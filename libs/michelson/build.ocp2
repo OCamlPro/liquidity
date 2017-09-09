@@ -1,0 +1,82 @@
+(**************************************************************************)
+(*                                                                        *)
+(*    Copyright (c) 2017       .                                          *)
+(*    Fabrice Le Fessant, OCamlPro SAS <fabrice@lefessant.net>            *)
+(*                                                                        *)
+(*    All rights reserved. No warranty, explicit or implicit, provided.   *)
+(*                                                                        *)
+(**************************************************************************)
+
+(* Most of this code is from Tezos, except the Tezos_context module,
+that has been rewritten to avoid accesses to the GIT context *)
+
+OCaml.library("michelson", ocaml + {
+     bytelink = [ "-custom" ];
+     files = [
+        "data_encoding.ml";
+        "error_monad_sig.ml";
+        "error_monad.ml";
+
+        "time.ml";
+        "base58.ml";
+        "hash.ml";
+        "ed25519.ml";           (*    REWRITTEN *)
+        "tezos_hash.ml";
+
+        "qty_repr.ml";
+        "tez_repr.ml";
+
+        "script_int_repr.ml";
+        "script_prim_repr.ml";
+        "script_repr.ml";     
+        "contract_repr.ml";
+        "period_repr.ml";
+        "constants_repr.ml";
+        "seed_repr.ml";
+        "roll_repr.ml";
+        "cycle_repr.ml";
+        "raw_level_repr.ml";
+        "voting_period_repr.ml";
+        "level_repr.ml";
+        "fitness_repr.ml";
+        "vote_repr.ml";
+        "time_repr.ml";
+
+        "persist.ml";           (* COPIED BUT MODIFIED *)
+        "context.ml";           (*    REWRITTEN *)
+        "storage_sigs.ml";
+        "storage_functors.ml";
+        "storage.ml";
+        "level_storage.ml";
+        "seed_storage.ml";
+        "roll_storage.ml";
+        "reward_storage.ml";
+        "bootstrap_storage.ml";
+        "vote_storage.ml";
+
+        "contract_storage.ml";
+        
+        "tezos_context.ml"; (* rewritten. TODO *)
+        
+        "script_typed_ir.ml";
+        "script_ir_translator.ml";
+        "script_interpreter.ml";
+
+        (* from client/embedded/alpha *)
+          "script_located_ir.ml";
+          "concrete_lexer.mll";
+          "concrete_parser.mly", { ocamlyacc = "menhir" };
+          "client_proto_programs.ml";
+
+          "init_storage.ml";
+
+     ];
+     requires = [
+              "michelson-deps";
+              "zarith";
+              "ocplib-json-typed.bson"; (* data_encoding *)
+              "ocplib-endian";     (* data_encoding *)
+              "calendar";
+
+     ];
+   });

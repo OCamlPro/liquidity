@@ -1,0 +1,61 @@
+(**************************************************************************)
+(*                                                                        *)
+(*    Copyright (c) 2017       .                                          *)
+(*    Fabrice Le Fessant, OCamlPro SAS <fabrice@lefessant.net>            *)
+(*                                                                        *)
+(*    All rights reserved. No warranty, explicit or implicit, provided.   *)
+(*                                                                        *)
+(**************************************************************************)
+
+(* This part of the library is made to create a minimal set of dependencies
+to be able to run code that was directly extracted from Tezos *)
+
+OCaml.library("michelson-deps", ocaml + {
+     bytelink = [ "-custom" ];
+     files = [
+
+        "sha256.c"; (* from Polar SSL *)
+        "sha256-stubs.c";
+        
+        "tweetnacl.c";
+        "blake2b-ref.c";    (* from BLAKE/BLAKE *)
+        "blake2b-stubs.c";
+
+        "sha3-ref.c";
+        "sha3-stubs.c";
+
+        "secp256k1.ml";
+        "secp256k1-stubs.c";
+
+        "mBytes.ml";
+        "hex_encode.ml";  (* from Tezos *)
+        "nocrypto.ml";
+
+
+        "sodium.ml";
+
+        "cstruct.ml"; 
+
+        "compare.ml";
+        "utils.ml";
+
+        "lwt.ml";
+        "lwt_list.ml";
+        "lwt_mutex.ml";
+
+        "RPC.ml";
+        "cli_entries.ml";
+(*        "time.ml"; *)
+        "tezos_misc.ml";
+        "updater.ml";
+
+(*
+        "client_aliases.ml";
+        "client_commands.ml";
+*)
+     ];
+     requires = [
+        "ocplib-endian";     (* mBytes *)
+     ];
+     cclib = [ "-lsecp256k1" ]
+}); 

@@ -1,0 +1,146 @@
+
+Coverage of Michelson instructions
+----------------------------------
+
+Very common:
+| SEQ
+| DIP
+| DUP
+| DROP
+| CAR
+| CDR
+| PAIR
+| SWAP
+
+Generated:
+| IF (test_if, test11-test14, test17-test18)
+| IF_NONE (test_option, test18)
+| IF_CONS (test_ifcons, test13)
+| IF_LEFT (test17)
+  
+| LOOP (test_loop, test14)
+
+| LAMBDA (test16)
+| EXEC (test16)
+
+| CDAR (CD-DAR test2, test5, test6)
+
+| COMPARE (test11, test14, test17)
+| GE (test14)
+| EQ (test11, test17)
+  
+| TRANSFER_TOKENS (test_transfer)
+| ADD (test_loop, test_transfer)
+| SUB (test14)
+
+| UPDATE (test12, test14)
+| SOME (test10)
+| CONCAT (test11)
+| MEM (test12)
+
+| CONS (test13, test_ifcons)
+| OR (test9)
+
+| INT (test18)
+
+| LEFT (test17)
+| RIGHT (test17)
+
+| EDIV (test18)
+
+
+Not well tested:
+| CDDR
+| PUSH
+| LE
+| LT
+| GT
+| NEQ
+| FAIL
+| NOW 
+| BALANCE
+| GET
+| MAP
+| REDUCE
+| SELF
+| AMOUNT
+| STEPS_TO_QUOTA
+| MANAGER
+| CREATE_ACCOUNT
+| H
+| CHECK_SIGNATURE
+| XOR
+| AND
+| NOT
+| ABS
+| NEG
+| MUL
+| LSL
+| LSR
+| SOURCE
+(* obsolete *)
+| MOD
+| DIV
+
+Coverage of Liquidity primitives
+--------------------------------
+
+Set.update (test12)
+Set.mem (test12, test14)
+Loop.loop (test14, test_loop)
+Lambda.pipe (test16)
+Contract.call (test_transfer)
+Array.get/get
+Array.set/set
+Current.fail
+Current.contract
+Current.balance
+Current.source
+Current.time
+Current.amount
+Current.gas
+[]
+::
+None
+Some
+Left
+Right
+=
+<>
+<
+<=
+>
+>=
+compare
++
+-
+*
+/
+Map.find
+Map.update
+Map.mem
+Map.reduce
+Map.map
+Set.update
+Set.mem
+Set.reduce
+Some
+@
+List.reduce
+List.map
+Contract.manager
+Account.create
+Crypto.hash
+Crypto.check
+::
+or
+&
+xor
+not
+abs
+int
+-
+>>
+<<
+|>
+Lambda.pipe

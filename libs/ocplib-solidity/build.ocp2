@@ -1,0 +1,31 @@
+(**************************************************************************)
+(*                                                                        *)
+(*    Copyright (c) 2017       .                                          *)
+(*    Fabrice Le Fessant, OCamlPro SAS <fabrice@lefessant.net>            *)
+(*                                                                        *)
+(*    All rights reserved. No warranty, explicit or implicit, provided.   *)
+(*                                                                        *)
+(**************************************************************************)
+
+OCaml.library("ocplib-solidity",
+   ocaml + {
+     files = [
+       "solTypes.ml";
+       "solPrinter.ml";
+       "solLexer.mll";
+       "solParser.mly";
+     ];
+     requires = [
+             "compiler-libs.common";
+     ];
+                });
+
+OCaml.program("ocp-solidity",
+   ocaml + {
+     files = [
+       "solMain.ml";
+     ];
+     requires = [
+       "ocplib-solidity"
+     ];
+                });

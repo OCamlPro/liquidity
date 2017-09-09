@@ -1,0 +1,10 @@
+storage    (map string nat) ;
+parameter  string ;
+return     unit ;
+code       { DUP ; CAAR ; PUSH tez "5.00" ;
+             COMPARE ; GT ; IF { FAIL } {} ;
+             DUP ; DIP { CDR ; DUP } ;
+             CADR ; DUP ;
+             DIP { GET ; IF_NONE { FAIL } {} ;
+                   PUSH nat 1 ; ADD ; SOME } ;
+             UPDATE ; UNIT ; PAIR }

@@ -1,0 +1,98 @@
+(**************************************************************************)
+(*                                                                        *)
+(*    Copyright (c) 2017       .                                          *)
+(*    Fabrice Le Fessant, OCamlPro SAS <fabrice@lefessant.net>            *)
+(*                                                                        *)
+(*    All rights reserved. No warranty, explicit or implicit, provided.   *)
+(*                                                                        *)
+(**************************************************************************)
+
+(*
+   A contract is compiled as followed:
+   1) it is parsed by the OCaml compiler parser (compiler-libs)
+   2) the AST is translated to a simple untyped AST in [LiquidOCaml]
+   3) the untyped AST is typechecked in [LiquidCheck], number of uses
+       for each variable is computed, and a list of one-use variables
+       to be inlined is computed
+   4) one-use variables are inlined, and their def sites are removed,
+      in [LiquidSimplify] (optional pass)
+   5) the untyped AST is translated to symbolic Michelson in
+      [LiquidMichelson]
+   6) symbolic Michelson is simplified, mostly to decrease the size of
+      the stack. The pass is mostly optional, except the removal of
+      expressions after FAIL.
+   7) the symbolic Michelson is translated to raw Michelson in
+      [LiquidEmit]
+   8) the raw Michelson is finally printed in [LiquidPrinter]
+
+*)
+
+
+OCaml.library("ocplib-liquidity",
+   ocaml + {
+     files = [
+       "liquidMisc.ml";
+
+       "liquidTypes.ml";
+
+       "liquidBoundVariables.ml";
+       "liquidPrinter.ml";
+       "liquidDot.ml";
+       
+       "liquidEmit.ml";
+       "liquidPeephole.ml";
+       "liquidMichelson.ml";
+       "liquidSimplify.ml";
+       "liquidCheck.ml";
+
+       "liquidClean.ml";
+       "liquidInterp.ml";
+       "liquidDecomp.ml";
+       "liquidUntype.ml";
+     ];
+     requires = [
+        "ocplib-dot";
+     ];
+
+   });
+
+OCaml.library("ocplib-liquidity-tezos",
+   ocaml + {
+     files = [
+       "liquidFromTezos.ml";
+       "liquidToTezos.ml";
+     ];
+     requires = [
+        "ocplib-liquidity";
+        "michelson";
+        "ocplib-json";
+     ];
+   });
+
+OCaml.library("ocplib-liquidity-ocaml",
+   ocaml + {
+     files = [
+       "liquidFromOCaml.ml";
+       "liquidToOCaml.ml";
+     ];
+     requires = [
+        "ocplib-liquidity";
+        "compiler-libs.common";
+     ];
+
+   });
+
+OCaml.program("liquidity",
+   ocaml + {
+     files = [
+       "liquidMain.ml";      
+     ];
+     requires = [
+        "ocplib-dot";
+        "ocplib-liquidity-tezos";
+        "ocplib-liquidity-ocaml";
+        "ocplib-file";
+     ];
+
+   });
+

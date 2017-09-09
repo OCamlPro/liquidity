@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8"/>
+    <link rel="stylesheet" type="text/css" href="liquidity.css"/>
+    <title>Liquidity Language Documentation</title>
+  </head>
+  <body>
+<h1 id="LiquidityasimplelanguageoverMichelson">Liquidity, a simple language over Michelson</h1>
+
+<h2 id="ContractFormat">Contract Format</h2>
+
+<p>All the contracts have the following form:</p>
+<pre><code>let contract
+      (amount : tez)
+      (parameter : TYPE)
+      (storage : TYPE)
+      (return : TYPE) =
+      BODY</code></pre>
+
+<p>where TYPE is a type and BODY is the code of the contract, using the
+three arguments <code>amount</code>, <code>parameter</code> and <code>storage</code>. The <code>return</code>
+variable cannot be used, it is special form to declare the return type
+of the contract.  The <code>amount</code> argument is the amount of Tez sent to
+the contract, <code>parameter</code> is the argument provided by the caller, and
+<code>storage</code> is the initial state of the contract.</p>
+<p>A contract always returns a pair <code>(return, storage)</code>, where <code>return</code> is
+the return value to the caller, and <code>storage</code> is the final state of the
+contract after the call.</p>
+<h2 id="Callinganothercontract">Calling another contract</h2>
+
+<p>Calling another contract is done by using the following form:</p>
+<pre><code>let (RESULT, storage) = Contract.call CONTRACT AMOUNT STORAGE ARG
+in
+BODY</code></pre><p>where:</p>
+<ul><li><code>RESULT</code> is the identifier of the variable that will receive the value
+ returned by the contract;</li><li><code>CONTRACT</code> is the value of the contract being called;</li><li><code>AMOUNT</code> is the value of the amount of Tez sent to the contract;</li><li><code>STORAGE</code> is the value of the storage saved before the call;</li><li><code>ARG</code> is the argument sent to the contract.</li><li><code>BODY</code> is some code to be executed after the contract, using the
+ result of the call.</li></ul>
+
+<p>All variables are destroyed during the call, so any state that should
+survive the call should be stored in the storage of the calling
+contract.</p>
+<h2 id="Operatorsandfunctions">Operators and functions</h2>
+
+<p>Here is a list of equivalences between MICHELSON instructions and
+Liquidity functions:</p>
+<ul><li><code>FAIL</code> : <code>Current.fail ()</code></li><li><code>SELF</code> : <code>Current.contract ()</code></li><li><code>BALANCE</code> : <code>Current.balance ()</code></li><li><code>NOW</code> : <code>Current.time ()</code></li><li><code>AMOUNT</code> : <code>Current.amount ()</code></li><li><code>STEPS_TO_QUOTA</code> : <code>Current.gas ()</code></li><li><code>SOURCE arg_type res_type</code> : <code>( Source : (arg_type, res_type) contract)</code></li><li><code>CONS</code> : <code>x :: y</code></li><li><code>NIL ele_type</code> : <code>( [] : ele_type list )</code></li><li><code>H</code> : <code>Crypto.hash x</code></li><li><code>CHECK_SIGNATURE</code> : <code>Crypto.check sg</code></li><li><code>CREATE_ACCOUNT</code> : <code>Account.create</code></li><li><code>MANAGER</code> : <code>Contract.manager ct</code></li><li><code>EXEC</code> : <code>Lambda.pipe</code> or <code>|&gt;</code></li></ul>
+
+<p>Comparisons:</p>
+<ul><li><code>COMPARE</code> : <code>compare x y</code></li><li><code>COMPARE; EQ</code> : <code>x = y</code></li><li><code>COMPARE; NEQ</code> : <code>x &lt;&gt; y</code></li><li><code>COMPARE; LE</code> : <code>x &lt;= y</code></li><li><code>COMPARE; LT</code> : <code>x &lt; y</code></li><li><code>COMPARE; GE</code> : <code>x &gt;= y</code></li><li><code>COMPARE; GT</code> : <code>x &gt; y</code></li></ul>
+
+<p>On data structures:</p>
+<ul><li><code>MAP</code> : <code>Map.map</code> or <code>List.map</code></li><li><code>GET</code> : <code>Map.find</code></li><li><code>UPDATE</code>: <code>Map.update</code> or <code>Set.update</code></li><li><code>MEM</code>: <code>Map.mem</code> or <code>Set.mem</code></li><li><code>CONCAT</code> : <code>@</code></li><li><code>REDUCE</code> : <code>Map.reduce</code> or <code>Set.reduce</code> or <code>List.reduce</code></li></ul>
+
+<p>Operations:</p>
+<ul><li><code>OR</code> : <code>x or y</code></li><li><code>AND</code> : <code>x &amp; y</code></li><li><code>XOR</code> : <code>x xor y</code></li><li><code>NOT</code> : <code>not x</code></li><li><code>ABS</code> : <code>abs x</code></li><li><code>INT</code> : <code>int x</code></li><li><code>NEG</code> : <code>-x</code></li><li><code>ADD</code> : <code>x + y</code></li><li><code>SUB</code> : <code>x - y</code></li><li><code>MUL</code> : <code>x * y</code></li><li><code>EDIV</code> : <code>x / y</code></li><li><code>LSR</code> : <code>x &gt;&gt; y</code></li><li><code>LSL</code> : <code>x &lt;&lt; y</code></li></ul>
+
+<h2 id="Tuples">Tuples</h2>
+
+<p>Tuples in Liquidity are compiled to pairs in Michelson:</p>
+<pre><code>x * y * z &lt;=&gt; pair x (pair y z)</code></pre>
+
+<p>Tuples can be accessed using the field access notation of Liquidity:</p>
+<pre><code>let t = (x,y,z) in
+let should_be_true = t.(2) = z in
+...</code></pre>
+
+<p>A new tuple can be created from another one using the field access update
+notation of Liquidity:</p>
+<pre><code>let t = (1,2,3) in
+let z = t.(2) &lt;- 4 in
+...</code></pre>
+
+<h2 id="Records">Records</h2>
+
+<p>Record types can be declared and used inside a liquidity contract:</p>
+<pre><code>type storage = {
+  x : string;
+  y : int;
+}</code></pre><p>Such types can be created and used inside programs:</p>
+<pre><code>let r = { x = &quot;foo&quot;; y = 3 } in
+r.x</code></pre>
+
+<p>Records are compiled as tuples.</p>
+<p>Deep record creation is possible using the notation:</p>
+<pre><code>let r1 = { x = 1; y = { z = 3 } } in
+let r2 = r1.y.z &lt;- 4 in
+...</code></pre>
+
+<h2 id="Variants">Variants</h2>
+
+<p>Variants should be defined before use, before the contract
+declaration:</p>
+<pre><code>type t =
+| X
+| Y of int
+| Z of string * nat</code></pre>
+
+<p>Variants can be created using:</p>
+<pre><code>let x = X 3 in
+let y = Z s in
+...</code></pre>
+
+<p>The <code>match</code> construct can be used to pattern-match on them, but only
+on the first constructor:</p>
+<pre><code>match x with
+| X -&gt; ...
+| Y i -&gt; ...
+| Z s -&gt; ...</code></pre>
+
+<p>where <code>i</code> and <code>s</code> are variables that are bound by the construct to the
+parameter of the variant.</p>
+<p>A special case of variants is the <code>Left | Right</code> predefined variant,
+called <code>variant</code>:</p>
+<pre><code>type (`left, `right) variant =
+| Left of `left
+| Right of `right</code></pre>
+
+<p>All occurrences of these variants should be constrained with type
+annotations:</p>
+<pre><code>let x = (Left 3 : (int, string) variant) in
+match x with
+| Left left  -&gt; ...
+| Right right -&gt; ...</code></pre>
+
+<p>Another special variant is the <code>Source</code> variant: it is used to refer to
+the contract that called the current contract.</p>
+<pre><code>let s = ( Source : (unit, unit) contract ) in
+...</code></pre>
+
+<p>As for <code>Left</code> and <code>Right</code>, <code>Source</code> occurrences should be constrained by
+type annotations.</p>
+<h2 id="Functions">Functions</h2>
+
+<p>As for Michelson, functions in Liquidity are not closures. They can only
+access their only argument. The argument must be annotated with its
+(monomorphic) type.</p>
+<p>Function applications are done using the <code>Lambda.pipe</code> function or the
+<code>|&gt;</code> operator:</p>
+<pre><code>let succ = fun (x : int) -&gt; x + 1 in
+let one = 0 |&gt; succ in
+...</code></pre>
+
+<h2 id="Loops">Loops</h2>
+
+<p>Loops in liquidity share some syntax with functions, but the body of
+the loop is not a function, so it can access the environment, as would
+a closure do:</p>
+<pre><code>let end_loop = 5 in
+let x = Loop.loop (fun x -&gt;
+  ...
+  ( x &lt; end_loop, x&#39;)
+  ) x_init
+in
+...</code></pre>
+
+<p>As shown in this example, the body of the loop returns a pair, whose first
+part is the condition to remain in the loop, and the second part is the
+accumulator.</p>
+  </body>
+</html>

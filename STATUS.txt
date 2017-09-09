@@ -1,0 +1,57 @@
+TODO
+----
+
+* Write unitary tests for all Michelson instructions
+* Improve documentation
+* Use annotations in Michelson expressions to recover names of variables
+* Add syntactic sugar for:
+    (fun (x : t1) (y:t2) -> BODY)
+    for
+    (fun (xy : t1 * t2) ->
+       let x = xy.(0) in
+       let y = xy.(1) in
+       BODY)
+    (let (x,y) = EXP in BODY)
+    for
+    (let xy = EXP in
+     let x = xy.(0) in
+     let y = xy.(1) in
+     BODY)
+* Deep pattern-matching
+* Closures:
+  type ('arg, 'res, 'env) closure = {
+     f : ('arg * 'env, 'res) lambda;
+     env : 'env;
+     }
+  Apply(f, [ARG]) <=>
+  Apply(EXEC, [ tuple[ARG;f.env] ; f.f])
+  (fun (x:ARG) -> BODY) <=>
+  compute bv = bv(BODY)\{x}.
+  If bv = empty_set, then (ARG, _) lambda
+  else (ARG,_,ENV) closure
+  
+
+
+
+MICHELSON NOT YET IMPLEMENTED
+-----------------------------
+
+   * `CREATE_CONTRACT`:
+     Forge a new contract.
+
+
+        :: key : option key : bool : bool : tez : lambda (pair (pair tez 'p) 'g) (pair 'r 'g) : 'g : 'S
+           -> contract 'p 'r : 'S
+
+     As with non code-emitted originations the
+     contract code takes as argument the transfered amount plus an
+     ad-hoc argument and returns an ad-hoc value. The code also takes
+     the global data and returns it to be stored and retrieved on the
+     next transaction. These data are initialized by another
+     parameter. The calling convention for the code is as follows:
+     (Pair (Pair amount arg) globals)) -> (Pair ret globals), as
+     extrapolable from the instruction type. The first parameters are
+     the manager, optional delegate, then spendable and delegatable
+     flags and finally the initial amount taken from the currently
+     executed contract. The contract is returned as a first class
+     value to be called immediately or stored.
