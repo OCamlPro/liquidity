@@ -1,8 +1,9 @@
 let contract
-  (amount : tez)
   (parameter : string)
   (storage : (string, int) map)
   (return : unit) =
+
+  let amount = Current.amount() in
 
   if amount < ("5.00" : tez) then
     Current.fail ()

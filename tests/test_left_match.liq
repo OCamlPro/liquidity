@@ -1,6 +1,5 @@
 
 let contract
-      (amount : tez)
       (parameter : (int, string) variant)
       (storage : int)
       (return : string) =

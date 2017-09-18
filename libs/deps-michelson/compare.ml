@@ -1,3 +1,6 @@
+#include "../../tezos/src/minutils/compare.ml"
+
+(*
 (**************************************************************************)
 (*                                                                        *)
 (*    Copyright (c) 2014 - 2016.                                          *)
@@ -174,3 +177,4 @@ module Option(P : S) = struct
   let max x y = if x >= y then x else y
   let min x y = if x <= y then x else y
 end
+ *)

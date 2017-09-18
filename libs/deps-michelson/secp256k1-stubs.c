@@ -376,6 +376,28 @@ value secp256k1_ecdsa_sign_ml
   return Val_int(res);
 }
 
+value secp256k1_ec_pubkey_create_ml
+(
+ value ctx_v,
+ value pubkey_v, /* out */
+ value seckey_v  /* in */
+ )
+{
+ const secp256k1_context* ctx =
+    (const secp256k1_context*)
+    String_val(ctx_v);
+ const secp256k1_pubkey *pubkey =
+   (const secp256k1_pubkey *)
+   String_val(pubkey_v);
+ const unsigned char *seckey =
+   (const unsigned char *)
+   String_val(seckey_v); /* 32-byte privkey */
+
+ int res = secp256k1_ec_pubkey_create(ctx,
+                                      pubkey,
+                                      seckey);
+ return Val_int(res);
+}
 
 #if 0
 

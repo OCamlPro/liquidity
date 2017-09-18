@@ -170,6 +170,7 @@ let rec translate_const env exp =
                          let cst2, ty2 = translate_const env e2 in
                          (cst1, cst2), (ty1, ty2)
                        ) pair_list in
+     let pair_list = List.sort compare pair_list in
      let csts, tys = List.split pair_list in
      let tys = match tys with
        | [] -> None
@@ -599,8 +600,7 @@ let rec translate_head env head_exp args =
                 Ppat_constraint(
                     { ppat_desc =
                         Ppat_var { txt =
-                                     (   "amount"
-                                         | "parameter"
+                                     (   "parameter"
                                        | "storage"
                                        | "return"
                                      ) as arg} },
@@ -609,6 +609,18 @@ let rec translate_head env head_exp args =
             head_exp) } ->
      translate_head env head_exp
                     ((arg, translate_type env arg_type) :: args)
+  | { pexp_desc =
+        Pexp_fun (
+            Nolabel, None,
+            { ppat_desc =
+                Ppat_constraint(
+                    { ppat_desc =
+                        Ppat_var { txt } },
+                    arg_type)
+            },
+            head_exp);
+      pexp_loc } ->
+     error_loc pexp_loc (Printf.sprintf  "unexpected argument %S" txt)
   | exp ->
      let code = translate_code env exp in
      {

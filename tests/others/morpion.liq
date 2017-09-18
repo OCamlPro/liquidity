@@ -7,7 +7,6 @@ type storage = {
 type parameter = { play : bool; x : int; y : int }
 
 let contract
-      ( amount : tez )
       ( storage : storage )
       ( parameter : parameter )
       ( return : (bool option) option )

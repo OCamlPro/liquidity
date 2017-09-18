@@ -9,7 +9,13 @@
 
 type context
 
-type seckey = string (* 32 bytes *)
+module Privkey = struct
+
+  type t = string (* 32 bytes *)
+  let of_string s =
+    assert (String.length s = 32);
+    s
+end
 
 module ABSTRACT : sig
 
@@ -42,6 +48,12 @@ external context_create : create_flag list -> context =
 
 (* clone and destroy not implemented *)
 
+external ec_pubkey_create :
+  context ->
+  pubkey -> (* Out *)
+  Privkey.t -> (* In *)
+  bool =
+  "secp256k1_ec_pubkey_create_ml"
 
 external pubkey_parse :
   context ->
@@ -108,7 +120,7 @@ external sign :
   context ->
   signature ->  (* Out *)
   string ->     (* In 32 bytes *)
-  seckey ->     (* In 32 bytes *)
+  Privkey.t ->     (* In 32 bytes *)
   unit
   =
   "secp256k1_ecdsa_sign_ml"
@@ -130,6 +142,11 @@ module Pubkey = struct
     let s = String.make 65 '\000' in
     let len = pubkey_serialize ctx s sg flags in
     String.sub s 0 len
+  let create ctx seckey =
+    let pubkey = new_pubkey () in
+    if ec_pubkey_create ctx pubkey seckey then
+      Some pubkey
+    else None
 end
 
 module Signature = struct
@@ -163,7 +180,7 @@ external sign :
   context ->
   signature ->  (* Out *)
   string ->     (* In 32 bytes *)
-  seckey ->     (* In 32 bytes *)
+  Privkey.t ->     (* In 32 bytes *)
   unit
   =
   "secp256k1_ecdsa_sign_ml"
@@ -222,7 +239,7 @@ module ECDSA_recoverable = struct
     context ->
     recoverable_signature ->       (* Out *)
     string ->          (* In: 32 bytes of data *)
-    seckey ->          (* In: seckey *)
+    Privkey.t ->          (* In: seckey *)
     bool
     =
     "secp256k1_ecdsa_recoverable_sign_ml"

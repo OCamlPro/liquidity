@@ -27,8 +27,8 @@ OCaml.library("michelson-deps", ocaml + {
         "secp256k1.ml";
         "secp256k1-stubs.c";
 
-        "mBytes.ml";
-        "hex_encode.ml";  (* from Tezos *)
+        "mBytes.ml", { pp = [ "ocp-pp" ] };
+        "hex_encode.ml"; 
         "nocrypto.ml";
 
 
@@ -36,16 +36,16 @@ OCaml.library("michelson-deps", ocaml + {
 
         "cstruct.ml"; 
 
-        "compare.ml";
+        "compare.ml", { pp = [ "ocp-pp" ] };
         "utils.ml";
 
         "lwt.ml";
         "lwt_list.ml";
         "lwt_mutex.ml";
+        "lwt_stream.ml";
+        "lwt_io.ml";
 
         "RPC.ml";
-        "cli_entries.ml";
-(*        "time.ml"; *)
         "tezos_misc.ml";
         "updater.ml";
 

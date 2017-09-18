@@ -13,6 +13,7 @@ val create: int -> t
 
 val length: t -> int
 
+val compare : t -> t -> int
 (*
 
 open Bigarray
@@ -151,6 +152,6 @@ val (<=) : t -> t -> bool
 val (>=) : t -> t -> bool
 val (>) : t -> t -> bool
 val compare : t -> t -> int
+ *)
 
 val concat: t -> t -> t
- *)

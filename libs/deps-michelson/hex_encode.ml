@@ -1,13 +1,3 @@
-(**************************************************************************)
-(*                                                                        *)
-(*    Copyright (c) 2014 - 2016.                                          *)
-(*    Dynamic Ledger Solutions, Inc. <contact@tezos.com>                  *)
-(*                                                                        *)
-(*    All rights reserved. No warranty, explicit or implicit, provided.   *)
-(*                                                                        *)
-(**************************************************************************)
-
-(* Tezos Utility library - Hexadecimal encoding *)
 
 (* From OCaml's stdlib. See [Digest.to_hex] *)
 let gen_encode length get s =
@@ -46,41 +36,3 @@ let hex_decode s =
 
 let bytes_of_hex s =
   gen_decode MBytes.create MBytes.set_int8 s
-
-(*
-let hex_bytes =
-  let open Data_encoding in
-  let schema =
-     let open Json_schema in
-     create
-       { title = None ;
-         description = None ;
-         default = None;
-         enum = None;
-         kind = String {
-             pattern = Some "^[a-zA-Z0-9]+$";
-             min_length = 0;
-             max_length = None;
-           };
-         format = None ;
-         id = None } in
-  conv ~schema hex_of_bytes (Json.wrap_error bytes_of_hex) string
-
-let sha256 =
-  let open Data_encoding in
-  let schema =
-    let open Json_schema in
-    create
-      { title = None ;
-        description = None ;
-        default = None;
-        enum = None;
-        kind = String {
-            pattern = Some "^[a-zA-Z0-9]+$";
-            min_length = 64;
-            max_length = Some 64;
-          };
-        format = Some "sha256" ;
-        id = None } in
-  conv ~schema hex_of_bytes (Json.wrap_error bytes_of_hex) string
-*)

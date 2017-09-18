@@ -473,12 +473,11 @@ let interp contract =
   let start_node = node N_START [] [] in
 
   let initial_code = match contract.code with
-    | SEQ code -> SEQ (PAIR :: PAIR :: code)
+    | SEQ code -> SEQ (PAIR :: code)
     | _ -> assert false
   in
 
   let initial_stack = [
-    node (N_VAR "amount") [] [];
     node (N_VAR "parameter") [] [];
     node (N_VAR "storage") [] [];
     ] in

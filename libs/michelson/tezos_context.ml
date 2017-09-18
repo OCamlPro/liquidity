@@ -102,3 +102,11 @@ end
 module Public_key = struct
   let get _ctxt _key = ok ( assert false : signature) (* TODO: should be a key ??? *)
 end
+
+module Voting_period = Voting_period_repr
+
+module Local_environment = struct
+  module Environment = struct
+    module Error_monad = Error_monad
+  end
+end

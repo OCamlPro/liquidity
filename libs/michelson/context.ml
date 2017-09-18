@@ -92,7 +92,7 @@ let list t keys =
       | Some t ->
          iter (fun k v -> list := (key @ k) :: !list) key t
     ) keys;
-  (!list : Persist.key list Lwt.t)
+  (!list : Persist.key list)
 
 let rec remove_rec t key =
   match key with

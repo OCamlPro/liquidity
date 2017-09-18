@@ -4,7 +4,6 @@
 (* let version = "1.0" *)
 
 let contract
-      (amount : tez)
       (parameter : string)
       (storage : string)
       (return : unit) =

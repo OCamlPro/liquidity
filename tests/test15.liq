@@ -10,7 +10,6 @@ type storage = {
 }
 
 let contract
-      (amount : tez)
       (parameter : int)
       (storage : storage)
       (return : unit) =

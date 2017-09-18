@@ -1,5 +1,4 @@
 let contract
-  (amount : tez)
   (parameter : int option)
   (storage : unit)
   (return : int) =

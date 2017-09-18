@@ -7,27 +7,39 @@
 (*                                                                        *)
 (**************************************************************************)
 
-(* Most of this code is from Tezos, except the Tezos_context module,
-that has been rewritten to avoid accesses to the GIT context *)
+(* Most of this code is from Tezos, so we use include files and a submodule *)
+
+ocaml.debug = true;
+
+compflags = [ "-bin-annot"; "-g"; "-thread"; "-short-paths"; "-safe-string";
+                "-w"; "+27-30-40"; ];
+
 
 OCaml.library("michelson", ocaml + {
      bytelink = [ "-custom" ];
+     pp = [ "ocp-pp" ];
      files = [
         "data_encoding.ml";
         "error_monad_sig.ml";
         "error_monad.ml";
+        "data_encoding_ezjsonm.ml"; 
+        "cli_entries.ml", { pp = "ocp-pp" };
 
         "time.ml";
         "base58.ml";
         "hash.ml";
         "ed25519.ml";           (*    REWRITTEN *)
         "tezos_hash.ml";
+        "tezos_data.ml";
+
 
         "qty_repr.ml";
         "tez_repr.ml";
 
         "script_int_repr.ml";
-        "script_prim_repr.ml";
+
+        "script_prim_repr.ml";  (* ?????????????????? *)
+        
         "script_repr.ml";     
         "contract_repr.ml";
         "period_repr.ml";
@@ -42,7 +54,7 @@ OCaml.library("michelson", ocaml + {
         "vote_repr.ml";
         "time_repr.ml";
 
-        "persist.ml";           (* COPIED BUT MODIFIED *)
+        "persist.ml";           (* SIMPLIFIED *)
         "context.ml";           (*    REWRITTEN *)
         "storage_sigs.ml";
         "storage_functors.ml";
@@ -64,8 +76,15 @@ OCaml.library("michelson", ocaml + {
 
         (* from client/embedded/alpha *)
           "script_located_ir.ml";
-          "concrete_lexer.mll";
-          "concrete_parser.mly", { ocamlyacc = "menhir" };
+          "../../tezos/src/client/embedded/alpha/concrete_lexer.mll", { pp = [] };
+          "../../tezos/src/client/embedded/alpha/concrete_parser.mly", { ocamlyacc = "menhir"; pp = [] };
+
+          
+          "apply.ml";           (* REWRITTEN *)
+          "client_commands.ml"; (* REWRITTEN *)
+          "client_aliases.ml";    (* REWRITTEN *)
+          "packed_protocol.ml";   (* REWRITTEN *)
+          "client_proto_args.ml";
           "client_proto_programs.ml";
 
           "init_storage.ml";
@@ -73,6 +92,7 @@ OCaml.library("michelson", ocaml + {
      ];
      requires = [
               "michelson-deps";
+              "ezjsonm";
               "zarith";
               "ocplib-json-typed.bson"; (* data_encoding *)
               "ocplib-endian";     (* data_encoding *)

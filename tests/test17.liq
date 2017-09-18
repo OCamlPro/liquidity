@@ -5,7 +5,6 @@ type storage =
 | String of string * int
 
 let contract
-      (amount : tez)
       (parameter : int)
       (storage : storage)
       (return : unit) =

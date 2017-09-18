@@ -164,12 +164,12 @@ let convert_contract c =
 
 let contract_of_string s =
   match Client_proto_programs.parse_program s with
-  | Ok code -> Some code
+  | Ok parsed -> Some parsed.ast
   | Error _ -> None
 
 let data_of_string s =
   match Client_proto_programs.parse_data s with
-  | Ok data -> Some data
+  | Ok data -> Some data.ast
   | Error _ -> None
 
 let pp = Tezos_context.pp

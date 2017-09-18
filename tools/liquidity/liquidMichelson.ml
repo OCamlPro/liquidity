@@ -378,16 +378,12 @@ the ending NIL is not annotated with a type *)
   let env = StringMap.empty in
   let env = StringMap.add "storage/1" 0 env in
   let env = StringMap.add "parameter/2" 1 env in
-  let env = StringMap.add "amount/3" 2 env in
-  let depth = 3 in
+  let depth = 2 in
 
   let exprs, transfer = compile depth env code in
 
-  (* replace ( (amount, parameter), storage ) *)
+  (* replace ( parameter, storage ) *)
   let header = [
-      dup 1;
-      dip 1 [ CDR ];
-      CAR;
       dup 1;
       dip 1 [ CDR ];
       CAR;

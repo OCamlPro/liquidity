@@ -2,7 +2,6 @@
 (* let version = "1.0" *)
 
 let contract
-      (amount : tez)
       (parameter : timestamp)
       (storage : string * (* 0: S *)
                    timestamp * (* 1: T *)

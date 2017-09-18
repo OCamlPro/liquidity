@@ -1,6 +1,5 @@
 
 let contract
-      (amount : tez)
       (parameter : int)
       (storage : nat)
       (return : int) =

@@ -11,7 +11,6 @@ type storage = {
 }
 
 let contract
-      (amount : tez)
       (parameter : timestamp)
       (storage : storage)
       (return : unit) =

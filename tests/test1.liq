@@ -2,7 +2,6 @@
 (* let version = "1.0" *)
 
 let contract
-      (amount : tez)
       (parameter : timestamp)
       (storage : string * (* 0: S *)
                    timestamp * (* 1: T *)
@@ -11,6 +10,7 @@ let contract
                          (unit,unit) contract * (* 4: A *)
                            (unit,unit) contract)  (* 5: B *)
       (return : (timestamp * tez) * (tez * timestamp) ) =
+   let amount = Current.amount () in
    let x = (parameter, amount) in
    let y = (amount, parameter) in
    ( (x,y), storage )

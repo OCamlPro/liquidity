@@ -1,7 +1,10 @@
 
 all: build
 
-build: _obuild
+tezos/Makefile:
+	git clone git@gitlab.com:tezos/tezos.git
+
+build: _obuild tezos/Makefile
 	ocp-build build
 
 install: _obuild

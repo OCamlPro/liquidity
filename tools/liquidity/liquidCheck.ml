@@ -872,8 +872,6 @@ let types env contract =
   let (_ , env, _) = new_binding env  "storage" contract.storage in
   (* "parameter/2" *)
   let (_, env, _) = new_binding env "parameter" contract.parameter in
-  (* "amount/3" *)
-  let (_, env, _) = new_binding env "amount" Ttez in
 
   let expected_ty = Ttuple [ contract.return; contract.storage ] in
 

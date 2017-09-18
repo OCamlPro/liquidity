@@ -281,11 +281,6 @@ let structure_of_contract contract =
                 Vb.mk (Pat.var (loc "contract"))
                       (Exp.fun_ Nolabel None
                                 (Pat.constraint_
-                                   (Pat.var (loc "amount"))
-                                   (convert_type Ttez)
-                                )
-                      (Exp.fun_ Nolabel None
-                                (Pat.constraint_
                                    (Pat.var (loc "parameter"))
                                    (convert_type contract.parameter)
                                 )
@@ -299,7 +294,7 @@ let structure_of_contract contract =
                                    (Pat.var (loc "return"))
                                    (convert_type contract.return)
                                 )
-                                code))))
+                                code)))
               ]
   ]
 

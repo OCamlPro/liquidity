@@ -190,5 +190,4 @@ let untype_contract contract =
   let env = empty_env () in
   let env = new_binding "storage/1" "storage" env in
   let env = new_binding "parameter/2" "parameter" env in
-  let env = new_binding "amount/3" "amount" env in
   { contract with code = untype env contract.code }
