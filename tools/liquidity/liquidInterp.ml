@@ -247,9 +247,9 @@ let interp contract =
                  | _ -> assert false
              in
 
+             let stack = merge 0 stack end_stack in
              end_node.args <- List.rev end_node.args;
              loop_node.kind <- N_LOOP (begin_node, end_node);
-             let stack = merge 0 stack end_stack in
              stack, loop_node
        end
 

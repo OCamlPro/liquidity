@@ -324,7 +324,9 @@ let rec translate_code env exp =
                       ppat_desc =
                         Ppat_tuple [
                             { ppat_desc = Ppat_var { txt = result } };
-                            { ppat_desc = Ppat_var { txt = "storage" } };
+                            { ppat_desc = Ppat_var { txt =
+                                                       ("storage" | "_storage")as storage_name
+                            } };
                           ]
                     };
                   pvb_expr =
@@ -342,7 +344,7 @@ let rec translate_code env exp =
                     ]) }
                 }
               ], body) } ->
-       LetTransfer ("storage", result,
+       LetTransfer (storage_name, result,
                     lo exp.pexp_loc,
                     translate_code env contract_exp,
                     translate_code env tez_exp,

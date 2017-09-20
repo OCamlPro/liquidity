@@ -9,5 +9,5 @@ let contract
 
       let p = get storage 0 in
       let n = get storage 1 in
-      let cost = ( "1.00" : tez ) + p + n in
+      let cost = 1.00t + p + n in
       ( cost, storage )

@@ -12,7 +12,7 @@ let contract
       (return : unit ) =
    let pn = get storage 2 in
    let p = get pn 0 in
-   let p = p + ("1.00" : tez) in
+   let p = p + 1t in
    let pn = set pn 0 p in
    let storage = set storage 2 pn in
    ( (), storage )

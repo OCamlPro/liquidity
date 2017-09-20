@@ -221,7 +221,8 @@ let types env contract =
        mk (Apply(prim, loc, args)) ty can_fail, can_fail, false
 
     | Seq (exp1, exp2) ->
-       let exp1, fail1, transfer1 = typecheck_expected env Tunit exp1 in
+       let exp1, fail1, transfer1 =
+         typecheck_expected (noloc, "sequence") env Tunit exp1 in
        let exp2, fail2, transfer2 = typecheck env exp2 in
        let desc = Seq (exp1, exp2) in
        (* TODO: if not fail1 then remove exp1 *)
@@ -229,7 +230,8 @@ let types env contract =
        mk desc exp2.ty can_fail, can_fail, transfer1 || transfer2
 
     | If (cond, ifthen, ifelse) ->
-       let cond, fail1, transfer1 = typecheck_expected env Tbool cond in
+       let cond, fail1, transfer1 =
+         typecheck_expected (noloc, "if-cond") env Tbool cond in
        if transfer1 then
          error noloc "transfer within if condition";
        let ifthen, fail2, transfer2 = typecheck env ifthen in
@@ -239,7 +241,7 @@ let types env contract =
            ifelse, fail3, transfer3, ifelse.ty
          else
            let ifelse, fail3, transfer3 =
-             typecheck_expected env ifthen.ty ifelse in
+             typecheck_expected (noloc, "if-result") env ifthen.ty ifelse in
            ifelse, fail3, transfer3, ifthen.ty
        in
        let desc = If(cond, ifthen, ifelse) in
@@ -252,15 +254,17 @@ let types env contract =
                    loc,
                    contract_exp, tez_exp,
                    storage_exp, arg_exp, body) ->
-       let tez_exp, fail1, transfer1 = typecheck_expected env Ttez tez_exp in
+       let tez_exp, fail1, transfer1 =
+         typecheck_expected (noloc, "call-amount") env Ttez tez_exp in
        let contract_exp, fail2, transfer2 = typecheck env contract_exp in
        begin
          match contract_exp.ty with
          | Tcontract (arg_ty, return_ty) ->
             let arg_exp, fail3, transfer3 =
-              typecheck_expected env arg_ty arg_exp in
+              typecheck_expected (noloc,"call-arg") env arg_ty arg_exp in
             let storage_exp, fail4, transfer4 =
-              typecheck_expected env contract.storage storage_exp in
+              typecheck_expected (noloc, "call-storage")
+                                 env contract.storage storage_exp in
             if transfer1 || transfer2 || transfer3 || transfer4 then
               error noloc "transfer within transfer arguments";
             let (new_storage, env, storage_count) =
@@ -336,7 +340,7 @@ let types env contract =
        let env = maybe_reset_vars env transfer1 in
        let (new_name, env, count) = new_binding env name arg.ty in
        let body, fail2, transfer2 =
-         typecheck_expected env
+         typecheck_expected (noloc, "loop-body") env
                             (Ttuple [Tbool; arg.ty])
                             body in
        check_used name loc count;
@@ -412,7 +416,8 @@ let types env contract =
            in
            if ty_name <> ty_name' then
              error loc "inconsistent list of labels";
-           let exp, can_fail, transfer = typecheck_expected env ty exp in
+           let exp, can_fail, transfer =
+             typecheck_expected (noloc, "label "^ label) env ty exp in
            if transfer then
              error loc "transfer not allowed in record";
            t.(label_pos) <- Some exp;
@@ -429,7 +434,8 @@ let types env contract =
 
     | Constructor(loc, Constr constr, arg) ->
        let ty_name, arg_ty = StringMap.find constr env.constrs in
-       let arg, can_fail, transfer = typecheck_expected env arg_ty arg in
+       let arg, can_fail, transfer =
+         typecheck_expected (noloc, "constr-arg") env arg_ty arg in
        if transfer then
          error loc "transfer not allowed in constructor argument";
        let constr_ty, ty_kind = StringMap.find ty_name env.types in
@@ -563,7 +569,8 @@ let types env contract =
            let (e, can_fail, transfer) =
              match !expected_type with
              | Some expected_type ->
-                typecheck_expected env expected_type e
+                typecheck_expected
+                  (noloc, "constr-match") env expected_type e
              | None ->
                 let (e, can_fail, transfer) =
                   typecheck env e in
@@ -865,12 +872,12 @@ let types env contract =
        Printf.eprintf "Bad args for primitive %S:\n" prim;
        error loc "prim"
 
-  and typecheck_expected env expected_ty exp =
+  and typecheck_expected (loc,info) env expected_ty exp =
     let exp, fail, transfer = typecheck env exp in
     if exp.ty <> expected_ty && exp.ty <> Tfail then begin
         Printf.eprintf "typecheck: actual type differs from expected type:\n%!";
         eprint_2types exp.ty expected_ty;
-        raise Error
+        error loc info
       end;
     exp, fail, transfer
 
@@ -885,5 +892,5 @@ let types env contract =
   let expected_ty = Ttuple [ contract.return; contract.storage ] in
 
   let code, _can_fail, _transfer =
-    typecheck_expected env expected_ty contract.code in
+    typecheck_expected (noloc,"final value") env expected_ty contract.code in
   { contract with code }, !to_inline
