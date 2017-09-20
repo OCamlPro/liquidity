@@ -71,6 +71,8 @@ let rec emit_code code =
   | CREATE_ACCOUNT -> M_INS "CREATE_ACCOUNT"
   | H -> M_INS "H"
   | CHECK_SIGNATURE -> M_INS "CHECK_SIGNATURE"
+  | SIZE -> M_INS "SIZE"
+  | DEFAULT_ACCOUNT -> M_INS "DEFAULT_ACCOUNT"
   | CONS -> M_INS "CONS"
   | OR -> M_INS "OR"
   | XOR -> M_INS "XOR"

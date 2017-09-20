@@ -311,6 +311,10 @@ let interp contract =
        let x = node (N_PRIM "AMOUNT") [] [seq] in
        x :: stack, x
 
+    | DEFAULT_ACCOUNT, key :: stack ->
+       let x = node (N_PRIM "DEFAULT_ACCOUNT") [key] [seq] in
+       x :: stack, x
+
 
     | MANAGER, x :: stack ->
        let x = node (N_PRIM "MANAGER") [x] [seq] in
@@ -438,7 +442,6 @@ let interp contract =
     | REDUCE, x :: y :: z :: stack ->
        let x = node (N_PRIM "REDUCE") [x;y;z] [seq] in
        x :: stack, x
-
 
     | _ ->
        let ins = LiquidEmit.emit_code ins in

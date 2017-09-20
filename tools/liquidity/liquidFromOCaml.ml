@@ -202,6 +202,7 @@ let rec translate_const env exp =
                     let cst1, ty1 = translate_const env e1 in
                     cst1, ty1
                   ) list in
+     let list = List.sort compare list in
      let csts, tys = List.split list in
      let tys = match tys with
        | [] -> None

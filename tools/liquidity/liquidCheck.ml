@@ -25,6 +25,12 @@
 
  *)
 
+(* New:
+    SIZE ?
+    CREATE_CONTRACT ?
+    DEFAULT_ACCOUNT ?
+ *)
+
 open LiquidTypes
 
 let noloc = "At unspecified location"
@@ -739,6 +745,10 @@ let types env contract =
          error loc "bad Set.mem key type";
        Tbool
 
+    | "List.size", [ { ty = Tlist _ }]  ->  Tnat
+    | "Set.size", [ { ty = Tset _ }]  ->  Tnat
+    | "Map.size", [ { ty = Tmap _ }]  ->  Tnat
+
     | "Set.update", [ { ty = key_ty }; { ty = Tbool };
                       { ty = Tset expected_key_ty }]
       ->
@@ -765,13 +775,15 @@ let types env contract =
     | "Account.create", [ { ty = Tkey }; { ty = Toption Tkey };
                           { ty = Tbool }; { ty = Ttez } ] ->
        Tcontract (Tunit, Tunit)
+    | "Account.default", [ { ty = Tkey } ] ->
+       Tcontract (Tunit, Tunit)
     | "Contract.create", [ { ty = Tkey }; (* manager *)
                            { ty = Toption Tkey }; (* delegate *)
                            { ty = Tbool }; (* spendable *)
                            { ty = Tbool }; (* delegatable *)
                            { ty = Ttez }; (* initial amount *)
                            { ty = Tlambda (
-                                      Ttuple [ Ttuple [ Ttez; arg_type ];
+                                      Ttuple [ arg_type;
                                                storage_arg],
                                       Ttuple [ result_type; storage_res]); };
                            { ty = storage_init }

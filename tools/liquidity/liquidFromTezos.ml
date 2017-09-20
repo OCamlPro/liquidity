@@ -8,7 +8,7 @@
 (**************************************************************************)
 
 open LiquidTypes
-
+open Client_proto_programs
 (*
 type expr =
   | Int of location * string
@@ -129,8 +129,12 @@ let rec convert_code expr =
   | Script_repr.Prim(_, "UNIT", []) -> PUSH (Tunit, CUnit)
   | Script_repr.Prim(_, "TRANSFER_TOKENS", []) -> TRANSFER_TOKENS
   | Script_repr.Prim(_, "PUSH", [ ty; cst ]) ->
-     PUSH (convert_type ty, convert_const cst)
-
+     begin match convert_type ty, convert_const cst with
+     | Tnat, CInt n ->
+        PUSH (Tnat, CNat n)
+     | ty, cst ->
+        PUSH (ty, cst)
+     end
   | Script_repr.Prim(_, "H", []) -> H
   | Script_repr.Prim(_, "CHECK_SIGNATURE", []) -> CHECK_SIGNATURE
   | Script_repr.Prim(_, "CONCAT", []) -> CONCAT
@@ -139,6 +143,8 @@ let rec convert_code expr =
   | Script_repr.Prim(_, "MOD", []) -> MOD
   | Script_repr.Prim(_, "DIV", []) -> DIV
   | Script_repr.Prim(_, "AMOUNT", []) -> AMOUNT
+  | Script_repr.Prim(_, "NIL", [ty]) ->
+     PUSH (Tlist (convert_type ty), CList [])
   | Script_repr.Prim(_, "EMPTY_MAP", [ty1; ty2]) ->
      PUSH (Tmap (convert_type ty1, convert_type ty2), CMap [])
   | Script_repr.Prim(_, "NONE", [ty]) ->
@@ -150,7 +156,9 @@ let rec convert_code expr =
   | Script_repr.Prim(_, "RIGHT", [ty]) ->
      RIGHT (convert_type ty)
   | Script_repr.Prim(_, "INT", []) -> INT
-  | Script_repr.Prim(_, "ABS", []) -> ABS
+  | Script_repr.Prim(_, "SIZE", []) -> SIZE
+  | Script_repr.Prim(_, "DEFAULT_ACCOUNT", []) -> DEFAULT_ACCOUNT
+
 
   | _ -> unknown_expr "convert_code" expr
 

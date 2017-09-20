@@ -1,0 +1,8 @@
+parameter (list string);
+return (list string);
+storage unit;
+code{CAR; DIP{NIL string}; PUSH bool True; # Setting up the loop
+     LOOP {IF_CONS {CONS; SWAP; PUSH bool True} {NIL string; PUSH bool False}};
+     # End of loop accounting
+     DROP; UNIT; SWAP; PAIR};
+     

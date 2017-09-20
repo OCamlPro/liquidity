@@ -39,13 +39,15 @@ let rec arg_of node =
      begin
        match pos, List.length args with
        | 0, 1 -> arg_of begin_node
-       | _ -> assert false
+       | _ ->
+          mk (Apply ("Array.get", noloc, [ arg_of begin_node; nat_n pos ]))
      end
   | N_LOOP_RESULT (loop_node, begin_node, pos ) ->
      begin
        match pos, List.length begin_node.args with
        | 0, 1 -> arg_of loop_node
-       | _ -> assert false
+       | _ ->
+          mk (Apply ("Array.get", noloc, [ arg_of loop_node; nat_n pos ]))
      end
   | N_CONST (ty, ((
                    CUnit | CBool _ | CInt _ | CNat _ | CTez _
@@ -139,6 +141,7 @@ let decompile contract =
                  | "AND" -> "&"
                  | "LSR" -> ">>"
                  | "LSL" -> "<<"
+                 | "DEFAULT_ACCOUNT" -> "Account.default"
                  | _ -> prim
                in
 

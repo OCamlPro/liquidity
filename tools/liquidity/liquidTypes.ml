@@ -196,6 +196,9 @@ type pre_michelson =
 
   | SOURCE of datatype * datatype
 
+  | SIZE
+  | DEFAULT_ACCOUNT
+
   (* obsolete *)
   | MOD
   | DIV

@@ -42,11 +42,17 @@ NTESTS=18
 SIMPLE_TESTS= `seq -f 'test%.0f' 0 $(NTESTS)`
 MORE_TESTS=test_ifcons test_if test_loop test_option test_transfer test_left
 OTHER_TESTS=others/broker others/demo
+REV_TESTS=`seq -f  'test%.0f' 0 5`
 #EXIT_ON_ERROR= || exit 2
 tests: build
 	for i in $(SIMPLE_TESTS) \
 		$(MORE_TESTS) $(OTHER_TESTS); do \
 		./check.sh $$i $(EXIT_ON_ERROR); \
+	done
+
+rev-tests: build
+	for i in $(REV_TESTS); do \
+		./check-rev.sh $$i $(EXIT_ON_ERROR); \
 	done
 
 

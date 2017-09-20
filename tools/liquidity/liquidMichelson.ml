@@ -268,7 +268,6 @@ set x n y = x + [ DUP; CAR; SWAP; CDR ]*n +
     | "Source", [ { ty = from_ty }; { ty = to_ty } ] ->
        [ SOURCE (from_ty, to_ty) ]
 
-
     (* catch the special case of [a;b;c] where
 the ending NIL is not annotated with a type *)
     | "::", [ { ty } as arg; { ty = Tunit } ] ->
@@ -310,6 +309,8 @@ the ending NIL is not annotated with a type *)
          | "Contract.create", 7 -> [ CREATE_CONTRACT ]
          | "Crypto.hash", 1 -> [ H ]
          | "Crypto.check", 2 -> [ CHECK_SIGNATURE ]
+         | "Account.default", 1 -> [ DEFAULT_ACCOUNT ]
+
 
          | "::", 2 -> [ CONS ]
          | "or", 2 -> [ OR ]
