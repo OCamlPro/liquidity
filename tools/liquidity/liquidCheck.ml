@@ -25,12 +25,6 @@
 
  *)
 
-(* New:
-    SIZE ?
-    CREATE_CONTRACT ?
-    DEFAULT_ACCOUNT ?
- *)
-
 open LiquidTypes
 
 let noloc = "At unspecified location"
@@ -663,6 +657,9 @@ let types env contract =
          | "reduce", [_; { ty = Tlist _ }; _ ] -> "List.reduce"
          | "reduce", [_; { ty = Tset _ }; _ ] -> "Set.reduce"
          | "reduce", [_; { ty = Tmap _ }; _ ] -> "Map.reduce"
+         | "size", [{ ty = Tlist _ } ] -> "List.size"
+         | "size", [{ ty = Tset _ } ] -> "Set.size"
+         | "size", [{ ty = Tmap _ } ] -> "Map.size"
          | "map", [_; { ty = Tmap _ } ] -> "Map.map"
          | _ -> prim
        in

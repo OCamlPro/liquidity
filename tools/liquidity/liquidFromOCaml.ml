@@ -114,6 +114,11 @@ let rec translate_const env exp =
      CInt s, Some Tint
   | { pexp_desc = Pexp_constant (Pconst_integer (s, Some 'p')) } ->
      CNat s, Some Tnat
+  | { pexp_desc = Pexp_constant (Pconst_integer (s, Some 't')) } ->
+     CTez s, Some Ttez
+  | { pexp_desc = Pexp_constant (Pconst_float (s, Some 't')) } ->
+     CTez s, Some Ttez
+
   | { pexp_desc = Pexp_constant (Pconst_string (s, None)) } ->
      CString s, Some Tstring
 

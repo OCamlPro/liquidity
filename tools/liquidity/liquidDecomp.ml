@@ -110,6 +110,7 @@ let decompile contract =
             | "NOW", [] -> "Current.time", [unit]
             | "BALANCE", [] -> "Current.balance", [unit]
             | "AMOUNT",[] -> "Current.amount", [unit]
+            | "STEPS_TO_QUOTA",[] -> "Current.gas", [unit]
             | prim, args ->
                let prim =
                  match prim with
@@ -121,6 +122,7 @@ let decompile contract =
                  | "MEM" -> "mem"
                  | "MAP" -> "map"
                  | "REDUCE" -> "reduce"
+                 | "SIZE" -> "size"
                  | "FIND" -> "find"
                  | "CONS" -> "::"
                  | "SUB" -> "-"

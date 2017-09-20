@@ -145,6 +145,8 @@ let rec convert_code expr =
   | Script_repr.Prim(_, "AMOUNT", []) -> AMOUNT
   | Script_repr.Prim(_, "NIL", [ty]) ->
      PUSH (Tlist (convert_type ty), CList [])
+  | Script_repr.Prim(_, "EMPTY_SET", [ty]) ->
+     PUSH (Tset (convert_type ty), CSet [])
   | Script_repr.Prim(_, "EMPTY_MAP", [ty1; ty2]) ->
      PUSH (Tmap (convert_type ty1, convert_type ty2), CMap [])
   | Script_repr.Prim(_, "NONE", [ty]) ->
@@ -157,6 +159,13 @@ let rec convert_code expr =
      RIGHT (convert_type ty)
   | Script_repr.Prim(_, "INT", []) -> INT
   | Script_repr.Prim(_, "SIZE", []) -> SIZE
+  | Script_repr.Prim(_, "AND", []) -> AND
+  | Script_repr.Prim(_, "XOR", []) -> XOR
+  | Script_repr.Prim(_, "ABS", []) -> ABS
+  | Script_repr.Prim(_, "NOT", []) -> NOT
+  | Script_repr.Prim(_, "STEPS_TO_QUOTA", []) -> STEPS_TO_QUOTA
+  | Script_repr.Prim(_, "CREATE_ACCOUNT", []) -> CREATE_ACCOUNT
+  | Script_repr.Prim(_, "CREATE_CONTRACT", []) -> CREATE_CONTRACT
   | Script_repr.Prim(_, "DEFAULT_ACCOUNT", []) -> DEFAULT_ACCOUNT
 
 

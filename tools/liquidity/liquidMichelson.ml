@@ -310,7 +310,9 @@ the ending NIL is not annotated with a type *)
          | "Crypto.hash", 1 -> [ H ]
          | "Crypto.check", 2 -> [ CHECK_SIGNATURE ]
          | "Account.default", 1 -> [ DEFAULT_ACCOUNT ]
-
+         | "List.size", 1 -> [ SIZE ]
+         | "Set.size", 1 -> [ SIZE ]
+         | "Map.size", 1 -> [ SIZE ]
 
          | "::", 2 -> [ CONS ]
          | "or", 2 -> [ OR ]

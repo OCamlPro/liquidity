@@ -315,7 +315,6 @@ let interp contract =
        let x = node (N_PRIM "DEFAULT_ACCOUNT") [key] [seq] in
        x :: stack, x
 
-
     | MANAGER, x :: stack ->
        let x = node (N_PRIM "MANAGER") [x] [seq] in
        x :: stack, x
@@ -441,6 +440,44 @@ let interp contract =
 
     | REDUCE, x :: y :: z :: stack ->
        let x = node (N_PRIM "REDUCE") [x;y;z] [seq] in
+       x :: stack, x
+
+    | MAP, x :: y :: stack ->
+       let x = node (N_PRIM "MAP") [x;y] [seq] in
+       x :: stack, x
+
+    | SIZE, x :: stack ->
+       let x = node (N_PRIM "SIZE") [x] [seq] in
+       x :: stack, x
+
+    | AND, x :: y :: stack ->
+       let x = node (N_PRIM "AND") [x; y] [seq] in
+       x :: stack, x
+
+    | XOR, x :: y :: stack ->
+       let x = node (N_PRIM "XOR") [x; y] [seq] in
+       x :: stack, x
+
+    | NOT, x :: stack ->
+       let x = node (N_PRIM "NOT") [x] [seq] in
+       x :: stack, x
+
+    | STEPS_TO_QUOTA, stack ->
+       let x = node (N_PRIM "STEPS_TO_QUOTA") [] [seq] in
+       x :: stack, x
+
+    | CREATE_ACCOUNT, manager :: delegate :: delegatable :: amount :: stack ->
+       let x = node (N_PRIM "CREATE_ACCOUNT")
+                    [manager; delegate; delegatable; amount] [seq] in
+       x :: stack, x
+
+    | CREATE_CONTRACT, manager :: delegate ::
+                         spendable :: delegatable ::
+                           amount :: contract :: storage :: stack ->
+       let x = node (N_PRIM "CREATE_CONTRACT")
+                    [manager; delegate;
+                     spendable; delegatable;
+                     amount; contract; storage] [seq] in
        x :: stack, x
 
     | _ ->
