@@ -29,6 +29,19 @@ The Liquidity language provides the following features:
 * High-level types: types like sum-types and record-types can be defined
   and used in Liquidity programs.
 
+Documentation
+-------------
+
+See the `docs/` directory for Documentation and many examples in the
+`tests/` and `tests/others/` directories.
+
+Status
+------
+
+All features of Michelson are supported in Liquidity.
+All tests from `tezos/test/contracts/` can be decompiled to Liquidity
+and recompiled to Michelson.
+
 Roadmap
 -------
 
