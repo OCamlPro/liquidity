@@ -10,6 +10,8 @@
 (* This part of the library is made to create a minimal set of dependencies
 to be able to run code that was directly extracted from Tezos *)
 
+if( with_tezos ) {
+
 OCaml.library("michelson-deps", ocaml + {
      bytelink = [ "-custom" ];
      files = [
@@ -59,3 +61,5 @@ OCaml.library("michelson-deps", ocaml + {
      ];
      cclib = [ "-lsecp256k1" ]
 }); 
+
+}

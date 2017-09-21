@@ -8,6 +8,10 @@
 (**************************************************************************)
 
 open LiquidTypes
+open Tezos_context
+
+
+type tezos_code = Tezos_context.Script.code
 
 (*
 type expr =
@@ -176,6 +180,8 @@ let rec convert_code expr =
      convert_code (DIP (ndip, SEQ (LiquidMisc.list_init ndrop (fun _ -> DROP))))
   | CDAR n -> prim (Printf.sprintf "C%sAR" (String.make n 'D')) []
   | CDDR n -> prim (Printf.sprintf "C%sDR" (String.make n 'D')) []
+  | SIZE -> prim "SIZE" []
+  | DEFAULT_ACCOUNT -> prim "DEFAULT_ACCOUNT"  []
 
 
 let convert_contract c =
@@ -194,3 +200,114 @@ let string_of_contract c =
   let ppf = Format.str_formatter in
   Client_proto_programs.print_program (fun _ -> None) ppf (c, []);
   Format.flush_str_formatter ()
+
+
+
+
+let contract_amount = ref "1000.00"
+let contract_arg = ref (Script_repr.Prim(0, "Unit", []))
+let contract_storage = ref (Script_repr.Prim(0, "Unit", []))
+
+let context = ref None
+
+let get_context () =
+  match !context with
+  | Some ctxt -> ctxt
+  | None ->
+     let (level : int32) = 1l in
+     let (timestamp : int64) = 1L in
+     let (fitness : MBytes.t list) = [] in
+     let (ctxt : Context.t) = Context.empty in
+     match
+       Storage.prepare ~level ~timestamp ~fitness ctxt
+     with
+     | Error _ -> assert false
+     | Ok (ctxt, _bool) ->
+        context := Some ctxt;
+        ctxt
+
+let read_tezos_file filename =
+  let s = FileString.read_file filename in
+  let contract_hash = Hash.Operation_hash.hash_bytes [s] in
+  match LiquidFromTezos.contract_of_string s with
+  | Some code ->
+     Printf.eprintf "Program %S parsed\n%!" filename;
+     code, contract_hash
+  | None ->
+     Printf.eprintf "Errors parsing in %S\n%!" filename;
+     exit 2
+
+let execute_contract_file filename =
+  let contract, contract_hash = read_tezos_file filename in
+
+  let origination = Contract.initial_origination_nonce contract_hash in
+  let destination = Contract.originated_contract origination in
+
+  (* TODO: change that. Why do we need a Source opcode in Michelson ? *)
+  let source = destination in
+
+  let ctxt = get_context () in
+
+  let (amount : Tez.t) =
+    match Tez_repr.of_string !contract_amount with
+    | None -> assert false
+    | Some amount -> amount in
+  let (storage : Script_repr.storage) = {
+      Script_repr.storage_type = contract.Script.storage_type;
+      Script_repr.storage = !contract_storage;
+    } in
+  let (arg : Script_repr.expr) = !contract_arg in
+  let (qta : int) = 1000 in
+
+  match
+    Script_interpreter.execute origination source destination ctxt
+                               storage contract amount
+                               arg qta
+  with
+  | Ok (new_storage, result, qta, ctxt, origination) ->
+     let ppf = Format.str_formatter in
+     let noloc = fun _ -> None in
+     Format.fprintf ppf "Result:\n";
+     Client_proto_programs.print_expr noloc ppf result;
+     Format.fprintf ppf "@.";
+     Format.fprintf ppf "Storage:\n";
+     Client_proto_programs.print_expr noloc ppf new_storage;
+     Format.fprintf ppf "@.";
+     let s = Format.flush_str_formatter () in
+     Printf.printf "%s\n%!" s;
+     contract_storage := new_storage
+
+  | Error errors ->
+     Printf.eprintf "%d Errors executing %S\n%!"
+                    (List.length errors) filename;
+     List.iter (fun error ->
+         Format.eprintf "%a" Tezos_context.pp error
+       ) errors;
+     Tezos_context.pp_print_error Format.err_formatter errors;
+     Format.fprintf Format.err_formatter "@.";
+
+     exit 2
+
+let arg_list work_done = [
+    "--exec", Arg.String (fun s ->
+                  work_done := true;
+                  execute_contract_file s),
+    "FILE.tz Execute Tezos file FILE.tz";
+    "--load-arg", Arg.String (fun s ->
+                      let content = FileString.read_file s in
+                      match LiquidFromTezos.data_of_string content with
+                      | None -> assert false
+                      | Some data -> contract_arg := data),
+    "FILE Use data from file as argument";
+    "--load-storage", Arg.String (fun s ->
+                          let content = FileString.read_file s in
+                          match LiquidFromTezos.data_of_string content with
+                          | None -> assert false
+                          | Some data -> contract_storage := data),
+    "FILE Use data from file as initial storage";
+    "--amount", Arg.String (fun s -> contract_amount := s),
+    "NNN.00 Number of Tez sent";
+  ]
+
+(* force linking *)
+let execute = Script_interpreter.execute

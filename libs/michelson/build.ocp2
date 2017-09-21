@@ -9,6 +9,8 @@
 
 (* Most of this code is from Tezos, so we use include files and a submodule *)
 
+if( with_tezos ) {
+
 ocaml.debug = true;
 
 compflags = [ "-bin-annot"; "-g"; "-thread"; "-short-paths"; "-safe-string";
@@ -100,3 +102,6 @@ OCaml.library("michelson", ocaml + {
 
      ];
    });
+
+}
+

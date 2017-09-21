@@ -12,7 +12,6 @@
   site. It could dramatically decrease the size of the stack.  *)
 
 
-open Tezos_context
 open LiquidTypes
 
 (* We use the parser of the OCaml compiler parser to parse the file,
@@ -62,19 +61,8 @@ let compile_liquid_file filename =
   Printf.eprintf "Typecheck with:\n  tezos-client typecheck program %s\n" output
 
 
-let read_tezos_file filename =
-  let s = FileString.read_file filename in
-  let contract_hash = Hash.Operation_hash.hash_bytes [s] in
-  match LiquidFromTezos.contract_of_string s with
-  | Some code ->
-     Printf.eprintf "Program %S parsed\n%!" filename;
-     code, contract_hash
-  | None ->
-     Printf.eprintf "Errors parsing in %S\n%!" filename;
-     exit 2
-
 let compile_tezos_file filename =
-  let code, contract_hash = read_tezos_file filename in
+  let code, contract_hash = LiquidToTezos.read_tezos_file filename in
 
   let c = LiquidFromTezos.convert_contract code in
   let c = LiquidClean.clean_contract c in
@@ -106,79 +94,6 @@ let compile_tezos_file filename =
   Printf.eprintf "File %S generated\n%!" output;
   ()
 
-let contract_amount = ref "1000.00"
-let contract_arg = ref (Script_repr.Prim(0, "Unit", []))
-let contract_storage = ref (Script_repr.Prim(0, "Unit", []))
-
-let context = ref None
-
-let get_context () =
-  match !context with
-  | Some ctxt -> ctxt
-  | None ->
-     let (level : int32) = 1l in
-     let (timestamp : int64) = 1L in
-     let (fitness : MBytes.t list) = [] in
-     let (ctxt : Context.t) = Context.empty in
-     match
-       Storage.prepare ~level ~timestamp ~fitness ctxt
-     with
-     | Error _ -> assert false
-     | Ok (ctxt, _bool) ->
-        context := Some ctxt;
-        ctxt
-
-let execute_tezos_file filename =
-  let contract, contract_hash = read_tezos_file filename in
-
-  let origination = Contract.initial_origination_nonce contract_hash in
-  let destination = Contract.originated_contract origination in
-
-  (* TODO: change that. Why do we need a Source opcode in Michelson ? *)
-  let source = destination in
-
-  let ctxt = get_context () in
-
-  let (amount : Tez.t) =
-    match Tez_repr.of_string !contract_amount with
-    | None -> assert false
-    | Some amount -> amount in
-  let (storage : Script_repr.storage) = {
-      Script_repr.storage_type = contract.storage_type;
-      Script_repr.storage = !contract_storage;
-    } in
-  let (arg : Script_repr.expr) = !contract_arg in
-  let (qta : int) = 1000 in
-
-  match
-    Script_interpreter.execute origination source destination ctxt
-                               storage contract amount
-                               arg qta
-  with
-  | Ok (new_storage, result, qta, ctxt, origination) ->
-     let ppf = Format.str_formatter in
-     let noloc = fun _ -> None in
-     Format.fprintf ppf "Result:\n";
-     Client_proto_programs.print_expr noloc ppf result;
-     Format.fprintf ppf "@.";
-     Format.fprintf ppf "Storage:\n";
-     Client_proto_programs.print_expr noloc ppf new_storage;
-     Format.fprintf ppf "@.";
-     let s = Format.flush_str_formatter () in
-     Printf.printf "%s\n%!" s;
-     contract_storage := new_storage
-
-  | Error errors ->
-     Printf.eprintf "%d Errors executing %S\n%!"
-                    (List.length errors) filename;
-     List.iter (fun error ->
-         Format.eprintf "%a" Tezos_context.pp error
-       ) errors;
-     Tezos_context.pp_print_error Format.err_formatter errors;
-     Format.fprintf Format.err_formatter "@.";
-
-     exit 2
-
 
 let compile_file filename =
   if Filename.check_suffix filename ".liq" then
@@ -203,25 +118,8 @@ let main () =
       "-k", Arg.Set arg_keepon, " Continue on error";
       "--no-peephole", Arg.Clear arg_peephole,
       " Disable peephole optimizations";
-      "--exec", Arg.String (fun s ->
-                    work_done := true;
-                    execute_tezos_file s),
-      "FILE.tz Execute Tezos file FILE.tz";
-      "--load-arg", Arg.String (fun s ->
-                   let content = FileString.read_file s in
-                   match LiquidFromTezos.data_of_string content with
-                   | None -> assert false
-                   | Some data -> contract_arg := data),
-      "FILE Use data from file as argument";
-      "--load-storage", Arg.String (fun s ->
-                       let content = FileString.read_file s in
-                       match LiquidFromTezos.data_of_string content with
-                       | None -> assert false
-                       | Some data -> contract_storage := data),
-      "FILE Use data from file as initial storage";
-      "--amount", Arg.String (fun s -> contract_amount := s),
-      "NNN.00 Number of Tez sent";
-                   ] in
+                   ] @ LiquidToTezos.arg_list work_done
+  in
   let arg_usage = String.concat "\n" [
 "liquidity [OPTIONS] FILES";
 "";
@@ -238,8 +136,6 @@ let main () =
   if not !work_done then
     Arg.usage arg_list arg_usage
 
-
-let execute = Script_interpreter.execute
 
 let () =
   try

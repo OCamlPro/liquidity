@@ -8,6 +8,11 @@
 (**************************************************************************)
 
 open LiquidTypes
+
+
+let convert_contract string = assert false
+
+       (*
 open Client_proto_programs
 (*
 type expr =
@@ -211,3 +216,4 @@ module JSON = struct
     Error_monad.json_to_string := to_string
 
 end
+        *)

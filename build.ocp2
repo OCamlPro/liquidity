@@ -1,0 +1,7 @@
+(* Disable to compile without the sources of Tezos.
+   The following features with be disabled:
+   * Decompilation of Michelson files
+   * Execution of Michelson contracts
+*)
+
+with_tezos = true;
