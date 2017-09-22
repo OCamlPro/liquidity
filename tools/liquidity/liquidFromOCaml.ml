@@ -684,8 +684,28 @@ let translate_variant ty_name constrs env =
   let ty, constrs = iter constrs in
   env.types <- StringMap.add ty_name (ty, Type_variant constrs) env.types
 
+let check_version = function
+  | { pexp_desc = Pexp_constant (Pconst_float (s, None)); pexp_loc } ->
+    let req_version = float_of_string s in
+    let liq_version = float_of_string Version.version in
+    if req_version <> liq_version then
+      error_loc pexp_loc ("version mismatch (requires " ^ s ^
+                          " while compiler is " ^ Version.version ^ ")");
+  | { pexp_loc } -> error_loc pexp_loc "version must be a floating point number"
+
 let rec translate_structure env ast =
   match ast with
+  | { pstr_desc =
+         Pstr_value (
+             Nonrecursive,
+             [ {
+                 pvb_pat = { ppat_desc = Ppat_var { txt = "version" } };
+                 pvb_expr = exp;
+               }
+    ]) } :: ast ->
+    check_version exp;
+    translate_structure env ast
+
   | [{ pstr_desc =
          Pstr_value (
              Nonrecursive,

@@ -1,3 +1,7 @@
+(* Version of the Liquidity compiler *)
+
+version = "1.0";
+
 (* Disable to compile without the sources of Tezos.
    The following features with be disabled:
    * Decompilation of Michelson files
