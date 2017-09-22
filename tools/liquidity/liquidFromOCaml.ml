@@ -7,6 +7,12 @@
 (*                                                                        *)
 (**************************************************************************)
 
+(* The minimal version of liquidity files that are accepted by this compiler *)
+let minimal_version = 1.0
+
+(* The maximal version of liquidity files that are accepted by this compiler *)
+let maximal_version = 1.0
+
 (*
 let contract
       (parameter : timestamp)
@@ -697,10 +703,12 @@ let translate_variant ty_name constrs env =
 let check_version = function
   | { pexp_desc = Pexp_constant (Pconst_float (s, None)); pexp_loc } ->
     let req_version = float_of_string s in
-    let liq_version = float_of_string Version.version in
-    if req_version <> liq_version then
-      error_loc pexp_loc ("version mismatch (requires " ^ s ^
-                          " while compiler is " ^ Version.version ^ ")");
+    if req_version < minimal_version then
+      Printf.kprintf (error_loc pexp_loc)
+                     "version mismatch (requires %.2f while compiler has minimal %.2f )" req_version minimal_version;
+    if req_version > maximal_version then
+      Printf.kprintf (error_loc pexp_loc)
+                     "version mismatch (requires %.2f while compiler has maximal %.2f )" req_version maximal_version;
   | { pexp_loc } -> error_loc pexp_loc "version must be a floating point number"
 
 let rec translate_structure funs env ast =

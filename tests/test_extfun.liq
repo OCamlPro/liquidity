@@ -1,7 +1,6 @@
 let version = 1.0
 
-let f = fun ( arg : unit * int ) ->
-  arg.(0)
+let f ( arg : unit * int ) = arg.(0)
 
 let contract
       (parameter : int)

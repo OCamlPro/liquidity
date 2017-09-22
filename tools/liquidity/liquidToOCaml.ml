@@ -7,6 +7,9 @@
 (*                                                                        *)
 (**************************************************************************)
 
+(* The version that will be required to compile the generated files. *)
+let output_version = "1.0"
+
 (*
 let contract
       (parameter : timestamp)
@@ -276,7 +279,13 @@ let rec convert_code expr =
 
 let structure_of_contract contract =
   let code = convert_code contract.code in
-  [Str.value Nonrecursive
+  [
+    Str.value Nonrecursive
+              [
+                Vb.mk (Pat.var (loc "version"))
+                      (Exp.constant (Const.float output_version))
+              ];
+    Str.value Nonrecursive
               [
                 Vb.mk (Pat.var (loc "contract"))
                       (Exp.fun_ Nolabel None
