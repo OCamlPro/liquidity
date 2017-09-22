@@ -4,4 +4,4 @@
    * Execution of Michelson contracts
 *)
 
-with_tezos = true;
+with_tezos = false;
