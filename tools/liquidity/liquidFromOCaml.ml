@@ -599,7 +599,17 @@ and translate_case env case =
      | { ppat_loc } ->
         error_loc ppat_loc "bad pattern"
 
-let rec translate_head env head_exp args =
+let rec inline_funs exp = function
+  | [] -> exp
+  | (f_pvb, f_loc) :: funs ->
+    let f_in_exp = {
+      pexp_loc = f_loc;
+      pexp_desc = Pexp_let (Nonrecursive, [f_pvb], exp);
+      pexp_attributes = []; (* dummy value *)
+    } in
+    inline_funs f_in_exp funs
+
+let rec translate_head env ext_funs head_exp args =
   match head_exp with
   | { pexp_desc =
         Pexp_fun (
@@ -615,7 +625,7 @@ let rec translate_head env head_exp args =
                     arg_type)
             },
             head_exp) } ->
-     translate_head env head_exp
+     translate_head env ext_funs head_exp
                     ((arg, translate_type env arg_type) :: args)
   | { pexp_desc =
         Pexp_fun (
@@ -630,7 +640,7 @@ let rec translate_head env head_exp args =
       pexp_loc } ->
      error_loc pexp_loc (Printf.sprintf  "unexpected argument %S" txt)
   | exp ->
-     let code = translate_code env exp in
+     let code = translate_code env (inline_funs exp ext_funs) in
      {
        code;
        parameter = List.assoc "parameter" args;
@@ -693,7 +703,7 @@ let check_version = function
                           " while compiler is " ^ Version.version ^ ")");
   | { pexp_loc } -> error_loc pexp_loc "version must be a floating point number"
 
-let rec translate_structure env ast =
+let rec translate_structure funs env ast =
   match ast with
   | { pstr_desc =
          Pstr_value (
@@ -704,7 +714,7 @@ let rec translate_structure env ast =
                }
     ]) } :: ast ->
     check_version exp;
-    translate_structure env ast
+    translate_structure funs env ast
 
   | [{ pstr_desc =
          Pstr_value (
@@ -714,7 +724,17 @@ let rec translate_structure env ast =
                  pvb_expr = head_exp;
                }
     ]) } ] ->
-     translate_head env head_exp default_args
+    translate_head env funs head_exp default_args
+
+  | { pstr_desc =
+         Pstr_value (
+             Nonrecursive,
+             [ {
+                 pvb_pat = { ppat_desc = Ppat_var _ };
+                 pvb_expr = { pexp_desc = Pexp_fun _ };
+               } as f_pvb
+    ]); pstr_loc = f_loc } :: ast ->
+    translate_structure ((f_pvb, f_loc) :: funs) env ast
 
   | { pstr_desc = Pstr_type (Recursive,
                              [
@@ -744,7 +764,7 @@ let rec translate_structure env ast =
           end;
         translate_variant ty_name constrs env;
      end;
-     translate_structure env ast
+     translate_structure funs env ast
 
   | [] -> Printf.eprintf "Empty file %S\n%!" env.filename; raise Error
   | { pstr_loc = loc } :: _ -> error_loc loc "at toplevel"
@@ -797,7 +817,7 @@ let initial_env filename =
 
 let translate filename ast =
   let env = initial_env filename in
-  translate_structure env ast, env
+  translate_structure [] env ast, env
 
 let read_file filename =
   try
