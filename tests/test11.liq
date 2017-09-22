@@ -1,7 +1,7 @@
 
 (* strings *)
 
-(* let version = "1.0" *)
+let version = 1.0
 
 let contract
       (parameter : string)

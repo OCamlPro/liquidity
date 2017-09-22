@@ -58,7 +58,9 @@ OCaml.library("ocplib-liquidity",
 
 OCaml.library("ocplib-liquidity-ocaml",
    ocaml + {
+     version = version;
      files = [
+       "version.ml", {ocp2ml=true};
        "liquidFromOCaml.ml";
        "liquidToOCaml.ml";
      ];
