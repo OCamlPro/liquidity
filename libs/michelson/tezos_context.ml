@@ -15,6 +15,7 @@ type t = Storage.t
     warning : 'a. ('a, Format.formatter, unit) format -> 'a;
   } *)
 type context = t
+type public_key = Ed25519.Public_key.t
 type public_key_hash = Ed25519.Public_key_hash.t
 type signature = Ed25519.Signature.t
 

@@ -78,9 +78,12 @@ OCaml.library("michelson", ocaml + {
 
         (* from client/embedded/alpha *)
           "script_located_ir.ml";
+          "michelson_macros.ml";
+          "michelson_parser.ml";
+          (*
           "../../tezos/src/client/embedded/alpha/concrete_lexer.mll", { pp = [] };
           "../../tezos/src/client/embedded/alpha/concrete_parser.mly", { ocamlyacc = "menhir"; pp = [] };
-
+*)
           
           "apply.ml";           (* REWRITTEN *)
           "client_commands.ml"; (* REWRITTEN *)

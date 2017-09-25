@@ -4,6 +4,9 @@ open Hash
 open Utils
 open Tezos_data
 open Tezos_context
+open Michelson_parser
+open Client_commands
+open Script_located_ir
 
 (* from Updater *)
 type Error_monad.error += Ecoproto_error of Tezos_context.error (* Proto.error *) list

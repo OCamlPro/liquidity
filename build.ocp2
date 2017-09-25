@@ -8,4 +8,4 @@ version = "1.0";
    * Execution of Michelson contracts
 *)
 
-with_tezos = false;
+with_tezos = true;

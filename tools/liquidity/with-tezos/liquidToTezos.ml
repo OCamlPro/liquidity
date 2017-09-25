@@ -21,36 +21,39 @@ type expr =
   | Seq of location * expr list
  *)
 
-let prim name args = Script_repr.Prim(0, name, args)
+let debug = None
+
+let prim name args = Script_repr.Prim(0, name, args, debug)
 
 let rec convert_const expr =
   match expr with
   | CInt n -> Script_repr.Int (0, n)
   | CString s -> Script_repr.String (0, s)
-  | CUnit -> Script_repr.Prim(0, "Unit", [])
-  | CBool true -> Script_repr.Prim(0, "True", [])
-  | CBool false -> Script_repr.Prim(0, "False", [])
-  | CNone -> Script_repr.Prim(0, "None", [])
+  | CUnit -> Script_repr.Prim(0, "Unit", [], debug)
+  | CBool true -> Script_repr.Prim(0, "True", [], debug)
+  | CBool false -> Script_repr.Prim(0, "False", [], debug)
+  | CNone -> Script_repr.Prim(0, "None", [], debug)
 
-  | CSome x -> Script_repr.Prim(0, "Some", [convert_const x])
+  | CSome x -> Script_repr.Prim(0, "Some", [convert_const x], debug)
   | CTuple [] -> assert false
   | CTuple [_] -> assert false
   | CTuple [x;y] ->
      Script_repr.Prim(0, "Pair", [convert_const x;
-                                  convert_const y])
+                                  convert_const y], debug)
   | CTuple (x :: y) ->
      Script_repr.Prim(0, "Pair", [convert_const x;
-                                  convert_const (CTuple y)])
+                                  convert_const (CTuple y)], debug)
   | CList args -> Script_repr.Prim(0, "List",
-                                   List.map convert_const args)
+                                   List.map convert_const args, debug)
   | CMap args ->
      Script_repr.Prim(0, "Map",
                       List.map (fun (x,y) ->
                           Script_repr.Prim(0, "Item", [convert_const x;
-                                                       convert_const y]))
-                               args)
+                                                       convert_const y], debug
+                                          ))
+                               args, debug)
   | CSet args -> Script_repr.Prim(0, "Set",
-                                  List.map convert_const args)
+                                  List.map convert_const args, debug)
   | CNat n -> Script_repr.Int (0, n)
   | CTez n -> Script_repr.String (0, n)
            (*
@@ -93,7 +96,7 @@ let rec convert_type expr =
 let rec convert_code expr =
   match expr with
   | SEQ exprs ->
-     Script_repr.Seq (0, List.map convert_code exprs)
+     Script_repr.Seq (0, List.map convert_code exprs, debug)
   | DROP -> prim "DROP" []
   | DIP (0, arg) -> assert false
   | DIP (1, arg) -> prim "DIP" [ convert_code arg ]
@@ -205,8 +208,8 @@ let string_of_contract c =
 
 
 let contract_amount = ref "1000.00"
-let contract_arg = ref (Script_repr.Prim(0, "Unit", []))
-let contract_storage = ref (Script_repr.Prim(0, "Unit", []))
+let contract_arg = ref (Script_repr.Prim(0, "Unit", [], debug))
+let contract_storage = ref (Script_repr.Prim(0, "Unit", [], debug))
 
 let context = ref None
 
