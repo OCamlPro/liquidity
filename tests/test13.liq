@@ -1,9 +1,9 @@
 
 (* lists *)
 
-(* let version = "1.0" *)
+let version = 1.0
 
-let contract
+let%entry main
       (parameter : string)
       (storage : string list)
       (return : unit) =

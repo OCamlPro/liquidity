@@ -1,7 +1,7 @@
 #!/bin/sh
 
-LIQUIDITY=liquidity
-# LIQUIDITY=liquidity-mini
+#LIQUIDITY=liquidity
+LIQUIDITY=liquidity-mini
 
 test=$1
 echo $test

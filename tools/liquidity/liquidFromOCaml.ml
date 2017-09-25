@@ -724,15 +724,21 @@ let rec translate_structure funs env ast =
     check_version exp;
     translate_structure funs env ast
 
-  | [{ pstr_desc =
-         Pstr_value (
-             Nonrecursive,
-             [ {
-                 pvb_pat = { ppat_desc = Ppat_var { txt = "contract" } };
-                 pvb_expr = head_exp;
-               }
-    ]) } ] ->
-    translate_head env funs head_exp default_args
+  | { pstr_desc =
+        Pstr_extension
+          (({ txt = "entry" },
+           PStr
+             [{ pstr_desc =
+                  Pstr_value (
+                      Nonrecursive,
+                      [ {
+                          pvb_pat = { ppat_desc = Ppat_var { txt = "main" } };
+                          pvb_expr = head_exp;
+                        }
+             ]) } ]
+           ), []) } :: _ast  (* TODO *)
+    ->
+     translate_head env funs head_exp default_args
 
   | { pstr_desc =
          Pstr_value (

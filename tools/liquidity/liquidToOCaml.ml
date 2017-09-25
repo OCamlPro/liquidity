@@ -285,9 +285,11 @@ let structure_of_contract contract =
                 Vb.mk (Pat.var (loc "version"))
                       (Exp.constant (Const.float output_version))
               ];
-    Str.value Nonrecursive
+    Str.extension ( { txt = "entry"; loc = !default_loc },
+               PStr    [
+                     Str.value Nonrecursive
               [
-                Vb.mk (Pat.var (loc "contract"))
+                Vb.mk (Pat.var (loc "main"))
                       (Exp.fun_ Nolabel None
                                 (Pat.constraint_
                                    (Pat.var (loc "parameter"))
@@ -305,6 +307,6 @@ let structure_of_contract contract =
                                 )
                                 code)))
               ]
-  ]
+  ])]
 
 let string_of_structure str = Pprintast.string_of_structure str

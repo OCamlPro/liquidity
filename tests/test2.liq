@@ -1,7 +1,7 @@
 
-(* let version = "1.0" *)
+let version = 1.0
 
-let contract
+let%entry contract
       (parameter : timestamp)
       (storage : string * (* 0: S *)
                    timestamp * (* 1: T *)

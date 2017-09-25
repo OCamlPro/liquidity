@@ -1,9 +1,9 @@
 
 (* loops *)
 
-(* let version = "1.0" *)
+let version = 1.0
 
-let contract
+let%entry main
       (parameter : int)
       (storage : int)
       (return : unit) =

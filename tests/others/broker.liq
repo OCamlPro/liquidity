@@ -1,5 +1,5 @@
 
-(* let version = "1.0" *)
+let version = 1.0
 
 type storage = {
   state : string;
@@ -10,7 +10,7 @@ type storage = {
   b : (unit, unit) contract;
 }
 
-let contract
+let%entry main
       (parameter : timestamp)
       (storage : storage)
       (return : unit) =

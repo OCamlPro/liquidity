@@ -3,7 +3,7 @@
 
 let version = 1.0
 
-let contract
+let%entry main
       (parameter : string)
       (storage : string)
       (return : unit) =

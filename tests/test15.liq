@@ -1,5 +1,5 @@
 
-(* let version = "1.0" *)
+let version = 1.0
 
 type point = { x : string; y : bool; z : int }
 type vector = { orig : point; dest : point }
@@ -9,7 +9,7 @@ type storage = {
   whatever : unit;
 }
 
-let contract
+let%entry main
       (parameter : int)
       (storage : storage)
       (return : unit) =

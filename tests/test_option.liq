@@ -1,4 +1,4 @@
-let contract
+let%entry main
   (parameter : int option)
   (storage : unit)
   (return : int) =

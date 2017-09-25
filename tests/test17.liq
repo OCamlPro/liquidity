@@ -4,7 +4,7 @@ type storage =
 | Int of int
 | String of string * int
 
-let contract
+let%entry main
       (parameter : int)
       (storage : storage)
       (return : unit) =

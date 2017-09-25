@@ -1,5 +1,5 @@
 
-let contract
+let%entry main
       (parameter : int)
       (storage : unit)
       (return : unit) =

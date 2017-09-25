@@ -1,4 +1,4 @@
-let contract
+let%entry main
   (parameter : string)
   (storage : (string, int) map)
   (return : unit) =

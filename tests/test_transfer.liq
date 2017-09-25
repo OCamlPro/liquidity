@@ -1,9 +1,9 @@
 
 (* transfers *)
 
-(* let version = "1.0" *)
+let version = 1.0
 
-let contract
+let%entry main
       (parameter : (unit,unit) contract)
       (storage : tez)
       (return : unit) =
