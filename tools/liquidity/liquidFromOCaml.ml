@@ -780,7 +780,8 @@ let rec translate_structure funs env ast =
      end;
      translate_structure funs env ast
 
-  | [] -> Printf.eprintf "Empty file %S\n%!" env.filename; raise Error
+  | [] -> Printf.eprintf
+            "No entry point found in file %S\n%!" env.filename; raise Error
   | { pstr_loc = loc } :: _ -> error_loc loc "at toplevel"
 
 let predefined_constructors =

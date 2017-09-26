@@ -46,8 +46,6 @@ OCaml.library("ocplib-liquidity-examples",
          file2string = [
                   "others/demo.liq";
                   "others/broker.liq";
-                  "others/broker2.liq";
-                  "others/broker.liq";
           ];
        };
 

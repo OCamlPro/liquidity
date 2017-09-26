@@ -42,7 +42,7 @@ NTESTS=18
 SIMPLE_TESTS= `seq -f 'test%.0f' 0 $(NTESTS)`
 MORE_TESTS=test_ifcons test_if test_loop test_option test_transfer test_left \
   test_extfun test_left_constr
-OTHER_TESTS=others/broker others/demo
+OTHER_TESTS=others/broker others/broker2 others/demo
 REV_TESTS=`seq -f  'test%.0f' 0 5`
 
 TEZOS_TESTS=and exec_concat max_in_list steps_to_quota balance		\
