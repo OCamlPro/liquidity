@@ -36,7 +36,7 @@ clean: _obuild clean-tests clean-sources
 distclean: clean
 	rm -rf _obuild
 
-
+# All of these tests must be run with with_tezos=true
 
 NTESTS=18
 SIMPLE_TESTS= `seq -f 'test%.0f' 0 $(NTESTS)`

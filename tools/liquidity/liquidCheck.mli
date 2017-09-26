@@ -12,7 +12,7 @@ open LiquidTypes
 val error : location -> string -> 'a
 val warning : location -> string -> unit
 
-val types : env -> syntax_exp contract ->
+val types : warnings:bool -> env -> syntax_exp contract ->
             typed_exp contract
             * datatype exp StringMap.t
 

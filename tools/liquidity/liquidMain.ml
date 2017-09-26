@@ -28,7 +28,7 @@ let compile_liquid_file filename =
   FileString.write_file (filename ^ ".syntax")
                         (LiquidPrinter.Liquid.string_of_contract
                            syntax_ast);
-  let typed_ast, to_inline = LiquidCheck.types env syntax_ast in
+  let typed_ast, to_inline = LiquidCheck.types ~warnings:true env syntax_ast in
   FileString.write_file (filename ^ ".typed")
                         (LiquidPrinter.Liquid.string_of_contract
                            typed_ast);
@@ -73,8 +73,8 @@ let compile_tezos_file filename =
   FileString.write_file  (filename ^ ".liq.pre")
                          (LiquidPrinter.Liquid.string_of_contract c);
   let env = LiquidFromOCaml.initial_env filename in
-  let typed_ast, to_inline = LiquidCheck.types env c in
-  Printf.eprintf "Inlining: %d\n%!" (StringMap.cardinal to_inline);
+  let typed_ast, to_inline = LiquidCheck.types ~warnings:false env c in
+  (*  Printf.eprintf "Inlining: %d\n%!" (StringMap.cardinal to_inline); *)
   let live_ast = LiquidSimplify.simplify_contract typed_ast to_inline in
   let untyped_ast = LiquidUntype.untype_contract live_ast in
   let output = filename ^ ".liq" in

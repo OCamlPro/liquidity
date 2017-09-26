@@ -1,10 +1,10 @@
 # NONE if user wants to get the value
 # SOME (signed hash of the string, string)
-parameter (option (pair signature string))
-return string
+parameter (option (pair signature string));
+return string;
 # The key used to update the contract
 # The data
-storage (pair key string)
+storage (pair key string);
 code {DUP; DUP; CAR;
       IF_NONE {PUSH tez "1.00"; # Fee pattern from July 26
                AMOUNT; CMPLE; IF {FAIL} {};
@@ -19,4 +19,4 @@ code {DUP; DUP; CAR;
                   {DROP; DUP; CDR; DIP{CDDR}}};
       # Cleanup
       SWAP; PAIR}
-      
+

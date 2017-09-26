@@ -72,8 +72,8 @@ let new_binding env name ty =
               vars = StringMap.add name (new_name, ty, count) env.vars } in
   (new_name, env, count)
 
-let check_used name loc count =
-  if !count = 0 && name.[0] <> '_' then begin
+let check_used ~warnings name loc count =
+  if warnings && !count = 0 && name.[0] <> '_' then begin
       warning
         loc
         (Printf.sprintf "unused variable %S" name)
@@ -91,7 +91,7 @@ let eprint_2types ty1 ty2 =
                  (LiquidPrinter.Liquid.string_of_type ty2);
   ()
 
-let types env contract =
+let types ~warnings env contract =
 
   let to_inline = ref StringMap.empty in
 
@@ -116,7 +116,7 @@ let types env contract =
        let (new_name, env, count) = new_binding env name exp.ty in
        let body, fail2, transfer2 = typecheck env body in
        let desc = Let (new_name, loc, exp, body ) in
-       check_used name loc count;
+       check_used ~warnings name loc count;
        if (not transfer1) && (not fail1) then begin
            match !count with
            | 0 ->
@@ -272,8 +272,8 @@ let types env contract =
             let (new_result, env, result_count) =
               new_binding env result_name return_ty in
             let body, fail5, transfer5 = typecheck env body in
-            check_used storage_name loc storage_count;
-            check_used result_name loc result_count;
+            check_used ~warnings storage_name loc storage_count;
+            check_used ~warnings result_name loc result_count;
             let desc = LetTransfer(new_storage, new_result,
                                    loc,
                                    contract_exp, tez_exp,
@@ -315,7 +315,7 @@ let types env contract =
        let ifnone, fail2, transfer2 = typecheck env ifnone in
        let (new_name, env, count) = new_binding env name arg_ty in
        let ifsome, fail3, transfer3 = typecheck env ifsome in
-       check_used name loc count;
+       check_used ~warnings name loc count;
        let desc = MatchOption (arg, loc, ifnone, new_name, ifsome ) in
        let ty =
          match ifnone.ty, ifsome.ty with
@@ -343,7 +343,7 @@ let types env contract =
          typecheck_expected (noloc, "loop-body") env
                             (Ttuple [Tbool; arg.ty])
                             body in
-       check_used name loc count;
+       check_used ~warnings name loc count;
        let can_fail = fail1 || fail2 in
        mk (Loop (new_name, loc, body, arg)) arg.ty can_fail,
        can_fail,
@@ -364,8 +364,8 @@ let types env contract =
        let (new_tail_name, env, count) =
          new_binding env tail_name (Tlist arg_ty) in
        let ifcons, fail3, transfer3 = typecheck env ifcons in
-       check_used head_name loc count;
-       check_used tail_name loc count;
+       check_used ~warnings head_name loc count;
+       check_used ~warnings tail_name loc count;
        let desc = MatchList (arg, loc, new_head_name, new_tail_name, ifcons,
                              ifnil ) in
        let ty =
@@ -583,7 +583,7 @@ let types env contract =
            in
            if can_fail then match_can_fail := true;
            if transfer then has_transfer := true;
-           check_used name loc count;
+           check_used ~warnings name loc count;
            present_constrs := StringMap.add constr
                                             (new_name, e)
                                             !present_constrs

@@ -9,9 +9,11 @@ code {DUP; CAR;
                # Put NONE on stack and finish
                IF_NONE {NONE string; DIP{PAIR}; PAIR}
                        # Reoption the element and remove the entry from the map
-                       {SOME; DIP{DUP; DIP{CAR; DIP{NONE string}; UPDATE};
-                                  # Increment the counter and cleanup
-                                  DUP; CAR; PUSH nat 1; ADD; DIP{CDR}; PAIR; PAIR}; PAIR}}
+                       {SOME;
+                        DIP{ DUP; DIP{CAR; DIP{NONE string}; UPDATE};
+                             DUP; CAR; PUSH nat 1; ADD; DIP{CDR}; PAIR; PAIR};
+                        PAIR}
+              }
               # Arrange the stack
               {DIP{DUP; CDAR; DIP{CDDR}; DUP}; SWAP; CAR;
                # Add the element to the map
@@ -20,4 +22,4 @@ code {DUP; CAR;
                    PUSH nat 1; ADD};
                # Cleanup and finish
                PAIR; PAIR; NONE string; PAIR}}
-               
+
