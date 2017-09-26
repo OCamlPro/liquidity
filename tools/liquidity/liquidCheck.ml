@@ -30,10 +30,7 @@ open LiquidTypes
 let noloc env = Location.in_file env.filename
 
 let error loc msg =
-  Location.raise_errorf ~loc ("Type error:  "^^msg^^"\n%!")
-
-let warning loc msg =
-  Format.eprintf "%a\nWarning:  %s\n%!" Location.print_loc loc msg
+  Location.raise_errorf ~loc ("Type error:  " ^^ msg ^^ "%!")
 
 let comparable_ty ty1 ty2 =
   match ty1, ty2 with
@@ -72,10 +69,8 @@ let new_binding env name ty =
 
 let check_used ~warnings name loc count =
   if warnings && !count = 0 && name.[0] <> '_' then begin
-      warning
-        loc
-        (Printf.sprintf "unused variable %S" name)
-    end
+      warn loc (Unused name)
+  end
 
 let maybe_reset_vars env transfer =
   if transfer then

@@ -13,8 +13,6 @@ val error :
   location ->
   ('a, Format.formatter, unit, unit, unit, 'b) format6 -> 'a
 
-val warning : location -> string -> unit
-
 val types : warnings:bool -> env -> syntax_exp contract ->
             typed_exp contract
             * datatype exp StringMap.t

@@ -270,3 +270,17 @@ type node = {
    | N_SOURCE of datatype * datatype
 
 type node_exp = node * node
+
+type warning =
+  | Unused of string
+
+let default_warning_printer loc w =
+  Format.eprintf "%a:\nWarning:  %a\n%!" Location.print_loc loc
+  (fun fmt -> function
+     | Unused name ->
+       Format.fprintf fmt "unused variable %S" name)
+  w
+
+let warning_printer = ref default_warning_printer
+
+let warn loc w = !warning_printer loc w
