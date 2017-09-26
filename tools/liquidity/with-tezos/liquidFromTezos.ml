@@ -193,6 +193,7 @@ let data_of_string s =
   | Ok data -> Some data.ast
   | Error _ -> None
 
+                 (*
 let pp = Tezos_context.pp
 
 module JSON = struct
@@ -215,3 +216,4 @@ module JSON = struct
     Error_monad.json_to_string := to_string
 
 end
+                  *)
