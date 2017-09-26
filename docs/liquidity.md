@@ -22,12 +22,12 @@ a version that it does not understand (too old, more recent).
 
 The `main` function is the default entry point for the contract.
 `let%entry` is the construct used to declare entry points (there is
-currently only one, but there will be probably more in the future).
-Each of the three parameter of an entry point should have its type
-specified. Using the names `parameter`, `storage` and `return` for
-these three parameters is mandatory. `parameter` and `storage` are the
-two arguments to the entry, while `return` has the type of its return
-value.
+currently only one entry point, but there will be probably more in the
+future).  Each of the three parameter of an entry point should have
+its type specified. Using the names `parameter`, `storage` and
+`return` for these three parameters is mandatory. `parameter` and
+`storage` are the two arguments to the entry, while `return` has the
+type of its return value.
 
 A contract always returns a pair `(return, storage)`, where `return` is
 the return value to the caller, and `storage` is the final state of the
