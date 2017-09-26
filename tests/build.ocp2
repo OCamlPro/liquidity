@@ -1,0 +1,67 @@
+
+OCaml.library("ocplib-liquidity-examples",
+  ocaml + {
+    files = [
+    
+       "liquidTestSimple.ml", {
+         file2string = [
+                     "test0.liq";
+                     "test1.liq";
+                     "test2.liq";
+                     "test3.liq";
+                     "test4.liq";
+                     "test5.liq";
+                     "test6.liq";
+                     "test7.liq";
+                     "test8.liq";
+                     "test9.liq";
+                     "test10.liq";
+                     "test11.liq";
+                     "test12.liq";
+                     "test13.liq";
+                     "test14.liq";
+                     "test15.liq";
+                     "test16.liq";
+                     "test17.liq";
+                     "test18.liq";
+                     ];
+       };
+
+       "liquidTestMore.ml", {
+         file2string = [
+                  "test_extfun.liq";
+                  "test_ifcons.liq";
+                  "test_if.liq";
+                  "test_left_constr.liq";
+                  "test_left.liq";
+                  "test_left_match.liq";
+                  "test_loop.liq";
+                  "test_option.liq";
+                  "test_right_constr.liq";
+                  "test_transfer.liq";
+          ];
+       };
+
+       "liquidTestOthers.ml", {
+         file2string = [
+                  "others/demo.liq";
+                  "others/broker.liq";
+                  "others/broker2.liq";
+                  "others/broker.liq";
+          ];
+       };
+
+       "liquidTestReverse.ml", {
+         file2string = [
+                     "reverse/test0.tz";
+                     "reverse/test1.tz";
+                     "reverse/test2.tz";
+                     "reverse/test3.tz";
+                     "reverse/test4.tz";
+                     "reverse/test5.tz";
+          ];
+       };
+
+
+    ];
+  });
