@@ -61,7 +61,7 @@ type 'exp contract = {
     code : 'exp;
   }
 
-type location = string
+type location = Location.t
 
 (* `variant` is the only parameterized type authorized in Liquidity.
    Its constructors, `Left` and `Right` must be constrained with type
@@ -270,5 +270,3 @@ type node = {
    | N_SOURCE of datatype * datatype
 
 type node_exp = node * node
-
-exception Error

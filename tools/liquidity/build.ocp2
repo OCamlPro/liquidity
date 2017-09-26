@@ -52,6 +52,7 @@ OCaml.library("ocplib-liquidity",
      ];
      requires = [
         "ocplib-dot";
+        "compiler-libs.common";
      ];
 
    });

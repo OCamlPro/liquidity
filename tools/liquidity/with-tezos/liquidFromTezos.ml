@@ -23,17 +23,16 @@ type expr =
 
 
 let unknown_expr f_name expr =
-  Printf.eprintf "Error in %s: %s\n%!" f_name
-                 (match expr with
-                  | Script_repr.Seq (_loc, _exprs, _debug) -> "Seq (_)"
-                  | Script_repr.String (_loc, s) ->
-                     Printf.sprintf "String %S" s
-                  | Script_repr.Int (_loc, s) ->
-                     Printf.sprintf "Int %s" s
-                  | Script_repr.Prim(_, s, args, _debug) ->
-                     Printf.sprintf "Prim(%S,[%d])" s (List.length args)
-                 );
-  raise Error
+  Location.raise_errorf ~loc:(Location.in_file f_name) "%s"
+    (match expr with
+     | Script_repr.Seq (_loc, _exprs, _debug) -> "Seq (_)"
+     | Script_repr.String (_loc, s) ->
+       Printf.sprintf "String %S" s
+     | Script_repr.Int (_loc, s) ->
+       Printf.sprintf "Int %s" s
+     | Script_repr.Prim(_, s, args, _debug) ->
+       Printf.sprintf "Prim(%S,[%d])" s (List.length args)
+    )
 
 let rec convert_const expr =
   match expr with

@@ -9,7 +9,7 @@
 
 open LiquidTypes
 
-let noloc = "At unspecified location"
+let noloc = Location.none
 
 let mk desc = { desc; ty = (); bv = StringSet.empty; fail = false }
 
@@ -192,9 +192,9 @@ let decompile contract =
                               decompile_next else_node
                            ])
             | _ ->
-               Printf.eprintf "Error: not implemented at IF node %s\n%!"
-                              (LiquidPrinter.string_of_node then_node);
-               raise Error
+              Location.raise_errorf
+                "Error: not implemented at IF node %s%!"
+                (LiquidPrinter.string_of_node then_node)
           in
           mklet node desc
        | N_IF_END _, args -> value_of_args args
@@ -269,10 +269,9 @@ let decompile contract =
        | N_LOOP_ARG (_, _)
        | N_LOOP_RESULT (_, _, _)
        ), _->
-
-          Printf.eprintf "Error: not implemented at node %s\n%!"
-                         (LiquidPrinter.string_of_node node);
-          raise Error
+         Location.raise_errorf
+           "not implemented at node %s%!"
+           (LiquidPrinter.string_of_node node)
 
 
   and value_of_args args =

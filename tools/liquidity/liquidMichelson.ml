@@ -46,9 +46,9 @@ let translate_code code =
        let pos = try
            StringMap.find name env
          with Not_found ->
-           Printf.eprintf "Internal Error(Michelson): variable %S not found\n%!"
-                          name;
-           raise Error
+           Location.raise_errorf ~loc
+             "Internal Error(Michelson): variable %S not found\n%!"
+             name
        in
        [ dup (depth - pos) ], false
     | Var (name, loc, _::_) ->  assert false

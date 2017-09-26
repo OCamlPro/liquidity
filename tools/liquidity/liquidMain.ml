@@ -83,7 +83,7 @@ let compile_tezos_file filename =
                             LiquidToOCaml.string_of_structure
                               (LiquidToOCaml.structure_of_contract
                                  untyped_ast)
-                          with Error ->
+                          with Location.Error _ ->
                             LiquidPrinter.Liquid.string_of_contract
                               untyped_ast);
   Printf.eprintf "File %S generated\n%!" output;
@@ -104,8 +104,8 @@ let compile_file filename =
 let compile_file filename =
   try
     compile_file filename
-  with Error ->
-       if not !arg_keepon then raise Error
+  with (Location.Error _) as e ->
+       if not !arg_keepon then raise e
 
 let main () =
   let work_done = ref false in
@@ -135,6 +135,10 @@ let main () =
 let () =
   try
     main ()
-  with Error ->
-    Printf.eprintf "Fatal Error: aborting\n";
-    exit 2
+  with e -> match Location.error_of_exn e with
+    | Some err ->
+      Format.fprintf Format.err_formatter "@[%a@]@." Location.report_error err;
+      exit 2
+    | None ->
+      Printf.eprintf "Fatal Error: aborting\n";
+      exit 2

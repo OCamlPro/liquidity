@@ -62,9 +62,8 @@ let rec convert_const expr =
    | CSignature _|CLeft _|CRight _)
             *)
   | _ ->
-     Printf.eprintf "to-tezos: unimplemented const:\n%s\n%!"
-                    (LiquidPrinter.Michelson.string_of_const expr);
-     raise Error
+    Location.raise_errorf "to-tezos: unimplemented const:\n%s%!"
+      (LiquidPrinter.Michelson.string_of_const expr)
 
 
 let rec convert_type expr =
