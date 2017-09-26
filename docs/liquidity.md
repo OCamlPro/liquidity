@@ -124,6 +124,18 @@ Operations:
 * `LSR` : `x >> y`
 * `LSL` : `x << y`
 
+Constants
+---------
+
+As in Michelson, there are different types of integers:
+* int : an unbounded integer, positive or negative, simply
+    written `0`,`1`,`2`,`-1`,`-2`,...
+* nat : an unbounded positive integer, written either with a `p` suffix
+    (`0p`, `12p`, etc.) or as an integer with a type coercion ( `(0 : nat)` ).
+* tez : an unbounded positive float of Tezzies, written either with
+    a `t` suffix (`1.00t`, etc.) or as a string with type coercion
+    (`("1.00" : tez)`).
+
 Tuples
 ------
 

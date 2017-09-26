@@ -246,11 +246,13 @@ let rec translate_const env exp =
      let cst, tyo = translate_const env cst in
      let ty = translate_type env ty in
      begin
+       let loc = exp.pexp_loc in
        match tyo with
        | None ->
-          (* TODO: check conformance of constant to proposed type *)
-          cst, Some ty
+          check_const_type loc ty cst, Some ty
        | Some ty_infer ->
+          check_const_type loc ty cst, Some ty
+                           (*
           if ty <> ty_infer then begin
               let cst =
                 match ty, cst with
@@ -265,9 +267,46 @@ let rec translate_const env exp =
             end
           else
             cst, Some ty
+                            *)
      end
 
   | _ -> raise NotAConstant
+
+and check_const_type loc ty cst =
+  match ty, cst with
+  | Tunit, CUnit -> CUnit
+  | Tbool, CBool b -> CBool b
+  | Tint, CInt n -> CInt n
+  | Tnat, CInt n -> CNat n
+  | Tint, CNat s -> CInt s
+  | Tstring, CString s -> CString s
+  | Ttez, CString s -> CTez s
+  | Tkey, CString s -> CKey s
+  | Tsignature, CString s -> CSignature s
+  | Ttuple tys, CTuple csts ->
+     begin
+       try
+         CTuple (List.map2 (check_const_type loc) tys csts)
+       with Invalid_argument _ ->
+         error_loc loc "constant type mismatch (tuple length differs from type)"
+     end
+
+  | Toption _, CNone -> CNone
+  | Toption ty, CSome cst -> CSome (check_const_type loc ty cst)
+
+  | Tmap (ty1, ty2), CMap csts ->
+     CMap (List.map (fun (cst1, cst2) ->
+               check_const_type loc ty1 cst1,
+               check_const_type loc ty2 cst2) csts)
+
+  | Tlist ty, CList csts ->
+     CList (List.map (check_const_type loc ty) csts)
+
+  | Tset ty, CSet csts ->
+     CSet (List.map (check_const_type loc ty) csts)
+
+  | _ ->
+     error_loc loc "constant type mismatch"
 
 and translate_list exp =
   match exp.pexp_desc with

@@ -42,7 +42,7 @@ NTESTS=18
 SIMPLE_TESTS= `seq -f 'test%.0f' 0 $(NTESTS)`
 MORE_TESTS=test_ifcons test_if test_loop test_option test_transfer test_left \
   test_extfun test_left_constr
-OTHER_TESTS=others/broker others/broker2 others/demo
+OTHER_TESTS=others/broker others/demo
 REV_TESTS=`seq -f  'test%.0f' 0 5`
 
 TEZOS_TESTS=and exec_concat max_in_list steps_to_quota balance		\
@@ -54,8 +54,8 @@ reverse_loop transfer_to create_account list_id_map reverse		\
 weather_insurance create_contract list_id set_id xor default_account	\
 map_id set_member empty_map map_size set_size
 
-#EXIT_ON_ERROR= || exit 2
-EXIT_ON_ERROR= || echo Test $$i failed
+EXIT_ON_ERROR= || exit 2
+#EXIT_ON_ERROR= || echo Test $$i failed
 tests: build
 	for i in $(SIMPLE_TESTS) \
 		$(MORE_TESTS) $(OTHER_TESTS); do \

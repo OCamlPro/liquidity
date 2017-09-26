@@ -1,0 +1,9 @@
+OCaml.library("ocplib-liquidity-documentation",
+  ocaml + {
+    files =[
+      "liquidDoc.ml",
+            { file2string = [
+                    "liquidity.md"
+                          ] }           
+        ];
+        });
