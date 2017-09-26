@@ -54,8 +54,8 @@ reverse_loop transfer_to create_account list_id_map reverse		\
 weather_insurance create_contract list_id set_id xor default_account	\
 map_id set_member empty_map map_size set_size
 
-EXIT_ON_ERROR= || exit 2
-#EXIT_ON_ERROR= || echo Test $$i failed
+#EXIT_ON_ERROR= || exit 2
+EXIT_ON_ERROR= || echo Test $$i failed
 tests: build
 	for i in $(SIMPLE_TESTS) \
 		$(MORE_TESTS) $(OTHER_TESTS); do \
