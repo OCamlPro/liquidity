@@ -7,24 +7,35 @@ Contract Format
 All the contracts have the following form:
 
 ```
-let contract
-      (amount : tez)
+let version = 1.0
+<... local declarations ...>
+let%entry main
       (parameter : TYPE)
       (storage : TYPE)
       (return : TYPE) =
       BODY
 ```
 
-where TYPE is a type and BODY is the code of the contract, using the
-three arguments `amount`, `parameter` and `storage`. The `return`
-variable cannot be used, it is special form to declare the return type
-of the contract.  The `amount` argument is the amount of Tez sent to
-the contract, `parameter` is the argument provided by the caller, and
-`storage` is the initial state of the contract.
+The `version` statement tells the compiler in which version of Liquidity
+the contract is written. The compiler will reject any contract that has
+a version that it does not understand (too old, more recent).
+
+The `main` function is the default entry point for the contract.
+`let%entry` is the construct used to declare entry points (there is
+currently only one, but there will be probably more in the future).
+Each of the three parameter of an entry point should have its type
+specified. Using the names `parameter`, `storage` and `return` for
+these three parameters is mandatory. `parameter` and `storage` are the
+two arguments to the entry, while `return` has the type of its return
+value.
 
 A contract always returns a pair `(return, storage)`, where `return` is
 the return value to the caller, and `storage` is the final state of the
 contract after the call.
+
+<... local declarations ...> is an optional set of optional type and
+function declarations. Type declarations can be used to define records
+and variants (sum-types), described later in this documentation.
 
 Calling another contract
 ------------------------
@@ -48,7 +59,9 @@ where:
 
 All variables are destroyed during the call, so any state that should
 survive the call should be stored in the storage of the calling
-contract. 
+contract. It is not a limitation, but a design choice: always
+specifying the state at the call forces the programmer to think about
+what would happen in the case of a recursive call.
 
 Operators and functions
 -----------------------
@@ -68,8 +81,10 @@ Liquidity functions:
 * `H` : `Crypto.hash x`
 * `CHECK_SIGNATURE` : `Crypto.check sg`
 * `CREATE_ACCOUNT` : `Account.create`
+* `CREATE_CONTRACT` : `Contract.create`
 * `MANAGER` : `Contract.manager ct`
 * `EXEC` : `Lambda.pipe` or `|>`
+* `DEFAULT_ACCOUNT` : `Account.default`
 
 Comparisons:
 
@@ -88,6 +103,11 @@ On data structures:
 * `MEM`: `Map.mem` or `Set.mem`
 * `CONCAT` : `@`
 * `REDUCE` : `Map.reduce` or `Set.reduce` or `List.reduce`
+* `SIZE` : `List.size` or `Set.size` or `Map.size`
+
+(it is possible to use the generic `Coll.` prefix for all collections,
+but not in a polymorphic way, i.e. `Coll.` is immediately replaced by the
+type-specific version for the type of its argument.)
 
 Operations:
 * `OR` : `x or y`

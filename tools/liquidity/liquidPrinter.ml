@@ -41,40 +41,47 @@ module Michelson = struct
     | Ttuple tys -> bprint_type_pairs b indent tys
     | Tcontract (ty1, ty2) ->
        let indent = indent ^ "  " in
-       Printf.bprintf b "contract\n%s" indent;
+       Printf.bprintf b "(contract\n%s" indent;
        bprint_type b indent ty1;
        Printf.bprintf b "\n%s" indent;
-       bprint_type b indent ty2
+       bprint_type b indent ty2;
+       Printf.bprintf b "\n%s)" indent;
     | Tor (ty1, ty2) ->
        let indent = indent ^ "  " in
-       Printf.bprintf b "or\n%s" indent;
+       Printf.bprintf b "(or\n%s" indent;
        bprint_type b indent ty1;
        Printf.bprintf b "\n%s" indent;
-       bprint_type b indent ty2
+       bprint_type b indent ty2;
+       Printf.bprintf b "\n%s)" indent;
     | Toption ty ->
        let indent = indent ^ "  " in
-       Printf.bprintf b "option\n%s" indent;
-       bprint_type b indent ty
+       Printf.bprintf b "(option\n%s" indent;
+       bprint_type b indent ty;
+       Printf.bprintf b "\n%s)" indent;
     | Tlist ty ->
        let indent = indent ^ "  " in
-       Printf.bprintf b "list\n%s" indent;
-       bprint_type b indent ty
+       Printf.bprintf b "(list\n%s" indent;
+       bprint_type b indent ty;
+       Printf.bprintf b "\n%s)" indent;
     | Tset ty ->
        let indent = indent ^ "  " in
-       Printf.bprintf b "set\n%s" indent;
-       bprint_type b indent ty
+       Printf.bprintf b "(set\n%s" indent;
+       bprint_type b indent ty;
+       Printf.bprintf b "\n%s)" indent;
     | Tmap (ty1, ty2) ->
        let indent = indent ^ "  " in
-       Printf.bprintf b "map\n%s" indent;
+       Printf.bprintf b "(map\n%s" indent;
        bprint_type b indent ty1;
        Printf.bprintf b "\n%s" indent;
-       bprint_type b indent ty2
+       bprint_type b indent ty2;
+       Printf.bprintf b "\n%s)" indent;
     | Tlambda (ty1, ty2) ->
        let indent = indent ^ "  " in
-       Printf.bprintf b "lambda\n%s" indent;
+       Printf.bprintf b "(lambda\n%s" indent;
        bprint_type b indent ty1;
        Printf.bprintf b "\n%s" indent;
-       bprint_type b indent ty2
+       bprint_type b indent ty2;
+       Printf.bprintf b "\n%s)" indent;
     | Ttype (ty_name, ty) ->
        (*     Printf.bprintf b "%S =\n%s  " ty_name indent; *)
        bprint_type b indent ty
@@ -87,10 +94,12 @@ module Michelson = struct
     | [ty] -> bprint_type b indent ty
     | ty :: tys ->
        let indent = indent ^ "  " in
-       Printf.bprintf b "pair\n%s" indent;
+       Printf.bprintf b "(pair\n%s" indent;
        bprint_type b indent ty;
        Printf.bprintf b "\n%s" indent;
-       bprint_type_pairs b indent tys
+       bprint_type_pairs b indent tys;
+       Printf.bprintf b "\n%s)" indent;
+       ()
 
   let rec bprint_const b indent cst =
     match cst with
@@ -115,34 +124,39 @@ module Michelson = struct
                                *)
     | CSome cst ->
        let indent = indent ^ "  " in
-       Printf.bprintf b "Some\n%s" indent;
-       bprint_const b indent cst
+       Printf.bprintf b "(Some\n%s" indent;
+       bprint_const b indent cst;
+       Printf.bprintf b "\n%s)" indent;
     | CTuple tys -> bprint_const_pairs b indent tys
     | CMap pairs ->
        let indent = indent ^ "  " in
-       Printf.bprintf b "Map";
+       Printf.bprintf b "(Map";
        List.iter (fun (cst1, cst2) ->
-           Printf.bprintf b "\n%sItem" indent;
+           Printf.bprintf b "\n%s(Item" indent;
            let indent = indent ^ "  " in
            Printf.bprintf b "\n%s" indent;
            bprint_const b indent cst1;
            Printf.bprintf b "\n%s" indent;
            bprint_const b indent cst2;
-         ) pairs
+           Printf.bprintf b "\n%s)" indent;
+         ) pairs;
+       Printf.bprintf b "\n%s)" indent;
     | CList csts ->
        let indent = indent ^ "  " in
-       Printf.bprintf b "List";
+       Printf.bprintf b "(List";
        List.iter (fun cst ->
            Printf.bprintf b "\n%s" indent;
            bprint_const b indent cst;
-         ) csts
+         ) csts;
+       Printf.bprintf b "\n%s)" indent;
     | CSet csts ->
        let indent = indent ^ "  " in
-       Printf.bprintf b "Set";
+       Printf.bprintf b "(Set";
        List.iter (fun cst ->
            Printf.bprintf b "\n%s" indent;
            bprint_const b indent cst;
-         ) csts
+         ) csts;
+       Printf.bprintf b "\n%s)" indent;
 
   and bprint_const_pairs b indent tys =
     match tys with
@@ -150,20 +164,23 @@ module Michelson = struct
     | [ty] -> bprint_const b indent ty
     | ty :: tys ->
        let indent = indent ^ "  " in
-       Printf.bprintf b "Pair\n%s" indent;
+       Printf.bprintf b "(Pair\n%s" indent;
        bprint_const b indent ty;
        Printf.bprintf b "\n%s" indent;
-       bprint_const_pairs b indent tys
+       bprint_const_pairs b indent tys;
+       Printf.bprintf b ")";
+       ()
 
   let rec bprint_code b indent code =
     match code with
-    | M_INS ins -> Printf.bprintf b "%s" ins
+    | M_INS ins -> Printf.bprintf b "%s ;" ins
     | M_INS_CST (ins,ty,cst) ->
        let indent = indent ^ "  " in
        Printf.bprintf b "%s\n%s" ins indent;
        bprint_type b indent ty;
        Printf.bprintf b "\n%s" indent;
-       bprint_const b indent cst
+       bprint_const b indent cst;
+       Printf.bprintf b " ;";
     | M_INS_EXP ("SEQ", [], []) ->
        Printf.bprintf b "{}"
     | M_INS_EXP ("SEQ", [], exps) ->
@@ -181,7 +198,9 @@ module Michelson = struct
            bprint_type b indent ty) tys;
        List.iter (fun exp ->
            Printf.bprintf b "\n%s" indent;
-           bprint_code b indent exp) exps
+           bprint_code b indent exp) exps;
+       Printf.bprintf b "\n%s;" indent;
+       ()
 
 
   let bprint_contract bprint_code b indent contract =

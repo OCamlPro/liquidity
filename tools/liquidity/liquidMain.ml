@@ -50,13 +50,8 @@ let compile_liquid_file filename =
 
   let output = filename ^ ".tz" in
   FileString.write_file output
-                        (try
-                           LiquidPrinter.Michelson.string_of_contract
-                             michelson_ast
-                         with
-                         | Error ->
-                            LiquidToTezos.string_of_contract
-                              (LiquidToTezos.convert_contract pre_michelson));
+                        (LiquidToTezos.string_of_contract
+                           (LiquidToTezos.convert_contract pre_michelson));
   Printf.eprintf "File %S generated\n%!" output;
   Printf.eprintf "Typecheck with:\n  tezos-client typecheck program %s\n" output
 

@@ -16,6 +16,7 @@ ocaml.debug = true;
 compflags = [ "-bin-annot"; "-g"; "-thread"; "-short-paths"; "-safe-string";
                 "-w"; "+27-30-40"; ];
 
+tezos_dir = "../../tezos/src/";
 
 OCaml.library("michelson", ocaml + {
      bytelink = [ "-custom" ];
@@ -90,7 +91,9 @@ OCaml.library("michelson", ocaml + {
           "client_aliases.ml";    (* REWRITTEN *)
           "packed_protocol.ml";   (* REWRITTEN *)
           "client_proto_args.ml";
-          "client_proto_programs.ml";
+          "client_proto_programs.ml", {
+            more_deps = [ tezos_dir + "client/embedded/alpha/client_proto_programs.ml"]
+          };
 
           "init_storage.ml";
 

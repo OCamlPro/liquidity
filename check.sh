@@ -1,10 +1,9 @@
 #!/bin/sh
 
-#LIQUIDITY=liquidity
-LIQUIDITY=liquidity-mini
-
 test=$1
 echo $test
+
+LIQUIDITY=liquidity
 
 ./_obuild/${LIQUIDITY}/${LIQUIDITY}.asm tests/$test.liq || exit 2
 
