@@ -46,7 +46,7 @@ let translate_code code =
        let pos = try
            StringMap.find name env
          with Not_found ->
-           Location.raise_errorf ~loc
+           LiquidLoc.raise_error ~loc
              "Internal Error(Michelson): variable %S not found\n%!"
              name
        in

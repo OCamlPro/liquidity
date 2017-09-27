@@ -7,6 +7,7 @@ open Tezos_context
 open Michelson_parser
 open Client_commands
 open Script_located_ir
+open Script
 
 (* from Updater *)
 type Error_monad.error += Ecoproto_error of Tezos_context.error (* Proto.error *) list

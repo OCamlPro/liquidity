@@ -9,8 +9,14 @@
 
 open LiquidTypes
 
-val initial_env : string -> env
-val translate : string -> Parsetree.structure -> syntax_exp contract * env
-val read_file : string -> Parsetree.structure
+val warning_printer :
+           (location -> LiquidTypes.warning -> unit) ref
 
-val translate_exn : exn -> 'a
+val warn : location -> LiquidTypes.warning -> unit
+
+val raise_error :
+  ?loc:LiquidTypes.location ->
+  ('a, Format.formatter, unit, 'b) format4 -> 'a
+
+val loc_in_file : string -> location
+val noloc : location

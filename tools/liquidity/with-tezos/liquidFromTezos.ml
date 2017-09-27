@@ -23,7 +23,7 @@ type expr =
 
 
 let unknown_expr f_name expr =
-  Location.raise_errorf ~loc:(Location.in_file f_name) "%s"
+  LiquidLoc.raise_error ~loc:(LiquidLoc.loc_in_file f_name) "%s"
     (match expr with
      | Script_repr.Seq (_loc, _exprs, _debug) -> "Seq (_)"
      | Script_repr.String (_loc, s) ->

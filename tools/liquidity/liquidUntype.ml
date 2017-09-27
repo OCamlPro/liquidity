@@ -172,7 +172,7 @@ let rec untype (env : env) (code : typed_exp) =
       | Constructor (_, _, _)
       | MatchVariant (_, _, _) ->
 
-       Location.raise_errorf
+       LiquidLoc.raise_error
          "untype: unimplemented code:\n%s%!"
          (LiquidPrinter.Liquid.string_of_code code)
 

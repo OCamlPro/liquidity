@@ -61,7 +61,12 @@ type 'exp contract = {
     code : 'exp;
   }
 
-type location = Location.t
+type location = {
+    loc_file : string;
+    loc_pos : ( (int * int) * (int*int) ) option;
+  }
+
+exception Error of location option * string
 
 (* `variant` is the only parameterized type authorized in Liquidity.
    Its constructors, `Left` and `Right` must be constrained with type
@@ -273,14 +278,3 @@ type node_exp = node * node
 
 type warning =
   | Unused of string
-
-let default_warning_printer loc w =
-  Format.eprintf "%a:\nWarning:  %a\n%!" Location.print_loc loc
-  (fun fmt -> function
-     | Unused name ->
-       Format.fprintf fmt "unused variable %S" name)
-  w
-
-let warning_printer = ref default_warning_printer
-
-let warn loc w = !warning_printer loc w

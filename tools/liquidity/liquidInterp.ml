@@ -98,7 +98,7 @@ let rec merge_stacks if_stack end_node1 end_node2 stack1 stack2 =
         | Some node -> node.args <- List.rev node.args);
        stack
      with Exit ->
-       Location.raise_errorf "interp error merging stacks:\n%a%a"
+       LiquidLoc.raise_error "interp error merging stacks:\n%a%a"
          (fprint_stack "stack1 ") stack1
          (fprint_stack "stack2 ") stack2
 
@@ -489,7 +489,7 @@ let interp contract =
     | _ ->
        let ins = LiquidEmit.emit_code ins in
        let s = LiquidPrinter.Michelson.string_of_code ins in
-       Location.raise_errorf "Error while decompiling:\n %s!" s
+       LiquidLoc.raise_error "Error while decompiling:\n %s!" s
 
   and decompile_if if_node if_stack
                    ifthen then_node then_stack

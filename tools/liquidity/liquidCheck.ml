@@ -27,10 +27,10 @@
 
 open LiquidTypes
 
-let noloc env = Location.in_file env.filename
+let noloc env = LiquidLoc.loc_in_file env.filename
 
 let error loc msg =
-  Location.raise_errorf ~loc ("Type error:  " ^^ msg ^^ "%!")
+  LiquidLoc.raise_error ~loc ("Type error:  " ^^ msg ^^ "%!")
 
 let comparable_ty ty1 ty2 =
   match ty1, ty2 with
@@ -69,7 +69,7 @@ let new_binding env name ty =
 
 let check_used ~warnings name loc count =
   if warnings && !count = 0 && name.[0] <> '_' then begin
-      warn loc (Unused name)
+      LiquidLoc.warn loc (Unused name)
   end
 
 let maybe_reset_vars env transfer =
@@ -112,7 +112,11 @@ let types ~warnings env contract =
 
     | If (e1, _, e2)
     | Seq (e1, e2) ->
-      { (loc_exp e1) with Location.loc_end = (loc_exp e2).Location.loc_end }
+       match loc_exp e1, loc_exp e2 with
+       | ({ loc_pos = Some ( loc_begin , _ ) } as loc),
+         { loc_pos = Some ( _, loc_end ) } ->
+          { loc with loc_pos = Some (loc_begin, loc_end) }
+       | loc, _ -> loc
   in
 
   (* this function returns a triple with
@@ -301,7 +305,7 @@ let types ~warnings env contract =
             mk desc body.ty true,
             true, true
          | _ ->
-           Location.raise_errorf "typecheck error: Contract expected%!"
+           LiquidLoc.raise_error "typecheck error: Contract expected%!"
        end
     | Apply (prim, loc, args) ->
        let can_fail = ref false in

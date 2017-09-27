@@ -62,7 +62,7 @@ let rec convert_const expr =
    | CSignature _|CLeft _|CRight _)
             *)
   | _ ->
-    Location.raise_errorf "to-tezos: unimplemented const:\n%s%!"
+    LiquidLoc.raise_error "to-tezos: unimplemented const:\n%s%!"
       (LiquidPrinter.Michelson.string_of_const expr)
 
 

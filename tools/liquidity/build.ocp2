@@ -31,9 +31,11 @@
 OCaml.library("ocplib-liquidity",
    ocaml + {
      files = [
-       "liquidMisc.ml";
-
+        "liquidMisc.ml";
+            
        "liquidTypes.ml";
+       "liquidLoc.ml";
+
 
        "liquidBoundVariables.ml";
        "liquidPrinter.ml";
@@ -52,7 +54,6 @@ OCaml.library("ocplib-liquidity",
      ];
      requires = [
         "ocplib-dot";
-        "compiler-libs.common";
      ];
 
    });
