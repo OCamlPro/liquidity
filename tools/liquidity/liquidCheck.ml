@@ -95,7 +95,6 @@ let types ~warnings env contract =
 
   (* approximate location *)
   let rec loc_exp e = match e.desc with
-    | Let (_, loc, _, _)
     | Var (_, loc, _)
     | SetVar (_, loc, _, _)
     | Apply (_, loc, _)
@@ -107,6 +106,8 @@ let types ~warnings env contract =
     | Record (loc, _)
     | Constructor (loc, _, _)
     | MatchVariant (_, loc, _) -> loc
+
+    | Let (_, _, _, e) -> loc_exp e
 
     | Const _ -> noloc env
 

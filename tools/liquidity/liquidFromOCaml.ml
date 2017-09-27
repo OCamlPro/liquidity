@@ -32,15 +32,14 @@ open LiquidTypes
 let loc_of_loc loc =
   let open Lexing in
   {
-
     loc_file =
       loc.Location.loc_start.pos_fname;
     loc_pos = Some (
-                  (loc.Location.loc_start.pos_lnum,
-                   loc.Location.loc_start.pos_cnum),
-                  (loc.Location.loc_end.pos_lnum,
-                   loc.Location.loc_end.pos_cnum)
-                )
+        (loc.Location.loc_start.pos_lnum,
+         loc.Location.loc_start.pos_cnum - loc.Location.loc_start.pos_bol),
+        (loc.Location.loc_end.pos_lnum,
+         loc.Location.loc_end.pos_cnum - loc.Location.loc_end.pos_bol)
+      )
   }
 
 

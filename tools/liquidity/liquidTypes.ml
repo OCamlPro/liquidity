@@ -66,7 +66,7 @@ type location = {
     loc_pos : ( (int * int) * (int*int) ) option;
   }
 
-exception Error of location option * string
+exception Error of location * string
 
 (* `variant` is the only parameterized type authorized in Liquidity.
    Its constructors, `Left` and `Right` must be constrained with type

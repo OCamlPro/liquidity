@@ -9,14 +9,15 @@
 
 open LiquidTypes
 
-val warning_printer :
-           (location -> LiquidTypes.warning -> unit) ref
+val warning_printer : (location -> warning -> unit) ref
 
-val warn : location -> LiquidTypes.warning -> unit
+val warn : location -> warning -> unit
+
+val report_error : (location * string) -> unit
 
 val raise_error :
-  ?loc:LiquidTypes.location ->
-  ('a, Format.formatter, unit, 'b) format4 -> 'a
+  ?loc:location -> ('a, Format.formatter, unit, 'b) format4 -> 'a
 
 val loc_in_file : string -> location
+
 val noloc : location

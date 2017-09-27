@@ -24,7 +24,9 @@ let pp_ksprintf ?before k fmt = (* From Location in OCaml *)
       k msg)
     ppf fmt
 
-let raise_error ?loc =
+let noloc = { loc_file = "<unspecified>"; loc_pos = None }
+
+let raise_error ?(loc=noloc) =
   pp_ksprintf (fun msg -> raise (Error (loc, msg)))
 
 let print_loc ppf loc =
@@ -37,8 +39,11 @@ let print_loc ppf loc =
   | None ->
      Format.fprintf ppf "%s" loc.loc_file
 
+let report_error (loc, msg) =
+  Format.eprintf "%a: Error: @[%s@]\n%!" print_loc loc msg
+
 let default_warning_printer loc w =
-  Format.eprintf "%a:\nWarning:  %a\n%!" print_loc loc
+  Format.eprintf "%a: Warning: @[%a@]\n%!" print_loc loc
   (fun fmt -> function
      | Unused name ->
        Format.fprintf fmt "unused variable %S" name)
@@ -48,5 +53,4 @@ let warning_printer = ref default_warning_printer
 
 let warn loc w = !warning_printer loc w
 
-let noloc = { loc_file = "<unspecified>"; loc_pos = None }
 let loc_in_file loc_file = { loc_file; loc_pos = None }
