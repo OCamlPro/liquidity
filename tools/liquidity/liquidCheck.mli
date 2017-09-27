@@ -9,8 +9,9 @@
 
 open LiquidTypes
 
-val error : location -> string -> 'a
-val warning : location -> string -> unit
+val error :
+  location ->
+  ('a, Format.formatter, unit, unit, unit, 'b) format6 -> 'a
 
 val types : warnings:bool -> env -> syntax_exp contract ->
             typed_exp contract

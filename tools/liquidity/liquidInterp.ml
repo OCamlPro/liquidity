@@ -26,12 +26,19 @@ let node kind args prevs =
 let bv = StringSet.empty
 let mk desc = { desc ; ty = (); bv; fail = false }
 
-let eprint_stack msg stack =
-  Printf.eprintf "Stack %s:\n" msg;
+let fprint_stack msg fmt stack =
+  Format.fprintf fmt "Stack %s:\n" msg;
   List.iter (fun node ->
-      Printf.eprintf "  %s\n" (LiquidPrinter.string_of_node node)
+      Format.fprintf fmt "  %s\n" (LiquidPrinter.string_of_node node)
     ) stack;
-  Printf.eprintf "%!"
+  Format.fprintf fmt "%!"
+
+let eprintf_stack msg = fprint_stack msg Format.err_formatter
+
+let sprint_stack msg stack =
+  let fmt = Format.str_formatter in
+  fprint_stack msg fmt stack;
+  Format.flush_str_formatter ()
 
 let rec uniformize_stack if_stack stack =
   let if_stack_length = List.length if_stack in
@@ -91,10 +98,9 @@ let rec merge_stacks if_stack end_node1 end_node2 stack1 stack2 =
         | Some node -> node.args <- List.rev node.args);
        stack
      with Exit ->
-       Printf.eprintf "interp error merging stacks:\n";
-       eprint_stack "stack1 " stack1;
-       eprint_stack "stack2 " stack2;
-       raise Error
+       Location.raise_errorf "interp error merging stacks:\n%a%a"
+         (fprint_stack "stack1 ") stack1
+         (fprint_stack "stack2 ") stack2
 
 let interp contract =
 
@@ -483,9 +489,7 @@ let interp contract =
     | _ ->
        let ins = LiquidEmit.emit_code ins in
        let s = LiquidPrinter.Michelson.string_of_code ins in
-       Printf.eprintf "Error while decompiling:\n %s\n%!" s;
-       raise Error
-
+       Location.raise_errorf "Error while decompiling:\n %s!" s
 
   and decompile_if if_node if_stack
                    ifthen then_node then_stack

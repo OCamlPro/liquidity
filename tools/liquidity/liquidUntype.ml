@@ -172,9 +172,9 @@ let rec untype (env : env) (code : typed_exp) =
       | Constructor (_, _, _)
       | MatchVariant (_, _, _) ->
 
-       Printf.eprintf "untype: unimplemented code:\n%s\n%!"
-                      (LiquidPrinter.Liquid.string_of_code code);
-       raise Error
+       Location.raise_errorf
+         "untype: unimplemented code:\n%s%!"
+         (LiquidPrinter.Liquid.string_of_code code)
 
   in
   mk desc

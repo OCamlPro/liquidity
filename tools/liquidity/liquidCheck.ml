@@ -27,14 +27,10 @@
 
 open LiquidTypes
 
-let noloc = "At unspecified location"
+let noloc env = Location.in_file env.filename
 
 let error loc msg =
-  Printf.eprintf "%s\nType error:  %s\n%!" loc msg;
-  raise Error
-
-let warning loc msg =
-  Printf.eprintf "%s\nWarning:  %s\n%!" loc msg
+  Location.raise_errorf ~loc ("Type error:  " ^^ msg ^^ "%!")
 
 let comparable_ty ty1 ty2 =
   match ty1, ty2 with
@@ -45,11 +41,10 @@ let comparable_ty ty1 ty2 =
   | _ -> false
 
 let error_not_comparable loc prim ty1 ty2 =
-  error loc (
-          Printf.sprintf "arguments of %s not comparable: %s\nwith\n%s\n"
-                         prim
-                         (LiquidPrinter.Michelson.string_of_type ty1)
-                         (LiquidPrinter.Michelson.string_of_type ty2))
+  error loc "arguments of %s not comparable: %s\nwith\n%s\n"
+    prim
+    (LiquidPrinter.Michelson.string_of_type ty1)
+    (LiquidPrinter.Michelson.string_of_type ty2)
 
 let mk =
   let bv = StringSet.empty in
@@ -57,8 +52,8 @@ let mk =
 
 let const_unit = mk (Const (Tunit, CUnit)) Tunit false
 
-let unused ty =
-  mk (Apply("_unused_", noloc, [const_unit])) ty false
+let unused env ty =
+  mk (Apply("_unused_", noloc env, [const_unit])) ty false
 
 let counter = ref 0
 let uniq_ident name =
@@ -74,26 +69,51 @@ let new_binding env name ty =
 
 let check_used ~warnings name loc count =
   if warnings && !count = 0 && name.[0] <> '_' then begin
-      warning
-        loc
-        (Printf.sprintf "unused variable %S" name)
-    end
+      warn loc (Unused name)
+  end
 
 let maybe_reset_vars env transfer =
   if transfer then
     { env with vars = StringMap.empty }
   else env
 
-let eprint_2types ty1 ty2 =
-  Printf.eprintf "First type:\n  %s\n"
-                 (LiquidPrinter.Liquid.string_of_type ty1);
-  Printf.eprintf "Second type:\n  %s\n"
-                 (LiquidPrinter.Liquid.string_of_type ty2);
-  ()
+let fprint_2types fmt (ty1, ty2) =
+  Format.fprintf fmt "First type:\n  %s\n"
+    (LiquidPrinter.Liquid.string_of_type ty1);
+  Format.fprintf fmt "Second type:\n  %s"
+    (LiquidPrinter.Liquid.string_of_type ty2)
+
+let type_error loc msg actual expected =
+  error loc "%s.\nExpected type:\n  %s\nActual type:\n  %s"
+    msg
+    (LiquidPrinter.Liquid.string_of_type expected)
+    (LiquidPrinter.Liquid.string_of_type actual)
 
 let types ~warnings env contract =
 
   let to_inline = ref StringMap.empty in
+
+  (* approximate location *)
+  let rec loc_exp e = match e.desc with
+    | Let (_, loc, _, _)
+    | Var (_, loc, _)
+    | SetVar (_, loc, _, _)
+    | Apply (_, loc, _)
+    | LetTransfer (_, _, loc, _, _, _, _, _)
+    | MatchOption (_, loc, _, _, _)
+    | MatchList (_, loc, _, _, _, _)
+    | Loop (_, loc, _, _)
+    | Lambda (_, _, loc, _, _)
+    | Record (loc, _)
+    | Constructor (loc, _, _)
+    | MatchVariant (_, loc, _) -> loc
+
+    | Const _ -> noloc env
+
+    | If (e1, _, e2)
+    | Seq (e1, e2) ->
+      { (loc_exp e1) with Location.loc_end = (loc_exp e2).Location.loc_end }
+  in
 
   (* this function returns a triple with
    * the expression annotated with its type
@@ -132,8 +152,7 @@ let types ~warnings env contract =
        let (name, ty, count) =
          try
            StringMap.find name env.vars
-         with Not_found ->
-           Printf.kprintf (error loc) "unbound variable %S" name
+         with Not_found -> error loc "unbound variable %S" name
        in
        incr count;
        let e = mk (Var (name, loc, [])) ty false in
@@ -171,7 +190,7 @@ let types ~warnings env contract =
          try
            StringMap.find name env.vars
          with Not_found ->
-           Printf.kprintf (error loc) "unbound variable %S" name
+           error loc "unbound variable %S" name
        in
        incr count;
 
@@ -222,7 +241,7 @@ let types ~warnings env contract =
 
     | Seq (exp1, exp2) ->
        let exp1, fail1, transfer1 =
-         typecheck_expected (noloc, "sequence") env Tunit exp1 in
+         typecheck_expected "sequence" env Tunit exp1 in
        let exp2, fail2, transfer2 = typecheck env exp2 in
        let desc = Seq (exp1, exp2) in
        (* TODO: if not fail1 then remove exp1 *)
@@ -231,9 +250,9 @@ let types ~warnings env contract =
 
     | If (cond, ifthen, ifelse) ->
        let cond, fail1, transfer1 =
-         typecheck_expected (noloc, "if-cond") env Tbool cond in
+         typecheck_expected "if-cond" env Tbool cond in
        if transfer1 then
-         error noloc "transfer within if condition";
+         error (noloc env) "transfer within if condition";
        let ifthen, fail2, transfer2 = typecheck env ifthen in
        let ifelse, fail3, transfer3, ty =
          if ifthen.ty = Tfail then
@@ -241,7 +260,7 @@ let types ~warnings env contract =
            ifelse, fail3, transfer3, ifelse.ty
          else
            let ifelse, fail3, transfer3 =
-             typecheck_expected (noloc, "if-result") env ifthen.ty ifelse in
+             typecheck_expected "if-result" env ifthen.ty ifelse in
            ifelse, fail3, transfer3, ifthen.ty
        in
        let desc = If(cond, ifthen, ifelse) in
@@ -255,18 +274,18 @@ let types ~warnings env contract =
                    contract_exp, tez_exp,
                    storage_exp, arg_exp, body) ->
        let tez_exp, fail1, transfer1 =
-         typecheck_expected (noloc, "call-amount") env Ttez tez_exp in
+         typecheck_expected "call-amount" env Ttez tez_exp in
        let contract_exp, fail2, transfer2 = typecheck env contract_exp in
        begin
          match contract_exp.ty with
          | Tcontract (arg_ty, return_ty) ->
             let arg_exp, fail3, transfer3 =
-              typecheck_expected (noloc,"call-arg") env arg_ty arg_exp in
+              typecheck_expected "call-arg" env arg_ty arg_exp in
             let storage_exp, fail4, transfer4 =
-              typecheck_expected (noloc, "call-storage")
+              typecheck_expected "call-storage"
                                  env contract.storage storage_exp in
             if transfer1 || transfer2 || transfer3 || transfer4 then
-              error noloc "transfer within transfer arguments";
+              error loc "transfer within transfer arguments";
             let (new_storage, env, storage_count) =
               new_binding env storage_name contract.storage in
             let (new_result, env, result_count) =
@@ -282,8 +301,7 @@ let types ~warnings env contract =
             mk desc body.ty true,
             true, true
          | _ ->
-            Printf.eprintf "typecheck error: Contract expected\n%!";
-            raise Error
+           Location.raise_errorf "typecheck error: Contract expected%!"
        end
     | Apply (prim, loc, args) ->
        let can_fail = ref false in
@@ -322,11 +340,8 @@ let types ~warnings env contract =
          | ty, Tfail
            | Tfail, ty -> ty
          | ty1, ty2 ->
-            if ty1 <> ty2 then begin
-                eprint_2types ty1 ty2;
-                error loc "not the same type";
-              end;
-            ty1
+           if ty1 <> ty2 then type_error loc "Bad option type in match" ty2 ty1;
+           ty1
        in
        let can_fail = fail1 || fail2 || fail3 in
        mk desc ty can_fail,
@@ -340,7 +355,7 @@ let types ~warnings env contract =
        let env = maybe_reset_vars env transfer1 in
        let (new_name, env, count) = new_binding env name arg.ty in
        let body, fail2, transfer2 =
-         typecheck_expected (noloc, "loop-body") env
+         typecheck_expected "loop-body" env
                             (Ttuple [Tbool; arg.ty])
                             body in
        check_used ~warnings name loc count;
@@ -400,7 +415,7 @@ let types ~warnings env contract =
          try
            StringMap.find label env.labels
          with Not_found ->
-           error loc (Printf.sprintf "unbound label %S" label)
+           error loc "unbound label %S" label
        in
        let record_ty, ty_kind = StringMap.find ty_name env.types in
        let len = List.length (match ty_kind with
@@ -412,12 +427,12 @@ let types ~warnings env contract =
            let ty_name', label_pos, ty = try
                StringMap.find label env.labels
              with Not_found ->
-               error loc (Printf.sprintf "unbound label %S" label)
+               error loc "unbound label %S" label
            in
            if ty_name <> ty_name' then
              error loc "inconsistent list of labels";
            let exp, can_fail, transfer =
-             typecheck_expected (noloc, "label "^ label) env ty exp in
+             typecheck_expected ("label "^ label) env ty exp in
            if transfer then
              error loc "transfer not allowed in record";
            t.(label_pos) <- Some exp;
@@ -435,7 +450,7 @@ let types ~warnings env contract =
     | Constructor(loc, Constr constr, arg) ->
        let ty_name, arg_ty = StringMap.find constr env.constrs in
        let arg, can_fail, transfer =
-         typecheck_expected (noloc, "constr-arg") env arg_ty arg in
+         typecheck_expected "constr-arg" env arg_ty arg in
        if transfer then
          error loc "transfer not allowed in constructor argument";
        let constr_ty, ty_kind = StringMap.find ty_name env.types in
@@ -454,10 +469,10 @@ let types ~warnings env contract =
                    if c = constr then
                      (* We use an unused argument to carry the type to
                    the code generator *)
-                     Apply("Left", loc, [arg; unused right_ty])
+                     Apply("Left", loc, [arg; unused env right_ty])
                    else
                      let arg = iter constrs in
-                     Apply("Right", loc, [arg; unused left_ty])
+                     Apply("Right", loc, [arg; unused env left_ty])
                  in
                  mk desc ty can_fail
             in
@@ -470,12 +485,12 @@ let types ~warnings env contract =
        if transfer then
          error loc "transfer not allowed in constructor argument";
        let ty = Tor(arg.ty, right_ty) in
-       let desc = Apply("Left",loc,[arg; unused right_ty]) in
+       let desc = Apply("Left",loc,[arg; unused env right_ty]) in
        mk desc ty can_fail, can_fail, false
 
     | Constructor(loc, Source (from_ty, to_ty), _arg) ->
        let ty = Tcontract(from_ty, to_ty) in
-       let desc = Apply("Source",loc,[unused from_ty; unused to_ty]) in
+       let desc = Apply("Source",loc,[unused env from_ty; unused env to_ty]) in
        mk desc ty false, false, false
 
     | Constructor(loc, Right left_ty, arg) ->
@@ -483,7 +498,7 @@ let types ~warnings env contract =
        if transfer then
          error loc "transfer not allowed in constructor argument";
        let ty = Tor(left_ty, arg.ty) in
-       let desc = Apply("Right",loc,[arg; unused left_ty]) in
+       let desc = Apply("Right",loc,[arg; unused env left_ty]) in
        mk desc ty can_fail, can_fail, false
 
     | MatchVariant (arg, loc,
@@ -494,9 +509,8 @@ let types ~warnings env contract =
        let (left_ty, right_ty) = match arg.ty with
          | Tor(left_ty, right_ty) -> (left_ty, right_ty)
          | _ ->
-            error loc (Printf.sprintf
-                         "not a Left-Right variant type: %s"
-                         (LiquidPrinter.Michelson.string_of_type arg.ty))
+            error loc "not a Left-Right variant type: %s"
+              (LiquidPrinter.Michelson.string_of_type arg.ty)
        in
        let env = maybe_reset_vars env transfer1 in
        let left_arg, left_exp, can_fail1, transfer1 =
@@ -537,9 +551,8 @@ let types ~warnings env contract =
               end
            | _ -> raise Not_found
          with Not_found ->
-           error loc (Printf.sprintf
-                        "not a variant type: %s"
-                        (LiquidPrinter.Michelson.string_of_type arg.ty))
+           error loc "not a variant type: %s"
+             (LiquidPrinter.Michelson.string_of_type arg.ty)
        in
        let env = maybe_reset_vars env transfer1 in
        let match_can_fail = ref can_fail in
@@ -569,8 +582,7 @@ let types ~warnings env contract =
            let (e, can_fail, transfer) =
              match !expected_type with
              | Some expected_type ->
-                typecheck_expected
-                  (noloc, "constr-match") env expected_type e
+                typecheck_expected "constr-match" env expected_type e
              | None ->
                 let (e, can_fail, transfer) =
                   typecheck env e in
@@ -800,14 +812,14 @@ let types ~warnings env contract =
        Tcontract (arg_type, result_type)
     | ("Lambda.pipe" | "|>"), [ { ty }; { ty = Tlambda(from_ty, to_ty) }] ->
        if ty <> from_ty then
-         error loc "Bad argument type in Lambda.exec";
+         type_error loc "Bad argument type in Lambda.pipe" ty from_ty;
        to_ty
 
     | "List.map", [
         { ty = Tlambda (from_ty, to_ty) };
         { ty = Tlist ty } ] ->
        if ty <> from_ty then
-         error loc "Bad argument type in List.map";
+         type_error loc "Bad argument type in List.map" ty from_ty;
        Tlist to_ty
 
     | "List.reduce", [
@@ -816,11 +828,11 @@ let types ~warnings env contract =
         { ty = acc_ty };
       ] ->
        if src_ty <> src_ty' then
-         error loc "Bad argument source type in List.reduce";
+         type_error loc "Bad argument source type in List.reduce" src_ty' src_ty;
        if dst_ty <> dst_ty' then
-         error loc "Bad function type in List.reduce";
+         type_error loc "Bad function type in List.reduce" dst_ty' dst_ty;
        if acc_ty <> dst_ty' then
-         error loc "Bad accumulator type in List.reduce";
+         type_error loc "Bad accumulator type in List.reduce" acc_ty dst_ty';
        acc_ty
 
     | "Set.reduce", [
@@ -829,11 +841,11 @@ let types ~warnings env contract =
         { ty = acc_ty };
       ] ->
        if src_ty <> src_ty' then
-         error loc "Bad argument source type in Set.reduce";
+         type_error loc "Bad argument source type in Set.reduce" src_ty' src_ty;
        if dst_ty <> dst_ty' then
-         error loc "Bad function type in Set.reduce";
+         type_error loc "Bad function type in Set.reduce" dst_ty' dst_ty;
        if acc_ty <> dst_ty' then
-         error loc "Bad accumulator type in Set.reduce";
+         type_error loc "Bad accumulator type in Set.reduce" acc_ty dst_ty';
        acc_ty
 
     | "Map.reduce", [
@@ -842,22 +854,23 @@ let types ~warnings env contract =
         { ty = acc_ty };
       ] ->
        if src_ty <> src_ty' then
-         error loc "Bad argument source type in Map.reduce";
+         type_error loc "Bad argument source type in Map.reduce" src_ty' src_ty;
        if dst_ty <> dst_ty' then
-         error loc "Bad function type in Map.reduce";
+         type_error loc "Bad function type in Map.reduce" dst_ty' dst_ty;
        if acc_ty <> dst_ty' then
-         error loc "Bad accumulator type in Map.reduce";
+         type_error loc "Bad accumulator type in Map.reduce" acc_ty dst_ty';
        if key_ty <> key_ty' then
-         error loc "Bad function key type in Map.reduce";
+         type_error loc "Bad function key type in Map.reduce" key_ty' key_ty;
        acc_ty
 
     | "Map.map", [
         { ty = Tlambda (Ttuple [from_key_ty; from_value_ty], to_value_ty) };
         { ty = Tmap (key_ty, value_ty) } ] ->
        if from_key_ty <> key_ty then
-         error loc "Bad function key type in Map.map";
+         type_error loc "Bad function key type in Map.map" key_ty from_key_ty;
        if from_value_ty <> value_ty then
-         error loc "Bad function value type in Map.map";
+         type_error loc "Bad function value type in Map.map"
+           value_ty from_value_ty;
        Tmap (key_ty, to_value_ty)
 
 
@@ -866,19 +879,15 @@ let types ~warnings env contract =
        Tlist head_ty
     | "::", [ { ty = head_ty }; { ty = Tlist tail_ty } ] ->
        if head_ty <> tail_ty then
-         error loc "Bad types for list";
+         type_error loc "Bad types for list" head_ty tail_ty;
        Tlist tail_ty
     | _ ->
-       Printf.eprintf "Bad args for primitive %S:\n" prim;
-       error loc "prim"
+       error loc "Bad args for primitive %S:\n" prim;
 
-  and typecheck_expected (loc,info) env expected_ty exp =
+  and typecheck_expected info env expected_ty exp =
     let exp, fail, transfer = typecheck env exp in
-    if exp.ty <> expected_ty && exp.ty <> Tfail then begin
-        Printf.eprintf "typecheck: actual type differs from expected type:\n%!";
-        eprint_2types exp.ty expected_ty;
-        error loc info
-      end;
+    if exp.ty <> expected_ty && exp.ty <> Tfail then
+      type_error (loc_exp exp) ("Unexpected type for "^info) exp.ty expected_ty;
     exp, fail, transfer
 
 
@@ -892,5 +901,5 @@ let types ~warnings env contract =
   let expected_ty = Ttuple [ contract.return; contract.storage ] in
 
   let code, _can_fail, _transfer =
-    typecheck_expected (noloc,"final value") env expected_ty contract.code in
+    typecheck_expected "final value" env expected_ty contract.code in
   { contract with code }, !to_inline
