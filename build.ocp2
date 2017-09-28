@@ -8,4 +8,8 @@ version = "1.0";
    * Execution of Michelson contracts
 *)
 
-with_tezos = true;
+(* This value is used if with_tezos is not set before *)
+default_with_tezos = true;
+
+try { with_tezos = with_tezos; }
+  catch("unknown-variable",x){ with_tezos = default_with_tezos; }
