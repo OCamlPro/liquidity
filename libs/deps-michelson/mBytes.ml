@@ -1,7 +1,3 @@
-(*
-#include "../../tezos/src/minutils/mBytes.ml"
- *)
-
 type t = bytes
 
 let create = String.create

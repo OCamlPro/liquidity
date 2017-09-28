@@ -51,6 +51,8 @@ OCaml.library("michelson", ocaml + {
      pp = [ "ocp-pp" ];
      files = [
 
+
+        pp_minutils("compare.ml");
         pp_minutils("data_encoding.ml");
 
         pp_utils("error_monad_sig.ml");

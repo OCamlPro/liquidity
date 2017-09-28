@@ -29,17 +29,15 @@ OCaml.library("michelson-deps", ocaml + {
         "secp256k1.ml";
         "secp256k1-stubs.c";
 
-        "mBytes.ml", { pp = [ "ocp-pp" ] };
+        "mBytes.ml";
         "hex_encode.ml"; 
         "nocrypto.ml";
-
 
         "sodium.ml";
 
         "cstruct.ml"; 
 
-        "compare.ml", { pp = [ "ocp-pp" ] };
-        "utils.ml";
+        "utils.ml"; 
 
         "lwt.ml";
         "lwt_list.ml";
@@ -50,11 +48,6 @@ OCaml.library("michelson-deps", ocaml + {
         "RPC.ml";
         "tezos_misc.ml";
         "updater.ml";
-
-(*
-        "client_aliases.ml";
-        "client_commands.ml";
-*)
      ];
      requires = [
         "ocplib-endian";     (* mBytes *)

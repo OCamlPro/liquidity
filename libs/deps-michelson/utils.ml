@@ -67,31 +67,31 @@ let remove_prefix ~prefix s =
 let split delim ?(limit = max_int) path =
   let l = String.length path in
   let rec do_slashes acc limit i =
-    if Compare.Int.(i >= l) then
+    if (i >= l) then
       List.rev acc
-    else if Compare.Char.(String.get path i = delim) then
+    else if (String.get path i = delim) then
       do_slashes acc limit (i + 1)
     else
       do_split acc limit i
   and do_split acc limit i =
-    if Compare.Int.(limit <= 0) then
-      if Compare.Int.(i = l) then
+    if (limit <= 0) then
+      if (i = l) then
         List.rev acc
       else
         List.rev (String.sub path i (l - i) :: acc)
     else
       do_component acc (pred limit) i i
   and do_component acc limit i j =
-    if Compare.Int.(j >= l) then
-      if Compare.Int.(i = j) then
+    if (j >= l) then
+      if (i = j) then
         List.rev acc
       else
         List.rev (String.sub path i (j - i) :: acc)
-    else if Compare.Char.(String.get path j = delim) then
+    else if (String.get path j = delim) then
       do_slashes (String.sub path i (j - i) :: acc) limit j
     else
       do_component acc limit i (j + 1) in
-  if Compare.Int.(limit > 0) then
+  if (limit > 0) then
     do_slashes [] limit 0
   else
     [ path ]
