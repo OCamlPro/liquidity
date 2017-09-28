@@ -29,14 +29,3 @@ module Client_rpcs = struct
 end
 
 #include "../../tezos/src/client/client_commands.ml"
-
-(*
-type ('a, 'b) lwt_format =
-  ('a, Format.formatter, unit, 'b Lwt.t) format4
-
-type context = {
-    warning : 'a. ('a, unit) lwt_format -> 'a ;
-  }
-
-type command = unit
- *)

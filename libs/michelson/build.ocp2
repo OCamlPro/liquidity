@@ -18,84 +18,100 @@ compflags = [ "-bin-annot"; "-g"; "-thread"; "-short-paths"; "-safe-string";
 
 tezos_dir = "../../tezos/src/";
 
+(* Some functions to declare Tezos dependencies created by including source
+  files with #include *)
+function pp_tezos(file){
+  return { more_deps = [ tezos_dir + file ] };
+}
+
+function pp_proto_alpha(file){
+  return file, { more_deps = [ tezos_dir + "proto/alpha/" + file ] };
+}
+
+function pp_client(file){
+  return file, { more_deps = [ tezos_dir + "client/" + file ] };
+}
+
+function pp_utils(file){
+  return file, { more_deps = [ tezos_dir + "utils/" + file ] };
+}
+
+function pp_minutils(file){
+  return file, { more_deps = [ tezos_dir + "minutils/" + file ] };
+}
+
+function pp_client_emdebbed(file){
+  return file, { more_deps = [ tezos_dir + "client/embedded/alpha/" + file ] };
+}
+
+
+
 OCaml.library("michelson", ocaml + {
      bytelink = [ "-custom" ];
      pp = [ "ocp-pp" ];
      files = [
-        "data_encoding.ml";
-        "error_monad_sig.ml";
-        "error_monad.ml";
+
+        pp_minutils("data_encoding.ml");
+
+        pp_utils("error_monad_sig.ml");
+        pp_utils("error_monad.ml");
         "data_encoding_ezjsonm.ml"; 
-        "cli_entries.ml", { pp = "ocp-pp" };
+        pp_utils("cli_entries.ml");
+        pp_utils("time.ml");
+        pp_utils("base58.ml");
+        pp_utils("hash.ml");
+        "ed25519.ml";
+        pp_utils("tezos_data.ml");
 
-        "time.ml";
-        "base58.ml";
-        "hash.ml";
-        "ed25519.ml";           (*    REWRITTEN *)
-        "tezos_hash.ml";
-        "tezos_data.ml";
+        pp_proto_alpha("tezos_hash.ml");
+        pp_proto_alpha("qty_repr.ml");
+        pp_proto_alpha("tez_repr.ml");
+        pp_proto_alpha("script_int_repr.ml");
+        pp_proto_alpha("script_repr.ml");
+        pp_proto_alpha("contract_repr.ml");
+        pp_proto_alpha("period_repr.ml");
+        pp_proto_alpha("constants_repr.ml");
+        pp_proto_alpha("seed_repr.ml");
+        pp_proto_alpha("roll_repr.ml");
+        pp_proto_alpha("cycle_repr.ml");
+        pp_proto_alpha("raw_level_repr.ml");
+        pp_proto_alpha("voting_period_repr.ml");
+        pp_proto_alpha("level_repr.ml");
+        pp_proto_alpha("fitness_repr.ml");
+        pp_proto_alpha("vote_repr.ml");
+        pp_proto_alpha("time_repr.ml");
 
+        "persist.ml";
+        "context.ml";
 
-        "qty_repr.ml";
-        "tez_repr.ml";
+        pp_proto_alpha("storage_sigs.ml");
+        pp_proto_alpha("storage_functors.ml");
+        pp_proto_alpha("storage.ml");
+        pp_proto_alpha("level_storage.ml");
+        pp_proto_alpha("seed_storage.ml");
+        pp_proto_alpha("roll_storage.ml");
+        pp_proto_alpha("reward_storage.ml");
+        pp_proto_alpha("bootstrap_storage.ml");
+        pp_proto_alpha("vote_storage.ml");
+        pp_proto_alpha("contract_storage.ml");
 
-        "script_int_repr.ml";
+        "tezos_context.ml";
 
-        "script_prim_repr.ml";  (* ?????????????????? *)
-        
-        "script_repr.ml";     
-        "contract_repr.ml";
-        "period_repr.ml";
-        "constants_repr.ml";
-        "seed_repr.ml";
-        "roll_repr.ml";
-        "cycle_repr.ml";
-        "raw_level_repr.ml";
-        "voting_period_repr.ml";
-        "level_repr.ml";
-        "fitness_repr.ml";
-        "vote_repr.ml";
-        "time_repr.ml";
+        pp_proto_alpha("script_typed_ir.ml");
+        pp_proto_alpha("script_ir_translator.ml");
+        pp_proto_alpha("script_interpreter.ml");
+        pp_proto_alpha("init_storage.ml");
 
-        "persist.ml";           (* SIMPLIFIED *)
-        "context.ml";           (*    REWRITTEN *)
-        "storage_sigs.ml";
-        "storage_functors.ml";
-        "storage.ml";
-        "level_storage.ml";
-        "seed_storage.ml";
-        "roll_storage.ml";
-        "reward_storage.ml";
-        "bootstrap_storage.ml";
-        "vote_storage.ml";
+        "apply.ml";
+        pp_client("client_commands.ml");
+        pp_client("client_aliases.ml");
+        "packed_protocol.ml";
 
-        "contract_storage.ml";
-        
-        "tezos_context.ml"; (* rewritten. TODO *)
-        
-        "script_typed_ir.ml";
-        "script_ir_translator.ml";
-        "script_interpreter.ml";
-
-        (* from client/embedded/alpha *)
-          "script_located_ir.ml";
-          "michelson_macros.ml";
-          "michelson_parser.ml";
-          (*
-          "../../tezos/src/client/embedded/alpha/concrete_lexer.mll", { pp = [] };
-          "../../tezos/src/client/embedded/alpha/concrete_parser.mly", { ocamlyacc = "menhir"; pp = [] };
-*)
-          
-          "apply.ml";           (* REWRITTEN *)
-          "client_commands.ml"; (* REWRITTEN *)
-          "client_aliases.ml";    (* REWRITTEN *)
-          "packed_protocol.ml";   (* REWRITTEN *)
-          "client_proto_args.ml";
-          "client_proto_programs.ml", {
-            more_deps = [ tezos_dir + "client/embedded/alpha/client_proto_programs.ml"]
-          };
-
-          "init_storage.ml";
+        pp_client_emdebbed("script_located_ir.ml");
+        pp_client_emdebbed("michelson_macros.ml");
+        pp_client_emdebbed("michelson_parser.ml");
+        pp_client_emdebbed("client_proto_args.ml");
+        pp_client_emdebbed("client_proto_programs.ml");
 
      ];
      requires = [

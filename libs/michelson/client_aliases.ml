@@ -6,10 +6,3 @@ module Lwt_utils = struct
 end
 
 #include "../../tezos/src/client/client_aliases.ml"
-
-(*
-module type Entity = sig type t end
-module type Alias = sig type t end
-
-module Alias(S : Entity) = struct type t = S.t end
- *)

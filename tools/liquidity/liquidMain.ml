@@ -46,7 +46,7 @@ let compile_liquid_file filename =
     else
       pre_michelson
   in
-  let michelson_ast = LiquidEmit.emit_contract pre_michelson in
+  (*  let michelson_ast = LiquidEmit.emit_contract pre_michelson in *)
 
   let output = filename ^ ".tz" in
   FileString.write_file output

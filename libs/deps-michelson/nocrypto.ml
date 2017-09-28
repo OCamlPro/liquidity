@@ -50,7 +50,7 @@ let blake2b input =
 
 let () =
   let test_BLAKE2b_512 input =
-    String.uppercase (Hex_encode.hex_encode (blake2b input))
+    String.uppercase_ascii (Hex_encode.hex_encode (blake2b input))
   in
   assert (test_BLAKE2b_512 "" =
             "786A02F742015903C6C6FD852552D272912F4740E15847618A86E217F71F5419\

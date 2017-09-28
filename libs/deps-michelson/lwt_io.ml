@@ -22,6 +22,6 @@ let with_file : type a. mode:a kind -> string ->
 
 let write oc str = output_string oc str; Lwt.return ()
 let read ic =
-  let s  = String.create 64_000 in
+  let s  = Bytes.create 64_000 in
   let len = input ic s 0 (String.length s) in
   Lwt.return (String.sub s 0 len)

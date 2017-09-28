@@ -48,38 +48,9 @@ module Script = struct
   include Script_repr
 end
 
-module Script_prim = struct
-  include Script_prim_repr
-end
-
 module Contract = struct
   include Contract_repr
   include Contract_storage
-            (*
-  let exists ( _ctxt : context ) (_contract : t) = ok (assert false : bool)
-  let get_script (_ctxt : context) ( _contract : t) =
-    (assert false : (Script.t option) tzresult Lwt.t )
-  let get_manager (_ctxt : context) (_contract : t) =
-    ok (assert false: public_key_hash)
-  let spend_from_script (_ctxt : context) (_contract: t) (_:Tez.t) =
-    ok (assert false : context)
-  let  (assert false : t Data_encoding.t)encoding =
-    Data_encoding.describe
-                           ~
-  let credit (_ctxt: context) (_contract: t) (_amount : Tez.t) =
-    ok (assert false : context )
-  let update_script_storage_and_fees
-        ( _ctxt : context) (_contract: t)
-    ( _fee : Tez.t) ( _storage : Script.expr) =
-    ok (assert false : context)
-  let originate
-        (_ : context)
-        (_ : origination_nonce)
-        ~manager ~delegate ~balance
-        ?script ~spendable ~delegatable =
-    ok (assert false : context * t * origination_nonce)
-  let get_balance (_ : context) (_: t) = ok (assert false : Tez.t)
-             *)
 end
 
 
