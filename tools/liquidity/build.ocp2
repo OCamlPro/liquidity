@@ -36,6 +36,13 @@ OCaml.library("ocplib-liquidity",
        "liquidTypes.ml";
        "liquidLoc.ml";
 
+(*
+       "ocaml/asttypes.ml";
+       "ocaml/parsetree.ml";
+       "ocaml/ast_helper.ml";
+       "ocaml/parser.mly";
+       "ocaml/lexer.mll";
+*)
 
        "liquidBoundVariables.ml";
        "liquidPrinter.ml";

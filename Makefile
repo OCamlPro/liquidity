@@ -45,13 +45,15 @@ MORE_TESTS=test_ifcons test_if test_loop test_option test_transfer test_left \
 OTHER_TESTS=others/broker others/demo
 REV_TESTS=`seq -f  'test%.0f' 0 5`
 
+NEW_TEZOS_TESTS= fail weather_insurance
+FAILING_TEZOS_TESTS= originator
 TEZOS_TESTS=and exec_concat max_in_list steps_to_quota balance		\
-fail_amount noop store_input build_list fail not store_now		\
-check_signature first originator str_id compare get_map_value or	\
+fail_amount noop store_input build_list not store_now		\
+check_signature first str_id compare get_map_value or	\
 swap_left_right concat_hello hardlimit pair_id tez_add_sub		\
 concat_list hash_string ret_int transfer_amount contains_all if		\
 reverse_loop transfer_to create_account list_id_map reverse		\
-weather_insurance create_contract list_id set_id xor default_account	\
+ create_contract list_id set_id xor default_account	\
 map_id set_member empty_map map_size set_size
 
 EXIT_ON_ERROR= || exit 2

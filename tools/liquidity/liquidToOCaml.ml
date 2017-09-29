@@ -309,4 +309,8 @@ let structure_of_contract contract =
               ]
   ])]
 
-let string_of_structure str = Pprintast.string_of_structure str
+let string_of_structure = Pprintast.string_of_structure
+
+let translate_expression = convert_code
+
+let string_of_expression = Pprintast.string_of_expression

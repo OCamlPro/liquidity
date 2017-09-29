@@ -938,3 +938,21 @@ let read_file filename =
   try
     Pparse.parse_implementation ppf "liquidity" filename
   with exn -> translate_exn exn
+
+let translate_expression filename expression =
+  let env = initial_env filename in
+  try
+    translate_code env expression
+  with exn -> translate_exn exn
+
+let ocaml_of_string parser content =
+  try
+    Location.input_name := "buffer";
+    let lexbuf = Lexing.from_string content in
+    Location.init lexbuf "buffer";
+    parser lexbuf
+  with exn ->
+    translate_exn exn
+
+let structure_of_string = ocaml_of_string Parse.implementation
+let expression_of_string = ocaml_of_string Parse.expression
