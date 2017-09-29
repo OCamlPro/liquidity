@@ -27,6 +27,8 @@
 
 open LiquidTypes
 
+exception Unbound_variable of location * string
+
 let noloc env = LiquidLoc.loc_in_file env.env.filename
 
 let error loc msg =
@@ -71,6 +73,79 @@ let check_used env name loc count =
       LiquidLoc.warn loc (Unused name)
   end
 
+
+let find_var env loc name =
+  try
+    let (name, ty, count) = StringMap.find name env.vars in
+    incr count;
+    mk (Var (name, loc, [])) ty false
+  with Not_found ->
+  match env.clos_env with
+  | None -> raise (Unbound_variable (loc, name))
+  | Some ce ->
+    StringMap.iter (fun name _ -> Format.eprintf "%s@." name) ce.env_bindings;
+    try StringMap.find name ce.env_bindings
+    with Not_found ->raise (Unbound_variable (loc, name))
+
+let env_for_clos env loc arg_name arg_type =
+  Format.eprintf "closure for %s@." arg_name;
+  (* let new_name = uniq_ident arg_name in *)
+  (* let (new_name, env, arg_count) = new_binding env arg_name arg_type in *)
+  let arg_index, free_vars = match env.clos_env with
+    | Some ce -> ce.next_index, ce.free_vars
+    | None -> 0, StringMap.empty
+  in
+  let next_index, free_vars =
+    StringMap.fold (fun n (bname, btype, _) (index, free_vars) ->
+      match btype with
+      | Tlambda _ -> (index, free_vars)
+      | _ ->
+        Format.eprintf "adding %s@." n;
+        (index + 1, StringMap.add n (bname, btype, index) free_vars)
+    ) env.vars (arg_index + 1, free_vars)
+  in
+  let free_vars_l =
+    StringMap.bindings free_vars
+    |> List.sort (fun (_, (_,_,i1)) (_, (_,_,i2)) -> compare i1 i2)
+  in
+  let ext_env = env in
+  let env = { env with vars = StringMap.empty } in
+  match free_vars_l with
+  | [] -> (* no closure environment *)
+    let (new_name, env, _) = new_binding env arg_name arg_type in
+    env, new_name, arg_type, []
+  | _ ->
+    let env_arg_name = uniq_ident "closure_env" in
+    let env_arg_type =
+      Ttuple (arg_type :: List.map (fun (_, (_,ty,_)) -> ty) free_vars_l) in
+    let env_arg_var = mk (Var (env_arg_name, loc, [])) env_arg_type false in
+    let env_vars =
+      StringMap.add arg_name
+        (uniq_ident arg_name, arg_type, arg_index) free_vars in
+    let env_bindings =
+      StringMap.map (fun (_, ty, index) ->
+          let ei = mk (Const (Tnat, CNat (string_of_int index))) Tnat false in
+          mk (Apply("get", loc, [env_arg_var; ei])) ty false
+        ) env_vars
+    in
+    let call_bindings = List.map (fun (name, _) ->
+        name, find_var ext_env loc name
+      ) free_vars_l
+    in
+    let env_closure = {
+      next_index;
+      free_vars;
+      env_vars;
+      env_bindings;
+      call_bindings;
+    } in
+    let env =
+      { env with
+        clos_env = Some env_closure
+      }
+    in
+    env, env_arg_name, env_arg_type, call_bindings
+
 let maybe_reset_vars env transfer =
   if transfer then
     { env with vars = StringMap.empty }
@@ -98,6 +173,7 @@ let rec loc_exp env e = match e.desc with
     | MatchList (_, loc, _, _, _, _)
     | Loop (_, loc, _, _)
     | Lambda (_, _, loc, _, _)
+    | Closure (_, _, loc, _, _, _)
     | Record (loc, _)
     | Constructor (loc, _, _)
     | MatchVariant (_, loc, _) -> loc
@@ -150,13 +226,7 @@ let rec loc_exp env e = match e.desc with
        mk desc body.ty fail, fail, transfer1 || transfer2
 
     | Var (name, loc, labels) ->
-       let (name, ty, count) =
-         try
-           StringMap.find name env.vars
-         with Not_found -> error loc "unbound variable %S" name
-       in
-       incr count;
-       let e = mk (Var (name, loc, [])) ty false in
+       let e = find_var env loc name in
        let e =
          List.fold_left
            (fun e label ->
@@ -189,7 +259,7 @@ let rec loc_exp env e = match e.desc with
     | SetVar (name, loc, label :: labels, arg) ->
        let (name, ty, count) =
          try
-           StringMap.find name env.vars
+           StringMap.find name env.vars (* FIXME *)
          with Not_found ->
            error loc "unbound variable %S" name
        in
@@ -423,15 +493,31 @@ let rec loc_exp env e = match e.desc with
 
     | Lambda (arg_name, arg_type, loc, body, res_type) ->
 
+       let lambda_arg_type = arg_type in
        assert (res_type = Tunit);
-       let env = { env with vars = StringMap.empty } in
-       let (new_name, env, arg_count) = new_binding env arg_name arg_type in
+       (* let env = { env with vars = StringMap.empty } in *)
+       (* let (new_name, env, arg_count) = new_binding env arg_name arg_type in *)
+       let env, arg_name, arg_type, call_env =
+         env_for_clos env loc arg_name arg_type in
        let body, _fail, transfer = typecheck env body in
        if transfer then
          error loc "no transfer in lambda";
-       let desc = Lambda (new_name, arg_type, loc, body, body.ty) in
-       let ty = Tlambda (arg_type, body.ty) in
+       let desc, ty = match call_env with
+         | [] ->
+           let desc = Lambda (arg_name, arg_type, loc, body, body.ty) in
+           let ty = Tlambda (arg_type, body.ty) in
+           desc, ty
+         | _ ->
+           let desc =
+             Closure (arg_name, arg_type, loc, call_env, body, body.ty) in
+           let call_env_type =
+             Ttuple (List.map (fun (_, t) -> t.ty) call_env) in
+           let ty = Tclosure ((lambda_arg_type, call_env_type), body.ty) in
+           desc, ty
+       in
        mk desc ty false, false, false
+
+    | Closure _ -> assert false
 
     | Record (_loc, []) -> assert false
     | Record (loc, (( (label, _) :: _ ) as lab_x_exp_list)) ->
@@ -837,7 +923,10 @@ let rec loc_exp env e = match e.desc with
          error loc "Contract.create: wrong type for storage init";
 
        Tcontract (arg_type, result_type)
-    | Prim_exec, [ { ty }; { ty = Tlambda(from_ty, to_ty) }] ->
+
+    | Prim_exec, [ { ty };
+                   { ty = ( Tlambda(from_ty, to_ty)
+                          | Tclosure((from_ty, _), to_ty)) }] ->
        if ty <> from_ty then
          type_error loc "Bad argument type in Lambda.pipe" ty from_ty;
        to_ty
@@ -935,6 +1024,7 @@ let typecheck_contract ~warnings env contract =
       vars = StringMap.empty;
       to_inline = ref StringMap.empty;
       env = env;
+      clos_env = None;
       contract;
     } in
 
@@ -957,6 +1047,7 @@ let typecheck_code ~warnings env contract expected_ty code =
       vars = StringMap.empty;
       to_inline = ref StringMap.empty;
       env = env;
+      clos_env = None;
       contract ;
     } in
 

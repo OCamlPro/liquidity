@@ -83,6 +83,16 @@ let translate_code code =
        let body = compile_no_transfer depth env body in
        [ LAMBDA (arg_type, res_type, seq (body @ [DIP_DROP (1,1)])) ], false
 
+    | Closure (arg_name, arg_type, loc, call_env, body, res_type) ->
+      let p_arg_type = Ttuple [arg_type;
+                               Ttuple (List.map (fun (_, t) -> t.ty) call_env) ]
+      in
+      let call_env_code = compile_tuple depth env (List.map snd call_env) in
+      (compile depth env
+        { e with
+          desc = Lambda (arg_name, p_arg_type, loc, body, res_type) } |> fst) @
+      call_env_code @ [ PAIR ], false
+
     | If (cond, ifthen, ifelse) ->
        let cond = compile_no_transfer depth env cond in
        let (ifthen, transfer1) = compile depth env ifthen in
@@ -123,6 +133,13 @@ let translate_code code =
            cleanup_stack, true
 
     | Apply (Prim_unknown, _loc, args) -> assert false
+
+    | Apply (Prim_exec, _loc, [arg; { ty = Tclosure _ } as f]) ->
+      let arg = compile_no_transfer depth env arg in
+      let f_env = compile_no_transfer depth env f in
+      f_env @ [ dip 1 [ dup 1; CAR; SWAP; CDR] ] @
+      arg @ [ PAIR ; EXEC ], false
+
     | Apply (prim, _loc, args) ->
        compile_prim depth env prim args, false
 

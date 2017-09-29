@@ -101,6 +101,14 @@ let rec untype (env : env) (code : typed_exp) =
        let env = empty_env () in
        let env = new_binding arg_name base env in
        Lambda (base, arg_type, loc, untype env body, Tunit)
+
+    | Closure (arg_name, arg_type, loc, call_env, body, res_type) ->
+       let call_env = List.map (fun (name, t) -> name, untype env t) call_env in
+       let base = base_of_var arg_name in
+       let env = empty_env () in
+       let env = new_binding arg_name base env in
+       Closure (base, arg_type, loc, call_env, untype env body, Tunit)
+
     | Var (name, loc, fields) ->
        let name = find_name env name in
        Var (name, loc, fields)

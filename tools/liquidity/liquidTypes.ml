@@ -52,6 +52,7 @@ and datatype =
   | Tcontract of datatype * datatype
   | Tor of datatype * datatype
   | Tlambda of datatype * datatype
+  | Tclosure of (datatype * datatype) * datatype
 
   | Tfail
   | Ttype of string * datatype
@@ -307,8 +308,20 @@ type 'ty exp = {
               * 'ty exp  (* body *)
               * 'ty exp (*  arg *)
 
-  | Lambda of string * datatype * location * 'ty exp * datatype
-   (* final datatype is inferred during typechecking *)
+  | Lambda of string (* argument name *)
+              * datatype (* argument type *)
+              * location
+              * 'ty exp (* body *)
+              * datatype (* final datatype,
+                            inferred during typechecking *)
+
+  | Closure of string (* argument name *)
+              * datatype (* argument type *)
+              * location
+              * (string * 'ty exp) list (* call environment *)
+              * 'ty exp (* body *)
+              * datatype (* final datatype,
+                            inferred during typechecking *)
 
   | Record of location * (string * 'ty exp) list
   | Constructor of location * constructor * 'ty exp
@@ -412,6 +425,13 @@ type type_kind =
        * datatype (* right type *)
       ) list
 
+type closure_env = {
+  free_vars : (string * datatype * int) StringMap.t;
+  env_vars :  (string * datatype * int) StringMap.t;
+  env_bindings : typed_exp StringMap.t;
+  call_bindings : (string * typed_exp) list;
+}
+
 type env = {
     (* name of file being compiled *)
     filename : string;
@@ -433,8 +453,8 @@ type 'a typecheck_env = {
     env : env;
     to_inline : datatype exp StringMap.t ref;
     contract : 'a contract;
-  }
-
+    clos_env : closure_env option;
+}
 
 (* decompilation *)
 

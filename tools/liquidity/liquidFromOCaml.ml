@@ -555,7 +555,8 @@ let rec translate_code env exp =
               body_exp) } ->
        let body_exp = translate_code env body_exp in
        let arg_type = translate_type env arg_type in
-       Lambda (arg_name, arg_type, loc_of_loc exp.pexp_loc, body_exp,
+       Lambda (arg_name, arg_type, loc_of_loc exp.pexp_loc,
+               body_exp,
                Tunit) (* not yet inferred *)
 
     | { pexp_desc = Pexp_record (lab_x_exp_list, None) } ->
