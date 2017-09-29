@@ -32,22 +32,14 @@ OCaml.library("ocplib-liquidity",
    ocaml + {
      files = [
         "liquidMisc.ml";
-            
+
        "liquidTypes.ml";
        "liquidLoc.ml";
-
-(*
-       "ocaml/asttypes.ml";
-       "ocaml/parsetree.ml";
-       "ocaml/ast_helper.ml";
-       "ocaml/parser.mly";
-       "ocaml/lexer.mll";
-*)
 
        "liquidBoundVariables.ml";
        "liquidPrinter.ml";
        "liquidDot.ml";
-       
+
        "liquidEmit.ml";
        "liquidPeephole.ml";
        "liquidMichelson.ml";
@@ -70,6 +62,12 @@ OCaml.library("ocplib-liquidity-ocaml",
      version = version;
      files = [
        "version.ml", {ocp2ml=true};
+
+       "ocaml/liquidOCamlParser.mly";
+       "ocaml/liquidOCamlLexer.mll";
+       "ocaml/liquidOCamlParse.ml";
+       "ocaml/liquidOCamlPrinter.ml";
+
        "liquidFromOCaml.ml";
        "liquidToOCaml.ml";
      ];

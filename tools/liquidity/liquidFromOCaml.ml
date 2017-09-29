@@ -7,6 +7,74 @@
 (*                                                                        *)
 (**************************************************************************)
 
+open LiquidOCamlParser
+
+let () =
+  LiquidOCamlLexer.define_keywords
+ [
+    "and", AND;
+    "as", AS;
+    "assert", ASSERT;
+    "begin", BEGIN;
+    (*    "class", CLASS; *)
+    (*    "constraint", CONSTRAINT; *)
+    "do", DO;
+    "done", DONE;
+    "downto", DOWNTO;
+    "else", ELSE;
+    "end", END;
+    (* "exception", EXCEPTION; *)
+    (* "external", EXTERNAL; *)
+    "false", FALSE;
+    "for", FOR;
+    "fun", FUN;
+    "function", FUNCTION;
+    (* "functor", FUNCTOR; *)
+    "if", IF;
+    "in", IN;
+    (* "include", INCLUDE; *)
+    (* "inherit", INHERIT; *)
+    (* "initializer", INITIALIZER; *)
+    (* "lazy", LAZY; *)
+    "let", LET;
+    "match", MATCH;
+    (* "method", METHOD; *)
+    (* "module", MODULE; *)
+    (* "mutable", MUTABLE; *)
+    (* "new", NEW; *)
+    (* "nonrec", NONREC; *)
+    (* "object", OBJECT; *)
+    "of", OF;
+    (* "open", OPEN; *)
+    "or", OR;
+    (*  "parser", PARSER; *)
+    (* "private", PRIVATE; *)
+    "rec", REC;
+    (* "sig", SIG; *)
+    (* "struct", STRUCT; *)
+    "then", THEN;
+    "to", TO;
+    "true", TRUE;
+    (* "try", TRY; *)
+    "type", TYPE;
+    (* "val", VAL; *)
+    (* "virtual", VIRTUAL; *)
+
+    (* "when", WHEN; *)
+    "while", WHILE;
+    "with", WITH;
+
+    "lor", INFIXOP3("lor"); (* Should be INFIXOP2 *)
+    "lxor", INFIXOP3("lxor"); (* Should be INFIXOP2 *)
+    "mod", INFIXOP3("mod");
+    "land", INFIXOP3("land");
+    "lsl", INFIXOP4("lsl");
+    "lsr", INFIXOP4("lsr");
+    "asr", INFIXOP4("asr")
+]
+
+
+
 (* The minimal version of liquidity files that are accepted by this compiler *)
 let minimal_version = 1.0
 
@@ -621,7 +689,8 @@ from the head element. We use unit for that type. *)
 
           | { pexp_loc } ->
              error_loc pexp_loc
-                       ("in expression " ^ Pprintast.string_of_expression exp)
+                       ("in expression " ^
+                          LiquidOCamlPrinter.string_of_expression exp)
 
 
   (*
@@ -934,9 +1003,22 @@ let translate filename ast =
     translate_structure [] env ast, env
   with exn -> translate_exn exn
 
+let ocaml_of_file parser file =
+  let ic = open_in file in
+  try
+    Location.input_name := file;
+    let lexbuf = Lexing.from_channel ic in
+    Location.init lexbuf "buffer";
+    let ast = parser lexbuf in
+    close_in ic;
+    ast
+  with exn ->
+    close_in ic;
+    translate_exn exn
+
 let read_file filename =
   try
-    Pparse.parse_implementation ppf "liquidity" filename
+    ocaml_of_file LiquidOCamlParse.implementation filename
   with exn -> translate_exn exn
 
 let translate_expression filename expression =
@@ -954,5 +1036,5 @@ let ocaml_of_string parser content =
   with exn ->
     translate_exn exn
 
-let structure_of_string = ocaml_of_string Parse.implementation
-let expression_of_string = ocaml_of_string Parse.expression
+let structure_of_string = ocaml_of_string LiquidOCamlParse.implementation
+let expression_of_string = ocaml_of_string LiquidOCamlParse.expression

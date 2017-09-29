@@ -309,8 +309,8 @@ let structure_of_contract contract =
               ]
   ])]
 
-let string_of_structure = Pprintast.string_of_structure
+let string_of_structure = LiquidOCamlPrinter.string_of_structure
 
 let translate_expression = convert_code
 
-let string_of_expression = Pprintast.string_of_expression
+let string_of_expression = LiquidOCamlPrinter.string_of_expression

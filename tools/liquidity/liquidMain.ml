@@ -133,12 +133,16 @@ let main () =
 
 
 let () =
+  Printexc.record_backtrace true;
   try
     main ()
   with
   | Error (loc, msg) ->
     LiquidLoc.report_error (loc, msg);
     exit 2
-  | _ ->
-    Printf.eprintf "Fatal Error: aborting\n";
+(*
+  | exn ->
+     Printf.eprintf "Fatal Error: aborting\n";
+     Printf.eprintf "  Exception: %s\n%!" (Printexc.to_string exn);
     exit 2
+ *)
