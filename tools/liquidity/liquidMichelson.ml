@@ -47,8 +47,8 @@ let translate_code code =
            StringMap.find name env
          with Not_found ->
            LiquidLoc.raise_error ~loc
-             "Internal Error(Michelson): variable %S not found\n%!"
-             name
+                                 "Internal Error(Michelson): variable %S not found\n%!"
+                                 name
        in
        [ dup (depth - pos) ], false
     | Var (name, loc, _::_) ->  assert false
@@ -122,6 +122,7 @@ let translate_code code =
          [  TRANSFER_TOKENS ] @ body @
            cleanup_stack, true
 
+    | Apply (Prim_unknown, _loc, args) -> assert false
     | Apply (prim, _loc, args) ->
        compile_prim depth env prim args, false
 
@@ -173,13 +174,13 @@ let translate_code code =
        in
        let has_transfer = ref false in
        let cases = List.map (function
-         | (constr, [ arg_name ], e) ->
-            let env = StringMap.add arg_name depth env in
-            let depth = depth + 1 in
-            let e, transfer = compile depth env e in
-            if transfer then has_transfer := true;
-            e, transfer, depth
-         | _ -> assert false) cases in
+                             | (constr, [ arg_name ], e) ->
+                                let env = StringMap.add arg_name depth env in
+                                let depth = depth + 1 in
+                                let e, transfer = compile depth env e in
+                                if transfer then has_transfer := true;
+                                e, transfer, depth
+                             | _ -> assert false) cases in
 
        let rec iter cases =
          match cases with
@@ -220,19 +221,20 @@ let translate_code code =
 
   and compile_prim depth env prim args =
     match prim, args with
-    | "tuple", args ->
+    | Prim_tuple, args ->
        compile_tuple depth env (List.rev args)
 
-    | "get", [arg; { desc = Const (_, (CInt n | CNat n))} ] ->
+    | Prim_tuple_get, [arg; { desc = Const (_, (CInt n | CNat n))} ] ->
        let arg = compile_no_transfer depth env arg in
        let n = int_of_string n in
        arg @ [  CDAR n ]
+    | Prim_tuple_get, _ -> assert false
 
-    | "get_last", [arg; { desc = Const (_, (CInt n | CNat n))} ] ->
+    | Prim_tuple_get_last, [arg; { desc = Const (_, (CInt n | CNat n))} ] ->
        let arg = compile_no_transfer depth env arg in
        let n = int_of_string n in
        arg @ [  CDDR (n-1) ]
-
+    | Prim_tuple_get_last, _ -> assert false
 
     (*
 set x n y = x + [ DUP; CAR; SWAP; CDR ]*n +
@@ -240,96 +242,143 @@ set x n y = x + [ DUP; CAR; SWAP; CDR ]*n +
                 [ SWAP; PAIR ]*2
      *)
 
-    | "set", [x; { desc = Const (_, (CInt n | CNat n))}; y ] ->
+    | Prim_tuple_set, [x; { desc = Const (_, (CInt n | CNat n))}; y ] ->
        let x_code = compile_no_transfer depth env x in
        let n = int_of_string n in
        let set_code = compile_prim_set false (depth+1) env n y in
        x_code @ set_code
+    | Prim_tuple_set, _ -> assert false
 
-    | "set_last", [x; { desc = Const (_, (CInt n | CNat n))}; y ] ->
+    | Prim_tuple_set_last, [x; { desc = Const (_, (CInt n | CNat n))}; y ] ->
        let x_code = compile_no_transfer depth env x in
        let n = int_of_string n in
        let set_code = compile_prim_set true (depth+1) env n y in
        x_code @ set_code
+    | Prim_tuple_set_last, _ -> assert false
 
-    | "Current.fail",_ -> [ FAIL ]
-    | "Current.contract", _ -> [ SELF ]
-    | "Current.balance", _ -> [ BALANCE ]
-    | "Current.time", _ -> [ NOW ]
-    | "Current.amount", _ -> [ AMOUNT ]
-    | "Current.gas", _ -> [ STEPS_TO_QUOTA ]
+    | Prim_fail,_ -> [ FAIL ]
+    | Prim_self, _ -> [ SELF ]
+    | Prim_balance, _ -> [ BALANCE ]
+    | Prim_now, _ -> [ NOW ]
+    | Prim_amount, _ -> [ AMOUNT ]
+    | Prim_gas, _ -> [ STEPS_TO_QUOTA ]
 
-    | "Left", [ arg; { ty = right_ty }] ->
+    | Prim_Left, [ arg; { ty = right_ty }] ->
        compile_no_transfer depth env arg @
-       [ LEFT right_ty]
-    | "Right", [ arg; { ty = left_ty } ] ->
+         [ LEFT right_ty]
+    | Prim_Left, _ -> assert false
+
+    | Prim_Right, [ arg; { ty = left_ty } ] ->
        compile_no_transfer depth env arg @
-       [ RIGHT left_ty ]
-    | "Source", [ { ty = from_ty }; { ty = to_ty } ] ->
+         [ RIGHT left_ty ]
+    | Prim_Right, _ -> assert false
+
+    | Prim_Source, [ { ty = from_ty }; { ty = to_ty } ] ->
        [ SOURCE (from_ty, to_ty) ]
+    | Prim_Source, _ -> assert false
 
     (* catch the special case of [a;b;c] where
 the ending NIL is not annotated with a type *)
-    | "::", [ { ty } as arg; { ty = Tunit } ] ->
+    | Prim_Cons, [ { ty } as arg; { ty = Tunit } ] ->
        let arg = compile_no_transfer (depth+1) env arg in
        [ PUSH (Tlist ty, CList[]) ] @ arg @ [ CONS ]
 
-    | _ ->
+    (* Should be removed in LiquidCheck *)
+    | Prim_unknown, _ -> assert false
+
+    (* Should have disappeared *)
+    | Prim_unused, _ -> assert false
+    | (Prim_coll_find|Prim_coll_update|Prim_coll_mem|Prim_coll_reduce|
+       Prim_coll_map|Prim_coll_size), _ -> assert false
+
+    | (Prim_apply|Prim_eq|Prim_neq|Prim_lt|Prim_le|Prim_gt|Prim_ge
+       | Prim_compare|Prim_add|Prim_sub|Prim_mul|Prim_ediv|Prim_map_find
+       | Prim_map_update|Prim_map_mem|Prim_map_reduce|Prim_map_map
+       | Prim_set_update|Prim_set_mem|Prim_set_reduce|Prim_Some
+       | Prim_concat|Prim_list_reduce|Prim_list_map|Prim_manager
+       | Prim_create_account|Prim_create_contract|Prim_set_map
+       | Prim_hash|Prim_check|Prim_default_account|Prim_list_size
+       | Prim_set_size|Prim_map_size|Prim_or|Prim_and|Prim_xor
+       | Prim_not|Prim_abs|Prim_int|Prim_neg|Prim_lsr|Prim_lsl
+       | Prim_exec|Prim_Cons),_ ->
        let _depth, args_code = compile_args depth env args in
        let prim_code = match prim, List.length args with
-         | "=", 2 -> [  COMPARE;  EQ ]
-         | "<>", 2 -> [  COMPARE;  NEQ ]
-         | "<", 2 -> [  COMPARE;  LT ]
-         | "<=", 2 -> [  COMPARE;  LE ]
-         | ">", 2 -> [  COMPARE;  GT ]
-         | ">=", 2 -> [ COMPARE; GE ]
-         | "compare", 2 -> [  COMPARE ]
-         | "+", 2 -> [ ADD ]
-         | "-", 2 -> [ SUB ]
-         | "*", 2 -> [ MUL ]
-         | "/", 2 -> [ EDIV ]
-         | "Map.find", 2 -> [ GET ]
-         | "Map.update", 3 -> [ UPDATE ]
-         | "Map.mem", 2 -> [ MEM ]
-         | "Map.reduce", 3 -> [ REDUCE ]
-         | "Map.map", 2 -> [ MAP ]
+         | Prim_eq, 2 -> [  COMPARE;  EQ ]
+         | Prim_neq, 2 -> [  COMPARE;  NEQ ]
+         | Prim_lt, 2 -> [  COMPARE;  LT ]
+         | Prim_le, 2 -> [  COMPARE;  LE ]
+         | Prim_gt, 2 -> [  COMPARE;  GT ]
+         | Prim_ge, 2 -> [ COMPARE; GE ]
+         | Prim_compare, 2 -> [  COMPARE ]
+         | Prim_add, 2 -> [ ADD ]
+         | Prim_sub, 2 -> [ SUB ]
+         | Prim_mul, 2 -> [ MUL ]
+         | Prim_ediv, 2 -> [ EDIV ]
+         | Prim_map_find, 2 -> [ GET ]
+         | Prim_map_update, 3 -> [ UPDATE ]
+         | Prim_map_mem, 2 -> [ MEM ]
+         | Prim_map_reduce, 3 -> [ REDUCE ]
+         | Prim_map_map, 2 -> [ MAP ]
 
-         | "Set.update", 3 -> [ UPDATE ]
-         | "Set.mem", 2 -> [ MEM ]
-         | "Set.reduce", 3 -> [ REDUCE ]
+         | Prim_set_update, 3 -> [ UPDATE ]
+         | Prim_set_mem, 2 -> [ MEM ]
+         | Prim_set_reduce, 3 -> [ REDUCE ]
+         | Prim_set_map, 2 -> [ MAP ]
 
-         | "Some", 1 -> [ SOME ]
-         | "@", 2 -> [ CONCAT ]
+         | Prim_Some, 1 -> [ SOME ]
+         | Prim_concat, 2 -> [ CONCAT ]
 
-         | "List.reduce", 3 -> [ REDUCE ]
-         | "List.map", 2 -> [ MAP ]
+         | Prim_list_reduce, 3 -> [ REDUCE ]
+         | Prim_list_map, 2 -> [ MAP ]
 
-         | "Contract.manager", 1 -> [ MANAGER ]
-         | "Account.create", 4 -> [ CREATE_ACCOUNT ]
-         | "Contract.create", 7 -> [ CREATE_CONTRACT ]
-         | "Crypto.hash", 1 -> [ H ]
-         | "Crypto.check", 2 -> [ CHECK_SIGNATURE ]
-         | "Account.default", 1 -> [ DEFAULT_ACCOUNT ]
-         | "List.size", 1 -> [ SIZE ]
-         | "Set.size", 1 -> [ SIZE ]
-         | "Map.size", 1 -> [ SIZE ]
+         | Prim_manager, 1 -> [ MANAGER ]
+         | Prim_create_account, 4 -> [ CREATE_ACCOUNT ]
+         | Prim_create_contract, 7 -> [ CREATE_CONTRACT ]
+         | Prim_hash, 1 -> [ H ]
+         | Prim_check, 2 -> [ CHECK_SIGNATURE ]
+         | Prim_default_account, 1 -> [ DEFAULT_ACCOUNT ]
+         | Prim_list_size, 1 -> [ SIZE ]
+         | Prim_set_size, 1 -> [ SIZE ]
+         | Prim_map_size, 1 -> [ SIZE ]
 
-         | "::", 2 -> [ CONS ]
-         | "or", 2 -> [ OR ]
-         | "&", 2 -> [ AND ]
-         | "xor", 2 -> [ XOR ]
-         | "not", 1 -> [ NOT ]
-         | "abs", 1 -> [ ABS ]
-         | "int", 1 -> [ INT ]
-         | "-", 1 -> [ NEG ]
-         | ">>", 2 -> [ LSR ]
-         | "<<", 2 -> [ LSL ]
+         | Prim_Cons, 2 -> [ CONS ]
+         | Prim_or, 2 -> [ OR ]
+         | Prim_and, 2 -> [ AND ]
+         | Prim_xor, 2 -> [ XOR ]
+         | Prim_not, 1 -> [ NOT ]
+         | Prim_abs, 1 -> [ ABS ]
+         | Prim_int, 1 -> [ INT ]
+         | Prim_neg, 1 -> [ NEG ]
+         | Prim_lsr, 2 -> [ LSR ]
+         | Prim_lsl, 2 -> [ LSL ]
 
-         | ( "|>" | "Lambda.pipe" ), 2 -> [ EXEC ]
+         | Prim_exec, 2 -> [ EXEC ]
 
-         | prim, args ->
-            Printf.eprintf "Primitive %S not implemented\n%!" prim;
+         | (Prim_apply|Prim_eq|Prim_neq|Prim_lt|Prim_le|Prim_gt|Prim_ge
+            | Prim_compare|Prim_add|Prim_sub|Prim_mul|Prim_ediv|Prim_map_find
+            | Prim_map_update|Prim_map_mem|Prim_map_reduce|Prim_map_map
+            | Prim_set_update|Prim_set_mem|Prim_set_reduce|Prim_Some
+            | Prim_concat|Prim_list_reduce|Prim_list_map|Prim_manager
+            | Prim_create_account|Prim_create_contract
+            | Prim_hash|Prim_check|Prim_default_account|Prim_list_size
+            | Prim_set_size|Prim_map_size|Prim_or|Prim_and|Prim_xor
+            | Prim_not|Prim_abs|Prim_int|Prim_neg|Prim_lsr|Prim_lsl
+            | Prim_exec|Prim_Cons|Prim_set_map),n ->
+            Printf.eprintf "Primitive %S: wrong number of args(%d)\n%!"
+                           (LiquidTypes.string_of_primitive prim)
+                           n;
             assert false
+         (*                           | prim, args -> *)
+
+         | (Prim_unknown|Prim_tuple_get_last|Prim_tuple_get
+            | Prim_tuple_set_last|Prim_tuple_set|Prim_tuple|Prim_fail
+            | Prim_self|Prim_balance|Prim_now|Prim_amount|Prim_gas
+            | Prim_Left|Prim_Right|Prim_Source|Prim_unused
+            | Prim_coll_find|Prim_coll_update|Prim_coll_mem
+            | Prim_coll_reduce|Prim_coll_map|Prim_coll_size), _ ->
+            (* already filtered out *)
+            assert false
+
        in
        args_code @ prim_code
 

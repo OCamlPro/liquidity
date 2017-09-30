@@ -68,6 +68,198 @@ type location = {
 
 exception Error of location * string
 
+
+
+type primitive =
+   (* resolved in LiquidCheck *)
+  | Prim_unknown
+  | Prim_coll_find
+  | Prim_coll_update
+  | Prim_coll_mem
+  | Prim_coll_reduce
+  | Prim_coll_map
+  | Prim_coll_size
+
+  (* generated in LiquidCheck *)
+  | Prim_unused
+
+  (* primitives *)
+  | Prim_tuple_get_last
+  | Prim_tuple_get
+  | Prim_tuple_set_last
+  | Prim_tuple_set
+  | Prim_apply
+  | Prim_tuple
+
+  | Prim_fail
+  | Prim_self
+  | Prim_balance
+  | Prim_now
+  | Prim_amount
+  | Prim_gas
+  | Prim_Left
+  | Prim_Right
+  | Prim_Source
+  | Prim_eq
+  | Prim_neq
+  | Prim_lt
+  | Prim_le
+  | Prim_gt
+  | Prim_ge
+  | Prim_compare
+  | Prim_add
+  | Prim_sub
+  | Prim_mul
+  | Prim_ediv
+
+  | Prim_map_find
+  | Prim_map_update
+  | Prim_map_mem
+  | Prim_map_reduce
+  | Prim_map_map
+  | Prim_map_size
+
+  | Prim_set_update
+  | Prim_set_mem
+  | Prim_set_reduce
+  | Prim_set_size
+  | Prim_set_map
+
+  | Prim_Some
+  | Prim_concat
+
+  | Prim_list_reduce
+  | Prim_list_map
+  | Prim_list_size
+
+  | Prim_manager
+  | Prim_create_account
+  | Prim_create_contract
+  | Prim_hash
+  | Prim_check
+  | Prim_default_account
+
+
+  | Prim_Cons
+  | Prim_or
+  | Prim_and
+  | Prim_xor
+  | Prim_not
+  | Prim_abs
+  | Prim_int
+  | Prim_neg
+  | Prim_lsr
+  | Prim_lsl
+
+  | Prim_exec
+
+
+let primitive_of_string = Hashtbl.create 101
+let string_of_primitive = Hashtbl.create 101
+let () =
+  List.iter (fun (n,p) ->
+      Hashtbl.add primitive_of_string n p;
+      Hashtbl.add string_of_primitive p n;
+    )
+            [
+              "get", Prim_tuple_get;
+              "get_last", Prim_tuple_get_last;
+              "Array.get", Prim_tuple_get;
+              "set_last", Prim_tuple_set_last;
+              "set", Prim_tuple_set;
+              "Array.set", Prim_tuple_set;
+              "|>", Prim_apply;
+              "Lambda.pipe", Prim_apply;
+              "tuple", Prim_tuple;
+              "Current.fail", Prim_fail;
+              "Current.contract", Prim_self;
+              "Current.balance", Prim_balance;
+              "Current.time", Prim_now;
+              "Current.amount", Prim_amount;
+              "Current.gas", Prim_gas;
+              "Left", Prim_Left;
+              "Right", Prim_Right;
+              "Source", Prim_Source;
+              "=", Prim_eq;
+              "<>", Prim_neq;
+              "<", Prim_lt;
+              "<=", Prim_le;
+              ">", Prim_gt;
+              ">=", Prim_ge;
+              "compare", Prim_compare;
+              "+", Prim_add;
+              "-", Prim_sub;
+              "*", Prim_mul;
+              "/", Prim_ediv;
+
+              "Map.find", Prim_map_find;
+              "Map.update", Prim_map_update;
+              "Map.mem", Prim_map_mem;
+              "Map.reduce", Prim_map_reduce;
+              "Map.map", Prim_map_map;
+
+              "Set.update", Prim_set_update;
+              "Set.mem", Prim_set_mem;
+              "Set.reduce", Prim_set_reduce;
+              "Set.map", Prim_set_map;
+
+              "Some", Prim_Some;
+              "@", Prim_concat;
+
+              "List.reduce", Prim_list_reduce;
+              "List.map", Prim_list_map;
+
+              "Contract.manager", Prim_manager;
+              "Account.create", Prim_create_account;
+              "Contract.create", Prim_create_contract;
+              "Crypto.hash", Prim_hash;
+              "Crypto.check", Prim_check;
+              "Account.default", Prim_default_account;
+              "List.size", Prim_list_size;
+              "Set.size", Prim_set_size;
+              "Map.size", Prim_map_size;
+
+              "::", Prim_Cons;
+              "or", Prim_or;
+              "&", Prim_and;
+              "xor", Prim_xor;
+              "not", Prim_not;
+              "abs", Prim_abs;
+              "int", Prim_int;
+              ">>", Prim_lsr;
+              "<<", Prim_lsl;
+
+              "|>", Prim_exec;
+              "Lambda.pipe" , Prim_exec;
+
+              "Coll.update", Prim_coll_update;
+              "Coll.mem", Prim_coll_mem;
+              "Coll.find", Prim_coll_find;
+              "Coll.map", Prim_coll_map;
+              "Coll.reduce", Prim_coll_reduce;
+              "Coll.size",Prim_coll_size;
+
+              "<unknown>", Prim_unknown;
+              "<unused>", Prim_unused;
+
+            ]
+
+let primitive_of_string s =
+  try
+    Hashtbl.find primitive_of_string s
+  with Not_found ->
+    Printf.eprintf "Debug: primitive_of_string(%S) raised Not_found\n%!" s;
+    raise Not_found
+
+let string_of_primitive prim =
+  try
+    Hashtbl.find string_of_primitive prim
+  with Not_found ->
+    Printf.eprintf "Debug: string_of_primitive(%d) raised Not_found\n%!"
+                   (Obj.magic prim : int);
+    raise Not_found
+
+
 (* `variant` is the only parameterized type authorized in Liquidity.
    Its constructors, `Left` and `Right` must be constrained with type
    annotations, for the correct types to be propagated in the sources.
@@ -85,12 +277,12 @@ type 'ty exp = {
     fail : bool;
   }
 
-and 'ty exp_desc =
+ and 'ty exp_desc =
   | Let of string * location * 'ty exp * 'ty exp
   | Var of string * location * string list
   | SetVar of string * location * string list * 'ty exp
   | Const of datatype * const
-  | Apply of string * location * 'ty exp list
+  | Apply of primitive * location * 'ty exp list
   | If of 'ty exp * 'ty exp * 'ty exp
   | Seq of 'ty exp * 'ty exp
   | LetTransfer of (* storage *) string * (* result *) string

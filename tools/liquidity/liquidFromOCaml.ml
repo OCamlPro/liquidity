@@ -413,6 +413,9 @@ let rec translate_code env exp =
     match exp with
     | { pexp_desc = Pexp_ident ( { txt = Lident var } ) } ->
        Var (var, loc_of_loc exp.pexp_loc, [])
+    | { pexp_desc = Pexp_ident ( { txt = Ldot(Lident m, var) } ) } ->
+       Var (m ^ "." ^ var, loc_of_loc exp.pexp_loc, [])
+
     | { pexp_desc = Pexp_field (exp, { txt = Lident label }) } ->
        begin
          let e = translate_code env exp
@@ -434,8 +437,6 @@ let rec translate_code env exp =
        end
 
 
-    | { pexp_desc = Pexp_ident ( { txt = Ldot(Lident m, var) } ) } ->
-       Var (m ^ "." ^ var, loc_of_loc exp.pexp_loc, [])
     | { pexp_desc = Pexp_ifthenelse (e1, e2, None) } ->
        If (translate_code env e1,
            translate_code env e2,
@@ -513,26 +514,15 @@ let rec translate_code env exp =
 
     | { pexp_desc =
           Pexp_apply (
-              { pexp_desc = Pexp_ident ( { txt = Ldot(Lident m, prim);
-                                           loc } ) },
-              args) } ->
-       Apply(m ^ "." ^ prim, loc_of_loc loc, List.map (
+              exp,
+              args); pexp_loc = loc } ->
+       let exp = translate_code env exp in
+       Apply(Prim_unknown, loc_of_loc loc, exp :: List.map (
                                          function (Nolabel, exp) ->
                                                   translate_code env exp
                                                 | (_, { pexp_loc }) ->
                                                    error_loc pexp_loc "in arg"
                                        ) args)
-
-    | { pexp_desc =
-          Pexp_apply (
-              { pexp_desc = Pexp_ident ( { txt = Lident prim; loc } ) },
-              args) } ->
-       Apply(prim, loc_of_loc loc, List.map (
-                               function (Nolabel, exp) ->
-                                        translate_code env exp
-                                      | (_, { pexp_loc }) ->
-                                         error_loc pexp_loc "in arg"
-                             ) args)
 
     | { pexp_desc = Pexp_match (e, cases); pexp_loc } ->
        let e = translate_code env e in
@@ -582,7 +572,8 @@ let rec translate_code env exp =
           match exp with
           | { pexp_desc = Pexp_construct (
                               { txt = Lident "Some" }, Some args) } ->
-             Apply("Some", loc_of_loc exp.pexp_loc, [translate_code env args])
+             Apply(Prim_Some, loc_of_loc exp.pexp_loc,
+                   [translate_code env args])
 
           (* Ok, this is a very special case. We accept
 not knowing the full type of the empty list because it will be infered
@@ -597,7 +588,7 @@ from the head element. We use unit for that type. *)
                                     Pexp_construct(
                                         { txt = Lident "[]" }, None) }]}) }
             ->
-             Apply("::", loc_of_loc exp.pexp_loc,
+             Apply(Prim_Cons, loc_of_loc exp.pexp_loc,
                    [translate_code env a;
                     mk ( Const (Tunit, CUnit))
                   ])
@@ -605,7 +596,7 @@ from the head element. We use unit for that type. *)
           | { pexp_desc = Pexp_construct (
                               { txt = Lident "::" },
                               Some { pexp_desc = Pexp_tuple [a;b]}) } ->
-             Apply("::", loc_of_loc exp.pexp_loc,
+             Apply(Prim_Cons, loc_of_loc exp.pexp_loc,
                    [translate_code env a;
                     translate_code env b])
 
@@ -684,7 +675,7 @@ from the head element. We use unit for that type. *)
                  in
                  Const (Ttuple tys, CTuple csts)
                with Exit ->
-                 Apply("tuple", loc_of_loc exp.pexp_loc, exps)
+                 Apply(Prim_tuple, loc_of_loc exp.pexp_loc, exps)
              end
 
           | { pexp_loc } ->
@@ -1008,7 +999,7 @@ let ocaml_of_file parser file =
   try
     Location.input_name := file;
     let lexbuf = Lexing.from_channel ic in
-    Location.init lexbuf "buffer";
+    Location.init lexbuf file;
     let ast = parser lexbuf in
     close_in ic;
     ast

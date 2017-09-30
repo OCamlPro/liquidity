@@ -142,18 +142,22 @@ let rec convert_code expr =
                  (convert_type arg_type))
               (convert_code body)
 
-  | Apply ("::", _loc, args) ->
+  | Apply (Prim_Cons, _loc, args) ->
      Exp.construct (lid "::")
                    (Some (Exp.tuple (List.map convert_code args)))
-  | Apply ("Some", _loc, [arg]) ->
+  | Apply (Prim_Some, _loc, [arg]) ->
      Exp.construct (lid "Some") (Some (convert_code arg))
-  | Apply ("tuple", _loc, args) ->
+  | Apply (Prim_tuple, _loc, args) ->
      Exp.tuple (List.map convert_code args)
   | Apply (prim_name, _loc, args) ->
-     let prim_name = match prim_name with
-       | "get_last" -> "Array.get"
-       | "get" -> "Array.get"
+     let prim = match prim_name with
+       | Prim_tuple_get_last -> Prim_tuple_get
        | _ -> prim_name
+     in
+     let prim_name =
+       try
+         LiquidTypes.string_of_primitive prim
+       with Not_found -> assert false
      in
      Exp.apply (Exp.ident (lid prim_name))
                (List.map (fun arg ->

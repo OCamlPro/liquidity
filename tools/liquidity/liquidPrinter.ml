@@ -271,8 +271,9 @@ module Liquid = struct
        Printf.bprintf b ")";
     | Var (name, _loc, labels) ->
        Printf.bprintf b "\n%s%s" indent (String.concat "." (name :: labels))
-    | Apply (name, _loc, args) ->
-       Printf.bprintf b "\n%s(%s" indent name;
+    | Apply (prim, _loc, args) ->
+       Printf.bprintf b "\n%s(%s" indent
+                      (LiquidTypes.string_of_primitive prim);
        let indent2 = indent ^ "  " in
        List.iter (fun exp ->
            bprint_code ~debug b indent2 exp
@@ -431,7 +432,8 @@ let string_of_node node =
   | N_TRANSFER _ -> "N_TRANSFER"
   | N_TRANSFER_RESULT int -> Printf.sprintf "N_TRANSFER_RESULT %d" int
   | N_CONST (ty, cst) -> "N_CONST " ^ Michelson.string_of_const cst
-  | N_PRIM string -> Printf.sprintf "N_PRIM %s" string
+  | N_PRIM string ->
+     Printf.sprintf "N_PRIM %s" string
   | N_FAIL -> "N_FAIL"
   | N_LOOP _ -> "N_LOOP"
   | N_LOOP_BEGIN _ -> "N_LOOP_BEGIN"

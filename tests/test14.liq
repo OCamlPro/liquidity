@@ -19,6 +19,6 @@ let%entry main
             ( false, (count, storage) )
         ) (parameter, storage)
       in
-      let storage = get x 1 in
+      let storage = Array.get x 1 in
       ( (), storage )
 

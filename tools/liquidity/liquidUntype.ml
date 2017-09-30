@@ -83,15 +83,15 @@ let rec untype (env : env) (code : typed_exp) =
     | Seq (x, y) -> Seq (untype env x, untype env y)
     | Const (ty, cst) ->  Const (ty, cst)
 
-    | Apply("Source", loc, [from_arg; to_arg]) ->
+    | Apply(Prim_Source, loc, [from_arg; to_arg]) ->
        Constructor(loc, Source (from_arg.ty, to_arg.ty), untype env from_arg)
-    | Apply("Left", loc, [arg; unused]) ->
+    | Apply(Prim_Left, loc, [arg; unused]) ->
        Constructor(loc, Left unused.ty, untype env arg)
-    | Apply("Right", loc, [arg; unused]) ->
+    | Apply(Prim_Right, loc, [arg; unused]) ->
        Constructor(loc, Right unused.ty, untype env arg)
     | Apply (prim, loc, args) ->
        let prim = match prim with
-         | "get_last" -> "Array.get"
+         | Prim_tuple_get_last -> Prim_tuple_get
          | _ -> prim
        in
        Apply(prim, loc, List.map (untype env) args)

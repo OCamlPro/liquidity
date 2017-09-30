@@ -48,7 +48,7 @@ let%entry main
         else
           Set [1;2;3;4]
       in
-      let storage = set storage 3 set in
+      let storage = Array.set storage 3 set in
 
 (* lists *)
       let list =
@@ -57,6 +57,6 @@ let%entry main
         else
           [1;2;3;4;5]
       in
-      let storage = set storage 4 list in
+      let storage = Array.set storage 4 list in
 
       ( (), storage )
