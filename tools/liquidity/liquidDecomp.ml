@@ -33,21 +33,21 @@ let rec arg_of node =
        match pos, List.length args with
        | 0, 1 -> arg_of if_node
        | _ ->
-          mk (Apply ("Array.get", noloc, [ arg_of if_node; nat_n pos ]))
+          mk (Apply (Prim_tuple_get, noloc, [ arg_of if_node; nat_n pos ]))
      end
   | N_LOOP_ARG ({ kind = N_LOOP_BEGIN ( _); args } as begin_node, pos ) ->
      begin
        match pos, List.length args with
        | 0, 1 -> arg_of begin_node
        | _ ->
-          mk (Apply ("Array.get", noloc, [ arg_of begin_node; nat_n pos ]))
+          mk (Apply (Prim_tuple_get, noloc, [ arg_of begin_node; nat_n pos ]))
      end
   | N_LOOP_RESULT (loop_node, begin_node, pos ) ->
      begin
        match pos, List.length begin_node.args with
        | 0, 1 -> arg_of loop_node
        | _ ->
-          mk (Apply ("Array.get", noloc, [ arg_of loop_node; nat_n pos ]))
+          mk (Apply (Prim_tuple_get, noloc, [ arg_of loop_node; nat_n pos ]))
      end
   | N_CONST (ty, ((
                    CUnit | CBool _ | CInt _ | CNat _ | CTez _
@@ -72,80 +72,82 @@ let decompile contract =
        match node.kind, node.args with
        | N_PRIM "MOD", [arg1; arg2] ->
           mklet node (MatchOption(
-                          mk(Apply("/",noloc,[arg_of arg1;arg_of arg2])),
+                          mk(Apply(Prim_ediv,noloc,[arg_of arg1;arg_of arg2])),
                           noloc,
-                          mk(Apply("Current.fail",noloc, [unit])),
+                          mk(Apply(Prim_fail,noloc, [unit])),
                           var_of node,
-                          mk(Apply("Array.get",noloc,[
+                          mk(Apply(Prim_tuple_get,noloc,[
                                        mk(Var(var_of node,noloc,[]));
                                        int_one]))))
        | N_PRIM "DIV", [arg1; arg2] ->
           mklet node (MatchOption(
-                          mk(Apply("/",noloc,[arg_of arg1;arg_of arg2])),
+                          mk(Apply(Prim_ediv,noloc,[arg_of arg1;arg_of arg2])),
                           noloc,
-                          mk(Apply("Current.fail",noloc, [unit])),
+                          mk(Apply(Prim_fail,noloc, [unit])),
                           var_of node,
-                          mk(Apply("Array.get",noloc,[
+                          mk(Apply(Prim_tuple_get,noloc,[
                                        mk(Var(var_of node,noloc,[]));
                                        int_zero]))))
 
        | N_PRIM prim, _ ->
           let prim, args =
             match prim, node.args with
-            | "CDR", [arg] -> "Array.get", [arg_of arg; nat_one]
-            | "CAR", [arg] -> "Array.get", [arg_of arg; nat_zero]
-            | "SOME", [arg] -> "Some", [arg_of arg]
-            | "NEQ", [arg] -> "<>", [arg_of arg; int_zero]
-            | "EQ", [arg] -> "=", [arg_of arg; int_zero]
-            | "GE", [arg] -> ">=", [arg_of arg; int_zero]
-            | "GT", [arg] -> ">", [arg_of arg; int_zero]
-            | "LE", [arg] -> "<=", [arg_of arg; int_zero]
-            | "LT", [arg] -> "<", [arg_of arg; int_zero]
-            | "NEQ", [arg1;arg2] -> "<>", [arg_of arg1; arg_of arg2]
-            | "EQ", [arg1;arg2] -> "=", [arg_of arg1;  arg_of arg2]
-            | "GE", [arg1;arg2] -> ">=", [arg_of arg1; arg_of arg2]
-            | "GT", [arg1;arg2] -> ">", [arg_of arg1;  arg_of arg2]
-            | "LE", [arg1;arg2] -> "<=", [arg_of arg1; arg_of arg2]
-            | "LT", [arg1;arg2] -> "<", [arg_of arg1; arg_of arg2 ]
-            | "NOW", [] -> "Current.time", [unit]
-            | "BALANCE", [] -> "Current.balance", [unit]
-            | "AMOUNT",[] -> "Current.amount", [unit]
-            | "STEPS_TO_QUOTA",[] -> "Current.gas", [unit]
+            | "CDR", [arg] -> Prim_tuple_get, [arg_of arg; nat_one]
+            | "CAR", [arg] -> Prim_tuple_get, [arg_of arg; nat_zero]
+            | "NEQ", [arg] -> Prim_neq, [arg_of arg; int_zero]
+            | "EQ", [arg] -> Prim_eq, [arg_of arg; int_zero]
+            | "GE", [arg] -> Prim_ge, [arg_of arg; int_zero]
+            | "GT", [arg] -> Prim_gt, [arg_of arg; int_zero]
+            | "LE", [arg] -> Prim_le, [arg_of arg; int_zero]
+            | "LT", [arg] -> Prim_lt, [arg_of arg; int_zero]
+            | "NEQ", [arg1;arg2] -> Prim_neq, [arg_of arg1; arg_of arg2]
+            | "EQ", [arg1;arg2] -> Prim_eq, [arg_of arg1;  arg_of arg2]
+            | "GE", [arg1;arg2] -> Prim_le, [arg_of arg1; arg_of arg2]
+            | "GT", [arg1;arg2] -> Prim_lt, [arg_of arg1;  arg_of arg2]
+            | "LE", [arg1;arg2] -> Prim_ge, [arg_of arg1; arg_of arg2]
+            | "LT", [arg1;arg2] -> Prim_gt, [arg_of arg1; arg_of arg2 ]
+            | "NOW", [] -> Prim_now, [unit]
+            | "BALANCE", [] -> Prim_balance, [unit]
+            | "AMOUNT",[] -> Prim_amount, [unit]
+            | "STEPS_TO_QUOTA",[] -> Prim_gas, [unit]
             | prim, args ->
                let prim =
                  match prim with
-                 | "GET" -> "Map.find"
-                 | "PAIR" -> "tuple"
-                 | "COMPARE" -> "compare"
-                 | "CONCAT" -> "@"
-                 | "UPDATE" -> "Coll.update"
-                 | "MEM" -> "Coll.mem"
-                 | "MAP" -> "Coll.map"
-                 | "REDUCE" -> "Coll.reduce"
-                 | "SIZE" -> "Coll.size"
-                 | "CONS" -> "::"
-                 | "SUB" -> "-"
-                 | "ADD" -> "+"
-                 | "MUL" -> "*"
-                 | "EDIV" -> "/"
-                 | "EXEC" -> "|>"
-                 | "INT" -> "int"
-                 | "ABS" -> "abs"
-                 | "H" -> "Crypto.hash"
-                 | "CHECK_SIGNATURE" -> "Crypto.check"
-                 | "CREATE_ACCOUNT" -> "Account.create"
-                 | "CREATE_CONTRACT" -> "Contract.create"
-                 | "MANAGER" -> "Contract.manager"
-                 | "XOR" -> "xor"
-                 | "NOT" -> "not"
-                 | "OR" -> "or"
-                 | "AND" -> "&"
-                 | "LSR" -> ">>"
-                 | "LSL" -> "<<"
-                 | "DEFAULT_ACCOUNT" -> "Account.default"
-                 | _ -> prim
+                 | "GET" -> Prim_map_find
+                 | "PAIR" -> Prim_tuple
+                 | "COMPARE" -> Prim_compare
+                 | "CONCAT" -> Prim_concat
+                 | "UPDATE" -> Prim_coll_update
+                 | "MEM" -> Prim_coll_mem
+                 | "MAP" -> Prim_coll_map
+                 | "REDUCE" -> Prim_coll_reduce
+                 | "SIZE" -> Prim_coll_size
+                 | "CONS" -> Prim_Cons
+                 | "SUB" -> Prim_sub
+                 | "ADD" -> Prim_add
+                 | "MUL" -> Prim_mul
+                 | "EDIV" -> Prim_ediv
+                 | "EXEC" -> Prim_exec
+                 | "INT" -> Prim_int
+                 | "ABS" -> Prim_abs
+                 | "H" -> Prim_hash
+                 | "CHECK_SIGNATURE" -> Prim_check
+                 | "CREATE_ACCOUNT" -> Prim_create_account
+                 | "CREATE_CONTRACT" -> Prim_create_contract
+                 | "MANAGER" -> Prim_manager
+                 | "XOR" -> Prim_xor
+                 | "NOT" -> Prim_not
+                 | "OR" -> Prim_or
+                 | "AND" -> Prim_and
+                 | "LSR" -> Prim_lsr
+                 | "LSL" -> Prim_lsl
+                 | "DEFAULT_ACCOUNT" -> Prim_default_account
+                 | "SOME" -> Prim_Some
+                 | ins ->
+                    LiquidLoc.raise_error
+                      "Error: unknown instruction %S"
+                      ins
                in
-
                (prim, List.map arg_of args)
           in
           mklet node (Apply (prim, noloc, args))
@@ -161,7 +163,7 @@ let decompile contract =
        | N_END, [ arg ] -> arg_of arg
 
        | N_FAIL, _ ->
-          mk (Apply ("Current.fail", noloc, [unit]))
+          mk (Apply (Prim_fail, noloc, [unit]))
        | N_CONST (ty, cst), [] ->
           mklet node (Const (ty, cst))
 
@@ -213,7 +215,7 @@ let decompile contract =
           mklet node desc
 
        | N_LOOP_END (_,_,final_cond), args ->
-          mk (Apply("tuple", noloc,
+          mk (Apply(Prim_tuple, noloc,
                     [arg_of final_cond;
                      value_of_args args]))
 
@@ -279,7 +281,7 @@ let decompile contract =
     | [] -> mk (Const (Tunit, CUnit))
     | [arg] -> arg_of arg
     | args ->
-       mk (Apply ("tuple", noloc, List.map arg_of args))
+       mk (Apply (Prim_tuple, noloc, List.map arg_of args))
 
   and mklet node desc =
     mk (Let (var_of node, noloc,
@@ -290,9 +292,9 @@ let decompile contract =
   let code = decompile_next begin_node in
   (*  let code =
     mk (Let ("exp1", noloc,
-             mk (Apply("tuple", noloc,
+             mk (Apply(Prim_tuple, noloc,
                        [
-                         mk (Apply("tuple", noloc,
+                         mk (Apply(Prim_tuple, noloc,
                                    [
                                      mk (Var ("amount", noloc, []));
                                      mk (Var ("parameter", noloc, []));

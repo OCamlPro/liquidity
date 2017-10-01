@@ -15,6 +15,6 @@ let%entry main
 (* options *)
       let x = 3 in
       let option = Some x in
-      let storage  = set storage 1 option in
+      let storage  = Array.set storage 1 option in
 
       ( (), storage )
