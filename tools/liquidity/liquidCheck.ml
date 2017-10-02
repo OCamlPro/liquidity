@@ -27,8 +27,6 @@
 
 open LiquidTypes
 
-exception Unbound_variable of location * string
-
 let noloc env = LiquidLoc.loc_in_file env.env.filename
 
 let error loc msg =
@@ -73,41 +71,63 @@ let check_used env name loc count =
       LiquidLoc.warn loc (Unused name)
   end
 
+let check_used_in_env env name loc =
+  try
+    let (_, _, count) = StringMap.find name env.vars in
+    check_used env name loc count;
+  with Not_found ->
+  match env.clos_env with
+  | None -> check_used env name loc (ref 0)
+  | Some ce ->
+    try
+      let _, (count, _) = StringMap.find name ce.env_bindings in
+      check_used env name loc count;
+    with Not_found ->
+      check_used env name loc (ref 0)
 
-let find_var env loc name =
+(* Find variable name in either the global environment or the closure
+   environment, returns a corresponding variable expression *)
+let find_var ?(count_used=true) env loc name =
   try
     let (name, ty, count) = StringMap.find name env.vars in
-    incr count;
+    if count_used then incr count;
     mk (Var (name, loc, [])) ty false
   with Not_found ->
   match env.clos_env with
   | None -> error loc "unbound variable %S" name
   | Some ce ->
     try
-      StringMap.find name ce.env_bindings
+      let v, (cpt_in, cpt_out) = StringMap.find name ce.env_bindings in
+      if count_used then begin
+        incr cpt_in;
+        incr cpt_out;
+      end;
+      v
     with Not_found ->
       error loc "unbound variable %S" name
 
+(* Create environment for closure *)
 let env_for_clos env loc arg_name arg_type =
   let free_vars = match env.clos_env with
     | Some ce ->
       StringMap.map
-        (fun (bname, btype, index) -> (bname, btype, index + 1))
+        (fun (bname, btype, index, (cpt_in, cpt_out)) ->
+           (bname, btype, index + 1, (cpt_in, cpt_out)))
         ce.env_vars
     | None -> StringMap.empty
   in
   let _, free_vars =
-    StringMap.fold (fun n (bname, btype, _) (index, free_vars) ->
+    StringMap.fold (fun n (bname, btype, count) (index, free_vars) ->
       match btype with
       | Tlambda _ -> (index, free_vars)
       | _ ->
         let index = index + 1 in
-        (index, StringMap.add n (bname, btype, index) free_vars)
+        (index, StringMap.add n (bname, btype, index, (ref 0, count)) free_vars)
     ) env.vars (StringMap.cardinal free_vars, free_vars)
   in
   let free_vars_l =
     StringMap.bindings free_vars
-    |> List.sort (fun (_, (_,_,i1)) (_, (_,_,i2)) -> compare i1 i2)
+    |> List.sort (fun (_, (_,_,i1,_)) (_, (_,_,i2,_)) -> compare i1 i2)
   in
   let ext_env = env in
   let env = { env with vars = StringMap.empty } in
@@ -116,32 +136,35 @@ let env_for_clos env loc arg_name arg_type =
     let (new_name, env, _) = new_binding env arg_name arg_type in
     env, new_name, arg_type, []
   | _ ->
-    let env_arg_name = uniq_ident "closure_env" in
+    let env_arg_name, env = uniq_ident env "closure_env" in
     let env_arg_type =
-      Ttuple (arg_type :: List.map (fun (_, (_,ty,_)) -> ty) free_vars_l) in
+      Ttuple (arg_type :: List.map (fun (_, (_,ty,_,_)) -> ty) free_vars_l) in
     let env_arg_var = mk (Var (env_arg_name, loc, [])) env_arg_type false in
+    let new_name, env = uniq_ident env arg_name in
     let env_vars =
       StringMap.add arg_name
-        (uniq_ident arg_name, arg_type, 0) free_vars in
+        (new_name, arg_type, 0, (ref 0, ref 0)) free_vars in
     let size = StringMap.cardinal env_vars in
     let env_bindings =
-      StringMap.map (fun (_, ty, index) ->
+      StringMap.map (fun (_, ty, index, count) ->
           let ei = mk (Const (Tnat, CNat (string_of_int index))) Tnat false in
-          let accessor = if index + 1 = size then "get_last" else "get" in
-          mk (Apply(accessor, loc, [env_arg_var; ei])) ty false
+          let accessor =
+            if index + 1 = size then Prim_tuple_get_last
+            else Prim_tuple_get in
+          let exp = mk (Apply(accessor, loc, [env_arg_var; ei])) ty false in
+          exp, count
         ) env_vars
     in
     let call_bindings = List.map (fun (name, _) ->
-        name, find_var ext_env loc name
+        name, find_var ~count_used:false ext_env loc name
       ) free_vars_l
     in
     (* Format.eprintf "--- Closure %s ---@." env_arg_name; *)
-    (* StringMap.iter (fun name e -> *)
+    (* StringMap.iter (fun name (e,_) -> *)
     (*     Format.eprintf "%s -> %s@." *)
     (*       name (LiquidPrinter.Liquid.string_of_code e) *)
     (*   ) env_bindings; *)
     let env_closure = {
-      free_vars;
       env_vars;
       env_bindings;
       call_bindings;
@@ -387,8 +410,7 @@ let rec loc_exp env e = match e.desc with
          try
            LiquidTypes.primitive_of_string name
          with Not_found ->
-           error loc
-                 "Unknown identifier %S" name
+           error loc "Unknown identifier %S" name
        in
        typecheck env { exp with
                        desc = Apply(prim, loc, args) }
@@ -493,8 +515,10 @@ let rec loc_exp env e = match e.desc with
        transfer1 || transfer2 || transfer3
 
     | Lambda (arg_name, arg_type, loc, body, res_type) ->
-
+       let env_at_lambda = env in
        let lambda_arg_type = arg_type in
+       let lambda_arg_name = arg_name in
+       let lambda_body = body in
        assert (res_type = Tunit);
        (* let env = { env with vars = StringMap.empty } in *)
        (* let (arg_name, env, arg_count) = new_binding env arg_name arg_type in *)
@@ -503,20 +527,44 @@ let rec loc_exp env e = match e.desc with
        let body, _fail, transfer = typecheck env body in
        if transfer then
          error loc "no transfer in lambda";
-       let desc, ty = match call_env with
-         | [] ->
-           let desc = Lambda (arg_name, arg_type, loc, body, body.ty) in
-           let ty = Tlambda (arg_type, body.ty) in
-           desc, ty
-         | _ ->
-           let desc =
-             Closure (arg_name, arg_type, loc, call_env, body, body.ty) in
-           let call_env_type =
-             Ttuple (List.map (fun (_, t) -> t.ty) call_env) in
-           let ty = Tclosure ((lambda_arg_type, call_env_type), body.ty) in
-           desc, ty
+       let is_real_closure = match env.clos_env with
+         | None -> false
+         | Some clos_env ->
+           StringMap.exists (fun name (_, (cpt_in, _)) ->
+               !cpt_in <> 0 && name <> lambda_arg_name
+             ) clos_env.env_bindings
        in
-       mk desc ty false, false, false
+       (* begin match env.clos_env with *)
+       (*   | None -> () *)
+       (*   | Some clos_env -> *)
+       (*     Format.eprintf "--- Closure %s (real:%b)---@." arg_name is_real_closure; *)
+       (*     StringMap.iter (fun name (e, (cpt_in, cpt_out)) -> *)
+       (*         Format.eprintf "%s -> %s , (%d, %d)@." *)
+       (*           name (LiquidPrinter.Liquid.string_of_code e) !cpt_in !cpt_out *)
+       (*       ) clos_env.env_bindings *)
+       (* end; *)
+       if not is_real_closure then
+         (* recreate lambda from scratch *)
+         let env = { env_at_lambda with vars = StringMap.empty } in
+         let (new_arg_name, env, arg_count) =
+           new_binding env lambda_arg_name lambda_arg_type in
+         let body, _fail, transfer = typecheck env lambda_body in
+         check_used env lambda_arg_name loc arg_count;
+         if transfer then
+           error loc "no transfer in lambda";
+         let desc =
+           Lambda (new_arg_name, lambda_arg_type, loc, body, body.ty) in
+         let ty = Tlambda (lambda_arg_type, body.ty) in
+         mk desc ty false, false, false
+       else begin
+         check_used_in_env env lambda_arg_name loc;
+         let desc =
+           Closure (arg_name, arg_type, loc, call_env, body, body.ty) in
+         let call_env_type =
+           Ttuple (List.map (fun (_, t) -> t.ty) call_env) in
+         let ty = Tclosure ((lambda_arg_type, call_env_type), body.ty) in
+         mk desc ty false, false, false
+       end
 
     | Closure _ -> assert false
 

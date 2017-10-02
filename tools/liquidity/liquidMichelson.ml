@@ -84,8 +84,11 @@ let translate_code code =
        [ LAMBDA (arg_type, res_type, seq (body @ [DIP_DROP (1,1)])) ], false
 
     | Closure (arg_name, p_arg_type, loc, call_env, body, res_type) ->
-      let call_env_code =
-        compile_tuple depth env (List.rev_map snd call_env) in
+      let call_env_code = match call_env with
+        | [] -> assert false
+        | [_, e] -> compile_no_transfer depth env e
+        | _ -> compile_tuple depth env (List.rev_map snd call_env)
+      in
       call_env_code @
       (compile depth env
         { e with
@@ -134,7 +137,6 @@ let translate_code code =
     | Apply (Prim_unknown, _loc, args) -> assert false
 
     | Apply (Prim_exec, _loc, [arg; { ty = Tclosure _ } as f]) ->
-      let arg = compile_no_transfer depth env arg in
       let f_env = compile_no_transfer depth env f in
       let arg = compile_no_transfer (depth+1) env arg in
       f_env @ arg @ [ dip 1 [ dup 1; CAR; SWAP; CDR] ] @

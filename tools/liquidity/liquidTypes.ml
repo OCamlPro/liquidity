@@ -426,9 +426,16 @@ type type_kind =
       ) list
 
 type closure_env = {
-  free_vars : (string * datatype * int) StringMap.t;
-  env_vars :  (string * datatype * int) StringMap.t;
-  env_bindings : typed_exp StringMap.t;
+  env_vars :  (string (* name outside closure *)
+               * datatype
+               * int (* index *)
+               * (int ref * (* usage counter inside closure *)
+                  int ref (* usage counter outside closure *)
+                 )) StringMap.t;
+  env_bindings : (typed_exp (* expression to access variable inside closure *)
+                  * (int ref * (* usage counter inside closure *)
+                     int ref (* usage counter outside closure *)
+                    )) StringMap.t;
   call_bindings : (string * typed_exp) list;
 }
 
