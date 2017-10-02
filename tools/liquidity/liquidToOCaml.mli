@@ -9,6 +9,8 @@
 
 open LiquidTypes
 
+val output_version : string
+
 val structure_of_contract : syntax_exp contract -> Parsetree.structure
 val string_of_structure : Parsetree.structure -> string
 

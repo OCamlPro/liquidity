@@ -31,7 +31,9 @@
 OCaml.library("ocplib-liquidity",
    ocaml + {
      files = [
-        "liquidMisc.ml";
+       "liquidVersion.ml", { ocp2ml=true;
+                             env_strings = [ "ocp::commit" ]; };
+       "liquidMisc.ml";
 
        "liquidTypes.ml";
        "liquidLoc.ml";
@@ -61,8 +63,6 @@ OCaml.library("ocplib-liquidity-ocaml",
    ocaml + {
      version = version;
      files = [
-       "version.ml", {ocp2ml=true};
-
        "ocaml/liquidOCamlParser.mly";
        "ocaml/liquidOCamlLexer.mll";
        "ocaml/liquidOCamlParse.ml";
