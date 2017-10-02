@@ -38,15 +38,17 @@ a version that it does not understand (too old, more recent).
 The `main` function is the default entry point for the contract.
 `let%entry` is the construct used to declare entry points (there is
 currently only one entry point, but there will be probably more in the
-future).  Each of the three parameter of an entry point should have
-its type specified. Using the names `parameter`, `storage` and
-`return` for these three parameters is mandatory. `parameter` and
-`storage` are the two arguments to the entry, while `return` has the
-type of its return value.
+future).  The declaration takes three parameters with names
+`parameter`, `storage` and `return`. The first two parameters,
+`parameter` and `storage` are arguments to the function, while the
+latest one, `return`, is only used to specified the return type of the
+function. The types of the three parameters must always be specified.
 
-A contract always returns a pair `(return, storage)`, where `return` is
-the return value to the caller, and `storage` is the final state of the
-contract after the call.
+A contract always returns a pair `(return, storage)`, where `return`
+is the return value to the caller, and `storage` is the final state of
+the contract after the call. The type of the pair must match the type
+of a pair with the two parameters, `return` and `storage`, that were
+specified at the beginning of `main`.
 
 <... local declarations ...> is an optional set of optional type and
 function declarations. Type declarations can be used to define records
@@ -84,26 +86,36 @@ Operators and functions
 Here is a list of equivalences between MICHELSON instructions and
 Liquidity functions:
 
-* `FAIL` : `Current.fail ()`
-* `SELF` : `Current.contract ()`
-* `BALANCE` : `Current.balance ()`
-* `NOW` : `Current.time ()`
-* `AMOUNT` : `Current.amount ()`
-* `STEPS_TO_QUOTA` : `Current.gas ()`
-* `SOURCE arg_type res_type` : `( Source : (arg_type, res_type) contract)`
+* `FAIL` : `Current.fail ()`. Makes the contract abort.
+* `SELF` : `Current.contract ()`. Returns the current contract being executed.
+* `BALANCE` : `Current.balance ()`. Returns the current balance of the
+       current contract.
+* `NOW` : `Current.time ()`. Returns the timestamp of the block containing
+       the transaction in the blockchain.
+* `AMOUNT` : `Current.amount ()`. Returns the amount of tezzies that were
+       transfered when the contract was called.
+* `STEPS_TO_QUOTA` : `Current.gas ()`. Returns the current gas available
+       to execute the end of the contract.
+* `SOURCE arg_type res_type` : `( Source : (arg_type, res_type) contract)`.
+       Returns the contract that called the current contract.
 * `CONS` : `x :: y`
 * `NIL ele_type` : `( [] : ele_type list )`
-* `H` : `Crypto.hash x`
-* `CHECK_SIGNATURE` : `Crypto.check sg`
-* `CREATE_ACCOUNT` : `Account.create`
-* `CREATE_CONTRACT` : `Contract.create`
-* `MANAGER` : `Contract.manager ct`
-* `EXEC` : `Lambda.pipe` or `|>`
-* `DEFAULT_ACCOUNT` : `Account.default`
+* `H` : `Crypto.hash x`. Returns the hash of its argument, whatever it is.
+* `CHECK_SIGNATURE` : `Crypto.check key (signature,data)`. Returns `true` if
+     the public key has been used to generate the signature of the data.
+* `CREATE_ACCOUNT` : `Account.create`: creates a new account
+* `CREATE_CONTRACT` : `Contract.create`: creates a new contract
+* `MANAGER` : `Contract.manager ct`: returns the key of the manager of the
+     contract in argument
+* `EXEC` : `Lambda.pipe x f` or `x |> f`. Equivalent of `f x`, i.e. application
+     of the lambda `f` on the argument `x`.
+* `DEFAULT_ACCOUNT` : `Account.default key`. Returns the default contract
+    (of type `(unit,unit) contract`) associated with a key.
 
-Comparisons:
+Comparison operators
+--------------------
 
-* `COMPARE` : `compare x y`
+These operators take two values of the same type, and return a boolean value:
 * `COMPARE; EQ` : `x = y`
 * `COMPARE; NEQ` : `x <> y`
 * `COMPARE; LE` : `x <= y`
@@ -111,7 +123,12 @@ Comparisons:
 * `COMPARE; GE` : `x >= y`
 * `COMPARE; GT` : `x > y`
 
-On data structures:
+The last one returns an integer:
+* `COMPARE` : `compare x y`
+
+
+Operations on data structures
+-----------------------------
 * `MAP` : `Map.map` or `List.map`
 * `GET` : `Map.find`
 * `UPDATE`: `Map.update` or `Set.update`
@@ -124,7 +141,9 @@ On data structures:
 but not in a polymorphic way, i.e. `Coll.` is immediately replaced by the
 type-specific version for the type of its argument.)
 
-Operations:
+Arithmetic and logic operators
+------------------------------
+
 * `OR` : `x or y`
 * `AND` : `x & y`
 * `XOR` : `x xor y`
@@ -150,6 +169,19 @@ As in Michelson, there are different types of integers:
 * tez : an unbounded positive float of Tezzies, written either with
     a `t` suffix (`1.00t`, etc.) or as a string with type coercion
     (`("1.00" : tez)`).
+
+There are also three types of collections: lists, sets and
+maps. Constants collections can be created directly:
+* Lists: `["x";"y"]`;
+* Sets: `Set [1;2;3;4]`;
+* Maps: `Map [1, "x"; 2, "y"; 3, "z"]`;
+
+In the case of an empty collection, whose type cannot be inferred, the
+  type must be specified:
+* Lists: `([] : int list)`
+* Sets: `(Set : int set)`
+* Maps: `(Map : (int, string) map)`
+
 
 Tuples
 ------
@@ -265,18 +297,40 @@ type annotations.
 Functions
 ---------
 
-As for Michelson, functions in Liquidity are not closures. They can only
-access their only argument. The argument must be annotated with its
-(monomorphic) type.
+As for Michelson, functions in Liquidity are not closures. They can
+only access their argument. The argument must be annotated with its
+(monomorphic) type. Only one argument is allowed for a user-defined
+function (primitive functions such as `List.map` can take several
+arguments).
 
-Function applications are done using the `Lambda.pipe` function or the
-`|>` operator:
+Function applications are often done using the `Lambda.pipe` function
+or the `|>` operator:
 
 ```
-let succ = fun (x : int) -> x + 1 in
-let one = 0 |> succ in
+  let succ = fun (x : int) -> x + 1 in
+  let one = 0 |> succ in
 ...
 ```
+
+but they can also be done directly:
+
+```
+...
+  let succ (x : int) = x + 1 in
+  let one = succ 0 in
+...
+```
+
+A toplevel function can also be defined before the main entry point:
+```
+let version = 1.0
+let succ (x : int) = x + 1
+let%entry main ... =
+   ...
+   let one = succ 0 in
+   ...
+```
+
 
 Loops
 -----
