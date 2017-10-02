@@ -131,7 +131,9 @@ module Data = struct
       | Apply (Prim_Cons, _, [_])
       -> LiquidLoc.raise_error "<not yet implemented>"
 
-    | Apply (_, _, _)
+    | Apply (prim, _, _)
+      -> LiquidLoc.raise_error "<apply %s not yet implemented>"
+                               (LiquidTypes.string_of_primitive prim)
       | Var (_, _, _)
       | SetVar (_, _, _, _)
       | If (_, _, _)
@@ -147,39 +149,46 @@ module Data = struct
 
   let data_of_liq ~contract ~parameter ~storage =
     (* first, extract the types *)
-    let ocaml_ast = LiquidFromOCaml.structure_of_string contract in
-    let contract, env = LiquidFromOCaml.translate "buffer" ocaml_ast in
+    let ocaml_ast = LiquidFromOCaml.structure_of_string
+                      ~name:contract contract in
+    let contract, env = LiquidFromOCaml.translate contract ocaml_ast in
     let _, _ = LiquidCheck.typecheck_contract
                  ~warnings:true env contract in
 
     let translate name s ty =
-      let ml_exp = LiquidFromOCaml.expression_of_string s in
-      let sy_exp = LiquidFromOCaml.translate_expression "buffer" ml_exp in
-      let ty_exp =
-        LiquidCheck.typecheck_code ~warnings:true env contract ty sy_exp in
-      let loc = LiquidLoc.loc_in_file name in
-      let ty_exp = translate_const_exp loc ty_exp in
-      let s = LiquidPrinter.Michelson.string_of_const ty_exp in
-      Some s
+      try
+        let ml_exp = LiquidFromOCaml.expression_of_string ~name s in
+        Printf.eprintf "Parsed\n%!";
+        let sy_exp = LiquidFromOCaml.translate_expression env ml_exp in
+        Printf.eprintf "Translated\n%!";
+        let ty_exp =
+          LiquidCheck.typecheck_code ~warnings:true env contract ty sy_exp in
+        let loc = LiquidLoc.loc_in_file name in
+        let ty_exp = translate_const_exp loc ty_exp in
+        let s = LiquidPrinter.Michelson.string_of_const ty_exp in
+        Some s
+      with Error(loc,msg) ->
+        LiquidLoc.report_error (loc, msg);
+        None
     in
     (translate "parameter" parameter contract.parameter),
     (translate "storage" storage contract.storage)
 
-let contract = ref ""
-let parameter = ref ""
-let storage = ref ""
+  let contract = ref ""
+  let parameter = ref ""
+  let storage = ref ""
 
-let translate () =
-  let contract = FileString.read_file !contract in
-  let parameter = !parameter in
-  let storage = !storage in
-  let p,s = data_of_liq ~contract ~parameter ~storage in
-  List.iter (fun (s,x) ->
-      match x with
-      | None -> ()
-      | Some x ->
-         Printf.printf "%s: %s\n%!" s x)
-            [ "parameter", p; "storage", s ]
+  let translate () =
+    let contract = FileString.read_file !contract in
+    let parameter = !parameter in
+    let storage = !storage in
+    let p,s = data_of_liq ~contract ~parameter ~storage in
+    List.iter (fun (s,x) ->
+        match x with
+        | None -> ()
+        | Some x ->
+           Printf.printf "%s: %s\n%!" s x)
+              [ "parameter", p; "storage", s ]
 
 end
 

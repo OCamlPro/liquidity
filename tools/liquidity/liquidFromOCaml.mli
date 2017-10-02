@@ -14,8 +14,8 @@ val translate : string -> Parsetree.structure -> syntax_exp contract * env
 val read_file : string -> Parsetree.structure
 
 val translate_expression :
-  string -> Parsetree.expression -> LiquidTypes.syntax_exp
+  LiquidTypes.env -> Parsetree.expression -> LiquidTypes.syntax_exp
 
 
-val structure_of_string : string -> Parsetree.structure
-val expression_of_string : string -> Parsetree.expression
+val structure_of_string : ?name:string -> string -> Parsetree.structure
+val expression_of_string : ?name:string -> string -> Parsetree.expression

@@ -961,5 +961,5 @@ let typecheck_code ~warnings env contract expected_ty code =
     } in
 
   let code, _can_fail, _transfer =
-    typecheck_expected "final value" env expected_ty contract.code in
+    typecheck_expected "final value" env expected_ty code in
   code

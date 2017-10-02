@@ -32,7 +32,10 @@ OCaml.library("ocplib-liquidity",
    ocaml + {
      files = [
        "liquidVersion.ml", { ocp2ml=true;
-                             env_strings = [ "ocp::commit" ]; };
+                             env_strings = [
+                                "ocp::commit";
+                                "ocp::dates";
+                                ]; };
        "liquidMisc.ml";
 
        "liquidTypes.ml";

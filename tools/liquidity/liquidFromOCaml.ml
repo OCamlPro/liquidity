@@ -984,6 +984,13 @@ let translate_exn exn =
      let loc = loc_of_loc loc in
      LiquidLoc.raise_error ~loc "%s" msg
 
+  | LiquidOCamlLexer.Error (error, oloc) ->
+     let loc = loc_of_loc oloc in
+     LiquidLoc.raise_error ~loc "%s"
+                           (Location.error_of_printer
+                              oloc
+                              LiquidOCamlLexer.report_error error).Location.msg
+     LiquidOCamlLexer.report_error ppf error
   | _ -> raise exn
 
 
@@ -1011,20 +1018,21 @@ let read_file filename =
     ocaml_of_file LiquidOCamlParse.implementation filename
   with exn -> translate_exn exn
 
-let translate_expression filename expression =
-  let env = initial_env filename in
+let translate_expression env expression =
   try
     translate_code env expression
   with exn -> translate_exn exn
 
-let ocaml_of_string parser content =
+let ocaml_of_string ?(name = "buffer") parser content =
   try
-    Location.input_name := "buffer";
+    Location.input_name := name;
     let lexbuf = Lexing.from_string content in
-    Location.init lexbuf "buffer";
+    Location.init lexbuf name;
     parser lexbuf
   with exn ->
     translate_exn exn
 
-let structure_of_string = ocaml_of_string LiquidOCamlParse.implementation
-let expression_of_string = ocaml_of_string LiquidOCamlParse.expression
+let structure_of_string ?name =
+  ocaml_of_string ?name LiquidOCamlParse.implementation
+let expression_of_string ?name =
+  ocaml_of_string ?name LiquidOCamlParse.expression
