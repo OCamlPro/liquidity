@@ -27,7 +27,7 @@
 
 open LiquidTypes
 
-let noloc env = LiquidLoc.loc_in_file env.filename
+let noloc env = LiquidLoc.loc_in_file env.env.filename
 
 let error loc msg =
   LiquidLoc.raise_error ~loc ("Type error:  " ^^ msg ^^ "%!")
@@ -55,20 +55,19 @@ let const_unit = mk (Const (Tunit, CUnit)) Tunit false
 let unused env ty =
   mk (Apply(Prim_unused, noloc env, [const_unit])) ty false
 
-let counter = ref 0
-let uniq_ident name =
-  incr counter;
-  Printf.sprintf "%s/%d" name !counter
+let uniq_ident env name =
+  let env = { env with counter = env.counter + 1 } in
+  Printf.sprintf "%s/%d" name env.counter, env
 
 let new_binding env name ty =
-  let new_name = uniq_ident name in
+  let new_name, env = uniq_ident env name in
   let count = ref 0 in
   let env = { env with
               vars = StringMap.add name (new_name, ty, count) env.vars } in
   (new_name, env, count)
 
-let check_used ~warnings name loc count =
-  if warnings && !count = 0 && name.[0] <> '_' then begin
+let check_used env name loc count =
+  if env.warnings && !count = 0 && name.[0] <> '_' then begin
       LiquidLoc.warn loc (Unused name)
   end
 
@@ -89,13 +88,9 @@ let type_error loc msg actual expected =
     (LiquidPrinter.Liquid.string_of_type expected)
     (LiquidPrinter.Liquid.string_of_type actual)
 
-let types ~warnings env contract =
-
-  let to_inline = ref StringMap.empty in
-
   (* approximate location *)
-  let rec loc_exp e = match e.desc with
-    | Var (_, loc, _)
+let rec loc_exp env e = match e.desc with
+  | Var (_, loc, _)
     | SetVar (_, loc, _, _)
     | Apply (_, loc, _)
     | LetTransfer (_, _, loc, _, _, _, _, _)
@@ -107,18 +102,17 @@ let types ~warnings env contract =
     | Constructor (loc, _, _)
     | MatchVariant (_, loc, _) -> loc
 
-    | Let (_, _, _, e) -> loc_exp e
+  | Let (_, _, _, e) -> loc_exp env e
 
-    | Const _ -> noloc env
+  | Const _ -> noloc env
 
-    | If (e1, _, e2)
+  | If (e1, _, e2)
     | Seq (e1, e2) ->
-       match loc_exp e1, loc_exp e2 with
-       | ({ loc_pos = Some ( loc_begin , _ ) } as loc),
-         { loc_pos = Some ( _, loc_end ) } ->
-          { loc with loc_pos = Some (loc_begin, loc_end) }
-       | loc, _ -> loc
-  in
+     match loc_exp env e1, loc_exp env e2 with
+     | ({ loc_pos = Some ( loc_begin , _ ) } as loc),
+       { loc_pos = Some ( _, loc_end ) } ->
+        { loc with loc_pos = Some (loc_begin, loc_end) }
+     | loc, _ -> loc
 
   (* this function returns a triple with
    * the expression annotated with its type
@@ -141,13 +135,15 @@ let types ~warnings env contract =
        let (new_name, env, count) = new_binding env name exp.ty in
        let body, fail2, transfer2 = typecheck env body in
        let desc = Let (new_name, loc, exp, body ) in
-       check_used ~warnings name loc count;
+       check_used env name loc count;
        if (not transfer1) && (not fail1) then begin
            match !count with
            | 0 ->
-              to_inline := StringMap.add new_name const_unit !to_inline
+              env.to_inline := StringMap.add new_name const_unit
+                                             ! (env.to_inline)
            | 1 ->
-              to_inline := StringMap.add new_name exp !to_inline
+              env.to_inline := StringMap.add new_name exp
+                                             ! (env.to_inline)
            | _ -> ()
          end;
        let fail = fail1 || fail2 in
@@ -173,7 +169,7 @@ let types ~warnings env contract =
              let n =
                try
                  let (ty_name', n, _label_ty) =
-                   StringMap.find label env.labels in
+                   StringMap.find label env.env.labels in
                  if ty_name' <> ty_name then
                    error loc "label for wrong record";
                  n
@@ -183,7 +179,7 @@ let types ~warnings env contract =
              let arg2 =
                mk (Const (Tnat, CNat (string_of_int n))) Tnat false in
              let args = [ arg1; arg2] in
-             let prim, ty = typecheck_prim1 Prim_tuple_get loc args in
+             let prim, ty = typecheck_prim1 env Prim_tuple_get loc args in
              mk (Apply(prim, loc, args)) ty false
            ) e labels in
        e, false, false
@@ -208,7 +204,7 @@ let types ~warnings env contract =
        let n =
          try
            let (ty_name', n, _label_ty) =
-             StringMap.find label env.labels in
+             StringMap.find label env.env.labels in
            if ty_name' <> ty_name then
              error loc "label for wrong record";
            n
@@ -226,10 +222,9 @@ let types ~warnings env contract =
             (arg, can_fail)
          | _::_ ->
             let args = [ arg1; arg2] in
-            let prim, ty = typecheck_prim1 Prim_tuple_get loc args in
+            let prim, ty = typecheck_prim1 env Prim_tuple_get loc args in
             let get_exp = mk (Apply(prim, loc, args)) ty false in
-            let tmp_name = Printf.sprintf "tmp#%d" !counter in
-            incr counter;
+            let tmp_name, env = uniq_ident env "tmp#" in
             let (new_name, env, count) = new_binding env tmp_name ty in
             let body, can_fail, _transfer =
               typecheck env
@@ -241,7 +236,7 @@ let types ~warnings env contract =
 
        in
        let args = [ arg1; arg2; arg] in
-       let prim, tuple_ty' = typecheck_prim1 Prim_tuple_set loc args in
+       let prim, tuple_ty' = typecheck_prim1 env Prim_tuple_set loc args in
        mk (Apply(prim, loc, args)) ty can_fail, can_fail, false
 
     | Seq (exp1, exp2) ->
@@ -288,16 +283,16 @@ let types ~warnings env contract =
               typecheck_expected "call-arg" env arg_ty arg_exp in
             let storage_exp, fail4, transfer4 =
               typecheck_expected "call-storage"
-                                 env contract.storage storage_exp in
+                                 env env.contract.storage storage_exp in
             if transfer1 || transfer2 || transfer3 || transfer4 then
               error loc "transfer within transfer arguments";
             let (new_storage, env, storage_count) =
-              new_binding env storage_name contract.storage in
+              new_binding env storage_name env.contract.storage in
             let (new_result, env, result_count) =
               new_binding env result_name return_ty in
             let body, fail5, transfer5 = typecheck env body in
-            check_used ~warnings storage_name loc storage_count;
-            check_used ~warnings result_name loc result_count;
+            check_used env storage_name loc storage_count;
+            check_used env result_name loc result_count;
             let desc = LetTransfer(new_storage, new_result,
                                    loc,
                                    contract_exp, tez_exp,
@@ -341,7 +336,7 @@ let types ~warnings env contract =
                       if fail then can_fail := true;
                       arg
                     ) args in
-       let prim, ty = typecheck_prim1 prim loc args in
+       let prim, ty = typecheck_prim1 env prim loc args in
        let can_fail =
          match prim with
          | Prim_fail -> true
@@ -362,7 +357,7 @@ let types ~warnings env contract =
        let ifnone, fail2, transfer2 = typecheck env ifnone in
        let (new_name, env, count) = new_binding env name arg_ty in
        let ifsome, fail3, transfer3 = typecheck env ifsome in
-       check_used ~warnings name loc count;
+       check_used env name loc count;
        let desc = MatchOption (arg, loc, ifnone, new_name, ifsome ) in
        let ty =
          match ifnone.ty, ifsome.ty with
@@ -387,7 +382,7 @@ let types ~warnings env contract =
          typecheck_expected "loop-body" env
                             (Ttuple [Tbool; arg.ty])
                             body in
-       check_used ~warnings name loc count;
+       check_used env name loc count;
        let can_fail = fail1 || fail2 in
        mk (Loop (new_name, loc, body, arg)) arg.ty can_fail,
        can_fail,
@@ -408,8 +403,8 @@ let types ~warnings env contract =
        let (new_tail_name, env, count) =
          new_binding env tail_name (Tlist arg_ty) in
        let ifcons, fail3, transfer3 = typecheck env ifcons in
-       check_used ~warnings head_name loc count;
-       check_used ~warnings tail_name loc count;
+       check_used env head_name loc count;
+       check_used env tail_name loc count;
        let desc = MatchList (arg, loc, new_head_name, new_tail_name, ifcons,
                              ifnil ) in
        let ty =
@@ -442,11 +437,11 @@ let types ~warnings env contract =
     | Record (loc, (( (label, _) :: _ ) as lab_x_exp_list)) ->
        let ty_name, _, _ =
          try
-           StringMap.find label env.labels
+           StringMap.find label env.env.labels
          with Not_found ->
            error loc "unbound label %S" label
        in
-       let record_ty, ty_kind = StringMap.find ty_name env.types in
+       let record_ty, ty_kind = StringMap.find ty_name env.env.types in
        let len = List.length (match ty_kind with
                               | Type_record (tys,_labels) -> tys
                               | Type_variant _ -> assert false) in
@@ -454,7 +449,7 @@ let types ~warnings env contract =
        let record_can_fail = ref false in
        List.iteri (fun i (label, exp) ->
            let ty_name', label_pos, ty = try
-               StringMap.find label env.labels
+               StringMap.find label env.env.labels
              with Not_found ->
                error loc "unbound label %S" label
            in
@@ -477,12 +472,12 @@ let types ~warnings env contract =
        mk desc ty !record_can_fail, !record_can_fail, false
 
     | Constructor(loc, Constr constr, arg) ->
-       let ty_name, arg_ty = StringMap.find constr env.constrs in
+       let ty_name, arg_ty = StringMap.find constr env.env.constrs in
        let arg, can_fail, transfer =
          typecheck_expected "constr-arg" env arg_ty arg in
        if transfer then
          error loc "transfer not allowed in constructor argument";
-       let constr_ty, ty_kind = StringMap.find ty_name env.types in
+       let constr_ty, ty_kind = StringMap.find ty_name env.env.types in
        let exp =
          match ty_kind with
          | Type_record _ -> assert false
@@ -573,7 +568,7 @@ let types ~warnings env contract =
               error loc "cannot match failure"
            | Ttype (ty_name, _) ->
               begin
-                let constr_ty, ty_kind = StringMap.find ty_name env.types in
+                let constr_ty, ty_kind = StringMap.find ty_name env.env.types in
                 match ty_kind with
                 | Type_variant constrs -> (ty_name, constrs)
                 | Type_record _ -> raise Not_found
@@ -591,7 +586,7 @@ let types ~warnings env contract =
        List.iter (fun (constr, vars, e) ->
            let ty_name', var_ty =
              try
-               StringMap.find constr env.constrs
+               StringMap.find constr env.env.constrs
              with Not_found ->
                error loc "unknown constructor"
            in
@@ -624,7 +619,7 @@ let types ~warnings env contract =
            in
            if can_fail then match_can_fail := true;
            if transfer then has_transfer := true;
-           check_used ~warnings name loc count;
+           check_used env name loc count;
            present_constrs := StringMap.add constr
                                             (new_name, e)
                                             !present_constrs
@@ -653,7 +648,7 @@ let types ~warnings env contract =
     let (exp, can_fail, transfer) = typecheck env  exp in
     (new_name, exp, can_fail, transfer)
 
-  and typecheck_prim1 prim loc args =
+  and typecheck_prim1 env prim loc args =
     match prim, args with
     | Prim_tuple_get, [ { ty = Ttuple tuple };
                                { desc = Const (_, (CInt n | CNat n)) }] ->
@@ -713,9 +708,9 @@ let types ~warnings env contract =
          | Prim_coll_size, [{ ty = Tmap _ } ] -> Prim_map_size
          | _ -> prim
        in
-       prim, typecheck_prim2 prim loc args
+       prim, typecheck_prim2 env prim loc args
 
-  and typecheck_prim2 prim loc args =
+  and typecheck_prim2 env prim loc args =
     match prim, args with
     | ( Prim_neq | Prim_lt | Prim_gt | Prim_eq | Prim_le | Prim_ge ),
       [ { ty = ty1 }; { ty = ty2 } ] ->
@@ -808,7 +803,7 @@ let types ~warnings env contract =
     | Prim_Some, [ { ty } ] -> Toption ty
     | Prim_fail, [ { ty = Tunit } ] -> Tfail
     | Prim_self, [ { ty = Tunit } ] ->
-       Tcontract (contract.parameter, contract.return)
+       Tcontract (env.contract.parameter, env.contract.return)
     | Prim_now, [ { ty = Tunit } ] -> Ttimestamp
     | Prim_balance, [ { ty = Tunit } ] -> Ttez
     (*    | "Current.source", [ { ty = Tunit } ] -> ... *)
@@ -926,12 +921,23 @@ let types ~warnings env contract =
   and typecheck_expected info env expected_ty exp =
     let exp, fail, transfer = typecheck env exp in
     if exp.ty <> expected_ty && exp.ty <> Tfail then
-      type_error (loc_exp exp) ("Unexpected type for "^info) exp.ty expected_ty;
+      type_error (loc_exp env exp)
+                 ("Unexpected type for "^info) exp.ty expected_ty;
     exp, fail, transfer
 
 
-  in
-  counter := 0;
+
+let typecheck_contract ~warnings env contract =
+  let env =
+    {
+      warnings;
+      counter = 0;
+      vars = StringMap.empty;
+      to_inline = ref StringMap.empty;
+      env = env;
+      contract;
+    } in
+
   (* "storage/1" *)
   let (_ , env, _) = new_binding env  "storage" contract.storage in
   (* "parameter/2" *)
@@ -941,4 +947,19 @@ let types ~warnings env contract =
 
   let code, _can_fail, _transfer =
     typecheck_expected "final value" env expected_ty contract.code in
-  { contract with code }, !to_inline
+  { contract with code }, ! (env.to_inline)
+
+let typecheck_code ~warnings env contract expected_ty code =
+  let env =
+    {
+      warnings;
+      counter = 0;
+      vars = StringMap.empty;
+      to_inline = ref StringMap.empty;
+      env = env;
+      contract ;
+    } in
+
+  let code, _can_fail, _transfer =
+    typecheck_expected "final value" env expected_ty contract.code in
+  code

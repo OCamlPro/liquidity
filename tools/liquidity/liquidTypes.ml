@@ -410,11 +410,26 @@ type type_kind =
       ) list
 
 type env = {
+    (* name of file being compiled *)
     filename : string;
+
+    (* fields modified in LiquidFromOCaml *)
+    (* type definitions *)
     mutable types : (datatype * type_kind) StringMap.t;
+    (* labels of records in type definitions *)
     mutable labels : (string * int * datatype) StringMap.t;
+    (* constructors of sum-types in type definitions *)
     mutable constrs : (string * datatype) StringMap.t;
+  }
+
+(* fields updated in LiquidCheck *)
+type 'a typecheck_env = {
+    warnings : bool;
+    counter : int;
     vars : (string * datatype * int ref) StringMap.t;
+    env : env;
+    to_inline : datatype exp StringMap.t ref;
+    contract : 'a contract;
   }
 
 

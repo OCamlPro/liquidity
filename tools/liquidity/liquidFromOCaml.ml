@@ -942,7 +942,6 @@ let initial_env filename =
     labels = StringMap.empty;
     constrs = predefined_constructors;
     filename;
-    vars = StringMap.empty;
   }
 
 let translate_exn exn =

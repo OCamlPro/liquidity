@@ -28,7 +28,8 @@ let compile_liquid_file filename =
   FileString.write_file (filename ^ ".syntax")
                         (LiquidPrinter.Liquid.string_of_contract
                            syntax_ast);
-  let typed_ast, to_inline = LiquidCheck.types ~warnings:true env syntax_ast in
+  let typed_ast, to_inline =
+    LiquidCheck.typecheck_contract ~warnings:true env syntax_ast in
   FileString.write_file (filename ^ ".typed")
                         (LiquidPrinter.Liquid.string_of_contract
                            typed_ast);
@@ -73,7 +74,8 @@ let compile_tezos_file filename =
   FileString.write_file  (filename ^ ".liq.pre")
                          (LiquidPrinter.Liquid.string_of_contract c);
   let env = LiquidFromOCaml.initial_env filename in
-  let typed_ast, to_inline = LiquidCheck.types ~warnings:false env c in
+  let typed_ast, to_inline =
+    LiquidCheck.typecheck_contract ~warnings:false env c in
   (*  Printf.eprintf "Inlining: %d\n%!" (StringMap.cardinal to_inline); *)
   let live_ast = LiquidSimplify.simplify_contract typed_ast to_inline in
   let untyped_ast = LiquidUntype.untype_contract live_ast in
@@ -107,13 +109,95 @@ let compile_file filename =
   with (Error _) as e ->
        if not !arg_keepon then raise e
 
+
+module Data = struct
+
+  let rec translate_const_exp loc exp =
+    match exp.desc with
+    | Let (_, loc, _, _) ->
+       LiquidLoc.raise_error ~loc "'let' forbidden in constant"
+    | Const (ty, c) -> c
+
+    | Record (_, _)
+      | Constructor (_, _, _)
+      | Apply (Prim_tuple, _, _)
+      | Apply (Prim_neq, _, [_])
+      | Apply (Prim_Left, _, [_])
+      | Apply (Prim_Right, _, [_])
+      | Apply (Prim_Some, _, [_])
+      | Apply (Prim_Cons, _, [_])
+      -> LiquidLoc.raise_error "<not yet implemented>"
+
+    | Apply (_, _, _)
+      | Var (_, _, _)
+      | SetVar (_, _, _, _)
+      | If (_, _, _)
+      | Seq (_, _)
+      | LetTransfer (_, _, _, _, _, _, _, _)
+      | MatchOption (_, _, _, _, _)
+      | MatchList (_, _, _, _, _, _)
+      | Loop (_, _, _, _)
+      | Lambda (_, _, _, _, _)
+      | MatchVariant (_, _, _)
+      ->
+       LiquidLoc.raise_error ~loc "non-constant expression"
+
+  let data_of_liq ~contract ~parameter ~storage =
+    (* first, extract the types *)
+    let ocaml_ast = LiquidFromOCaml.structure_of_string contract in
+    let contract, env = LiquidFromOCaml.translate "buffer" ocaml_ast in
+    let _, _ = LiquidCheck.typecheck_contract
+                 ~warnings:true env contract in
+
+    let translate name s ty =
+      let ml_exp = LiquidFromOCaml.expression_of_string s in
+      let sy_exp = LiquidFromOCaml.translate_expression "buffer" ml_exp in
+      let ty_exp =
+        LiquidCheck.typecheck_code ~warnings:true env contract ty sy_exp in
+      let loc = LiquidLoc.loc_in_file name in
+      let ty_exp = translate_const_exp loc ty_exp in
+      let s = LiquidPrinter.Michelson.string_of_const ty_exp in
+      Some s
+    in
+    (translate "parameter" parameter contract.parameter),
+    (translate "storage" storage contract.storage)
+
+let contract = ref ""
+let parameter = ref ""
+let storage = ref ""
+
+let translate () =
+  let contract = FileString.read_file !contract in
+  let parameter = !parameter in
+  let storage = !storage in
+  let p,s = data_of_liq ~contract ~parameter ~storage in
+  List.iter (fun (s,x) ->
+      match x with
+      | None -> ()
+      | Some x ->
+         Printf.printf "%s: %s\n%!" s x)
+            [ "parameter", p; "storage", s ]
+
+end
+
+
 let main () =
   let work_done = ref false in
   let arg_list = Arg.align [
       "-k", Arg.Set arg_keepon, " Continue on error";
       "--no-peephole", Arg.Clear arg_peephole,
       " Disable peephole optimizations";
+      "--data", Arg.Tuple [
+                    Arg.String (fun s -> Data.contract := s);
+                    Arg.String (fun s -> Data.parameter := s);
+                    Arg.String (fun s -> Data.storage := s);
+                    Arg.Unit (fun () ->
+                        work_done := true;
+                        Data.translate ());
+                  ],
+      "FILE.liq PARAMETER STORAGE Translate to Michelson";
                    ] @ LiquidToTezos.arg_list work_done
+
   in
   let arg_usage = String.concat "\n" [
 "liquidity [OPTIONS] FILES";
