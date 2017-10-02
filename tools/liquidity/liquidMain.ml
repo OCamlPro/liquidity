@@ -118,8 +118,11 @@ module Data = struct
        LiquidLoc.raise_error ~loc "'let' forbidden in constant"
     | Const (ty, c) -> c
 
+    (* removed during typechecking *)
     | Record (_, _)
-      | Constructor (_, _, _)
+    | Constructor (_, _, _) -> assert false
+
+    (* Expect constants... *)
       | Apply (Prim_tuple, _, _)
       | Apply (Prim_neq, _, [_])
       | Apply (Prim_Left, _, [_])

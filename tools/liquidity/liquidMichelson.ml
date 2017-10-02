@@ -216,7 +216,8 @@ let translate_code code =
        @ [ LOOP (seq (body @ body_end)) ],
        transfer1 || transfer2
 
-    | Record _ -> assert false (* removed during typechecking, replaced by tuple *)
+    (* removed during typechecking, replaced by tuple *)
+    | Record _ -> assert false
     | Constructor _ -> assert false
 
   and compile_prim depth env prim args =
