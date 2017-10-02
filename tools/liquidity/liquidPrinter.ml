@@ -83,12 +83,9 @@ module Michelson = struct
        bprint_type b indent ty2;
        Printf.bprintf b "\n%s)" indent;
     | Tclosure ((ty_arg, ty_env), ty_r) ->
-       let indent = indent ^ "  " in
-       Printf.bprintf b "(lambda\n%s" indent;
-       bprint_type b indent (Ttuple [ty_arg; ty_env]);
-       Printf.bprintf b "\n%s" indent;
-       bprint_type b indent ty_r;
-       Printf.bprintf b "\n%s)" indent;
+       bprint_type b indent
+         (Ttuple [Tlambda (Ttuple [ty_arg; ty_env], ty_r);
+                  ty_env ]);
     | Ttype (ty_name, ty) ->
        (*     Printf.bprintf b "%S =\n%s  " ty_name indent; *)
        bprint_type b indent ty

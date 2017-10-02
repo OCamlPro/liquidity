@@ -85,6 +85,8 @@ let rec convert_type expr =
   | Tor (x,y) -> prim "or" [convert_type x; convert_type y]
   | Tcontract (x,y) -> prim "contract" [convert_type x;convert_type y]
   | Tlambda (x,y) -> prim "lambda" [convert_type x; convert_type y]
+  | Tclosure ((x,e),r) ->
+    convert_type (Ttuple [Tlambda (Ttuple [x; e], r); e ]);
   | Tmap (x,y) -> prim "map" [convert_type x;convert_type y]
   | Tset x -> prim "set" [convert_type x]
   | Tlist x -> prim "list" [convert_type x]

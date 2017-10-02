@@ -81,28 +81,29 @@ let find_var env loc name =
     mk (Var (name, loc, [])) ty false
   with Not_found ->
   match env.clos_env with
-  | None -> raise (Unbound_variable (loc, name))
+  | None -> error loc "unbound variable %S" name
   | Some ce ->
-    StringMap.iter (fun name _ -> Format.eprintf "%s@." name) ce.env_bindings;
-    try StringMap.find name ce.env_bindings
-    with Not_found ->raise (Unbound_variable (loc, name))
+    try
+      StringMap.find name ce.env_bindings
+    with Not_found ->
+      error loc "unbound variable %S" name
 
 let env_for_clos env loc arg_name arg_type =
-  Format.eprintf "closure for %s@." arg_name;
-  (* let new_name = uniq_ident arg_name in *)
-  (* let (new_name, env, arg_count) = new_binding env arg_name arg_type in *)
-  let arg_index, free_vars = match env.clos_env with
-    | Some ce -> ce.next_index, ce.free_vars
-    | None -> 0, StringMap.empty
+  let free_vars = match env.clos_env with
+    | Some ce ->
+      StringMap.map
+        (fun (bname, btype, index) -> (bname, btype, index + 1))
+        ce.env_vars
+    | None -> StringMap.empty
   in
-  let next_index, free_vars =
+  let _, free_vars =
     StringMap.fold (fun n (bname, btype, _) (index, free_vars) ->
       match btype with
       | Tlambda _ -> (index, free_vars)
       | _ ->
-        Format.eprintf "adding %s@." n;
-        (index + 1, StringMap.add n (bname, btype, index) free_vars)
-    ) env.vars (arg_index + 1, free_vars)
+        let index = index + 1 in
+        (index, StringMap.add n (bname, btype, index) free_vars)
+    ) env.vars (StringMap.cardinal free_vars, free_vars)
   in
   let free_vars_l =
     StringMap.bindings free_vars
@@ -121,19 +122,25 @@ let env_for_clos env loc arg_name arg_type =
     let env_arg_var = mk (Var (env_arg_name, loc, [])) env_arg_type false in
     let env_vars =
       StringMap.add arg_name
-        (uniq_ident arg_name, arg_type, arg_index) free_vars in
+        (uniq_ident arg_name, arg_type, 0) free_vars in
+    let size = StringMap.cardinal env_vars in
     let env_bindings =
       StringMap.map (fun (_, ty, index) ->
           let ei = mk (Const (Tnat, CNat (string_of_int index))) Tnat false in
-          mk (Apply("get", loc, [env_arg_var; ei])) ty false
+          let accessor = if index + 1 = size then "get_last" else "get" in
+          mk (Apply(accessor, loc, [env_arg_var; ei])) ty false
         ) env_vars
     in
     let call_bindings = List.map (fun (name, _) ->
         name, find_var ext_env loc name
       ) free_vars_l
     in
+    (* Format.eprintf "--- Closure %s ---@." env_arg_name; *)
+    (* StringMap.iter (fun name e -> *)
+    (*     Format.eprintf "%s -> %s@." *)
+    (*       name (LiquidPrinter.Liquid.string_of_code e) *)
+    (*   ) env_bindings; *)
     let env_closure = {
-      next_index;
       free_vars;
       env_vars;
       env_bindings;
@@ -257,20 +264,14 @@ let rec loc_exp env e = match e.desc with
     | SetVar (name, loc, [], e) -> typecheck env e
 
     | SetVar (name, loc, label :: labels, arg) ->
-       let (name, ty, count) =
-         try
-           StringMap.find name env.vars (* FIXME *)
-         with Not_found ->
-           error loc "unbound variable %S" name
-       in
-       incr count;
-
+       let arg1_t = find_var env loc name in
+       let ty = arg1_t.ty in
        let ty_name, tuple_ty = match ty with
          | Ttype (ty_name, ty) -> ty_name, ty
          | _ ->
             error loc "not a record"
        in
-       let arg1 = mk (Var (name, loc, [])) tuple_ty false in
+       let arg1 = { arg1_t with ty = tuple_ty } in
        let n =
          try
            let (ty_name', n, _label_ty) =
@@ -496,7 +497,7 @@ let rec loc_exp env e = match e.desc with
        let lambda_arg_type = arg_type in
        assert (res_type = Tunit);
        (* let env = { env with vars = StringMap.empty } in *)
-       (* let (new_name, env, arg_count) = new_binding env arg_name arg_type in *)
+       (* let (arg_name, env, arg_count) = new_binding env arg_name arg_type in *)
        let env, arg_name, arg_type, call_env =
          env_for_clos env loc arg_name arg_type in
        let body, _fail, transfer = typecheck env body in
