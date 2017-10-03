@@ -43,7 +43,7 @@ SIMPLE_TESTS= `seq -f 'test%.0f' 0 $(NTESTS)`
 MORE_TESTS=test_ifcons test_if test_loop test_option test_transfer test_left \
   test_extfun test_left_constr test_closure test_closure2 test_closure3 \
   test_map
-OTHER_TESTS=others/broker others/demo
+OTHER_TESTS=others/broker others/demo others/auction
 REV_TESTS=`seq -f  'test%.0f' 0 5`
 
 NEW_TEZOS_TESTS= fail weather_insurance
