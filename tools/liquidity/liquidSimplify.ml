@@ -99,8 +99,15 @@ let compute code to_inline =
                                      body_exp) }
 
     | Lambda (arg_name, arg_type, loc, body_exp, res_type) ->
-       let body_exp = iter body_exp in
-       { exp with desc = Lambda (arg_name, arg_type, loc, body_exp, res_type) }
+      let body_exp = iter body_exp in
+      { exp with
+        desc = Lambda (arg_name, arg_type, loc, body_exp, res_type) }
+
+    | Closure (arg_name, arg_type, loc, call_env, body_exp, res_type) ->
+      let body_exp = iter body_exp in
+      let call_env = List.map (fun (name, t) -> name, iter t) call_env in
+      { exp with
+        desc = Closure (arg_name, arg_type, loc, call_env, body_exp, res_type) }
 
     | Record (loc, lab_x_exp_list) ->
        let lab_x_exp_list = List.map (fun (label, exp) -> label, iter exp)

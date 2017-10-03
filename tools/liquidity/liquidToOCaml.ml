@@ -48,6 +48,8 @@ let rec convert_type ty =
   | Tor (x,y) -> typ_constr "variant" [convert_type x; convert_type y]
   | Tcontract (x,y) -> typ_constr "contract" [convert_type x;convert_type y]
   | Tlambda (x,y) -> typ_constr "lambda" [convert_type x; convert_type y]
+  | Tclosure ((x,e),r) ->
+    typ_constr "closure" [convert_type x; convert_type e; convert_type r]
   | Tmap (x,y) -> typ_constr "map" [convert_type x;convert_type y]
   | Tset x -> typ_constr "set" [convert_type x]
   | Tlist x -> typ_constr "list" [convert_type x]
@@ -145,6 +147,8 @@ let rec convert_code expr =
                  (Pat.var (loc arg_name))
                  (convert_type arg_type))
               (convert_code body)
+
+  | Closure _ -> assert false
 
   | Apply (Prim_Cons, _loc, args) ->
      Exp.construct (lid "::")

@@ -82,6 +82,10 @@ module Michelson = struct
        Printf.bprintf b "\n%s" indent;
        bprint_type b indent ty2;
        Printf.bprintf b "\n%s)" indent;
+    | Tclosure ((ty_arg, ty_env), ty_r) ->
+       bprint_type b indent
+         (Ttuple [Tlambda (Ttuple [ty_arg; ty_env], ty_r);
+                  ty_env ]);
     | Ttype (ty_name, ty) ->
        (*     Printf.bprintf b "%S =\n%s  " ty_name indent; *)
        bprint_type b indent ty
@@ -343,6 +347,8 @@ module Liquid = struct
        Printf.bprintf b ")\n%s" indent2;
        bprint_code ~debug b indent2 arg;
        ()
+    | Closure (arg_name, arg_type, _loc, _, body, res_type)
+    (* FIXME change this *)
     | Lambda (arg_name, arg_type, _loc, body, res_type) ->
        let indent2 = indent ^ "  " in
        let indent4 = indent2 ^ "  " in

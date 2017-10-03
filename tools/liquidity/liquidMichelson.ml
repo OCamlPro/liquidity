@@ -83,6 +83,18 @@ let translate_code code =
        let body = compile_no_transfer depth env body in
        [ LAMBDA (arg_type, res_type, seq (body @ [DIP_DROP (1,1)])) ], false
 
+    | Closure (arg_name, p_arg_type, loc, call_env, body, res_type) ->
+      let call_env_code = match call_env with
+        | [] -> assert false
+        | [_, e] -> compile_no_transfer depth env e
+        | _ -> compile_tuple depth env (List.rev_map snd call_env)
+      in
+      call_env_code @
+      (compile depth env
+        { e with
+          desc = Lambda (arg_name, p_arg_type, loc, body, res_type) } |> fst) @
+      [ PAIR ], false
+
     | If (cond, ifthen, ifelse) ->
        let cond = compile_no_transfer depth env cond in
        let (ifthen, transfer1) = compile depth env ifthen in
@@ -123,6 +135,13 @@ let translate_code code =
            cleanup_stack, true
 
     | Apply (Prim_unknown, _loc, args) -> assert false
+
+    | Apply (Prim_exec, _loc, [arg; { ty = Tclosure _ } as f]) ->
+      let f_env = compile_no_transfer depth env f in
+      let arg = compile_no_transfer (depth+1) env arg in
+      f_env @ arg @ [ dip 1 [ dup 1; CAR; SWAP; CDR] ] @
+      [ PAIR ; EXEC ], false
+
     | Apply (prim, _loc, args) ->
        compile_prim depth env prim args, false
 
@@ -292,7 +311,7 @@ the ending NIL is not annotated with a type *)
     | (Prim_coll_find|Prim_coll_update|Prim_coll_mem|Prim_coll_reduce|
        Prim_coll_map|Prim_coll_size), _ -> assert false
 
-    | (Prim_apply|Prim_eq|Prim_neq|Prim_lt|Prim_le|Prim_gt|Prim_ge
+    | ( Prim_eq|Prim_neq|Prim_lt|Prim_le|Prim_gt|Prim_ge
        | Prim_compare|Prim_add|Prim_sub|Prim_mul|Prim_ediv|Prim_map_find
        | Prim_map_update|Prim_map_mem|Prim_map_reduce|Prim_map_map
        | Prim_set_update|Prim_set_mem|Prim_set_reduce|Prim_Some
@@ -355,7 +374,7 @@ the ending NIL is not annotated with a type *)
 
          | Prim_exec, 2 -> [ EXEC ]
 
-         | (Prim_apply|Prim_eq|Prim_neq|Prim_lt|Prim_le|Prim_gt|Prim_ge
+         | (Prim_eq|Prim_neq|Prim_lt|Prim_le|Prim_gt|Prim_ge
             | Prim_compare|Prim_add|Prim_sub|Prim_mul|Prim_ediv|Prim_map_find
             | Prim_map_update|Prim_map_mem|Prim_map_reduce|Prim_map_map
             | Prim_set_update|Prim_set_mem|Prim_set_reduce|Prim_Some

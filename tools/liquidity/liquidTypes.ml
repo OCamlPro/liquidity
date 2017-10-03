@@ -52,6 +52,7 @@ and datatype =
   | Tcontract of datatype * datatype
   | Tor of datatype * datatype
   | Tlambda of datatype * datatype
+  | Tclosure of (datatype * datatype) * datatype
 
   | Tfail
   | Ttype of string * datatype
@@ -91,7 +92,6 @@ type primitive =
   | Prim_tuple_get
   | Prim_tuple_set_last
   | Prim_tuple_set
-  | Prim_apply
   | Prim_tuple
 
   | Prim_fail
@@ -171,8 +171,6 @@ let () =
               "set_last", Prim_tuple_set_last;
               "set", Prim_tuple_set;
               "Array.set", Prim_tuple_set;
-              "|>", Prim_apply;
-              "Lambda.pipe", Prim_apply;
               "tuple", Prim_tuple;
               "Current.fail", Prim_fail;
               "Current.contract", Prim_self;
@@ -307,8 +305,20 @@ type 'ty exp = {
               * 'ty exp  (* body *)
               * 'ty exp (*  arg *)
 
-  | Lambda of string * datatype * location * 'ty exp * datatype
-   (* final datatype is inferred during typechecking *)
+  | Lambda of string (* argument name *)
+              * datatype (* argument type *)
+              * location
+              * 'ty exp (* body *)
+              * datatype (* final datatype,
+                            inferred during typechecking *)
+
+  | Closure of string (* argument name *)
+              * datatype (* argument type *)
+              * location
+              * (string * 'ty exp) list (* call environment *)
+              * 'ty exp (* body *)
+              * datatype (* final datatype,
+                            inferred during typechecking *)
 
   | Record of location * (string * 'ty exp) list
   | Constructor of location * constructor * 'ty exp
@@ -412,6 +422,20 @@ type type_kind =
        * datatype (* right type *)
       ) list
 
+type closure_env = {
+  env_vars :  (string (* name outside closure *)
+               * datatype
+               * int (* index *)
+               * (int ref * (* usage counter inside closure *)
+                  int ref (* usage counter outside closure *)
+                 )) StringMap.t;
+  env_bindings : (typed_exp (* expression to access variable inside closure *)
+                  * (int ref * (* usage counter inside closure *)
+                     int ref (* usage counter outside closure *)
+                    )) StringMap.t;
+  call_bindings : (string * typed_exp) list;
+}
+
 type env = {
     (* name of file being compiled *)
     filename : string;
@@ -428,13 +452,13 @@ type env = {
 (* fields updated in LiquidCheck *)
 type 'a typecheck_env = {
     warnings : bool;
-    counter : int;
+    counter : int ref;
     vars : (string * datatype * int ref) StringMap.t;
     env : env;
     to_inline : datatype exp StringMap.t ref;
     contract : 'a contract;
-  }
-
+    clos_env : closure_env option;
+}
 
 (* decompilation *)
 

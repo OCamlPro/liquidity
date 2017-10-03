@@ -294,14 +294,14 @@ let s = ( Source : (unit, unit) contract ) in
 As for `Left` and `Right`, `Source` occurrences should be constrained by
 type annotations.
 
-Functions
----------
+Functions and Closures
+----------------------
 
-As for Michelson, functions in Liquidity are not closures. They can
-only access their argument. The argument must be annotated with its
-(monomorphic) type. Only one argument is allowed for a user-defined
-function (primitive functions such as `List.map` can take several
-arguments).
+Unlike Michelson, functions in Liquidity can also be closures. They can take
+multiple arguments and are curryfied. Because closures are lambda-lifted, it is
+however recommended to use a single tuple argument when possible.  Arguments
+must be annotated with their (monomorphic) type. Primitive functions such as
+`List.map` do not accept closures as their first arguments at the moment.
 
 Function applications are often done using the `Lambda.pipe` function
 or the `|>` operator:
@@ -329,6 +329,26 @@ let%entry main ... =
    ...
    let one = succ 0 in
    ...
+```
+
+Closures can be created with the same syntax:
+```
+let p = 10 in
+let sum_and_add_p (x : int) (y : int) = x + y + p in
+let r = add_p 3 4 in
+...
+```
+
+This is equivalent to:
+```
+let p = 10 in
+let sum_and_add_p =
+  fun (x : int) ->
+    fun (y : int) ->
+      x + y + p
+in
+let r = 4 |> (3 |> add_p) in
+...
 ```
 
 

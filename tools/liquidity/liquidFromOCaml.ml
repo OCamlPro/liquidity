@@ -123,6 +123,10 @@ let error_loc loc msg =
   let loc = loc_of_loc loc in
   LiquidLoc.raise_error ~loc "Unexpected syntax %s%!" msg
 
+let error_version loc msg =
+  let loc = loc_of_loc loc in
+  LiquidLoc.raise_error ~loc "version mismatch %s%!" msg
+
 let unbound_type loc ty =
   let loc = loc_of_loc loc in
   LiquidLoc.raise_error ~loc "Unbound type %S%!" ty
@@ -485,11 +489,11 @@ let rec translate_code env exp =
                               [
                                 {
                                   pvb_pat = { ppat_desc =
-                                                Ppat_var { txt = var } };
+                                                Ppat_var { txt = var; loc } };
                                   pvb_expr = var_exp;
                                 }
                               ], body) } ->
-       Let (var, loc_of_loc var_exp.pexp_loc,
+       Let (var, loc_of_loc loc,
             translate_code env var_exp, translate_code env body)
 
     | { pexp_desc = Pexp_sequence (exp1, exp2) } ->
@@ -551,7 +555,8 @@ let rec translate_code env exp =
               body_exp) } ->
        let body_exp = translate_code env body_exp in
        let arg_type = translate_type env arg_type in
-       Lambda (arg_name, arg_type, loc_of_loc exp.pexp_loc, body_exp,
+       Lambda (arg_name, arg_type, loc_of_loc exp.pexp_loc,
+               body_exp,
                Tunit) (* not yet inferred *)
 
     | { pexp_desc = Pexp_record (lab_x_exp_list, None) } ->
@@ -818,11 +823,11 @@ let check_version = function
   | { pexp_desc = Pexp_constant (Pconst_float (s, None)); pexp_loc } ->
     let req_version = float_of_string s in
     if req_version < minimal_version then
-      Printf.kprintf (error_loc pexp_loc)
-                     "version mismatch (requires %.2f while compiler has minimal %.2f )" req_version minimal_version;
+      Printf.kprintf (error_version pexp_loc)
+                     "(requires %.2f while compiler has minimal %.2f )" req_version minimal_version;
     if req_version > maximal_version then
       Printf.kprintf (error_loc pexp_loc)
-                     "version mismatch (requires %.2f while compiler has maximal %.2f )" req_version maximal_version;
+                     "(requires %.2f while compiler has maximal %.2f )" req_version maximal_version;
   | { pexp_loc } -> error_loc pexp_loc "version must be a floating point number"
 
 let rec translate_structure funs env ast =
