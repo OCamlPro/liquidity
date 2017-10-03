@@ -73,6 +73,7 @@ OCaml.library("ocplib-liquidity-ocaml",
 
        "liquidFromOCaml.ml";
        "liquidToOCaml.ml";
+       "liquidData.ml";
      ];
      requires = [
         "ocplib-liquidity";

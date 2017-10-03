@@ -994,7 +994,7 @@ let translate_exn exn =
   | _ -> raise exn
 
 
-let translate filename ast =
+let translate ~filename ast =
   let env = initial_env filename in
   try
     translate_structure [] env ast, env
@@ -1023,16 +1023,16 @@ let translate_expression env expression =
     translate_code env expression
   with exn -> translate_exn exn
 
-let ocaml_of_string ?(name = "buffer") parser content =
+let ocaml_of_string ?(filename = "buffer") parser content =
   try
-    Location.input_name := name;
+    Location.input_name := filename;
     let lexbuf = Lexing.from_string content in
-    Location.init lexbuf name;
+    Location.init lexbuf filename;
     parser lexbuf
   with exn ->
     translate_exn exn
 
-let structure_of_string ?name =
-  ocaml_of_string ?name LiquidOCamlParse.implementation
-let expression_of_string ?name =
-  ocaml_of_string ?name LiquidOCamlParse.expression
+let structure_of_string ?filename impl =
+  ocaml_of_string ?filename LiquidOCamlParse.implementation impl
+let expression_of_string ?filename s =
+  ocaml_of_string ?filename LiquidOCamlParse.expression s

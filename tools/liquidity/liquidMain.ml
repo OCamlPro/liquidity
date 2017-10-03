@@ -112,77 +112,17 @@ let compile_file filename =
 
 module Data = struct
 
-  let rec translate_const_exp loc exp =
-    match exp.desc with
-    | Let (_, loc, _, _) ->
-       LiquidLoc.raise_error ~loc "'let' forbidden in constant"
-    | Const (ty, c) -> c
-
-    (* removed during typechecking *)
-    | Record (_, _)
-    | Constructor (_, _, _) -> assert false
-
-    (* Expect constants... *)
-      | Apply (Prim_tuple, _, _)
-      | Apply (Prim_neq, _, [_])
-      | Apply (Prim_Left, _, [_])
-      | Apply (Prim_Right, _, [_])
-      | Apply (Prim_Some, _, [_])
-      | Apply (Prim_Cons, _, [_])
-      -> LiquidLoc.raise_error "<not yet implemented>"
-
-    | Apply (prim, _, _)
-      -> LiquidLoc.raise_error "<apply %s not yet implemented>"
-                               (LiquidTypes.string_of_primitive prim)
-      | Var (_, _, _)
-      | SetVar (_, _, _, _)
-      | If (_, _, _)
-      | Seq (_, _)
-      | LetTransfer (_, _, _, _, _, _, _, _)
-      | MatchOption (_, _, _, _, _)
-      | MatchList (_, _, _, _, _, _)
-      | Loop (_, _, _, _)
-      | Lambda (_, _, _, _, _)
-      | MatchVariant (_, _, _)
-      ->
-       LiquidLoc.raise_error ~loc "non-constant expression"
-
-  let data_of_liq ~contract ~parameter ~storage =
-    (* first, extract the types *)
-    let ocaml_ast = LiquidFromOCaml.structure_of_string
-                      ~name:contract contract in
-    let contract, env = LiquidFromOCaml.translate contract ocaml_ast in
-    let _, _ = LiquidCheck.typecheck_contract
-                 ~warnings:true env contract in
-
-    let translate name s ty =
-      try
-        let ml_exp = LiquidFromOCaml.expression_of_string ~name s in
-        Printf.eprintf "Parsed\n%!";
-        let sy_exp = LiquidFromOCaml.translate_expression env ml_exp in
-        Printf.eprintf "Translated\n%!";
-        let ty_exp =
-          LiquidCheck.typecheck_code ~warnings:true env contract ty sy_exp in
-        let loc = LiquidLoc.loc_in_file name in
-        let ty_exp = translate_const_exp loc ty_exp in
-        let s = LiquidPrinter.Michelson.string_of_const ty_exp in
-        Some s
-      with Error(loc,msg) ->
-        LiquidLoc.report_error (loc, msg);
-        None
-    in
-    (translate "parameter" parameter contract.parameter),
-    (translate "storage" storage contract.storage)
-
   let contract = ref ""
   let parameter = ref ""
   let storage = ref ""
 
   let translate () =
-    let contract = FileString.read_file !contract in
+    let filename = !contract in
+    let contract = FileString.read_file filename in
     let parameter = !parameter in
     let storage = !storage in
-    let p,s = data_of_liq ~contract ~parameter ~storage in
+    let p,s = LiquidData.data_of_liq ~filename
+                                     ~contract ~parameter ~storage in
     List.iter (fun (s,x) ->
         match x with
         | None -> ()

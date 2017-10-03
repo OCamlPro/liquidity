@@ -127,6 +127,16 @@ module Michelson = struct
        Printf.bprintf b "(Some\n%s" indent;
        bprint_const b indent cst;
        Printf.bprintf b "\n%s)" indent;
+    | CLeft cst ->
+       let indent = indent ^ "  " in
+       Printf.bprintf b "(Left\n%s" indent;
+       bprint_const b indent cst;
+       Printf.bprintf b "\n%s)" indent;
+    | CRight cst ->
+       let indent = indent ^ "  " in
+       Printf.bprintf b "(Right\n%s" indent;
+       bprint_const b indent cst;
+       Printf.bprintf b "\n%s)" indent;
     | CTuple tys -> bprint_const_pairs b indent tys
     | CMap pairs ->
        let indent = indent ^ "  " in

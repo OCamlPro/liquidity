@@ -7,16 +7,8 @@
 (*                                                                        *)
 (**************************************************************************)
 
-open LiquidTypes
-
-val initial_env : string -> env
-val translate : filename:string ->
-                Parsetree.structure -> syntax_exp contract * env
-val read_file : string -> Parsetree.structure
-
-val translate_expression :
-  LiquidTypes.env -> Parsetree.expression -> LiquidTypes.syntax_exp
-
-
-val structure_of_string : ?filename:string -> string -> Parsetree.structure
-val expression_of_string : ?filename:string -> string -> Parsetree.expression
+val data_of_liq :
+  filename:string ->
+  contract:string ->
+  parameter:string ->
+  storage:string -> string option * string option

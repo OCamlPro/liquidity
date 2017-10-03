@@ -66,6 +66,10 @@ let rec convert_const expr =
   | CNone -> Exp.construct (lid "None") None
   | CSome x -> Exp.construct (lid "Some")
                              (Some (convert_const x))
+  | CLeft x -> Exp.construct (lid "Left")
+                             (Some (convert_const x))
+  | CRight x -> Exp.construct (lid "Right")
+                             (Some (convert_const x))
   | CTuple args -> Exp.tuple (List.map convert_const args)
   | CTez n -> Exp.constraint_ (convert_const (CString n))
                               (convert_type Ttez)

@@ -28,6 +28,9 @@ type const =
   | CList of const list
   | CSet of const list
 
+  | CLeft of const
+  | CRight of const
+
 and datatype =
   | Tunit
   | Tbool
