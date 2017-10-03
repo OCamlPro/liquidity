@@ -56,11 +56,11 @@ let unused env ty =
   mk (Apply(Prim_unused, noloc env, [const_unit])) ty false
 
 let uniq_ident env name =
-  let env = { env with counter = env.counter + 1 } in
-  Printf.sprintf "%s/%d" name env.counter, env
+  env.counter := !(env.counter) + 1;
+  Printf.sprintf "%s/%d" name !(env.counter)
 
 let new_binding env name ty =
-  let new_name, env = uniq_ident env name in
+  let new_name = uniq_ident env name in
   let count = ref 0 in
   let env = { env with
               vars = StringMap.add name (new_name, ty, count) env.vars } in
@@ -136,11 +136,11 @@ let env_for_clos env loc arg_name arg_type =
     let (new_name, env, _) = new_binding env arg_name arg_type in
     env, new_name, arg_type, []
   | _ ->
-    let env_arg_name, env = uniq_ident env "closure_env" in
+    let env_arg_name = uniq_ident env "closure_env" in
     let env_arg_type =
       Ttuple (arg_type :: List.map (fun (_, (_,ty,_,_)) -> ty) free_vars_l) in
     let env_arg_var = mk (Var (env_arg_name, loc, [])) env_arg_type false in
-    let new_name, env = uniq_ident env arg_name in
+    let new_name = uniq_ident env arg_name in
     let env_vars =
       StringMap.add arg_name
         (new_name, arg_type, 0, (ref 0, ref 0)) free_vars in
@@ -318,7 +318,7 @@ let rec loc_exp env e = match e.desc with
             let args = [ arg1; arg2] in
             let prim, ty = typecheck_prim1 env Prim_tuple_get loc args in
             let get_exp = mk (Apply(prim, loc, args)) ty false in
-            let tmp_name, env = uniq_ident env "tmp#" in
+            let tmp_name = uniq_ident env "tmp#" in
             let (new_name, env, count) = new_binding env tmp_name ty in
             let body, can_fail, _transfer =
               typecheck env
@@ -1069,7 +1069,7 @@ let typecheck_contract ~warnings env contract =
   let env =
     {
       warnings;
-      counter = 0;
+      counter = ref 0;
       vars = StringMap.empty;
       to_inline = ref StringMap.empty;
       env = env;
@@ -1092,7 +1092,7 @@ let typecheck_code ~warnings env contract expected_ty code =
   let env =
     {
       warnings;
-      counter = 0;
+      counter = ref 0;
       vars = StringMap.empty;
       to_inline = ref StringMap.empty;
       env = env;
