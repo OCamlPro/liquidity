@@ -3,7 +3,7 @@ let version = 1.0
 let%entry main
       (parameter : int)
       (storage : int)
-      (return : unit) =
+      [%return : unit] =
   let x = parameter + 10 in
   let f ( arg : int * int ) (y : int) =
     0

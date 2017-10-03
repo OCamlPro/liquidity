@@ -9,7 +9,7 @@ let%entry main
                        (unit,unit) contract * (* 3: X *)
                          (unit,unit) contract * (* 4: A *)
                            (unit,unit) contract)  (* 5: B *)
-      (return : unit ) =
+      [%return : unit ] =
    let pn = get storage 2 in
    let p = get pn 0 in
    let p = p + 1t in

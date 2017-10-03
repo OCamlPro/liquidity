@@ -27,7 +27,7 @@ let version = 1.0
 let%entry main
       (parameter : TYPE)
       (storage : TYPE)
-      (return : TYPE) =
+      [%return : TYPE] =
       BODY
 ```
 

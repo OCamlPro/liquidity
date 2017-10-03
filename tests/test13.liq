@@ -6,7 +6,7 @@ let version = 1.0
 let%entry main
       (parameter : string)
       (storage : string list)
-      (return : unit) =
+      [%return : unit] =
       
       let set = ([] : string list) in
       let set = "a" :: set in

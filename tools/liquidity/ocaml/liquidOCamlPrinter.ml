@@ -1546,3 +1546,8 @@ let core_type = core_type reset_ctxt
 let pattern = pattern reset_ctxt
 let signature = signature reset_ctxt
 let structure = structure reset_ctxt
+
+let exp_ast ast =
+  let fmt = Format.str_formatter in
+  Printast.expression 0 fmt ast;
+  Format.flush_str_formatter ()

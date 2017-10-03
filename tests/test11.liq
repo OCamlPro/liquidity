@@ -6,7 +6,7 @@ let version = 1.0
 let%entry main
       (parameter : string)
       (storage : string)
-      (return : unit) =
+      [%return : unit] =
       
 (* options *)
       let storage = if parameter = "" then

@@ -6,7 +6,7 @@ let version = 1.0
 let%entry main
       (parameter : int)
       (storage : int)
-      (return : unit) =
+      [%return : unit] =
 
       let storage =
         Loop.loop (fun x ->

@@ -9,7 +9,7 @@ let%entry main
                        (unit,unit) contract * (* 3: X *)
                          (unit,unit) contract * (* 4: A *)
                            (unit,unit) contract)  (* 5: B *)
-      (return : (timestamp * tez) * (tez * timestamp) ) =
+      [%return : (timestamp * tez) * (tez * timestamp) ] =
    let amount = Current.amount () in
    let x = (parameter, amount) in
    let y = (amount, parameter) in

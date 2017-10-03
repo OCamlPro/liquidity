@@ -17,7 +17,7 @@ let contract
                    ( (unit,unit) contract *
                        (unit, unit) contract *
                          (unit, unit) contract)) )
-      (return : unit) =
+      [%return : unit] =
        ...
  *)
 
@@ -320,9 +320,9 @@ let structure_of_contract contract =
                                    (convert_type contract.storage)
                                 )
                       (Exp.fun_ Nolabel None
-                                (Pat.constraint_
-                                   (Pat.var (loc "return"))
-                                   (convert_type contract.return)
+                                (Pat.extension
+                                   (loc "return",
+                                   PTyp (convert_type contract.return))
                                 )
                                 code)))
               ]

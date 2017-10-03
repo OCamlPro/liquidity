@@ -2,7 +2,7 @@
 let%entry main
       (parameter : (int, string) variant)
       (storage : int)
-      (return : string) =
+      [%return : string] =
       
   match parameter with
   | Left left -> ("", left)

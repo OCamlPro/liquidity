@@ -10,7 +10,7 @@ let%entry main
         int option *
         (string,int) map
       )
-      (return : unit) =
+      [%return : unit] =
       
 (* options *)
       let x = 3 in

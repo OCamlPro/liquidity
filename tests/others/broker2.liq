@@ -13,7 +13,7 @@ type storage = {
 let contract
       (parameter : timestamp)
       (storage : storage)
-      (return : unit) =
+      [%return : unit] =
 
   if storage.state <> "open" then Current.fail ()
   else

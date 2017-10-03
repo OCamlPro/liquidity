@@ -6,7 +6,7 @@ let version = 1.0
 let%entry main
       (parameter : string)
       (storage : string set)
-      (return : unit) =
+      [%return : unit] =
       
       let set = (Set : string set) in
       let set = Set.update "a" true set in

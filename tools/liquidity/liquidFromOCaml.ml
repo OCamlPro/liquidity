@@ -89,7 +89,7 @@ let contract
                    ( (unit,unit) contract *
                        (unit, unit) contract *
                          (unit, unit) contract)) )
-      (return : unit) =
+      [%return : unit] =
        ...
  *)
 
@@ -651,7 +651,9 @@ from the head element. We use unit for that type. *)
           | { pexp_loc } ->
              error_loc pexp_loc
                        ("in expression " ^
-                          LiquidOCamlPrinter.string_of_expression exp)
+                          LiquidOCamlPrinter.string_of_expression exp
+                       (*    LiquidOCamlPrinter.exp_ast exp *)
+                       )
 
 
   (*
@@ -710,13 +712,24 @@ let rec translate_head env ext_funs head_exp args =
                         Ppat_var { txt =
                                      (   "parameter"
                                        | "storage"
-                                       | "return"
+                                     (*  | "return" *)
                                      ) as arg} },
                     arg_type)
             },
             head_exp) } ->
      translate_head env ext_funs head_exp
                     ((arg, translate_type env arg_type) :: args)
+
+  | { pexp_desc =
+        Pexp_fun (
+            Nolabel, None,
+            { ppat_desc =
+                Ppat_extension ({ txt = "return"}, PTyp arg_type)
+            },
+            head_exp) } ->
+     translate_head env ext_funs head_exp
+                    (("return", translate_type env arg_type) :: args)
+
   | { pexp_desc =
         Pexp_fun (
             Nolabel, None,
@@ -729,6 +742,7 @@ let rec translate_head env ext_funs head_exp args =
             head_exp);
       pexp_loc } ->
      error_arg pexp_loc txt
+
   | exp ->
      let code = translate_code env (inline_funs exp ext_funs) in
      {
