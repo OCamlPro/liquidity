@@ -980,6 +980,16 @@ let rec loc_exp env e = match e.desc with
          type_error loc "Bad argument type in Lambda.pipe" ty from_ty;
        to_ty
 
+    | ( Prim_list_map
+      | Prim_list_reduce
+      | Prim_set_reduce
+      | Prim_map_reduce
+      | Prim_map_map
+      | Prim_coll_map
+      | Prim_coll_reduce
+      ), { ty = Tclosure _ } :: _ ->
+      error loc "Cannot use closures in %s" (LiquidTypes.string_of_primitive prim)
+
     | Prim_list_map, [
         { ty = Tlambda (from_ty, to_ty) };
         { ty = Tlist ty } ] ->
