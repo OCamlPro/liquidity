@@ -28,13 +28,6 @@ open LiquidTypes
 
 open Ast_helper
 
-let liq_of_tez { tezzies ; centiles } =
-  match centiles with
-  | None -> tezzies
-  | Some centiles -> tezzies ^ "." ^ centiles
-
-let liq_of_integer { integer } = integer
-
 let loc txt = { loc = !default_loc; txt }
 let lid s = loc (Longident.parse s)
 
@@ -66,8 +59,9 @@ let rec convert_type ty =
 
 let rec convert_const expr =
   match expr with
-  | CInt n -> Exp.constant (Const.integer (liq_of_integer n))
-  | CNat n -> Exp.constant (Const.integer ~suffix:'p' (liq_of_integer n))
+  | CInt n -> Exp.constant (Const.integer (LiquidPrinter.liq_of_integer n))
+  | CNat n -> Exp.constant (Const.integer ~suffix:'p'
+                                          (LiquidPrinter.liq_of_integer n))
   | CString s -> Exp.constant (Const.string s)
   | CUnit -> Exp.construct (lid "()") None
   | CBool false -> Exp.construct (lid "false") None
@@ -81,7 +75,8 @@ let rec convert_const expr =
                              (Some (convert_const x))
   | CTuple args -> Exp.tuple (List.map convert_const args)
   | CTez n -> Exp.constraint_ (
-                  Exp.constant (Const.float ~suffix:'t' (liq_of_tez n)))
+                  Exp.constant (Const.float ~suffix:'t'
+                                            (LiquidPrinter.liq_of_tez n)))
                   (convert_type Ttez)
   | CKey n -> Exp.constraint_ (convert_const (CString n))
                               (convert_type Tkey)

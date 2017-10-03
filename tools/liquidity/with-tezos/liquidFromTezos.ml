@@ -21,8 +21,6 @@ type expr =
   | Seq of location * expr list
  *)
 
-let integer_of_mic integer = { integer }
-
 let unknown_expr f_name expr =
   LiquidLoc.raise_error ~loc:(LiquidLoc.loc_in_file f_name) "%s"
     (match expr with
@@ -37,7 +35,7 @@ let unknown_expr f_name expr =
 
 let rec convert_const expr =
   match expr with
-  | Script_repr.Int (_loc, n) -> CInt (integer_of_mic n)
+  | Script_repr.Int (_loc, n) -> CInt (LiquidPrinter.integer_of_mic n)
   | Script_repr.String (_loc, s) -> CString s
   | Script_repr.Prim(_, "Unit", [], _debug) -> CUnit
   | Script_repr.Prim(_, "True", [], _debug) -> CBool true

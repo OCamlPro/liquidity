@@ -21,15 +21,75 @@ let integer_of_int int =
   let integer = string_of_int int in
   { integer }
 
+let tez_of_mic s =
+  let b = Buffer.create 10 in
+  let parts = ref [] in
+  for i = 0 to String.length s - 1 do
+    match s.[i] with
+    | ',' -> ()
+    | '.' ->
+       parts := (Buffer.contents b) :: !parts;
+       Buffer.clear b
+    | c -> Buffer.add_char b c
+  done;
+  let parts = Buffer.contents b :: !parts in
+  match parts with
+  | [ tezzies ]
+  | [ "" ; tezzies ] -> { tezzies; centiles = None }
+  | [ centiles; tezzies ] -> { tezzies; centiles = Some centiles }
+  | _ -> invalid_arg "tez_of_mic" (* TODO exn *)
+
+let integer_of_mic integer = { integer }
+
+let remove_underscores s =
+  let b = Buffer.create 10 in
+  let len = String.length s in
+  for i = 0 to len - 1 do
+    match s.[i] with
+    | '_' -> ()
+    | c -> Buffer.add_char b c
+  done;
+  Buffer.contents b
+
+let integer_of_liq s =
+  let integer = remove_underscores s in
+  { integer }
+
+(* TODO: beware of overflow... *)
+let tez_of_liq s =
+  let s = remove_underscores s in
+  try
+    let pos = String.index s '.' in
+    let len = String.length s in
+    let tezzies = String.sub s 0 pos in
+    let centiles = String.sub s (pos+1) (len - pos - 1) in
+    let centiles_len = String.length centiles in
+    let centiles = match centiles_len with
+        0 -> None
+      | 1 -> Some (centiles ^ "0")
+      | 2 -> Some centiles
+      | _ -> invalid_arg "bad centiles in tez_of_liq"
+    in
+    { tezzies; centiles }
+  with Not_found ->
+    { tezzies = s; centiles = None }
+
+let liq_of_tez { tezzies ; centiles } =
+  match centiles with
+  | None -> tezzies
+  | Some centiles -> tezzies ^ "." ^ centiles
+
+let liq_of_integer { integer } = integer
+
+
+
+
+
 let to_string bprinter x =
   let b = Buffer.create 10_000 in
   let indent = "  " in
   bprinter b indent x;
   Buffer.contents b
-
-
-
-
 
 module Michelson = struct
 

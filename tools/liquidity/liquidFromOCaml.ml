@@ -10,28 +10,6 @@
 open LiquidTypes
 open LiquidOCamlParser
 
-let integer_of_liq s =
-  let b = Buffer.create 10 in
-  let len = String.length s in
-  for i = 0 to len - 1 do
-    match s.[i] with
-    | '_' -> ()
-    | c -> Buffer.add_char b c
-  done;
-  let integer = Buffer.contents b in
-  { integer }
-
-(* TODO: beware of overflow... *)
-let tez_of_liq s =
-  let n = float_of_string s in (* TODO exn *)
-  let n = n *. 100. in
-  let n = int_of_float n in
-  let tezzies = n / 100 in
-  let centiles = n mod 100 in
-  let tezzies = string_of_int tezzies in
-  let centiles = if centiles = 0 then None else Some (string_of_int centiles) in
-  { tezzies; centiles }
-
 let () =
   LiquidOCamlLexer.define_keywords
  [
@@ -227,13 +205,13 @@ let rec translate_const env exp =
   | { pexp_desc = Pexp_construct ( { txt = Lident "None" }, None ) } ->
      CNone, None
   | { pexp_desc = Pexp_constant (Pconst_integer (s,None)) } ->
-     CInt (integer_of_liq s), Some Tint
+     CInt (LiquidPrinter.integer_of_liq s), Some Tint
   | { pexp_desc = Pexp_constant (Pconst_integer (s, Some 'p')) } ->
-     CNat (integer_of_liq s), Some Tnat
+     CNat (LiquidPrinter.integer_of_liq s), Some Tnat
   | { pexp_desc = Pexp_constant (Pconst_integer (s, Some 't')) } ->
-     CTez (tez_of_liq s), Some Ttez
+     CTez (LiquidPrinter.tez_of_liq s), Some Ttez
   | { pexp_desc = Pexp_constant (Pconst_float (s, Some 't')) } ->
-     CTez (tez_of_liq s), Some Ttez
+     CTez (LiquidPrinter.tez_of_liq s), Some Ttez
 
   | { pexp_desc = Pexp_constant (Pconst_string (s, None)) } ->
      CString s, Some Tstring
@@ -359,9 +337,9 @@ let rec translate_const env exp =
        let loc = loc_of_loc exp.pexp_loc in
        match tyo with
        | None ->
-          LiquidCheck.check_const_type ~to_tez:tez_of_liq loc ty cst, Some ty
+          LiquidCheck.check_const_type ~to_tez:LiquidPrinter.tez_of_liq loc ty cst, Some ty
        | Some ty_infer ->
-          LiquidCheck.check_const_type ~to_tez:tez_of_liq loc ty cst, Some ty
+          LiquidCheck.check_const_type ~to_tez:LiquidPrinter.tez_of_liq loc ty cst, Some ty
                            (*
           if ty <> ty_infer then begin
               let cst =

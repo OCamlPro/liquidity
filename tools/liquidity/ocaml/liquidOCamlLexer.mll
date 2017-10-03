@@ -15,6 +15,8 @@
 
 (* The lexer definition *)
 
+(* remove hex_float_literal and exponential from float_literal *)
+
 {
 
 open Lexing
@@ -324,15 +326,12 @@ let bin_literal =
   '0' ['b' 'B'] ['0'-'1'] ['0'-'1' '_']*
 let int_literal =
   decimal_literal | hex_literal | oct_literal | bin_literal
+
+(* remove hex_float_literal and remove exponential from float. *)
+
 let float_literal =
   ['0'-'9'] ['0'-'9' '_']*
   ('.' ['0'-'9' '_']* )?
-  (['e' 'E'] ['+' '-']? ['0'-'9'] ['0'-'9' '_']* )?
-let hex_float_literal =
-  '0' ['x' 'X']
-  ['0'-'9' 'A'-'F' 'a'-'f'] ['0'-'9' 'A'-'F' 'a'-'f' '_']*
-  ('.' ['0'-'9' 'A'-'F' 'a'-'f' '_']* )?
-  (['p' 'P'] ['+' '-']? ['0'-'9'] ['0'-'9' '_']* )?
 let literal_modifier = ['G'-'Z' 'g'-'z']
 
 rule token = parse
@@ -374,11 +373,11 @@ rule token = parse
   | int_literal { INT (Lexing.lexeme lexbuf, None) }
   | (int_literal as lit) (literal_modifier as modif)
       { INT (lit, Some modif) }
-  | float_literal | hex_float_literal
+  | float_literal
       { FLOAT (Lexing.lexeme lexbuf, None) }
-  | ((float_literal | hex_float_literal) as lit) (literal_modifier as modif)
+  | ((float_literal) as lit) (literal_modifier as modif)
       { FLOAT (lit, Some modif) }
-  | (float_literal | hex_float_literal | int_literal) identchar+
+  | (float_literal | int_literal) identchar+
       { raise (Error(Invalid_literal (Lexing.lexeme lexbuf),
                      Location.curr lexbuf)) }
   | "\""
