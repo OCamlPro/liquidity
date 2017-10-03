@@ -5,8 +5,8 @@ let%entry main
       (storage : int)
       (return : unit) =
   let x = parameter + 10 in
-  let f = fun ( arg : int * int ) (y : int) ->
+  let f ( arg : int * int ) (y : int) =
     arg.(0) + x + y
   in
-  let storage = 199 |> ((parameter, storage) |> f) in
+  let storage = f (parameter, storage) 199 in
   ( (), storage )

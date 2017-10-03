@@ -92,7 +92,6 @@ type primitive =
   | Prim_tuple_get
   | Prim_tuple_set_last
   | Prim_tuple_set
-  | Prim_apply
   | Prim_tuple
 
   | Prim_fail
@@ -172,8 +171,6 @@ let () =
               "set_last", Prim_tuple_set_last;
               "set", Prim_tuple_set;
               "Array.set", Prim_tuple_set;
-              "|>", Prim_apply;
-              "Lambda.pipe", Prim_apply;
               "tuple", Prim_tuple;
               "Current.fail", Prim_fail;
               "Current.contract", Prim_self;

@@ -311,7 +311,7 @@ the ending NIL is not annotated with a type *)
     | (Prim_coll_find|Prim_coll_update|Prim_coll_mem|Prim_coll_reduce|
        Prim_coll_map|Prim_coll_size), _ -> assert false
 
-    | (Prim_apply|Prim_eq|Prim_neq|Prim_lt|Prim_le|Prim_gt|Prim_ge
+    | ( Prim_eq|Prim_neq|Prim_lt|Prim_le|Prim_gt|Prim_ge
        | Prim_compare|Prim_add|Prim_sub|Prim_mul|Prim_ediv|Prim_map_find
        | Prim_map_update|Prim_map_mem|Prim_map_reduce|Prim_map_map
        | Prim_set_update|Prim_set_mem|Prim_set_reduce|Prim_Some
@@ -374,7 +374,7 @@ the ending NIL is not annotated with a type *)
 
          | Prim_exec, 2 -> [ EXEC ]
 
-         | (Prim_apply|Prim_eq|Prim_neq|Prim_lt|Prim_le|Prim_gt|Prim_ge
+         | (Prim_eq|Prim_neq|Prim_lt|Prim_le|Prim_gt|Prim_ge
             | Prim_compare|Prim_add|Prim_sub|Prim_mul|Prim_ediv|Prim_map_find
             | Prim_map_update|Prim_map_mem|Prim_map_reduce|Prim_map_map
             | Prim_set_update|Prim_set_mem|Prim_set_reduce|Prim_Some

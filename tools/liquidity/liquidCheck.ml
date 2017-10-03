@@ -398,6 +398,16 @@ let rec loc_exp env e = match e.desc with
            LiquidLoc.raise_error "typecheck error: Contract expected%!"
        end
 
+
+    | Apply (Prim_unknown, loc,
+             ({ desc = Var (name, varloc, [])} as f) :: ((_ :: _) as r))
+      when StringMap.mem name env.vars ->
+      let exp = List.fold_left (fun f x ->
+          { exp with desc = Apply (Prim_exec, loc, [x; f]) }
+        ) f r
+      in
+      typecheck env exp
+
     | Apply (Prim_unknown, loc,
              [ { desc = Var (name, _, _)} as f; x ])
          when StringMap.mem name env.vars ->
@@ -977,7 +987,7 @@ let rec loc_exp env e = match e.desc with
                    { ty = ( Tlambda(from_ty, to_ty)
                           | Tclosure((from_ty, _), to_ty)) }] ->
        if ty <> from_ty then
-         type_error loc "Bad argument type in Lambda.pipe" ty from_ty;
+         type_error loc "Bad argument type in function application" ty from_ty;
        to_ty
 
     | ( Prim_list_map

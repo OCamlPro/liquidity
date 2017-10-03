@@ -8,5 +8,5 @@ let%entry main
   let f ( arg : int * int ) (y : int) =
     0
   in
-  let storage = (f (parameter, storage)) 199 in
+  let storage = f (parameter, storage) 199 in
   ( (), storage )
