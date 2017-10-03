@@ -27,7 +27,7 @@ let prim name args = Script_repr.Prim(0, name, args, debug)
 
 let rec convert_const expr =
   match expr with
-  | CInt n -> Script_repr.Int (0, n)
+  | CInt n -> Script_repr.Int (0, LiquidPrinter.mic_of_integer n)
   | CString s -> Script_repr.String (0, s)
   | CUnit -> Script_repr.Prim(0, "Unit", [], debug)
   | CBool true -> Script_repr.Prim(0, "True", [], debug)
@@ -54,8 +54,8 @@ let rec convert_const expr =
                                args, debug)
   | CSet args -> Script_repr.Prim(0, "Set",
                                   List.map convert_const args, debug)
-  | CNat n -> Script_repr.Int (0, n)
-  | CTez n -> Script_repr.String (0, n)
+  | CNat n -> Script_repr.Int (0, LiquidPrinter.mic_of_integer n)
+  | CTez n -> Script_repr.String (0, LiquidPrinter.mic_of_tez n)
            (*
   | CTez tez
     |CKey _|

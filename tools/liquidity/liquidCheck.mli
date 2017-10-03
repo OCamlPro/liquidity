@@ -28,3 +28,8 @@ val typecheck_code :
   LiquidTypes.datatype ->
   syntax_exp ->
   typed_exp
+
+val check_const_type :
+  to_tez:(string -> LiquidTypes.tez) ->
+  LiquidTypes.location ->
+  LiquidTypes.datatype -> LiquidTypes.const -> LiquidTypes.const

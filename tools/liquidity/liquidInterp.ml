@@ -427,7 +427,9 @@ let interp contract =
        let x = node (N_PRIM "PAIR") [x;y] [seq] in
        x :: stack, x
 
-    | COMPARE, x ::  { kind = N_CONST (Tint,CInt "0")} :: stack->
+    | COMPARE, x ::  { kind = N_CONST (Tint,CInt n)} :: stack
+         when LiquidPrinter.int_of_integer n = 0
+      ->
        x :: stack, seq
 
     | COMPARE, x :: y :: stack ->

@@ -9,8 +9,17 @@
 
 open LiquidTypes
 
+let mic_of_tez { tezzies ; centiles } =
+  match centiles with
+  | None -> tezzies
+  | Some centiles -> tezzies ^ "." ^ centiles
 
+let mic_of_integer { integer } = integer
 
+let int_of_integer { integer } = int_of_string integer
+let integer_of_int int =
+  let integer = string_of_int int in
+  { integer }
 
 let to_string bprinter x =
   let b = Buffer.create 10_000 in
@@ -26,106 +35,106 @@ module Michelson = struct
 
 (* For now, we always use the multi-line notation, and never output
   parenthesized expressions such as "(contract unit unit)" *)
+
+  let bprint_type_base bprint_type_rec b indent ty =
+    let rec bprint_type b indent ty =
+      match ty with
+      | Tfail -> Printf.bprintf b "failure"
+      | Tunit -> Printf.bprintf b "unit"
+      | Tbool -> Printf.bprintf b "bool"
+      | Tint -> Printf.bprintf b "int"
+      | Tnat -> Printf.bprintf b "nat"
+      | Ttez -> Printf.bprintf b "tez"
+      | Tstring -> Printf.bprintf b "string"
+      | Ttimestamp  -> Printf.bprintf b "timestamp"
+      | Tkey  -> Printf.bprintf b "key"
+      | Tsignature  -> Printf.bprintf b "signature"
+      | Ttuple tys -> bprint_type_pairs b indent tys
+      | Tcontract (ty1, ty2) ->
+         let indent = indent ^ "  " in
+         Printf.bprintf b "(contract\n%s" indent;
+         bprint_type b indent ty1;
+         Printf.bprintf b "\n%s" indent;
+         bprint_type b indent ty2;
+         Printf.bprintf b "\n%s)" indent;
+      | Tor (ty1, ty2) ->
+         let indent = indent ^ "  " in
+         Printf.bprintf b "(or\n%s" indent;
+         bprint_type b indent ty1;
+         Printf.bprintf b "\n%s" indent;
+         bprint_type b indent ty2;
+         Printf.bprintf b "\n%s)" indent;
+      | Toption ty ->
+         let indent = indent ^ "  " in
+         Printf.bprintf b "(option\n%s" indent;
+         bprint_type b indent ty;
+         Printf.bprintf b "\n%s)" indent;
+      | Tlist ty ->
+         let indent = indent ^ "  " in
+         Printf.bprintf b "(list\n%s" indent;
+         bprint_type b indent ty;
+         Printf.bprintf b "\n%s)" indent;
+      | Tset ty ->
+         let indent = indent ^ "  " in
+         Printf.bprintf b "(set\n%s" indent;
+         bprint_type b indent ty;
+         Printf.bprintf b "\n%s)" indent;
+      | Tmap (ty1, ty2) ->
+         let indent = indent ^ "  " in
+         Printf.bprintf b "(map\n%s" indent;
+         bprint_type b indent ty1;
+         Printf.bprintf b "\n%s" indent;
+         bprint_type b indent ty2;
+         Printf.bprintf b "\n%s)" indent;
+      | Tlambda (ty1, ty2) ->
+         let indent = indent ^ "  " in
+         Printf.bprintf b "(lambda\n%s" indent;
+         bprint_type b indent ty1;
+         Printf.bprintf b "\n%s" indent;
+         bprint_type b indent ty2;
+         Printf.bprintf b "\n%s)" indent;
+      | Tclosure ((ty_arg, ty_env), ty_r) ->
+         bprint_type b indent
+                     (Ttuple [Tlambda (Ttuple [ty_arg; ty_env], ty_r);
+                              ty_env ]);
+      | Ttype (ty_name, ty) ->
+         (*     Printf.bprintf b "%S =\n%s  " ty_name indent; *)
+         bprint_type_rec b indent ty_name ty
+
+    and bprint_type_pairs b indent tys =
+      match tys with
+      | [] -> assert false
+      | [ty] -> bprint_type b indent ty
+      | ty :: tys ->
+         let indent = indent ^ "  " in
+         Printf.bprintf b "(pair\n%s" indent;
+         bprint_type b indent ty;
+         Printf.bprintf b "\n%s" indent;
+         bprint_type_pairs b indent tys;
+         Printf.bprintf b "\n%s)" indent;
+         ()
+    in
+    bprint_type b indent ty
+
   let rec bprint_type b indent ty =
-    match ty with
-    | Tfail -> Printf.bprintf b "failure"
-    | Tunit -> Printf.bprintf b "unit"
-    | Tbool -> Printf.bprintf b "bool"
-    | Tint -> Printf.bprintf b "int"
-    | Tnat -> Printf.bprintf b "nat"
-    | Ttez -> Printf.bprintf b "tez"
-    | Tstring -> Printf.bprintf b "string"
-    | Ttimestamp  -> Printf.bprintf b "timestamp"
-    | Tkey  -> Printf.bprintf b "key"
-    | Tsignature  -> Printf.bprintf b "signature"
-    | Ttuple tys -> bprint_type_pairs b indent tys
-    | Tcontract (ty1, ty2) ->
-       let indent = indent ^ "  " in
-       Printf.bprintf b "(contract\n%s" indent;
-       bprint_type b indent ty1;
-       Printf.bprintf b "\n%s" indent;
-       bprint_type b indent ty2;
-       Printf.bprintf b "\n%s)" indent;
-    | Tor (ty1, ty2) ->
-       let indent = indent ^ "  " in
-       Printf.bprintf b "(or\n%s" indent;
-       bprint_type b indent ty1;
-       Printf.bprintf b "\n%s" indent;
-       bprint_type b indent ty2;
-       Printf.bprintf b "\n%s)" indent;
-    | Toption ty ->
-       let indent = indent ^ "  " in
-       Printf.bprintf b "(option\n%s" indent;
-       bprint_type b indent ty;
-       Printf.bprintf b "\n%s)" indent;
-    | Tlist ty ->
-       let indent = indent ^ "  " in
-       Printf.bprintf b "(list\n%s" indent;
-       bprint_type b indent ty;
-       Printf.bprintf b "\n%s)" indent;
-    | Tset ty ->
-       let indent = indent ^ "  " in
-       Printf.bprintf b "(set\n%s" indent;
-       bprint_type b indent ty;
-       Printf.bprintf b "\n%s)" indent;
-    | Tmap (ty1, ty2) ->
-       let indent = indent ^ "  " in
-       Printf.bprintf b "(map\n%s" indent;
-       bprint_type b indent ty1;
-       Printf.bprintf b "\n%s" indent;
-       bprint_type b indent ty2;
-       Printf.bprintf b "\n%s)" indent;
-    | Tlambda (ty1, ty2) ->
-       let indent = indent ^ "  " in
-       Printf.bprintf b "(lambda\n%s" indent;
-       bprint_type b indent ty1;
-       Printf.bprintf b "\n%s" indent;
-       bprint_type b indent ty2;
-       Printf.bprintf b "\n%s)" indent;
-    | Tclosure ((ty_arg, ty_env), ty_r) ->
-       bprint_type b indent
-         (Ttuple [Tlambda (Ttuple [ty_arg; ty_env], ty_r);
-                  ty_env ]);
-    | Ttype (ty_name, ty) ->
-       (*     Printf.bprintf b "%S =\n%s  " ty_name indent; *)
-       bprint_type b indent ty
-
-
-
-  and bprint_type_pairs b indent tys =
-    match tys with
-    | [] -> assert false
-    | [ty] -> bprint_type b indent ty
-    | ty :: tys ->
-       let indent = indent ^ "  " in
-       Printf.bprintf b "(pair\n%s" indent;
-       bprint_type b indent ty;
-       Printf.bprintf b "\n%s" indent;
-       bprint_type_pairs b indent tys;
-       Printf.bprintf b "\n%s)" indent;
-       ()
+    bprint_type_base
+      (fun b indent ty_name ty ->
+        bprint_type b indent ty)
+      b indent ty
 
   let rec bprint_const b indent cst =
     match cst with
     | CString s -> Printf.bprintf b "%S" s
     | CKey s -> Printf.bprintf b "%S" s
     | CSignature s -> Printf.bprintf b "%S" s
-    | CTez s -> Printf.bprintf b "%S" s
-    | CInt n | CNat n -> Printf.bprintf b "%s" n
+    | CTez s -> Printf.bprintf b "%S" (mic_of_tez s)
+    | CInt n -> Printf.bprintf b "%s" (mic_of_integer n)
+    | CNat n -> Printf.bprintf b "%s" (mic_of_integer n)
+    | CTimestamp s -> Printf.bprintf b "%S" s
     | CBool true -> Printf.bprintf b "True"
     | CBool false -> Printf.bprintf b "False"
     | CUnit -> Printf.bprintf b "Unit"
     | CNone -> Printf.bprintf b "None"
-                              (*
-    | CLeft cst ->
-       let indent = indent ^ "  " in
-       Printf.bprintf b "Left\n%s" indent;
-       bprint_const b indent cst
-    | CRight cst ->
-       let indent = indent ^ "  " in
-       Printf.bprintf b "Right\n%s" indent;
-       bprint_const b indent cst
-                               *)
     | CSome cst ->
        let indent = indent ^ "  " in
        Printf.bprintf b "(Some\n%s" indent;
@@ -249,8 +258,34 @@ end
 
 module Liquid = struct
 
-  let bprint_type b indent ty =
-    Michelson.bprint_type b indent ty
+
+  let rec bprint_type b indent ty =
+    let set = ref StringSet.empty in
+    let todo = ref [None, ty] in
+    let rec iter () =
+      match !todo with
+        [] -> ()
+      | (ty_name, ty) :: rem ->
+         todo := rem;
+         let indent = match ty_name with
+           | None -> indent
+           | Some ty_name ->
+              Printf.bprintf b "%s%s = " indent ty_name;
+              indent ^ "  "
+         in
+         Michelson.bprint_type_base
+           (fun b indent ty_name ty ->
+             Printf.bprintf b "%s" ty_name;
+             if not ( StringSet.mem ty_name !set ) then begin
+                 set := StringSet.add ty_name !set;
+                 todo := (Some ty_name, ty) :: !todo
+               end
+           )
+           b indent ty;
+         Printf.bprintf b "\n";
+         iter ()
+    in
+    iter ()
 
   let bprint_const b indent cst =
     Michelson.bprint_const b indent cst

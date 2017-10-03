@@ -9,6 +9,24 @@
 
 open LiquidTypes
 
+let tez_of_mic s =
+  let b = Buffer.create 10 in
+  let parts = ref [] in
+  for i = 0 to String.length s - 1 do
+    match s.[i] with
+    | ',' -> ()
+    | '.' ->
+       parts := (Buffer.contents b) :: !parts;
+       Buffer.clear b
+    | c -> Buffer.add_char b c
+  done;
+  let parts = Buffer.contents b :: !parts in
+  match parts with
+  | [ tezzies ]
+  | [ "" ; tezzies ] -> { tezzies; centiles = None }
+  | [ centiles; tezzies ] -> { tezzies; centiles = Some centiles }
+  | _ -> invalid_arg "tez_of_mic" (* TODO exn *)
+
 let noloc = LiquidLoc.noloc
 
 let mk desc = { desc; ty = (); bv = StringSet.empty; fail = false }
@@ -19,7 +37,7 @@ let rec var_of node =
   | _ -> Printf.sprintf "exp%d" node.num
 
 
-let nat_n n = mk (Const (Tnat,CNat (string_of_int n)))
+let nat_n n = mk (Const (Tnat,CNat (LiquidPrinter.integer_of_int n)))
 let nat_zero = nat_n 0
 let nat_one = nat_n 1
 
@@ -58,8 +76,9 @@ let rec arg_of node =
        mk (Var (var_of node, noloc, []))
 
 
-let int_zero = mk (Const (Tint,CInt "0"))
-let int_one = mk (Const (Tint,CInt "1"))
+let int_n n = mk (Const (Tint,CInt (LiquidPrinter.integer_of_int n)))
+let int_zero = int_n 0
+let int_one = int_n 1
 
 let unit = mk (Const (Tunit, CUnit))
 
@@ -165,6 +184,9 @@ let decompile contract =
        | N_FAIL, _ ->
           mk (Apply (Prim_fail, noloc, [unit]))
        | N_CONST (ty, cst), [] ->
+          let cst = LiquidCheck.check_const_type
+                      ~to_tez:tez_of_mic noloc ty cst
+          in
           mklet node (Const (ty, cst))
 
        | N_IF ({ kind = N_IF_END (_, then_node) },

@@ -147,7 +147,7 @@ let env_for_clos env loc arg_name arg_type =
     let size = StringMap.cardinal env_vars in
     let env_bindings =
       StringMap.map (fun (_, ty, index, count) ->
-          let ei = mk (Const (Tnat, CNat (string_of_int index))) Tnat false in
+          let ei = mk (Const (Tnat, CNat (LiquidPrinter.integer_of_int index))) Tnat false in
           let accessor =
             if index + 1 = size then Prim_tuple_get_last
             else Prim_tuple_get in
@@ -277,7 +277,8 @@ let rec loc_exp env e = match e.desc with
                  error loc "bad label"
              in
              let arg2 =
-               mk (Const (Tnat, CNat (string_of_int n))) Tnat false in
+               mk (Const (Tnat,
+                          CNat (LiquidPrinter.integer_of_int n))) Tnat false in
              let args = [ arg1; arg2] in
              let prim, ty = typecheck_prim1 env Prim_tuple_get loc args in
              mk (Apply(prim, loc, args)) ty false
@@ -306,7 +307,7 @@ let rec loc_exp env e = match e.desc with
            error loc "bad label"
        in
        let arg2 =
-         mk (Const (Tnat, CNat (string_of_int n))) Tnat false in
+         mk (Const (Tnat, CNat (LiquidPrinter.integer_of_int n))) Tnat false in
        let arg, can_fail =
          match labels with
          | [] ->
@@ -797,7 +798,7 @@ let rec loc_exp env e = match e.desc with
     match prim, args with
     | Prim_tuple_get, [ { ty = Ttuple tuple };
                                { desc = Const (_, (CInt n | CNat n)) }] ->
-       let n = int_of_string n in
+       let n = LiquidPrinter.int_of_integer n in
        let size = List.length tuple in
        let prim =
          if size <= n then
@@ -814,7 +815,7 @@ let rec loc_exp env e = match e.desc with
     | Prim_tuple_set, [ { ty = Ttuple tuple };
                               { desc = Const (_, (CInt n | CNat n)) };
                               { ty } ] ->
-       let n = int_of_string n in
+       let n = LiquidPrinter.int_of_integer n in
        let expected_ty = List.nth tuple n in
        let size = List.length tuple in
        let prim =
@@ -1121,5 +1122,60 @@ let typecheck_code ~warnings env contract expected_ty code =
     } in
 
   let code, _can_fail, _transfer =
-    typecheck_expected "final value" env expected_ty code in
+    typecheck_expected "value" env expected_ty code in
   code
+
+
+let check_const_type ~to_tez loc ty cst =
+  let rec check_const_type ty cst =
+    match ty, cst with
+    | Tunit, CUnit -> CUnit
+    | Tbool, CBool b -> CBool b
+
+    | Tint, CInt s
+      | Tint, CNat s -> CInt s
+
+    | Tnat, CInt s
+      | Tnat, CNat s -> CNat s
+
+    | Tstring, CString s -> CString s
+
+    | Ttez, CTez s -> CTez s
+    | Ttez, CString s -> CTez (to_tez s)
+
+    | Tkey, CKey s
+      | Tkey, CString s -> CKey s
+
+    | Ttimestamp, CString s
+      | Ttimestamp, CTimestamp s -> CTimestamp s
+
+    | Tsignature, CSignature s
+      | Tsignature, CString s -> CSignature s
+
+    | Ttuple tys, CTuple csts ->
+       begin
+         try
+           CTuple (List.map2 check_const_type tys csts)
+         with Invalid_argument _ ->
+           error loc "constant type mismatch (tuple length differs from type)"
+       end
+
+    | Toption _, CNone -> CNone
+    | Toption ty, CSome cst -> CSome (check_const_type ty cst)
+
+    | Tmap (ty1, ty2), CMap csts ->
+       CMap (List.map (fun (cst1, cst2) ->
+                 check_const_type ty1 cst1,
+                 check_const_type ty2 cst2) csts)
+
+    | Tlist ty, CList csts ->
+       CList (List.map (check_const_type ty) csts)
+
+    | Tset ty, CSet csts ->
+       CSet (List.map (check_const_type ty) csts)
+
+    | _ ->
+       error loc "constant type mismatch"
+
+  in
+  check_const_type ty cst

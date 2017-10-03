@@ -10,12 +10,88 @@
 module StringMap = Map.Make(String)
 module StringSet = Set.Make(String)
 
+exception InvalidFormat of string * string
+
+type tez = { tezzies : string; centiles : string option }
+type integer = { integer : string }
+
+                 (*
+module Tez : sig
+
+  type t
+
+  val of_ocaml : string -> t
+  val to_ocaml : t -> string
+
+  val of_tezos : string -> t
+  val to_tezos : t -> string
+
+end = struct
+
+  (* Internally: tezzies * centiles *)
+  type t = string * string option
+
+  (* from an OCaml float *)
+  let of_ocaml s =
+    let b = Buffer.create 10 in
+    let tezzies = ref None in
+    for i = 0 to String.length s - 1 do
+      match s.[i] with
+      | '_' -> ()
+      | '.' -> begin
+          match !tezzies with
+          end
+      | c -> Buffer.add_char b c
+    done;
+    Buffer.contents b
+
+  let to_ocaml s =
+    let b = Buffer.create 10 in
+    for i = 0 to String.length s - 1 do
+      match s.[i] with
+      | ',' ->  Buffer.add_char b '_'
+      | c -> Buffer.add_char b c
+    done;
+    let before, after = String.cut_at '.' (Buffer.contents b)
+
+  let to_tezos s = s
+  let of_tezos s =s
+
+end
+
+module Integer : sig
+
+  type t
+
+  val of_ocaml : string -> t
+  val to_ocaml : t -> string
+  val of_tezos : string -> t
+  val to_tezos : t -> string
+  val to_int : t -> int
+  val of_int : int -> t
+
+end = struct
+
+  type t = string
+
+  let of_ocaml s = s
+  let to_ocaml s = s
+
+  let to_tezos s = s
+  let of_tezos s = s
+
+  let to_int s = int_of_string s
+  let of_int s = string_of_int s
+end
+                  *)
+
 type const =
   | CUnit
   | CBool of bool
-  | CInt of string
-  | CNat of string
-  | CTez of string
+  | CInt of integer
+  | CNat of integer
+  | CTez of tez
+  | CTimestamp of string
   | CString of string
   | CKey of string
   | CSignature of string

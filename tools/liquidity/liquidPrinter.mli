@@ -9,6 +9,12 @@
 
 open LiquidTypes
 
+val mic_of_tez : tez -> string
+val mic_of_integer : integer -> string
+
+val int_of_integer : integer -> int
+val integer_of_int : int -> integer
+
 module Liquid : sig
   val string_of_type : LiquidTypes.datatype -> string
   val string_of_const : LiquidTypes.const -> string
