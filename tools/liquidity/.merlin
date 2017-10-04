@@ -1,0 +1,12 @@
+S ./**
+S ../../libs/**
+B ../../_obuild/**
+PKG ocplib-file
+PKG ocplib-ocamlres
+PKG ocplib-endian
+PKG calendar
+PKG compiler-libs
+PKG ezjsonm
+PKG ocplib-json-typed
+PKG omd
+PKG menhir
