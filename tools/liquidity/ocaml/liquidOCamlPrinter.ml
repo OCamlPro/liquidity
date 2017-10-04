@@ -212,10 +212,17 @@ let constant f = function
   | Pconst_string (i, Some delim) -> pp f "{%s|%s|%s}" delim i delim
   | Pconst_integer (i, None) -> paren (i.[0]='-') (fun f -> pp f "%s") f i
   | Pconst_integer (i, Some m) ->
-    paren (i.[0]='-') (fun f (i, m) -> pp f "%s%c" i m) f (i,m)
+     paren (i.[0]='-') (fun f (i, m) ->
+             if m = '\231' then
+               pp f "%stz" i
+             else
+               pp f "%s%c" i m) f (i,m)
   | Pconst_float (i, None) -> paren (i.[0]='-') (fun f -> pp f "%s") f i
-  | Pconst_float (i, Some m) -> paren (i.[0]='-') (fun f (i,m) ->
-      pp f "%s%c" i m) f (i,m)
+  | Pconst_float (i, Some m) -> paren (i.[0]='-') (fun f (i,_m) ->
+                                             if m = '\231' then
+                                               pp f "%stz" i
+                                             else
+                                               pp f "%s%c" i m) f (i,m)
 
 (* trailing space*)
 let mutable_flag f = function

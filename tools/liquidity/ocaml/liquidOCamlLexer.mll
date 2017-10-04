@@ -371,10 +371,14 @@ rule token = parse
   | uppercase_latin1 identchar_latin1 *
       { warn_latin1 lexbuf; UIDENT(Lexing.lexeme lexbuf) }
   | int_literal { INT (Lexing.lexeme lexbuf, None) }
+  | (int_literal as lit) "tz"
+      { INT (lit, Some '\231') }
   | (int_literal as lit) (literal_modifier as modif)
       { INT (lit, Some modif) }
   | float_literal
       { FLOAT (Lexing.lexeme lexbuf, None) }
+  | ((float_literal) as lit) "tz"
+      { FLOAT (lit, Some '\231') }
   | ((float_literal) as lit) (literal_modifier as modif)
       { FLOAT (lit, Some modif) }
   | (float_literal | int_literal) identchar+

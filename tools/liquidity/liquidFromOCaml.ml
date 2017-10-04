@@ -208,9 +208,9 @@ let rec translate_const env exp =
      CInt (LiquidPrinter.integer_of_liq s), Some Tint
   | { pexp_desc = Pexp_constant (Pconst_integer (s, Some 'p')) } ->
      CNat (LiquidPrinter.integer_of_liq s), Some Tnat
-  | { pexp_desc = Pexp_constant (Pconst_integer (s, Some 't')) } ->
+  | { pexp_desc = Pexp_constant (Pconst_integer (s, Some '\231')) } ->
      CTez (LiquidPrinter.tez_of_liq s), Some Ttez
-  | { pexp_desc = Pexp_constant (Pconst_float (s, Some 't')) } ->
+  | { pexp_desc = Pexp_constant (Pconst_float (s, Some '\231')) } ->
      CTez (LiquidPrinter.tez_of_liq s), Some Ttez
 
   | { pexp_desc = Pexp_constant (Pconst_string (s, None)) } ->

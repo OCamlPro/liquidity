@@ -75,7 +75,7 @@ let rec convert_const expr =
                              (Some (convert_const x))
   | CTuple args -> Exp.tuple (List.map convert_const args)
   | CTez n -> Exp.constraint_ (
-                  Exp.constant (Const.float ~suffix:'t'
+                  Exp.constant (Const.float ~suffix:'\231'
                                             (LiquidPrinter.liq_of_tez n)))
                   (convert_type Ttez)
   | CKey n -> Exp.constraint_ (convert_const (CString n))
