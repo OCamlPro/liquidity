@@ -67,11 +67,10 @@ let data_of_liq ~filename ~contract ~parameter ~storage =
         LiquidCheck.typecheck_code ~warnings:true env contract ty sy_exp in
       let loc = LiquidLoc.loc_in_file filename in
       let ty_exp = translate_const_exp loc ty_exp in
-      let s = LiquidPrinter.Michelson.string_of_const ty_exp in
-      Some s
-    with Error(loc,msg) ->
-      LiquidLoc.report_error (loc, msg);
-      None
+      let s = LiquidPrinter.Michelson.line_of_const ty_exp in
+      Ok s
+    with LiquidError error ->
+      Error error
   in
   (translate "parameter" parameter contract.parameter),
   (translate "storage" storage contract.storage)

@@ -7,6 +7,9 @@
 (*                                                                        *)
 (**************************************************************************)
 
+(* We use '\231' as suffix for integers and floats to encode the "tz"
+    suffix.  *)
+
 open LiquidTypes
 open LiquidOCamlParser
 

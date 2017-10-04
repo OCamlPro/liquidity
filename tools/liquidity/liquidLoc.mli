@@ -13,7 +13,7 @@ val warning_printer : (location -> warning -> unit) ref
 
 val warn : location -> warning -> unit
 
-val report_error : (location * string) -> unit
+val report_error : error -> unit
 
 val raise_error :
   ?loc:location -> ('a, Format.formatter, unit, 'b) format4 -> 'a
