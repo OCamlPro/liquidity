@@ -167,7 +167,7 @@ As in Michelson, there are different types of integers:
 * nat : an unbounded positive integer, written either with a `p` suffix
     (`0p`, `12p`, etc.) or as an integer with a type coercion ( `(0 : nat)` ).
 * tez : an unbounded positive float of Tezzies, written either with
-    a `t` suffix (`1.00t`, etc.) or as a string with type coercion
+    a `tz` suffix (`1.00tz`, etc.) or as a string with type coercion
     (`("1.00" : tez)`).
 
 There are also three types of collections: lists, sets and
