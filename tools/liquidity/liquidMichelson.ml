@@ -38,8 +38,8 @@ let drop_stack n depth =
      lambda (pair (pair tez 'arg) 'global) -> (pair 'ret 'global) *)
 let translate_code code =
 
-  let rec compile depth env e =
-    match e.desc with
+  let rec compile_desc depth env desc =
+    match desc with
     | Var (name, loc, []) ->
        let pos = try
            StringMap.find name env
@@ -88,9 +88,8 @@ let translate_code code =
         | _ -> compile_tuple depth env (List.rev_map snd call_env)
       in
       call_env_code @
-      (compile depth env
-        { e with
-          desc = Lambda (arg_name, p_arg_type, loc, body, res_type) } |> fst) @
+      (compile_desc depth env
+         (Lambda (arg_name, p_arg_type, loc, body, res_type)) |> fst) @
       [ PAIR ], false
 
     | If (cond, ifthen, ifelse) ->
@@ -302,7 +301,8 @@ the ending NIL is not annotated with a type *)
        [ PUSH (Tlist ty, CList[]) ] @ arg @ [ CONS ]
 
     (* Should be removed in LiquidCheck *)
-    | Prim_unknown, _ -> assert false
+    | Prim_unknown, _
+    | Prim_list_rev, _ -> assert false
 
     (* Should have disappeared *)
     | Prim_unused, _ -> assert false
@@ -373,29 +373,30 @@ the ending NIL is not annotated with a type *)
          | Prim_exec, 2 -> [ EXEC ]
 
          | (Prim_eq|Prim_neq|Prim_lt|Prim_le|Prim_gt|Prim_ge
-            | Prim_compare|Prim_add|Prim_sub|Prim_mul|Prim_ediv|Prim_map_find
-            | Prim_map_update|Prim_map_mem|Prim_map_reduce|Prim_map_map
-            | Prim_set_update|Prim_set_mem|Prim_set_reduce|Prim_Some
-            | Prim_concat|Prim_list_reduce|Prim_list_map|Prim_manager
-            | Prim_create_account|Prim_create_contract
-            | Prim_hash|Prim_check|Prim_default_account|Prim_list_size
-            | Prim_set_size|Prim_map_size|Prim_or|Prim_and|Prim_xor
-            | Prim_not|Prim_abs|Prim_int|Prim_neg|Prim_lsr|Prim_lsl
-            | Prim_exec|Prim_Cons|Prim_set_map),n ->
-            Printf.eprintf "Primitive %S: wrong number of args(%d)\n%!"
-                           (LiquidTypes.string_of_primitive prim)
-                           n;
-            assert false
+           | Prim_compare|Prim_add|Prim_sub|Prim_mul|Prim_ediv|Prim_map_find
+           | Prim_map_update|Prim_map_mem|Prim_map_reduce|Prim_map_map
+           | Prim_set_update|Prim_set_mem|Prim_set_reduce|Prim_Some
+           | Prim_concat|Prim_list_reduce|Prim_list_map|Prim_manager
+           | Prim_create_account|Prim_create_contract
+           | Prim_hash|Prim_check|Prim_default_account|Prim_list_size
+           | Prim_set_size|Prim_map_size|Prim_or|Prim_and|Prim_xor
+           | Prim_not|Prim_abs|Prim_int|Prim_neg|Prim_lsr|Prim_lsl
+           | Prim_exec|Prim_Cons|Prim_set_map),n ->
+           Printf.eprintf "Primitive %S: wrong number of args(%d)\n%!"
+             (LiquidTypes.string_of_primitive prim)
+             n;
+           assert false
          (*                           | prim, args -> *)
 
          | (Prim_unknown|Prim_tuple_get_last|Prim_tuple_get
-            | Prim_tuple_set_last|Prim_tuple_set|Prim_tuple|Prim_fail
-            | Prim_self|Prim_balance|Prim_now|Prim_amount|Prim_gas
-            | Prim_Left|Prim_Right|Prim_Source|Prim_unused
-            | Prim_coll_find|Prim_coll_update|Prim_coll_mem
-            | Prim_coll_reduce|Prim_coll_map|Prim_coll_size), _ ->
-            (* already filtered out *)
-            assert false
+           | Prim_tuple_set_last|Prim_tuple_set|Prim_tuple|Prim_fail
+           | Prim_self|Prim_balance|Prim_now|Prim_amount|Prim_gas
+           | Prim_Left|Prim_Right|Prim_Source|Prim_unused
+           | Prim_coll_find|Prim_coll_update|Prim_coll_mem
+           | Prim_coll_reduce|Prim_coll_map|Prim_coll_size
+           | Prim_list_rev), _ ->
+           (* already filtered out *)
+           assert false
 
        in
        args_code @ prim_code
@@ -413,8 +414,8 @@ the ending NIL is not annotated with a type *)
         compile_prim_set last (depth+1) env (n-1) y @
           [ SWAP; PAIR ]
 
-  and compile_no_transfer depth env e =
-    let (e, transfer) = compile depth env e in
+  and compile_desc_no_transfer depth env e =
+    let (e, transfer) = compile_desc depth env e in
     assert (not transfer);
     e
 
@@ -442,6 +443,12 @@ the ending NIL is not annotated with a type *)
        let arg = compile_no_transfer (depth+1) env arg in
        let args = compile_tuple1 depth env args in
        arg @ [ PAIR ] @ args
+
+  and compile depth env e =
+    compile_desc depth env e.desc
+
+  and compile_no_transfer depth env e =
+    compile_desc_no_transfer depth env e.desc
 
   in
 

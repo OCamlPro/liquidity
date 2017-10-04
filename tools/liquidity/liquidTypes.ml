@@ -142,6 +142,7 @@ type primitive =
   | Prim_list_reduce
   | Prim_list_map
   | Prim_list_size
+  | Prim_list_rev
 
   | Prim_manager
   | Prim_create_account
@@ -217,6 +218,7 @@ let () =
 
               "List.reduce", Prim_list_reduce;
               "List.map", Prim_list_map;
+              "List.rev", Prim_list_rev;
 
               "Contract.manager", Prim_manager;
               "Account.create", Prim_create_account;
