@@ -96,6 +96,20 @@ module Michelson = struct
 (* For now, we always use the multi-line notation, and never output
   parenthesized expressions such as "(contract unit unit)" *)
 
+  type format = {
+      increase_indent : (string -> string);
+      newline : char;
+    }
+
+  let multi_line = {
+      increase_indent = (fun indent -> indent ^ "  ");
+      newline = '\n';
+    }
+  let single_line = {
+      increase_indent = (fun indent -> indent);
+      newline = ' ';
+    }
+
   let bprint_type_base bprint_type_rec b indent ty =
     let rec bprint_type b indent ty =
       match ty with
@@ -182,7 +196,7 @@ module Michelson = struct
         bprint_type b indent ty)
       b indent ty
 
-  let rec bprint_const b indent cst =
+  let rec bprint_const fmt b indent cst =
     match cst with
     | CString s -> Printf.bprintf b "%S" s
     | CKey s -> Printf.bprintf b "%S" s
@@ -196,63 +210,66 @@ module Michelson = struct
     | CUnit -> Printf.bprintf b "Unit"
     | CNone -> Printf.bprintf b "None"
     | CSome cst ->
-       let indent = indent ^ "  " in
-       Printf.bprintf b "(Some\n%s" indent;
-       bprint_const b indent cst;
-       Printf.bprintf b "\n%s)" indent;
+       let indent = fmt.increase_indent indent in
+       Printf.bprintf b "(Some%c%s" fmt.newline indent;
+       bprint_const fmt b indent cst;
+       Printf.bprintf b "%c%s)" fmt.newline indent;
     | CLeft cst ->
-       let indent = indent ^ "  " in
-       Printf.bprintf b "(Left\n%s" indent;
-       bprint_const b indent cst;
-       Printf.bprintf b "\n%s)" indent;
+       let indent = fmt.increase_indent indent in
+       Printf.bprintf b "(Left%c%s" fmt.newline indent;
+       bprint_const fmt b indent cst;
+       Printf.bprintf b "%c%s)" fmt.newline indent;
     | CRight cst ->
-       let indent = indent ^ "  " in
-       Printf.bprintf b "(Right\n%s" indent;
-       bprint_const b indent cst;
-       Printf.bprintf b "\n%s)" indent;
-    | CTuple tys -> bprint_const_pairs b indent tys
+       let indent = fmt.increase_indent indent in
+       Printf.bprintf b "(Right%c%s" fmt.newline indent;
+       bprint_const fmt b indent cst;
+       Printf.bprintf b "%c%s)" fmt.newline indent;
+    | CTuple tys -> bprint_const_pairs fmt b indent tys
     | CMap pairs ->
-       let indent = indent ^ "  " in
+       let indent = fmt.increase_indent indent in
        Printf.bprintf b "(Map";
        List.iter (fun (cst1, cst2) ->
-           Printf.bprintf b "\n%s(Item" indent;
-           let indent = indent ^ "  " in
-           Printf.bprintf b "\n%s" indent;
-           bprint_const b indent cst1;
-           Printf.bprintf b "\n%s" indent;
-           bprint_const b indent cst2;
-           Printf.bprintf b "\n%s)" indent;
+           Printf.bprintf b "%c%s(Item" fmt.newline indent;
+           let indent = fmt.increase_indent indent in
+           Printf.bprintf b "%c%s" fmt.newline indent;
+           bprint_const fmt b indent cst1;
+           Printf.bprintf b "%c%s" fmt.newline indent;
+           bprint_const fmt b indent cst2;
+           Printf.bprintf b "%c%s)" fmt.newline indent;
          ) pairs;
-       Printf.bprintf b "\n%s)" indent;
+       Printf.bprintf b "%c%s)" fmt.newline indent;
     | CList csts ->
-       let indent = indent ^ "  " in
+       let indent = fmt.increase_indent indent in
        Printf.bprintf b "(List";
        List.iter (fun cst ->
-           Printf.bprintf b "\n%s" indent;
-           bprint_const b indent cst;
+           Printf.bprintf b "%c%s" fmt.newline indent;
+           bprint_const fmt b indent cst;
          ) csts;
-       Printf.bprintf b "\n%s)" indent;
+       Printf.bprintf b "%c%s)" fmt.newline indent;
     | CSet csts ->
-       let indent = indent ^ "  " in
+       let indent = fmt.increase_indent indent in
        Printf.bprintf b "(Set";
        List.iter (fun cst ->
-           Printf.bprintf b "\n%s" indent;
-           bprint_const b indent cst;
+           Printf.bprintf b "%c%s" fmt.newline indent;
+           bprint_const fmt b indent cst;
          ) csts;
-       Printf.bprintf b "\n%s)" indent;
+       Printf.bprintf b "%c%s)" fmt.newline indent;
 
-  and bprint_const_pairs b indent tys =
+  and bprint_const_pairs fmt b indent tys =
     match tys with
     | [] -> assert false
-    | [ty] -> bprint_const b indent ty
+    | [ty] -> bprint_const fmt b indent ty
     | ty :: tys ->
-       let indent = indent ^ "  " in
-       Printf.bprintf b "(Pair\n%s" indent;
-       bprint_const b indent ty;
-       Printf.bprintf b "\n%s" indent;
-       bprint_const_pairs b indent tys;
+       let indent = fmt.increase_indent indent in
+       Printf.bprintf b "(Pair%c%s" fmt.newline indent;
+       bprint_const fmt b indent ty;
+       Printf.bprintf b "%c%s" fmt.newline indent;
+       bprint_const_pairs fmt b indent tys;
        Printf.bprintf b ")";
        ()
+
+  let bprint_const_single b indent ty = bprint_const single_line b "" ty
+  let bprint_const = bprint_const multi_line
 
   let rec bprint_code b indent code =
     match code with
@@ -308,6 +325,7 @@ module Michelson = struct
   let string_of_type = to_string bprint_type
   let string_of_code code = to_string bprint_code code
   let string_of_const = to_string bprint_const
+  let line_of_const = to_string bprint_const_single
   let string_of_contract cmd = to_string (bprint_contract bprint_code) cmd
 
 

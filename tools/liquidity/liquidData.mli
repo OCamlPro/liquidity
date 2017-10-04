@@ -7,8 +7,10 @@
 (*                                                                        *)
 (**************************************************************************)
 
+open LiquidTypes
+
 val data_of_liq :
   filename:string ->
   contract:string ->
   parameter:string ->
-  storage:string -> string option * string option
+  storage:string -> (string,error) result * (string,error) result

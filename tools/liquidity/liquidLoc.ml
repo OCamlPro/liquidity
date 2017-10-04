@@ -27,7 +27,8 @@ let pp_ksprintf ?before k fmt = (* From Location in OCaml *)
 let noloc = { loc_file = "<unspecified>"; loc_pos = None }
 
 let raise_error ?(loc=noloc) =
-  pp_ksprintf (fun msg -> raise (Error (loc, msg)))
+  pp_ksprintf (fun msg -> raise (LiquidError { err_loc = loc;
+                                               err_msg = msg }))
 
 let print_loc ppf loc =
   match loc.loc_pos with
@@ -39,8 +40,8 @@ let print_loc ppf loc =
   | None ->
      Format.fprintf ppf "%s" loc.loc_file
 
-let report_error (loc, msg) =
-  Format.eprintf "%a: Error: @[%s@]\n%!" print_loc loc msg
+let report_error { err_loc; err_msg } =
+  Format.eprintf "%a: Error: @[%s@]\n%!" print_loc err_loc err_msg
 
 let default_warning_printer loc w =
   Format.eprintf "%a: Warning: @[%a@]\n%!" print_loc loc

@@ -85,7 +85,7 @@ let compile_tezos_file filename =
                             LiquidToOCaml.string_of_structure
                               (LiquidToOCaml.structure_of_contract
                                  untyped_ast)
-                          with Error _ ->
+                          with LiquidError _ ->
                             LiquidPrinter.Liquid.string_of_contract
                               untyped_ast);
   Printf.eprintf "File %S generated\n%!" output;
@@ -106,7 +106,7 @@ let compile_file filename =
 let compile_file filename =
   try
     compile_file filename
-  with (Error _) as e ->
+  with (LiquidError _) as e ->
        if not !arg_keepon then raise e
 
 
@@ -125,8 +125,9 @@ module Data = struct
                                      ~contract ~parameter ~storage in
     List.iter (fun (s,x) ->
         match x with
-        | None -> ()
-        | Some x ->
+        | Error error ->
+           LiquidLoc.report_error error
+        | Ok x ->
            Printf.printf "%s: %s\n%!" s x)
               [ "parameter", p; "storage", s ]
 
@@ -173,8 +174,8 @@ let () =
   try
     main ()
   with
-  | Error (loc, msg) ->
-    LiquidLoc.report_error (loc, msg);
+  | LiquidError error ->
+    LiquidLoc.report_error error;
     exit 2
 (*
   | exn ->
