@@ -8,7 +8,7 @@
 (**************************************************************************)
 
 (* The version that will be required to compile the generated files. *)
-let output_version = "1.0"
+let output_version = "0.1"
 
 (*
 let contract

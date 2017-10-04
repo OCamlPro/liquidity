@@ -22,7 +22,7 @@ Contract Format
 All the contracts have the following form:
 
 ```
-let version = 1.0
+let version = 0.1
 <... local declarations ...>
 let%entry main
       (parameter : TYPE)
@@ -31,9 +31,11 @@ let%entry main
       BODY
 ```
 
-The `version` statement tells the compiler in which version of Liquidity
-the contract is written. The compiler will reject any contract that has
-a version that it does not understand (too old, more recent).
+The `version` statement tells the compiler in which version of
+Liquidity the contract is written. The compiler will reject any
+contract that has a version that it does not understand (too old, more
+recent). We expect to reach version 1.0 at the launch of the Tezos
+network.
 
 The `main` function is the default entry point for the contract.
 `let%entry` is the construct used to declare entry points (there is

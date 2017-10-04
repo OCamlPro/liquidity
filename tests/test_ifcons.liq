@@ -1,7 +1,7 @@
 
 (* lists *)
 
-let version = 1.0
+let version = 0.1
 
 let%entry main
       (parameter : string)
