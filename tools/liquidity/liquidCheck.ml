@@ -53,7 +53,18 @@ let mk =
 let mk_nat i =
   mk (Const (Tnat, CNat (LiquidPrinter.integer_of_int i))) Tnat false
 
+let mk_nil list_ty =
+  mk (Const (list_ty, CList [])) list_ty false
+
+let mk_tuple loc l fail =
+  let tuple_ty = Ttuple (List.map (fun t -> t.ty) l) in
+  mk (Apply (Prim_tuple, loc, l)) tuple_ty fail
+
 let const_unit = mk (Const (Tunit, CUnit)) Tunit false
+
+let const_true = mk (Const (Tbool, CBool true)) Tbool false
+
+let const_false = mk (Const (Tbool, CBool false)) Tbool false
 
 let unused env ty =
   mk (Apply(Prim_unused, noloc env, [const_unit])) ty false
@@ -181,7 +192,10 @@ let env_for_clos env loc arg_name arg_type =
 
 let maybe_reset_vars env transfer =
   if transfer then
-    { env with vars = StringMap.empty }
+    { env with
+      vars = StringMap.empty;
+      clos_env = None;
+    }
   else env
 
 let fprint_2types fmt (ty1, ty2) =
@@ -448,9 +462,69 @@ let rec loc_exp env e = match e.desc with
       let f_body = mk (Apply (Prim_Cons, loc, [e; acc])) list_ty false in
       let f_desc = Lambda (arg_name, arg_ty, loc, f_body, list_ty) in
       let f = mk f_desc (Tlambda (arg_ty, list_ty)) false in
-      let empty_acc = mk (Const (list_ty, CList [])) list_ty false in
+      let empty_acc = mk_nil list_ty in
       let desc = Apply (Prim_list_reduce, loc, [f; l; empty_acc]) in
       mk desc list_ty fail, fail, false
+
+    | Apply (Prim_list_reduce, loc, [f; l; acc]) ->
+      let f, _, _ = typecheck env f in
+      let l, can_fail1, transfer1 = typecheck env l in
+      let acc, can_fail2, transfer2 = typecheck env acc in
+      if transfer1 || transfer2 then
+        error loc "transfer within List.reduce args";
+      let args = [f; l; acc] in
+      let _, ty = typecheck_prim1 env Prim_list_reduce loc args in
+      let can_fail = can_fail1 || can_fail2 in
+      begin match f.ty with
+        | Tclosure ((arg_ty, env_ty), acc_ty) ->
+          let elt_ty = match l.ty with
+            | Tlist ty -> ty
+            | _ -> error loc "Argument of List.reduce must be a list"
+          in
+          let loop_arg_name = uniq_ident env "arg" in
+          let head_name = uniq_ident env "head" in
+          let tail_name = uniq_ident env "tail" in
+          (* let loop_arg_ty = arg_ty in *)
+          let loop_body_ty = Ttuple [Tbool; arg_ty] in
+          let list_ty = Tlist elt_ty in
+          let arg = mk (Var (loop_arg_name, loc, [])) arg_ty false in
+          let head = mk (Var (head_name, loc, [])) elt_ty false in
+          let tail = mk (Var (tail_name, loc, [])) list_ty false in
+          let l' =
+            mk (Apply(Prim_tuple_get, loc, [arg; mk_nat 0])) list_ty can_fail in
+          let acc' =
+            mk (Apply(Prim_tuple_get_last, loc, [arg; mk_nat 1]))
+              acc_ty can_fail in
+          let nil_case = mk_tuple loc [
+              const_false;
+              mk_tuple loc [mk_nil list_ty; acc'] can_fail
+            ] can_fail in
+          let cons_case =
+            mk_tuple loc [
+              const_true;
+              mk_tuple loc [
+                tail;
+                mk (Apply (Prim_exec, loc, [
+                    mk_tuple loc [head; acc'] can_fail;
+                    f
+                  ])) acc_ty can_fail
+              ] can_fail
+            ] can_fail
+          in
+          let loop_body = mk
+              (MatchList (l', loc, head_name, tail_name, cons_case, nil_case))
+              loop_body_ty can_fail
+          in
+          let loop = mk
+            (Loop (loop_arg_name, loc, loop_body,
+                  mk_tuple loc [l; acc] can_fail1))
+            (Ttuple [list_ty; acc_ty]) can_fail
+          in
+          mk (Apply (Prim_tuple_get_last, loc, [loop; mk_nat 1]))
+            acc_ty can_fail, can_fail, false
+        | _ ->
+          mk (Apply (Prim_list_reduce, loc, args)) ty can_fail, can_fail, false
+      end
 
     | Apply (prim, loc, args) ->
        let can_fail = ref false in
@@ -1011,7 +1085,7 @@ let rec loc_exp env e = match e.desc with
        to_ty
 
     | ( Prim_list_map
-      | Prim_list_reduce
+      (* | Prim_list_reduce *)
       | Prim_set_reduce
       | Prim_map_reduce
       | Prim_map_map
@@ -1028,7 +1102,8 @@ let rec loc_exp env e = match e.desc with
        Tlist to_ty
 
     | Prim_list_reduce, [
-        { ty = Tlambda (Ttuple [src_ty; dst_ty], dst_ty') };
+        { ty = ( Tlambda (Ttuple [src_ty; dst_ty], dst_ty')
+               | Tclosure ((Ttuple [src_ty; dst_ty], _), dst_ty')) };
         { ty = Tlist src_ty' };
         { ty = acc_ty };
       ] ->
