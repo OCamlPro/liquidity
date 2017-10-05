@@ -1,6 +1,6 @@
 (* List.map *)
 
-let version = 0.1
+[%%version 0.1]
 
 let succ (x : int) = x + 1
 

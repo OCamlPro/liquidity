@@ -815,13 +815,10 @@ let check_version = function
 let rec translate_structure funs env ast =
   match ast with
   | { pstr_desc =
-         Pstr_value (
-             Nonrecursive,
-             [ {
-                 pvb_pat = { ppat_desc = Ppat_var { txt = "version" } };
-                 pvb_expr = exp;
-               }
-    ]) } :: ast ->
+        Pstr_extension
+            (({ Asttypes.txt = "version" },
+             PStr [{ pstr_desc = Pstr_eval (exp,[])}]),[])
+    } :: ast ->
     check_version exp;
     translate_structure funs env ast
 

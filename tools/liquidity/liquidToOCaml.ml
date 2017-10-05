@@ -299,11 +299,11 @@ let rec convert_code expr =
 let structure_of_contract contract =
   let code = convert_code contract.code in
   [
-    Str.value Nonrecursive
-              [
-                Vb.mk (Pat.var (loc "version"))
+    Str.extension ( { txt = "version"; loc = !default_loc },
+              PStr [
+                Str.eval
                       (Exp.constant (Const.float output_version))
-              ];
+              ]);
     Str.extension ( { txt = "entry"; loc = !default_loc },
                PStr    [
                      Str.value Nonrecursive

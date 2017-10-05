@@ -1558,3 +1558,8 @@ let exp_ast ast =
   let fmt = Format.str_formatter in
   Printast.expression 0 fmt ast;
   Format.flush_str_formatter ()
+
+let contract_ast ast =
+  let fmt = Format.str_formatter in
+  Printast.structure 0 fmt ast;
+  Format.flush_str_formatter ()

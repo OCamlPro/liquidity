@@ -1,7 +1,7 @@
 
 (* constants *)
 
-let version = 0.1
+[%%version 0.1]
 
 let%entry main
       (parameter : bool)

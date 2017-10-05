@@ -1,5 +1,5 @@
 
-let version = 0.1
+[%%version 0.1]
 
 type point = { x : string; y : bool; z : int }
 type vector = { orig : point; dest : point }

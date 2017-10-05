@@ -22,7 +22,7 @@ Contract Format
 All the contracts have the following form:
 
 ```
-let version = 0.1
+[%%version 0.1]
 <... local declarations ...>
 let%entry main
       (parameter : TYPE)

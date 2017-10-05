@@ -5,6 +5,7 @@ clean:
 	for dir in . others reverse; do    \
 		rm -f $$dir/*~;            \
 		rm -f $$dir/*.liq.tz;      \
+		rm -f $$dir/*.liq.ocaml;   \
 		rm -f $$dir/*.liq.simple;  \
 		rm -f $$dir/*.liq.syntax;  \
 		rm -f $$dir/*.liq.typed;   \
