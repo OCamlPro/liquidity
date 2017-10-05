@@ -1374,8 +1374,30 @@ let check_const_type ~to_tez loc ty cst =
     | Tkey, CKey s
       | Tkey, CString s -> CKey s
 
+    | Ttimestamp, CInt { integer = s }
+    | Ttimestamp, CNat { integer = s } -> CTimestamp s
+
     | Ttimestamp, CString s
-      | Ttimestamp, CTimestamp s -> CTimestamp s
+    | Ttimestamp, CTimestamp s ->
+      begin (* approximation of correct tezos timestamp *)
+        try Scanf.sscanf s "%_d%!" ()
+        with _ ->
+        try Scanf.sscanf s "%_d-%_d-%_dT%_d:%_d:%_dZ%!" ()
+        with _ ->
+        try Scanf.sscanf s "%_d-%_d-%_d %_d:%_d:%_dZ%!" ()
+        with _ ->
+        try Scanf.sscanf s "%_d-%_d-%_dT%_d:%_d:%_d-%_d:%_d%!" ()
+        with _ ->
+        try Scanf.sscanf s "%_d-%_d-%_dT%_d:%_d:%_d+%_d:%_d%!" ()
+        with _ ->
+        try Scanf.sscanf s "%_d-%_d-%_d %_d:%_d:%_d-%_d:%_d%!" ()
+        with _ ->
+        try Scanf.sscanf s "%_d-%_d-%_d %_d:%_d:%_d+%_d:%_d%!" ()
+        with _ ->
+          error loc "Bad format for timestamp"
+      end;
+      CTimestamp s
+
 
     | Tsignature, CSignature s
       | Tsignature, CString s -> CSignature s
