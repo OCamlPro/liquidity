@@ -50,6 +50,9 @@ let mk =
   let bv = StringSet.empty in
   fun desc (ty : datatype) fail -> { desc; ty; bv; fail }
 
+let mk_nat i =
+  mk (Const (Tnat, CNat (LiquidPrinter.integer_of_int i))) Tnat false
+
 let const_unit = mk (Const (Tunit, CUnit)) Tunit false
 
 let unused env ty =
@@ -147,7 +150,7 @@ let env_for_clos env loc arg_name arg_type =
     let size = StringMap.cardinal env_vars in
     let env_bindings =
       StringMap.map (fun (_, ty, index, count) ->
-          let ei = mk (Const (Tnat, CNat (LiquidPrinter.integer_of_int index))) Tnat false in
+          let ei = mk_nat index in
           let accessor =
             if index + 1 = size then Prim_tuple_get_last
             else Prim_tuple_get in
@@ -276,9 +279,7 @@ let rec loc_exp env e = match e.desc with
                with Not_found ->
                  error loc "bad label"
              in
-             let arg2 =
-               mk (Const (Tnat,
-                          CNat (LiquidPrinter.integer_of_int n))) Tnat false in
+             let arg2 = mk_nat n in
              let args = [ arg1; arg2] in
              let prim, ty = typecheck_prim1 env Prim_tuple_get loc args in
              mk (Apply(prim, loc, args)) ty false
@@ -306,8 +307,7 @@ let rec loc_exp env e = match e.desc with
          with Not_found ->
            error loc "bad label"
        in
-       let arg2 =
-         mk (Const (Tnat, CNat (LiquidPrinter.integer_of_int n))) Tnat false in
+       let arg2 = mk_nat n in
        let arg, can_fail =
          match labels with
          | [] ->
@@ -430,6 +430,27 @@ let rec loc_exp env e = match e.desc with
        typecheck env { exp with
                        desc = Apply(Prim_exec, loc, [x; f]) }
 
+
+    | Apply (Prim_list_rev, loc, [l]) ->
+      let l, fail, transfer = typecheck env l in
+      if transfer then error loc "transfer within List.rev args";
+      let elt_ty = match l.ty with
+        | Tlist ty -> ty
+        | _ -> error loc "Argument of List.rev must be a list"
+      in
+      let arg_name = uniq_ident env "arg" in
+      let list_ty = Tlist elt_ty in
+      let arg_ty = Ttuple [elt_ty; list_ty] in
+      let arg = mk (Var (arg_name, loc, [])) arg_ty false in
+      let e = mk (Apply(Prim_tuple_get, loc, [arg; mk_nat 0])) elt_ty false in
+      let acc =
+        mk (Apply(Prim_tuple_get_last, loc, [arg; mk_nat 1])) list_ty false in
+      let f_body = mk (Apply (Prim_Cons, loc, [e; acc])) list_ty false in
+      let f_desc = Lambda (arg_name, arg_ty, loc, f_body, list_ty) in
+      let f = mk f_desc (Tlambda (arg_ty, list_ty)) false in
+      let empty_acc = mk (Const (list_ty, CList [])) list_ty false in
+      let desc = Apply (Prim_list_reduce, loc, [f; l; empty_acc]) in
+      mk desc list_ty fail, fail, false
 
     | Apply (prim, loc, args) ->
        let can_fail = ref false in
@@ -561,8 +582,6 @@ let rec loc_exp env e = match e.desc with
            new_binding env lambda_arg_name lambda_arg_type in
          let body, _fail, transfer = typecheck env lambda_body in
          check_used env lambda_arg_name loc arg_count;
-         if transfer then
-           error loc "no transfer in lambda";
          let desc =
            Lambda (new_arg_name, lambda_arg_type, loc, body, body.ty) in
          let ty = Tlambda (lambda_arg_type, body.ty) in

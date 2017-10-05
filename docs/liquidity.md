@@ -109,8 +109,8 @@ Liquidity functions:
 * `CREATE_CONTRACT` : `Contract.create`: creates a new contract
 * `MANAGER` : `Contract.manager ct`: returns the key of the manager of the
      contract in argument
-* `EXEC` : `Lambda.pipe x f` or `x |> f`. Equivalent of `f x`, i.e. application
-     of the lambda `f` on the argument `x`.
+* `EXEC` : `Lambda.pipe x f` or `x |> f` or `f x`, is the application of the
+     lambda `f` on the argument `x`.
 * `DEFAULT_ACCOUNT` : `Account.default key`. Returns the default contract
     (of type `(unit,unit) contract`) associated with a key.
 
@@ -142,6 +142,9 @@ Operations on data structures
 (it is possible to use the generic `Coll.` prefix for all collections,
 but not in a polymorphic way, i.e. `Coll.` is immediately replaced by the
 type-specific version for the type of its argument.)
+
+Liquidity also provides additional operations:
+* `List.rev` : List reversal
 
 Arithmetic and logic operators
 ------------------------------
