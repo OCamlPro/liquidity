@@ -303,8 +303,7 @@ Functions and Closures
 Unlike Michelson, functions in Liquidity can also be closures. They can take
 multiple arguments and are curryfied. Because closures are lambda-lifted, it is
 however recommended to use a single tuple argument when possible.  Arguments
-must be annotated with their (monomorphic) type. Primitive functions such as
-`List.map` do not accept closures as their first arguments at the moment.
+must be annotated with their (monomorphic) type.
 
 Function applications are often done using the `Lambda.pipe` function
 or the `|>` operator:
