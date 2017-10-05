@@ -53,7 +53,31 @@ let mk =
 let mk_nat i =
   mk (Const (Tnat, CNat (LiquidPrinter.integer_of_int i))) Tnat false
 
+let mk_nil list_ty =
+  mk (Const (list_ty, CList [])) list_ty false
+
+let mk_tuple loc l fail =
+  let tuple_ty = Ttuple (List.map (fun t -> t.ty) l) in
+  mk (Apply (Prim_tuple, loc, l)) tuple_ty fail
+
 let const_unit = mk (Const (Tunit, CUnit)) Tunit false
+
+let const_true = mk (Const (Tbool, CBool true)) Tbool false
+
+let const_false = mk (Const (Tbool, CBool false)) Tbool false
+
+let mk_untyped =
+  let bv = StringSet.empty in
+  fun desc -> { desc; ty = (); bv; fail = false }
+
+let untyped_int i =
+  mk_untyped (Const (Tint, CInt (LiquidPrinter.integer_of_int i)))
+
+let untyped_nil list_ty =
+  mk_untyped (Const (list_ty, CList []))
+
+let mk_untyped_tuple loc l =
+  mk_untyped (Apply (Prim_tuple, loc, l))
 
 let unused env ty =
   mk (Apply(Prim_unused, noloc env, [const_unit])) ty false
@@ -181,7 +205,10 @@ let env_for_clos env loc arg_name arg_type =
 
 let maybe_reset_vars env transfer =
   if transfer then
-    { env with vars = StringMap.empty }
+    { env with
+      vars = StringMap.empty;
+      clos_env = None;
+    }
   else env
 
 let fprint_2types fmt (ty1, ty2) =
@@ -431,6 +458,7 @@ let rec loc_exp env e = match e.desc with
                        desc = Apply(Prim_exec, loc, [x; f]) }
 
 
+    (* List.rev -> List.reduce (::) *)
     | Apply (Prim_list_rev, loc, [l]) ->
       let l, fail, transfer = typecheck env l in
       if transfer then error loc "transfer within List.rev args";
@@ -448,26 +476,181 @@ let rec loc_exp env e = match e.desc with
       let f_body = mk (Apply (Prim_Cons, loc, [e; acc])) list_ty false in
       let f_desc = Lambda (arg_name, arg_ty, loc, f_body, list_ty) in
       let f = mk f_desc (Tlambda (arg_ty, list_ty)) false in
-      let empty_acc = mk (Const (list_ty, CList [])) list_ty false in
+      let empty_acc = mk_nil list_ty in
       let desc = Apply (Prim_list_reduce, loc, [f; l; empty_acc]) in
       mk desc list_ty fail, fail, false
 
-    | Apply (prim, loc, args) ->
-       let can_fail = ref false in
-       let args = List.map (fun arg ->
-                      let arg, fail, transfer = typecheck env arg in
-                      if transfer then
-                        error loc "transfer within prim args";
-                      if fail then can_fail := true;
-                      arg
-                    ) args in
-       let prim, ty = typecheck_prim1 env prim loc args in
-       let can_fail =
-         match prim with
-         | Prim_fail -> true
-         | _ -> !can_fail
-       in
-       mk (Apply (prim, loc, args)) ty can_fail, can_fail, false
+    (* List.reduce (closure) -> Loop.loop *)
+    | Apply (Prim_list_reduce, loc, [f; l; acc]) ->
+      let f, _, _ = typecheck env f in
+      let l, can_fail1, transfer1 = typecheck env l in
+      let acc, can_fail2, transfer2 = typecheck env acc in
+      if transfer1 || transfer2 then
+        error loc "transfer within List.reduce args";
+      let args = [f; l; acc] in
+      let _, ty = typecheck_prim1 env Prim_list_reduce loc args in
+      let can_fail = can_fail1 || can_fail2 in
+      begin match f.ty with
+        | Tclosure ((arg_ty, env_ty), acc_ty) ->
+          let elt_ty = match l.ty with
+            | Tlist ty -> ty
+            | _ -> error loc "Argument of List.reduce must be a list"
+          in
+          let loop_arg_name = uniq_ident env "arg" in
+          let head_name = uniq_ident env "head" in
+          let tail_name = uniq_ident env "tail" in
+          (* let loop_arg_ty = arg_ty in *)
+          let loop_body_ty = Ttuple [Tbool; arg_ty] in
+          let list_ty = Tlist elt_ty in
+          let arg = mk (Var (loop_arg_name, loc, [])) arg_ty false in
+          let head = mk (Var (head_name, loc, [])) elt_ty false in
+          let tail = mk (Var (tail_name, loc, [])) list_ty false in
+          let l' =
+            mk (Apply(Prim_tuple_get, loc, [arg; mk_nat 0])) list_ty can_fail in
+          let acc' =
+            mk (Apply(Prim_tuple_get_last, loc, [arg; mk_nat 1]))
+              acc_ty can_fail in
+          let nil_case = mk_tuple loc [
+              const_false;
+              mk_tuple loc [mk_nil list_ty; acc'] can_fail
+            ] can_fail in
+          let cons_case =
+            mk_tuple loc [
+              const_true;
+              mk_tuple loc [
+                tail;
+                mk (Apply (Prim_exec, loc, [
+                    mk_tuple loc [head; acc'] can_fail;
+                    f
+                  ])) acc_ty can_fail
+              ] can_fail
+            ] can_fail
+          in
+          let loop_body = mk
+              (MatchList (l', loc, head_name, tail_name, cons_case, nil_case))
+              loop_body_ty can_fail
+          in
+          let loop = mk
+            (Loop (loop_arg_name, loc, loop_body,
+                  mk_tuple loc [l; acc] can_fail1))
+            (Ttuple [list_ty; acc_ty]) can_fail
+          in
+          mk (Apply (Prim_tuple_get_last, loc, [loop; mk_nat 1]))
+            acc_ty can_fail, can_fail, false
+        | _ ->
+          mk (Apply (Prim_list_reduce, loc, args)) ty can_fail, can_fail, false
+      end
+
+    (* List.map (closure) -> {List.rev(List.reduce (closure)} *)
+    | Apply (Prim_list_map, loc, [f; l]) ->
+      begin match is_closure env f with
+        | None -> typecheck_apply env Prim_list_map loc [f; l]
+        | Some ((arg_ty, _), ty_ret) ->
+          let arg_name = uniq_ident env "arg" in
+          let arg = mk_untyped (Var (arg_name, loc, [])) in
+          let x =
+            mk_untyped (Apply(Prim_tuple_get, loc, [arg; untyped_int 0])) in
+          let acc =
+            mk_untyped (Apply(Prim_tuple_get, loc, [arg; untyped_int 1])) in
+          let f_body = mk_untyped (Apply(Prim_Cons, loc, [
+              mk_untyped (Apply(Prim_exec, loc, [x; f]));
+              acc
+            ])) in
+          let f_red =
+            mk_untyped (Lambda (arg_name, Ttuple [arg_ty; Tlist arg_ty],
+                                loc, f_body, Tunit)) in
+          let red =
+            mk_untyped (Apply (Prim_list_reduce, loc,
+                               [f_red; l; untyped_nil (Tlist arg_ty)])) in
+          let rev_red = mk_untyped (Apply (Prim_list_rev, loc, [red])) in
+          typecheck env rev_red
+      end
+
+    (* Map.reduce (closure) -> {Map.reduce (::) |> List.rev |> List.reduce} *)
+    | Apply (Prim_map_reduce, loc, [f; m; acc]) ->
+      begin match is_closure env f with
+        | None -> typecheck_apply env Prim_map_reduce loc [f; m; acc]
+        | Some ((Ttuple [kv_ty; acc_ty], _), ty_ret) ->
+          let arg_name = uniq_ident env "arg" in
+          let arg = mk_untyped (Var (arg_name, loc, [])) in
+          let kv =
+            mk_untyped (Apply(Prim_tuple_get, loc, [arg; untyped_int 0])) in
+          let acc_elts =
+            mk_untyped (Apply(Prim_tuple_get, loc, [arg; untyped_int 1])) in
+          let gather_body =
+            mk_untyped (Apply(Prim_Cons, loc, [kv; acc_elts])) in
+          let gather_fun =
+            mk_untyped (Lambda (arg_name, Ttuple [kv_ty; Tlist kv_ty],
+                                loc, gather_body, Tunit)) in
+          let rev_elts =
+            mk_untyped (Apply(Prim_map_reduce, loc,
+                              [gather_fun; m; untyped_nil (Tlist kv_ty)])) in
+          let elts = mk_untyped (Apply(Prim_list_rev, loc, [rev_elts])) in
+          let red = mk_untyped (Apply(Prim_list_reduce, loc, [f; elts; acc])) in
+          typecheck env red
+        | Some _ -> error loc "bad closure type in Map.reduce"
+      end
+
+    (* Map.map (closure) -> {Map.reduce (Map.update)} *)
+    | Apply (Prim_map_map, loc, [f; m]) ->
+      begin match is_closure env f with
+        | None -> typecheck_apply env Prim_map_map loc [f; m]
+        | Some ((Ttuple [k_ty; v_ty], _), ty_ret) ->
+          let arg_name = uniq_ident env "arg" in
+          let arg = mk_untyped (Var (arg_name, loc, [])) in
+          let kv =
+            mk_untyped (Apply(Prim_tuple_get, loc, [arg; untyped_int 0])) in
+          let acc =
+            mk_untyped (Apply(Prim_tuple_get, loc, [arg; untyped_int 1])) in
+          let k =
+            mk_untyped (Apply(Prim_tuple_get, loc, [kv; untyped_int 0])) in
+          let acc_ty = Tmap (k_ty, ty_ret) in
+          let update_body =
+            mk_untyped (Apply(Prim_map_update, loc, [
+                k;
+                mk_untyped (Apply(Prim_Some, loc, [
+                    mk_untyped (Apply(Prim_exec, loc, [kv; f]))
+                  ]));
+                acc
+              ])) in
+          let update_fun =
+            mk_untyped (Lambda (arg_name, Ttuple [Ttuple [k_ty; v_ty]; acc_ty],
+                                loc, update_body, Tunit)) in
+          let red =
+            mk_untyped (Apply (Prim_map_reduce, loc, [
+                update_fun; m;
+                mk_untyped (Const (acc_ty, CMap []))
+              ])) in
+          typecheck env red
+        | Some _ -> error loc "bad closure type in Map.map"
+      end
+
+    (* Set.reduce (closure) -> {Set.reduce (::) |> List.rev |> List.reduce} *)
+    | Apply (Prim_set_reduce, loc, [f; s; acc]) ->
+      begin match is_closure env f with
+        | None -> typecheck_apply env Prim_set_reduce loc [f; s; acc]
+        | Some ((Ttuple [elt_ty; acc_ty], _), ty_ret) ->
+          let arg_name = uniq_ident env "arg" in
+          let arg = mk_untyped (Var (arg_name, loc, [])) in
+          let elt =
+            mk_untyped (Apply(Prim_tuple_get, loc, [arg; untyped_int 0])) in
+          let acc_elts =
+            mk_untyped (Apply(Prim_tuple_get, loc, [arg; untyped_int 1])) in
+          let gather_body =
+            mk_untyped (Apply(Prim_Cons, loc, [elt; acc_elts])) in
+          let gather_fun =
+            mk_untyped (Lambda (arg_name, Ttuple [elt_ty; Tlist elt_ty],
+                                loc, gather_body, Tunit)) in
+          let rev_elts =
+            mk_untyped (Apply(Prim_set_reduce, loc,
+                              [gather_fun; s; untyped_nil (Tlist elt_ty)])) in
+          let elts = mk_untyped (Apply(Prim_list_rev, loc, [rev_elts])) in
+          let red = mk_untyped (Apply(Prim_list_reduce, loc, [f; elts; acc])) in
+          typecheck env red
+        | Some _ -> error loc "bad closure type in Set.reduce"
+      end
+
+    | Apply (prim, loc, args) -> typecheck_apply env prim loc args
 
     | MatchOption (arg, loc, ifnone, name, ifsome) ->
        let arg, fail1, transfer1 = typecheck env arg in
@@ -937,9 +1120,9 @@ let rec loc_exp env e = match e.desc with
                       { ty = Tmap (expected_key_ty, expected_value_ty) }]
       ->
        if expected_key_ty <> key_ty then
-         error loc "bad Map.add key type";
+         error loc "bad Map.update key type";
        if expected_value_ty <> value_ty then
-         error loc "bad Map.add value type";
+         error loc "bad Map.update value type";
        Tmap (key_ty, value_ty)
     | Prim_map_mem, [ { ty = key_ty }; { ty = Tmap (expected_key_ty,_) }]
       ->
@@ -1011,7 +1194,7 @@ let rec loc_exp env e = match e.desc with
        to_ty
 
     | ( Prim_list_map
-      | Prim_list_reduce
+      (* | Prim_list_reduce *)
       | Prim_set_reduce
       | Prim_map_reduce
       | Prim_map_map
@@ -1028,7 +1211,8 @@ let rec loc_exp env e = match e.desc with
        Tlist to_ty
 
     | Prim_list_reduce, [
-        { ty = Tlambda (Ttuple [src_ty; dst_ty], dst_ty') };
+        { ty = ( Tlambda (Ttuple [src_ty; dst_ty], dst_ty')
+               | Tclosure ((Ttuple [src_ty; dst_ty], _), dst_ty')) };
         { ty = Tlist src_ty' };
         { ty = acc_ty };
       ] ->
@@ -1103,6 +1287,31 @@ let rec loc_exp env e = match e.desc with
                  ("Unexpected type for "^info) exp.ty expected_ty;
     exp, fail, transfer
 
+  and typecheck_apply env prim loc args =
+    let can_fail = ref false in
+    let args = List.map (fun arg ->
+        let arg, fail, transfer = typecheck env arg in
+        if transfer then
+          error loc "transfer within prim args";
+        if fail then can_fail := true;
+        arg
+      ) args in
+    let prim, ty = typecheck_prim1 env prim loc args in
+    let can_fail =
+      match prim with
+      | Prim_fail -> true
+      | _ -> !can_fail
+    in
+    mk (Apply (prim, loc, args)) ty can_fail, can_fail, false
+
+
+  (* FIXME ugly hack *)
+  and is_closure env exp =
+    match typecheck env exp with
+    | { ty = Tclosure ((ty_arg, ty_env), ty_ret) }, _, _ ->
+      Some ((ty_arg, ty_env), ty_ret)
+    | _ ->
+      None
 
 
 let typecheck_contract ~warnings env contract =

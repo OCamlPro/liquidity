@@ -39,13 +39,24 @@ OCaml.library("ocplib-liquidity-examples",
                   "test_option.liq";
                   "test_right_constr.liq";
                   "test_transfer.liq";
-          ];
+                  "test_closure.liq";
+                  "test_closure2.liq";
+                  "test_closure3.liq";
+                  "test_map.liq";
+                  "test_rev.liq";
+                  "test_reduce_closure.liq";
+                  "test_map_closure.liq";
+                  "test_mapreduce_closure.liq";
+                  "test_mapmap_closure.liq";
+                  "test_setreduce_closure.liq";
+         ];
        };
 
        "liquidTestOthers.ml", {
          file2string = [
                   "others/demo.liq";
                   "others/broker.liq";
+                  "others/auction.liq";
           ];
        };
 

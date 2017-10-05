@@ -28,11 +28,12 @@ let rec bv code =
      StringSet.union (bv exp)
                      (StringSet.remove var (bv body))
 
-  | Lambda _ -> StringSet.empty
+  | Lambda (arg_name, arg_type, loc, body, res_type) ->
+    bv body
+    |> StringSet.remove arg_name
 
   | Closure (arg_name, arg_type, loc, call_env, body, res_type) ->
     bv body
-    |> List.fold_right (fun (v, _) -> StringSet.remove v) call_env
     |> StringSet.remove arg_name
     |> List.fold_right (fun (_, e) -> StringSet.union (bv e)) call_env
 
@@ -135,14 +136,14 @@ let rec bound code =
   | Lambda (arg_name, arg_type, loc, body, res_type) ->
      let body = bound body in
      let desc = Lambda(arg_name, arg_type, loc, body, res_type) in
-     mk desc code StringSet.empty
+     let bv = bv body |> StringSet.remove arg_name in
+     mk desc code bv
 
   | Closure (arg_name, arg_type, loc, call_env, body, res_type) ->
      let call_env = List.map (fun (name, t) -> name, bound t) call_env in
      let body = bound body in
      let bv =
        body.bv
-       |> List.fold_right (fun (v, _) -> StringSet.remove v) call_env
        |> StringSet.remove arg_name
        |> List.fold_right (fun (_, e) -> StringSet.union e.bv) call_env
      in
