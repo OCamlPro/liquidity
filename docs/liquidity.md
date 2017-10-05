@@ -173,6 +173,12 @@ As in Michelson, there are different types of integers:
     a `tz` suffix (`1.00tz`, etc.) or as a string with type coercion
     (`("1.00" : tez)`).
 
+Timestamps are written in ISO 8601 format or integer seconds since epoch, the
+following are equivalent:
+* `("2015-12-01T10:01:00+01:00" : timestamp)`
+* `("1448960460" : timestamp)`
+* `(1448960460 : timestamp)`
+
 There are also three types of collections: lists, sets and
 maps. Constants collections can be created directly:
 * Lists: `["x";"y"]`;
