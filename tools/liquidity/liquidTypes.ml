@@ -240,8 +240,8 @@ let () =
               ">>", Prim_lsr;
               "<<", Prim_lsl;
 
-              "|>", Prim_exec;
               "Lambda.pipe" , Prim_exec;
+              "|>", Prim_exec;
 
               "Coll.update", Prim_coll_update;
               "Coll.mem", Prim_coll_mem;

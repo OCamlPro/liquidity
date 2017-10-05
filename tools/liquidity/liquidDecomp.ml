@@ -13,9 +13,53 @@ let noloc = LiquidLoc.noloc
 
 let mk desc = { desc; ty = (); bv = StringSet.empty; fail = false }
 
+let const_name_of_datatype = function
+  | Tunit -> "u"
+  | Tbool -> "b"
+  | Tint -> "i"
+  | Tnat -> "n"
+  | Ttez -> "amount"
+  | Tstring -> "s"
+  | Ttimestamp -> "time"
+  | Tkey -> "key"
+  | Tsignature -> "sig"
+  | Ttuple _ -> "tuple"
+  | Toption _ -> "opt"
+  | Tlist _ -> "l"
+  | Tset _ -> "s"
+  | Tmap _ -> "map"
+  | Tcontract _ -> "contrat"
+  | Tor _ -> "or"
+  | Tlambda _ | Tclosure _  -> "fun"
+  | Tfail -> "fail"
+  | Ttype _ -> "ty"
+
+
 let rec var_of node =
   match node.kind with
   | N_VAR name -> name
+  | N_PRIM p -> Printf.sprintf "%s%d" (String.lowercase_ascii p) node.num
+  | N_IF _ -> Printf.sprintf "branch%d" node.num
+  | N_IF_THEN _ -> Printf.sprintf "then%d" node.num
+  | N_IF_ELSE _ -> Printf.sprintf "else%d" node.num
+  | N_IF_NIL _ -> Printf.sprintf "if_nil%d" node.num
+  | N_IF_CONS _ -> Printf.sprintf "if_cons%d" node.num
+  | N_IF_LEFT _ -> Printf.sprintf "if_left%d" node.num
+  | N_IF_RIGHT _ -> Printf.sprintf "if_right%d" node.num
+  | N_LEFT _ -> Printf.sprintf "left%d" node.num
+  | N_RIGHT _ -> Printf.sprintf "right%d" node.num
+  | N_TRANSFER _ -> Printf.sprintf "transfer%d" node.num
+  | N_TRANSFER_RESULT _ -> Printf.sprintf "transfer_res%d" node.num
+  | N_IF_RESULT _ | N_IF_END_RESULT _ | N_LOOP_RESULT _ ->
+    Printf.sprintf "res%d" node.num
+  | N_SOURCE _ -> Printf.sprintf "source%d" node.num
+  | N_FAIL -> Printf.sprintf "fail%d" node.num
+  | N_LOOP _ -> Printf.sprintf "loop%d" node.num
+  | N_LAMBDA _ -> Printf.sprintf "fun%d" node.num
+  | N_LAMBDA_BEGIN -> Printf.sprintf "arg%d" node.num
+  | N_LOOP_BEGIN _ ->  Printf.sprintf "loop_arg%d" node.num
+  | N_CONST (ty, _) ->
+    Printf.sprintf "%s%d" (const_name_of_datatype ty) node.num
   | _ -> Printf.sprintf "exp%d" node.num
 
 
