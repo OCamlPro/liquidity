@@ -66,6 +66,19 @@ let const_true = mk (Const (Tbool, CBool true)) Tbool false
 
 let const_false = mk (Const (Tbool, CBool false)) Tbool false
 
+let mk_untyped =
+  let bv = StringSet.empty in
+  fun desc -> { desc; ty = (); bv; fail = false }
+
+let untyped_int i =
+  mk_untyped (Const (Tint, CInt (LiquidPrinter.integer_of_int i)))
+
+let untyped_nil list_ty =
+  mk_untyped (Const (list_ty, CList []))
+
+let mk_untyped_tuple loc l =
+  mk_untyped (Apply (Prim_tuple, loc, l))
+
 let unused env ty =
   mk (Apply(Prim_unused, noloc env, [const_unit])) ty false
 
@@ -526,22 +539,31 @@ let rec loc_exp env e = match e.desc with
           mk (Apply (Prim_list_reduce, loc, args)) ty can_fail, can_fail, false
       end
 
-    | Apply (prim, loc, args) ->
-       let can_fail = ref false in
-       let args = List.map (fun arg ->
-                      let arg, fail, transfer = typecheck env arg in
-                      if transfer then
-                        error loc "transfer within prim args";
-                      if fail then can_fail := true;
-                      arg
-                    ) args in
-       let prim, ty = typecheck_prim1 env prim loc args in
-       let can_fail =
-         match prim with
-         | Prim_fail -> true
-         | _ -> !can_fail
-       in
-       mk (Apply (prim, loc, args)) ty can_fail, can_fail, false
+    | Apply (Prim_list_map, loc, [f; l]) ->
+      begin match is_closure env f with
+        | None -> typecheck_apply env Prim_list_map loc [f; l]
+        | Some ((arg_ty, _), ty_ret) ->
+          let arg_name = uniq_ident env "arg" in
+          let arg = mk_untyped (Var (arg_name, loc, [])) in
+          let x =
+            mk_untyped (Apply(Prim_tuple_get, loc, [arg; untyped_int 0])) in
+          let acc =
+            mk_untyped (Apply(Prim_tuple_get, loc, [arg; untyped_int 1])) in
+          let f_body = mk_untyped (Apply(Prim_Cons, loc, [
+              mk_untyped (Apply(Prim_exec, loc, [x; f]));
+              acc
+            ])) in
+          let f_red =
+            mk_untyped (Lambda (arg_name, Ttuple [arg_ty; Tlist arg_ty],
+                                loc, f_body, Tunit)) in
+          let red =
+            mk_untyped (Apply (Prim_list_reduce, loc,
+                               [f_red; l; untyped_nil (Tlist arg_ty)])) in
+          let rev_red = mk_untyped (Apply (Prim_list_rev, loc, [red])) in
+          typecheck env rev_red
+      end
+
+    | Apply (prim, loc, args) -> typecheck_apply env prim loc args
 
     | MatchOption (arg, loc, ifnone, name, ifsome) ->
        let arg, fail1, transfer1 = typecheck env arg in
@@ -1178,6 +1200,31 @@ let rec loc_exp env e = match e.desc with
                  ("Unexpected type for "^info) exp.ty expected_ty;
     exp, fail, transfer
 
+  and typecheck_apply env prim loc args =
+    let can_fail = ref false in
+    let args = List.map (fun arg ->
+        let arg, fail, transfer = typecheck env arg in
+        if transfer then
+          error loc "transfer within prim args";
+        if fail then can_fail := true;
+        arg
+      ) args in
+    let prim, ty = typecheck_prim1 env prim loc args in
+    let can_fail =
+      match prim with
+      | Prim_fail -> true
+      | _ -> !can_fail
+    in
+    mk (Apply (prim, loc, args)) ty can_fail, can_fail, false
+
+
+  (* FIXME ugly hack *)
+  and is_closure env exp =
+    match typecheck env exp with
+    | { ty = Tclosure ((ty_arg, ty_env), ty_ret) }, _, _ ->
+      Some ((ty_arg, ty_env), ty_ret)
+    | _ ->
+      None
 
 
 let typecheck_contract ~warnings env contract =
