@@ -304,6 +304,12 @@ let structure_of_contract contract =
                 Str.eval
                       (Exp.constant (Const.float output_version))
               ]);
+
+    Str.type_ Recursive [
+      Type.mk ~manifest:(convert_type contract.storage)
+        { txt = "storage"; loc = !default_loc }
+    ];
+
     Str.extension ( { txt = "entry"; loc = !default_loc },
                PStr    [
                      Str.value Nonrecursive
@@ -317,11 +323,11 @@ let structure_of_contract contract =
                       (Exp.fun_ Nolabel None
                                 (Pat.constraint_
                                    (Pat.var (loc "storage"))
-                                   (convert_type contract.storage)
+                                   (typ_constr "storage" [])
                                 )
                       (Exp.constraint_
-                         code (convert_type
-                                 (Ttuple [contract.return; contract.storage])))
+                         code (Typ.tuple [convert_type contract.return;
+                                          typ_constr "storage" []]))
                       ))
               ]
   ])]
