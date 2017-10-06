@@ -19,6 +19,19 @@ let rec bv code =
                      (StringSet.union (bv ifthen) (bv ifelse))
   | Seq (x, y) -> StringSet.union (bv x) (bv y)
   | Const (ty, cst) ->  StringSet.empty
+
+  | Apply (Prim_unknown, _,
+           ({ desc = Var (name, _, [])} :: args)) ->
+    let set =
+      try
+        LiquidTypes.primitive_of_string name |> ignore;
+        StringSet.empty
+      with Not_found -> StringSet.singleton name
+    in
+    List.fold_left (fun set arg ->
+        StringSet.union set (bv arg)
+      ) set args
+
   | Apply (prim, loc, args) ->
      List.fold_left (fun set arg ->
          StringSet.union set (bv arg)
@@ -114,6 +127,23 @@ let rec bound code =
 
   | Const (ty, cst) ->
      mk code.desc code StringSet.empty
+
+  | Apply (Prim_unknown, loc,
+           ({ desc = Var (name, varloc, [])} :: args)) ->
+    let args = List.map bound args in
+    let bv =
+      try
+        LiquidTypes.primitive_of_string name |> ignore;
+        StringSet.empty
+      with Not_found -> StringSet.singleton name
+    in
+    let v = mk (Var (name, varloc, [])) code bv in
+    let bv =
+      List.fold_left (fun set arg ->
+        StringSet.union set arg.bv
+        ) bv args
+    in
+    mk (Apply(Prim_unknown, loc, v :: args)) code bv
 
   | Apply (prim, loc, args) ->
      let args = List.map bound args in

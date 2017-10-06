@@ -62,6 +62,9 @@ let rec convert_const expr =
    | CSignature _|CLeft _|CRight _)
             *)
   | CTimestamp s -> Script_repr.String (0, s)
+  | CKey s -> Script_repr.String (0, s)
+  | CSignature s -> Script_repr.String (0, s)
+
   | _ ->
     LiquidLoc.raise_error "to-tezos: unimplemented const:\n%s%!"
       (LiquidPrinter.Michelson.string_of_const expr)
