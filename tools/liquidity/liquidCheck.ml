@@ -1371,16 +1371,11 @@ let check_const_type ~to_tez loc ty cst =
     | Ttez, CString s -> CTez (to_tez s)
 
     | Tkey, CKey s
-      | Tkey, CString s -> CKey s
-
-    | Ttimestamp, CInt { integer = s }
-    | Ttimestamp, CNat { integer = s } -> CTimestamp s
+    | Tkey, CString s -> CKey s
 
     | Ttimestamp, CString s
     | Ttimestamp, CTimestamp s ->
       begin (* approximation of correct tezos timestamp *)
-        try Scanf.sscanf s "%_d%!" ()
-        with _ ->
         try Scanf.sscanf s "%_d-%_d-%_dT%_d:%_d:%_dZ%!" ()
         with _ ->
         try Scanf.sscanf s "%_d-%_d-%_d %_d:%_d:%_dZ%!" ()
