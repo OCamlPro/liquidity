@@ -1,7 +1,7 @@
 
 (* sets *)
 
-[%%version 0.1]
+[%%version 0.11]
 
 let%entry main
       (parameter : string)

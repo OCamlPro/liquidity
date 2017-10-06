@@ -1,5 +1,5 @@
 
-[%%version 0.1]
+[%%version 0.11]
 
 let f ( arg : unit * int ) = arg.(0)
 

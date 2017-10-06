@@ -8,16 +8,14 @@
 (**************************************************************************)
 
 (* The version that will be required to compile the generated files. *)
-let output_version = "0.1"
+let output_version = "0.11"
 
 (*
+type storage = ...
 let contract
       (parameter : timestamp)
-      (storage: (string * timestamp * (tez * tez) *
-                   ( (unit,unit) contract *
-                       (unit, unit) contract *
-                         (unit, unit) contract)) )
-      [%return : unit] =
+      (storage: storage )
+      : unit * storage =
        ...
  *)
 

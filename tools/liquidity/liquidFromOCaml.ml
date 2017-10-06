@@ -81,10 +81,6 @@ let () =
 
 (* The minimal version of liquidity files that are accepted by this compiler *)
 let minimal_version = 0.1
-
-(* The maximal version of liquidity files that are accepted by this compiler *)
-let maximal_version = 0.1
-
 (*
 let contract
       (parameter : timestamp)
@@ -95,6 +91,18 @@ let contract
       [%return : unit] =
        ...
  *)
+
+(* The maximal version of liquidity files that are accepted by this compiler *)
+let maximal_version = 0.11
+(*
+type storage = ...
+let contract
+      (parameter : timestamp)
+      (storage: storage )
+      : unit * storage =
+       ...
+ *)
+
 
 open Asttypes
 open Longident
@@ -737,6 +745,16 @@ let rec translate_head env ext_funs head_exp args =
           "return type must be a product of some type and the storage type"
     in
     translate_head env ext_funs head_exp (("return", return) :: args)
+
+  | { pexp_desc =
+        Pexp_fun (
+            Nolabel, None,
+            { ppat_desc =
+                Ppat_extension ({ txt = "return"}, PTyp arg_type)
+            },
+            head_exp) } ->
+     translate_head env ext_funs head_exp
+       (("return", translate_type env arg_type) :: args)
 
   | { pexp_desc =
         Pexp_fun (

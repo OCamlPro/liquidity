@@ -1,7 +1,7 @@
 
 (* constants *)
 
-[%%version 0.1]
+[%%version 0.11]
 
 type storage =
         bool *
