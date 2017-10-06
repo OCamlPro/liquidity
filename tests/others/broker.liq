@@ -1,5 +1,5 @@
 
-[%%version 0.1]
+[%%version 0.11]
 
 type storage = {
   state : string;
@@ -13,7 +13,7 @@ type storage = {
 let%entry main
       (parameter : timestamp)
       (storage : storage)
-      [%return : unit] =
+      : unit * storage =
 
   if storage.state <> "open" then Current.fail ()
   else

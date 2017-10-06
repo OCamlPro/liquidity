@@ -1,18 +1,19 @@
 
 (* constants *)
 
-[%%version 0.1]
+[%%version 0.11]
 
-let%entry main
-      (parameter : bool)
-      (storage :
+type storage =
         bool *
         int option *
         (string,int) map *
         int set *
         int list
-      )
-      [%return : unit] =
+
+let%entry main
+      (parameter : bool)
+      (storage : storage)
+      : unit * storage =
 
 (* booleans *)
       let bool =

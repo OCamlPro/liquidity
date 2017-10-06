@@ -27,7 +27,7 @@ All the contracts have the following form:
 let%entry main
       (parameter : TYPE)
       (storage : TYPE)
-      [%return : TYPE] =
+      : TYPE =
       BODY
 ```
 
@@ -40,17 +40,17 @@ network.
 The `main` function is the default entry point for the contract.
 `let%entry` is the construct used to declare entry points (there is
 currently only one entry point, but there will be probably more in the
-future).  The declaration takes three parameters with names
-`parameter`, `storage` and `return`. The first two parameters,
-`parameter` and `storage` are arguments to the function, while the
-latest one, `return`, is only used to specified the return type of the
-function. The types of the three parameters must always be specified.
+future).  The declaration takes two parameters with names
+`parameter`, `storage`, the arguments to the function. Their types must
+always be specified. The return type of the function must also be
+specified by a type annotation.
 
 A contract always returns a pair `(return, storage)`, where `return`
 is the return value to the caller, and `storage` is the final state of
 the contract after the call. The type of the pair must match the type
-of a pair with the two parameters, `return` and `storage`, that were
-specified at the beginning of `main`.
+of a pair where the first component is the return type of the function
+specified in its signature and the second is the type of the argument
+`storage` of `main`.
 
 <... local declarations ...> is an optional set of optional type and
 function declarations. Type declarations can be used to define records
@@ -175,11 +175,11 @@ As in Michelson, there are different types of integers:
     a `tz` suffix (`1.00tz`, etc.) or as a string with type coercion
     (`("1.00" : tez)`).
 
-Timestamps are written in ISO 8601 format or integer seconds since epoch, the
-following are equivalent:
+Timestamps are written in ISO 8601 format, like in Michelson:
 * `("2015-12-01T10:01:00+01:00" : timestamp)`
-* `("1448960460" : timestamp)`
-* `(1448960460 : timestamp)`
+
+Keys and signatures constants are the same as the ones in Michelson:
+* `("tz1hxLtJnSYCVabeGio3M87Yp8ChLF9LFmCM" : key)`
 
 There are also three types of collections: lists, sets and
 maps. Constants collections can be created directly:

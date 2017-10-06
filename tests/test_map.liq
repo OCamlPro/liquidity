@@ -1,13 +1,13 @@
 (* List.map *)
 
-[%%version 0.1]
+[%%version 0.11]
 
 let succ (x : int) = x + 1
 
 let%entry main
       (parameter : int)
       (storage : int list)
-      [%return : unit] =
+      : unit * int list =
   let l = List.map succ storage in
   ( (), l)
 

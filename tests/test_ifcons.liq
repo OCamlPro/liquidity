@@ -1,12 +1,12 @@
 
 (* lists *)
 
-[%%version 0.1]
+[%%version 0.11]
 
 let%entry main
       (parameter : string)
       (storage : string list)
-      [%return : unit] =
+      : unit * string list =
       
       let a = "1" in
       let set = ([] : string list) in

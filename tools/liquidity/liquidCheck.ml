@@ -134,23 +134,23 @@ let find_var ?(count_used=true) env loc name =
       error loc "unbound variable %S" name
 
 (* Create environment for closure *)
-let env_for_clos env loc arg_name arg_type =
-  let free_vars = match env.clos_env with
-    | Some ce ->
-      StringMap.map
-        (fun (bname, btype, index, (cpt_in, cpt_out)) ->
-           (bname, btype, index + 1, (cpt_in, cpt_out)))
-        ce.env_vars
-    | None -> StringMap.empty
-  in
-  let _, free_vars =
-    StringMap.fold (fun n (bname, btype, count) (index, free_vars) ->
-      match btype with
-      | Tlambda _ -> (index, free_vars)
-      | _ ->
+let env_for_clos env loc bvs arg_name arg_type =
+  let _, free_vars = StringSet.fold (fun v (index, free_vars) ->
+      try
         let index = index + 1 in
-        (index, StringMap.add n (bname, btype, index, (ref 0, count)) free_vars)
-    ) env.vars (StringMap.cardinal free_vars, free_vars)
+        match env.clos_env with
+        | None ->
+          let (bname, btype, cpt_out) = StringMap.find v env.vars in
+          (index,
+           StringMap.add v (bname, btype, index, (ref 0, cpt_out)) free_vars)
+        | Some ce ->
+          let bname, btype, _, (cpt_in, cpt_out) =
+            StringMap.find v ce.env_vars in
+          (index,
+           StringMap.add v (bname, btype, index, (cpt_in, cpt_out)) free_vars)
+      with Not_found ->
+        (index, free_vars)
+    ) bvs (0, StringMap.empty)
   in
   let free_vars_l =
     StringMap.bindings free_vars
@@ -737,47 +737,46 @@ let rec loc_exp env e = match e.desc with
        assert (res_type = Tunit);
        (* let env = { env with vars = StringMap.empty } in *)
        (* let (arg_name, env, arg_count) = new_binding env arg_name arg_type in *)
-       let env, arg_name, arg_type, call_env =
-         env_for_clos env loc arg_name arg_type in
-       let body, _fail, transfer = typecheck env body in
-       if transfer then
-         error loc "no transfer in lambda";
-       let is_real_closure = match env.clos_env with
-         | None -> false
-         | Some clos_env ->
-           StringMap.exists (fun name (_, (cpt_in, _)) ->
-               !cpt_in <> 0 && name <> lambda_arg_name
-             ) clos_env.env_bindings
-       in
-       (* begin match env.clos_env with *)
-       (*   | None -> () *)
-       (*   | Some clos_env -> *)
-       (*     Format.eprintf "--- Closure %s (real:%b)---@." arg_name is_real_closure; *)
-       (*     StringMap.iter (fun name (e, (cpt_in, cpt_out)) -> *)
-       (*         Format.eprintf "%s -> %s , (%d, %d)@." *)
-       (*           name (LiquidPrinter.Liquid.string_of_code e) !cpt_in !cpt_out *)
-       (*       ) clos_env.env_bindings *)
-       (* end; *)
-       if not is_real_closure then
-         (* recreate lambda from scratch *)
+       let bvs = LiquidBoundVariables.bv exp in
+       if StringSet.is_empty bvs then
+         (* not a closure, create a real lambda *)
          let env = { env_at_lambda with vars = StringMap.empty } in
          let (new_arg_name, env, arg_count) =
            new_binding env lambda_arg_name lambda_arg_type in
          let body, _fail, transfer = typecheck env lambda_body in
+         if transfer then
+           error loc "no transfer in lambda";
          check_used env lambda_arg_name loc arg_count;
          let desc =
            Lambda (new_arg_name, lambda_arg_type, loc, body, body.ty) in
          let ty = Tlambda (lambda_arg_type, body.ty) in
          mk desc ty false, false, false
-       else begin
+       else
+         (* create closure with environment *)
+         let env, arg_name, arg_type, call_env =
+           env_for_clos env loc bvs arg_name arg_type in
+         let body, _fail, transfer = typecheck env body in
+         if transfer then
+           error loc "no transfer in closure";
+         (* begin match env.clos_env with *)
+         (*   | None -> () *)
+         (*   | Some clos_env -> *)
+         (*     Format.eprintf "--- Closure %s (real:%b)---@." arg_name is_real_closure; *)
+         (*     StringMap.iter (fun name (e, (cpt_in, cpt_out)) -> *)
+         (*         Format.eprintf "%s -> %s , (%d, %d)@." *)
+         (*           name (LiquidPrinter.Liquid.string_of_code e) !cpt_in !cpt_out *)
+         (*       ) clos_env.env_bindings *)
+         (* end; *)
          check_used_in_env env lambda_arg_name loc;
          let desc =
            Closure (arg_name, arg_type, loc, call_env, body, body.ty) in
-         let call_env_type =
-           Ttuple (List.map (fun (_, t) -> t.ty) call_env) in
+         let call_env_type = match call_env with
+           | [] -> assert false
+           | [_, t] -> t.ty
+           | _ -> Ttuple (List.map (fun (_, t) -> t.ty) call_env)
+         in
          let ty = Tclosure ((lambda_arg_type, call_env_type), body.ty) in
          mk desc ty false, false, false
-       end
 
     | Closure _ -> assert false
 
@@ -792,7 +791,7 @@ let rec loc_exp env e = match e.desc with
        let record_ty, ty_kind = StringMap.find ty_name env.env.types in
        let len = List.length (match ty_kind with
                               | Type_record (tys,_labels) -> tys
-                              | Type_variant _ -> assert false) in
+                              | Type_variant _ | Type_alias -> assert false) in
        let t = Array.make len None in
        let record_can_fail = ref false in
        List.iteri (fun i (label, exp) ->
@@ -828,7 +827,7 @@ let rec loc_exp env e = match e.desc with
        let constr_ty, ty_kind = StringMap.find ty_name env.env.types in
        let exp =
          match ty_kind with
-         | Type_record _ -> assert false
+         | Type_record _ | Type_alias -> assert false
          | Type_variant constrs ->
             let rec iter constrs =
               match constrs with
@@ -919,7 +918,7 @@ let rec loc_exp env e = match e.desc with
                 let constr_ty, ty_kind = StringMap.find ty_name env.env.types in
                 match ty_kind with
                 | Type_variant constrs -> (ty_name, constrs)
-                | Type_record _ -> raise Not_found
+                | Type_record _ | Type_alias -> raise Not_found
               end
            | _ -> raise Not_found
          with Not_found ->
@@ -1331,10 +1330,10 @@ let typecheck_contract ~warnings env contract =
   (* "parameter/2" *)
   let (_, env, _) = new_binding env "parameter" contract.parameter in
 
-  let expected_ty = Ttuple [ contract.return; contract.storage ] in
+  let expected_ty = Ttuple [contract.return; contract.storage] in
 
   let code, _can_fail, _transfer =
-    typecheck_expected "final value" env expected_ty contract.code in
+    typecheck_expected "return value" env expected_ty contract.code in
   { contract with code }, ! (env.to_inline)
 
 let typecheck_code ~warnings env contract expected_ty code =
@@ -1372,16 +1371,11 @@ let check_const_type ~to_tez loc ty cst =
     | Ttez, CString s -> CTez (to_tez s)
 
     | Tkey, CKey s
-      | Tkey, CString s -> CKey s
-
-    | Ttimestamp, CInt { integer = s }
-    | Ttimestamp, CNat { integer = s } -> CTimestamp s
+    | Tkey, CString s -> CKey s
 
     | Ttimestamp, CString s
     | Ttimestamp, CTimestamp s ->
       begin (* approximation of correct tezos timestamp *)
-        try Scanf.sscanf s "%_d%!" ()
-        with _ ->
         try Scanf.sscanf s "%_d-%_d-%_dT%_d:%_d:%_dZ%!" ()
         with _ ->
         try Scanf.sscanf s "%_d-%_d-%_d %_d:%_d:%_dZ%!" ()

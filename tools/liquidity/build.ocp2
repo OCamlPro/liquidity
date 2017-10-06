@@ -64,7 +64,6 @@ OCaml.library("ocplib-liquidity",
 
 OCaml.library("ocplib-liquidity-ocaml",
    ocaml + {
-     version = version;
      files = [
        "ocaml/liquidOCamlParser.mly";
        "ocaml/liquidOCamlLexer.mll";

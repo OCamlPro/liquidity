@@ -8,16 +8,14 @@
 (**************************************************************************)
 
 (* The version that will be required to compile the generated files. *)
-let output_version = "0.1"
+let output_version = "0.11"
 
 (*
+type storage = ...
 let contract
       (parameter : timestamp)
-      (storage: (string * timestamp * (tez * tez) *
-                   ( (unit,unit) contract *
-                       (unit, unit) contract *
-                         (unit, unit) contract)) )
-      [%return : unit] =
+      (storage: storage )
+      : unit * storage =
        ...
  *)
 
@@ -304,6 +302,12 @@ let structure_of_contract contract =
                 Str.eval
                       (Exp.constant (Const.float output_version))
               ]);
+
+    Str.type_ Recursive [
+      Type.mk ~manifest:(convert_type contract.storage)
+        { txt = "storage"; loc = !default_loc }
+    ];
+
     Str.extension ( { txt = "entry"; loc = !default_loc },
                PStr    [
                      Str.value Nonrecursive
@@ -317,14 +321,12 @@ let structure_of_contract contract =
                       (Exp.fun_ Nolabel None
                                 (Pat.constraint_
                                    (Pat.var (loc "storage"))
-                                   (convert_type contract.storage)
+                                   (typ_constr "storage" [])
                                 )
-                      (Exp.fun_ Nolabel None
-                                (Pat.extension
-                                   (loc "return",
-                                   PTyp (convert_type contract.return))
-                                )
-                                code)))
+                      (Exp.constraint_
+                         code (Typ.tuple [convert_type contract.return;
+                                          typ_constr "storage" []]))
+                      ))
               ]
   ])]
 

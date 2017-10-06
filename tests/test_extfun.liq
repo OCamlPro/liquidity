@@ -1,11 +1,11 @@
 
-[%%version 0.1]
+[%%version 0.11]
 
 let f ( arg : unit * int ) = arg.(0)
 
 let%entry main
       (parameter : int)
       (storage : unit)
-      [%return : unit] =
+      : unit * unit =
   let storage = f (storage, parameter) in
   ( (), storage )

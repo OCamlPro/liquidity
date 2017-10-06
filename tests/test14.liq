@@ -1,12 +1,12 @@
 
 (* loops *)
 
-[%%version 0.1]
+[%%version 0.11]
 
 let%entry main
       (parameter : int)
       (storage : int set)
-      [%return : unit] =
+      : unit * int set =
 
       let x =
         Loop.loop (fun x ->
