@@ -6,7 +6,7 @@
 let%entry main
       (parameter : string)
       (storage : string)
-      [%return : unit] =
+      : unit =
       
 (* options *)
       let storage = if parameter = "" then

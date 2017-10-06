@@ -9,7 +9,7 @@ let%entry main
                        (unit,unit) contract * (* 3: X *)
                          (unit,unit) contract * (* 4: A *)
                            (unit,unit) contract)  (* 5: B *)
-      [%return : unit ] =
+      : unit  =
    let pn = get storage 2 in
    let storage = set storage 2 pn in
    ( (), storage )

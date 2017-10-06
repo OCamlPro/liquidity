@@ -12,7 +12,7 @@ let%entry main
         int set *
         int list
       )
-      [%return : unit] =
+      : unit =
 
 (* booleans *)
       let bool =

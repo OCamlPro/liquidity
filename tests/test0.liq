@@ -9,5 +9,5 @@ let%entry main
                        (unit,unit) contract * (* 3: X *)
                          (unit,unit) contract * (* 4: A *)
                            (unit,unit) contract)  (* 5: B *)
-      [%return : unit] =
+      : unit =
    ( (), storage )

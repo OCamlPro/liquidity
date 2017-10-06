@@ -1,7 +1,7 @@
 let%entry main
   (parameter : int option)
   (storage : unit)
-  [%return : int] =
+  : int =
 
   let x = match parameter with
     | None -> 1

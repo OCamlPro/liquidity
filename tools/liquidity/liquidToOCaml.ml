@@ -319,12 +319,10 @@ let structure_of_contract contract =
                                    (Pat.var (loc "storage"))
                                    (convert_type contract.storage)
                                 )
-                      (Exp.fun_ Nolabel None
-                                (Pat.extension
-                                   (loc "return",
-                                   PTyp (convert_type contract.return))
-                                )
-                                code)))
+                      (Exp.constraint_
+                         code
+                         (convert_type contract.return))
+                      ))
               ]
   ])]
 

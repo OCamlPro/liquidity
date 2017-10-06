@@ -4,7 +4,7 @@
 let%entry main
       (parameter : int)
       (storage : int)
-      [%return : unit] =
+      : unit =
   let x = parameter + 10 in
   let f = fun ( arg : int * int ) ->
     arg.(1) + x

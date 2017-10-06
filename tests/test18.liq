@@ -2,7 +2,7 @@
 let%entry main
       (parameter : int)
       (storage : nat)
-      [%return : int] =
+      : int =
 
   match int storage / parameter with
   | None -> ( 0, 0p)

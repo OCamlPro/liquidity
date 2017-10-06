@@ -5,6 +5,6 @@
 let%entry main
       (parameter : int)
       (storage : int list)
-      [%return : unit] =
+      : unit =
   let l = List.rev storage in
   ( (), l )

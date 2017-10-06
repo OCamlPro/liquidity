@@ -11,7 +11,7 @@ type storage = {
 let%entry main
     (parameter : key)
     (storage : storage)
-    [%return : unit] =
+    : unit =
 
   (* Check if auction has ended *)
   if Current.time () > storage.auction_end then Current.fail ();

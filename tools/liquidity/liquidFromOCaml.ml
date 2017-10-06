@@ -721,17 +721,11 @@ let rec translate_head env ext_funs head_exp args =
             },
             head_exp) } ->
      translate_head env ext_funs head_exp
-                    ((arg, translate_type env arg_type) :: args)
+       ((arg, translate_type env arg_type) :: args)
 
-  | { pexp_desc =
-        Pexp_fun (
-            Nolabel, None,
-            { ppat_desc =
-                Ppat_extension ({ txt = "return"}, PTyp arg_type)
-            },
-            head_exp) } ->
-     translate_head env ext_funs head_exp
-                    (("return", translate_type env arg_type) :: args)
+  | { pexp_desc = Pexp_constraint (head_exp, return_type) } ->
+    translate_head env ext_funs head_exp
+      (("return", translate_type env return_type) :: args)
 
   | { pexp_desc =
         Pexp_fun (

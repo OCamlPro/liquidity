@@ -4,7 +4,7 @@
 let%entry main
   (parameter : string)
   (storage : (string, int) map)
-  [%return : unit] =
+  : unit =
 
   let amount = Current.amount() in
 
