@@ -6,7 +6,7 @@
 let%entry main
       (parameter : int)
       (storage : int set)
-      : unit =
+      : unit * int set =
 
       let x =
         Loop.loop (fun x ->

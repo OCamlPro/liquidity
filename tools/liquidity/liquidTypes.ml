@@ -424,6 +424,7 @@ type pre_michelson =
   | DIV
 
 type type_kind =
+  | Type_alias
   | Type_record of datatype list * int StringMap.t
   | Type_variant of
       (string

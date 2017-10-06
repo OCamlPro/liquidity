@@ -5,7 +5,7 @@
 let%entry main
       (parameter : int)
       (storage : int list)
-      : unit =
+      : unit * int list =
   let add_param (x : int) = x + parameter in
   let l = List.map add_param storage in
   ( (), l )

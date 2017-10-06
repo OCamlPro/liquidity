@@ -2,7 +2,7 @@
 let%entry main
       (parameter : int)
       (storage : unit)
-      : unit =
+      : unit * unit =
   let f = fun ( arg : unit * int ) ->
     arg.(0)
   in

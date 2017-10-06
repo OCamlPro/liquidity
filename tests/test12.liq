@@ -6,8 +6,8 @@
 let%entry main
       (parameter : string)
       (storage : string set)
-      : unit =
-      
+      : unit * string set =
+
       let set = (Set : string set) in
       let set = Set.update "a" true set in
       let set = Set.update "b" true set in

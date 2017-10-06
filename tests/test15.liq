@@ -12,7 +12,7 @@ type storage = {
 let%entry main
       (parameter : int)
       (storage : storage)
-      : unit =
+      : unit * storage =
 
       let storage = storage.v.dest.z <- parameter in
       let storage = storage.v.orig <- { x="0"; y=true; z = parameter } in

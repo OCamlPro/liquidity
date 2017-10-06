@@ -2,7 +2,7 @@
 let%entry main
       (parameter : int)
       (storage : int)
-      : unit =
+      : unit * int =
   let a = (Left 3 : (_, string) variant) in
   let b = (Right a : (int, _) variant) in
 

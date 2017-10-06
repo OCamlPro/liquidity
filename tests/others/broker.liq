@@ -13,7 +13,7 @@ type storage = {
 let%entry main
       (parameter : timestamp)
       (storage : storage)
-      : unit =
+      : unit * storage =
 
   if storage.state <> "open" then Current.fail ()
   else

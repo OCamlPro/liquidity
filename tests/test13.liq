@@ -6,7 +6,7 @@
 let%entry main
       (parameter : string)
       (storage : string list)
-      : unit =
+      : unit * string list =
       
       let set = ([] : string list) in
       let set = "a" :: set in

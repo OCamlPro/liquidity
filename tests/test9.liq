@@ -3,16 +3,16 @@
 
 [%%version 0.1]
 
+type storage = bool *
+               int option *
+               (string,int) map *
+               int set *
+               int list
+
 let%entry main
       (parameter : bool)
-      (storage :
-        bool *
-        int option *
-        (string,int) map *
-        int set *
-        int list
-      )
-      : unit =
+      (storage : storage)
+      : unit * storage =
 
 (* booleans *)
       let bool =

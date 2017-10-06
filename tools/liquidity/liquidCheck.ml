@@ -791,7 +791,7 @@ let rec loc_exp env e = match e.desc with
        let record_ty, ty_kind = StringMap.find ty_name env.env.types in
        let len = List.length (match ty_kind with
                               | Type_record (tys,_labels) -> tys
-                              | Type_variant _ -> assert false) in
+                              | Type_variant _ | Type_alias -> assert false) in
        let t = Array.make len None in
        let record_can_fail = ref false in
        List.iteri (fun i (label, exp) ->
@@ -827,7 +827,7 @@ let rec loc_exp env e = match e.desc with
        let constr_ty, ty_kind = StringMap.find ty_name env.env.types in
        let exp =
          match ty_kind with
-         | Type_record _ -> assert false
+         | Type_record _ | Type_alias -> assert false
          | Type_variant constrs ->
             let rec iter constrs =
               match constrs with
@@ -918,7 +918,7 @@ let rec loc_exp env e = match e.desc with
                 let constr_ty, ty_kind = StringMap.find ty_name env.env.types in
                 match ty_kind with
                 | Type_variant constrs -> (ty_name, constrs)
-                | Type_record _ -> raise Not_found
+                | Type_record _ | Type_alias -> raise Not_found
               end
            | _ -> raise Not_found
          with Not_found ->
@@ -1330,10 +1330,10 @@ let typecheck_contract ~warnings env contract =
   (* "parameter/2" *)
   let (_, env, _) = new_binding env "parameter" contract.parameter in
 
-  let expected_ty = Ttuple [ contract.return; contract.storage ] in
+  let expected_ty = Ttuple [contract.return; contract.storage] in
 
   let code, _can_fail, _transfer =
-    typecheck_expected "final value" env expected_ty contract.code in
+    typecheck_expected "return value" env expected_ty contract.code in
   { contract with code }, ! (env.to_inline)
 
 let typecheck_code ~warnings env contract expected_ty code =

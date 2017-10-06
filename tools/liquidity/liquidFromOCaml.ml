@@ -118,7 +118,7 @@ let loc_of_loc loc =
 let ppf = Format.err_formatter
 
 let default_args = [
-    "return", Tunit;
+    "return_storage", Tunit;
     "storage", Tunit;
     "parameter", Tunit;
   ]
@@ -184,8 +184,9 @@ let rec translate_type env typ =
   | { ptyp_desc = Ptyp_constr ({ txt = Lident ty_name }, []) } ->
      begin
        try
-         let ty,_ = StringMap.find ty_name env.types in
-         Ttype (ty_name, ty)
+         match StringMap.find ty_name env.types with
+         | ty, Type_alias -> ty
+         | ty, _ -> Ttype (ty_name, ty)
        with Not_found ->
          unbound_type typ.ptyp_loc ty_name
      end
@@ -723,9 +724,19 @@ let rec translate_head env ext_funs head_exp args =
      translate_head env ext_funs head_exp
        ((arg, translate_type env arg_type) :: args)
 
-  | { pexp_desc = Pexp_constraint (head_exp, return_type) } ->
-    translate_head env ext_funs head_exp
-      (("return", translate_type env return_type) :: args)
+  | { pexp_desc = Pexp_constraint (head_exp, return_type); pexp_loc } ->
+    let return = match translate_type env return_type with
+      | Ttuple [ ret_ty; sto_ty ] ->
+        let storage = List.assoc "storage" args in
+        if sto_ty <> storage then
+          error_loc pexp_loc
+            "Second component of return type must be identical to storage type";
+        ret_ty
+      | _ ->
+        error_loc pexp_loc
+          "return type must be a product of some type and the storage type"
+    in
+    translate_head env ext_funs head_exp (("return", return) :: args)
 
   | { pexp_desc =
         Pexp_fun (
@@ -871,6 +882,23 @@ let rec translate_structure funs env ast =
         translate_variant ty_name constrs env;
      end;
      translate_structure funs env ast
+
+  (* type alias *)
+  | { pstr_desc = Pstr_type (Recursive,
+                             [
+                               { ptype_name = { txt = ty_name };
+                                 ptype_params = [];
+                                 ptype_cstrs = [];
+                                 ptype_private = Public;
+                                 ptype_manifest = Some ct;
+                                 ptype_attributes = [];
+                                 ptype_loc;
+                                 ptype_kind;
+                               }
+    ]) } :: ast ->
+    let ty = translate_type env ct in
+    env.types <- StringMap.add ty_name (ty, Type_alias) env.types;
+    translate_structure funs env ast
 
   | [] ->
     Location.raise_errorf "No entry point found in file %S%!" env.filename

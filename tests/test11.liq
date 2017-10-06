@@ -6,13 +6,13 @@
 let%entry main
       (parameter : string)
       (storage : string)
-      : unit =
-      
+      : unit * string =
+
 (* options *)
       let storage = if parameter = "" then
            storage
         else
            storage @ parameter
-       in   
+       in
 
       ( (), storage )

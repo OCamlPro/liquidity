@@ -5,7 +5,7 @@
 let%entry main
     (parameter : int list)
     (storage : int)
-    : unit =
+    : unit * int =
 
   let c = 1 in
 

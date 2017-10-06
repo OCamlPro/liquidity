@@ -320,8 +320,8 @@ let structure_of_contract contract =
                                    (convert_type contract.storage)
                                 )
                       (Exp.constraint_
-                         code
-                         (convert_type contract.return))
+                         code (convert_type
+                                 (Ttuple [contract.return; contract.storage])))
                       ))
               ]
   ])]

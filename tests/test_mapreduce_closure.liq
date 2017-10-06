@@ -1,7 +1,7 @@
 let%entry main
   (parameter : string)
   (storage : (string, tez) map)
-  : bool =
+  : bool * (string, tez) map =
 
   let amount = Current.amount() in
   let f (arg: (string * tez) * bool) =
