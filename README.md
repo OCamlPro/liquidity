@@ -29,6 +29,15 @@ The Liquidity language provides the following features:
 * High-level types: types like sum-types and record-types can be defined
   and used in Liquidity programs.
 
+Branches
+--------
+
+The `master` branch contains the latest stable release. The `next`
+branch contains the upcoming version: the language on the `next`
+branch is for experimentation, and features may be modified before the
+next release.
+
+
 Documentation
 -------------
 
