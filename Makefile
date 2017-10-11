@@ -14,18 +14,7 @@ _obuild: Makefile
 	ocp-build init
 
 clean-tests:
-	rm -f tests/*.liq.tz \
-		tests/*.liq.debug \
-		tests/*.liq.tz.liq \
-		tests/*.pdf \
-		tests/*.dot \
-		tests/*.syntax \
-		tests/*.typed \
-		tests/*.mic \
-		tests/*.normal \
-		tests/*.pre \
-		tests/others/*.*.*
-	rm -f *~ tests/*~ tests/others/*~
+	$(MAKE) -C tests clean
 
 clean-sources:
 	rm -f tools/*/*~ libs/*/*~

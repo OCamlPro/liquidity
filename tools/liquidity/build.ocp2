@@ -86,6 +86,10 @@ OCaml.program("ocp-liquidity-comp",
     requires = [ "ocplib-liquidity-ocaml" ];
     files = [
        "ocaml/liquidOCamlPparse.ml";
+
+       "ocaml/liquidOCamlTranslate.ml";
+       
+
        "ocaml/liquidOCamlCompile.ml";
        "ocaml/liquidOCamlMain.ml";
     ];

@@ -1,3 +1,15 @@
+(**************************************************************************)
+(*                                                                        *)
+(*    Copyright (c) 2017       .                                          *)
+(*    Fabrice Le Fessant, OCamlPro SAS <fabrice@lefessant.net>            *)
+(*                                                                        *)
+(*    All rights reserved. No warranty, explicit or implicit, provided.   *)
+(*                                                                        *)
+(**************************************************************************)
+
+(* This module is completely unsafe: it can only by used to execute a
+file that has been correctly typechecked by the `liquidity`
+typechecker.  *)
 
 type timestamp = string
 type kind = Tez | Int
@@ -6,7 +18,7 @@ type tez = integer
 type nat = integer
 type key
 
-type ('arg, 'res) contract = Contract of 'arg * 'res
+type ('arg, 'res) contract
 
 module Tez : sig
 
@@ -45,6 +57,9 @@ module Current : sig
   val fail : unit -> 'a
   val time : unit -> timestamp
   val balance : unit -> tez
+  val gas : unit -> tez (* NOT TESTED *)
+  val contract : unit -> ('a,'b) contract (* unsafe, NOT TESTED *)
+  val source : unit -> ('a,'b) contract (* NOT TESTED *)
 
 end = struct
 
@@ -52,7 +67,9 @@ end = struct
   let fail () = assert false    (* TODO *)
   let time () = assert false    (* TODO *)
   let balance () = assert false (* TODO *)
-
+  let gas () = assert false
+  let contract () = assert false
+  let source () = assert false
 end
 
 
@@ -80,7 +97,8 @@ end
 module Map : sig
 
   type ('key, 'value) map
-  val empty : int -> ('key,'value) map
+
+  val empty : unit -> ('key,'value) map
   val make : ('key * 'value) list -> ('key, 'value) map
   val reduce : ( ('key * 'value) * 'acc -> 'acc) ->
                ('key,'value) map -> 'acc -> 'acc
@@ -93,6 +111,9 @@ module Map : sig
 
   val update : 'key -> 'value option  -> ('key, 'value) map ->
                ('key, 'value) map
+
+  val mem : 'key -> ('key, 'value) map -> bool (* NOT TESTED *)
+  val size : ('key, 'value) map -> int
 
 end = struct
 
@@ -137,6 +158,8 @@ end = struct
     with Not_found -> None
 
   let update key value map = assert false (* TODO *)
+  let mem key map = assert false (* TODO, NOT TESTED *)
+  let size map = ObjMap.cardinal (Obj.magic map)
 
 end
 include Array (* Remove ? *)
@@ -147,12 +170,14 @@ type ('key,'value) map = ('key,'value) Map.map
 module Set : sig
 
   type 'key set
-  val empty : int -> 'key set
+  val empty : unit -> 'key set
   val make : 'key list -> 'key set
   val update : 'key -> bool -> 'key set -> 'key set
   val mem : 'key -> 'key set -> bool
   val reduce : ( 'key * 'acc -> 'acc) ->
                'key set -> 'acc -> 'acc
+  val map : ('key -> 'res) -> 'key set -> 'res set
+  val size : 'key set -> int
 
 end = struct
 
@@ -197,6 +222,9 @@ end = struct
     in
     Obj.magic acc
 
+  let map f set = assert false (* TODO, NOT TESTED *)
+  let size set = ObjSet.cardinal (Obj.magic set)
+
 end
 
 type 'key set = 'key Set.set
@@ -227,6 +255,16 @@ let (/) (x,xu) (y,yu) =
     Some ((q,qu), (r,ru))
   with _ -> None
 
+let ( * ) (x,xu) (y,yu) = (* NOT TESTED *)
+  let u =
+    match xu, yu with
+    | Int, Int -> Int
+    | Tez, Int
+      | Int, Tez -> Tez
+    | _ -> assert false
+  in
+  Z.mul x y, u
+
 
 module Lambda : sig
   val pipe : 'a -> ('a -> 'b) -> 'b
@@ -250,10 +288,15 @@ module Contract : sig
   val call : ('arg, 'res) contract -> tez -> 'storage -> 'arg ->
              'res * 'storage
 
+  val manager : unit -> unit (* TODO TYPE *)
+  val create : unit -> unit (* TODO TYPE *)
+
+
 end = struct
 
-  let call contract amount storage arg =
-    assert false (* TODO *)
+  let call contract amount storage arg = assert false (* TODO *)
+  let manager () = assert false (* TODO *)
+  let create () = assert false (* TODO *)
 
 end
 
@@ -264,6 +307,7 @@ module List : sig
   val reduce : ('a * 'b -> 'b) -> 'a list -> 'b -> 'b
   val map : ('a -> 'b) -> 'a list -> 'b list
   val rev : 'a list -> 'a list
+  val size : 'a list -> int
 
 end = struct
 
@@ -275,11 +319,22 @@ end = struct
 
   let map = List.map
   let rev = List.rev
+  let size list = Z.of_int (List.length list), Int
 
 end
 
 module Account : sig
+  val create : unit -> unit (* TODO TYPE *)
   val default : key -> (unit,unit) contract
 end = struct
+  let create () = assert false (* TODO NOT TESTED *)
   let default _ = assert false (* TODO *)
+end
+
+module Crypto : sig
+  val hash : unit -> unit (* TODO TYPE *)
+  val check : unit -> unit (* TODO TYPE *)
+end = struct
+  let hash () = assert false (*TODO *)
+  let check () = assert false (* TODO *)
 end
