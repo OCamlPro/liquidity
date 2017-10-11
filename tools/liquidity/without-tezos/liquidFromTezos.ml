@@ -10,7 +10,7 @@
 open LiquidTypes
 
 
-let convert_contract string = assert false
+let convert_contract loc_table string = assert false
 
        (*
 open Client_proto_programs

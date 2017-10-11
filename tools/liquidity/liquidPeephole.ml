@@ -10,8 +10,8 @@
 open LiquidTypes
 
 
-let string_of_pre pre =
-  LiquidPrinter.Michelson.string_of_code (LiquidEmit.emit_code (SEQ pre))
+(* let string_of_pre pre = *)
+(*   LiquidPrinter.Michelson.string_of_code (LiquidEmit.emit_code (SEQ pre)) *)
 
 (* Try to simplify Michelson with peepholes optims: mostly, move
    DIP_DROPs backwards to decrease the size of the stack. *)

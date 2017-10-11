@@ -57,7 +57,7 @@ let rec emit_code code =
   | BALANCE -> M_INS "BALANCE"
   | SWAP -> M_INS "SWAP"
   | DIP_DROP (n,m) ->
-     emit_code (DIP (n, SEQ (LiquidMisc.list_init m (fun _ -> DROP))))
+    emit_code (DIP (n, SEQ (LiquidMisc.list_init m (fun _ -> DROP))))
   | SOME -> M_INS "SOME"
   | GET -> M_INS "GET"
   | UPDATE -> M_INS "UPDATE"

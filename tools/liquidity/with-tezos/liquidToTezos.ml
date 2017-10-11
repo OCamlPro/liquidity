@@ -237,16 +237,16 @@ let get_context () =
 let read_tezos_file filename =
   let s = FileString.read_file filename in
   let contract_hash = Hash.Operation_hash.hash_bytes [s] in
-  match LiquidFromTezos.contract_of_string s with
-  | Some code ->
+  match LiquidFromTezos.contract_of_string filename s with
+  | Some (code, loc_table) ->
      Printf.eprintf "Program %S parsed\n%!" filename;
-     code, contract_hash
+     code, contract_hash, loc_table
   | None ->
      Printf.eprintf "Errors parsing in %S\n%!" filename;
      exit 2
 
 let execute_contract_file filename =
-  let contract, contract_hash = read_tezos_file filename in
+  let contract, contract_hash, _ = read_tezos_file filename in
 
   let origination = Contract.initial_origination_nonce contract_hash in
   let destination = Contract.originated_contract origination in

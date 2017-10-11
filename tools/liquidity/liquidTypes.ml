@@ -73,7 +73,7 @@ type 'exp contract = {
 
 type location = {
     loc_file : string;
-    loc_pos : ( (int * int) * (int*int) ) option;
+    loc_pos : ((int * int) * (int * int)) option;
   }
 
 type error = { err_loc: location; err_msg: string }
@@ -349,16 +349,16 @@ type michelson_exp =
   | M_INS_CST of string * datatype * const
   | M_INS_EXP of string * datatype list * michelson_exp list
 
-type pre_michelson =
-  | SEQ of pre_michelson list
-  | DIP of int * pre_michelson
-  | IF of pre_michelson * pre_michelson
-  | IF_NONE of pre_michelson * pre_michelson
-  | IF_CONS of pre_michelson * pre_michelson
-  | IF_LEFT of pre_michelson * pre_michelson
-  | LOOP of pre_michelson
+type 'a pre_michelson =
+  | SEQ of 'a list
+  | DIP of int * 'a
+  | IF of 'a * 'a
+  | IF_NONE of 'a * 'a
+  | IF_CONS of 'a * 'a
+  | IF_LEFT of 'a * 'a
+  | LOOP of 'a
 
-  | LAMBDA of datatype * datatype * pre_michelson
+  | LAMBDA of datatype * datatype * 'a
   | EXEC
 
   | DUP of int
@@ -423,6 +423,16 @@ type pre_michelson =
   | MOD
   | DIV
 
+type noloc_michelson = noloc_michelson pre_michelson
+
+type loc_michelson = {
+  loc : location;
+  ins : loc_michelson pre_michelson;
+}
+
+let mic ins = ins
+let mic_loc loc ins = { loc; ins }
+
 type type_kind =
   | Type_alias
   | Type_record of datatype list * int StringMap.t
@@ -474,13 +484,14 @@ type 'a typecheck_env = {
 (* decompilation *)
 
 type node = {
-    num : int;
-    mutable kind : node_kind;
-    mutable args : node list; (* dependencies *)
+  num : int;
+  loc : location;
+  mutable kind : node_kind;
+  mutable args : node list; (* dependencies *)
 
-    mutable next : node option;
-    mutable prevs : node list;
-  }
+  mutable next : node option;
+  mutable prevs : node list;
+}
 
  and node_kind =
    | N_UNKNOWN of string
