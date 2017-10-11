@@ -21,3 +21,4 @@ echo ./_obuild/${LIQUIDITY}/${LIQUIDITY}.asm tests/$test.liq.tz.liq
 
 echo ./_obuild/ocp-liquidity-comp/ocp-liquidity-comp.asm -I +../zarith zarith.cma -I _obuild/liquidity-env ./_obuild/liquidity-env/liquidity-env.cma -impl tests/$test.liq
 ./_obuild/ocp-liquidity-comp/ocp-liquidity-comp.asm -I +../zarith zarith.cma -I _obuild/liquidity-env ./_obuild/liquidity-env/liquidity-env.cma -dsource -impl tests/$test.liq
+rm -f a.out

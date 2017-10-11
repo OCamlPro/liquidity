@@ -27,14 +27,21 @@
 
 *)
 
-OCaml.library("ocplib-liquidity",
-   ocaml + {
-     files = [
-       "liquidVersion.ml", { ocp2ml=true;
+if(with_version){
+  version_info = { ocp2ml=true;
                              env_strings = [
                                 "ocp::commit";
                                 "ocp::dates";
                                 ]; };
+} else {
+  version_info = {};
+}
+
+OCaml.library("ocplib-liquidity",
+   ocaml + {
+     files = [
+       
+       "liquidVersion.ml", version_info;
        "liquidMisc.ml";
 
        "liquidTypes.ml";
@@ -60,6 +67,7 @@ OCaml.library("ocplib-liquidity",
      ];
 
    });
+
 
 OCaml.library("ocplib-liquidity-ocaml",
    ocaml + {

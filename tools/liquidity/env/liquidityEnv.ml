@@ -17,7 +17,7 @@ type integer = Z.t * kind
 type tez = integer
 type nat = integer
 type key
-
+type signature
 type ('arg, 'res) contract
 
 module Tez : sig
@@ -58,7 +58,7 @@ module Current : sig
   val time : unit -> timestamp
   val balance : unit -> tez
   val gas : unit -> tez (* NOT TESTED *)
-  val contract : unit -> ('a,'b) contract (* unsafe, NOT TESTED *)
+  val contract : unit -> ('a,'b) contract (* unsafe, NOT IMPLEMENTED !! *)
   val source : unit -> ('a,'b) contract (* NOT TESTED *)
 
 end = struct
@@ -288,16 +288,21 @@ module Contract : sig
   val call : ('arg, 'res) contract -> tez -> 'storage -> 'arg ->
              'res * 'storage
 
-  val manager : unit -> unit (* TODO TYPE *)
-  val create : unit -> unit (* TODO TYPE *)
-
+  val manager : ('a,'b) contract -> key
+  val create : key -> key option ->
+               bool -> bool -> tez ->
+               ( ('a *'b) -> ('c * 'b) ) -> 'b ->
+               ('a,'c) contract
+  val source : unit -> ('a,'b) contract
 
 end = struct
 
   let call contract amount storage arg = assert false (* TODO *)
-  let manager () = assert false (* TODO *)
-  let create () = assert false (* TODO *)
-
+  let manager _contract = assert false (* TODO *)
+  let create _key _manager
+             _spendable _delegatable _amount
+             _f _storage = assert false (* TODO *)
+  let source () = assert false (* TODO *)
 end
 
 type ('a,'b) variant = Left of 'a | Right of 'b
@@ -324,17 +329,17 @@ end = struct
 end
 
 module Account : sig
-  val create : unit -> unit (* TODO TYPE *)
+  val create : key -> key option -> bool -> tez -> (unit,unit) contract
   val default : key -> (unit,unit) contract
 end = struct
-  let create () = assert false (* TODO NOT TESTED *)
-  let default _ = assert false (* TODO *)
+  let create key key_opt _spendable _amount = assert false (* TODO NOT TESTED *)
+  let default _key = assert false (* TODO *)
 end
 
 module Crypto : sig
-  val hash : unit -> unit (* TODO TYPE *)
-  val check : unit -> unit (* TODO TYPE *)
+  val hash : 'a -> string
+  val check : key -> signature * string -> bool
 end = struct
-  let hash () = assert false (*TODO *)
-  let check () = assert false (* TODO *)
+  let hash _ = assert false (*TODO *)
+  let check _key (_sig, _hash) = assert false (* TODO *)
 end
