@@ -14,7 +14,14 @@ You need the following dependencies to be installed to compile `liquidity`:
 Compilation and installation
 ----------------------------
 
-In the top-directory, use `make` and `make install`
+In the top-directory, use:
+* `make tezos`
+* `make`
+* `make install`
+
+If you want limited features, you can pass the first step, you will
+only get a program `liquidity-mini` with only compilation features,
+no decompilation.
 
 You can also use `make clean` to clean the directories,
 and `make tests` to run the compiler on examples in the
