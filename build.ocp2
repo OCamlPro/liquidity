@@ -4,8 +4,10 @@
    * Execution of Michelson contracts
 *)
 
+Sys = module("ocp-build:Sys", "1.0");
+
 (* This value is used if with_tezos is not set before *)
-default_with_tezos = true;
+default_with_tezos = Sys.file_exists("tezos/README.md");
 
 try { with_tezos = with_tezos; }
   catch("unknown-variable",x){ with_tezos = default_with_tezos; }
@@ -17,8 +19,6 @@ try { with_tezos = with_tezos; }
   The flag can also be controled in an inclusing project by using
   the 'with_version' option.
 *)
-
-Sys = module("ocp-build:Sys", "1.0");
 
 default_with_version = !Sys.file_exists("DEVEL");
 
