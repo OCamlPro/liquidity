@@ -12,27 +12,26 @@ open LiquidTypes
 
 (*  Translation to Michelson *)
 
+let ii i = {i}
 
+let seq exprs = {i=SEQ exprs}
 
-let seq exprs = SEQ exprs
-
-let dup n = DUP n
+let dup n = {i=DUP n}
 
 (* n = size of preserved head of stack *)
-let dip n exprs =
-  DIP (n, seq exprs)
+let dip n exprs = {i=DIP (n, seq exprs)}
 
-let push ty cst = PUSH (ty, cst)
+let push ty cst = {i=PUSH (ty, cst)}
 
 (* n = size of preserved head of stack *)
 let drop_stack n depth =
   if depth = 0 then [] else
     let rec drop_stack depth =
       if depth = 0 then [] else
-        DROP :: (drop_stack (depth-1))
+        {i=DROP} :: (drop_stack (depth-1))
     in
     let exps = drop_stack depth in
-    if n = 0 then exps else [DIP_DROP (n, List.length exps)]
+    if n = 0 then exps else [{i=DIP_DROP (n, List.length exps)}]
 
 (* The type of a contract code is usually:
      lambda (pair (pair tez 'arg) 'global) -> (pair 'ret 'global) *)
@@ -59,7 +58,7 @@ let translate_code code =
          if transfer1 then (0, StringMap.empty) else (depth, env)
        in
        let e2, transfer2 = compile depth env e2 in
-       e1 @ [  DROP ] @ e2, transfer1 || transfer2
+       e1 @ [ ii DROP ] @ e2, transfer1 || transfer2
 
     | Let (name, loc, e1, e2) ->
        let e1, transfer1 = compile depth env e1 in
@@ -70,7 +69,7 @@ let translate_code code =
        let depth = depth + 1 in
        let e2, transfer2 = compile depth env e2 in
        let cleanup_stack =
-         if transfer2 then [] else [ DIP_DROP (1,1)]
+         if transfer2 then [] else [ {i=DIP_DROP (1,1)}]
        in
        e1 @ e2 @ cleanup_stack, transfer1 || transfer2
 
@@ -79,7 +78,8 @@ let translate_code code =
        let env = StringMap.add arg_name 0 env in
        let depth = 1 in
        let body = compile_no_transfer depth env body in
-       [ LAMBDA (arg_type, res_type, seq (body @ [DIP_DROP (1,1)])) ], false
+       [ {i=LAMBDA (arg_type, res_type, seq (body @ [
+                                               {i=DIP_DROP (1,1)}]))} ], false
 
     | Closure (arg_name, p_arg_type, loc, call_env, body, res_type) ->
       let call_env_code = match call_env with
@@ -90,7 +90,7 @@ let translate_code code =
       call_env_code @
       (compile_desc depth env
          (Lambda (arg_name, p_arg_type, loc, body, res_type)) |> fst) @
-      [ PAIR ], false
+      [ ii PAIR ], false
 
     | If (cond, ifthen, ifelse) ->
        let cond = compile_no_transfer depth env cond in
@@ -105,8 +105,8 @@ let translate_code code =
          | true, false -> [], drop_stack 1 depth
          | false, true -> drop_stack 1 depth, []
        in
-       cond @ [  (IF (seq (ifthen @ ifthen_end),
-                      seq (ifelse @ ifelse_end) ))],
+       cond @ [  {i= IF (seq (ifthen @ ifthen_end),
+                         seq (ifelse @ ifelse_end) )}],
        transfer1 || transfer2
 
     | LetTransfer( storage_name, result_name,
@@ -125,10 +125,10 @@ let translate_code code =
        let body, transfer = compile 2 env body_exp in
        let cleanup_stack =
          if transfer then []
-         else [ DIP_DROP (1,2) ]
+         else [ {i=DIP_DROP (1,2)} ]
        in
        storage @ contract @ amount @ arg @ drop @
-         [  TRANSFER_TOKENS ] @ body @
+         [ ii TRANSFER_TOKENS ] @ body @
            cleanup_stack, true
 
     | Apply (Prim_unknown, _loc, args) -> assert false
@@ -136,8 +136,8 @@ let translate_code code =
     | Apply (Prim_exec, _loc, [arg; { ty = Tclosure _ } as f]) ->
       let f_env = compile_no_transfer depth env f in
       let arg = compile_no_transfer (depth+1) env arg in
-      f_env @ arg @ [ dip 1 [ dup 1; CAR; SWAP; CDR] ] @
-      [ PAIR ; EXEC ], false
+      f_env @ arg @ [ dip 1 [ dup 1; ii CAR; ii SWAP; ii CDR] ] @
+      [ ii PAIR ; ii EXEC ], false
 
     | Apply (prim, _loc, args) ->
        compile_prim depth env prim args, false
@@ -153,13 +153,13 @@ let translate_code code =
        let ifsome, transfer3 = compile depth env ifsome in
        let (ifnone_end, ifsome_end) =
          match transfer1, transfer2 with
-         | false, false -> [], [ DIP_DROP(1,1) ]
+         | false, false -> [], [ {i=DIP_DROP(1,1)} ]
          | true, true -> [], []
          | true, false -> [], drop_stack 1 depth
          | false, true -> drop_stack 1 (depth-1), []
        in
-       arg @ [  (IF_NONE (seq (ifnone @ ifnone_end),
-                          seq (ifsome @ ifsome_end) ))],
+       arg @ [ {i=IF_NONE (seq (ifnone @ ifnone_end),
+                          seq (ifsome @ ifsome_end) )}],
        transfer1 || transfer2 || transfer3
 
     | MatchList(arg, loc, head_name, tail_name, ifcons, ifnil) ->
@@ -174,13 +174,13 @@ let translate_code code =
        let ifcons, transfer3 = compile depth env ifcons in
        let (ifnil_end, ifcons_end) =
          match transfer1, transfer2 with
-         | false, false -> [], [ DIP_DROP(1,2) ]
+         | false, false -> [], [ {i=DIP_DROP(1,2)} ]
          | true, true -> [], []
          | true, false -> [], drop_stack 1 depth
          | false, true -> drop_stack 1 (depth-2), []
        in
-       arg @ [  (IF_CONS (seq (ifcons @ ifcons_end),
-                          seq (ifnil @ ifnil_end) ))],
+       arg @ [ {i=IF_CONS (seq (ifcons @ ifcons_end),
+                          seq (ifnil @ ifnil_end) )}],
        transfer1 || transfer2 || transfer3
 
     | MatchVariant(arg, loc, cases) ->
@@ -205,7 +205,7 @@ let translate_code code =
             let left_end =
               match !has_transfer, transfer with
               | true, true -> []
-              | false, false -> [ DIP_DROP(1,1) ]
+              | false, false -> [ {i=DIP_DROP(1,1)} ]
               | false, true -> assert false
               | true, false -> drop_stack 1 (depth-1)
             in
@@ -214,7 +214,7 @@ let translate_code code =
             | [] -> left
             | _ ->
                let right = iter cases in
-               [ IF_LEFT( seq left, seq right ) ]
+               [ {i=IF_LEFT( seq left, seq right )} ]
        in
        arg @ iter cases, !has_transfer
 
@@ -226,10 +226,13 @@ let translate_code code =
        let env = StringMap.add name depth env in
        let depth = depth + 1 in
        let body, transfer2 = compile depth env body in
-       let body_end = [ DIP_DROP (1,1); DUP 1; CAR; DIP (1, seq [ CDR ]) ] in
+       let body_end = [ {i=DIP_DROP (1,1)};
+                        {i=DUP 1};
+                        ii CAR;
+                        {i=DIP (1, seq [ ii CDR ])} ] in
        arg
-       @ [ PUSH (Tbool, CBool true)]
-       @ [ LOOP (seq (body @ body_end)) ],
+       @ [ {i=PUSH (Tbool, CBool true)}]
+       @ [ {i=LOOP (seq (body @ body_end))} ],
        transfer1 || transfer2
 
     (* removed during typechecking, replaced by tuple *)
@@ -244,13 +247,13 @@ let translate_code code =
     | Prim_tuple_get, [arg; { desc = Const (_, (CInt n | CNat n))} ] ->
        let arg = compile_no_transfer depth env arg in
        let n = LiquidPrinter.int_of_integer n in
-       arg @ [  CDAR n ]
+       arg @ [  {i=CDAR n} ]
     | Prim_tuple_get, _ -> assert false
 
     | Prim_tuple_get_last, [arg; { desc = Const (_, (CInt n | CNat n))} ] ->
        let arg = compile_no_transfer depth env arg in
        let n = LiquidPrinter.int_of_integer n in
-       arg @ [  CDDR (n-1) ]
+       arg @ [  {i=CDDR (n-1)} ]
     | Prim_tuple_get_last, _ -> assert false
 
     (*
@@ -273,32 +276,32 @@ set x n y = x + [ DUP; CAR; SWAP; CDR ]*n +
        x_code @ set_code
     | Prim_tuple_set_last, _ -> assert false
 
-    | Prim_fail,_ -> [ FAIL ]
-    | Prim_self, _ -> [ SELF ]
-    | Prim_balance, _ -> [ BALANCE ]
-    | Prim_now, _ -> [ NOW ]
-    | Prim_amount, _ -> [ AMOUNT ]
-    | Prim_gas, _ -> [ STEPS_TO_QUOTA ]
+    | Prim_fail,_ -> [ ii FAIL ]
+    | Prim_self, _ -> [ ii SELF ]
+    | Prim_balance, _ -> [ ii BALANCE ]
+    | Prim_now, _ -> [ ii NOW ]
+    | Prim_amount, _ -> [ ii AMOUNT ]
+    | Prim_gas, _ -> [ ii STEPS_TO_QUOTA ]
 
     | Prim_Left, [ arg; { ty = right_ty }] ->
        compile_no_transfer depth env arg @
-         [ LEFT right_ty]
+         [ {i=LEFT right_ty} ]
     | Prim_Left, _ -> assert false
 
     | Prim_Right, [ arg; { ty = left_ty } ] ->
        compile_no_transfer depth env arg @
-         [ RIGHT left_ty ]
+         [ {i=RIGHT left_ty} ]
     | Prim_Right, _ -> assert false
 
     | Prim_Source, [ { ty = from_ty }; { ty = to_ty } ] ->
-       [ SOURCE (from_ty, to_ty) ]
+       [ {i=SOURCE (from_ty, to_ty)} ]
     | Prim_Source, _ -> assert false
 
     (* catch the special case of [a;b;c] where
 the ending NIL is not annotated with a type *)
     | Prim_Cons, [ { ty } as arg; { ty = Tunit } ] ->
        let arg = compile_no_transfer (depth+1) env arg in
-       [ PUSH (Tlist ty, CList[]) ] @ arg @ [ CONS ]
+       [ {i=PUSH (Tlist ty, CList[])} ] @ arg @ [ ii CONS ]
 
     (* Should be removed in LiquidCheck *)
     | Prim_unknown, _
@@ -321,56 +324,56 @@ the ending NIL is not annotated with a type *)
        | Prim_exec|Prim_Cons),_ ->
        let _depth, args_code = compile_args depth env args in
        let prim_code = match prim, List.length args with
-         | Prim_eq, 2 -> [  COMPARE;  EQ ]
-         | Prim_neq, 2 -> [  COMPARE;  NEQ ]
-         | Prim_lt, 2 -> [  COMPARE;  LT ]
-         | Prim_le, 2 -> [  COMPARE;  LE ]
-         | Prim_gt, 2 -> [  COMPARE;  GT ]
-         | Prim_ge, 2 -> [ COMPARE; GE ]
-         | Prim_compare, 2 -> [  COMPARE ]
-         | Prim_add, 2 -> [ ADD ]
-         | Prim_sub, 2 -> [ SUB ]
-         | Prim_mul, 2 -> [ MUL ]
-         | Prim_ediv, 2 -> [ EDIV ]
-         | Prim_map_find, 2 -> [ GET ]
-         | Prim_map_update, 3 -> [ UPDATE ]
-         | Prim_map_mem, 2 -> [ MEM ]
-         | Prim_map_reduce, 3 -> [ REDUCE ]
-         | Prim_map_map, 2 -> [ MAP ]
+         | Prim_eq, 2 -> [ ii COMPARE; ii EQ ]
+         | Prim_neq, 2 -> [ ii COMPARE; ii NEQ ]
+         | Prim_lt, 2 -> [ ii COMPARE; ii LT ]
+         | Prim_le, 2 -> [ ii COMPARE; ii LE ]
+         | Prim_gt, 2 -> [ ii COMPARE; ii GT ]
+         | Prim_ge, 2 -> [ ii COMPARE; ii GE ]
+         | Prim_compare, 2 -> [ ii COMPARE ]
+         | Prim_add, 2 -> [ ii ADD ]
+         | Prim_sub, 2 -> [ ii SUB ]
+         | Prim_mul, 2 -> [ ii MUL ]
+         | Prim_ediv, 2 -> [ ii EDIV ]
+         | Prim_map_find, 2 -> [ ii GET ]
+         | Prim_map_update, 3 -> [ ii UPDATE ]
+         | Prim_map_mem, 2 -> [ ii MEM ]
+         | Prim_map_reduce, 3 -> [ ii REDUCE ]
+         | Prim_map_map, 2 -> [ ii MAP ]
 
-         | Prim_set_update, 3 -> [ UPDATE ]
-         | Prim_set_mem, 2 -> [ MEM ]
-         | Prim_set_reduce, 3 -> [ REDUCE ]
-         | Prim_set_map, 2 -> [ MAP ]
+         | Prim_set_update, 3 -> [ ii UPDATE ]
+         | Prim_set_mem, 2 -> [ ii MEM ]
+         | Prim_set_reduce, 3 -> [ ii REDUCE ]
+         | Prim_set_map, 2 -> [ ii MAP ]
 
-         | Prim_Some, 1 -> [ SOME ]
-         | Prim_concat, 2 -> [ CONCAT ]
+         | Prim_Some, 1 -> [ ii SOME ]
+         | Prim_concat, 2 -> [ ii CONCAT ]
 
-         | Prim_list_reduce, 3 -> [ REDUCE ]
-         | Prim_list_map, 2 -> [ MAP ]
+         | Prim_list_reduce, 3 -> [ ii REDUCE ]
+         | Prim_list_map, 2 -> [ ii MAP ]
 
-         | Prim_manager, 1 -> [ MANAGER ]
-         | Prim_create_account, 4 -> [ CREATE_ACCOUNT ]
-         | Prim_create_contract, 7 -> [ CREATE_CONTRACT ]
-         | Prim_hash, 1 -> [ H ]
-         | Prim_check, 2 -> [ CHECK_SIGNATURE ]
-         | Prim_default_account, 1 -> [ DEFAULT_ACCOUNT ]
-         | Prim_list_size, 1 -> [ SIZE ]
-         | Prim_set_size, 1 -> [ SIZE ]
-         | Prim_map_size, 1 -> [ SIZE ]
+         | Prim_manager, 1 -> [ ii MANAGER ]
+         | Prim_create_account, 4 -> [ ii CREATE_ACCOUNT ]
+         | Prim_create_contract, 7 -> [ ii CREATE_CONTRACT ]
+         | Prim_hash, 1 -> [ ii H ]
+         | Prim_check, 2 -> [ ii CHECK_SIGNATURE ]
+         | Prim_default_account, 1 -> [ ii DEFAULT_ACCOUNT ]
+         | Prim_list_size, 1 -> [ ii SIZE ]
+         | Prim_set_size, 1 -> [ ii SIZE ]
+         | Prim_map_size, 1 -> [ ii SIZE ]
 
-         | Prim_Cons, 2 -> [ CONS ]
-         | Prim_or, 2 -> [ OR ]
-         | Prim_and, 2 -> [ AND ]
-         | Prim_xor, 2 -> [ XOR ]
-         | Prim_not, 1 -> [ NOT ]
-         | Prim_abs, 1 -> [ ABS ]
-         | Prim_int, 1 -> [ INT ]
-         | Prim_neg, 1 -> [ NEG ]
-         | Prim_lsr, 2 -> [ LSR ]
-         | Prim_lsl, 2 -> [ LSL ]
+         | Prim_Cons, 2 -> [ ii CONS ]
+         | Prim_or, 2 -> [ ii OR ]
+         | Prim_and, 2 -> [ ii AND ]
+         | Prim_xor, 2 -> [ ii XOR ]
+         | Prim_not, 1 -> [ ii NOT ]
+         | Prim_abs, 1 -> [ ii ABS ]
+         | Prim_int, 1 -> [ ii INT ]
+         | Prim_neg, 1 -> [ ii NEG ]
+         | Prim_lsr, 2 -> [ ii LSR ]
+         | Prim_lsl, 2 -> [ ii LSL ]
 
-         | Prim_exec, 2 -> [ EXEC ]
+         | Prim_exec, 2 -> [ ii EXEC ]
 
          | (Prim_eq|Prim_neq|Prim_lt|Prim_le|Prim_gt|Prim_ge
            | Prim_compare|Prim_add|Prim_sub|Prim_mul|Prim_ediv|Prim_map_find
@@ -405,14 +408,14 @@ the ending NIL is not annotated with a type *)
   and compile_prim_set last depth env n y =
     if n = 0 then
       if last then
-        [ DROP ]
+        [ ii DROP ]
         @ compile_no_transfer (depth-1) env y
       else
-        [ CDR ] @ compile_no_transfer depth env y @ [ PAIR ]
+        [ ii CDR ] @ compile_no_transfer depth env y @ [ ii PAIR ]
     else
-      [ DUP 1; CAR; SWAP; CDR ] @
+      [ {i=DUP 1}; ii CAR; ii SWAP; ii CDR ] @
         compile_prim_set last (depth+1) env (n-1) y @
-          [ SWAP; PAIR ]
+          [ ii SWAP; ii PAIR ]
 
   and compile_desc_no_transfer depth env e =
     let (e, transfer) = compile_desc depth env e in
@@ -442,7 +445,7 @@ the ending NIL is not annotated with a type *)
     | arg :: args ->
        let arg = compile_no_transfer (depth+1) env arg in
        let args = compile_tuple1 depth env args in
-       arg @ [ PAIR ] @ args
+       arg @ [ ii PAIR ] @ args
 
   and compile depth env e =
     compile_desc depth env e.desc
@@ -462,8 +465,8 @@ the ending NIL is not annotated with a type *)
   (* replace ( parameter, storage ) *)
   let header = [
       dup 1;
-      dip 1 [ CDR ];
-      CAR;
+      dip 1 [ ii CDR ];
+      ii CAR;
     ]
   in
   let trailer = if transfer then [] else drop_stack 1 depth in

@@ -431,8 +431,8 @@ module Michelson = struct
     | MOD -> Printf.bprintf b "MOD"
     | DIV -> Printf.bprintf b "DIV"
 
-  let rec bprint_noloc_michelson b =
-    bprint_pre_michelson bprint_noloc_michelson b
+  let rec bprint_noloc_michelson b ins=
+    bprint_pre_michelson bprint_noloc_michelson b ins.i
 
   let rec bprint_loc_michelson b m =
     bprint_pre_michelson bprint_loc_michelson b m.ins

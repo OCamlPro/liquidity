@@ -423,7 +423,7 @@ type 'a pre_michelson =
   | MOD
   | DIV
 
-type noloc_michelson = noloc_michelson pre_michelson
+type noloc_michelson = { i : noloc_michelson pre_michelson }
 
 type loc_michelson = {
   loc : location;

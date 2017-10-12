@@ -27,9 +27,6 @@
 
 *)
 
-ocaml.asmcomp = ["-rectypes"];
-ocaml.bytecomp = ["-rectypes"];
-
 OCaml.library("ocplib-liquidity",
    ocaml + {
      files = [

@@ -99,7 +99,7 @@ let rec convert_type expr =
   | Ttype (_, ty) -> convert_type ty
 
 let rec convert_code expr =
-  match expr with
+  match expr.i with
   | SEQ exprs ->
      Script_repr.Seq (0, List.map convert_code exprs, debug)
   | DROP -> prim "DROP" []
@@ -185,7 +185,9 @@ let rec convert_code expr =
   | LSL -> prim "LSL" []
   | LSR -> prim "LSR"  []
   | DIP_DROP (ndip, ndrop) ->
-     convert_code (DIP (ndip, SEQ (LiquidMisc.list_init ndrop (fun _ -> DROP))))
+     convert_code {i=DIP (ndip,
+                          {i=SEQ (LiquidMisc.list_init ndrop
+                                                       (fun _ -> {i=DROP}))})}
   | CDAR n -> prim (Printf.sprintf "C%sAR" (String.make n 'D')) []
   | CDDR n -> prim (Printf.sprintf "C%sDR" (String.make n 'D')) []
   | SIZE -> prim "SIZE" []
