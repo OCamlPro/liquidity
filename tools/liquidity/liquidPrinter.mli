@@ -41,7 +41,8 @@ module Michelson : sig
   val string_of_contract :
     LiquidTypes.michelson_exp LiquidTypes.contract -> string
   val string_of_code : LiquidTypes.michelson_exp -> string
-
-  end
+  val string_of_noloc_michelson : LiquidTypes.noloc_michelson -> string
+  val string_of_loc_michelson : LiquidTypes.loc_michelson -> string
+end
 
 val string_of_node : LiquidTypes.node -> string

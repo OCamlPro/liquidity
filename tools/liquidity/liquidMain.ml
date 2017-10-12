@@ -68,9 +68,9 @@ let compile_liquid_file filename =
 
 
 let compile_tezos_file filename =
-  let code, contract_hash = LiquidToTezos.read_tezos_file filename in
+  let code, contract_hash, loc_table = LiquidToTezos.read_tezos_file filename in
 
-  let c = LiquidFromTezos.convert_contract code in
+  let c = LiquidFromTezos.convert_contract loc_table code in
   let c = LiquidClean.clean_contract c in
   let c = LiquidInterp.interp c in
   if !debug then begin

@@ -11,7 +11,7 @@ open LiquidTypes
 
 
 let rec emit_code code =
-  match code with
+  match code.i with
   | SEQ exprs -> M_INS_EXP ("SEQ", [], List.map emit_code exprs)
   | IF (ifthen, ifelse) ->
      M_INS_EXP ("IF", [], [emit_code ifthen; emit_code ifelse])
@@ -57,7 +57,9 @@ let rec emit_code code =
   | BALANCE -> M_INS "BALANCE"
   | SWAP -> M_INS "SWAP"
   | DIP_DROP (n,m) ->
-     emit_code (DIP (n, SEQ (LiquidMisc.list_init m (fun _ -> DROP))))
+     emit_code {i= DIP (n,
+                        { i = SEQ (LiquidMisc.list_init m
+                                                        (fun _ -> {i=DROP}))})}
   | SOME -> M_INS "SOME"
   | GET -> M_INS "GET"
   | UPDATE -> M_INS "UPDATE"

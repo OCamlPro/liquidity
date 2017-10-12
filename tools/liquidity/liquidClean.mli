@@ -9,5 +9,5 @@
 
 open LiquidTypes
 
-val clean_code : pre_michelson -> pre_michelson
-val clean_contract : pre_michelson contract -> pre_michelson contract
+val clean_code : loc_michelson -> loc_michelson
+val clean_contract : loc_michelson contract -> loc_michelson contract

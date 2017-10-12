@@ -126,7 +126,7 @@ let loc_of_loc loc =
 let ppf = Format.err_formatter
 
 let default_args = [
-    "return_storage", Tunit;
+    "return", Tunit;
     "storage", Tunit;
     "parameter", Tunit;
   ]

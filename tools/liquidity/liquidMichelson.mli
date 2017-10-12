@@ -9,4 +9,4 @@
 
 open LiquidTypes
 
-val translate : typed_exp contract -> pre_michelson contract
+val translate : typed_exp contract -> noloc_michelson contract
