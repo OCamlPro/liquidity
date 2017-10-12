@@ -168,6 +168,13 @@ type primitive =
 
 let primitive_of_string = Hashtbl.create 101
 let string_of_primitive = Hashtbl.create 101
+
+
+(* Some primitives should be kept internal:
+* get and set
+* get_last and set_last
+* tuple
+*)
 let () =
   List.iter (fun (n,p) ->
       Hashtbl.add primitive_of_string n p;
@@ -176,17 +183,20 @@ let () =
             [
               "get", Prim_tuple_get;
               "get_last", Prim_tuple_get_last;
-              "Array.get", Prim_tuple_get;
               "set_last", Prim_tuple_set_last;
               "set", Prim_tuple_set;
-              "Array.set", Prim_tuple_set;
               "tuple", Prim_tuple;
+
+              "Array.get", Prim_tuple_get;
+              "Array.set", Prim_tuple_set;
+
               "Current.fail", Prim_fail;
               "Current.contract", Prim_self;
               "Current.balance", Prim_balance;
               "Current.time", Prim_now;
               "Current.amount", Prim_amount;
               "Current.gas", Prim_gas;
+
               "Left", Prim_Left;
               "Right", Prim_Right;
               "Source", Prim_Source;
@@ -207,11 +217,13 @@ let () =
               "Map.mem", Prim_map_mem;
               "Map.reduce", Prim_map_reduce;
               "Map.map", Prim_map_map;
+              "Map.size", Prim_map_size;
 
               "Set.update", Prim_set_update;
               "Set.mem", Prim_set_mem;
               "Set.reduce", Prim_set_reduce;
               "Set.map", Prim_set_map;
+              "Set.size", Prim_set_size;
 
               "Some", Prim_Some;
               "@", Prim_concat;
@@ -219,16 +231,16 @@ let () =
               "List.reduce", Prim_list_reduce;
               "List.map", Prim_list_map;
               "List.rev", Prim_list_rev;
+              "List.size", Prim_list_size;
 
               "Contract.manager", Prim_manager;
-              "Account.create", Prim_create_account;
               "Contract.create", Prim_create_contract;
+
+              "Account.create", Prim_create_account;
+              "Account.default", Prim_default_account;
+
               "Crypto.hash", Prim_hash;
               "Crypto.check", Prim_check;
-              "Account.default", Prim_default_account;
-              "List.size", Prim_list_size;
-              "Set.size", Prim_set_size;
-              "Map.size", Prim_map_size;
 
               "::", Prim_Cons;
               "or", Prim_or;

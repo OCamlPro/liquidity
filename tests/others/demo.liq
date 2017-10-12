@@ -8,7 +8,7 @@ let%entry main
 
   let amount = Current.amount() in
 
-  if amount < ("5.00" : tez) then
+  if amount < 5.00tz then
     Current.fail ()
   else
     match Map.find parameter storage with

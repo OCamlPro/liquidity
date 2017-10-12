@@ -14,6 +14,6 @@ let%entry main
       (storage : storage)
       : unit * storage =
 
-      let storage = storage.v.dest.z <- parameter in
+(*      let storage = storage.v.dest.z <- parameter in *)
       let storage = storage.v.orig <- { x="0"; y=true; z = parameter } in
       ( (), storage )

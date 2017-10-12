@@ -4,8 +4,23 @@
    * Execution of Michelson contracts
 *)
 
+Sys = module("ocp-build:Sys", "1.0");
+
 (* This value is used if with_tezos is not set before *)
-default_with_tezos = true;
+default_with_tezos = Sys.file_exists("tezos/README.md");
 
 try { with_tezos = with_tezos; }
   catch("unknown-variable",x){ with_tezos = default_with_tezos; }
+
+(* By default, liquidity will contain some version information
+  (Git commit, build date, etc.). However, during development, it
+  makes recompilation slower, so you can create a file DEVEL here
+  to tell ocp-build not to include version information.
+  The flag can also be controled in an inclusing project by using
+  the 'with_version' option.
+*)
+
+default_with_version = !Sys.file_exists("DEVEL");
+
+try { with_version = with_version; }
+  catch("unknown-variable",x){ with_version = default_with_version; }
