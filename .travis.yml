@@ -6,29 +6,15 @@ language: ocaml
 sudo: required
 
 before_install:
-- sudo apt-get update -qq
-- sudo apt-get install -y -qq ocaml ocaml-native-compilers libgmp-dev
-
-# do this in a second step to only install libsecp256k1-dev libsecp256k1-0
-- sudo add-apt-repository "deb http://cz.archive.ubuntu.com/ubuntu artful main universe"
-- sudo apt-get update -qq
-- sudo apt-get install -y -qq libsecp256k1-dev libsecp256k1-0
+- sh travis-scripts/prepare-trusty.sh
 
 install:
-- wget -qq https://raw.github.com/ocaml/opam/master/shell/opam_installer.sh -O - | sh -s /usr/local/bin
-- export OPAMYES=1
-# currently, we only target OCaml 4.05.0
-- opam init --comp 4.05.0
-- eval `opam config env`
-- opam update
-- opam install ocp-build zarith ocplib-json-typed ocplib-endian calendar
-
-# TODO > other deps are missing ?
-
-- opam install astring base64 biniou camlp4 cmdliner cohttp cohttp-lwt cohttp-lwt-unix conduit conduit-lwt conduit-lwt-unix conf-autoconf conf-which cstruct depext easy-format ezjsonm fieldslib fmt hex ipaddr js_of_ocaml js_of_ocaml-camlp4 js_of_ocaml-compiler js_of_ocaml-lwt js_of_ocaml-ppx js_of_ocaml-toplevel js_of_ocaml-tyxml jsonm logs lwt magic-mime markup menhir ocp-indent ocp-ocamlres omd optcomp pprint ppx_cstruct ppx_fields_conv  ppx_tools ppx_tools_versioned  react reactiveData topkg tyxml uchar uutf yojson
-
+- sh travis-scripts/prepare-opam.sh
 
 script:
+- export OPAMYES=1
+- opam sw 4.05.0
+- eval `opam config env`
 - make
 
 # TODO > add tests after make
