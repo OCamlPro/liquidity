@@ -15,7 +15,7 @@ Compilation and installation
 ----------------------------
 
 In the top-directory, use:
-* `make tezos`
+* `make clone-tezos`
 * `make`
 * `make install`
 

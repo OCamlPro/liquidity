@@ -1,7 +1,7 @@
 
 all: build
 
-tezos:
+clone-tezos:
 	git clone -b alphanet https://github.com/tezos/tezos.git # clone with https
 #	git clone git@github.com:tezos/tezos.git
 #	git clone git@gitlab.com:tezos/tezos.git
