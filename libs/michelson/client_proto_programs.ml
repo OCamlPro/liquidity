@@ -35,6 +35,7 @@ end
 
 module Environment = struct
   module Ed25519 = Ed25519
+  module Error_monad = Error_monad
 end
 
 #include "../../tezos/src/client/embedded/alpha/client_proto_programs.ml"

@@ -95,3 +95,5 @@ let split delim ?(limit = max_int) path =
     do_slashes [] limit 0
   else
     [ path ]
+
+module StringMap = Map.Make (String)
