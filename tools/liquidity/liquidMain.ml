@@ -64,7 +64,8 @@ let compile_liquid_file filename =
                         (LiquidToTezos.string_of_contract
                            (LiquidToTezos.convert_contract pre_michelson));
   Printf.eprintf "File %S generated\n%!" output;
-  Printf.eprintf "Typecheck with:\n  tezos-client typecheck program %s\n" output
+  Printf.eprintf "If tezos is compiled, you may want to typecheck with:\n";
+  Printf.eprintf "  tezos-client typecheck program %s\n" output
 
 
 let compile_tezos_file filename =
