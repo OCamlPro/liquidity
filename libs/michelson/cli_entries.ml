@@ -1,3 +1,4 @@
+open Utils
 
 #include "../../tezos/src/utils/cli_entries.ml"
 (*

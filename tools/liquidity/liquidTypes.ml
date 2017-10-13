@@ -37,7 +37,8 @@ type const =
   | CLeft of const
   | CRight of const
 
-and datatype =
+ and datatype =
+   (* michelson *)
   | Tunit
   | Tbool
   | Tint
@@ -58,8 +59,9 @@ and datatype =
   | Tcontract of datatype * datatype
   | Tor of datatype * datatype
   | Tlambda of datatype * datatype
-  | Tclosure of (datatype * datatype) * datatype
 
+  (* liquidity extensions *)
+  | Tclosure of (datatype * datatype) * datatype
   | Tfail
   | Ttype of string * datatype
 
