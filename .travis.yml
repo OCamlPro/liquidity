@@ -17,6 +17,8 @@ script:
 - eval `opam config env`
 - make clone-tezos
 - make
+- make tests-mini
+- make tests
+- make rev-tests
 
-# TODO > add tests after make
-# TODO > how to compile and test with tezos ?
+# TODO > how to compile and test with tezos (I.e. with a fully compiled version of tezos)?
