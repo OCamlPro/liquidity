@@ -11,9 +11,5 @@ opam init --comp 4.05.0
 eval `opam config env`
 
 opam update
-opam install ocp-build zarith ocplib-json-typed ocplib-endian calendar
-
+opam install ocp-build zarith uutf uri uchar stringext sexplib re ocplib-json-typed ocplib-endian jsonm hex ezjsonm cstruct calendar
 # TODO > other deps are missing ?
-
-opam install astring base64 biniou camlp4 cmdliner cohttp cohttp-lwt cohttp-lwt-unix conduit conduit-lwt conduit-lwt-unix conf-autoconf conf-which cstruct depext easy-format ezjsonm fieldslib fmt hex ipaddr js_of_ocaml js_of_ocaml-camlp4 js_of_ocaml-compiler js_of_ocaml-lwt js_of_ocaml-ppx js_of_ocaml-toplevel js_of_ocaml-tyxml jsonm logs lwt magic-mime markup menhir ocp-indent ocp-ocamlres omd optcomp pprint ppx_cstruct ppx_fields_conv  ppx_tools ppx_tools_versioned  react reactiveData topkg tyxml uchar uutf yojson
-
