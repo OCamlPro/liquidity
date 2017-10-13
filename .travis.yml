@@ -15,6 +15,7 @@ script:
 - export OPAMYES=1
 - opam sw 4.05.0
 - eval `opam config env`
+- make tezos
 - make
 
 # TODO > add tests after make
