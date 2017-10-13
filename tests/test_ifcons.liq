@@ -15,7 +15,7 @@ let%entry main
       let storage =
         match x with
         | [] -> set
-        | y :: z -> z
+        | _ :: z -> z
        in
 
       ( (), storage )

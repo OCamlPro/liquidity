@@ -255,22 +255,25 @@ let rec convert_code expr =
 
   | MatchVariant (arg, _loc, cases) ->
      Exp.match_ (convert_code arg)
-                 (List.map (fun (constr, var_args, exp) ->
-                      Exp.case
-                        (Pat.construct (lid constr)
-                                       (match var_args with
-                                        | [] -> None
-                                        | [var_arg] ->
-                                           Some (Pat.var (loc var_arg))
-                                        | var_args ->
-                                           Some
-                                             (Pat.tuple (List.map
-                                                   (fun var_arg ->
-                                                     Pat.var (loc var_arg)
-                                                   ) var_args))
-                                       ))
-                       (convert_code exp)
-                   ) cases)
+       (List.map (function
+            | CAny, exp ->
+              Exp.case (Pat.any ()) (convert_code exp)
+            | CConstr (constr, var_args), exp ->
+              Exp.case
+                (Pat.construct (lid constr)
+                   (match var_args with
+                    | [] -> None
+                    | [var_arg] ->
+                      Some (Pat.var (loc var_arg))
+                    | var_args ->
+                      Some
+                        (Pat.tuple (List.map
+                                      (fun var_arg ->
+                                         Pat.var (loc var_arg)
+                                      ) var_args))
+                   ))
+                (convert_code exp)
+          ) cases)
 
   | Constructor (_loc, Constr id, { desc = Const (Tunit, CUnit) } ) ->
      Exp.construct (lid id) None

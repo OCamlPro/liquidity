@@ -898,122 +898,117 @@ let rec typecheck env ( exp : LiquidTypes.syntax_exp ) =
      let desc = Apply(Prim_Right,loc,[arg; unused env left_ty]) in
      mk desc ty can_fail, can_fail, false
 
-  | MatchVariant (arg, loc,
-                  [ "Left", [left_arg], left_exp;
-                    "Right", [right_arg], right_exp;
-                 ]) ->
-     let arg, can_fail, transfer1 = typecheck env arg in
-     let (left_ty, right_ty) = match arg.ty with
-       | Tor(left_ty, right_ty) -> (left_ty, right_ty)
-       | _ ->
-          error loc "not a Left-Right variant type: %s"
-                (LiquidPrinter.Michelson.string_of_type arg.ty)
-     in
-     let env = maybe_reset_vars env transfer1 in
-     let left_arg, left_exp, can_fail1, transfer1 =
-       typecheck_case env left_arg left_exp left_ty in
-     let right_arg, right_exp, can_fail2, transfer2 =
-       typecheck_case env right_arg right_exp right_ty in
-     let desc = MatchVariant(arg, loc,
-                             [ "Left", [left_arg], left_exp;
-                               "Right", [right_arg], right_exp;
-                            ])
-     in
-     if left_exp.ty <> right_exp.ty then begin
-         error loc "inconsistent return type"
-       end;
-     let can_fail = can_fail || can_fail1 || can_fail2 in
-     mk desc left_exp.ty can_fail,
-     can_fail,
-     transfer1 || transfer2
-
-  | MatchVariant (arg, loc,
-                  [ ("Left" | "Right"), _, _; ]
-                 ) ->
-     error  loc "non-exhaustive pattern-matching"
-
   | MatchVariant (arg, loc, cases) ->
-     let arg, can_fail, transfer1 = typecheck env arg in
-     let ty_name, constrs =
-       try
-         match arg.ty with
-         | Tfail ->
-            error loc "cannot match failure"
-         | Ttype (ty_name, _) ->
+    let arg, can_fail, transfer1 = typecheck env arg in
+    let ty_name, constrs, is_left_right =
+      try
+        match arg.ty with
+        | Tfail ->
+          error loc "cannot match failure"
+        | Ttype (ty_name, _) ->
+          begin
+            let constr_ty, ty_kind = StringMap.find ty_name env.env.types in
+            match ty_kind with
+            | Type_variant constrs ->
+              (ty_name, List.map (fun (c, _, _, _) -> c) constrs, None)
+            | Type_record _ | Type_alias -> raise Not_found
+          end
+        | Tor (left_ty, right_ty) ->
+          (* Left, Right pattern matching *)
+          let ty_name = LiquidPrinter.Liquid.string_of_type arg.ty in
+          (ty_name, ["Left"; "Right"], Some (left_ty, right_ty))
+        | _ -> raise Not_found
+      with Not_found ->
+        error loc "not a variant type: %s"
+          (LiquidPrinter.Liquid.string_of_type arg.ty)
+    in
+    let env = maybe_reset_vars env transfer1 in
+    let match_can_fail = ref can_fail in
+    let expected_type = ref None in
+    let has_transfer = ref transfer1 in
+    let cases_extra_constrs =
+      List.fold_left (fun acc -> function
+          | CAny, _ -> acc
+          | CConstr (c, _), _ -> StringSet.add c acc
+        ) StringSet.empty cases
+      |> ref
+    in
+    let cases = List.map (fun constr ->
+        let cve = find_case loc env constr cases in
+        cases_extra_constrs := StringSet.remove constr !cases_extra_constrs;
+        cve
+      ) constrs in
+
+    if not (StringSet.is_empty !cases_extra_constrs) then
+      error loc "constructors %s do not belong to type %s"
+        (String.concat ", " (StringSet.elements !cases_extra_constrs))
+        ty_name;
+
+    let cases = List.map (fun (constr, vars, e) ->
+        let var_ty = match is_left_right, constr with
+          | Some (left_ty, _), "Left" -> left_ty
+          | Some (_, right_ty), "Right" -> right_ty
+          | Some _, _ -> error loc "unknown constructor %S" constr
+          | None, _ ->
+            let ty_name', var_ty =
+              try StringMap.find constr env.env.constrs
+              with Not_found -> error loc "unknown constructor %S" constr
+            in
+            if ty_name <> ty_name' then error loc "inconsistent constructors";
+            var_ty
+        in
+        let name =
+          match vars with
+          | [] -> "_"
+          | [ var ] -> var
+          | _ ->
+            error loc "cannot deconstruct constructor args"
+        in
+        let (new_name, env, count) =
+          new_binding env name var_ty in
+        let (e, can_fail, transfer) =
+          match !expected_type with
+          | Some expected_type ->
+            typecheck_expected "pattern matching branch" env expected_type e
+          | None ->
+            let (e, can_fail, transfer) =
+              typecheck env e in
             begin
-              let constr_ty, ty_kind = StringMap.find ty_name env.env.types in
-              match ty_kind with
-              | Type_variant constrs -> (ty_name, constrs)
-              | Type_record _ | Type_alias -> raise Not_found
-            end
-         | _ -> raise Not_found
-       with Not_found ->
-         error loc "not a variant type: %s"
-               (LiquidPrinter.Michelson.string_of_type arg.ty)
-     in
-     let env = maybe_reset_vars env transfer1 in
-     let match_can_fail = ref can_fail in
-     let expected_type = ref None in
-     let has_transfer = ref transfer1 in
-     let present_constrs = ref StringMap.empty in
-     List.iter (fun (constr, vars, e) ->
-         let ty_name', var_ty =
-           try
-             StringMap.find constr env.env.constrs
-           with Not_found ->
-             error loc "unknown constructor"
-         in
-         if ty_name <> ty_name' then
-           error loc "inconsistent constructors";
-         if StringMap.mem constr !present_constrs then
-           error loc "constructor matched twice";
-         let name =
-           match vars with
-           | [] -> "_"
-           | [ var ] -> var
-           | _ ->
-              error loc "cannot deconstruct constructor args"
-         in
-         let (new_name, env, count) =
-           new_binding env name var_ty in
-         let (e, can_fail, transfer) =
-           match !expected_type with
-           | Some expected_type ->
-              typecheck_expected "constr-match" env expected_type e
-           | None ->
-              let (e, can_fail, transfer) =
-                typecheck env e in
-              begin
-                match e.ty with
-                | Tfail -> ()
-                | _ -> expected_type := Some e.ty
-              end;
-              (e, can_fail, transfer)
-         in
-         if can_fail then match_can_fail := true;
-         if transfer then has_transfer := true;
-         check_used env name loc count;
-         present_constrs := StringMap.add constr
-                                          (new_name, e)
-                                          !present_constrs
-       ) cases;
+              match e.ty with
+              | Tfail -> ()
+              | _ -> expected_type := Some e.ty
+            end;
+            (e, can_fail, transfer)
+        in
+        if can_fail then match_can_fail := true;
+        if transfer then has_transfer := true;
+        check_used env name loc count;
+        (CConstr (constr, [new_name]), e)
+      ) cases
+    in
 
-     let cases = List.map (fun (constr, _ty, _left_ty, _right_ty) ->
-                     let (new_name, e) =
-                       try
-                         StringMap.find constr !present_constrs
-                       with Not_found ->
-                         error loc "non-exhaustive pattern"
-                     in
-                     (constr, [new_name], e)
-                   ) constrs in
+    let desc = MatchVariant (arg, loc, cases ) in
+    let ty = match !expected_type with
+      | None -> Tfail
+      | Some ty -> ty
+    in
+    mk desc ty !match_can_fail, !match_can_fail, !has_transfer
 
-     let desc = MatchVariant (arg, loc, cases ) in
-     let ty = match !expected_type with
-       | None -> Tfail
-       | Some ty -> ty
-     in
-     mk desc ty !match_can_fail, !match_can_fail, !has_transfer
+and find_case loc env constr cases =
+  match List.find_all (function
+      | CAny, _ -> true
+      | CConstr (cname, _), _ -> cname = constr
+    ) cases
+  with
+  | [] ->
+    error loc "non-exhaustive pattern. Constructor %s is not matched." constr
+  | m :: unused ->
+    List.iter (fun (_, e) ->
+        LiquidLoc.warn (loc_exp env e) (UnusedMatched constr)
+      ) unused;
+    match m with
+    | CAny, e -> constr, [], e
+    | CConstr (_, vars), e -> constr, vars, e
 
 and typecheck_case env name exp var_ty =
   let (new_name, env, count) =

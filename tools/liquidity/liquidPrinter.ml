@@ -628,10 +628,14 @@ module Liquid = struct
        Printf.bprintf b "\n%smatch " indent;
        bprint_code ~debug b indent2 arg;
        Printf.bprintf b " with\n";
-       List.iter (fun (constr, vars, e) ->
-           Printf.bprintf b "\n%s| %s (%s) ->\n" indent2 constr
-                          (String.concat ", " vars);
-           bprint_code ~debug b indent4 e;
+       List.iter (function
+           | CConstr (constr, vars), e ->
+             Printf.bprintf b "\n%s| %s (%s) ->\n" indent2 constr
+               (String.concat ", " vars);
+             bprint_code ~debug b indent4 e;
+           | CAny, e ->
+             Printf.bprintf b "\n%s| _ ->\n" indent2;
+             bprint_code ~debug b indent4 e;
          ) cases;
        ()
 

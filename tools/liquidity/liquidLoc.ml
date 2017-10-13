@@ -47,8 +47,11 @@ let default_warning_printer loc w =
   Format.eprintf "%a: Warning: @[%a@]\n%!" print_loc loc
   (fun fmt -> function
      | Unused name ->
-       Format.fprintf fmt "unused variable %S" name)
-  w
+       Format.fprintf fmt "unused variable %S" name
+     | UnusedMatched constr ->
+       Format.fprintf fmt
+         "unused branch, constructor %S is already matched" constr
+  ) w
 
 let warning_printer = ref default_warning_printer
 

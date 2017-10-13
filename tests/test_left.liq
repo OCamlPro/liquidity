@@ -11,7 +11,7 @@ let%entry main
   | Right r ->
      match r with
      | Left x -> x
-     | Right s -> storage
+     | Right _ -> storage
   in
 
   ( (), storage )

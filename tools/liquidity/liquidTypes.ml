@@ -300,6 +300,10 @@ type constructor =
 | Right of datatype
 | Source of datatype * datatype
 
+type pattern =
+  | CConstr of string * string list
+  | CAny
+
 type 'ty exp = {
     desc : 'ty exp_desc;
     ty : 'ty;
@@ -354,7 +358,7 @@ type 'ty exp = {
 
   | MatchVariant of 'ty exp
                     * location
-                    * (string * string list * 'ty exp) list
+                    * (pattern * 'ty exp) list
 
 type syntax_exp = unit exp
 type typed_exp = datatype exp
@@ -554,3 +558,4 @@ type node_exp = node * node
 
 type warning =
   | Unused of string
+  | UnusedMatched of string

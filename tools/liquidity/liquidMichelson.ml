@@ -190,7 +190,7 @@ let translate_code code =
        in
        let has_transfer = ref false in
        let cases = List.map (function
-                             | (constr, [ arg_name ], e) ->
+                             | CConstr (constr, [ arg_name ]), e ->
                                 let env = StringMap.add arg_name depth env in
                                 let depth = depth + 1 in
                                 let e, transfer = compile depth env e in

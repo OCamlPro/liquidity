@@ -96,13 +96,18 @@ let rec bv code =
      bv arg
 
   | MatchVariant (exp, _loc, args) ->
-     StringSet.union (bv exp)
-                     (List.fold_left (fun set (_constr, var_args, exp) ->
-                          StringSet.union set (
-                                            List.fold_left (fun set var_arg ->
-                                                StringSet.remove var_arg set
-                                              )  (bv exp) var_args)
-                        ) StringSet.empty args)
+    StringSet.union (bv exp)
+      (List.fold_left (fun set (pat, exp) ->
+           let bv_exp = bv exp in
+           let bv_case = match pat with
+             | CConstr (_constr, var_args) ->
+               List.fold_left (fun set var_arg ->
+                 StringSet.remove var_arg set
+                 ) bv_exp var_args
+             | CAny -> bv_exp
+           in
+           StringSet.union set bv_case
+         ) StringSet.empty args)
 
 let mk desc exp bv = { desc; ty = exp.ty; bv; fail = exp.fail }
 
@@ -277,18 +282,22 @@ let rec bound code =
   | MatchVariant (exp, loc, args) ->
      let exp = bound exp in
      let args =
-       List.map (fun (constr, var_args, exp) ->
-           (constr, var_args, bound exp)
+       List.map (fun (pat, exp) ->
+           (pat, bound exp)
          ) args in
-     let bv =
-       StringSet.union (exp.bv)
-                       (List.fold_left (fun set (_constr, var_args, exp) ->
-                            StringSet.union set (
-                                              List.fold_left (fun set var_arg ->
-                                                  StringSet.remove var_arg set
-                                                )  exp.bv var_args)
-                          ) StringSet.empty args)
+     let bv = List.fold_left (fun set (pat, exp) ->
+          let bv_exp = bv exp in
+          let bv_case = match pat with
+            | CConstr (_constr, var_args) ->
+              List.fold_left (fun set var_arg ->
+                  StringSet.remove var_arg set
+                ) bv_exp var_args
+            | CAny -> bv_exp
+          in
+          StringSet.union set bv_case
+       ) StringSet.empty args
      in
+     let bv = StringSet.union (exp.bv) bv in
      let desc = MatchVariant(exp,loc,args) in
      mk desc code bv
 

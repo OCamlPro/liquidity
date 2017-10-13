@@ -164,16 +164,16 @@ let rec untype (env : env) (code : typed_exp) =
 
     | MatchVariant (arg, loc,
                     [
-                      "Left", [left_var], left_arg;
-                      "Right", [right_var], right_arg;
+                      CConstr ("Left", [left_var]), left_arg;
+                      CConstr ("Right", [right_var]), right_arg;
                    ]) ->
        let arg = untype env arg in
        let left_var, left_arg = untype_case env left_var left_arg in
        let right_var, right_arg = untype_case env right_var right_arg in
        MatchVariant (arg, loc,
                     [
-                      "Left", [left_var], left_arg;
-                      "Right", [right_var], right_arg;
+                      CConstr ("Left", [left_var]), left_arg;
+                      CConstr ("Right", [right_var]), right_arg;
                     ])
 
     | Record (_, _)

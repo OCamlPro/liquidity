@@ -238,9 +238,9 @@ let decompile contract =
             | N_IF_LEFT (_, var0), N_IF_RIGHT (_,var1) ->
                MatchVariant(arg_of arg, noloc,
                             [
-                              "Left", [var_of var0],
+                              CConstr ("Left", [var_of var0]),
                               decompile_next then_node;
-                              "Right", [var_of var1],
+                              CConstr ("Right", [var_of var1]),
                               decompile_next else_node
                            ])
             | _ ->

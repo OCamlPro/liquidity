@@ -510,15 +510,23 @@ let rec translate_code env exp =
        let e = translate_code env e in
        let cases = List.map (translate_case env) cases in
        begin
-         match List.sort compare cases with
-         | [ "None", [], ifnone;
-             "Some", [arg], ifsome] ->
-            MatchOption(e, loc_of_loc pexp_loc, ifnone, arg, ifsome)
-         | [ "::", [head; tail], ifcons;
-             "[]", [], ifnil ] ->
-            MatchList(e, loc_of_loc pexp_loc, head, tail, ifcons, ifnil)
+         match cases with
+         | [ CConstr ("None", []), ifnone; CConstr ("Some", [arg]), ifsome ]
+         | [ CConstr ("Some", [arg]), ifsome; CConstr ("None", []), ifnone ]
+         | [ CConstr ("Some", [arg]), ifsome; CAny, ifnone ] ->
+           MatchOption(e, loc_of_loc pexp_loc, ifnone, arg, ifsome)
+         | [ CConstr ("None", []), ifnone; CAny, ifsome ] ->
+           MatchOption(e, loc_of_loc pexp_loc, ifnone, "_", ifsome)
+
+         | [ CConstr ("[]", []), ifnil; CConstr ("::", [head; tail]), ifcons ]
+         | [ CConstr ("::", [head; tail]), ifcons; CConstr ("[]", []), ifnil ]
+         | [ CConstr ("::", [head; tail]), ifcons; CAny, ifnil ] ->
+           MatchList(e, loc_of_loc pexp_loc, head, tail, ifcons, ifnil)
+         | [ CConstr ("[]", []), ifnil; CAny, ifcons ] ->
+           MatchList(e, loc_of_loc pexp_loc, "_head", "_tail", ifcons, ifnil)
+
          | args ->
-            MatchVariant(e, loc_of_loc pexp_loc, args)
+           MatchVariant(e, loc_of_loc pexp_loc, args)
        end
 
     | { pexp_desc =
@@ -684,25 +692,29 @@ and translate_case env case =
      let e = case.pc_rhs in
      let e = translate_code env e in
      match case.pc_lhs with
+     | { ppat_desc = Ppat_any } ->
+        (CAny, e)
      | { ppat_desc = Ppat_construct ( { txt = Lident name } , None) }  ->
-        (name, [], e)
-     | { ppat_desc = Ppat_construct (
-                         { txt = Lident name } ,
-                         Some { ppat_desc = Ppat_var { txt } } ) }  ->
-        (name, [txt], e)
+        (CConstr (name, []), e)
      | { ppat_desc =
            Ppat_construct (
                { txt = Lident name } ,
-               Some { ppat_desc =
-                        Ppat_tuple [
-                            { ppat_desc = Ppat_var { txt = var1 } };
-                            { ppat_desc = Ppat_var { txt = var2 } };
-                          ]
-                    }
+               Some { ppat_desc = Ppat_tuple [ p1; p2 ]}
        ) }  ->
-        (name, [var1; var2], e)
+        (CConstr (name, [var_of_pat p1; var_of_pat p2]), e)
+     | { ppat_desc = Ppat_construct (
+                         { txt = Lident name } , Some p ) }  ->
+        (CConstr (name, [var_of_pat p]), e)
      | { ppat_loc } ->
         error_loc ppat_loc "bad pattern"
+
+and var_of_pat = function
+    | { ppat_desc = Ppat_var { txt = var } } -> var
+    | { ppat_desc = Ppat_any } -> "_"
+    | { ppat_desc = Ppat_construct _; ppat_loc } ->
+      error_loc ppat_loc "cannot match deep"
+    | { ppat_loc } ->
+      error_loc ppat_loc "bad pattern"
 
 let rec inline_funs exp = function
   | [] -> exp

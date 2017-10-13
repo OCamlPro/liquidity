@@ -60,8 +60,7 @@ let compute code to_inline =
 
     | MatchVariant(arg, loc, cases) ->
        let arg = iter arg in
-       let cases = List.map (fun (constr, vars, e) ->
-                       constr, vars, iter e) cases in
+       let cases = List.map (fun (pat, e) -> pat, iter e) cases in
        { exp with desc = MatchVariant(arg,loc, cases) }
 
     | Loop(name, loc, body, arg) ->

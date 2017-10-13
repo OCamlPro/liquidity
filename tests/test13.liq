@@ -18,7 +18,7 @@ let%entry main
         else
         match x with
         | [] -> set
-        | y :: z -> z
+        | _ :: z -> z
        in
 
       ( (), storage )
