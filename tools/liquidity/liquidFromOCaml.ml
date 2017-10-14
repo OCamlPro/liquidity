@@ -161,6 +161,7 @@ let rec translate_type env typ =
   | { ptyp_desc = Ptyp_constr ({ txt = Lident "string" }, []) } -> Tstring
   | { ptyp_desc = Ptyp_constr ({ txt = Lident "timestamp" }, []) } -> Ttimestamp
   | { ptyp_desc = Ptyp_constr ({ txt = Lident "key" }, []) } -> Tkey
+  | { ptyp_desc = Ptyp_constr ({ txt = Lident "key_hash" }, []) } -> Tkey_hash
   | { ptyp_desc = Ptyp_constr ({ txt = Lident "signature" }, []) } -> Tsignature
 
 

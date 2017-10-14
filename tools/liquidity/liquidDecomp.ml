@@ -22,6 +22,7 @@ let const_name_of_datatype = function
   | Tstring -> "s"
   | Ttimestamp -> "time"
   | Tkey -> "key"
+  | Tkey_hash -> "key_hash"
   | Tsignature -> "sig"
   | Ttuple _ -> "tuple"
   | Toption _ -> "opt"
@@ -176,6 +177,7 @@ let decompile contract =
                  | "INT" -> Prim_int
                  | "ABS" -> Prim_abs
                  | "H" -> Prim_hash
+                 | "HASH_KEY" -> Prim_hash_key
                  | "CHECK_SIGNATURE" -> Prim_check
                  | "CREATE_ACCOUNT" -> Prim_create_account
                  | "CREATE_CONTRACT" -> Prim_create_contract

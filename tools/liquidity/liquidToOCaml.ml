@@ -40,6 +40,7 @@ let rec convert_type ty =
   | Tnat -> typ_constr "nat" []
   | Tbool -> typ_constr "bool" []
   | Tkey -> typ_constr "key" []
+  | Tkey_hash -> typ_constr "key_hash" []
   | Tsignature -> typ_constr "signature" []
   | Tstring -> typ_constr "string" []
   | Ttuple args -> Typ.tuple (List.map convert_type args)
@@ -78,6 +79,8 @@ let rec convert_const expr =
                   (convert_type Ttez)
   | CKey n -> Exp.constraint_ (convert_const (CString n))
                               (convert_type Tkey)
+  | CKey_hash n -> Exp.constraint_ (convert_const (CString n))
+                              (convert_type Tkey_hash)
   | CSignature n -> Exp.constraint_ (convert_const (CString n))
                                     (convert_type Tsignature)
 

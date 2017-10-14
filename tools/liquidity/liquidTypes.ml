@@ -37,6 +37,8 @@ type const =
   | CLeft of const
   | CRight of const
 
+  | CKey_hash of string
+
  and datatype =
    (* michelson *)
   | Tunit
@@ -47,6 +49,7 @@ type const =
   | Tstring
   | Ttimestamp
   | Tkey
+  | Tkey_hash
   | Tsignature
 
   | Ttuple of datatype list
@@ -150,6 +153,7 @@ type primitive =
   | Prim_create_account
   | Prim_create_contract
   | Prim_hash
+  | Prim_hash_key
   | Prim_check
   | Prim_default_account
 
@@ -242,6 +246,7 @@ let () =
               "Account.default", Prim_default_account;
 
               "Crypto.hash", Prim_hash;
+              "Crypto.hash_key", Prim_hash_key;
               "Crypto.check", Prim_check;
 
               "::", Prim_Cons;
@@ -408,6 +413,7 @@ type 'a pre_michelson =
   | CREATE_ACCOUNT
   | CREATE_CONTRACT
   | H
+  | HASH_KEY
   | CHECK_SIGNATURE
 
   | CONS

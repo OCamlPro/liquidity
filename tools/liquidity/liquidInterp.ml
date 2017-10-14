@@ -349,6 +349,9 @@ let interp contract =
     | H, x :: stack ->
        let x = node ins.loc (N_PRIM "H") [x] [seq] in
        x :: stack, x
+    | HASH_KEY, x :: stack ->
+       let x = node ins.loc (N_PRIM "HASH_KEY") [x] [seq] in
+       x :: stack, x
     | SOME, x :: stack ->
        let x = node ins.loc (N_PRIM "SOME") [x] [seq] in
        x :: stack, x
@@ -544,7 +547,7 @@ let interp contract =
                     (SEQ (mic_loc contract.code.loc PAIR :: code))
     | _ -> assert false
   in
-  
+
   let start_node = node contract.code.loc N_START [] [] in
 
   let initial_stack = [

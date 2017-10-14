@@ -5,11 +5,11 @@
 type storage = {
   auction_end : timestamp;
   highest_bid : tez;
-  bidder : key;
+  bidder : key_hash;
 }
 
 let%entry main
-    (parameter : key)
+    (parameter : key_hash)
     (storage : storage)
     : unit * storage =
 
