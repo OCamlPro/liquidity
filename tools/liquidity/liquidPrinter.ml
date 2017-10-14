@@ -122,6 +122,7 @@ module Michelson = struct
       | Tstring -> Printf.bprintf b "string"
       | Ttimestamp  -> Printf.bprintf b "timestamp"
       | Tkey  -> Printf.bprintf b "key"
+      | Tkey_hash  -> Printf.bprintf b "key_hash"
       | Tsignature  -> Printf.bprintf b "signature"
       | Ttuple tys -> bprint_type_pairs b indent tys
       | Tcontract (ty1, ty2) ->
@@ -200,6 +201,7 @@ module Michelson = struct
     match cst with
     | CString s -> Printf.bprintf b "%S" s
     | CKey s -> Printf.bprintf b "%S" s
+    | CKey_hash s -> Printf.bprintf b "%S" s
     | CSignature s -> Printf.bprintf b "%S" s
     | CTez s -> Printf.bprintf b "%S" (mic_of_tez s)
     | CInt n -> Printf.bprintf b "%s" (mic_of_integer n)
@@ -403,6 +405,7 @@ module Michelson = struct
     | CREATE_ACCOUNT -> Printf.bprintf b "CREATE_ACCOUNT"
     | CREATE_CONTRACT -> Printf.bprintf b "CREATE_CONTRACT"
     | H -> Printf.bprintf b "H"
+    | HASH_KEY -> Printf.bprintf b "HASH_KEY"
     | CHECK_SIGNATURE -> Printf.bprintf b "CHECK_SIGNATURE"
     | CONS -> Printf.bprintf b "CONS"
     | OR -> Printf.bprintf b "OR"

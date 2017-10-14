@@ -17,6 +17,7 @@ type integer = Z.t * kind
 type tez = integer
 type nat = integer
 type key
+type key_hash
 type signature
 type ('arg, 'res) contract
 
@@ -288,8 +289,8 @@ module Contract : sig
   val call : ('arg, 'res) contract -> tez -> 'storage -> 'arg ->
              'res * 'storage
 
-  val manager : ('a,'b) contract -> key
-  val create : key -> key option ->
+  val manager : ('a,'b) contract -> key_hash
+  val create : key_hash -> key_hash option ->
                bool -> bool -> tez ->
                ( ('a *'b) -> ('c * 'b) ) -> 'b ->
                ('a,'c) contract
@@ -329,8 +330,9 @@ end = struct
 end
 
 module Account : sig
-  val create : key -> key option -> bool -> tez -> (unit,unit) contract
-  val default : key -> (unit,unit) contract
+  val create : key_hash -> key_hash option ->
+               bool -> tez -> (unit,unit) contract
+  val default : key_hash -> (unit,unit) contract
 end = struct
   let create key key_opt _spendable _amount = assert false (* TODO NOT TESTED *)
   let default _key = assert false (* TODO *)
@@ -338,8 +340,10 @@ end
 
 module Crypto : sig
   val hash : 'a -> string
+  val hash_key : key -> key_hash
   val check : key -> signature * string -> bool
 end = struct
   let hash _ = assert false (*TODO *)
+  let hash_key _ = assert false (*TODO *)
   let check _key (_sig, _hash) = assert false (* TODO *)
 end

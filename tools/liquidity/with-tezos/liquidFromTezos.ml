@@ -64,6 +64,7 @@ let rec convert_type expr =
   | Script_repr.Prim(_, "nat", [], _debug) -> Tnat
   | Script_repr.Prim(_, "bool", [], _debug) -> Tbool
   | Script_repr.Prim(_, "key", [], _debug) -> Tkey
+  | Script_repr.Prim(_, "key_hash", [], _debug) -> Tkey_hash
   | Script_repr.Prim(_, "signature", [], _debug) -> Tsignature
   | Script_repr.Prim(_, "string", [], _debug) -> Tstring
   | Script_repr.Prim(_, "pair", [x;y], _debug) -> Ttuple [convert_type x;
@@ -180,6 +181,8 @@ let rec convert_code loc_table expr =
      end
   | Script_repr.Prim(index, "H", [], _debug) ->
     mic_loc (loc_of_int loc_table index) (H)
+  | Script_repr.Prim(index, "HASH_KEY", [], _debug) ->
+    mic_loc (loc_of_int loc_table index) (HASH_KEY)
   | Script_repr.Prim(index, "CHECK_SIGNATURE", [], _debug) ->
     mic_loc (loc_of_int loc_table index) (CHECK_SIGNATURE)
   | Script_repr.Prim(index, "CONCAT", [], _debug) ->

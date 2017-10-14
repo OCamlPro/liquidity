@@ -38,6 +38,7 @@ let comparable_ty ty1 ty2 =
     | Ttimestamp, Ttimestamp
     | Tstring, Tstring
     | Tkey, Tkey -> true
+    | Tkey_hash, Tkey_hash -> true
   | _ -> false
 
 let error_not_comparable loc prim ty1 ty2 =
@@ -1180,6 +1181,7 @@ and typecheck_prim2 env prim loc args =
   | Prim_amount, [ { ty = Tunit } ] -> Ttez
   | Prim_gas, [ { ty = Tunit } ] -> Tnat
   | Prim_hash, [ _ ] -> Tstring
+  | Prim_hash_key, [ { ty = Tkey } ] -> Tkey_hash
   | Prim_check, [ { ty = Tkey };
                   { ty = Ttuple [Tsignature; Tstring] } ] ->
      Tbool
@@ -1187,21 +1189,20 @@ and typecheck_prim2 env prim loc args =
      error_prim loc Prim_check args [Tkey; Ttuple [Tsignature; Tstring]]
 
   | Prim_manager, [ { ty = Tcontract(_,_) } ] ->
-     Tkey
+     Tkey_hash
 
-  | Prim_create_account, [ { ty = Tkey }; { ty = Toption Tkey };
+  | Prim_create_account, [ { ty = Tkey_hash }; { ty = Toption Tkey_hash };
                            { ty = Tbool }; { ty = Ttez } ] ->
      Tcontract (Tunit, Tunit)
   | Prim_create_account, args ->
      error_prim loc Prim_create_account args
-                [ Tkey; Toption Tkey; Tbool; Ttez ]
+                [ Tkey_hash; Toption Tkey_hash; Tbool; Ttez ]
 
-
-  | Prim_default_account, [ { ty = Tkey } ] ->
+  | Prim_default_account, [ { ty = Tkey_hash } ] ->
      Tcontract (Tunit, Tunit)
 
-  | Prim_create_contract, [ { ty = Tkey }; (* manager *)
-                            { ty = Toption Tkey }; (* delegate *)
+  | Prim_create_contract, [ { ty = Tkey_hash }; (* manager *)
+                            { ty = Toption Tkey_hash }; (* delegate *)
                             { ty = Tbool }; (* spendable *)
                             { ty = Tbool }; (* delegatable *)
                             { ty = Ttez }; (* initial amount *)
@@ -1220,7 +1221,7 @@ and typecheck_prim2 env prim loc args =
 
   | Prim_create_contract, args ->
 
-     let expected_args = [ Tkey; Toption Tkey;
+     let expected_args = [ Tkey_hash; Toption Tkey_hash;
                            Tbool; Tbool; Ttez ] in
      let nexpected = 7 in
      let prim = LiquidTypes.string_of_primitive Prim_create_contract in
@@ -1431,6 +1432,9 @@ let check_const_type ~to_tez loc ty cst =
 
     | Tkey, CKey s
     | Tkey, CString s -> CKey s
+
+    | Tkey_hash, CKey_hash s
+    | Tkey_hash, CString s -> CKey_hash s
 
     | Ttimestamp, CString s
     | Ttimestamp, CTimestamp s ->

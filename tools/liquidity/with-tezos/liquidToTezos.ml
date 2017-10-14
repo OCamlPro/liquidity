@@ -63,6 +63,7 @@ let rec convert_const expr =
             *)
   | CTimestamp s -> Script_repr.String (0, s)
   | CKey s -> Script_repr.String (0, s)
+  | CKey_hash s -> Script_repr.String (0, s)
   | CSignature s -> Script_repr.String (0, s)
 
   | _ ->
@@ -79,6 +80,7 @@ let rec convert_type expr =
   | Tnat -> prim "nat" []
   | Tbool -> prim "bool" []
   | Tkey -> prim "key" []
+  | Tkey_hash -> prim "key_hash" []
   | Tsignature -> prim "signature" []
   | Tstring -> prim "string" []
   | Ttuple [x] -> assert false
@@ -146,6 +148,7 @@ let rec convert_code expr =
   | PUSH (ty, cst) -> prim "PUSH" [ convert_type ty;
                                     convert_const cst ]
   | H -> prim "H" []
+  | HASH_KEY -> prim "HASH_KEY" []
   | CHECK_SIGNATURE -> prim "CHECK_SIGNATURE" []
   | CONCAT -> prim "CONCAT" []
   | EDIV -> prim "EDIV" []
