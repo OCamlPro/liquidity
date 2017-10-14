@@ -1,0 +1,864 @@
+(* Script to build Tezos with ocp-build.
+
+To use this script, checkout Tezos in a sub-directory `tezos/`, and
+create a file `build.ocp2` in `tezos/src/` containing only:
+
+```
+include "../../misc/build-tezos.ocp2-inc";
+```
+
+*)
+
+(* We want to use Posix threads when linking leveldb: *)
+OCaml.library("threads", ocaml + {
+                         generated = true;
+                         dirname = "%{OCAMLLIB}%";
+                         requires = [ "threads.posix" ];
+  });
+
+
+
+(* For now, disable webclient, since it does not compile *)
+build_webclient = false;
+
+List = module("ocp-build:List", "1.0");
+OCaml = module("ocp-build:OCaml", "1.0");
+Sys = module("ocp-build:Sys", "1.0");
+
+has_securenv = Sys.file_exists(dirname + "/ppx/ppx_securenv.ml");
+has_check = Sys.file_exists(dirname + "/minutils/check.ml");
+has_liquidity = Sys.file_exists(dirname + "/liquidity");
+has_liquidity = false;
+
+
+if( has_liquidity ) {
+  liquidity_files = [ "client_proto_programs_commands.ml" ];
+} else {
+  liquidity_files = [];
+}
+
+
+OCaml.program("tezos_protocol_environment_sigs_packer",
+        ocaml + {
+           files = [
+                "environment/tezos_protocol_environment_sigs_packer.ml";
+                ];
+        });
+
+
+ocaml.debug = true;
+
+compflags = [ "-bin-annot"; "-g"; "-thread"; "-short-paths"; "-safe-string";
+                "-w"; "+27-30-40"; ];
+min_opens = [
+      "-open"; "Error_monad";
+      "-open"; "Hash";
+      "-open"; "Utils";
+];
+
+opens = min_opens + [
+      "-open"; "Tezos_data";
+];
+
+basic_packages = [ "cstruct"; "lwt"; "ocplib-json-typed.bson";
+      "ocplib-resto.directory"; "base64"; "calendar"; "ezjsonm";
+      "ipaddr.unix"; "lwt.unix"; "mtime.clock.os"; "nocrypto";
+      "sodium"; "zarith"; "compiler-libs.optcomp"; "lwt.unix";
+      "ocplib-endian"; "ocplib-ocamlres"; "unix"; ];
+
+more_packages = basic_packages + [ "calendar"; "cmdliner";
+    "cohttp.lwt"; "dynlink"; "git"; (* "ipv6-multicast"; *) "irmin-unix";
+    "ocplib-resto.directory"; "ssl"; "leveldb" ];
+
+ocaml_without_opens = ocaml + {
+    dep = [];
+    bytecomp = compflags;
+    asmcomp = compflags;
+  };
+
+ocaml_with_opens = ocaml + {
+    dep = opens;
+    bytecomp = compflags + opens;
+    asmcomp = compflags + opens;
+  };
+
+if( has_securenv ){
+
+  OCaml.program("ppx_securenv", {
+     files = [ "ppx/ppx_securenv.ml" ];
+     requires = [ "compiler-libs.common" ];
+   });
+  securenv_mls = [ "securenv.ml" ];
+  securenv_mlis = [ "securenv.mli" ];
+} else {
+  securenv_mlis = [];
+  securenv_mls = [];
+}
+
+if( has_check ){
+    check_mls = [ "check.ml" ];
+    check_mlis = [ "check.mli" ];
+} else {
+    check_mls = [];
+    check_mlis = [];
+}
+
+function lib_with_opens(name, o){
+  OCaml.library(name, ocaml_with_opens + o);
+}
+
+function lib_without_opens(name, o){
+  OCaml.library(name, ocaml_without_opens + o);
+}
+
+function program_with_opens(name, o){
+  OCaml.program(name, ocaml_with_opens + o);
+}
+
+function program_without_opens(name, o){
+  OCaml.program(name, ocaml_without_opens + o);
+}
+
+lib_without_opens("minutils", {
+                    subdir = "minutils";
+                    files = securenv_mls + [
+                        "mBytes.ml";
+                        "hex_encode.ml";
+                        "utils.ml";
+                        "compare.ml";
+                        ] + check_mls + [
+                        "data_encoding.ml";
+                        "RPC.ml"; ];
+                    requires = [
+                        "cstruct"; "lwt"; "ocplib-json-typed.bson";
+                        "ocplib-resto.directory";
+                      ];
+                  });
+
+
+
+lib_without_opens("utils", {
+                    subdir = "utils";
+                    files = [
+                        "base58.ml";
+                        "error_monad_sig.ml";
+                        "error_monad.ml";
+                        "cli_entries.ml";
+                        "data_encoding_ezjsonm.ml";
+                        "time.ml";
+                        "hash.ml";
+                        "crypto_box.ml";
+                        "lwt_exit.ml";
+                        "logging.ml";
+                        "lwt_utils.ml";
+                        "lwt_pipe.ml"; "IO.ml";
+                        "moving_average.ml";
+                        "ring.ml";
+                        "watcher.ml";
+                        "tezos_data.ml";
+                      ];
+                    requires = [
+                        "minutils";
+                      ] + basic_packages;
+                  });
+
+utils_packages = [ "utils"; "minutils" ];
+
+
+
+
+
+
+begin
+
+  compflags += [ ];
+
+  OCaml.objects("sigs",
+                ocaml + {
+
+                  dep = opens;
+                  bytecomp = compflags + opens;
+                  asmcomp = compflags + opens;
+
+                  files = [
+                      "environment/tezos_protocol_environment_sigs_v1.ml", {
+                          deps = [];
+                          bytecomp = compflags + [ "-nopervasives" ];
+                          asmcomp = compflags + [ "-nopervasives" ];
+                      };
+
+                      "compiler/tezos_protocol_registerer.ml",{
+                          bytecomp = compflags + [ "-opaque" ] + opens;
+                          asmcomp = compflags + [ "-opaque" ] + opens;
+                        };
+                    ];
+                  requires = [ "minutils"; "utils";"proto"; ];
+                  });
+end
+
+OCaml.rules("embedded", ocaml + {
+                subdir = "compiler";
+                build_rules = [
+                    "compiler/tezos_compiler_embedded_cmis.ml",
+                    {
+                      build_target = true;
+                      sources = [
+                          "%{OCAMLLIB}%/camlinternalFormatBasics.cmi";
+                          "%{sigs_FULL_DST_DIR}%/tezos_protocol_environment_sigs_v1.cmi";
+                          "%{sigs_FULL_DST_DIR}%/tezos_protocol_registerer.cmi";
+                        ];
+                      commands = [
+                          OCaml.system(
+                              [
+                                "ocp-ocamlres"; "-format"; "ocaml";
+                                "-o"; "compiler/tezos_compiler_embedded_cmis.ml";
+                                "%{OCAMLLIB}%/camlinternalFormatBasics.cmi";
+                                "%{sigs_FULL_DST_DIR}%/tezos_protocol_environment_sigs_v1.cmi";
+                                "%{sigs_FULL_DST_DIR}%/tezos_protocol_registerer.cmi";
+                              ]
+                            );
+                        ];
+                    };
+                  ];
+                requires = [ "sigs" ];
+              });
+
+
+
+lib_with_opens("packer", {
+    subdir = "packer";
+    files = [ "tezos_protocol_packer.ml" ];
+    requires = [] + utils_packages;
+    });
+
+
+lib_with_opens("compiler", {
+    subdir = "compiler";
+    files = [
+        "tezos_compiler_embedded_cmis.ml";
+        "tezos_compiler.ml"
+      ];
+    requires = [
+        (* We cannot depend directly on [cmis], because they would be linked
+       in this library. Instead, we depend on a "rules" package. *)
+        "embedded"; "packer";
+      ] + utils_packages;
+  });
+
+
+program_without_opens("tezos-protocol-compiler", {
+                  files = [ "compiler_main.ml"; ];
+                  requires = [
+                      "minutils"; "utils"; "compiler";
+                    ] + basic_packages;
+                });
+
+begin
+  mlis = [
+    "pervasives.mli";
+    ] + securenv_mlis + [
+    "compare.mli";
+    ] + check_mlis + [
+    "array.mli";
+    "list.mli";
+    "bytes.mli";
+    "string.mli";
+    "set.mli";
+    "map.mli";
+    "int32.mli";
+    "int64.mli";
+    "buffer.mli";
+    "format.mli";
+    "z.mli";
+    "lwt_sequence.mli";
+    "lwt.mli";
+    "lwt_list.mli";
+    "mBytes.mli";
+    "hex_encode.mli";
+    "uri.mli";
+    "data_encoding.mli";
+    "error_monad.mli";
+    "logging.mli";
+    "time.mli";
+    "base58.mli";
+    "hash.mli";
+    "ed25519.mli";
+    "tezos_data.mli";
+    "persist.mli";
+    "context.mli";
+    "RPC.mli";
+    "updater.mli";
+  ];
+
+  mlis = List.map(
+    function(file){ return ("environment/v1/" + file); },
+                   mlis );
+
+  generator = DSTDIR("tezos_protocol_environment_sigs_packer",
+                     "tezos_protocol_environment_sigs_packer.byte");
+  generated_file = "environment/tezos_protocol_environment_sigs_v1.ml";
+  env.build_rules = [
+    generated_file, {
+        build_target = true;
+        sources = mlis + [ generator ];
+        commands = [
+           OCaml.system([generator] + mlis ,
+                        { stdout = generated_file; });
+         ];
+      };
+  ];
+  env.requires = [ "tezos_protocol_environment_sigs_packer" ];
+  OCaml.rules("proto", env);
+end
+
+lib_with_opens("node", {
+
+                   files = [
+                     "compiler/node_compiler_main.ml";
+                     "node/net/p2p_types.ml";
+                     "node/net/p2p_io_scheduler.ml";
+                     "node/net/p2p_connection.ml";
+                     "node/net/p2p_connection_pool_types.ml";
+                     "node/net/p2p_connection_pool.ml";
+                     "node/net/p2p_welcome.ml";
+                     "node/net/p2p_discovery.ml";
+                     "node/net/p2p_maintenance.ml";
+                     "node/net/p2p.ml";
+                     "node/net/RPC_server.ml";
+
+                     "node/db/persist.ml";
+                     "node/db/context.ml";
+
+                     "node/db/raw_store.ml";
+                     "node/db/store_sigs.mli";
+                     "node/db/store_helpers.ml";
+                     "node/db/store.ml";
+                     "node/updater/updater.ml";
+                     "node/updater/tezos_protocol_environment.ml";
+                     "node/updater/register.ml";
+
+                     "node/shell/state.ml";
+                     "node/shell/distributed_db_functors.ml";
+                     "node/shell/distributed_db_message.ml";
+                     "node/shell/distributed_db_metadata.ml";
+                     "node/shell/distributed_db.ml";
+                     "node/shell/chain_traversal.ml";
+                     "node/shell/chain.ml";
+                     "node/shell/prevalidation.ml";
+                     "node/shell/prevalidator.ml";
+                     "node/shell/validator.ml";
+
+                     "node/shell/node_rpc_services.ml";
+                     "node/shell/node.ml";
+                     "node/shell/node_rpc.ml";
+                   ];
+
+                   requires = [
+                       "minutils"; "utils"; "compiler"; "proto"; "sigs";
+                     ] + more_packages;
+
+              });
+
+function read_sources(protocol)
+{
+  dir = "proto/" + protocol;
+  files = Sys_readdir(dir, "*.ml") + Sys_readdir(dir, "*.mli");
+  files = List.map(function(file){return dir + "/" + file;},files);
+  return files;
+}
+
+protocol_sources["alpha"] = read_sources("alpha");
+protocol_sources["demo"] = read_sources("demo");
+protocol_sources["genesis"] = read_sources("genesis");
+
+  begin
+
+    compiler =
+      "%{tezos-protocol-compiler_FULL_DST_DIR}%/tezos-protocol-compiler.asm";
+
+    function compile(lib, dir, sources){
+
+      return OCaml.make([
+                   "proto/" + lib + ".o";
+                   "proto/" + lib + ".cmi";
+                   "proto/" + lib + ".cmx";
+                  ],
+                  [ compiler ] + sources,
+                  [
+                    [
+                      compiler; "-static";
+                      "-bin-annot"; "-g";
+                      "proto/"+lib;
+                      dir;
+                    ]
+                  ]
+      );
+    }
+
+  function embedded_proto(name){
+    env.build_rules = List.flatten([
+      compile("tezos_embedded_protocol_" + name, "proto/" + name,
+              protocol_sources[name]);
+    ]);
+    env.requires = [ "tezos-protocol-compiler" ];
+    env.tolink = true;
+    env.asm_targets = [ "proto/tezos_embedded_protocol_" + name + ".cmx" ];
+    env.byte_targets = [ "proto/tezos_embedded_protocol_" + name + ".cma" ];
+    env.intf_targets = [ "proto/tezos_embedded_protocol_" + name + ".cmi";
+                         "proto/tezos_embedded_protocol_" + name + ".cmx";
+                       ];
+
+    OCaml.rules("tezos_embedded_protocol_" + name, env);
+  }
+
+      embedded_proto("alpha");
+      embedded_proto("demo");
+      embedded_proto("genesis");
+
+  end
+
+program_with_opens("tezos-node",
+                   {
+                     has_byte = false;
+                     asmlink = [ "-linkall"; "-g" ];
+                     bytelink = [ "-linkall"; "-g" ];
+                     files = [
+                         "node/main/node_identity_file.ml";
+                         "node/main/node_config_file.ml";
+                         "node/main/node_shared_arg.ml";
+                         "node/main/node_run_command.ml";
+                         "node/main/node_config_command.ml";
+                         "node/main/node_identity_command.ml";
+                         "node_main.ml";
+                       ];
+                     requires = [
+                         "tezos_embedded_protocol_alpha";
+                         "tezos_embedded_protocol_demo";
+                         "tezos_embedded_protocol_genesis";
+
+                         "minutils"; "utils"; "compiler"; "node";
+                       ] + more_packages;
+                  });
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+lib_with_opens("client", {
+
+                 subdir = "client";
+                 requires = basic_packages + utils_packages + [ "node" ];
+                 files = [
+                     "client_rpcs.ml";
+                     "client_node_rpcs.ml";
+                     "client_commands.ml";
+                     "client_config.ml";
+                     "client_generic_rpcs.ml";
+                     "client_helpers.ml";
+                     "client_aliases.ml";
+                     "client_tags.ml";
+                     "client_keys.ml";
+                     "client_protocols.ml";
+                     "client_network.ml";
+                   ];
+               });
+
+
+
+function client_objects(proto, o){
+
+
+  base_opens = [];
+
+  more_opens = [
+    "-open"; "Client_proto_" + proto;
+    "-open"; "Error_monad";
+    "-open"; "Hash";
+    "-open"; "Tezos_data"
+  ] + o.opens;
+
+  ocaml.subdir = "client/embedded/" + proto;
+  ocaml.more_deps =
+  [ "%{tezos_embedded_protocol_" + proto + "_FULL_SRC_DIR}%/proto/tezos_embedded_protocol_" + proto + ".cmx"; ];
+
+  requires = [ "utils"; "minutils"; "node"; "client"; "lwt"; "zarith";
+             "ocplib-json-typed"; "sodium"; "sigs"; "ocplib-endian"; "uri"];
+  includes =
+    List.flatten(
+      List.map(function(dep){
+        return ["-I"; DSTDIR(dep) ];
+      }, requires));
+
+  compflags += [ "-I"; "%{tezos_embedded_protocol_" + proto + "_FULL_SRC_DIR}%/proto" ] + includes;
+
+  packed_files =
+    [
+      "client_proto_" + proto + ".ml", {
+        dep = base_opens;
+        asmcomp = compflags + base_opens;
+        bytecomp = compflags + base_opens;
+      };
+    ] + List.map(function(file){
+                             return file, {
+                               dep = more_opens;
+                               asmcomp = compflags + more_opens;
+                               bytecomp = compflags + more_opens;
+                             };
+                           },o.packed_files);
+
+  ocaml.dep = more_opens;
+  ocaml.asmcomp = compflags;
+  ocaml.bytecomp = compflags;
+
+
+  ocaml.files = OCaml.pack("Client_" + proto, packed_files);
+  ocaml.requires = o.requires;
+  OCaml.objects("client_" + proto, ocaml);
+}
+
+
+
+client_objects("genesis", {
+                 opens = [];
+                 packed_files = [
+                   "client_proto_main.ml";
+                 ];
+                 requires = [
+                     "client"; "client_alpha";
+                     "tezos_embedded_protocol_alpha", { tolink = true; };
+                     "tezos_embedded_protocol_genesis", { tolink = true; };
+                   ];
+
+              });
+
+
+(* "client_alpha": specific part of the client to interact with
+   the "alpha" protocol. *)
+client_objects("alpha", {
+                 opens = [
+
+                   "-open"; "Error_monad"; "-open"; "Hash";  "-open"; "Tezos_data";
+                   "-open"; "Tezos_context";
+];
+                 packed_files = [
+                     "script_located_ir.ml";
+                     "michelson_macros.ml";
+                     "michelson_parser.ml";
+                     "client_proto_rpcs.ml";
+                     "client_proto_args.ml";
+                     "client_proto_contracts.ml";
+                     "client_proto_programs.ml";
+                     ] + liquidity_files + [
+                     "client_proto_context.ml";
+                     "client_proto_nonces.ml";
+                     "client_proto_main.ml";
+                     "baker/client_mining_blocks.ml";
+                     "baker/client_mining_operations.ml";
+                     "baker/client_mining_endorsement.ml";
+                     "baker/client_mining_denunciation.ml";
+                     "baker/client_mining_revelation.ml";
+                     "baker/client_mining_forge.ml";
+                     "baker/client_mining_daemon.ml";
+                     "baker/client_mining_main.ml";
+                   ];
+                 requires = [
+                     "tezos_embedded_protocol_alpha"; "node"; "client";
+                   ];
+               });
+
+client_objects("demo", {
+                 opens = [];
+                 packed_files = [
+                     "client_proto_rpcs.ml";
+                     "client_proto_main.ml";
+                   ];
+                 requires = [
+                     "tezos_embedded_protocol_demo"; "client"
+                   ];
+               });
+
+
+program_with_opens("tezos-client", {
+                     has_byte = false;
+                     asmlink =  [ "-linkall";"-g" ];
+                     bytelink = [  "-linkall";"-g" ];
+                     files = [
+                         "client_main.ml";
+                       ];
+                     requires = [
+                         "tezos_embedded_protocol_alpha", { tolink = true };
+                         "tezos_embedded_protocol_demo", { tolink = true };
+                         "tezos_embedded_protocol_genesis", { tolink = true };
+                         "client_alpha"; "client_demo"; "client_genesis";
+                         "minutils"; "utils"; "compiler"; "node"; "client";
+                       ] + more_packages;
+                   });
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+(*
+
+
+if( build_webclient ) {
+
+
+
+
+
+begin
+
+  ocaml.dep = opens;
+  ocaml.asmcomp = compflags + opens;
+  ocaml.bytecomp = compflags + opens;
+  ocaml.requires = more_packages + [
+     "minutils"; "utils"; "compiler"; "node";
+  ];
+  ocaml.files = [ "client/webclient_version.ml" ];
+  OCaml.library("webclient", ocaml);
+end
+
+main_js = "client/embedded/alpha/webclient/static/main.js";
+
+begin
+  ocaml.has_byte = true;
+  ocaml.has_asm = false;
+  ppx = [ "-ppx"; "%{js_of_ocaml.ppx_FULL_SRC_DIR}%/ppx_js" ];
+  ocaml.asmcomp = compflags + ppx;
+  ocaml.bytecomp = compflags + ppx;
+  ocaml.subdir = "client/embedded/alpha/webclient";
+  ocaml.requires = [
+    "lwt"; "cstruct"; "ocplib-json-typed.browser";
+    "ocplib-json-typed.bson"; "ocplib-resto.directory";
+    "js_of_ocaml.tyxml"; "js_of_ocaml.ppx";
+  ] +
+    [ "minutils" ];
+  ocaml.files = [
+     "shared/webclient_proto_services.ml";
+     "browser/webclient_main.ml";
+  ];
+  ocaml.build_rules = OCaml.make(
+    [main_js],
+    [ "%{main_FULL_DST_DIR}%/main.byte" ],
+    [[ "js_of_ocaml"; "+weak.js"; "%{main_FULL_DST_DIR}%/main.byte";
+       "-o";  main_js ]]);
+
+  OCaml.program("main", ocaml);
+end
+
+begin
+  ocaml.has_byte = false;
+
+  opens = [
+    "-I"; "src/proto";
+    "-open"; "Client_embedded_proto_alpha";
+    "-open"; "Register_client_embedded_proto_alpha";
+    "-open"; "Error_monad";
+    "-open"; "Hash";
+    "-open"; "Client_alpha";
+    "-open"; "Tezos_context";
+  ];
+
+  compflags = [  "-g"; "-short-paths"; "-safe-string";
+                 "-w"; "+27-30-40" ];
+  ocaml.dep = opens;
+  ocaml.bytecomp = compflags + opens;
+  ocaml.asmcomp = compflags + opens;
+
+  ocaml.requires = [
+    "lwt"; "ocplib-json-typed"; "sodium"; "ocplib-ocamlres";
+  ] + [
+    "minutils"; "utils";
+    "main"; "client_embedded_proto_alpha"; "client_alpha"; "webclient" ];
+
+  subdir = "client/embedded/alpha/webclient/";
+
+  ocaml.files =
+    OCaml.pack("Webclient_alpha",
+               (* empty asmcomp, to avoid -open with -pack: since
+                  ocp-build does not provide -I during -pack, -open
+                  would fail *)
+               ocaml + { asmcomp = [] },
+               [
+      subdir + "webclient_proto_static.ml";
+      subdir + "shared/webclient_proto_services.ml";
+      subdir + "webclient_proto_service_directory.ml"
+        (* , {
+        asmcomp = ocaml.asmcomp + extra_opens;
+           } *);
+      subdir + "webclient_proto_main.ml";
+    ]
+    );
+
+  ocaml.build_rules = OCaml.make(
+    [subdir + "webclient_proto_static.ml"], [ main_js ],
+    [[ "ocp-ocamlres"; subdir + "static";
+       "-o"; subdir + "webclient_proto_static.ml" ]]);
+
+  OCaml.objects("webclient_alpha", ocaml);
+end
+
+
+begin
+
+    subdir = "client/embedded/alpha/webclient/";
+    compflags = compflags + ["-linkall"];
+    opens = [
+      "-open"; "Client_embedded_proto_demo";
+      "-open"; "Register_client_embedded_proto_demo";
+      "-open"; "Error_monad";
+      "-open"; "Hash";
+    ];
+
+    ocaml.dep = opens;
+    ocaml.bytecomp = compflags + opens;
+    ocaml.asmcomp = compflags + opens;
+
+    requires = [ "minutils"; "utils"; "node"; "client" ] +
+      [ "lwt";  "ocplib-json-typed"; "sodium";
+        "ocplib-ocamlres" ];
+
+    files = OCaml.pack("Webclient_demo", []);
+
+    OCaml.objects("webclient_demo", ocaml);
+
+  end
+
+
+
+  begin
+
+    subdir = "client/embedded/alpha/webclient/";
+    compflags = compflags + ["-linkall"];
+    opens = [
+      "-open"; "client_embedded_proto_genesis";
+      "-open"; "Register_client_embedded_proto_genesis";
+      "-open"; "Error_monad";
+      "-open"; "Hash";
+    ];
+
+    ocaml.dep = opens;
+    ocaml.bytecomp = compflags + opens;
+    ocaml.asmcomp = compflags + opens;
+
+    requires = [ "minutils"; "utils"; "node"; "client" ] +
+      [ "lwt";  "ocplib-json-typed"; "sodium";
+        "ocplib-ocamlres" ];
+
+    files = OCaml.pack("Webclient_genesis",
+                       [ ]);
+
+    OCaml.objects("webclient_genesis", ocaml);
+
+  end
+
+  begin
+
+    opens = [ "-open"; "Error_monad"; "-open"; "Hash"; "-open"; "Utils" ];
+
+    ocaml.dep = opens;
+    ocaml.bytecomp = compflags + opens;
+    ocaml.asmcomp = compflags + opens;
+
+
+    ocaml.files = [
+      "webclient_static.ml";
+      "webclient_main.ml";
+    ];
+      ocaml.requires = more_packages +
+      [
+        "minutils"; "utils"; "compiler"; "node"; "client"; "webclient";
+        "client_embedded_proto_alpha"; "client_embedded_proto_demo";
+        "client_embedded_proto_genesis"; "client_alpha"; "client_demo";
+        "client_genesis"; "webclient_alpha"; "webclient_demo";
+        "webclient_genesis";
+      ];
+
+      ocaml.build_rules = OCaml.make(
+        ["webclient_static.ml"],
+        List.map(function(file){
+          return "webclient_static/" + file;
+        }, Sys_readdir("webclient_static")),
+        [[ "ocp-ocamlres"; "webclient_static";
+              "-o"; "webclient_static.ml"; ]]);
+      OCaml.program("tezos-webclient", ocaml);
+  end
+
+
+}
+ *)
