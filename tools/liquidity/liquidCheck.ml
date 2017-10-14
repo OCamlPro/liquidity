@@ -7,6 +7,9 @@
 (*                                                                        *)
 (**************************************************************************)
 
+(* TODO: we should check that the keys of maps and sets are comparable,
+  in particular to avoid using `key` in maps instead of `key_hash`. *)
+
 (* TODO: we don't handle correctly all the occurrences of Tfail, i.e.
    when an error occurs in a sub-part of a type and another type is expected,
    we should probably unify.
@@ -37,7 +40,6 @@ let comparable_ty ty1 ty2 =
   | (Tint|Tnat|Ttez), (Tint|Tnat|Ttez)
     | Ttimestamp, Ttimestamp
     | Tstring, Tstring
-    | Tkey, Tkey -> true
     | Tkey_hash, Tkey_hash -> true
   | _ -> false
 
