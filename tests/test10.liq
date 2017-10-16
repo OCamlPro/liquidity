@@ -1,17 +1,18 @@
 
 (* constructors *)
 
-[%%version 0.1]
+[%%version 0.11]
 
-let%entry main
-      (parameter : bool)
-      (storage :
+type s =
         bool *
         int option *
         (string,int) map
-      )
-      [%return : unit] =
-      
+
+let%entry main
+      (parameter : bool)
+      (storage : s)
+      : unit * s =
+
 (* options *)
       let x = 3 in
       let option = Some x in

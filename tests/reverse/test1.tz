@@ -1,4 +1,4 @@
-parameter key;
+parameter key_hash;
 return unit;
 storage unit;
 code {CAR; DEFAULT_ACCOUNT; # Create an account for the recipient of the funds

@@ -1,10 +1,10 @@
 
-[%%version 0.1]
+[%%version 0.11]
 
 let%entry main
       (parameter : int)
       (storage : int)
-      [%return : unit] =
+      : unit * int =
   let x = parameter + 10 in
   let f ( arg : int * int ) (y : int) =
     arg.(0) + x + y

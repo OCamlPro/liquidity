@@ -81,10 +81,6 @@ let () =
 
 (* The minimal version of liquidity files that are accepted by this compiler *)
 let minimal_version = 0.1
-
-(* The maximal version of liquidity files that are accepted by this compiler *)
-let maximal_version = 0.1
-
 (*
 let contract
       (parameter : timestamp)
@@ -95,6 +91,18 @@ let contract
       [%return : unit] =
        ...
  *)
+
+(* The maximal version of liquidity files that are accepted by this compiler *)
+let maximal_version = 0.11
+(*
+type storage = ...
+let contract
+      (parameter : timestamp)
+      (storage: storage )
+      : unit * storage =
+       ...
+ *)
+
 
 open Asttypes
 open Longident
@@ -153,6 +161,7 @@ let rec translate_type env typ =
   | { ptyp_desc = Ptyp_constr ({ txt = Lident "string" }, []) } -> Tstring
   | { ptyp_desc = Ptyp_constr ({ txt = Lident "timestamp" }, []) } -> Ttimestamp
   | { ptyp_desc = Ptyp_constr ({ txt = Lident "key" }, []) } -> Tkey
+  | { ptyp_desc = Ptyp_constr ({ txt = Lident "key_hash" }, []) } -> Tkey_hash
   | { ptyp_desc = Ptyp_constr ({ txt = Lident "signature" }, []) } -> Tsignature
 
 
@@ -184,8 +193,9 @@ let rec translate_type env typ =
   | { ptyp_desc = Ptyp_constr ({ txt = Lident ty_name }, []) } ->
      begin
        try
-         let ty,_ = StringMap.find ty_name env.types in
-         Ttype (ty_name, ty)
+         match StringMap.find ty_name env.types with
+         | ty, Type_alias -> ty
+         | ty, _ -> Ttype (ty_name, ty)
        with Not_found ->
          unbound_type typ.ptyp_loc ty_name
      end
@@ -380,6 +390,41 @@ and translate_pair exp =
 
 let mk desc = { desc; ty = (); bv = StringSet.empty; fail = false }
 
+let deconstruct_pat env pat =
+  let rec deconstruct_pat_aux acc indexes = function
+    | { ppat_desc = Ppat_constraint (pat, ty) } ->
+      let acc, _ = deconstruct_pat_aux acc indexes pat in
+      acc, translate_type env ty
+
+    | { ppat_desc = Ppat_var { txt = var; loc } } ->
+      (var, loc_of_loc loc, indexes) :: acc, Tunit (* Dummy type value *)
+
+    | { ppat_desc = Ppat_any; ppat_loc } ->
+      ("_", loc_of_loc ppat_loc, indexes) :: acc, Tunit (* Dummy type value *)
+
+    | { ppat_desc = Ppat_tuple pats } ->
+      let _, acc, tys =
+        List.fold_left (fun (i, acc, tys) pat ->
+            let acc, ty = deconstruct_pat_aux acc (i :: indexes) pat in
+            i + 1, acc, ty :: tys
+          ) (0, acc, []) pats
+      in
+      acc, Ttuple (List.rev tys)
+
+    | { ppat_loc } ->
+      error_loc ppat_loc "cannot deconstruct this pattern"
+  in
+  deconstruct_pat_aux [] [] pat
+
+let access_of_deconstruct var_name loc indexes =
+  let a = mk (Var (var_name, loc, [])) in
+  List.fold_right (fun i a ->
+      mk (Apply (Prim_tuple_get, loc, [
+          a;
+          mk (Const (Tnat, CNat (LiquidPrinter.integer_of_int i)))
+        ]))
+    ) indexes a
+
 let rec translate_code env exp =
   let desc =
     match exp with
@@ -453,16 +498,27 @@ let rec translate_code env exp =
                     translate_code env arg_exp,
                     translate_code env body)
 
-    | { pexp_desc = Pexp_let (Nonrecursive,
-                              [
-                                {
-                                  pvb_pat = { ppat_desc =
-                                                Ppat_var { txt = var; loc } };
-                                  pvb_expr = var_exp;
-                                }
-                              ], body) } ->
-       Let (var, loc_of_loc loc,
-            translate_code env var_exp, translate_code env body)
+    | { pexp_desc = Pexp_let (Nonrecursive, [ {
+        pvb_pat = pat;
+        pvb_expr = var_exp;
+      } ], body); pexp_loc } ->
+
+      let vars_infos, _ = deconstruct_pat env pat in
+      let exp, body = translate_code env var_exp, translate_code env body in
+      begin match vars_infos with
+        | [] -> assert false
+        | [v, loc, []] -> Let (v, loc, exp, body)
+        | _ ->
+          let var_name =
+            String.concat "_" (List.rev_map (fun (v,_,_) -> v) vars_infos) in
+          let lets_body =
+            List.fold_left (fun e (v, loc, indexes) ->
+                let access = access_of_deconstruct var_name loc indexes in
+                mk (Let (v, loc, access, e))
+              ) body vars_infos
+          in
+          Let (var_name, loc_of_loc pexp_loc, exp, lets_body)
+      end
 
     | { pexp_desc = Pexp_sequence (exp1, exp2) } ->
        Seq (translate_code env exp1, translate_code env exp2)
@@ -500,32 +556,47 @@ let rec translate_code env exp =
        let e = translate_code env e in
        let cases = List.map (translate_case env) cases in
        begin
-         match List.sort compare cases with
-         | [ "None", [], ifnone;
-             "Some", [arg], ifsome] ->
-            MatchOption(e, loc_of_loc pexp_loc, ifnone, arg, ifsome)
-         | [ "::", [head; tail], ifcons;
-             "[]", [], ifnil ] ->
-            MatchList(e, loc_of_loc pexp_loc, head, tail, ifcons, ifnil)
+         match cases with
+         | [ CConstr ("None", []), ifnone; CConstr ("Some", [arg]), ifsome ]
+         | [ CConstr ("Some", [arg]), ifsome; CConstr ("None", []), ifnone ]
+         | [ CConstr ("Some", [arg]), ifsome; CAny, ifnone ] ->
+           MatchOption(e, loc_of_loc pexp_loc, ifnone, arg, ifsome)
+         | [ CConstr ("None", []), ifnone; CAny, ifsome ] ->
+           MatchOption(e, loc_of_loc pexp_loc, ifnone, "_", ifsome)
+
+         | [ CConstr ("[]", []), ifnil; CConstr ("::", [head; tail]), ifcons ]
+         | [ CConstr ("::", [head; tail]), ifcons; CConstr ("[]", []), ifnil ]
+         | [ CConstr ("::", [head; tail]), ifcons; CAny, ifnil ] ->
+           MatchList(e, loc_of_loc pexp_loc, head, tail, ifcons, ifnil)
+         | [ CConstr ("[]", []), ifnil; CAny, ifcons ] ->
+           MatchList(e, loc_of_loc pexp_loc, "_head", "_tail", ifcons, ifnil)
+
          | args ->
-            MatchVariant(e, loc_of_loc pexp_loc, args)
+           MatchVariant(e, loc_of_loc pexp_loc, args)
        end
 
-    | { pexp_desc =
-          Pexp_fun (
-              Nolabel, None,
-              { ppat_desc =
-                  Ppat_constraint(
-                      { ppat_desc =
-                          Ppat_var { txt = arg_name } },
-                      arg_type)
-              },
-              body_exp) } ->
+    | { pexp_desc = Pexp_fun (Nolabel, None, pat, body_exp) } ->
        let body_exp = translate_code env body_exp in
-       let arg_type = translate_type env arg_type in
-       Lambda (arg_name, arg_type, loc_of_loc exp.pexp_loc,
-               body_exp,
-               Tunit) (* not yet inferred *)
+       let vars_infos, arg_type = deconstruct_pat env pat in
+       begin match vars_infos with
+         | [] -> assert false
+         | [arg_name, loc, []] ->
+           Lambda (arg_name, arg_type, loc_of_loc exp.pexp_loc,
+                   body_exp,
+                   Tunit) (* not yet inferred *)
+         | _ ->
+           let arg_name =
+             String.concat "_" (List.rev_map (fun (v,_,_) -> v) vars_infos) in
+           let lets_body =
+             List.fold_left (fun e (v, loc, indexes) ->
+                   let access = access_of_deconstruct arg_name loc indexes in
+                   mk (Let (v, loc, access, e))
+               ) body_exp vars_infos
+           in
+           Lambda (arg_name, arg_type, loc_of_loc exp.pexp_loc,
+                   lets_body,
+                   Tunit) (* not yet inferred *)
+       end
 
     | { pexp_desc = Pexp_record (lab_x_exp_list, None) } ->
        let lab_x_exp_list =
@@ -674,25 +745,29 @@ and translate_case env case =
      let e = case.pc_rhs in
      let e = translate_code env e in
      match case.pc_lhs with
+     | { ppat_desc = Ppat_any } ->
+        (CAny, e)
      | { ppat_desc = Ppat_construct ( { txt = Lident name } , None) }  ->
-        (name, [], e)
-     | { ppat_desc = Ppat_construct (
-                         { txt = Lident name } ,
-                         Some { ppat_desc = Ppat_var { txt } } ) }  ->
-        (name, [txt], e)
+        (CConstr (name, []), e)
      | { ppat_desc =
            Ppat_construct (
                { txt = Lident name } ,
-               Some { ppat_desc =
-                        Ppat_tuple [
-                            { ppat_desc = Ppat_var { txt = var1 } };
-                            { ppat_desc = Ppat_var { txt = var2 } };
-                          ]
-                    }
+               Some { ppat_desc = Ppat_tuple [ p1; p2 ]}
        ) }  ->
-        (name, [var1; var2], e)
+        (CConstr (name, [var_of_pat p1; var_of_pat p2]), e)
+     | { ppat_desc = Ppat_construct (
+                         { txt = Lident name } , Some p ) }  ->
+        (CConstr (name, [var_of_pat p]), e)
      | { ppat_loc } ->
         error_loc ppat_loc "bad pattern"
+
+and var_of_pat = function
+    | { ppat_desc = Ppat_var { txt = var } } -> var
+    | { ppat_desc = Ppat_any } -> "_"
+    | { ppat_desc = Ppat_construct _; ppat_loc } ->
+      error_loc ppat_loc "cannot match deep"
+    | { ppat_loc } ->
+      error_loc ppat_loc "bad pattern"
 
 let rec inline_funs exp = function
   | [] -> exp
@@ -721,7 +796,21 @@ let rec translate_head env ext_funs head_exp args =
             },
             head_exp) } ->
      translate_head env ext_funs head_exp
-                    ((arg, translate_type env arg_type) :: args)
+       ((arg, translate_type env arg_type) :: args)
+
+  | { pexp_desc = Pexp_constraint (head_exp, return_type); pexp_loc } ->
+    let return = match translate_type env return_type with
+      | Ttuple [ ret_ty; sto_ty ] ->
+        let storage = List.assoc "storage" args in
+        if sto_ty <> storage then
+          error_loc pexp_loc
+            "Second component of return type must be identical to storage type";
+        ret_ty
+      | _ ->
+        error_loc pexp_loc
+          "return type must be a product of some type and the storage type"
+    in
+    translate_head env ext_funs head_exp (("return", return) :: args)
 
   | { pexp_desc =
         Pexp_fun (
@@ -731,7 +820,7 @@ let rec translate_head env ext_funs head_exp args =
             },
             head_exp) } ->
      translate_head env ext_funs head_exp
-                    (("return", translate_type env arg_type) :: args)
+       (("return", translate_type env arg_type) :: args)
 
   | { pexp_desc =
         Pexp_fun (
@@ -877,6 +966,23 @@ let rec translate_structure funs env ast =
         translate_variant ty_name constrs env;
      end;
      translate_structure funs env ast
+
+  (* type alias *)
+  | { pstr_desc = Pstr_type (Recursive,
+                             [
+                               { ptype_name = { txt = ty_name };
+                                 ptype_params = [];
+                                 ptype_cstrs = [];
+                                 ptype_private = Public;
+                                 ptype_manifest = Some ct;
+                                 ptype_attributes = [];
+                                 ptype_loc;
+                                 ptype_kind;
+                               }
+    ]) } :: ast ->
+    let ty = translate_type env ct in
+    env.types <- StringMap.add ty_name (ty, Type_alias) env.types;
+    translate_structure funs env ast
 
   | [] ->
     Location.raise_errorf "No entry point found in file %S%!" env.filename

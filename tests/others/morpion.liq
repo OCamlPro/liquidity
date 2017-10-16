@@ -9,7 +9,7 @@ type parameter = { play : bool; x : int; y : int }
 let contract
       ( storage : storage )
       ( parameter : parameter )
-      [%return : (bool option) option ]
+      : (bool option) option
   =
   let s = "This is a Tic Tac Toe game. Still work in progress" in
 

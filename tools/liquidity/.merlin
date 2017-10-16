@@ -1,6 +1,9 @@
 S ./**
 S ../../libs/**
 B ../../_obuild/**
+
+FLG -rectypes
+
 PKG ocplib-file
 PKG ocplib-ocamlres
 PKG ocplib-endian

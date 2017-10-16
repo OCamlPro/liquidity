@@ -1,17 +1,17 @@
 (* Auction contract from https://www.michelson-lang.com/contract-a-day.html *)
 
-[%%version 0.1]
+[%%version 0.11]
 
 type storage = {
   auction_end : timestamp;
   highest_bid : tez;
-  bidder : key;
+  bidder : key_hash;
 }
 
 let%entry main
-    (parameter : key)
+    (parameter : key_hash)
     (storage : storage)
-    [%return : unit] =
+    : unit * storage =
 
   (* Check if auction has ended *)
   if Current.time () > storage.auction_end then Current.fail ();

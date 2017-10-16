@@ -63,6 +63,7 @@ let rec convert_const expr =
             *)
   | CTimestamp s -> Script_repr.String (0, s)
   | CKey s -> Script_repr.String (0, s)
+  | CKey_hash s -> Script_repr.String (0, s)
   | CSignature s -> Script_repr.String (0, s)
 
   | _ ->
@@ -79,6 +80,7 @@ let rec convert_type expr =
   | Tnat -> prim "nat" []
   | Tbool -> prim "bool" []
   | Tkey -> prim "key" []
+  | Tkey_hash -> prim "key_hash" []
   | Tsignature -> prim "signature" []
   | Tstring -> prim "string" []
   | Ttuple [x] -> assert false
@@ -99,7 +101,7 @@ let rec convert_type expr =
   | Ttype (_, ty) -> convert_type ty
 
 let rec convert_code expr =
-  match expr with
+  match expr.i with
   | SEQ exprs ->
      Script_repr.Seq (0, List.map convert_code exprs, debug)
   | DROP -> prim "DROP" []
@@ -146,6 +148,7 @@ let rec convert_code expr =
   | PUSH (ty, cst) -> prim "PUSH" [ convert_type ty;
                                     convert_const cst ]
   | H -> prim "H" []
+  | HASH_KEY -> prim "HASH_KEY" []
   | CHECK_SIGNATURE -> prim "CHECK_SIGNATURE" []
   | CONCAT -> prim "CONCAT" []
   | EDIV -> prim "EDIV" []
@@ -185,7 +188,9 @@ let rec convert_code expr =
   | LSL -> prim "LSL" []
   | LSR -> prim "LSR"  []
   | DIP_DROP (ndip, ndrop) ->
-     convert_code (DIP (ndip, SEQ (LiquidMisc.list_init ndrop (fun _ -> DROP))))
+     convert_code {i=DIP (ndip,
+                          {i=SEQ (LiquidMisc.list_init ndrop
+                                                       (fun _ -> {i=DROP}))})}
   | CDAR n -> prim (Printf.sprintf "C%sAR" (String.make n 'D')) []
   | CDDR n -> prim (Printf.sprintf "C%sDR" (String.make n 'D')) []
   | SIZE -> prim "SIZE" []
@@ -237,16 +242,16 @@ let get_context () =
 let read_tezos_file filename =
   let s = FileString.read_file filename in
   let contract_hash = Hash.Operation_hash.hash_bytes [s] in
-  match LiquidFromTezos.contract_of_string s with
-  | Some code ->
+  match LiquidFromTezos.contract_of_string filename s with
+  | Some (code, loc_table) ->
      Printf.eprintf "Program %S parsed\n%!" filename;
-     code, contract_hash
+     code, contract_hash, loc_table
   | None ->
      Printf.eprintf "Errors parsing in %S\n%!" filename;
      exit 2
 
 let execute_contract_file filename =
-  let contract, contract_hash = read_tezos_file filename in
+  let contract, contract_hash, _ = read_tezos_file filename in
 
   let origination = Contract.initial_origination_nonce contract_hash in
   let destination = Contract.originated_contract origination in

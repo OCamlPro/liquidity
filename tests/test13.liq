@@ -1,12 +1,12 @@
 
 (* lists *)
 
-[%%version 0.1]
+[%%version 0.11]
 
 let%entry main
       (parameter : string)
       (storage : string list)
-      [%return : unit] =
+      : unit * string list =
       
       let set = ([] : string list) in
       let set = "a" :: set in
@@ -18,7 +18,7 @@ let%entry main
         else
         match x with
         | [] -> set
-        | y :: z -> z
+        | _ :: z -> z
        in
 
       ( (), storage )

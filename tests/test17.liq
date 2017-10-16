@@ -7,7 +7,7 @@ type storage =
 let%entry main
       (parameter : int)
       (storage : storage)
-      [%return : unit] =
+      : unit * storage =
   let _a = Nothing in
   let b = Int 3 in
   let c = String ("toto",0) in

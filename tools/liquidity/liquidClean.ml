@@ -10,12 +10,9 @@
 open LiquidTypes
 
 
-let string_of_pre pre =
-  LiquidPrinter.Michelson.string_of_code (LiquidEmit.emit_code (SEQ pre))
-
 let rec clean_code code =
-  let code =
-    match code with
+  let ins =
+    match code.ins with
     | SEQ expr -> SEQ (clean_seq expr)
     | IF (e1, e2) -> IF (clean_code e1, clean_code e2)
     | IF_NONE (e1, e2) -> IF_NONE (clean_code e1, clean_code e2)
@@ -25,12 +22,12 @@ let rec clean_code code =
     | LOOP e -> LOOP (clean_code e)
     | LAMBDA (arg_type, res_type, e) ->
        LAMBDA (arg_type, res_type, clean_code e)
-    | _ -> code
+    | ins -> ins
   in
-  match code with
-  | DIP (_, SEQ [FAIL]) | DIP (_, FAIL)
-    | LOOP (SEQ [FAIL]) | LOOP FAIL
-    -> FAIL
+  match ins with
+  | DIP (_, {ins=SEQ [{ins=FAIL}]}) | DIP (_, {ins=FAIL})
+  | LOOP ({ins=SEQ [{ins=FAIL}]}) | LOOP {ins=FAIL}
+    -> { code with ins = FAIL }
   | _ -> code
 
 and clean_seq exprs =
@@ -38,11 +35,11 @@ and clean_seq exprs =
   | [] -> []
   | e :: exprs ->
      let e = clean_code e in
-     if e = FAIL then [FAIL]
+     if e.ins = FAIL then [e]
      else
        let exprs =  clean_seq exprs in
        match e, exprs with
-       | _, FAIL :: _ -> [FAIL]
+       | _, ({ins=FAIL} as fail) :: _ -> [fail]
        | _ -> e :: exprs
 
 let clean_contract contract =

@@ -1,0 +1,24 @@
+# branches:
+#   only:
+#   - master
+dist: trusty
+language: ocaml
+sudo: required
+
+before_install:
+- sh travis-scripts/prepare-trusty.sh
+
+install:
+- sh travis-scripts/prepare-opam.sh
+
+script:
+- export OPAMYES=1
+- opam sw 4.05.0
+- eval `opam config env`
+- make clone-tezos
+- make
+- make tests-mini
+- make tests
+- make rev-tests
+
+# TODO > how to compile and test with tezos (I.e. with a fully compiled version of tezos)?

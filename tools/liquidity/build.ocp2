@@ -27,15 +27,21 @@
 
 *)
 
-
-OCaml.library("ocplib-liquidity",
-   ocaml + {
-     files = [
-       "liquidVersion.ml", { ocp2ml=true;
+if(with_version){
+  version_info = { ocp2ml=true;
                              env_strings = [
                                 "ocp::commit";
                                 "ocp::dates";
                                 ]; };
+} else {
+  version_info = {};
+}
+
+OCaml.library("ocplib-liquidity",
+   ocaml + {
+     files = [
+       
+       "liquidVersion.ml", version_info;
        "liquidMisc.ml";
 
        "liquidTypes.ml";
@@ -62,9 +68,9 @@ OCaml.library("ocplib-liquidity",
 
    });
 
+
 OCaml.library("ocplib-liquidity-ocaml",
    ocaml + {
-     version = version;
      files = [
        "ocaml/liquidOCamlParser.mly";
        "ocaml/liquidOCamlLexer.mll";
@@ -78,9 +84,24 @@ OCaml.library("ocplib-liquidity-ocaml",
      requires = [
         "ocplib-liquidity";
         "compiler-libs.common";
+        "compiler-libs.bytecomp";
      ];
 
    });
+
+OCaml.program("ocp-liquidity-comp",
+  ocaml + {
+    requires = [ "ocplib-liquidity-ocaml" ];
+    files = [
+       "ocaml/liquidOCamlPparse.ml";
+
+       "ocaml/liquidOCamlTranslate.ml";
+       
+
+       "ocaml/liquidOCamlCompile.ml";
+       "ocaml/liquidOCamlMain.ml";
+    ];
+  });
 
 if ( with_tezos ) {
 OCaml.library("ocplib-liquidity-with-tezos",
@@ -136,3 +157,9 @@ OCaml.program("liquidity-mini",
      ];
 
    });
+
+OCaml.library("liquidity-env",
+  ocaml + {
+    files = [ "env/liquidityEnv.ml" ];
+    requires = [ "zarith" ];
+  });

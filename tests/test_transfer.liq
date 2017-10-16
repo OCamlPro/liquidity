@@ -1,12 +1,12 @@
 
 (* transfers *)
 
-[%%version 0.1]
+[%%version 0.11]
 
 let%entry main
       (parameter : (unit,unit) contract)
       (storage : tez)
-      [%return : unit] =
+      : unit * tez =
 
       let amount = Current.amount () in
       let storage = storage + amount in

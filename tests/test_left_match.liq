@@ -2,8 +2,8 @@
 let%entry main
       (parameter : (int, string) variant)
       (storage : int)
-      [%return : string] =
-      
+      : string * int =
+
   match parameter with
   | Left left -> ("", left)
   | Right right -> (right, storage)

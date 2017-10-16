@@ -1,14 +1,14 @@
 
-[%%version 0.1]
+[%%version 0.11]
 
 let%entry main
   (parameter : string)
   (storage : (string, int) map)
-  [%return : unit] =
+  : unit * (string, int) map =
 
   let amount = Current.amount() in
 
-  if amount < ("5.00" : tez) then
+  if amount < 5.00tz then
     Current.fail ()
   else
     match Map.find parameter storage with

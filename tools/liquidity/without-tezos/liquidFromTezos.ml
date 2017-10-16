@@ -10,7 +10,7 @@
 open LiquidTypes
 
 
-let convert_contract string = assert false
+let convert_contract loc_table string = assert false
 
        (*
 open Client_proto_programs
@@ -181,8 +181,7 @@ let convert_contract c =
   let parameter = convert_type c.Script_repr.arg_type in
   let storage = convert_type c.Script_repr.storage_type in
   let code = convert_code c.Script_repr.code in
-  { code;
-    storage; return; parameter }
+  { code; storage; return; parameter }
 
 let contract_of_string s =
   match Client_proto_programs.parse_program s with

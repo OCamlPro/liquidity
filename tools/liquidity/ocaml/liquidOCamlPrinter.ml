@@ -1145,6 +1145,18 @@ and binding ctxt f {pvb_pat=p; pvb_expr=x; _} =
   let rec pp_print_pexp_function f x =
     if x.pexp_attributes <> [] then pp f "=@;%a" (expression ctxt) x
     else match x.pexp_desc with
+      | Pexp_fun (label, eo, p,
+                  { pexp_desc = Pexp_constraint (e, rty) }) ->
+          if label=Nolabel then
+            pp f "%a@ : %a@ %a"
+              (simple_pattern ctxt) p
+              (core_type ctxt) rty
+              pp_print_pexp_function e
+          else
+            pp f "%a@ : %a@ %a"
+              (label_exp ctxt) (label,eo,p)
+              (core_type ctxt) rty
+              pp_print_pexp_function e
       | Pexp_fun (label, eo, p, e) ->
           if label=Nolabel then
             pp f "%a@ %a" (simple_pattern ctxt) p pp_print_pexp_function e

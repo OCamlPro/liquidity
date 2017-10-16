@@ -12,7 +12,7 @@ open LiquidTypes
 let string_of_contract (c : michelson_exp contract) =
   LiquidPrinter.Michelson.string_of_contract c
 
-let convert_contract (c : pre_michelson contract) =
+let convert_contract (c : noloc_michelson contract) =
   LiquidEmit.emit_contract c
 
 let read_tezos_file (_filename : string) = assert false

@@ -37,7 +37,10 @@ type const =
   | CLeft of const
   | CRight of const
 
-and datatype =
+  | CKey_hash of string
+
+ and datatype =
+   (* michelson *)
   | Tunit
   | Tbool
   | Tint
@@ -46,6 +49,7 @@ and datatype =
   | Tstring
   | Ttimestamp
   | Tkey
+  | Tkey_hash
   | Tsignature
 
   | Ttuple of datatype list
@@ -58,8 +62,9 @@ and datatype =
   | Tcontract of datatype * datatype
   | Tor of datatype * datatype
   | Tlambda of datatype * datatype
-  | Tclosure of (datatype * datatype) * datatype
 
+  (* liquidity extensions *)
+  | Tclosure of (datatype * datatype) * datatype
   | Tfail
   | Ttype of string * datatype
 
@@ -73,7 +78,7 @@ type 'exp contract = {
 
 type location = {
     loc_file : string;
-    loc_pos : ( (int * int) * (int*int) ) option;
+    loc_pos : ((int * int) * (int * int)) option;
   }
 
 type error = { err_loc: location; err_msg: string }
@@ -148,6 +153,7 @@ type primitive =
   | Prim_create_account
   | Prim_create_contract
   | Prim_hash
+  | Prim_hash_key
   | Prim_check
   | Prim_default_account
 
@@ -168,6 +174,13 @@ type primitive =
 
 let primitive_of_string = Hashtbl.create 101
 let string_of_primitive = Hashtbl.create 101
+
+
+(* Some primitives should be kept internal:
+* get and set
+* get_last and set_last
+* tuple
+*)
 let () =
   List.iter (fun (n,p) ->
       Hashtbl.add primitive_of_string n p;
@@ -176,17 +189,20 @@ let () =
             [
               "get", Prim_tuple_get;
               "get_last", Prim_tuple_get_last;
-              "Array.get", Prim_tuple_get;
               "set_last", Prim_tuple_set_last;
               "set", Prim_tuple_set;
-              "Array.set", Prim_tuple_set;
               "tuple", Prim_tuple;
+
+              "Array.get", Prim_tuple_get;
+              "Array.set", Prim_tuple_set;
+
               "Current.fail", Prim_fail;
               "Current.contract", Prim_self;
               "Current.balance", Prim_balance;
               "Current.time", Prim_now;
               "Current.amount", Prim_amount;
               "Current.gas", Prim_gas;
+
               "Left", Prim_Left;
               "Right", Prim_Right;
               "Source", Prim_Source;
@@ -207,11 +223,13 @@ let () =
               "Map.mem", Prim_map_mem;
               "Map.reduce", Prim_map_reduce;
               "Map.map", Prim_map_map;
+              "Map.size", Prim_map_size;
 
               "Set.update", Prim_set_update;
               "Set.mem", Prim_set_mem;
               "Set.reduce", Prim_set_reduce;
               "Set.map", Prim_set_map;
+              "Set.size", Prim_set_size;
 
               "Some", Prim_Some;
               "@", Prim_concat;
@@ -219,16 +237,17 @@ let () =
               "List.reduce", Prim_list_reduce;
               "List.map", Prim_list_map;
               "List.rev", Prim_list_rev;
+              "List.size", Prim_list_size;
 
               "Contract.manager", Prim_manager;
-              "Account.create", Prim_create_account;
               "Contract.create", Prim_create_contract;
-              "Crypto.hash", Prim_hash;
-              "Crypto.check", Prim_check;
+
+              "Account.create", Prim_create_account;
               "Account.default", Prim_default_account;
-              "List.size", Prim_list_size;
-              "Set.size", Prim_set_size;
-              "Map.size", Prim_map_size;
+
+              "Crypto.hash", Prim_hash;
+              "Crypto.hash_key", Prim_hash_key;
+              "Crypto.check", Prim_check;
 
               "::", Prim_Cons;
               "or", Prim_or;
@@ -280,6 +299,10 @@ type constructor =
 | Left of datatype
 | Right of datatype
 | Source of datatype * datatype
+
+type pattern =
+  | CConstr of string * string list
+  | CAny
 
 type 'ty exp = {
     desc : 'ty exp_desc;
@@ -335,7 +358,7 @@ type 'ty exp = {
 
   | MatchVariant of 'ty exp
                     * location
-                    * (string * string list * 'ty exp) list
+                    * (pattern * 'ty exp) list
 
 type syntax_exp = unit exp
 type typed_exp = datatype exp
@@ -349,16 +372,16 @@ type michelson_exp =
   | M_INS_CST of string * datatype * const
   | M_INS_EXP of string * datatype list * michelson_exp list
 
-type pre_michelson =
-  | SEQ of pre_michelson list
-  | DIP of int * pre_michelson
-  | IF of pre_michelson * pre_michelson
-  | IF_NONE of pre_michelson * pre_michelson
-  | IF_CONS of pre_michelson * pre_michelson
-  | IF_LEFT of pre_michelson * pre_michelson
-  | LOOP of pre_michelson
+type 'a pre_michelson =
+  | SEQ of 'a list
+  | DIP of int * 'a
+  | IF of 'a * 'a
+  | IF_NONE of 'a * 'a
+  | IF_CONS of 'a * 'a
+  | IF_LEFT of 'a * 'a
+  | LOOP of 'a
 
-  | LAMBDA of datatype * datatype * pre_michelson
+  | LAMBDA of datatype * datatype * 'a
   | EXEC
 
   | DUP of int
@@ -394,6 +417,7 @@ type pre_michelson =
   | CREATE_ACCOUNT
   | CREATE_CONTRACT
   | H
+  | HASH_KEY
   | CHECK_SIGNATURE
 
   | CONS
@@ -423,7 +447,18 @@ type pre_michelson =
   | MOD
   | DIV
 
+type noloc_michelson = { i : noloc_michelson pre_michelson }
+
+type loc_michelson = {
+  loc : location;
+  ins : loc_michelson pre_michelson;
+}
+
+let mic ins = ins
+let mic_loc loc ins = { loc; ins }
+
 type type_kind =
+  | Type_alias
   | Type_record of datatype list * int StringMap.t
   | Type_variant of
       (string
@@ -473,13 +508,14 @@ type 'a typecheck_env = {
 (* decompilation *)
 
 type node = {
-    num : int;
-    mutable kind : node_kind;
-    mutable args : node list; (* dependencies *)
+  num : int;
+  loc : location;
+  mutable kind : node_kind;
+  mutable args : node list; (* dependencies *)
 
-    mutable next : node option;
-    mutable prevs : node list;
-  }
+  mutable next : node option;
+  mutable prevs : node list;
+}
 
  and node_kind =
    | N_UNKNOWN of string
@@ -522,3 +558,4 @@ type node_exp = node * node
 
 type warning =
   | Unused of string
+  | UnusedMatched of string

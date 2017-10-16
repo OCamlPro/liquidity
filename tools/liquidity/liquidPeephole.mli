@@ -7,6 +7,6 @@
 (*                                                                        *)
 (**************************************************************************)
 
-val simplify :
-  LiquidTypes.pre_michelson LiquidTypes.contract ->
-  LiquidTypes.pre_michelson LiquidTypes.contract
+open LiquidTypes
+
+val simplify : noloc_michelson contract -> noloc_michelson contract

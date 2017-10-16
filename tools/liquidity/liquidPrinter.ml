@@ -122,6 +122,7 @@ module Michelson = struct
       | Tstring -> Printf.bprintf b "string"
       | Ttimestamp  -> Printf.bprintf b "timestamp"
       | Tkey  -> Printf.bprintf b "key"
+      | Tkey_hash  -> Printf.bprintf b "key_hash"
       | Tsignature  -> Printf.bprintf b "signature"
       | Ttuple tys -> bprint_type_pairs b indent tys
       | Tcontract (ty1, ty2) ->
@@ -200,6 +201,7 @@ module Michelson = struct
     match cst with
     | CString s -> Printf.bprintf b "%S" s
     | CKey s -> Printf.bprintf b "%S" s
+    | CKey_hash s -> Printf.bprintf b "%S" s
     | CSignature s -> Printf.bprintf b "%S" s
     | CTez s -> Printf.bprintf b "%S" (mic_of_tez s)
     | CInt n -> Printf.bprintf b "%s" (mic_of_integer n)
@@ -321,14 +323,131 @@ module Michelson = struct
     Printf.bprintf b "\n";
     ()
 
+  let bprint_pre_michelson bprint_arg b = function
+    | SEQ args ->
+      Printf.bprintf b "{ ";
+      List.iter (fun a -> bprint_arg b a; Printf.bprintf b " ; ") args;
+      Printf.bprintf b " }";
+    | DIP (i, a) ->
+      Printf.bprintf b "D%sP "
+        (String.concat "" (LiquidMisc.list_init i (fun _ -> "I")));
+      bprint_arg b a;
+    | IF (a1, a2) ->
+      Printf.bprintf b "IF ";
+      bprint_arg b a1;
+      bprint_arg b a2;
+    | IF_NONE (a1, a2) ->
+      Printf.bprintf b "IF_NONE ";
+      bprint_arg b a1;
+      bprint_arg b a2;
+    | IF_CONS (a1, a2) ->
+      Printf.bprintf b "IF_CONS ";
+      bprint_arg b a1;
+      bprint_arg b a2;
+    | IF_LEFT (a1, a2) ->
+      Printf.bprintf b "IF_LEFT ";
+      bprint_arg b a1;
+      bprint_arg b a2;
+    | LOOP a ->
+      Printf.bprintf b "LOOP ";
+      bprint_arg b a;
+    | LAMBDA (ty1, ty2, a) ->
+      Printf.bprintf b "LAMBDA ";
+      bprint_type b "" ty1;
+      Printf.bprintf b " ";
+      bprint_type b "" ty2;
+      bprint_arg b a;
+    | EXEC -> Printf.bprintf b "EXEC"
+    | DUP i ->
+      Printf.bprintf b "D%sP"
+        (String.concat "" (LiquidMisc.list_init i (fun _ -> "U")));
+    | DIP_DROP (i, r) ->
+      Printf.bprintf b "DIP_DROP (%d, %d)" i r;
+    | DROP -> Printf.bprintf b "DROP"
+    | CAR -> Printf.bprintf b "CAR"
+    | CDR -> Printf.bprintf b "CDR"
+    | CDAR i ->
+      Printf.bprintf b "C%sAR "
+        (String.concat "" (LiquidMisc.list_init i (fun _ -> "D")));
+    | CDDR i ->
+      Printf.bprintf b "C%sDR "
+        (String.concat "" (LiquidMisc.list_init i (fun _ -> "D")));
+    | PUSH (ty, c) ->
+      Printf.bprintf b "PUSH ";
+      bprint_type b "" ty;
+      bprint_const b "" c;
+    | PAIR -> Printf.bprintf b "PAIR"
+    | COMPARE -> Printf.bprintf b "COMPARE"
+    | LE -> Printf.bprintf b "LE"
+    | LT -> Printf.bprintf b "LT"
+    | GE -> Printf.bprintf b "GE"
+    | GT -> Printf.bprintf b "GT"
+    | NEQ -> Printf.bprintf b "NEQ"
+    | EQ -> Printf.bprintf b "EQ"
+    | FAIL -> Printf.bprintf b "FAIL"
+    | NOW -> Printf.bprintf b "NOW"
+    | TRANSFER_TOKENS -> Printf.bprintf b "TRANSFER_TOKENS"
+    | ADD -> Printf.bprintf b "ADD"
+    | SUB -> Printf.bprintf b "SUB"
+    | BALANCE -> Printf.bprintf b "BALANCE"
+    | SWAP -> Printf.bprintf b "SWAP"
+    | GET -> Printf.bprintf b "GET"
+    | UPDATE -> Printf.bprintf b "UPDATE"
+    | SOME -> Printf.bprintf b "SOME"
+    | CONCAT -> Printf.bprintf b "CONCAT"
+    | MEM -> Printf.bprintf b "MEM"
+    | MAP -> Printf.bprintf b "MAP"
+    | REDUCE -> Printf.bprintf b "REDUCE"
+    | SELF -> Printf.bprintf b "SELF"
+    | AMOUNT -> Printf.bprintf b "AMOUNT"
+    | STEPS_TO_QUOTA -> Printf.bprintf b "STEPS_TO_QUOTA"
+    | MANAGER -> Printf.bprintf b "MANAGER"
+    | CREATE_ACCOUNT -> Printf.bprintf b "CREATE_ACCOUNT"
+    | CREATE_CONTRACT -> Printf.bprintf b "CREATE_CONTRACT"
+    | H -> Printf.bprintf b "H"
+    | HASH_KEY -> Printf.bprintf b "HASH_KEY"
+    | CHECK_SIGNATURE -> Printf.bprintf b "CHECK_SIGNATURE"
+    | CONS -> Printf.bprintf b "CONS"
+    | OR -> Printf.bprintf b "OR"
+    | XOR -> Printf.bprintf b "XOR"
+    | AND -> Printf.bprintf b "AND"
+    | NOT -> Printf.bprintf b "NOT"
+    | INT -> Printf.bprintf b "INT"
+    | ABS -> Printf.bprintf b "ABS"
+    | NEG -> Printf.bprintf b "NEG"
+    | MUL -> Printf.bprintf b "MUL"
+    | LEFT ty ->
+      Printf.bprintf b "LEFT";
+      bprint_type b "" ty;
+    | RIGHT ty ->
+      Printf.bprintf b "RIGHT";
+      bprint_type b "" ty;
+    | EDIV -> Printf.bprintf b "EDIV"
+    | LSL -> Printf.bprintf b "LSL"
+    | LSR -> Printf.bprintf b "LSR"
+    | SOURCE (ty1, ty2) ->
+      Printf.bprintf b "SOURCE";
+      bprint_type b "" ty1;
+      bprint_type b "" ty2;
+    | SIZE -> Printf.bprintf b "SIZE"
+    | DEFAULT_ACCOUNT -> Printf.bprintf b "DEFAULT_ACCOUNT"
+    | MOD -> Printf.bprintf b "MOD"
+    | DIV -> Printf.bprintf b "DIV"
+
+  let rec bprint_noloc_michelson b ins=
+    bprint_pre_michelson bprint_noloc_michelson b ins.i
+
+  let rec bprint_loc_michelson b m =
+    bprint_pre_michelson bprint_loc_michelson b m.ins
+
 
   let string_of_type = to_string bprint_type
   let string_of_code code = to_string bprint_code code
   let string_of_const = to_string bprint_const
   let line_of_const = to_string bprint_const_single
   let string_of_contract cmd = to_string (bprint_contract bprint_code) cmd
-
-
+  let string_of_noloc_michelson = to_string (fun b _ -> bprint_noloc_michelson b)
+  let string_of_loc_michelson = to_string (fun b _ -> bprint_loc_michelson b)
 
 end
 
@@ -509,10 +628,14 @@ module Liquid = struct
        Printf.bprintf b "\n%smatch " indent;
        bprint_code ~debug b indent2 arg;
        Printf.bprintf b " with\n";
-       List.iter (fun (constr, vars, e) ->
-           Printf.bprintf b "\n%s| %s (%s) ->\n" indent2 constr
-                          (String.concat ", " vars);
-           bprint_code ~debug b indent4 e;
+       List.iter (function
+           | CConstr (constr, vars), e ->
+             Printf.bprintf b "\n%s| %s (%s) ->\n" indent2 constr
+               (String.concat ", " vars);
+             bprint_code ~debug b indent4 e;
+           | CAny, e ->
+             Printf.bprintf b "\n%s| _ ->\n" indent2;
+             bprint_code ~debug b indent4 e;
          ) cases;
        ()
 
