@@ -19,8 +19,8 @@ let%entry main
   else
     if Current.time () < storage.timeout then (* Before timeout *)
       (* We compute ((1 + P) + N) tez for keeping the contract alive *)
-      let pn = storage.pn in
-      let cost = 1.00tz + pn.(0) + pn.(1) in
+      let (pn0, pn1) = storage.pn in
+      let cost = 1.00tz + pn0 + pn1 in
       let b = Current.balance () in
       if cost < b then
         (* # Not enough cash, we just accept the transaction
@@ -30,15 +30,17 @@ let%entry main
         (* # Enough cash, successful ending
                    # We update the global*)
         let storage = storage.state <- "success" in
+        let (pn0, _) = storage.pn in
         let (_result, storage) =
-            Contract.call storage.x storage.pn.(0) storage () in
+          Contract.call storage.x pn0 storage () in
+        let (_, pn1) = storage.pn in
         let (_result, storage) =
-            Contract.call storage.a storage.pn.(1) storage () in
+            Contract.call storage.a pn1 storage () in
         ( (), storage )
     else
       (* # After timeout, we refund
            # We update the global *)
-      let p = storage.pn.(0) in
+      let (p, _) = storage.pn in
       let storage = storage.state <- "timeout" in
       (*  # We try to transfer the fee to the broker *)
       let bal = Current.balance () in

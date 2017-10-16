@@ -1,7 +1,7 @@
 
 [%%version 0.11]
 
-let f ( arg : unit * int ) = arg.(0)
+let f ((x : unit), (_ : int) ) = x
 
 let%entry main
       (parameter : int)

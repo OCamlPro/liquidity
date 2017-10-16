@@ -390,6 +390,41 @@ and translate_pair exp =
 
 let mk desc = { desc; ty = (); bv = StringSet.empty; fail = false }
 
+let deconstruct_pat env pat =
+  let rec deconstruct_pat_aux acc indexes = function
+    | { ppat_desc = Ppat_constraint (pat, ty) } ->
+      let acc, _ = deconstruct_pat_aux acc indexes pat in
+      acc, translate_type env ty
+
+    | { ppat_desc = Ppat_var { txt = var; loc } } ->
+      (var, loc_of_loc loc, indexes) :: acc, Tunit (* Dummy type value *)
+
+    | { ppat_desc = Ppat_any; ppat_loc } ->
+      ("_", loc_of_loc ppat_loc, indexes) :: acc, Tunit (* Dummy type value *)
+
+    | { ppat_desc = Ppat_tuple pats } ->
+      let _, acc, tys =
+        List.fold_left (fun (i, acc, tys) pat ->
+            let acc, ty = deconstruct_pat_aux acc (i :: indexes) pat in
+            i + 1, acc, ty :: tys
+          ) (0, acc, []) pats
+      in
+      acc, Ttuple (List.rev tys)
+
+    | { ppat_loc } ->
+      error_loc ppat_loc "cannot deconstruct this pattern"
+  in
+  deconstruct_pat_aux [] [] pat
+
+let access_of_deconstruct var_name loc indexes =
+  let a = mk (Var (var_name, loc, [])) in
+  List.fold_right (fun i a ->
+      mk (Apply (Prim_tuple_get, loc, [
+          a;
+          mk (Const (Tnat, CNat (LiquidPrinter.integer_of_int i)))
+        ]))
+    ) indexes a
+
 let rec translate_code env exp =
   let desc =
     match exp with
@@ -463,16 +498,27 @@ let rec translate_code env exp =
                     translate_code env arg_exp,
                     translate_code env body)
 
-    | { pexp_desc = Pexp_let (Nonrecursive,
-                              [
-                                {
-                                  pvb_pat = { ppat_desc =
-                                                Ppat_var { txt = var; loc } };
-                                  pvb_expr = var_exp;
-                                }
-                              ], body) } ->
-       Let (var, loc_of_loc loc,
-            translate_code env var_exp, translate_code env body)
+    | { pexp_desc = Pexp_let (Nonrecursive, [ {
+        pvb_pat = pat;
+        pvb_expr = var_exp;
+      } ], body); pexp_loc } ->
+
+      let vars_infos, _ = deconstruct_pat env pat in
+      let exp, body = translate_code env var_exp, translate_code env body in
+      begin match vars_infos with
+        | [] -> assert false
+        | [v, loc, []] -> Let (v, loc, exp, body)
+        | _ ->
+          let var_name =
+            String.concat "_" (List.rev_map (fun (v,_,_) -> v) vars_infos) in
+          let lets_body =
+            List.fold_left (fun e (v, loc, indexes) ->
+                let access = access_of_deconstruct var_name loc indexes in
+                mk (Let (v, loc, access, e))
+              ) body vars_infos
+          in
+          Let (var_name, loc_of_loc pexp_loc, exp, lets_body)
+      end
 
     | { pexp_desc = Pexp_sequence (exp1, exp2) } ->
        Seq (translate_code env exp1, translate_code env exp2)
@@ -529,21 +575,28 @@ let rec translate_code env exp =
            MatchVariant(e, loc_of_loc pexp_loc, args)
        end
 
-    | { pexp_desc =
-          Pexp_fun (
-              Nolabel, None,
-              { ppat_desc =
-                  Ppat_constraint(
-                      { ppat_desc =
-                          Ppat_var { txt = arg_name } },
-                      arg_type)
-              },
-              body_exp) } ->
+    | { pexp_desc = Pexp_fun (Nolabel, None, pat, body_exp) } ->
        let body_exp = translate_code env body_exp in
-       let arg_type = translate_type env arg_type in
-       Lambda (arg_name, arg_type, loc_of_loc exp.pexp_loc,
-               body_exp,
-               Tunit) (* not yet inferred *)
+       let vars_infos, arg_type = deconstruct_pat env pat in
+       begin match vars_infos with
+         | [] -> assert false
+         | [arg_name, loc, []] ->
+           Lambda (arg_name, arg_type, loc_of_loc exp.pexp_loc,
+                   body_exp,
+                   Tunit) (* not yet inferred *)
+         | _ ->
+           let arg_name =
+             String.concat "_" (List.rev_map (fun (v,_,_) -> v) vars_infos) in
+           let lets_body =
+             List.fold_left (fun e (v, loc, indexes) ->
+                   let access = access_of_deconstruct arg_name loc indexes in
+                   mk (Let (v, loc, access, e))
+               ) body_exp vars_infos
+           in
+           Lambda (arg_name, arg_type, loc_of_loc exp.pexp_loc,
+                   lets_body,
+                   Tunit) (* not yet inferred *)
+       end
 
     | { pexp_desc = Pexp_record (lab_x_exp_list, None) } ->
        let lab_x_exp_list =
