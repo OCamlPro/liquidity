@@ -135,6 +135,12 @@ let decompile contract =
                                        mk(Var(var_of node,noloc,[]));
                                        int_zero]))))
 
+       (* ABS as match%abs *)
+       | N_PRIM "ABS", [arg] ->
+         let x = var_of arg in
+         let vx = mk (Var (x, noloc, [])) in
+         mklet node (MatchAbs(arg_of arg, noloc, x, vx, x, vx))
+
        | N_PRIM prim, _ ->
           let prim, args =
             match prim, node.args with

@@ -8,7 +8,7 @@
 (**************************************************************************)
 
 (* The version that will be required to compile the generated files. *)
-let output_version = "0.11"
+let output_version = "0.12"
 
 (*
 type storage = ...
@@ -202,6 +202,20 @@ let rec convert_code expr =
                                           (Some (Pat.var (loc some_pat))))
                            (convert_code ifsome);
                 ]
+
+  | MatchAbs (exp, _loc, p, ifplus, m, ifminus) ->
+    Exp.extension (loc "abs", PStr [
+        Str.eval (
+          Exp.match_ (convert_code exp)
+                [
+                  Exp.case (Pat.construct (lid "Plus")
+                              (Some (Pat.var (loc p))))
+                    (convert_code ifplus);
+                  Exp.case (Pat.construct (lid "Minus")
+                              (Some (Pat.var (loc m))))
+                    (convert_code ifminus);
+                ])
+      ])
 
   | MatchList (exp, _loc, head_pat, tail_pat, ifcons, ifnil) ->
      Exp.match_ (convert_code exp)

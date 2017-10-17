@@ -93,7 +93,7 @@ let contract
  *)
 
 (* The maximal version of liquidity files that are accepted by this compiler *)
-let maximal_version = 0.11
+let maximal_version = 0.12
 (*
 type storage = ...
 let contract
@@ -551,6 +551,27 @@ let rec translate_code env exp =
                                                 | (_, { pexp_loc }) ->
                                                    error_loc pexp_loc "in arg"
                                        ) args)
+
+    | { pexp_desc = Pexp_extension (
+        { txt = "abs" },
+        PStr [{ pstr_desc = Pstr_eval (
+            { pexp_desc = Pexp_match (e, cases); pexp_loc },
+            [])
+          }]
+      )} ->
+      let e = translate_code env e in
+      let cases = List.map (translate_case env) cases in
+      begin
+        match cases with
+        | [ CConstr ("Plus", [p]), ifplus; CConstr ("Minus", [m]), ifminus ]
+        | [ CConstr ("Minus", [m]), ifminus; CConstr ("Plus", [p]), ifplus ] ->
+          MatchAbs(e, loc_of_loc pexp_loc, p, ifplus, m, ifminus)
+        | [ CConstr ("Plus", [p]), ifplus; CAny, ifminus ] ->
+          MatchAbs(e, loc_of_loc pexp_loc, p, ifplus, "_", ifminus)
+        | [ CConstr ("Minus", [m]), ifminus; CAny, ifplus ] ->
+          MatchAbs(e, loc_of_loc pexp_loc, "_", ifplus, m, ifminus)
+        | _ -> error_loc pexp_loc "match%abs patterns are Plus _, Minus _"
+      end
 
     | { pexp_desc = Pexp_match (e, cases); pexp_loc } ->
        let e = translate_code env e in

@@ -43,6 +43,7 @@ let rec translate_const_exp loc exp =
     | Seq (_, _)
     | LetTransfer (_, _, _, _, _, _, _, _)
     | MatchOption (_, _, _, _, _)
+    | MatchAbs (_, _, _, _, _, _)
     | MatchList (_, _, _, _, _, _)
     | Loop (_, _, _, _)
     | Lambda (_, _, _, _, _)

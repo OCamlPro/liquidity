@@ -135,6 +135,13 @@ let rec untype (env : env) (code : typed_exp) =
                     untype env ifnone,
                     some_pat', untype env' ifsome)
 
+    | MatchAbs (exp, loc, p, ifplus, m, ifminus) ->
+       let (p, env') = find_free env p ifplus.bv in
+       let (m, env'') = find_free env m ifminus.bv in
+       MatchAbs (untype env exp, loc,
+                 p, untype env' ifplus,
+                 m, untype env'' ifminus)
+
     | MatchList (exp, loc, head_pat, tail_pat, ifcons, ifnil) ->
        let bv = ifcons.bv in
        let (head_pat, env') = find_free env head_pat bv in

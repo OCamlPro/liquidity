@@ -256,6 +256,7 @@ let rec loc_exp env e = match e.desc with
     | Apply (_, loc, _)
     | LetTransfer (_, _, loc, _, _, _, _, _)
     | MatchOption (_, loc, _, _, _)
+    | MatchAbs (_, loc, _, _, _, _)
     | MatchList (_, loc, _, _, _, _)
     | Loop (_, loc, _, _)
     | Lambda (_, _, loc, _, _)
@@ -695,11 +696,39 @@ let rec typecheck env ( exp : LiquidTypes.syntax_exp ) =
      let desc = MatchOption (arg, loc, ifnone, new_name, ifsome ) in
      let ty =
        match ifnone.ty, ifsome.ty with
-       | ty, Tfail
-         | Tfail, ty -> ty
+       | ty, Tfail | Tfail, ty -> ty
        | ty1, ty2 ->
           if ty1 <> ty2 then type_error loc "Bad option type in match" ty2 ty1;
           ty1
+     in
+     let can_fail = fail1 || fail2 || fail3 in
+     mk desc ty can_fail,
+     can_fail,
+     transfer1 || transfer2 || transfer3
+
+  | MatchAbs (arg, loc, plus_name, ifplus, minus_name, ifminus) ->
+     let arg, fail1, transfer1 = typecheck env arg in
+     begin match arg.ty with
+       | Tfail -> error loc "cannot match failure"
+       | Tint -> ()
+       | _ -> error loc "not an option type"
+     end;
+     let env = maybe_reset_vars env transfer1 in
+     let (plus_name, env2, count_p) = new_binding env plus_name Tnat in
+     let ifplus, fail2, transfer2 = typecheck env2 ifplus in
+     let (minus_name, env3, count_m) = new_binding env minus_name Tnat in
+     let ifminus, fail3, transfer3 = typecheck env3 ifminus in
+     check_used env plus_name loc count_p;
+     check_used env minus_name loc count_m;
+     let desc = MatchAbs (arg, loc, plus_name, ifplus, minus_name, ifminus) in
+     let ty =
+       match ifplus.ty, ifminus.ty with
+       | ty, Tfail | Tfail, ty -> ty
+       | ty1, ty2 ->
+         if ty1 <> ty2 then
+           type_error loc "branches of match%abs must have the same type"
+             ty2 ty1;
+         ty1
      in
      let can_fail = fail1 || fail2 || fail3 in
      mk desc ty can_fail,

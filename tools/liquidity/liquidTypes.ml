@@ -360,6 +360,11 @@ type 'ty exp = {
                     * location
                     * (pattern * 'ty exp) list
 
+  | MatchAbs of 'ty exp  (* argument *)
+                * location
+                * string * 'ty exp (* ifplus *)
+                * string * 'ty exp (* ifminus *)
+
 type syntax_exp = unit exp
 type typed_exp = datatype exp
 type live_exp = (datatype * datatype StringMap.t) exp

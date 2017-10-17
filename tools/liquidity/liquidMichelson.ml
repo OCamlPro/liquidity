@@ -162,6 +162,25 @@ let translate_code code =
                           seq (ifsome @ ifsome_end) )}],
        transfer1 || transfer2 || transfer3
 
+    | MatchAbs(arg, loc, plus_name, ifplus, minus_name, ifminus) ->
+       let arg = compile_no_transfer depth env arg in
+       let env' = StringMap.add plus_name depth env in
+       let ifplus, transfer1 = compile (depth + 1) env' ifplus in
+       let env'' = StringMap.add minus_name depth env in
+       let ifminus, transfer2 = compile (depth + 1) env'' ifminus in
+       let (ifplus_end, ifminus_end) =
+         match transfer1, transfer2 with
+         | false, false -> [ {i=DIP_DROP(1,1)} ], [ {i=DIP_DROP(1,1)} ]
+         | true, true -> [], []
+         | true, false -> [], drop_stack 1 (depth - 1)
+         | false, true -> drop_stack 1 (depth - 1), []
+       in
+       arg @ [
+         dup 1; ii ABS; ii SWAP; ii GE;
+         {i=IF (seq (ifplus @ ifplus_end),
+                seq (ifminus @ ifminus_end) )}],
+       transfer1 || transfer2
+
     | MatchList(arg, loc, head_name, tail_name, ifcons, ifnil) ->
        let arg, transfer1 = compile depth env arg in
        let (depth, env) =
