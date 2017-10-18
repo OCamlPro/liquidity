@@ -19,6 +19,12 @@
 
 {
 
+let tez_char = '\231'
+let timestamp_char = '\232'
+let keyhash_char = '\233'
+let key_char = '\234'
+let signature_char = '\235'
+
 open Lexing
 open Misc
 open LiquidOCamlParser
@@ -326,6 +332,23 @@ let bin_literal =
   '0' ['b' 'B'] ['0'-'1'] ['0'-'1' '_']*
 let int_literal =
   decimal_literal | hex_literal | oct_literal | bin_literal
+let base58_char =
+  ['1'-'9' 'A'-'H' 'J'-'N' 'P'-'Z' 'a'-'k' 'm'-'z' ]
+let keyhash_literal =
+  ['t' 'T'] "z1" base58_char* (* 36 *)
+let key_literal =
+  "edpk" base58_char* (* 54 *)
+let signature_literal =
+  "edsig" base58_char* (* 99 *)
+let digit = [ '0'-'9']
+let day_literal =
+  digit digit digit digit '-' digit digit '-' digit digit
+let hour_literal =
+  digit digit ':' digit digit ( ':' digit digit )?
+let timezone_literal =
+  digit digit ':' digit digit
+let date_literal =
+  day_literal ('T' hour_literal ('+' timezone_literal )?)?
 
 (* remove hex_float_literal and remove exponential from float. *)
 
@@ -360,6 +383,39 @@ rule token = parse
       { OPTLABEL (get_label_name lexbuf) }
   | "?" lowercase_latin1 identchar_latin1 * ':'
       { warn_latin1 lexbuf; OPTLABEL (get_label_name lexbuf) }
+  | keyhash_literal
+      {
+        let s = Lexing.lexeme lexbuf in
+        if String.length s = 36 then
+          INT (s, Some keyhash_char)
+        else begin
+            (* TODO warning *)
+            if s.[0] = 'T' then UIDENT s else LIDENT s
+          end
+      }
+  | key_literal
+      {
+        let s = Lexing.lexeme lexbuf in
+        if String.length s = 54 then
+          INT (s, Some key_char)
+        else begin
+            (* TODO warning *)
+            LIDENT s
+          end
+      }
+  | signature_literal
+      {
+        let s = Lexing.lexeme lexbuf in
+        if String.length s = 99 then
+          INT (s, Some signature_char)
+        else begin
+            (* TODO warning *)
+            LIDENT s
+          end
+      }
+  | date_literal
+      { let date = Lexing.lexeme lexbuf in
+        INT(date, Some timestamp_char) }
   | lowercase identchar *
       { let s = Lexing.lexeme lexbuf in
         try token_of_keyword s
@@ -372,13 +428,13 @@ rule token = parse
       { warn_latin1 lexbuf; UIDENT(Lexing.lexeme lexbuf) }
   | int_literal { INT (Lexing.lexeme lexbuf, None) }
   | (int_literal as lit) "tz"
-      { INT (lit, Some '\231') }
+      { INT (lit, Some tez_char) }
   | (int_literal as lit) (literal_modifier as modif)
       { INT (lit, Some modif) }
   | float_literal
       { FLOAT (Lexing.lexeme lexbuf, None) }
   | ((float_literal) as lit) "tz"
-      { FLOAT (lit, Some '\231') }
+      { FLOAT (lit, Some tez_char) }
   | ((float_literal) as lit) (literal_modifier as modif)
       { FLOAT (lit, Some modif) }
   | (float_literal | int_literal) identchar+

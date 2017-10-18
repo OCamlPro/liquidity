@@ -37,7 +37,8 @@ let error loc msg =
 
 let comparable_ty ty1 ty2 =
   match ty1, ty2 with
-  | (Tint|Tnat|Ttez), (Tint|Tnat|Ttez)
+  | (Tint|Tnat), (Tint|Tnat)
+    | Ttez, Ttez
     | Ttimestamp, Ttimestamp
     | Tstring, Tstring
     | Tkey_hash, Tkey_hash -> true
@@ -1433,7 +1434,7 @@ let typecheck_code ~warnings env contract expected_ty code =
   code
 
 
-let check_const_type ~to_tez loc ty cst =
+let check_const_type ?(from_mic=false) ~to_tez loc ty cst =
   let rec check_const_type ty cst =
     match ty, cst with
     | Tunit, CUnit -> CUnit
@@ -1448,36 +1449,11 @@ let check_const_type ~to_tez loc ty cst =
     | Tstring, CString s -> CString s
 
     | Ttez, CTez s -> CTez s
-    | Ttez, CString s -> CTez (to_tez s)
 
-    | Tkey, CKey s
-    | Tkey, CString s -> CKey s
-
-    | Tkey_hash, CKey_hash s
-    | Tkey_hash, CString s -> CKey_hash s
-
-    | Ttimestamp, CString s
-    | Ttimestamp, CTimestamp s ->
-      begin (* approximation of correct tezos timestamp *)
-        try Scanf.sscanf s "%_d-%_d-%_dT%_d:%_d:%_dZ%!" ()
-        with _ ->
-        try Scanf.sscanf s "%_d-%_d-%_d %_d:%_d:%_dZ%!" ()
-        with _ ->
-        try Scanf.sscanf s "%_d-%_d-%_dT%_d:%_d:%_d-%_d:%_d%!" ()
-        with _ ->
-        try Scanf.sscanf s "%_d-%_d-%_dT%_d:%_d:%_d+%_d:%_d%!" ()
-        with _ ->
-        try Scanf.sscanf s "%_d-%_d-%_d %_d:%_d:%_d-%_d:%_d%!" ()
-        with _ ->
-        try Scanf.sscanf s "%_d-%_d-%_d %_d:%_d:%_d+%_d:%_d%!" ()
-        with _ ->
-          error loc "Bad format for timestamp"
-      end;
-      CTimestamp s
-
-
-    | Tsignature, CSignature s
-      | Tsignature, CString s -> CSignature s
+    | Tkey, CKey s -> CKey s
+    | Tkey_hash, CKey_hash s -> CKey_hash s
+    | Ttimestamp, CTimestamp s -> CTimestamp s
+    | Tsignature, CSignature s -> CSignature s
 
     | Ttuple tys, CTuple csts ->
        begin
@@ -1502,7 +1478,35 @@ let check_const_type ~to_tez loc ty cst =
        CSet (List.map (check_const_type ty) csts)
 
     | _ ->
-       error loc "constant type mismatch"
+       if from_mic then
+         match ty, cst with
+         | Ttimestamp, CString s ->
+            begin (* approximation of correct tezos timestamp *)
+              try Scanf.sscanf s "%_d-%_d-%_dT%_d:%_d:%_dZ%!" ()
+              with _ ->
+                try Scanf.sscanf s "%_d-%_d-%_d %_d:%_d:%_dZ%!" ()
+                with _ ->
+                  try Scanf.sscanf s "%_d-%_d-%_dT%_d:%_d:%_d-%_d:%_d%!" ()
+                  with _ ->
+                    try Scanf.sscanf s "%_d-%_d-%_dT%_d:%_d:%_d+%_d:%_d%!" ()
+                    with _ ->
+                      try Scanf.sscanf s "%_d-%_d-%_d %_d:%_d:%_d-%_d:%_d%!" ()
+                      with _ ->
+                        try Scanf.sscanf s
+                                         "%_d-%_d-%_d %_d:%_d:%_d+%_d:%_d%!" ()
+                        with _ ->
+                          error loc "Bad format for timestamp"
+            end;
+            CTimestamp s
+
+         | Ttez, CString s -> CTez (to_tez s)
+         | Tkey_hash, CString s -> CKey_hash s
+         | Tkey, CString s -> CKey s
+         | Tsignature, CString s -> CSignature s
+
+         | _ -> error loc "constant type mismatch"
+       else
+         error loc "constant type mismatch"
 
   in
   check_const_type ty cst

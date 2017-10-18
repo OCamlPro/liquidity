@@ -40,7 +40,9 @@ if(with_version){
 OCaml.library("ocplib-liquidity",
    ocaml + {
      files = [
-       
+
+       "iSO8601.ml";
+
        "liquidVersion.ml", version_info;
        "liquidMisc.ml";
 

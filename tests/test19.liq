@@ -11,6 +11,11 @@ let%entry main
          storage =
   (*  let c = Current.contract () in *)
   let key_hash = Crypto.hash_key storage.key in
+  if key_hash = tz1KqTpEZ7Yob7QbPE4Hy4Wo8fHG8LhKxZSx then
+    Current.fail ();
+    if key_hash =
+    Crypto.hash_key edpkuTXkJDGcFd5nh6VvMz8phXxU3Bi7h6hqgywNFi1vZTfQNnS1RV then
+    Current.fail ();
   let manager = Contract.manager (Source : (unit,unit) contract) in
   let spendable = Crypto.check storage.key (parameter, storage.hash) in
   let amount = Current.amount () in

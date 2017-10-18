@@ -203,10 +203,27 @@ let rec translate_const env exp =
      CInt (LiquidPrinter.integer_of_liq s), Some Tint
   | { pexp_desc = Pexp_constant (Pconst_integer (s, Some 'p')) } ->
      CNat (LiquidPrinter.integer_of_liq s), Some Tnat
+
   | { pexp_desc = Pexp_constant (Pconst_integer (s, Some '\231')) } ->
      CTez (LiquidPrinter.tez_of_liq s), Some Ttez
   | { pexp_desc = Pexp_constant (Pconst_float (s, Some '\231')) } ->
      CTez (LiquidPrinter.tez_of_liq s), Some Ttez
+
+  (* Timestamps *)
+  | { pexp_desc = Pexp_constant (Pconst_integer (s, Some '\232')) } ->
+     CTimestamp (ISO8601.of_string s), Some Ttimestamp
+
+  (* Key_hash *)
+  | { pexp_desc = Pexp_constant (Pconst_integer (s, Some '\233')) } ->
+     CKey_hash s, Some Tkey_hash
+
+  (* Key *)
+  | { pexp_desc = Pexp_constant (Pconst_integer (s, Some '\234')) } ->
+     CKey s, Some Tkey
+
+  (* Signature *)
+  | { pexp_desc = Pexp_constant (Pconst_integer (s, Some '\235')) } ->
+     CSignature s, Some Tkey
 
   | { pexp_desc = Pexp_constant (Pconst_string (s, None)) } ->
      CString s, Some Tstring
@@ -335,22 +352,6 @@ let rec translate_const env exp =
           LiquidCheck.check_const_type ~to_tez:LiquidPrinter.tez_of_liq loc ty cst, Some ty
        | Some ty_infer ->
           LiquidCheck.check_const_type ~to_tez:LiquidPrinter.tez_of_liq loc ty cst, Some ty
-                           (*
-          if ty <> ty_infer then begin
-              let cst =
-                match ty, cst with
-                | Ttez, CString s -> CTez s
-                | Tkey, CString s -> CKey s
-                | Tsignature, CString s -> CSignature s
-                | Tint, CNat s -> CInt s
-                | _ ->
-                   error_loc exp.pexp_loc  "constant type mismatch";
-              in
-              cst, Some ty
-            end
-          else
-            cst, Some ty
-                            *)
      end
 
   | _ -> raise NotAConstant

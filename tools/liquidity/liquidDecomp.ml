@@ -222,7 +222,7 @@ let decompile contract =
        | N_FAIL, _ ->
           mk (Apply (Prim_fail, noloc, [unit]))
        | N_CONST (ty, cst), [] ->
-          let cst = LiquidCheck.check_const_type
+          let cst = LiquidCheck.check_const_type ~from_mic:true
                       ~to_tez:LiquidPrinter.tez_of_mic noloc ty cst
           in
           mklet node (Const (ty, cst))

@@ -11,15 +11,39 @@
 file that has been correctly typechecked by the `liquidity`
 typechecker.  *)
 
-type timestamp = string
-type kind = Tez | Int
-type integer = Z.t * kind
+exception Fail
+
+type integer =
+  Int of Z.t
+| Tez of Z.t
+| Timestamp of Z.t
+type timestamp = integer
 type tez = integer
 type nat = integer
-type key
-type key_hash
-type signature
+
+type key = Key of string
+type key_hash = Key_hash of string
+type signature = Signature of string
+
 type ('arg, 'res) contract
+
+module Signature : sig
+  val of_string : string -> signature
+end = struct
+  let of_string s = Signature s
+end
+
+module Key : sig
+  val of_string : string -> key
+  end = struct
+  let of_string s = Key s
+end
+
+module Key_hash : sig
+  val of_string : string -> key_hash
+  end = struct
+  let of_string s = Key_hash s
+end
 
 module Tez : sig
 
@@ -38,7 +62,7 @@ module Tez : sig
       with Not_found ->
         Z.of_string s, Z.of_int 0
     in
-    Z.add (Z.mul (Z.of_int 100) tezzies) centiles, Tez
+    Tez (Z.add (Z.mul (Z.of_int 100) tezzies) centiles)
 
 end
 
@@ -48,8 +72,14 @@ module Int : sig
 
 end = struct
 
-  let of_string n = Z.of_string n, Int
+  let of_string n = Int (Z.of_string n)
 
+end
+
+module Timestamp : sig
+  val of_string : string -> timestamp
+end = struct
+  let of_string time = assert false
 end
 
 module Current : sig
@@ -64,15 +94,20 @@ module Current : sig
 
 end = struct
 
-  let amount () = Z.of_int 100, Tez
-  let fail () = assert false    (* TODO *)
-  let time () = assert false    (* TODO *)
+  let amount () = Tez (Z.of_int 100)
+  let fail () = raise Fail
+  let time () = Timestamp (Z.of_float (Unix.gettimeofday ()))
   let balance () = assert false (* TODO *)
   let gas () = assert false
   let contract () = assert false
   let source () = assert false
 end
 
+
+let z_of_int = function
+    Tez n -> n
+  | Int n -> n
+  | Timestamp n -> n
 
 module Array : sig
   val get : 'a -> integer -> 'b
@@ -81,12 +116,12 @@ module Array : sig
 end = struct (* Arrays are for tuples, not typable in OCaml *)
 
   let get t n =
-    let n,_ = n in
+    let n = z_of_int n in
     let n = Z.to_int n in
     Obj.magic (Obj.field (Obj.magic  t) n)
 
   let set t n x =
-    let n,_ = n in
+    let n = z_of_int n in
     let n = Z.to_int n in
     let t = Obj.repr t in
     let t = Obj.dup t in
@@ -230,45 +265,96 @@ end
 
 type 'key set = 'key Set.set
 
-type int = integer
+module Arith : sig
 
-let (+) (x,unit) (y,_) = Z.add x y, unit
-let (-) (x,unit) (y,_) = Z.sub x y, unit
+  val (+) : integer -> integer -> integer
+  val (-) : integer -> integer -> integer
+  val ( * ) : integer -> integer -> integer
+  val ( / ) : integer -> integer -> (integer * integer) option
+
+  val int : integer -> integer
+  val abs : integer -> integer
+
+end = struct
+
+  let (+) = Z.add
+  let (+) x y =
+    match x,y with
+    | Timestamp x, Int y
+    | Int x, Timestamp y
+      -> Timestamp (x + y)
+    | Tez x, Tez y -> Tez (x+y)
+    | Int x, Int y -> Int (x+y)
+    | Tez _, (Int _|Timestamp _)
+      | (Int _ | Timestamp _), Tez _
+    | Timestamp _, Timestamp _
+      -> assert false
+
+
+  let (-) = Z.sub
+  let (-) x y =
+    match x,y with
+    | Timestamp x, Timestamp y -> Int (x - y)
+    | Timestamp x, Int y
+      -> Timestamp (x - y)
+    | Tez x, Tez y -> Tez (x-y)
+    | Int x, Int y -> Int (x-y)
+    | Tez _, (Int _|Timestamp _)
+      | (Int _ | Timestamp _), Tez _
+    | Int _, Timestamp _
+      -> assert false
+
+  let ediv x y =
+    try
+      let (q, r) = Z.ediv_rem x y in
+      Some (q, r)
+    with _ -> None
+
+  let (/) x y =
+    try
+      let (q, r) =
+        let x = z_of_int x in
+        let y = z_of_int y in
+        Z.ediv_rem x y in
+      Some (match x,y with
+              Tez _, Tez _ -> Int q, Tez r
+            | Tez _, Int _ -> Tez q, Tez r
+            | Int _, Int _ -> Int q, Int r
+            | Int _, Tez _
+              | Int _, Timestamp _
+              | Tez _, Timestamp _
+              | Timestamp _, Tez _
+              | Timestamp _, Int _
+              | Timestamp _, Timestamp _
+                                 -> assert false
+           )
+    with _ -> None
+
+  let ( * ) = Z.mul
+  let ( * ) x y =
+    match x,y with
+    | Tez x, Int y
+    | Int x, Tez y -> Tez (x * y)
+    | Int x, Int y -> Int (x * y)
+      | Tez _, Tez _
+        | Int _, Timestamp _
+      | Tez _, Timestamp _
+      | Timestamp _, Tez _
+      | Timestamp _, Int _
+      | Timestamp _, Timestamp _
+      -> assert false
+
+  let int x = x
+
+  let abs = function Int x -> Int (Z.abs x)
+                   | Tez _
+                   | Timestamp _ -> assert false
+
+end
+
 let (@) = (^)
 
-let abs = function
-  | x, Int -> Z.abs x, Int
-  | _ -> raise (Invalid_argument "abs")
-
-let ediv x y =
-  try
-    let (q, r) = Z.ediv_rem x y in
-    Some (q, r)
-  with _ -> None
-
-let (/) (x,xu) (y,yu) =
-  try
-    let (q, r) = Z.ediv_rem x y in
-    let (qu, ru) =
-      match xu, yu with
-        Tez, Tez -> Int, Tez
-      | Tez, Int -> Tez, Tez
-      | Int, Int -> Int, Int
-      | _ -> assert false
-    in
-    Some ((q,qu), (r,ru))
-  with _ -> None
-
-let ( * ) (x,xu) (y,yu) = (* NOT TESTED *)
-  let u =
-    match xu, yu with
-    | Int, Int -> Int
-    | Tez, Int
-      | Int, Tez -> Tez
-    | _ -> assert false
-  in
-  Z.mul x y, u
-
+include Arith
 
 module Lambda : sig
   val pipe : 'a -> ('a -> 'b) -> 'b
@@ -284,8 +370,6 @@ end = struct
     if bool then loop f ret
     else ret
 end
-
-let int x = x
 
 module Contract : sig
 
@@ -316,7 +400,7 @@ module List : sig
   val reduce : ('a * 'b -> 'b) -> 'a list -> 'b -> 'b
   val map : ('a -> 'b) -> 'a list -> 'b list
   val rev : 'a list -> 'a list
-  val size : 'a list -> int
+  val size : 'a list -> integer
 
 end = struct
 
@@ -328,7 +412,7 @@ end = struct
 
   let map = List.map
   let rev = List.rev
-  let size list = Z.of_int (List.length list), Int
+  let size list = Int (Z.of_int (List.length list))
 
 end
 
@@ -350,3 +434,5 @@ end = struct
   let hash_key _ = assert false (*TODO *)
   let check _key (_sig, _hash) = assert false (* TODO *)
 end
+
+type int = integer

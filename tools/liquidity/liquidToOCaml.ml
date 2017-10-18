@@ -73,19 +73,12 @@ let rec convert_const expr =
   | CRight x -> Exp.construct (lid "Right")
                              (Some (convert_const x))
   | CTuple args -> Exp.tuple (List.map convert_const args)
-  | CTez n -> Exp.constraint_ (
-                  Exp.constant (Const.float ~suffix:'\231'
-                                            (LiquidPrinter.liq_of_tez n)))
-                  (convert_type Ttez)
-  | CKey n -> Exp.constraint_ (convert_const (CString n))
-                              (convert_type Tkey)
-  | CKey_hash n -> Exp.constraint_ (convert_const (CString n))
-                              (convert_type Tkey_hash)
-  | CSignature n -> Exp.constraint_ (convert_const (CString n))
-                                    (convert_type Tsignature)
-
-  | CTimestamp s -> Exp.constraint_ (convert_const (CString s))
-                                    (convert_type Ttimestamp)
+  | CTez n -> Exp.constant (Const.float ~suffix:'\231'
+                                        (LiquidPrinter.liq_of_tez n))
+  | CTimestamp s -> Exp.constant (Pconst_integer (s, Some '\232'))
+  | CKey_hash n -> Exp.constant (Pconst_integer (n, Some '\233'))
+  | CKey n -> Exp.constant (Pconst_integer (n, Some '\234'))
+  | CSignature n -> Exp.constant (Pconst_integer (n, Some '\235'))
 
   | CList [] -> Exp.construct (lid "[]") None
   | CList (head :: tail) ->
@@ -140,6 +133,8 @@ let rec convert_code expr =
       | Tnat
         | Tstring
         | Tunit
+        | Ttimestamp
+        | Ttez
         | Tbool -> convert_const cst
       | _ ->
          Exp.constraint_ (convert_const cst) (convert_type ty)

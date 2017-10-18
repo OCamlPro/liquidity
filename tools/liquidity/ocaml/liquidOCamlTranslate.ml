@@ -55,6 +55,26 @@ let clean_ast =
          Exp.apply ~loc (exp_ident ~loc "Tez.of_string")
                    [Nolabel, exp_string ~loc s]
 
+      | Pexp_constant (Pconst_integer (s, Some '\232'))
+        ->
+         Exp.apply ~loc (exp_ident ~loc "Timestamp.of_string")
+                   [Nolabel, exp_string ~loc s]
+
+      | Pexp_constant (Pconst_integer (s, Some '\233'))
+        ->
+         Exp.apply ~loc (exp_ident ~loc "Key_hash.of_string")
+                   [Nolabel, exp_string ~loc s]
+
+      | Pexp_constant (Pconst_integer (s, Some '\234'))
+        ->
+         Exp.apply ~loc (exp_ident ~loc "Key.of_string")
+                   [Nolabel, exp_string ~loc s]
+
+      | Pexp_constant (Pconst_integer (s, Some '\235'))
+        ->
+         Exp.apply ~loc (exp_ident ~loc "Signature.of_string")
+                   [Nolabel, exp_string ~loc s]
+
       | Pexp_constant (
                   Pconst_float (s, Some '\231')
               )

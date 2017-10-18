@@ -30,6 +30,7 @@ val typecheck_code :
   typed_exp
 
 val check_const_type :
+  ?from_mic:bool ->
   to_tez:(string -> LiquidTypes.tez) ->
   LiquidTypes.location ->
   LiquidTypes.datatype -> LiquidTypes.const -> LiquidTypes.const
