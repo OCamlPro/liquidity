@@ -165,7 +165,7 @@ let translate_code code =
                           seq (ifsome @ ifsome_end) )}],
        transfer1 || transfer2 || transfer3
 
-    | MatchAbs(arg, loc, plus_name, ifplus, minus_name, ifminus) ->
+    | MatchNat(arg, loc, plus_name, ifplus, minus_name, ifminus) ->
        let arg, transfer1 = compile depth env arg in
        let (depth, env) =
          if transfer1 then (0, StringMap.empty) else (depth, env)

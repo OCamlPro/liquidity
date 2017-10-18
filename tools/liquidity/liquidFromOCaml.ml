@@ -553,7 +553,7 @@ let rec translate_code env exp =
                                        ) args)
 
     | { pexp_desc = Pexp_extension (
-        { txt = "abs" },
+        { txt = "nat" },
         PStr [{ pstr_desc = Pstr_eval (
             { pexp_desc = Pexp_match (e, cases); pexp_loc },
             [])
@@ -565,12 +565,12 @@ let rec translate_code env exp =
         match cases with
         | [ CConstr ("Plus", [p]), ifplus; CConstr ("Minus", [m]), ifminus ]
         | [ CConstr ("Minus", [m]), ifminus; CConstr ("Plus", [p]), ifplus ] ->
-          MatchAbs(e, loc_of_loc pexp_loc, p, ifplus, m, ifminus)
+          MatchNat(e, loc_of_loc pexp_loc, p, ifplus, m, ifminus)
         | [ CConstr ("Plus", [p]), ifplus; CAny, ifminus ] ->
-          MatchAbs(e, loc_of_loc pexp_loc, p, ifplus, "_", ifminus)
+          MatchNat(e, loc_of_loc pexp_loc, p, ifplus, "_", ifminus)
         | [ CConstr ("Minus", [m]), ifminus; CAny, ifplus ] ->
-          MatchAbs(e, loc_of_loc pexp_loc, "_", ifplus, m, ifminus)
-        | _ -> error_loc pexp_loc "match%abs patterns are Plus _, Minus _"
+          MatchNat(e, loc_of_loc pexp_loc, "_", ifplus, m, ifminus)
+        | _ -> error_loc pexp_loc "match%nat patterns are Plus _, Minus _"
       end
 
     | { pexp_desc = Pexp_match (e, cases); pexp_loc } ->

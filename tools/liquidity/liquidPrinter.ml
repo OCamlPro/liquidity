@@ -560,10 +560,10 @@ module Liquid = struct
        Printf.bprintf b "\n%s| Some %s ->\n" indent2 var;
        bprint_code ~debug b indent4 ifsome;
        ()
-    | MatchAbs (arg, _loc, p, ifplus, m, ifminus) ->
+    | MatchNat (arg, _loc, p, ifplus, m, ifminus) ->
        let indent2 = indent ^ "  " in
        let indent4 = indent2 ^ "  " in
-       Printf.bprintf b "\n%smatch%%abs " indent;
+       Printf.bprintf b "\n%smatch%%nat " indent;
        bprint_code ~debug b indent2 arg;
        Printf.bprintf b " with\n";
        Printf.bprintf b "\n%s| Plus %s ->\n" indent2 p;

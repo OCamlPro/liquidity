@@ -203,8 +203,8 @@ let rec convert_code expr =
                            (convert_code ifsome);
                 ]
 
-  | MatchAbs (exp, _loc, p, ifplus, m, ifminus) ->
-    Exp.extension (loc "abs", PStr [
+  | MatchNat (exp, _loc, p, ifplus, m, ifminus) ->
+    Exp.extension (loc "nat", PStr [
         Str.eval (
           Exp.match_ (convert_code exp)
                 [

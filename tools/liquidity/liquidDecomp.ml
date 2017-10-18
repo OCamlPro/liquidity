@@ -137,11 +137,11 @@ let decompile contract =
                                        mk(Var(var_of node,noloc,[]));
                                        int_zero]))))
 
-       (* ABS as match%abs *)
+       (* ABS as match%nat *)
        | N_PRIM "ABS", [arg] ->
          let x = var_of arg in
          let vx = mk (Var (x, noloc, [])) in
-         mklet node (MatchAbs(arg_of arg, noloc, x, vx, x, vx))
+         mklet node (MatchNat(arg_of arg, noloc, x, vx, x, vx))
 
        | N_PRIM prim, _ ->
           let prim, args =
@@ -244,7 +244,7 @@ let decompile contract =
                            var_of var0,
                            decompile_next else_node)
             | N_IF_PLUS (_, var0), N_IF_MINUS (_,var1) ->
-               MatchAbs(arg_of arg, noloc,
+               MatchNat(arg_of arg, noloc,
                         var_of var0,
                         decompile_next then_node,
                         var_of var1,

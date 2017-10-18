@@ -60,7 +60,7 @@ let rec bv code =
                      (StringSet.union (bv ifnone)
                                       (StringSet.remove some_pat (bv ifsome)))
 
-  | MatchAbs (exp, loc, p, ifplus, m, ifminus) ->
+  | MatchNat (exp, loc, p, ifplus, m, ifminus) ->
      StringSet.union (bv exp)
        (StringSet.union
           (StringSet.remove m (bv ifminus))
@@ -215,7 +215,7 @@ let rec bound code =
      mk desc code bv
 
 
-  | MatchAbs (exp, loc, p, ifplus, m, ifminus) ->
+  | MatchNat (exp, loc, p, ifplus, m, ifminus) ->
     let exp = bound exp in
     let ifplus = bound ifplus in
     let ifminus = bound ifminus in
@@ -225,7 +225,7 @@ let rec bound code =
            (StringSet.remove m ifminus.bv)
            (StringSet.remove p ifplus.bv))
     in
-    let desc = MatchAbs (exp, loc, p, ifplus, m, ifminus) in
+    let desc = MatchNat (exp, loc, p, ifplus, m, ifminus) in
     mk desc code bv
 
   | MatchList (exp, loc, head_pat, tail_pat, ifcons, ifnil) ->

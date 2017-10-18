@@ -50,11 +50,11 @@ let compute code to_inline =
        let ifsome = iter ifsome in
        { exp with desc = MatchOption(arg,loc,ifnone,name,ifsome) }
 
-    | MatchAbs(arg, loc, p, ifplus, m, ifminus) ->
+    | MatchNat(arg, loc, p, ifplus, m, ifminus) ->
        let arg = iter arg in
        let ifplus = iter ifplus in
        let ifminus = iter ifminus in
-       { exp with desc = MatchAbs(arg, loc, p, ifplus, m, ifminus) }
+       { exp with desc = MatchNat(arg, loc, p, ifplus, m, ifminus) }
 
     | MatchList(arg, loc, head_name, tail_name, ifcons, ifnil) ->
        let arg = iter arg in

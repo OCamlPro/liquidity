@@ -360,7 +360,7 @@ type 'ty exp = {
                     * location
                     * (pattern * 'ty exp) list
 
-  | MatchAbs of 'ty exp  (* argument *)
+  | MatchNat of 'ty exp  (* argument *)
                 * location
                 * string * 'ty exp (* ifplus *)
                 * string * 'ty exp (* ifminus *)
