@@ -45,10 +45,14 @@ end
 module Int : sig
 
   val of_string : string -> integer
+  val abs : integer -> integer
 
 end = struct
 
   let of_string n = Z.of_string n, Int
+  let abs (n, t) = match t with
+    | Int -> Z.abs n, Int
+    | _ -> assert false
 
 end
 

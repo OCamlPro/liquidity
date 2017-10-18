@@ -27,13 +27,15 @@ let clean_ast =
             (({ Asttypes.txt = "version" },
               PStr [{ pstr_desc = Pstr_eval (exp,[])}]),[])
       } ->
-       Str.eval (Exp.constant (Const.int 0))
+      Str.eval (Exp.constant (Const.int 0))
+
     | { pstr_desc =
           Pstr_extension
             (({ Asttypes.txt = "entry" },
               PStr [entry]),[])
       } ->
        mapper.structure_item mapper entry
+
     | _ ->
        default_mapper.structure_item mapper item
   );
@@ -120,6 +122,52 @@ let clean_ast =
               let record = default_mapper.expr mapper record in
               Exp.record ~loc [label1, value] (Some record)
          end
+
+      | Pexp_extension (
+          { txt = "nat" },
+          PStr [{ pstr_desc = Pstr_eval (
+              { pexp_desc = Pexp_match (e, cases); pexp_loc=loc },
+              [])
+            }]
+        ) ->
+        let exception Found of (string * Parsetree.expression) in
+        let find_constr c =
+          try
+            List.iter (fun case ->
+                match case.pc_lhs with
+                | { ppat_desc = Ppat_construct (
+                    { txt = Lident name } ,
+                    Some { ppat_desc = Ppat_var { txt = var } }) }
+                  when name = c ->
+                  raise (Found (var, default_mapper.expr mapper case.pc_rhs))
+                | _ -> ()
+              ) cases;
+            assert false
+          with Found v_e -> v_e
+        in
+        let id = "matchnat#" in
+        let p, ifplus = find_constr "Plus" in
+        let m, ifminus = find_constr "Minus" in
+        let exp = default_mapper.expr mapper e in
+        Exp.let_ ~loc Nonrecursive
+          [ Vb.mk (Pat.var { txt = id; loc }) exp]
+          (Exp.ifthenelse ~loc
+             (Exp.apply ~loc (exp_ident ~loc ">=")
+                [ Nolabel, exp_ident ~loc id ;
+                  Nolabel, Exp.apply ~loc (exp_ident ~loc "Int.of_string")
+                    [Nolabel, exp_string ~loc "0"]])
+             (Exp.let_ ~loc Nonrecursive
+                [ Vb.mk (Pat.var { txt = p; loc })
+                    (Exp.apply ~loc:ifplus.pexp_loc
+                       (exp_ident ~loc "Int.abs")
+                       [Nolabel, exp_ident ~loc id])]
+                ifplus)
+             (Some (Exp.let_ ~loc Nonrecursive
+                      [ Vb.mk (Pat.var { txt = m; loc })
+                          (Exp.apply ~loc:ifminus.pexp_loc
+                             (exp_ident ~loc "Int.abs")
+                             [Nolabel, exp_ident ~loc id])]
+                      ifminus)))
 
       | _ -> default_mapper.expr mapper expr
     );
