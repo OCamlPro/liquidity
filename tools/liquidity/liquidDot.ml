@@ -57,44 +57,46 @@ let to_string contract =
         let deps =
           match node.kind with
           | N_UNKNOWN _
-            | N_START
-            | N_FAIL
-            | N_LAMBDA_BEGIN
-            | N_END
-            | N_VAR _
-            | N_CONST (_, _)
-            | N_PRIM _
-            | N_SOURCE _
-            | N_LEFT _
-            | N_RIGHT _
-            | N_TRANSFER_RESULT _
+          | N_START
+          | N_FAIL
+          | N_LAMBDA_BEGIN
+          | N_END
+          | N_VAR _
+          | N_CONST (_, _)
+          | N_PRIM _
+          | N_SOURCE _
+          | N_LEFT _
+          | N_RIGHT _
+          | N_TRANSFER_RESULT _
 
             -> []
 
           | N_LOOP_END (x,y,z)
-            | N_IF_CONS (x, y, z)-> [x;y;z]
+          | N_IF_CONS (x, y, z)-> [x;y;z]
 
 
-            | N_TRANSFER (x,y)
-            | N_LOOP_RESULT (x,y,_)
-            | N_IF_SOME (x,y)
-            | N_IF_LEFT (x,y)
-            | N_IF_RIGHT (x,y)
-            | N_IF_END_RESULT (x,Some y,_)
+          | N_TRANSFER (x,y)
+          | N_LOOP_RESULT (x,y,_)
+          | N_IF_SOME (x,y)
+          | N_IF_LEFT (x,y)
+          | N_IF_RIGHT (x,y)
+          | N_IF_PLUS (x,y)
+          | N_IF_MINUS (x,y)
+          | N_IF_END_RESULT (x,Some y,_)
           | N_IF_END (x,y)
           | N_IF (x,y)
-            | N_LOOP (x,y)
-            | N_LAMBDA (x,y,_,_) -> [x;y]
+          | N_LOOP (x,y)
+          | N_LAMBDA (x,y,_,_) -> [x;y]
 
-            | N_IF_END_RESULT (x,None,_)
-              | N_IF_RESULT (x,_)
-            | N_IF_THEN x
-            | N_IF_ELSE x
-            | N_IF_NONE x
-            | N_IF_NIL x
-            | N_LOOP_BEGIN x
-            | N_LOOP_ARG (x,_)
-            | N_LAMBDA_END x -> [x]
+          | N_IF_END_RESULT (x,None,_)
+          | N_IF_RESULT (x,_)
+          | N_IF_THEN x
+          | N_IF_ELSE x
+          | N_IF_NONE x
+          | N_IF_NIL x
+          | N_LOOP_BEGIN x
+          | N_LOOP_ARG (x,_)
+          | N_LAMBDA_END x -> [x]
         in
         List.iter (fun arg ->
             add_edge node arg [ ]
@@ -105,7 +107,7 @@ let to_string contract =
         List.iter iter deps;
         List.iter iter node.args;
         iter_next node
-      end
+    end
   in
   iter begin_node;
   Ocamldot.to_string g

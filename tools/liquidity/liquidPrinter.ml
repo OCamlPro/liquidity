@@ -692,6 +692,8 @@ let string_of_node node =
   | N_IF_CONS _ -> "N_IF_CONS"
   | N_IF_LEFT _ -> "N_IF_LEFT"
   | N_IF_RIGHT _ -> "N_IF_RIGHT"
+  | N_IF_PLUS _ -> "N_IF_PLUS"
+  | N_IF_MINUS _ -> "N_IF_MINUS"
   | N_TRANSFER _ -> "N_TRANSFER"
   | N_TRANSFER_RESULT int -> Printf.sprintf "N_TRANSFER_RESULT %d" int
   | N_CONST (ty, cst) -> "N_CONST " ^ Michelson.string_of_const cst

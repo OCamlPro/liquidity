@@ -110,9 +110,35 @@ let interp contract =
   Hashtbl.clear nodes;
 
   let rec decompile_seq stack (seq : node) code =
-    match code with
-    | [] -> (stack, seq)
-    | ins :: code ->
+    match code, stack with
+    | [], _ -> (stack, seq)
+
+    (* Special case for match%abs *)
+    | {ins=DUP 1; loc} ::
+      {ins=ABS} ::
+      {ins=SWAP} ::
+      {ins=GE} ::
+      {ins=IF(ifplus, ifminus)} ::
+      code,
+      x :: stack ->
+      let if_node = node loc (N_UNKNOWN "IF_PLUS") [x] [seq] in
+
+      let var0 = node ifplus.loc (N_IF_RESULT (if_node, 0)) [] [] in
+      let then_node = node ifplus.loc (N_IF_PLUS (if_node, var0)) [] [] in
+      let then_stack = var0 :: stack in
+
+      let var0 = node ifminus.loc (N_IF_RESULT (if_node, 0)) [] [] in
+      let else_node = node ifminus.loc (N_IF_MINUS (if_node, var0)) [] [] in
+      let else_stack = var0 :: stack in
+
+      let stack, seq =
+        decompile_if if_node stack
+          ifplus then_node then_stack
+          ifminus else_node else_stack
+      in
+      decompile_seq stack seq code
+
+    | ins :: code, _ ->
        let stack, seq = decompile stack seq ins in
        decompile_seq stack seq code
 

@@ -538,6 +538,8 @@ type node = {
    | N_IF_CONS of node * node * node
    | N_IF_LEFT of node * node
    | N_IF_RIGHT of node * node
+   | N_IF_PLUS of node * node
+   | N_IF_MINUS of node * node
    | N_TRANSFER of node * node
    | N_TRANSFER_RESULT of int
    | N_CONST of datatype * const

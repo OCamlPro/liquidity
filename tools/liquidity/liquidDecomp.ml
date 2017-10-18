@@ -47,6 +47,8 @@ let rec var_of node =
   | N_IF_CONS _ -> Printf.sprintf "if_cons%d" node.num
   | N_IF_LEFT _ -> Printf.sprintf "if_left%d" node.num
   | N_IF_RIGHT _ -> Printf.sprintf "if_right%d" node.num
+  | N_IF_PLUS _ -> Printf.sprintf "if_plus%d" node.num
+  | N_IF_MINUS _ -> Printf.sprintf "if_minus%d" node.num
   | N_LEFT _ -> Printf.sprintf "left%d" node.num
   | N_RIGHT _ -> Printf.sprintf "right%d" node.num
   | N_TRANSFER _ -> Printf.sprintf "transfer%d" node.num
@@ -241,6 +243,12 @@ let decompile contract =
                            decompile_next then_node,
                            var_of var0,
                            decompile_next else_node)
+            | N_IF_PLUS (_, var0), N_IF_MINUS (_,var1) ->
+               MatchAbs(arg_of arg, noloc,
+                        var_of var0,
+                        decompile_next then_node,
+                        var_of var1,
+                        decompile_next else_node)
             | N_IF_LEFT (_, var0), N_IF_RIGHT (_,var1) ->
                MatchVariant(arg_of arg, noloc,
                             [
@@ -322,6 +330,8 @@ let decompile contract =
        | N_IF_CONS (_, _, _)
        | N_IF_LEFT (_, _)
        | N_IF_RIGHT (_, _)
+       | N_IF_PLUS (_, _)
+       | N_IF_MINUS (_, _)
        | N_TRANSFER_RESULT _
        | N_LOOP_BEGIN _
        | N_LOOP_ARG (_, _)

@@ -6,8 +6,8 @@ let%entry main
   : nat * int =
 
   let r = match%abs (parameter + 1)  with
-    | Plus x -> x
-    | Minus y -> y
+    | Plus x -> x + 2p
+    | Minus y -> y + 3p
   in
-
-  (r, storage)
+  let x = r + 10p in
+  (x, storage)
