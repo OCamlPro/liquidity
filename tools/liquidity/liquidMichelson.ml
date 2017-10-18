@@ -93,21 +93,24 @@ let translate_code code =
       [ ii PAIR ], false
 
     | If (cond, ifthen, ifelse) ->
-       let cond = compile_no_transfer depth env cond in
-       let (ifthen, transfer1) = compile depth env ifthen in
-       let (ifelse, transfer2) = compile depth env ifelse in
-       let (ifthen_end, ifelse_end) =
-         match transfer1, transfer2 with
-         | false, false -> [], []
-         | true, true -> [], []
-         (* We need to empty the stack before returning, keeping only
-             the last value *)
-         | true, false -> [], drop_stack 1 depth
-         | false, true -> drop_stack 1 depth, []
-       in
-       cond @ [  {i= IF (seq (ifthen @ ifthen_end),
-                         seq (ifelse @ ifelse_end) )}],
-       transfer1 || transfer2
+      let cond, transfer1 = compile depth env cond in
+      let (depth, env) =
+        if transfer1 then (0, StringMap.empty) else (depth, env)
+      in
+      let (ifthen, transfer2) = compile depth env ifthen in
+      let (ifelse, transfer3) = compile depth env ifelse in
+      let (ifthen_end, ifelse_end) =
+        match transfer2, transfer3 with
+        | false, false -> [], []
+        | true, true -> [], []
+        (* We need to empty the stack before returning, keeping only
+            the last value *)
+        | true, false -> [], drop_stack 1 depth
+        | false, true -> drop_stack 1 depth, []
+      in
+      cond @ [  {i= IF (seq (ifthen @ ifthen_end),
+                        seq (ifelse @ ifelse_end) )}],
+      transfer1 || transfer2 || transfer3
 
     | LetTransfer( storage_name, result_name,
                    _loc,
@@ -152,7 +155,7 @@ let translate_code code =
        let depth = depth + 1 in
        let ifsome, transfer3 = compile depth env ifsome in
        let (ifnone_end, ifsome_end) =
-         match transfer1, transfer2 with
+         match transfer2, transfer3 with
          | false, false -> [], [ {i=DIP_DROP(1,1)} ]
          | true, true -> [], []
          | true, false -> [], drop_stack 1 depth
@@ -163,13 +166,16 @@ let translate_code code =
        transfer1 || transfer2 || transfer3
 
     | MatchAbs(arg, loc, plus_name, ifplus, minus_name, ifminus) ->
-       let arg = compile_no_transfer depth env arg in
+       let arg, transfer1 = compile depth env arg in
+       let (depth, env) =
+         if transfer1 then (0, StringMap.empty) else (depth, env)
+       in
        let env' = StringMap.add plus_name depth env in
-       let ifplus, transfer1 = compile (depth + 1) env' ifplus in
+       let ifplus, transfer2 = compile (depth + 1) env' ifplus in
        let env'' = StringMap.add minus_name depth env in
-       let ifminus, transfer2 = compile (depth + 1) env'' ifminus in
+       let ifminus, transfer3 = compile (depth + 1) env'' ifminus in
        let (ifplus_end, ifminus_end) =
-         match transfer1, transfer2 with
+         match transfer2, transfer3 with
          | false, false -> [ {i=DIP_DROP(1,1)} ], [ {i=DIP_DROP(1,1)} ]
          | true, true -> [], []
          | true, false -> [], drop_stack 1 (depth - 1)
@@ -179,7 +185,7 @@ let translate_code code =
          dup 1; ii ABS; ii SWAP; ii GE;
          {i=IF (seq (ifplus @ ifplus_end),
                 seq (ifminus @ ifminus_end) )}],
-       transfer1 || transfer2
+       transfer1 || transfer2 || transfer3
 
     | MatchList(arg, loc, head_name, tail_name, ifcons, ifnil) ->
        let arg, transfer1 = compile depth env arg in
@@ -192,7 +198,7 @@ let translate_code code =
        let depth = depth + 2 in
        let ifcons, transfer3 = compile depth env ifcons in
        let (ifnil_end, ifcons_end) =
-         match transfer1, transfer2 with
+         match transfer2, transfer3 with
          | false, false -> [], [ {i=DIP_DROP(1,2)} ]
          | true, true -> [], []
          | true, false -> [], drop_stack 1 depth
@@ -209,14 +215,14 @@ let translate_code code =
        in
        let has_transfer = ref false in
        let cases = List.map (function
-                             | CConstr (constr, [ arg_name ]), e ->
-                                let env = StringMap.add arg_name depth env in
-                                let depth = depth + 1 in
-                                let e, transfer = compile depth env e in
-                                if transfer then has_transfer := true;
-                                e, transfer, depth
-                             | _ -> assert false) cases in
-
+           | CConstr (constr, [ arg_name ]), e ->
+             let env = StringMap.add arg_name depth env in
+             let depth = depth + 1 in
+             let e, transfer = compile depth env e in
+             if transfer then has_transfer := true;
+             e, transfer, depth
+           | _ -> assert false) cases
+       in
        let rec iter cases =
          match cases with
          | [] -> assert false
@@ -235,7 +241,7 @@ let translate_code code =
                let right = iter cases in
                [ {i=IF_LEFT( seq left, seq right )} ]
        in
-       arg @ iter cases, !has_transfer
+       arg @ iter cases, transfer1 || !has_transfer
 
     | Loop (name, _loc, body, arg) ->
        let arg, transfer1 = compile depth env arg in

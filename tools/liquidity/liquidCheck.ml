@@ -400,8 +400,6 @@ let rec typecheck env ( exp : LiquidTypes.syntax_exp ) =
   | If (cond, ifthen, ifelse) ->
      let cond, fail1, transfer1 =
        typecheck_expected "if-cond" env Tbool cond in
-     if transfer1 then
-       error (noloc env) "transfer within if condition";
      let ifthen, fail2, transfer2 = typecheck env ifthen in
      let ifelse, fail3, transfer3, ty =
        if ifthen.ty = Tfail then
@@ -416,7 +414,7 @@ let rec typecheck env ( exp : LiquidTypes.syntax_exp ) =
      let can_fail = fail1 || fail2 || fail3 in
      mk desc ty can_fail,
      can_fail,
-     transfer2 || transfer3
+     transfer1 || transfer2 || transfer3
 
   | LetTransfer (storage_name, result_name,
                  loc,
@@ -707,12 +705,8 @@ let rec typecheck env ( exp : LiquidTypes.syntax_exp ) =
      transfer1 || transfer2 || transfer3
 
   | MatchAbs (arg, loc, plus_name, ifplus, minus_name, ifminus) ->
-     let arg, fail1, transfer1 = typecheck env arg in
-     begin match arg.ty with
-       | Tfail -> error loc "cannot match failure"
-       | Tint -> ()
-       | _ -> error loc "not an option type"
-     end;
+     let arg, fail1, transfer1 =
+       typecheck_expected "match%abs" env Tint arg in
      let env = maybe_reset_vars env transfer1 in
      let (plus_name, env2, count_p) = new_binding env plus_name Tnat in
      let ifplus, fail2, transfer2 = typecheck env2 ifplus in
