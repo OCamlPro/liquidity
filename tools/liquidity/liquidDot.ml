@@ -68,7 +68,7 @@ let to_string contract =
           | N_LEFT _
           | N_RIGHT _
           | N_TRANSFER_RESULT _
-
+          | N_ABS
             -> []
 
           | N_LOOP_END (x,y,z)

@@ -560,6 +560,7 @@ type node = {
    | N_LEFT of datatype
    | N_RIGHT of datatype
    | N_SOURCE of datatype * datatype
+   | N_ABS
 
 type node_exp = node * node
 

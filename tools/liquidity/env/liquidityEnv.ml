@@ -45,14 +45,10 @@ end
 module Int : sig
 
   val of_string : string -> integer
-  val abs : integer -> integer
 
 end = struct
 
   let of_string n = Z.of_string n, Int
-  let abs (n, t) = match t with
-    | Int -> Z.abs n, Int
-    | _ -> assert false
 
 end
 
@@ -240,6 +236,9 @@ let (+) (x,unit) (y,_) = Z.add x y, unit
 let (-) (x,unit) (y,_) = Z.sub x y, unit
 let (@) = (^)
 
+let abs = function
+  | x, Int -> Z.abs x, Int
+  | _ -> raise (Invalid_argument "abs")
 
 let ediv x y =
   try

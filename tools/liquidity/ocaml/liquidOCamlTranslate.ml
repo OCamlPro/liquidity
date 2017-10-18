@@ -159,13 +159,13 @@ let clean_ast =
              (Exp.let_ ~loc Nonrecursive
                 [ Vb.mk (Pat.var { txt = p; loc })
                     (Exp.apply ~loc:ifplus.pexp_loc
-                       (exp_ident ~loc "Int.abs")
+                       (exp_ident ~loc "abs")
                        [Nolabel, exp_ident ~loc id])]
                 ifplus)
              (Some (Exp.let_ ~loc Nonrecursive
                       [ Vb.mk (Pat.var { txt = m; loc })
                           (Exp.apply ~loc:ifminus.pexp_loc
-                             (exp_ident ~loc "Int.abs")
+                             (exp_ident ~loc "abs")
                              [Nolabel, exp_ident ~loc id])]
                       ifminus)))
 

@@ -136,6 +136,9 @@ let decompile contract =
                           mk(Apply(Prim_tuple_get,noloc,[
                                        mk(Var(var_of node,noloc,[]));
                                        int_zero]))))
+       (* ABS : int -> int *)
+       | N_ABS, [arg] ->
+         mklet node (Apply(Prim_abs, noloc, [arg_of arg]))
 
        (* ABS as match%nat *)
        | N_PRIM "ABS", [arg] ->
@@ -183,7 +186,6 @@ let decompile contract =
                  | "EDIV" -> Prim_ediv
                  | "EXEC" -> Prim_exec
                  | "INT" -> Prim_int
-                 | "ABS" -> Prim_abs
                  | "H" -> Prim_hash
                  | "HASH_KEY" -> Prim_hash_key
                  | "CHECK_SIGNATURE" -> Prim_check
@@ -306,7 +308,7 @@ let decompile contract =
 
        | (
          N_LAMBDA_END _
-         | N_LAMBDA _
+       | N_LAMBDA _
        | N_TRANSFER _
        | N_LOOP _
        | N_IF _
@@ -316,7 +318,7 @@ let decompile contract =
        | N_SOURCE _
        | N_LEFT _
        | N_RIGHT _
-
+       | N_ABS
        | N_START
        | N_LAMBDA_BEGIN
        | N_VAR _

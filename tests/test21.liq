@@ -10,4 +10,5 @@ let%entry main
     | Minus y -> y + 3p
   in
   let x = r + 10p in
+  let storage = abs storage in
   (x, storage)

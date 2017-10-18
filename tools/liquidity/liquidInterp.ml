@@ -113,7 +113,13 @@ let interp contract =
     match code, stack with
     | [], _ -> (stack, seq)
 
-    (* Special case for match%abs *)
+    (* Special case for abs *)
+    | {ins=ABS; loc} :: {ins=INT} :: code, x :: stack ->
+      let n = node loc N_ABS [x] [seq] in
+      let stack, seq = n :: stack, n in
+      decompile_seq stack seq code
+
+    (* Special case for match%nat *)
     | {ins=DUP 1; loc} ::
       {ins=ABS} ::
       {ins=SWAP} ::

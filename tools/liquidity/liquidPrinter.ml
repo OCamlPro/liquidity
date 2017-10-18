@@ -713,3 +713,4 @@ let string_of_node node =
   | N_SOURCE _ -> "N_SOURCE"
   | N_LEFT _ -> "N_LEFT"
   | N_RIGHT _ -> "N_RIGHT"
+  | N_ABS -> "N_ABS"

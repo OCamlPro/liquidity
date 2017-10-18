@@ -1143,7 +1143,7 @@ and typecheck_prim2 env prim loc args =
   | Prim_and, [ { ty = Tint|Tnat }; { ty = Tint|Tnat } ] -> Tint
   | Prim_not, [ { ty = Tint|Tnat } ] -> Tint
 
-  | Prim_abs, [ { ty = Tint } ] -> Tnat
+  | Prim_abs, [ { ty = Tint } ] -> Tint
   | Prim_int, [ { ty = Tnat } ] -> Tint
   | Prim_sub, [ { ty = Tint|Tnat } ] -> Tint
 

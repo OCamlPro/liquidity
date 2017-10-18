@@ -393,7 +393,7 @@ the ending NIL is not annotated with a type *)
          | Prim_and, 2 -> [ ii AND ]
          | Prim_xor, 2 -> [ ii XOR ]
          | Prim_not, 1 -> [ ii NOT ]
-         | Prim_abs, 1 -> [ ii ABS ]
+         | Prim_abs, 1 -> [ ii ABS; ii INT ]
          | Prim_int, 1 -> [ ii INT ]
          | Prim_neg, 1 -> [ ii NEG ]
          | Prim_lsr, 2 -> [ ii LSR ]
