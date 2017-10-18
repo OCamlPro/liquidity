@@ -1,7 +1,7 @@
 
 (* constructors *)
 
-[%%version 0.11]
+[%%version 0.12]
 
 type s =
         bool *

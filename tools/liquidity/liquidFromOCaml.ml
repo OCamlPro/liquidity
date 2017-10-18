@@ -80,28 +80,10 @@ let () =
 
 
 (* The minimal version of liquidity files that are accepted by this compiler *)
-let minimal_version = 0.1
-(*
-let contract
-      (parameter : timestamp)
-      (storage: (string * timestamp * (tez * tez) *
-                   ( (unit,unit) contract *
-                       (unit, unit) contract *
-                         (unit, unit) contract)) )
-      [%return : unit] =
-       ...
- *)
+let minimal_version = 0.12
 
 (* The maximal version of liquidity files that are accepted by this compiler *)
 let maximal_version = 0.12
-(*
-type storage = ...
-let contract
-      (parameter : timestamp)
-      (storage: storage )
-      : unit * storage =
-       ...
- *)
 
 
 open Asttypes

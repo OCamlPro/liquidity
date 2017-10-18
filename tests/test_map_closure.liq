@@ -1,6 +1,6 @@
 (* List.map with closure *)
 
-[%%version  0.1]
+[%%version 0.12]
 
 let%entry main
       (parameter : int)
