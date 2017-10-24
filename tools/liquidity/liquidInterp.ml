@@ -100,7 +100,8 @@ let rec merge_stacks if_stack end_node1 end_node2 stack1 stack2 =
         | Some node -> node.args <- List.rev node.args);
        stack
      with Exit ->
-       LiquidLoc.raise_error "interp error merging stacks:\n%a%a"
+       LiquidLoc.raise_error ~loc:end_node1.loc
+         "interp error merging stacks:\n%a%a"
          (fprint_stack "stack1 ") stack1
          (fprint_stack "stack2 ") stack2
 

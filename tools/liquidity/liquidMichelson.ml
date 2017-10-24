@@ -174,12 +174,13 @@ let translate_code code =
        let ifplus, transfer2 = compile (depth + 1) env' ifplus in
        let env'' = StringMap.add minus_name depth env in
        let ifminus, transfer3 = compile (depth + 1) env'' ifminus in
+       let depth = depth + 1 in
        let (ifplus_end, ifminus_end) =
          match transfer2, transfer3 with
          | false, false -> [ {i=DIP_DROP(1,1)} ], [ {i=DIP_DROP(1,1)} ]
          | true, true -> [], []
-         | true, false -> [], drop_stack 1 (depth - 1)
-         | false, true -> drop_stack 1 (depth - 1), []
+         | true, false -> [], drop_stack 1 depth
+         | false, true -> drop_stack 1 depth, []
        in
        arg @ [
          dup 1; ii ABS; ii SWAP; ii GE;
@@ -232,7 +233,7 @@ let translate_code code =
               | true, true -> []
               | false, false -> [ {i=DIP_DROP(1,1)} ]
               | false, true -> assert false
-              | true, false -> drop_stack 1 (depth-1)
+              | true, false -> drop_stack 1 depth
             in
             let left = left @ left_end in
             match cases with
