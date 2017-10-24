@@ -468,6 +468,19 @@ let rec typecheck env ( exp : LiquidTypes.syntax_exp ) =
      typecheck env { exp with
                      desc = Apply(Prim_exec, loc, [x;f]) }
 
+
+  | Apply (Prim_unknown, loc,
+           ({ desc = Var ("Contract.call", varloc, [])} :: args)) ->
+    let nb_args = List.length args in
+    if nb_args <> 4 then
+      error loc
+        "Contract.call expects 4 arguments, it was given %d arguments."
+        nb_args
+    else
+      error loc
+        "The result of Contract.call must be bound under a \
+         \"let (result, storage) =\" directly."
+
   | Apply (Prim_unknown, loc,
            ({ desc = Var (name, varloc, [])} ::args)) ->
      let prim =

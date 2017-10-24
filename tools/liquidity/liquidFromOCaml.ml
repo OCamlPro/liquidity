@@ -452,11 +452,9 @@ let rec translate_code env exp =
                     {
                       ppat_desc =
                         Ppat_tuple [
-                            { ppat_desc = Ppat_var { txt = result } };
-                            { ppat_desc = Ppat_var { txt =
-                                                       ("storage" | "_storage")as storage_name
-                            } };
-                          ]
+                          { ppat_desc = (Ppat_any | Ppat_var _) as res};
+                          { ppat_desc = (Ppat_any | Ppat_var _) as sto};
+                        ]
                     };
                   pvb_expr =
                     { pexp_desc =
@@ -473,6 +471,16 @@ let rec translate_code env exp =
                     ]) }
                 }
               ], body) } ->
+       let result = match res with
+         | Ppat_any -> "_"
+         | Ppat_var { txt = result } -> result
+         | _ -> assert false
+       in
+       let storage_name = match sto with
+         | Ppat_any -> "_"
+         | Ppat_var { txt = storage_name } -> storage_name
+         | _ -> assert false
+       in
        LetTransfer (storage_name, result,
                     loc_of_loc exp.pexp_loc,
                     translate_code env contract_exp,
