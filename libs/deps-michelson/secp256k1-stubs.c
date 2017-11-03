@@ -386,8 +386,8 @@ value secp256k1_ec_pubkey_create_ml
  const secp256k1_context* ctx =
     (const secp256k1_context*)
     String_val(ctx_v);
- const secp256k1_pubkey *pubkey =
-   (const secp256k1_pubkey *)
+ secp256k1_pubkey *pubkey =
+   (secp256k1_pubkey *)
    String_val(pubkey_v);
  const unsigned char *seckey =
    (const unsigned char *)

@@ -28,13 +28,15 @@ distclean: clean
 # All of these tests must be run with with_tezos=true
 
 NTESTS=32
+NTESTS=21
+NREVTESTS=6
 SIMPLE_TESTS= `seq -f 'test%.0f' 0 $(NTESTS)`
 MORE_TESTS=test_ifcons test_if test_loop test_option test_transfer test_left \
   test_extfun test_left_constr test_closure test_closure2 test_closure3 \
   test_map test_rev test_reduce_closure test_map_closure test_mapreduce_closure \
   test_mapmap_closure test_setreduce_closure test_left_match
 OTHER_TESTS=others/broker others/demo others/auction
-REV_TESTS=`seq -f  'test%.0f' 0 5`
+REV_TESTS=`seq -f  'test%.0f' 0 $(NREVTESTS)`
 
 NEW_TEZOS_TESTS= fail weather_insurance
 FAILING_TEZOS_TESTS= originator

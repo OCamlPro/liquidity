@@ -10,15 +10,14 @@
 (* This part of the library is made to create a minimal set of dependencies
 to be able to run code that was directly extracted from Tezos *)
 
-if( with_tezos ) {
 
-OCaml.library("michelson-deps", ocaml + {
-     bytelink = [ "-custom" ];
-     files = [
+OCaml.library("ocplib-blockchain-crypto", ocaml + {
+  bytelink = [ "-custom" ];
+  files = [
 
         "sha256.c"; (* from Polar SSL *)
         "sha256-stubs.c";
-        
+
         "tweetnacl.c";
         "blake2b-ref.c";    (* from BLAKE/BLAKE *)
         "blake2b-stubs.c";
@@ -32,6 +31,18 @@ OCaml.library("michelson-deps", ocaml + {
         "mBytes.ml";
         "hex_encode.ml"; 
         "nocrypto.ml";
+  ];
+  requires = [
+     "ocplib-endian";
+  ];
+   cclib = [ "-lsecp256k1" ]
+  });
+
+if( with_tezos ) {
+
+OCaml.library("michelson-deps", ocaml + {
+     files = [
+
 
         "sodium.ml";
 
@@ -50,9 +61,9 @@ OCaml.library("michelson-deps", ocaml + {
         "updater.ml";
      ];
      requires = [
-        "ocplib-endian";     (* mBytes *)
+        
+        "ocplib-blockchain-crypto";
      ];
-     cclib = [ "-lsecp256k1" ]
 }); 
 
 }

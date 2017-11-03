@@ -19,32 +19,35 @@ open LiquidTypes
   to Michelson. No type-checking yet.
  *)
 
-let debug = ref (try
-                   ignore (Sys.getenv "LIQUID_DEBUG"); true
-                 with Not_found -> false)
+let verbosity = ref (try
+                   int_of_string (Sys.getenv "LIQUID_VERBOSITY")
+                     with
+                     | Not_found -> 0
+                     | _ -> 1 (* LIQUID_DEBUG not a number *)
+                    )
 
 let arg_peephole = ref true
 let arg_keepon = ref false
 
 let compile_liquid_file filename =
   let ocaml_ast = LiquidFromOCaml.read_file filename in
-  if !debug then
+  if !verbosity>0 then
   FileString.write_file (filename ^ ".ocaml")
                         (LiquidOCamlPrinter.contract_ast ocaml_ast);
   let syntax_ast, env = LiquidFromOCaml.translate filename ocaml_ast in
-  if !debug then
+  if !verbosity>0 then
   FileString.write_file (filename ^ ".syntax")
                         (LiquidPrinter.Liquid.string_of_contract
                            syntax_ast);
   let typed_ast, to_inline =
     LiquidCheck.typecheck_contract ~warnings:true env syntax_ast in
-  if !debug then
+  if !verbosity>0 then
   FileString.write_file (filename ^ ".typed")
                         (LiquidPrinter.Liquid.string_of_contract
                            typed_ast);
 
   let live_ast = LiquidSimplify.simplify_contract typed_ast to_inline in
-  if !debug then
+  if !verbosity>0 then
   FileString.write_file (filename ^ ".simple")
                         (LiquidPrinter.Liquid.string_of_contract
                            live_ast);
@@ -74,7 +77,7 @@ let compile_tezos_file filename =
   let c = LiquidFromTezos.convert_contract loc_table code in
   let c = LiquidClean.clean_contract c in
   let c = LiquidInterp.interp c in
-  if !debug then begin
+  if !verbosity>0 then begin
     FileString.write_file  (filename ^ ".dot")
                            (LiquidDot.to_string c);
     let cmd = Ocamldot.dot2pdf_cmd (filename ^ ".dot") (filename ^ ".pdf") in
@@ -82,7 +85,7 @@ let compile_tezos_file filename =
       Printf.eprintf "Warning: could not generate pdf from .dot file\n%!";
   end;
   let c = LiquidDecomp.decompile c in
-  if !debug then
+  if !verbosity>0 then
   FileString.write_file  (filename ^ ".liq.pre")
                          (LiquidPrinter.Liquid.string_of_contract c);
   let env = LiquidFromOCaml.initial_env filename in
@@ -150,6 +153,7 @@ let main () =
   let work_done = ref false in
   let arg_list = Arg.align [
       "-k", Arg.Set arg_keepon, " Continue on error";
+      "--verbose", Arg.Unit (fun () -> incr verbosity), " Increment verbosity";
       "--no-peephole", Arg.Clear arg_peephole,
       " Disable peephole optimizations";
       "--data", Arg.Tuple [
