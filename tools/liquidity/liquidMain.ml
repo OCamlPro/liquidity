@@ -39,12 +39,18 @@ let compile_liquid_file filename =
   FileString.write_file (filename ^ ".syntax")
                         (LiquidPrinter.Liquid.string_of_contract
                            syntax_ast);
-  let typed_ast, to_inline =
-    LiquidCheck.typecheck_contract ~warnings:true env syntax_ast in
+  let typed_ast, to_inline = LiquidCheck.typecheck_contract
+      ~only_typecheck:false ~warnings:true env syntax_ast in
   if !verbosity>0 then
-  FileString.write_file (filename ^ ".typed")
-                        (LiquidPrinter.Liquid.string_of_contract
-                           typed_ast);
+    let only_typed_ast, _ = LiquidCheck.typecheck_contract
+        ~only_typecheck:true ~warnings:false env syntax_ast in
+    FileString.write_file (filename ^ ".onlytyped")
+      (LiquidPrinter.Liquid.string_of_contract
+         only_typed_ast);
+    FileString.write_file (filename ^ ".typed")
+      (LiquidPrinter.Liquid.string_of_contract
+         typed_ast);
+  end;
 
   let live_ast = LiquidSimplify.simplify_contract typed_ast to_inline in
   if !verbosity>0 then
@@ -89,8 +95,8 @@ let compile_tezos_file filename =
   FileString.write_file  (filename ^ ".liq.pre")
                          (LiquidPrinter.Liquid.string_of_contract c);
   let env = LiquidFromOCaml.initial_env filename in
-  let typed_ast, to_inline =
-    LiquidCheck.typecheck_contract ~warnings:false env c in
+  let typed_ast, to_inline = LiquidCheck.typecheck_contract
+      ~only_typecheck:false ~warnings:false env c in
   (*  Printf.eprintf "Inlining: %d\n%!" (StringMap.cardinal to_inline); *)
   let live_ast = LiquidSimplify.simplify_contract typed_ast to_inline in
   let untyped_ast = LiquidUntype.untype_contract live_ast in

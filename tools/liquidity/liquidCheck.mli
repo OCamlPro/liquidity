@@ -13,17 +13,16 @@ val error :
   location ->
   ('a, Format.formatter, unit, unit, unit, 'b) format6 -> 'a
 
-val typecheck_contract : warnings:bool -> env ->
+val typecheck_contract : only_typecheck:bool -> warnings:bool -> env ->
                          syntax_exp contract ->
-                         typed_exp contract
-                         * datatype exp StringMap.t
+                         typed_exp contract * datatype exp StringMap.t
 
                        (*
 val uniq_ident : string -> string
                         *)
 
 val typecheck_code :
-  warnings:bool -> env ->
+  only_typecheck:bool -> warnings:bool -> env ->
   syntax_exp contract ->
   LiquidTypes.datatype ->
   syntax_exp ->

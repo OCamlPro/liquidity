@@ -502,6 +502,7 @@ type env = {
 (* fields updated in LiquidCheck *)
 type 'a typecheck_env = {
     warnings : bool;
+    only_typecheck : bool;
     counter : int ref;
     vars : (string * datatype * int ref) StringMap.t;
     env : env;
