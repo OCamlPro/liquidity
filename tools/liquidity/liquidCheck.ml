@@ -47,8 +47,8 @@ let comparable_ty ty1 ty2 =
 let error_not_comparable loc prim ty1 ty2 =
   error loc "arguments of %s not comparable: %s\nwith\n%s\n"
     (LiquidTypes.string_of_primitive prim)
-    (LiquidPrinter.Michelson.string_of_type ty1)
-    (LiquidPrinter.Michelson.string_of_type ty2)
+    (LiquidPrinter.Liquid.string_of_type_expl ty1)
+    (LiquidPrinter.Liquid.string_of_type_expl ty2)
 
 let mk =
   let bv = StringSet.empty in
@@ -215,17 +215,11 @@ let maybe_reset_vars env transfer =
     }
   else env
 
-let fprint_2types fmt (ty1, ty2) =
-  Format.fprintf fmt "First type:\n  %s\n"
-    (LiquidPrinter.Liquid.string_of_type ty1);
-  Format.fprintf fmt "Second type:\n  %s"
-    (LiquidPrinter.Liquid.string_of_type ty2)
-
 let type_error loc msg actual expected =
   error loc "%s.\nExpected type:\n  %s\nActual type:\n  %s"
     msg
-    (LiquidPrinter.Liquid.string_of_type expected)
-    (LiquidPrinter.Liquid.string_of_type actual)
+    (LiquidPrinter.Liquid.string_of_type_expl expected)
+    (LiquidPrinter.Liquid.string_of_type_expl actual)
 
 
 let error_prim loc prim args expected_args =
@@ -242,8 +236,8 @@ let error_prim loc prim args expected_args =
           error loc
                 "Primitive %s, argument %d:\nExpected type:%sProvided type:%s"
                 prim (i+1)
-                (LiquidPrinter.Liquid.string_of_type expected)
-                (LiquidPrinter.Liquid.string_of_type arg)
+                (LiquidPrinter.Liquid.string_of_type_expl expected)
+                (LiquidPrinter.Liquid.string_of_type_expl arg)
 
       ) (List.combine args expected_args);
     Printf.eprintf "Fatal error on typechecking primitive %S\n%!" prim;
@@ -482,8 +476,11 @@ let rec typecheck env ( exp : LiquidTypes.syntax_exp ) =
           in
           mk desc body.ty true,
           true, true
-       | _ ->
-          LiquidLoc.raise_error "typecheck error: Contract expected%!"
+       | ty ->
+         error (loc_exp env contract_exp)
+           "Bad contract type.\nExpected type:\n  ('a, 'b) contract\n\
+            Actual type:\n  %s"
+           (LiquidPrinter.Liquid.string_of_type_expl ty)
      end
 
 
@@ -1004,12 +1001,12 @@ let rec typecheck env ( exp : LiquidTypes.syntax_exp ) =
           end
         | Tor (left_ty, right_ty) ->
           (* Left, Right pattern matching *)
-          let ty_name = LiquidPrinter.Liquid.string_of_type arg.ty in
+          let ty_name = LiquidPrinter.Liquid.string_of_type_expl arg.ty in
           (ty_name, ["Left"; "Right"], Some (left_ty, right_ty))
         | _ -> raise Not_found
       with Not_found ->
         error loc "not a variant type: %s"
-          (LiquidPrinter.Liquid.string_of_type arg.ty)
+          (LiquidPrinter.Liquid.string_of_type_expl arg.ty)
     in
     let env = maybe_reset_vars env transfer1 in
     let match_can_fail = ref can_fail in
@@ -1322,12 +1319,14 @@ and typecheck_prim2 env prim loc args =
              error loc
                    "Primitive %s, argument %d:\nExpected type:%sProvided type:%s"
                    prim (i+1)
-                   (LiquidPrinter.Liquid.string_of_type expected)
-                   (LiquidPrinter.Liquid.string_of_type arg)
+                   (LiquidPrinter.Liquid.string_of_type_expl expected)
+                   (LiquidPrinter.Liquid.string_of_type_expl arg)
 
          ) (List.combine args expected_args);
        error loc
-             "Primitive %s, argument %d:\nExpected type: (arg * storage) -> (res * storage)\nProvided type:%s"
+             "Primitive %s, argument %d:\n\
+              Expected type: (arg * storage) -> (res * storage)\n\
+              Provided type:%s"
              prim 6
              (LiquidPrinter.Liquid.string_of_type (List.nth args 5))
 
@@ -1421,7 +1420,7 @@ and typecheck_prim2 env prim loc args =
            (String.concat "\n    "
                           (List.map
                              (fun arg ->
-                               LiquidPrinter.Liquid.string_of_type arg.ty)
+                               LiquidPrinter.Liquid.string_of_type_expl arg.ty)
                              args))
     ;
 

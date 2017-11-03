@@ -48,7 +48,7 @@ let compile_liquid_file filename =
     let only_typed_ast, _ = LiquidCheck.typecheck_contract
         ~only_typecheck:true ~warnings:false env syntax_ast in
     FileString.write_file (filename ^ ".onlytyped")
-      (LiquidPrinter.Liquid.string_of_contract
+      (LiquidPrinter.Liquid.string_of_contract_types
          only_typed_ast);
     FileString.write_file (filename ^ ".typed")
       (LiquidPrinter.Liquid.string_of_contract

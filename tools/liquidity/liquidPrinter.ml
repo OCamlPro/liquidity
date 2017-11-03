@@ -456,7 +456,82 @@ end
 module Liquid = struct
 
 
-  let rec bprint_type b indent ty =
+  let bprint_type_base expand definition b indent ty =
+    let rec bprint_type b indent ty =
+      match ty with
+      | Tfail -> Printf.bprintf b "failure"
+      | Tunit -> Printf.bprintf b "unit"
+      | Tbool -> Printf.bprintf b "bool"
+      | Tint -> Printf.bprintf b "int"
+      | Tnat -> Printf.bprintf b "nat"
+      | Ttez -> Printf.bprintf b "tez"
+      | Tstring -> Printf.bprintf b "string"
+      | Ttimestamp  -> Printf.bprintf b "timestamp"
+      | Tkey  -> Printf.bprintf b "key"
+      | Tkey_hash  -> Printf.bprintf b "key_hash"
+      | Tsignature  -> Printf.bprintf b "signature"
+      | Ttuple [] -> assert false
+      | Ttuple (ty :: tys) ->
+        Printf.bprintf b "(";
+        bprint_type b "" ty;
+        List.iter (fun ty ->
+            Printf.bprintf b " * ";
+            bprint_type b "" ty;
+          ) tys;
+        Printf.bprintf b ")";
+      | Tcontract (ty1, ty2) ->
+        Printf.bprintf b "(";
+        bprint_type b "" ty1;
+        Printf.bprintf b ", ";
+        bprint_type b "" ty2;
+        Printf.bprintf b ") contract";
+      | Tor (ty1, ty2) ->
+        Printf.bprintf b "(";
+        bprint_type b "" ty1;
+        Printf.bprintf b ", ";
+        bprint_type b "" ty2;
+        Printf.bprintf b ") variant";
+      | Toption ty ->
+        bprint_type b "" ty;
+        Printf.bprintf b " option";
+      | Tlist ty ->
+        bprint_type b "" ty;
+        Printf.bprintf b " list";
+      | Tset ty ->
+        bprint_type b "" ty;
+        Printf.bprintf b " set";
+      | Tmap (ty1, ty2) ->
+        Printf.bprintf b "(";
+        bprint_type b "" ty1;
+        Printf.bprintf b ", ";
+        bprint_type b "" ty2;
+        Printf.bprintf b ") map";
+      | Tlambda (ty1, ty2) ->
+        bprint_type b "" ty1;
+        Printf.bprintf b " -> ";
+        bprint_type b "" ty2;
+      | Tclosure ((ty_arg, ty_env), ty_r) ->
+        bprint_type b "" ty_arg;
+        Printf.bprintf b " {";
+        bprint_type b "" ty_env;
+        Printf.bprintf b "}-> ";
+        bprint_type b "" ty_r;
+      | Ttype (ty_name, ty) when definition ->
+        Printf.bprintf b "%S = " ty_name;
+        bprint_type b "" ty;
+      | Ttype (ty_name, ty) when expand ->
+        bprint_type b "" ty;
+      | Ttype (ty_name, ty) ->
+        Printf.bprintf b "%s" ty_name
+
+    in
+    bprint_type b indent ty
+
+  let rec bprint_type ?(expand=false) ?(definition=false) b indent ty =
+    bprint_type_base expand definition b indent ty
+
+
+  let bprint_type2 b indent ty =
     let set = ref StringSet.empty in
     let todo = ref [None, ty] in
     let rec iter () =
@@ -484,10 +559,64 @@ module Liquid = struct
     in
     iter ()
 
-  let bprint_const b indent cst =
-    Michelson.bprint_const b indent cst
+  let rec bprint_const b indent cst =
+    match cst with
+    | CString s -> Printf.bprintf b "%S" s
+    | CKey s -> Printf.bprintf b "%s" s
+    | CKey_hash s -> Printf.bprintf b "%s" s
+    | CSignature s -> Printf.bprintf b "%s" s
+    | CTez s -> Printf.bprintf b "%S" (liq_of_tez s)
+    | CInt n -> Printf.bprintf b "%s" (liq_of_integer n)
+    | CNat n -> Printf.bprintf b "%s" (liq_of_integer n)
+    | CTimestamp s -> Printf.bprintf b "%s" s
+    | CBool v -> Printf.bprintf b "%b" v
+    | CUnit -> Printf.bprintf b "()"
+    | CNone -> Printf.bprintf b "None"
+    | CSome cst ->
+       Printf.bprintf b "(Some ";
+       bprint_const b "" cst;
+       Printf.bprintf b ")";
+    | CLeft cst ->
+       Printf.bprintf b "(Left ";
+       bprint_const b "" cst;
+       Printf.bprintf b ")";
+    | CRight cst ->
+       Printf.bprintf b "(Right ";
+       bprint_const b "" cst;
+       Printf.bprintf b ")";
+    | CTuple [] -> assert false
+    | CTuple (c :: cs) ->
+      Printf.bprintf b "(";
+      bprint_const b "" c;
+      List.iter (fun c ->
+          Printf.bprintf b " * ";
+          bprint_const b "" c;
+        ) cs;
+      Printf.bprintf b ")";
+    | CMap pairs ->
+      Printf.bprintf b "(Map [";
+      Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt "; ")
+        (fun _ (c1, c2) ->
+           bprint_const b "" c1;
+           Printf.bprintf b ", ";
+           bprint_const b "" c2)
+        (Format.formatter_of_buffer b) pairs;
+      Printf.bprintf b "])";
+    | CList csts ->
+      Printf.bprintf b "[";
+      Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt "; ")
+        (fun _ c -> bprint_const b "" c)
+        (Format.formatter_of_buffer b) csts;
+      Printf.bprintf b "]";
+    | CSet csts ->
+      Printf.bprintf b "(Set [";
+      Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt "; ")
+        (fun _ c -> bprint_const b "" c)
+        (Format.formatter_of_buffer b) csts;
+      Printf.bprintf b "])"
 
-  let rec bprint_code ~debug b indent code =
+
+  let rec bprint_code_base bprint_code_rec ~debug b indent code =
     if debug && not (StringSet.is_empty code.bv) then begin
         Printf.bprintf b "\n%s(*\n" indent;
         (*        bprint_type b indent code.ty; *)
@@ -500,20 +629,16 @@ module Liquid = struct
     | Let (name, _loc, exp, body) ->
        let indent2 = indent ^ "  " in
        Printf.bprintf b "\n%slet %s =" indent name;
-       bprint_code ~debug b indent2 exp;
+       bprint_code_rec ~debug b indent2 exp;
        Printf.bprintf b "\n%sin" indent;
-       bprint_code ~debug b indent body
+       bprint_code_rec ~debug b indent body
     | Const (ty, cst) ->
-       let indent2 = indent ^ "  " in
-       Printf.bprintf b "\n%s(const\n%s" indent indent2;
-       bprint_type b indent2 ty;
-       Printf.bprintf b "\n%s" indent2;
-       bprint_const b indent2 cst;
-       Printf.bprintf b ")";
+       Printf.bprintf b "\n%s" indent;
+       bprint_const b indent cst;
     | SetVar (name, _loc, labels, e) ->
        let indent2 = indent ^ "  " in
        Printf.bprintf b "\n%s(%s <-" indent (String.concat "." (name :: labels));
-       bprint_code ~debug b indent2 e;
+       bprint_code_rec ~debug b indent2 e;
        Printf.bprintf b ")";
     | Var (name, _loc, labels) ->
        Printf.bprintf b "\n%s%s" indent (String.concat "." (name :: labels))
@@ -522,73 +647,73 @@ module Liquid = struct
                       (LiquidTypes.string_of_primitive prim);
        let indent2 = indent ^ "  " in
        List.iter (fun exp ->
-           bprint_code ~debug b indent2 exp
+           bprint_code_rec ~debug b indent2 exp
          ) args;
        Printf.bprintf b ")"
     | If (cond, ifthen, ifelse) ->
        let indent2 = indent ^ "  " in
        Printf.bprintf b "\n%sif" indent;
-       bprint_code ~debug b indent2 cond;
+       bprint_code_rec ~debug b indent2 cond;
        Printf.bprintf b "\n%sthen" indent;
-       bprint_code ~debug b indent2 ifthen;
+       bprint_code_rec ~debug b indent2 ifthen;
        Printf.bprintf b "\n%selse" indent;
-       bprint_code ~debug b indent2 ifelse;
+       bprint_code_rec ~debug b indent2 ifelse;
     | Seq (exp1, exp2) ->
-       bprint_code ~debug b indent exp1;
+       bprint_code_rec ~debug b indent exp1;
        Printf.bprintf b ";";
-       bprint_code ~debug b indent exp2
+       bprint_code_rec ~debug b indent exp2
     | LetTransfer (storage, result, _loc, contract_exp, tez_exp,
                    storage_exp, arg_exp, body) ->
        let indent2 = indent ^ "  " in
        let indent4 = indent2 ^ "  " in
        Printf.bprintf b "\n%slet %s, %s =" indent storage result;
        Printf.bprintf b "\n%sContract.call" indent2;
-       bprint_code ~debug b indent4 contract_exp;
-       bprint_code ~debug b indent4 tez_exp;
-       bprint_code ~debug b indent4 storage_exp;
-       bprint_code ~debug b indent4 arg_exp;
+       bprint_code_rec ~debug b indent4 contract_exp;
+       bprint_code_rec ~debug b indent4 tez_exp;
+       bprint_code_rec ~debug b indent4 storage_exp;
+       bprint_code_rec ~debug b indent4 arg_exp;
        Printf.bprintf b "\n%sin" indent;
-       bprint_code ~debug b indent body
+       bprint_code_rec ~debug b indent body
     | MatchOption (arg, _loc, ifnone, var, ifsome) ->
        let indent2 = indent ^ "  " in
        let indent4 = indent2 ^ "  " in
        Printf.bprintf b "\n%smatch " indent;
-       bprint_code ~debug b indent2 arg;
+       bprint_code_rec ~debug b indent2 arg;
        Printf.bprintf b " with\n";
        Printf.bprintf b "\n%s| None ->\n" indent2;
-       bprint_code ~debug b indent4 ifnone;
+       bprint_code_rec ~debug b indent4 ifnone;
        Printf.bprintf b "\n%s| Some %s ->\n" indent2 var;
-       bprint_code ~debug b indent4 ifsome;
+       bprint_code_rec ~debug b indent4 ifsome;
        ()
     | MatchNat (arg, _loc, p, ifplus, m, ifminus) ->
        let indent2 = indent ^ "  " in
        let indent4 = indent2 ^ "  " in
        Printf.bprintf b "\n%smatch%%nat " indent;
-       bprint_code ~debug b indent2 arg;
+       bprint_code_rec ~debug b indent2 arg;
        Printf.bprintf b " with\n";
        Printf.bprintf b "\n%s| Plus %s ->\n" indent2 p;
-       bprint_code ~debug b indent4 ifplus;
+       bprint_code_rec ~debug b indent4 ifplus;
        Printf.bprintf b "\n%s| Minus %s ->\n" indent2 m;
-       bprint_code ~debug b indent4 ifminus;
+       bprint_code_rec ~debug b indent4 ifminus;
        ()
     | MatchList (arg, _loc, head_name, tail_name, ifcons, ifnil) ->
        let indent2 = indent ^ "  " in
        let indent4 = indent2 ^ "  " in
        Printf.bprintf b "\n%smatch " indent;
-       bprint_code ~debug b indent2 arg;
+       bprint_code_rec ~debug b indent2 arg;
        Printf.bprintf b " with\n";
        Printf.bprintf b "\n%s| [] ->\n" indent2;
-       bprint_code ~debug b indent4 ifnil;
+       bprint_code_rec ~debug b indent4 ifnil;
        Printf.bprintf b "\n%s| %s :: %s ->\n" indent2 head_name tail_name;
-       bprint_code ~debug b indent4 ifcons;
+       bprint_code_rec ~debug b indent4 ifcons;
        ()
     | Loop (name, _loc, body, arg) ->
        let indent2 = indent ^ "  " in
        let indent4 = indent2 ^ "  " in
        Printf.bprintf b "\n%sLoop.loop (fun %s -> " indent name;
-       bprint_code ~debug b indent4 body;
+       bprint_code_rec ~debug b indent4 body;
        Printf.bprintf b ")\n%s" indent2;
-       bprint_code ~debug b indent2 arg;
+       bprint_code_rec ~debug b indent2 arg;
        ()
     | Closure (arg_name, arg_type, _loc, _, body, res_type)
     (* FIXME change this *)
@@ -598,7 +723,7 @@ module Liquid = struct
        Printf.bprintf b "\n%s(fun ( %s : " indent arg_name;
        bprint_type b indent2 arg_type;
        Printf.bprintf b ") ->\n%s" indent2;
-       bprint_code ~debug b indent4 body;
+       bprint_code_rec ~debug b indent4 body;
        Printf.bprintf b ")"
     | Record (_loc, lab_x_exp_list) ->
        let indent2 = indent ^ "  " in
@@ -606,23 +731,23 @@ module Liquid = struct
        Printf.bprintf b "\n%s{" indent;
        List.iter (fun (label, exp) ->
            Printf.bprintf b "\n%s%s = " indent2 label;
-           bprint_code ~debug b indent4 exp;
+           bprint_code_rec ~debug b indent4 exp;
            Printf.bprintf b ";";
          ) lab_x_exp_list;
        Printf.bprintf b "}"
     | Constructor (_loc, Constr constr, arg) ->
        Printf.bprintf b "\n%s%s (" indent constr;
-       bprint_code ~debug b (indent ^ "  ") arg;
+       bprint_code_rec ~debug b (indent ^ "  ") arg;
        Printf.bprintf b ")"
     | Constructor (_loc, Left right_ty, arg) ->
        Printf.bprintf b "\n%s(Left " indent;
-       bprint_code ~debug b (indent ^ "  ") arg;
+       bprint_code_rec ~debug b (indent ^ "  ") arg;
        Printf.bprintf b " : (_, ";
        bprint_type b (indent ^ "  ") right_ty;
        Printf.bprintf b ") variant)"
     | Constructor (_loc, Right right_ty, arg) ->
        Printf.bprintf b "\n%s(Right " indent;
-       bprint_code ~debug b (indent ^ "  ") arg;
+       bprint_code_rec ~debug b (indent ^ "  ") arg;
        Printf.bprintf b " : ( ";
        bprint_type b (indent ^ "  ") right_ty;
        Printf.bprintf b ", _) variant)"
@@ -637,42 +762,59 @@ module Liquid = struct
        let indent2 = indent ^ "  " in
        let indent4 = indent2 ^ "  " in
        Printf.bprintf b "\n%smatch " indent;
-       bprint_code ~debug b indent2 arg;
+       bprint_code_rec ~debug b indent2 arg;
        Printf.bprintf b " with\n";
        List.iter (function
            | CConstr (constr, vars), e ->
              Printf.bprintf b "\n%s| %s (%s) ->\n" indent2 constr
                (String.concat ", " vars);
-             bprint_code ~debug b indent4 e;
+             bprint_code_rec ~debug b indent4 e;
            | CAny, e ->
              Printf.bprintf b "\n%s| _ ->\n" indent2;
-             bprint_code ~debug b indent4 e;
+             bprint_code_rec ~debug b indent4 e;
          ) cases;
        ()
 
+  let rec bprint_code_types ~debug b indent code =
+    bprint_code_base
+      (fun ~debug b indent code ->
+         bprint_code_types ~debug b indent code;
+         Printf.bprintf b "\n%s(* : " indent;
+         bprint_type b (indent^"  ") code.ty;
+         Printf.bprintf b " *)";
+      )
+      ~debug b indent code
 
-  let bprint_contract ~debug b indent contract =
+  let rec bprint_code ~debug b indent code =
+    bprint_code_base bprint_code ~debug b indent code
+
+  let bprint_contract bprint_code ~debug b indent contract =
     let indent2 = indent ^ "    " in
-    Printf.bprintf b "let contract\n";
-    Printf.bprintf b "    (amount: tez)\n";
-    Printf.bprintf b "    (parameter: ";
+    Printf.bprintf b "let%%entry main\n";
+    (* Printf.bprintf b "    (amount: tez)\n"; *)
+    Printf.bprintf b "    (parameter/2: ";
     bprint_type b indent2 contract.parameter;
     Printf.bprintf b ")\n";
-    Printf.bprintf b "    (storage: ";
+    Printf.bprintf b "    (storage/1: ";
     bprint_type b indent2 contract.storage;
     Printf.bprintf b ")\n";
-    Printf.bprintf b "    (return: ";
-    bprint_type b indent2 contract.return;
-    Printf.bprintf b ") = \n";
+    Printf.bprintf b "    : ";
+    bprint_type b indent2 (Ttuple [contract.return; contract.storage]);
+    Printf.bprintf b "= \n";
 
     bprint_code ~debug b indent contract.code
 
   let string_of_type = to_string bprint_type
+  let string_of_type_expl = to_string (fun b -> bprint_type ~definition:true b)
   let string_of_const = to_string bprint_const
   let string_of_code ?(debug=false) code =
     to_string (bprint_code ~debug) code
+  let string_of_code_types ?(debug=false) code =
+    to_string (bprint_code_types ~debug) code
   let string_of_contract ?(debug=false) cmd =
-    to_string (bprint_contract ~debug) cmd
+    to_string (bprint_contract bprint_code ~debug) cmd
+  let string_of_contract_types ?(debug=false) cmd =
+    to_string (bprint_contract bprint_code_types ~debug) cmd
 
 end
 
