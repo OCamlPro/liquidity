@@ -175,9 +175,7 @@ let rec translate_type env typ =
   | { ptyp_desc = Ptyp_constr ({ txt = Lident ty_name }, []) } ->
      begin
        try
-         match StringMap.find ty_name env.types with
-         | ty, Type_alias -> ty
-         | ty, _ -> Ttype (ty_name, ty)
+         Ttype (ty_name, StringMap.find ty_name env.types)
        with Not_found ->
          unbound_type typ.ptyp_loc ty_name
      end
@@ -802,7 +800,7 @@ let rec translate_head env ext_funs head_exp args =
     let return = match translate_type env return_type with
       | Ttuple [ ret_ty; sto_ty ] ->
         let storage = List.assoc "storage" args in
-        if sto_ty <> storage then
+        if not (eq_types sto_ty storage) then
           error_loc pexp_loc
             "Second component of return type must be identical to storage type";
         ret_ty
@@ -845,50 +843,37 @@ let rec translate_head env ext_funs head_exp args =
      }
 
 let translate_record ty_name labels env =
-  let map = ref StringMap.empty in
-  let tys = List.mapi
-             (fun i pld ->
-               let label = pld.pld_name.txt in
-               if StringMap.mem label env.labels then
-                 error_loc pld.pld_loc "label already defined";
+  let rtys = List.mapi
+      (fun i pld ->
+         let label = pld.pld_name.txt in
+         if StringMap.mem label env.labels then
+           error_loc pld.pld_loc "label already defined";
 
-               let ty = translate_type env pld.pld_type in
-               env.labels <- StringMap.add label (ty_name, i, ty) env.labels;
-               map := StringMap.add label i !map;
-               ty) labels
+         let ty = translate_type env pld.pld_type in
+         env.labels <- StringMap.add label (ty_name, i, ty) env.labels;
+         label, ty) labels
   in
-  let ty = Ttuple tys in
-  env.types <- StringMap.add ty_name (ty, Type_record (tys,!map)) env.types
+  let ty = Trecord rtys in
+  env.types <- StringMap.add ty_name ty env.types
 
 let translate_variant ty_name constrs env =
-
   let constrs = List.map
-             (fun pcd ->
-               let constr = pcd.pcd_name.txt in
-               if StringMap.mem constr env.constrs then
-                 error_loc pcd.pcd_loc "constructor already defined";
+      (fun pcd ->
+         let constr = pcd.pcd_name.txt in
+         if StringMap.mem constr env.constrs then
+           error_loc pcd.pcd_loc "constructor already defined";
 
-               let ty = match pcd.pcd_args with
-                 | Pcstr_tuple [ ty ] -> translate_type env ty
-                 | Pcstr_tuple [] -> Tunit
-                 | Pcstr_tuple tys -> Ttuple (List.map (translate_type env) tys)
-                 | Pcstr_record _ -> error_loc pcd.pcd_loc "syntax error"
-               in
-               env.constrs <- StringMap.add constr (ty_name, ty) env.constrs;
-               constr, ty) constrs
+         let ty = match pcd.pcd_args with
+           | Pcstr_tuple [ ty ] -> translate_type env ty
+           | Pcstr_tuple [] -> Tunit
+           | Pcstr_tuple tys -> Ttuple (List.map (translate_type env) tys)
+           | Pcstr_record _ -> error_loc pcd.pcd_loc "syntax error"
+         in
+         env.constrs <- StringMap.add constr (ty_name, ty) env.constrs;
+         constr, ty) constrs
   in
-
-  let rec iter constrs =
-    match constrs with
-    | [] -> assert false
-    | [ constr, ty ] -> ty, [constr, ty, ty, ty]
-    | (constr, left_ty) :: constrs ->
-       let right_ty, right_constrs = iter constrs in
-       let ty = Tor (left_ty, right_ty) in
-       ty, (constr, ty, left_ty, right_ty) :: right_constrs
-  in
-  let ty, constrs = iter constrs in
-  env.types <- StringMap.add ty_name (ty, Type_variant constrs) env.types
+  let ty = Tsum constrs in
+  env.types <- StringMap.add ty_name ty env.types
 
 let check_version = function
   | { pexp_desc = Pexp_constant (Pconst_float (s, None)); pexp_loc } ->
@@ -981,7 +966,7 @@ let rec translate_structure funs env ast =
                                }
     ]) } :: ast ->
     let ty = translate_type env ct in
-    env.types <- StringMap.add ty_name (ty, Type_alias) env.types;
+    env.types <- StringMap.add ty_name ty env.types;
     translate_structure funs env ast
 
   | [] ->
@@ -1001,9 +986,9 @@ let predefined_constructors =
                    "None", ("'a option", Tunit);
                    "::", ("'a list", Tunit);
                    "[]", ("'a list", Tunit);
-                   "Left", ("'a variant", Tunit);
-                   "Right", ("'a variant", Tunit);
-                   "Source", ("'a contract", Tunit);
+                   "Left", ("('a, 'b) variant", Tunit);
+                   "Right", ("('a, 'b) variant", Tunit);
+                   "Source", ("('a, 'b) contract", Tunit);
                  ]
 
 let predefined_types =
@@ -1012,18 +997,20 @@ let predefined_types =
                  (* Enter predefined types with dummy-info to prevent
  the user from overriding them *)
                  [
-                   "int", (Tunit, Type_variant []);
-                   "unit", (Tunit, Type_variant []);
-                   "bool", (Tunit, Type_variant []);
-                   "nat", (Tunit, Type_variant []);
-                   "tez", (Tunit, Type_variant []);
-                   "string", (Tunit, Type_variant []);
-                   "key", (Tunit, Type_variant []);
-                   "signature", (Tunit, Type_variant []);
-                   "option", (Tunit, Type_variant []);
-                   "list", (Tunit, Type_variant []);
-                   "map", (Tunit, Type_variant []);
-                   "set", (Tunit, Type_variant []);
+                   "int", Tunit;
+                   "unit", Tunit;
+                   "bool", Tunit;
+                   "nat", Tunit;
+                   "tez", Tunit;
+                   "string", Tunit;
+                   "key", Tunit;
+                   "signature", Tunit;
+                   "option", Tunit;
+                   "list", Tunit;
+                   "map", Tunit;
+                   "set", Tunit;
+                   "variant", Tunit;
+                   "contract", Tunit;
                  ]
 
 let initial_env filename =

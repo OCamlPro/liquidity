@@ -54,6 +54,9 @@ type const =
 
   | Ttuple of datatype list
 
+  | Trecord of (string * datatype) list
+  | Tsum of (string * datatype) list
+
   | Toption of datatype
   | Tlist of datatype
   | Tset of datatype
@@ -67,6 +70,62 @@ type const =
   | Tclosure of (datatype * datatype) * datatype
   | Tfail
   | Ttype of string * datatype
+
+let rec get_type ty = match ty with
+  | Ttez | Tunit | Ttimestamp | Tint | Tnat | Tbool | Tkey | Tkey_hash
+  | Tsignature | Tstring | Tfail -> ty
+  | Ttuple tys ->
+    let tys' = List.map get_type tys in
+    if List.for_all2 (==) tys tys' then ty
+    else Ttuple tys'
+  | Tset t | Tlist t | Toption t ->
+    let t' = get_type t in
+    if t' == t then ty
+    else begin match ty with
+      | Tset t -> Tset t'
+      | Tlist t -> Tlist t'
+      | Toption t -> Toption t'
+      | _ -> assert false
+    end
+  | Tor (t1, t2) | Tcontract (t1, t2) | Tlambda (t1, t2) | Tmap (t1, t2) ->
+    let t1', t2' = get_type t1, get_type t2 in
+    if t1 == t1' && t2 == t2' then ty
+    else begin match ty with
+      | Tor (t1, t2) -> Tor (t1', t2')
+      | Tcontract (t1, t2) -> Tcontract (t1', t2')
+      | Tlambda (t1, t2) -> Tlambda (t1', t2')
+      | Tmap (t1, t2) -> Tmap (t1', t2')
+      | _ -> assert false
+    end
+  | Tclosure  ((t1, t2), t3) ->
+    let t1', t2', t3' = get_type t1, get_type t2, get_type t3 in
+    if t1 == t1' && t2 == t2' && t3 == t3' then ty
+    else Tclosure ((t1', t2'), t3')
+  | Trecord ntys | Tsum ntys ->
+    let change = ref false in
+      let ntys' = List.map (fun (l, ty) ->
+        let ty' = get_type ty in
+        if ty' != ty then change := true;
+        (l, ty')
+      ) ntys in
+    if !change then match ty with
+      | Trecord _ -> Trecord ntys'
+      | Tsum _ -> Tsum ntys'
+      | _ -> assert false
+    else ty
+
+  | Ttype (name, t) -> get_type t
+
+let first_alias ty =
+  let rec aux acc ty = match acc, ty with
+    | _, Ttype (name, ty) -> aux (Some name) ty
+    | Some name, ty -> Some (name, ty)
+    | None, _ -> None
+  in
+  aux None ty
+
+let eq_types t1 t2 =
+  get_type t1 = get_type t2
 
 
 type 'exp contract = {
@@ -462,16 +521,6 @@ type loc_michelson = {
 let mic ins = ins
 let mic_loc loc ins = { loc; ins }
 
-type type_kind =
-  | Type_alias
-  | Type_record of datatype list * int StringMap.t
-  | Type_variant of
-      (string
-       * datatype (* final type *)
-       * datatype (* left type *)
-       * datatype (* right type *)
-      ) list
-
 type closure_env = {
   env_vars :  (string (* name outside closure *)
                * datatype
@@ -492,7 +541,7 @@ type env = {
 
     (* fields modified in LiquidFromOCaml *)
     (* type definitions *)
-    mutable types : (datatype * type_kind) StringMap.t;
+    mutable types : datatype StringMap.t;
     (* labels of records in type definitions *)
     mutable labels : (string * int * datatype) StringMap.t;
     (* constructors of sum-types in type definitions *)

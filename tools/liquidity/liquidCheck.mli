@@ -13,6 +13,8 @@ val error :
   location ->
   ('a, Format.formatter, unit, unit, unit, 'b) format6 -> 'a
 
+val encode_type : ?keepalias:bool -> datatype -> datatype
+
 val typecheck_contract : only_typecheck:bool -> warnings:bool -> env ->
                          syntax_exp contract ->
                          typed_exp contract * datatype exp StringMap.t

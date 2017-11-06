@@ -517,4 +517,7 @@ let translate filename ~peephole contract =
   { contract with code }
  *)
 let translate contract =
-  { contract with code = translate_code contract.code }
+  { parameter = LiquidCheck.encode_type contract.parameter;
+    storage = LiquidCheck.encode_type contract.storage;
+    return = LiquidCheck.encode_type contract.return;
+    code = translate_code contract.code }

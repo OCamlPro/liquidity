@@ -125,6 +125,7 @@ module Michelson = struct
       | Tkey_hash  -> Printf.bprintf b "key_hash"
       | Tsignature  -> Printf.bprintf b "signature"
       | Ttuple tys -> bprint_type_pairs b indent tys
+      | Trecord _ | Tsum _ -> assert false
       | Tcontract (ty1, ty2) ->
          let indent = indent ^ "  " in
          Printf.bprintf b "(contract\n%s" indent;
@@ -479,6 +480,24 @@ module Liquid = struct
             bprint_type b "" ty;
           ) tys;
         Printf.bprintf b ")";
+      | Trecord [] -> assert false
+      | Trecord ((f, ty) :: rtys) ->
+        Printf.bprintf b "{ ";
+        Printf.bprintf b "%s: " f;
+        bprint_type b "" ty;
+        List.iter (fun (f, ty) ->
+            Printf.bprintf b "; %s: " f;
+            bprint_type b "" ty;
+          ) rtys;
+        Printf.bprintf b " }";
+      | Tsum [] -> assert false
+      | Tsum ((c, ty) :: rtys) ->
+        Printf.bprintf b "%s of " c;
+        bprint_type b "" ty;
+        List.iter (fun (c, ty) ->
+            Printf.bprintf b " | %s of " c;
+            bprint_type b "" ty;
+          ) rtys;
       | Tcontract (ty1, ty2) ->
         Printf.bprintf b "(";
         bprint_type b "" ty1;

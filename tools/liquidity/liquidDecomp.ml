@@ -26,6 +26,8 @@ let const_name_of_datatype = function
   | Tsignature -> "sig"
   | Ttuple _ -> "tuple"
   | Toption _ -> "opt"
+  | Trecord _ -> "record"
+  | Tsum _ -> "sum"
   | Tlist _ -> "l"
   | Tset _ -> "s"
   | Tmap _ -> "map"
