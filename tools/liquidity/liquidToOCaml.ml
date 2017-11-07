@@ -72,6 +72,8 @@ let rec convert_const expr =
                              (Some (convert_const x))
   | CRight x -> Exp.construct (lid "Right")
                              (Some (convert_const x))
+  | CConstr (c, x) -> Exp.construct (lid c)
+                        (Some (convert_const x))
   | CTuple args -> Exp.tuple (List.map convert_const args)
   | CTez n -> Exp.constant (Const.float ~suffix:'\231'
                                         (LiquidPrinter.liq_of_tez n))
@@ -108,6 +110,10 @@ let rec convert_const expr =
          ) (Exp.construct (lid "[]") None) list
      in
      Exp.construct (lid "Map") (Some args)
+  | CRecord labels ->
+    Exp.record
+      (List.map (fun (f, x) -> lid f, convert_const x) labels)
+      None
 
 let rec convert_code expr =
   match expr.desc with

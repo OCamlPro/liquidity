@@ -103,6 +103,45 @@ and encode_sum_type cstys =
   in
   rassoc cstys
 
+let rec encode_const env c = match c with
+  | CUnit | CBool _ | CInt _ | CNat _ | CTez _ | CTimestamp _ | CString _
+  | CKey _ | CSignature _ | CNone  | CKey_hash _ -> c
+
+  | CSome x -> CSome (encode_const env x)
+  | CLeft x -> CLeft (encode_const env x)
+  | CRight x -> CRight (encode_const env x)
+
+  | CTuple xs -> CTuple (List.map (encode_const env) xs)
+  | CList xs -> CList (List.map (encode_const env) xs)
+  | CSet xs -> CSet (List.map (encode_const env) xs)
+
+  | CMap l ->
+    CMap (List.map (fun (x,y) -> encode_const env x, encode_const env y) l)
+
+  | CRecord labels ->
+    CTuple (List.map (fun (_, x) -> encode_const env x) labels)
+
+  | CConstr (constr, x) ->
+    try
+      let ty_name, _ = StringMap.find constr env.env.constrs in
+      let constr_ty = StringMap.find ty_name env.env.types in
+      match constr_ty with
+      | Tsum constrs ->
+        let rec iter constrs =
+          match constrs with
+          | [] -> assert false
+          | [c, _] ->
+            assert (c = constr);
+            encode_const env x
+          | (c, _) :: constrs ->
+            if c = constr then CLeft (encode_const env x)
+            else CRight (iter constrs)
+        in
+        iter constrs
+      | _ -> raise Not_found
+    with Not_found ->
+      error (noloc env)  "unknown constructor %s" constr
+
 let mk =
   let bv = StringSet.empty in
   fun desc (ty : datatype) fail -> { desc; ty; bv; fail }
@@ -300,30 +339,30 @@ let error_prim loc prim args expected_args =
   (* approximate location *)
 let rec loc_exp env e = match e.desc with
   | Var (_, loc, _)
-    | SetVar (_, loc, _, _)
-    | Apply (_, loc, _)
-    | LetTransfer (_, _, loc, _, _, _, _, _)
-    | MatchOption (_, loc, _, _, _)
-    | MatchNat (_, loc, _, _, _, _)
-    | MatchList (_, loc, _, _, _, _)
-    | Loop (_, loc, _, _)
-    | Lambda (_, _, loc, _, _)
-    | Closure (_, _, loc, _, _, _)
-    | Record (loc, _)
-    | Constructor (loc, _, _)
-    | MatchVariant (_, loc, _) -> loc
+  | SetVar (_, loc, _, _)
+  | Apply (_, loc, _)
+  | LetTransfer (_, _, loc, _, _, _, _, _)
+  | MatchOption (_, loc, _, _, _)
+  | MatchNat (_, loc, _, _, _, _)
+  | MatchList (_, loc, _, _, _, _)
+  | Loop (_, loc, _, _)
+  | Lambda (_, _, loc, _, _)
+  | Closure (_, _, loc, _, _, _)
+  | Record (loc, _)
+  | Constructor (loc, _, _)
+  | MatchVariant (_, loc, _) -> loc
 
   | Let (_, _, _, e) -> loc_exp env e
 
   | Const _ -> noloc env
 
   | If (e1, _, e2)
-    | Seq (e1, e2) ->
-     match loc_exp env e1, loc_exp env e2 with
-     | ({ loc_pos = Some ( loc_begin , _ ) } as loc),
-       { loc_pos = Some ( _, loc_end ) } ->
-        { loc with loc_pos = Some (loc_begin, loc_end) }
-     | loc, _ -> loc
+  | Seq (e1, e2) ->
+    match loc_exp env e1, loc_exp env e2 with
+    | ({ loc_pos = Some ( loc_begin , _ ) } as loc),
+      { loc_pos = Some ( _, loc_end ) } ->
+      { loc with loc_pos = Some (loc_begin, loc_end) }
+    | loc, _ -> loc
 
   (* this function returns a triple with
    * the expression annotated with its type
@@ -334,7 +373,7 @@ let rec typecheck env ( exp : LiquidTypes.syntax_exp ) =
   match exp.desc with
 
   | Const (ty, cst ) ->
-     let desc = Const (ty, cst ) in
+     let desc = Const (ty, encode_const env cst) in
      let fail = false in
      mk desc ty fail, fail, false
 
@@ -1600,27 +1639,46 @@ let check_const_type ?(from_mic=false) ~to_tez loc ty cst =
     | Tset ty, CSet csts ->
        CSet (List.map (check_const_type ty) csts)
 
+    | Trecord labels, CRecord fields ->
+      CRecord (List.map (fun (f, cst) ->
+          try
+            let ty = List.assoc f labels in
+            f, check_const_type ty cst
+          with Not_found ->
+            error loc "Record field %s is not in type %s" f
+              (LiquidPrinter.Liquid.string_of_type ty)
+        ) fields)
+
+    | Tsum constrs, CConstr (c, cst) ->
+      CConstr (c,
+               try
+                 let ty = List.assoc c constrs in
+                 check_const_type ty cst
+               with Not_found ->
+                 error loc "Constructor %s does not belong to type %s" c
+                   (LiquidPrinter.Liquid.string_of_type ty)
+              )
+
     | _ ->
-       if from_mic then
-         match ty, cst with
-         | Ttimestamp, CString s ->
-            begin (* approximation of correct tezos timestamp *)
-              try Scanf.sscanf s "%_d-%_d-%_dT%_d:%_d:%_dZ%!" ()
-              with _ ->
-                try Scanf.sscanf s "%_d-%_d-%_d %_d:%_d:%_dZ%!" ()
-                with _ ->
-                  try Scanf.sscanf s "%_d-%_d-%_dT%_d:%_d:%_d-%_d:%_d%!" ()
-                  with _ ->
-                    try Scanf.sscanf s "%_d-%_d-%_dT%_d:%_d:%_d+%_d:%_d%!" ()
-                    with _ ->
-                      try Scanf.sscanf s "%_d-%_d-%_d %_d:%_d:%_d-%_d:%_d%!" ()
-                      with _ ->
-                        try Scanf.sscanf s
-                                         "%_d-%_d-%_d %_d:%_d:%_d+%_d:%_d%!" ()
-                        with _ ->
-                          error loc "Bad format for timestamp"
-            end;
-            CTimestamp s
+      if from_mic then
+        match ty, cst with
+        | Ttimestamp, CString s ->
+          begin (* approximation of correct tezos timestamp *)
+            try Scanf.sscanf s "%_d-%_d-%_dT%_d:%_d:%_dZ%!" ()
+            with _ ->
+            try Scanf.sscanf s "%_d-%_d-%_d %_d:%_d:%_dZ%!" ()
+            with _ ->
+            try Scanf.sscanf s "%_d-%_d-%_dT%_d:%_d:%_d-%_d:%_d%!" ()
+            with _ ->
+            try Scanf.sscanf s "%_d-%_d-%_dT%_d:%_d:%_d+%_d:%_d%!" ()
+            with _ ->
+            try Scanf.sscanf s "%_d-%_d-%_d %_d:%_d:%_d-%_d:%_d%!" ()
+            with _ ->
+            try Scanf.sscanf s "%_d-%_d-%_d %_d:%_d:%_d+%_d:%_d%!" ()
+            with _ ->
+              error loc "Bad format for timestamp"
+          end;
+          CTimestamp s
 
          | Ttez, CString s -> CTez (to_tez s)
          | Tkey_hash, CString s -> CKey_hash s

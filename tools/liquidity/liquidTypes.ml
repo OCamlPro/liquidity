@@ -39,6 +39,9 @@ type const =
 
   | CKey_hash of string
 
+  | CRecord of (string * const) list
+  | CConstr of string * const
+
  and datatype =
    (* michelson *)
   | Tunit

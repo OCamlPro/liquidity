@@ -257,6 +257,7 @@ module Michelson = struct
            bprint_const fmt b indent cst;
          ) csts;
        Printf.bprintf b "%c%s)" fmt.newline indent;
+    | CConstr _ | CRecord _ -> assert false
 
   and bprint_const_pairs fmt b indent tys =
     match tys with
@@ -592,17 +593,17 @@ module Liquid = struct
     | CUnit -> Printf.bprintf b "()"
     | CNone -> Printf.bprintf b "None"
     | CSome cst ->
-       Printf.bprintf b "(Some ";
-       bprint_const b "" cst;
-       Printf.bprintf b ")";
+      Printf.bprintf b "(Some ";
+      bprint_const b "" cst;
+      Printf.bprintf b ")";
     | CLeft cst ->
-       Printf.bprintf b "(Left ";
-       bprint_const b "" cst;
-       Printf.bprintf b ")";
+      Printf.bprintf b "(Left ";
+      bprint_const b "" cst;
+      Printf.bprintf b ")";
     | CRight cst ->
-       Printf.bprintf b "(Right ";
-       bprint_const b "" cst;
-       Printf.bprintf b ")";
+      Printf.bprintf b "(Right ";
+      bprint_const b "" cst;
+      Printf.bprintf b ")";
     | CTuple [] -> assert false
     | CTuple (c :: cs) ->
       Printf.bprintf b "(";
@@ -633,6 +634,18 @@ module Liquid = struct
         (fun _ c -> bprint_const b "" c)
         (Format.formatter_of_buffer b) csts;
       Printf.bprintf b "])"
+    | CConstr (c, cst) ->
+      Printf.bprintf b "(%s " c;
+      bprint_const b "" cst;
+      Printf.bprintf b ")";
+    | CRecord labels ->
+      Printf.bprintf b "{";
+      Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt "; ")
+        (fun _ (f, cst) ->
+           Printf.bprintf b "%s = " f;
+           bprint_const b "" cst)
+        (Format.formatter_of_buffer b) labels;
+      Printf.bprintf b "}"
 
 
   let rec bprint_code_base bprint_code_rec ~debug b indent code =
