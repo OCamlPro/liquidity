@@ -369,7 +369,8 @@ and translate_pair exp =
   | Pexp_tuple [e1; e2] -> (e1, e2)
   | _ -> error_loc exp.pexp_loc "pair expected"
 
-let mk desc = { desc; ty = (); bv = StringSet.empty; fail = false }
+
+let mk desc = mk desc ()
 
 let vars_info_pat env pat =
   let rec vars_info_pat_aux acc indexes = function
@@ -819,6 +820,17 @@ let rec translate_head env ext_funs head_exp args =
             head_exp) } ->
      translate_head env ext_funs head_exp
        (("return", translate_type env arg_type) :: args)
+
+  | { pexp_desc =
+        Pexp_fun (
+            Nolabel, None,
+            { ppat_desc =
+                Ppat_extension ({ txt = "invariant"},
+                                PStr [{ pstr_desc = Pstr_eval (exp, [])}])
+            },
+            head_exp) } ->
+    Format.eprintf "invariant@.";
+     translate_head env ext_funs head_exp args
 
   | { pexp_desc =
         Pexp_fun (

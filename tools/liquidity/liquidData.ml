@@ -57,8 +57,7 @@ let data_of_liq ~filename ~contract ~parameter ~storage =
   let ocaml_ast = LiquidFromOCaml.structure_of_string
                     ~filename contract in
   let contract, env = LiquidFromOCaml.translate ~filename ocaml_ast in
-  let _, _ = LiquidCheck.typecheck_contract
-               ~only_typecheck:false
+  let _ = LiquidCheck.typecheck_contract
                ~warnings:true env contract in
 
   let translate filename s ty =
@@ -66,7 +65,7 @@ let data_of_liq ~filename ~contract ~parameter ~storage =
       let ml_exp = LiquidFromOCaml.expression_of_string ~filename s in
       let sy_exp = LiquidFromOCaml.translate_expression env ml_exp in
       let ty_exp = LiquidCheck.typecheck_code
-          ~only_typecheck:false ~warnings:true env contract ty sy_exp in
+          ~warnings:true env contract ty sy_exp in
       let loc = LiquidLoc.loc_in_file filename in
       let ty_exp = translate_const_exp loc ty_exp in
       let s = LiquidPrinter.Michelson.line_of_const ty_exp in

@@ -21,7 +21,7 @@ let dup n = {i=DUP n}
 (* n = size of preserved head of stack *)
 let dip n exprs = {i=DIP (n, seq exprs)}
 
-let push ty cst = {i=PUSH (ty, cst)}
+let push ty cst = {i=PUSH (LiquidEncode.encode_type ty, cst)}
 
 (* n = size of preserved head of stack *)
 let drop_stack n depth =
@@ -77,9 +77,11 @@ let translate_code code =
        let env = StringMap.empty in
        let env = StringMap.add arg_name 0 env in
        let depth = 1 in
+       let arg_type = LiquidEncode.encode_type arg_type in
+       let res_type = LiquidEncode.encode_type res_type in
        let body = compile_no_transfer depth env body in
        [ {i=LAMBDA (arg_type, res_type, seq (body @ [
-                                               {i=DIP_DROP (1,1)}]))} ], false
+             {i=DIP_DROP (1,1)}]))} ], false
 
     | Closure (arg_name, p_arg_type, loc, call_env, body, res_type) ->
       let call_env_code = match call_env with
@@ -87,6 +89,8 @@ let translate_code code =
         | [_, e] -> compile_no_transfer depth env e
         | _ -> compile_tuple depth env (List.rev_map snd call_env)
       in
+      let p_arg_type = LiquidEncode.encode_type p_arg_type in
+      let res_type = LiquidEncode.encode_type res_type in
       call_env_code @
       (compile_desc depth env
          (Lambda (arg_name, p_arg_type, loc, body, res_type)) |> fst) @
@@ -141,6 +145,9 @@ let translate_code code =
       let arg = compile_no_transfer (depth+1) env arg in
       f_env @ arg @ [ dip 1 [ dup 1; ii CAR; ii SWAP; ii CDR] ] @
       [ ii PAIR ; ii EXEC ], false
+
+    | Apply (prim, _loc, ([_; { ty = Tlambda _ } ] as args)) ->
+      compile_prim depth env prim args, false
 
     | Apply (prim, _loc, args) ->
        compile_prim depth env prim args, false
@@ -310,24 +317,29 @@ set x n y = x + [ DUP; CAR; SWAP; CDR ]*n +
     | Prim_gas, _ -> [ ii STEPS_TO_QUOTA ]
 
     | Prim_Left, [ arg; { ty = right_ty }] ->
-       compile_no_transfer depth env arg @
-         [ {i=LEFT right_ty} ]
+      let right_ty = LiquidEncode.encode_type right_ty in
+      compile_no_transfer depth env arg @
+      [ {i=LEFT right_ty} ]
     | Prim_Left, _ -> assert false
 
     | Prim_Right, [ arg; { ty = left_ty } ] ->
-       compile_no_transfer depth env arg @
-         [ {i=RIGHT left_ty} ]
+      let left_ty = LiquidEncode.encode_type left_ty in
+      compile_no_transfer depth env arg @
+      [ {i=RIGHT left_ty} ]
     | Prim_Right, _ -> assert false
 
     | Prim_Source, [ { ty = from_ty }; { ty = to_ty } ] ->
-       [ {i=SOURCE (from_ty, to_ty)} ]
+      let from_ty = LiquidEncode.encode_type from_ty in
+      let to_ty = LiquidEncode.encode_type to_ty in
+      [ {i=SOURCE (from_ty, to_ty)} ]
     | Prim_Source, _ -> assert false
 
     (* catch the special case of [a;b;c] where
 the ending NIL is not annotated with a type *)
     | Prim_Cons, [ { ty } as arg; { ty = Tunit } ] ->
-       let arg = compile_no_transfer (depth+1) env arg in
-       [ {i=PUSH (Tlist ty, CList[])} ] @ arg @ [ ii CONS ]
+      let ty = LiquidEncode.encode_type ty in
+      let arg = compile_no_transfer (depth+1) env arg in
+      [ {i=PUSH (Tlist ty, CList[])} ] @ arg @ [ ii CONS ]
 
     (* Should be removed in LiquidCheck *)
     | Prim_unknown, _
@@ -517,7 +529,7 @@ let translate filename ~peephole contract =
   { contract with code }
  *)
 let translate contract =
-  { parameter = LiquidCheck.encode_type contract.parameter;
-    storage = LiquidCheck.encode_type contract.storage;
-    return = LiquidCheck.encode_type contract.return;
+  { parameter = LiquidEncode.encode_type contract.parameter;
+    storage = LiquidEncode.encode_type contract.storage;
+    return = LiquidEncode.encode_type contract.return;
     code = translate_code contract.code }

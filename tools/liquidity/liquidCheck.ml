@@ -50,144 +50,15 @@ let error_not_comparable loc prim ty1 ty2 =
     (LiquidPrinter.Liquid.string_of_type_expl ty1)
     (LiquidPrinter.Liquid.string_of_type_expl ty2)
 
-let rec encode_type ?(keepalias=true) ty =
-  (* if env.only_typecheck then ty *)
-  (* else *)
-  match ty with
-  | Ttez | Tunit | Ttimestamp | Tint | Tnat | Tbool | Tkey | Tkey_hash
-  | Tsignature | Tstring | Tfail -> ty
-  | Ttuple tys ->
-    let tys' = List.map encode_type tys in
-    if List.for_all2 (==) tys tys' then ty
-    else Ttuple tys'
-  | Tset t | Tlist t | Toption t ->
-    let t' = encode_type t in
-    if t' == t then ty
-    else begin match ty with
-      | Tset t -> Tset t'
-      | Tlist t -> Tlist t'
-      | Toption t -> Toption t'
-      | _ -> assert false
-    end
-  | Tor (t1, t2) | Tcontract (t1, t2) | Tlambda (t1, t2) | Tmap (t1, t2) ->
-    let t1', t2' = encode_type t1, encode_type t2 in
-    if t1 == t1' && t2 == t2' then ty
-    else begin match ty with
-      | Tor (t1, t2) -> Tor (t1', t2')
-      | Tcontract (t1, t2) -> Tcontract (t1', t2')
-      | Tlambda (t1, t2) -> Tlambda (t1', t2')
-      | Tmap (t1, t2) -> Tmap (t1', t2')
-      | _ -> assert false
-    end
-  | Tclosure  ((t1, t2), t3) ->
-    let t1', t2', t3' = encode_type t1, encode_type t2, encode_type t3 in
-    if t1 == t1' && t2 == t2' && t3 == t3' then ty
-    else Tclosure ((t1', t2'), t3')
-  | Ttype (name, t) ->
-    let t' = encode_type t in
-    if not keepalias then t'
-    else if t' == t then ty
-    else Ttype (name, t')
-  | Trecord labels -> encode_record_type labels
-  | Tsum cstys -> encode_sum_type cstys
-
-and encode_record_type labels =
-  Ttuple (List.map (fun (_, ty) -> encode_type ty) labels)
-
-and encode_sum_type cstys =
-  let rec rassoc = function
-    | [] -> assert false
-    | [_, ty] -> encode_type ty
-    | (_, lty) :: rstys ->
-      Tor (encode_type lty, rassoc rstys)
-  in
-  rassoc cstys
-
-let rec encode_const env c = match c with
-  | CUnit | CBool _ | CInt _ | CNat _ | CTez _ | CTimestamp _ | CString _
-  | CKey _ | CSignature _ | CNone  | CKey_hash _ -> c
-
-  | CSome x -> CSome (encode_const env x)
-  | CLeft x -> CLeft (encode_const env x)
-  | CRight x -> CRight (encode_const env x)
-
-  | CTuple xs -> CTuple (List.map (encode_const env) xs)
-  | CList xs -> CList (List.map (encode_const env) xs)
-  | CSet xs -> CSet (List.map (encode_const env) xs)
-
-  | CMap l ->
-    CMap (List.map (fun (x,y) -> encode_const env x, encode_const env y) l)
-
-  | CRecord labels ->
-    CTuple (List.map (fun (_, x) -> encode_const env x) labels)
-
-  | CConstr (constr, x) ->
-    try
-      let ty_name, _ = StringMap.find constr env.env.constrs in
-      let constr_ty = StringMap.find ty_name env.env.types in
-      match constr_ty with
-      | Tsum constrs ->
-        let rec iter constrs =
-          match constrs with
-          | [] -> assert false
-          | [c, _] ->
-            assert (c = constr);
-            encode_const env x
-          | (c, _) :: constrs ->
-            if c = constr then CLeft (encode_const env x)
-            else CRight (iter constrs)
-        in
-        iter constrs
-      | _ -> raise Not_found
-    with Not_found ->
-      error (noloc env)  "unknown constructor %s" constr
-
-let mk =
-  let bv = StringSet.empty in
-  fun desc (ty : datatype) fail -> { desc; ty; bv; fail }
-
-let mk_nat i =
-  mk (Const (Tnat, CNat (LiquidPrinter.integer_of_int i))) Tnat false
-
-let mk_nil list_ty =
-  mk (Const (list_ty, CList [])) list_ty false
-
-let mk_tuple loc l fail =
-  let tuple_ty = Ttuple (List.map (fun t -> t.ty) l) in
-  mk (Apply (Prim_tuple, loc, l)) tuple_ty fail
-
-let const_unit = mk (Const (Tunit, CUnit)) Tunit false
-
-let const_true = mk (Const (Tbool, CBool true)) Tbool false
-
-let const_false = mk (Const (Tbool, CBool false)) Tbool false
-
-let mk_untyped =
-  let bv = StringSet.empty in
-  fun desc -> { desc; ty = (); bv; fail = false }
-
-let untyped_int i =
-  mk_untyped (Const (Tint, CInt (LiquidPrinter.integer_of_int i)))
-
-let untyped_nil list_ty =
-  mk_untyped (Const (list_ty, CList []))
-
-let mk_untyped_tuple loc l =
-  mk_untyped (Apply (Prim_tuple, loc, l))
-
-let unused env ty =
-  mk (Apply(Prim_unused, noloc env, [const_unit])) ty false
-
 let uniq_ident env name =
   env.counter := !(env.counter) + 1;
   Printf.sprintf "%s/%d" name !(env.counter)
 
 let new_binding env name ty =
-  let new_name = uniq_ident env name in
   let count = ref 0 in
   let env = { env with
-              vars = StringMap.add name (new_name, ty, count) env.vars } in
-  (new_name, env, count)
+              vars = StringMap.add name (name, ty, count) env.vars } in
+  (env, count)
 
 let check_used env name loc count =
   if env.warnings && !count = 0 && name.[0] <> '_' then begin
@@ -214,7 +85,7 @@ let find_var ?(count_used=true) env loc name =
   try
     let (name, ty, count) = StringMap.find name env.vars in
     if count_used then incr count;
-    mk (Var (name, loc, [])) ty false
+    mk (Var (name, loc, [])) ty
   with Not_found ->
   match env.clos_env with
   | None -> error loc "unbound variable %S" name
@@ -228,76 +99,6 @@ let find_var ?(count_used=true) env loc name =
       v
     with Not_found ->
       error loc "unbound variable %S" name
-
-(* Create environment for closure *)
-let env_for_clos env loc bvs arg_name arg_type =
-  let _, free_vars = StringSet.fold (fun v (index, free_vars) ->
-      try
-        let index = index + 1 in
-        match env.clos_env with
-        | None ->
-          let (bname, btype, cpt_out) = StringMap.find v env.vars in
-          (index,
-           StringMap.add v (bname, btype, index, (ref 0, cpt_out)) free_vars)
-        | Some ce ->
-          let bname, btype, _, (cpt_in, cpt_out) =
-            StringMap.find v ce.env_vars in
-          (index,
-           StringMap.add v (bname, btype, index, (cpt_in, cpt_out)) free_vars)
-      with Not_found ->
-        (index, free_vars)
-    ) bvs (0, StringMap.empty)
-  in
-  let free_vars_l =
-    StringMap.bindings free_vars
-    |> List.sort (fun (_, (_,_,i1,_)) (_, (_,_,i2,_)) -> compare i1 i2)
-  in
-  let ext_env = env in
-  let env = { env with vars = StringMap.empty } in
-  match free_vars_l with
-  | [] -> (* no closure environment *)
-    let (new_name, env, _) = new_binding env arg_name arg_type in
-    env, new_name, arg_type, []
-  | _ ->
-    let env_arg_name = uniq_ident env "closure_env" in
-    let env_arg_type =
-      Ttuple (arg_type :: List.map (fun (_, (_,ty,_,_)) -> ty) free_vars_l) in
-    let env_arg_var = mk (Var (env_arg_name, loc, [])) env_arg_type false in
-    let new_name = uniq_ident env arg_name in
-    let env_vars =
-      StringMap.add arg_name
-        (new_name, arg_type, 0, (ref 0, ref 0)) free_vars in
-    let size = StringMap.cardinal env_vars in
-    let env_bindings =
-      StringMap.map (fun (_, ty, index, count) ->
-          let ei = mk_nat index in
-          let accessor =
-            if index + 1 = size then Prim_tuple_get_last
-            else Prim_tuple_get in
-          let exp = mk (Apply(accessor, loc, [env_arg_var; ei])) ty false in
-          exp, count
-        ) env_vars
-    in
-    let call_bindings = List.map (fun (name, _) ->
-        name, find_var ~count_used:false ext_env loc name
-      ) free_vars_l
-    in
-    (* Format.eprintf "--- Closure %s ---@." env_arg_name; *)
-    (* StringMap.iter (fun name (e,_) -> *)
-    (*     Format.eprintf "%s -> %s@." *)
-    (*       name (LiquidPrinter.Liquid.string_of_code e) *)
-    (*   ) env_bindings; *)
-    let env_closure = {
-      env_vars;
-      env_bindings;
-      call_bindings;
-    } in
-    let env =
-      { env with
-        clos_env = Some env_closure
-      }
-    in
-    env, env_arg_name, env_arg_type, call_bindings
 
 let maybe_reset_vars env transfer =
   if transfer then
@@ -372,35 +173,22 @@ let rec loc_exp env e = match e.desc with
 let rec typecheck env ( exp : LiquidTypes.syntax_exp ) =
   match exp.desc with
 
-  | Const (ty, cst ) ->
-     let desc = Const (ty, encode_const env cst) in
-     let fail = false in
-     mk desc ty fail, fail, false
+  | Const (ty, cst) ->
+    mk (Const (ty, cst)) ty
 
   | Let (name, loc, exp, body) ->
-     let exp, fail1, transfer1 = typecheck env exp in
-     if eq_types exp.ty Tfail then
-       error loc "cannot assign failure";
-     let env = maybe_reset_vars env transfer1 in
-     let (new_name, env, count) = new_binding env name exp.ty in
-     let body, fail2, transfer2 = typecheck env body in
-     let desc = Let (new_name, loc, exp, body ) in
+     let exp = typecheck env exp in
+     if eq_types exp.ty Tfail then error loc "cannot assign failure";
+     let env = maybe_reset_vars env exp.transfer in
+     let (env, count) = new_binding env name exp.ty in
+     let body = typecheck env body in
+     let desc = Let (name, loc, exp, body ) in
      check_used env name loc count;
-     if (not transfer1) && (not fail1) then begin
-         match !count with
-         | 0 ->
-           env.to_inline :=
-             StringMap.add new_name (const_unit) !(env.to_inline)
-         | 1 ->
-            env.to_inline := StringMap.add new_name exp !(env.to_inline)
-         | _ -> ()
-       end;
-     let fail = fail1 || fail2 in
-     mk desc body.ty fail, fail, transfer1 || transfer2
+     mk desc body.ty
 
-  | Var (name, loc, (_::_ as labels)) when env.only_typecheck ->
+  | Var (name, loc, (_::_ as labels)) ->
     begin match find_var env loc name with
-      | { desc = Var (name, _, []); ty = (Ttype _) as ty; fail } ->
+      | { desc = Var (name, _, []); ty = (Ttype _) as ty } ->
         let ty =
           List.fold_left (fun ty label ->
               match get_type ty with
@@ -416,154 +204,98 @@ let rec typecheck env ( exp : LiquidTypes.syntax_exp ) =
               | _ -> error loc "not a record"
             ) ty labels
         in
-        mk (Var (name, loc, labels)) ty fail, fail, false
-      | { desc = Var (name, _, []) } ->
-        error loc "not a record"
-      | _ -> assert false (* FIXME *)
+        mk (Var (name, loc, labels)) ty
+      | _ -> assert false
     end
 
-  | Var (name, loc, labels) ->
-    let e = find_var env loc name in
-    let e =
-      List.fold_left
-        (fun e label ->
-           let ty_name, ty = match first_alias e.ty with
-             | Some (ty_name, (Trecord _ as ty)) -> ty_name, ty
-             | _ -> error loc "not a record"
-           in
-           let arg1 = mk e.desc ty false in
-           let n =
-             try
-               let (ty_name', n, _label_ty) =
-                 StringMap.find label env.env.labels in
-               if ty_name' <> ty_name then
-                 error loc "label for wrong record";
-               n
-             with Not_found ->
-               error loc "bad label"
-           in
-           let arg2 = mk_nat n in
-           let args = [ arg1; arg2 ] in
-           let prim, ty = typecheck_prim1 env Prim_tuple_get loc args in
-           mk (Apply(prim, loc, args)) ty false
-        ) e labels in
-    e, false, false
+  | Var (name, loc, labels) -> find_var env loc name
 
-  | SetVar (name, loc, labels, e) when env.only_typecheck ->
-    let e, can_fail, transfer = typecheck env e in
-    begin match find_var env loc name with
-      | { desc = Var (name, _, []); ty = (Ttype _) as ty } ->
-        mk (SetVar (name, loc, labels, e)) ty can_fail, can_fail, transfer
-      | { desc = Var (name, _, []) } ->
-        error loc "not a record"
-      | _ -> assert false (* FIXME *)
-    end
+  | SetVar (name, loc, [], e) ->
+    let e = typecheck env e in
+    mk (SetVar (name, loc, [], e)) e.ty
 
-  | SetVar (name, loc, [], e) -> typecheck env e
-
-  | SetVar (name, loc, label :: labels, arg) ->
-     let arg1 = find_var env loc name in
-     let ty = arg1.ty in
-     let record_ty, label_types = match get_type ty with
-       | (Trecord label_types) as ty -> ty, label_types
-       | _ -> error loc "not a record %s"
-                (LiquidPrinter.Liquid.string_of_type_expl ty)
-     in
-     let exception Return of int in
-     let n =
-       try
-         List.iteri (fun n (l, _lty) ->
-             if l = label then raise (Return n)
-           ) label_types;
-         error loc "bad label"
-       with Return n -> n
-     in
-     let arg2 = mk_nat n in
-     let arg, can_fail =
-       match labels with
-       | [] ->
-          let (arg, can_fail, transfer) = typecheck env arg in
-          if transfer then
-            error loc "transfer within set-field";
-          (arg, can_fail)
-       | _::_ ->
-          let args = [ arg1; arg2] in
-          let prim, ty = typecheck_prim1 env Prim_tuple_get loc args in
-          let get_exp = mk (Apply(prim, loc, args)) ty false in
-          let tmp_name = uniq_ident env "tmp#" in
-          let (new_name, env, count) = new_binding env tmp_name ty in
-          let body, can_fail, _transfer =
-            typecheck env
-                      { exp with desc = SetVar (tmp_name, loc,
-                                                labels, arg) }
+  | SetVar (name, loc, ((l :: _) as labels), arg) ->
+    (* let arg = typecheck env arg in *)
+    let { ty } = find_var env loc name in
+    (* let label_types = match get_type ty with *)
+    (*   | Trecord label_types -> label_types *)
+    (*   | _ -> error loc "not a record %s" *)
+    (*            (LiquidPrinter.Liquid.string_of_type_expl ty) *)
+    (* in *)
+    (* let lty = *)
+    (*   try List.assoc l label_types *)
+    (*   with Not_found -> *)
+    (*     error loc "label %s does not belong to type %s" l *)
+    (*       (LiquidPrinter.Liquid.string_of_type_expl ty) *)
+    (* in *)
+    let exp_ty =
+      List.fold_left (fun lty label ->
+          let ty_name, _, ty =
+            try StringMap.find label env.env.labels
+            with Not_found -> error loc "unbound label %S" label
           in
-          let desc = Let (new_name, loc, get_exp, body ) in
-          mk desc body.ty can_fail, can_fail
-
-     in
-     let args = [ arg1; arg2; arg] in
-     let prim, tuple_ty' = typecheck_prim1 env Prim_tuple_set loc args in
-     mk (Apply(prim, loc, args)) ty can_fail, can_fail, false
+          let record_ty = StringMap.find ty_name env.env.types in
+          if not (eq_types lty record_ty) then
+            error loc "label %s does not belong to type %s" l
+              (LiquidPrinter.Liquid.string_of_type_expl lty);
+          ty
+        ) ty labels
+    in
+    let arg = typecheck_expected "set" env exp_ty arg in
+    mk (SetVar (name, loc, labels, arg)) ty
 
   | Seq (exp1, exp2) ->
-     let exp1, fail1, transfer1 =
-       typecheck_expected "sequence" env Tunit exp1 in
-     let exp2, fail2, transfer2 = typecheck env exp2 in
-     let desc = Seq (exp1, exp2) in
-     (* TODO: if not fail1 then remove exp1 *)
-     let can_fail = fail1 || fail2 in
-     mk desc exp2.ty can_fail, can_fail, transfer1 || transfer2
+    let exp1 = typecheck_expected "sequence" env Tunit exp1 in
+    let exp2 = typecheck env exp2 in
+    let desc = Seq (exp1, exp2) in
+    (* TODO: if not fail1 then remove exp1 *)
+    mk desc exp2.ty
 
   | If (cond, ifthen, ifelse) ->
-     let cond, fail1, transfer1 =
+     let cond =
        typecheck_expected "if-cond" env Tbool cond in
-     let ifthen, fail2, transfer2 = typecheck env ifthen in
-     let ifelse, fail3, transfer3, ty =
+     let ifthen = typecheck env ifthen in
+     let ifelse, ty =
        if ifthen.ty = Tfail then
-         let ifelse, fail3, transfer3 = typecheck env ifelse in
-         ifelse, fail3, transfer3, ifelse.ty
+         let ifelse = typecheck env ifelse in
+         ifelse, ifelse.ty
        else
-         let ifelse, fail3, transfer3 =
+         let ifelse =
            typecheck_expected "if-result" env ifthen.ty ifelse in
-         ifelse, fail3, transfer3, ifthen.ty
+         ifelse, ifthen.ty
      in
      let desc = If(cond, ifthen, ifelse) in
-     let can_fail = fail1 || fail2 || fail3 in
-     mk desc ty can_fail,
-     can_fail,
-     transfer1 || transfer2 || transfer3
+     mk desc ty
 
   | LetTransfer (storage_name, result_name,
                  loc,
                  contract_exp, tez_exp,
                  storage_exp, arg_exp, body) ->
-     let tez_exp, fail1, transfer1 =
-       typecheck_expected "call-amount" env Ttez tez_exp in
-     let contract_exp, fail2, transfer2 = typecheck env contract_exp in
+     let tez_exp = typecheck_expected "call-amount" env Ttez tez_exp in
+     let contract_exp = typecheck env contract_exp in
      begin
        match contract_exp.ty with
        | Tcontract (arg_ty, return_ty) ->
-          let arg_exp, fail3, transfer3 =
-            typecheck_expected "call-arg" env arg_ty arg_exp in
-          let storage_exp, fail4, transfer4 =
+          let arg_exp = typecheck_expected "call-arg" env arg_ty arg_exp in
+          let storage_exp =
             typecheck_expected "call-storage"
-                               env env.contract.storage storage_exp in
-          if transfer1 || transfer2 || transfer3 || transfer4 then
+              env env.contract.storage storage_exp in
+          if tez_exp.transfer || contract_exp.transfer
+             || arg_exp.transfer || storage_exp.transfer then
             error loc "transfer within transfer arguments";
-          let (new_storage, env, storage_count) =
+          let (env, storage_count) =
             new_binding env storage_name env.contract.storage in
-          let (new_result, env, result_count) =
+          let (env, result_count) =
             new_binding env result_name return_ty in
-          let body, fail5, transfer5 = typecheck env body in
+          let body = typecheck env body in
           check_used env storage_name loc storage_count;
           check_used env result_name loc result_count;
-          let desc = LetTransfer(new_storage, new_result,
+          let desc = LetTransfer(storage_name, result_name,
                                  loc,
                                  contract_exp, tez_exp,
                                  storage_exp, arg_exp, body)
           in
-          mk desc body.ty true,
-          true, true
+          mk desc body.ty
        | ty ->
          error (loc_exp env contract_exp)
            "Bad contract type.\nExpected type:\n  ('a, 'b) contract\n\
@@ -609,218 +341,22 @@ let rec typecheck env ( exp : LiquidTypes.syntax_exp ) =
                      desc = Apply(Prim_exec, loc, [x; f]) }
 
 
-  (* List.rev -> List.reduce (::) *)
-  | Apply (Prim_list_rev, loc, [l]) ->
-    let l, fail, transfer = typecheck env l in
-    if transfer then error loc "transfer within List.rev args";
-    let elt_ty = match l.ty with
-      | Tlist ty -> ty
-      | _ -> error loc "Argument of List.rev must be a list"
-    in
-    let list_ty = l.ty in
-    if env.only_typecheck then
-      mk (Apply (Prim_list_rev, loc, [l])) list_ty fail, fail, false
-    else
-      let arg_name = uniq_ident env "arg" in
-      let arg_ty = Ttuple [elt_ty; list_ty] in
-      let arg = mk (Var (arg_name, loc, [])) arg_ty false in
-      let e = mk (Apply(Prim_tuple_get, loc, [arg; mk_nat 0])) elt_ty false in
-      let acc =
-        mk (Apply(Prim_tuple_get_last, loc, [arg; mk_nat 1])) list_ty false in
-      let f_body = mk (Apply (Prim_Cons, loc, [e; acc])) list_ty false in
-      let f_desc = Lambda (arg_name, arg_ty, loc, f_body, list_ty) in
-      let f = mk f_desc (Tlambda (arg_ty, list_ty)) false in
-      let empty_acc = mk_nil list_ty in
-      let desc = Apply (Prim_list_reduce, loc, [f; l; empty_acc]) in
-      mk desc list_ty fail, fail, false
-
-  (* List.reduce (closure) -> Loop.loop *)
-  | Apply (Prim_list_reduce, loc, [f; l; acc]) ->
-     let f, _, _ = typecheck env f in
-     let l, can_fail1, transfer1 = typecheck env l in
-     let acc, can_fail2, transfer2 = typecheck env acc in
-     if transfer1 || transfer2 then
-       error loc "transfer within List.reduce args";
-     let args = [f; l; acc] in
-     let _, ty = typecheck_prim1 env Prim_list_reduce loc args in
-     let can_fail = can_fail1 || can_fail2 in
-     begin match f.ty with
-     | Tclosure ((arg_ty, env_ty), acc_ty) ->
-        let elt_ty = match l.ty with
-          | Tlist ty -> ty
-          | _ -> error loc "Argument of List.reduce must be a list"
-        in
-        let loop_arg_name = uniq_ident env "arg" in
-        let head_name = uniq_ident env "head" in
-        let tail_name = uniq_ident env "tail" in
-        (* let loop_arg_ty = arg_ty in *)
-        let loop_body_ty = Ttuple [Tbool; arg_ty] in
-        let list_ty = Tlist elt_ty in
-        let arg = mk (Var (loop_arg_name, loc, [])) arg_ty false in
-        let head = mk (Var (head_name, loc, [])) elt_ty false in
-        let tail = mk (Var (tail_name, loc, [])) list_ty false in
-        let l' =
-          mk (Apply(Prim_tuple_get, loc, [arg; mk_nat 0])) list_ty can_fail in
-        let acc' =
-          mk (Apply(Prim_tuple_get_last, loc, [arg; mk_nat 1]))
-             acc_ty can_fail in
-        let nil_case = mk_tuple loc [
-            const_false ;
-            mk_tuple loc [mk_nil list_ty; acc'] can_fail
-          ] can_fail in
-        let cons_case =
-          mk_tuple loc [
-            const_true;
-            mk_tuple loc [
-              tail;
-              mk (Apply (Prim_exec, loc, [
-                  mk_tuple loc [head; acc'] can_fail;
-                  f
-                ])) acc_ty can_fail
-            ] can_fail
-          ] can_fail
-        in
-        let loop_body = mk
-            (MatchList (l', loc, head_name, tail_name, cons_case, nil_case))
-            loop_body_ty can_fail
-        in
-        let loop = mk
-            (Loop (loop_arg_name, loc, loop_body,
-                   mk_tuple loc [l; acc] can_fail1))
-            (Ttuple [list_ty; acc_ty]) can_fail
-        in
-        mk (Apply (Prim_tuple_get_last, loc, [loop; mk_nat 1]))
-          acc_ty can_fail, can_fail, false
-     | _ ->
-       mk (Apply (Prim_list_reduce, loc, args)) ty can_fail, can_fail, false
-     end
-
-  (* List.map (closure) -> {List.rev(List.reduce (closure)} *)
-  | Apply (Prim_list_map, loc, [f; l]) ->
-     begin match is_closure env f with
-     | None -> typecheck_apply env Prim_list_map loc [f; l]
-     | Some ((arg_ty, _), ty_ret) ->
-        let arg_name = uniq_ident env "arg" in
-        let arg = mk_untyped (Var (arg_name, loc, [])) in
-        let x =
-          mk_untyped (Apply(Prim_tuple_get, loc, [arg; untyped_int 0])) in
-        let acc =
-          mk_untyped (Apply(Prim_tuple_get, loc, [arg; untyped_int 1])) in
-        let f_body = mk_untyped (Apply(Prim_Cons, loc, [
-                                           mk_untyped (Apply(Prim_exec, loc, [x; f]));
-                                           acc
-                                ])) in
-        let f_red =
-          mk_untyped (Lambda (arg_name, Ttuple [arg_ty; Tlist arg_ty],
-                              loc, f_body, Tunit)) in
-        let red =
-          mk_untyped (Apply (Prim_list_reduce, loc,
-                             [f_red; l; untyped_nil (Tlist arg_ty)])) in
-        let rev_red = mk_untyped (Apply (Prim_list_rev, loc, [red])) in
-        typecheck env rev_red
-     end
-
-  (* Map.reduce (closure) -> {Map.reduce (::) |> List.rev |> List.reduce} *)
-  | Apply (Prim_map_reduce, loc, [f; m; acc]) ->
-     begin match is_closure env f with
-     | None -> typecheck_apply env Prim_map_reduce loc [f; m; acc]
-     | Some ((Ttuple [kv_ty; acc_ty], _), ty_ret) ->
-        let arg_name = uniq_ident env "arg" in
-        let arg = mk_untyped (Var (arg_name, loc, [])) in
-        let kv =
-          mk_untyped (Apply(Prim_tuple_get, loc, [arg; untyped_int 0])) in
-        let acc_elts =
-          mk_untyped (Apply(Prim_tuple_get, loc, [arg; untyped_int 1])) in
-        let gather_body =
-          mk_untyped (Apply(Prim_Cons, loc, [kv; acc_elts])) in
-        let gather_fun =
-          mk_untyped (Lambda (arg_name, Ttuple [kv_ty; Tlist kv_ty],
-                              loc, gather_body, Tunit)) in
-        let rev_elts =
-          mk_untyped (Apply(Prim_map_reduce, loc,
-                            [gather_fun; m; untyped_nil (Tlist kv_ty)])) in
-        let elts = mk_untyped (Apply(Prim_list_rev, loc, [rev_elts])) in
-        let red = mk_untyped (Apply(Prim_list_reduce, loc, [f; elts; acc])) in
-        typecheck env red
-     | Some _ -> error loc "bad closure type in Map.reduce"
-     end
-
-  (* Map.map (closure) -> {Map.reduce (Map.update)} *)
-  | Apply (Prim_map_map, loc, [f; m]) ->
-     begin match is_closure env f with
-     | None -> typecheck_apply env Prim_map_map loc [f; m]
-     | Some ((Ttuple [k_ty; v_ty], _), ty_ret) ->
-        let arg_name = uniq_ident env "arg" in
-        let arg = mk_untyped (Var (arg_name, loc, [])) in
-        let kv =
-          mk_untyped (Apply(Prim_tuple_get, loc, [arg; untyped_int 0])) in
-        let acc =
-          mk_untyped (Apply(Prim_tuple_get, loc, [arg; untyped_int 1])) in
-        let k =
-          mk_untyped (Apply(Prim_tuple_get, loc, [kv; untyped_int 0])) in
-        let acc_ty = Tmap (k_ty, ty_ret) in
-        let update_body =
-          mk_untyped (Apply(Prim_map_update, loc, [
-                                k;
-                                mk_untyped (Apply(Prim_Some, loc, [
-                                                      mk_untyped (Apply(Prim_exec, loc, [kv; f]))
-                                           ]));
-                                acc
-                     ])) in
-        let update_fun =
-          mk_untyped (Lambda (arg_name, Ttuple [Ttuple [k_ty; v_ty]; acc_ty],
-                              loc, update_body, Tunit)) in
-        let red =
-          mk_untyped (Apply (Prim_map_reduce, loc, [
-                                 update_fun; m;
-                                 mk_untyped (Const (acc_ty, CMap []))
-                     ])) in
-        typecheck env red
-     | Some _ -> error loc "bad closure type in Map.map"
-     end
-
-  (* Set.reduce (closure) -> {Set.reduce (::) |> List.rev |> List.reduce} *)
-  | Apply (Prim_set_reduce, loc, [f; s; acc]) ->
-     begin match is_closure env f with
-     | None -> typecheck_apply env Prim_set_reduce loc [f; s; acc]
-     | Some ((Ttuple [elt_ty; acc_ty], _), ty_ret) ->
-        let arg_name = uniq_ident env "arg" in
-        let arg = mk_untyped (Var (arg_name, loc, [])) in
-        let elt =
-          mk_untyped (Apply(Prim_tuple_get, loc, [arg; untyped_int 0])) in
-        let acc_elts =
-          mk_untyped (Apply(Prim_tuple_get, loc, [arg; untyped_int 1])) in
-        let gather_body =
-          mk_untyped (Apply(Prim_Cons, loc, [elt; acc_elts])) in
-        let gather_fun =
-          mk_untyped (Lambda (arg_name, Ttuple [elt_ty; Tlist elt_ty],
-                              loc, gather_body, Tunit)) in
-        let rev_elts =
-          mk_untyped (Apply(Prim_set_reduce, loc,
-                            [gather_fun; s; untyped_nil (Tlist elt_ty)])) in
-        let elts = mk_untyped (Apply(Prim_list_rev, loc, [rev_elts])) in
-        let red = mk_untyped (Apply(Prim_list_reduce, loc, [f; elts; acc])) in
-        typecheck env red
-     | Some _ -> error loc "bad closure type in Set.reduce"
-     end
 
   | Apply (prim, loc, args) -> typecheck_apply env prim loc args
 
   | MatchOption (arg, loc, ifnone, name, ifsome) ->
-     let arg, fail1, transfer1 = typecheck env arg in
+     let arg = typecheck env arg in
      let arg_ty = match arg.ty with
-       | Tfail ->
-          error loc "cannot match failure"
+       | Tfail -> error loc "cannot match failure"
        | Toption ty -> ty
-       | _ ->
-          error loc "not an option type"
+       | _ -> error loc "not an option type"
      in
-     let env = maybe_reset_vars env transfer1 in
-     let ifnone, fail2, transfer2 = typecheck env ifnone in
-     let (new_name, env, count) = new_binding env name arg_ty in
-     let ifsome, fail3, transfer3 = typecheck env ifsome in
+     let env = maybe_reset_vars env arg.transfer in
+     let ifnone = typecheck env ifnone in
+     let (env, count) = new_binding env name arg_ty in
+     let ifsome = typecheck env ifsome in
      check_used env name loc count;
-     let desc = MatchOption (arg, loc, ifnone, new_name, ifsome ) in
+     let desc = MatchOption (arg, loc, ifnone, name, ifsome ) in
      let ty =
        match ifnone.ty, ifsome.ty with
        | ty, Tfail | Tfail, ty -> ty
@@ -828,19 +364,15 @@ let rec typecheck env ( exp : LiquidTypes.syntax_exp ) =
           if ty1 <> ty2 then type_error loc "Bad option type in match" ty2 ty1;
           ty1
      in
-     let can_fail = fail1 || fail2 || fail3 in
-     mk desc ty can_fail,
-     can_fail,
-     transfer1 || transfer2 || transfer3
+     mk desc ty
 
   | MatchNat (arg, loc, plus_name, ifplus, minus_name, ifminus) ->
-     let arg, fail1, transfer1 =
-       typecheck_expected "match%nat" env Tint arg in
-     let env = maybe_reset_vars env transfer1 in
-     let (plus_name, env2, count_p) = new_binding env plus_name Tnat in
-     let ifplus, fail2, transfer2 = typecheck env2 ifplus in
-     let (minus_name, env3, count_m) = new_binding env minus_name Tnat in
-     let ifminus, fail3, transfer3 = typecheck env3 ifminus in
+     let arg = typecheck_expected "match%nat" env Tint arg in
+     let env = maybe_reset_vars env arg.transfer in
+     let (env2, count_p) = new_binding env plus_name Tnat in
+     let ifplus = typecheck env2 ifplus in
+     let (env3, count_m) = new_binding env minus_name Tnat in
+     let ifminus = typecheck env3 ifminus in
      check_used env plus_name loc count_p;
      check_used env minus_name loc count_m;
      let desc = MatchNat (arg, loc, plus_name, ifplus, minus_name, ifminus) in
@@ -853,232 +385,115 @@ let rec typecheck env ( exp : LiquidTypes.syntax_exp ) =
              ty2 ty1;
          ty1
      in
-     let can_fail = fail1 || fail2 || fail3 in
-     mk desc ty can_fail,
-     can_fail,
-     transfer1 || transfer2 || transfer3
+     mk desc ty
 
   | Loop (name, loc, body, arg) ->
-     let arg, fail1, transfer1 = typecheck env arg in
-     if arg.ty = Tfail then
-       error loc "loop arg is a failure";
-     let env = maybe_reset_vars env transfer1 in
-     let (new_name, env, count) = new_binding env name arg.ty in
-     let body, fail2, transfer2 =
-       typecheck_expected "loop-body" env
-                          (Ttuple [Tbool; arg.ty])
-                          body in
+     let arg = typecheck env arg in
+     if arg.ty = Tfail then error loc "loop arg is a failure";
+     let env = maybe_reset_vars env arg.transfer in
+     let (env, count) = new_binding env name arg.ty in
+     let body =
+       typecheck_expected "loop-body" env (Ttuple [Tbool; arg.ty]) body in
      check_used env name loc count;
-     let can_fail = fail1 || fail2 in
-     mk (Loop (new_name, loc, body, arg)) arg.ty can_fail,
-     can_fail,
-     transfer1 || transfer2
+     mk (Loop (name, loc, body, arg)) arg.ty
 
   | MatchList (arg, loc, head_name, tail_name, ifcons, ifnil) ->
-     let arg, fail1, transfer1 = typecheck env arg in
+     let arg  = typecheck env arg in
      let arg_ty = match arg.ty with
-       | Tfail ->
-          error loc "cannot match failure"
+       | Tfail -> error loc "cannot match failure"
        | Tlist ty -> ty
-       | _ ->
-          error loc "not a list type"
+       | _ -> error loc "not a list type"
      in
-     let env = maybe_reset_vars env transfer1 in
-     let ifnil, fail2, transfer2 = typecheck env ifnil in
-     let (new_head_name, env, count) = new_binding env head_name arg_ty in
-     let (new_tail_name, env, count) =
-       new_binding env tail_name (Tlist arg_ty) in
-     let ifcons, fail3, transfer3 = typecheck env ifcons in
+     let env = maybe_reset_vars env arg.transfer in
+     let ifnil = typecheck env ifnil in
+     let (env, count) = new_binding env head_name arg_ty in
+     let (env, count) = new_binding env tail_name (Tlist arg_ty) in
+     let ifcons = typecheck env ifcons in
      check_used env head_name loc count;
      check_used env tail_name loc count;
-     let desc = MatchList (arg, loc, new_head_name, new_tail_name, ifcons,
-                           ifnil ) in
+     let desc = MatchList (arg, loc, head_name, tail_name, ifcons, ifnil) in
      let ty =
        match ifnil.ty, ifcons.ty with
-       | ty, Tfail
-         | Tfail, ty -> ty
+       | ty, Tfail | Tfail, ty -> ty
        | ty1, ty2 ->
           if ty1 <> ty2 then
             error loc "not the same type";
           ty1
      in
-     let can_fail = fail1 || fail2 || fail3 in
-     mk desc ty can_fail,
-     can_fail,
-     transfer1 || transfer2 || transfer3
+     mk desc ty
 
   | Lambda (arg_name, arg_type, loc, body, res_type) ->
-     let env_at_lambda = env in
-     let lambda_arg_type = arg_type in
-     let lambda_arg_name = arg_name in
-     let lambda_body = body in
-     assert (res_type = Tunit);
-     (* let env = { env with vars = StringMap.empty } in *)
-     (* let (arg_name, env, arg_count) = new_binding env arg_name arg_type in *)
-     let bvs = LiquidBoundVariables.bv exp in
-     if env.only_typecheck || StringSet.is_empty bvs then
-       (* not a closure, create a real lambda *)
-       let env =
-         if env.only_typecheck then env_at_lambda
-         else { env_at_lambda with vars = StringMap.empty } in
-       let (new_arg_name, env, arg_count) =
-         new_binding env lambda_arg_name lambda_arg_type in
-       let body, _fail, transfer = typecheck env lambda_body in
-       if transfer then
-         error loc "no transfer in lambda";
-       check_used env lambda_arg_name loc arg_count;
-       let desc =
-         Lambda (new_arg_name, lambda_arg_type, loc, body, body.ty) in
-       let ty = Tlambda (lambda_arg_type, body.ty) in
-       mk desc ty false, false, false
-       else
-         (* create closure with environment *)
-         let env, arg_name, arg_type, call_env =
-           env_for_clos env loc bvs arg_name arg_type in
-         let body, _fail, transfer = typecheck env body in
-         if transfer then
-           error loc "no transfer in closure";
-         (* begin match env.clos_env with *)
-         (*   | None -> () *)
-         (*   | Some clos_env -> *)
-         (*     Format.eprintf "--- Closure %s (real:%b)---@." arg_name is_real_closure; *)
-         (*     StringMap.iter (fun name (e, (cpt_in, cpt_out)) -> *)
-         (*         Format.eprintf "%s -> %s , (%d, %d)@." *)
-         (*           name (LiquidPrinter.Liquid.string_of_code e) !cpt_in !cpt_out *)
-         (*       ) clos_env.env_bindings *)
-         (* end; *)
-         check_used_in_env env lambda_arg_name loc;
-         let desc =
-           Closure (arg_name, arg_type, loc, call_env, body, body.ty) in
-         let call_env_type = match call_env with
-           | [] -> assert false
-           | [_, t] -> t.ty
-           | _ -> Ttuple (List.map (fun (_, t) -> t.ty) call_env)
-         in
-         let ty = Tclosure ((lambda_arg_type, call_env_type), body.ty) in
-         mk desc ty false, false, false
+    let lambda_arg_type = arg_type in
+    let lambda_arg_name = arg_name in
+    let lambda_body = body in
+    assert (res_type = Tunit);
+    (* allow closures at typechecking, do not reset env *)
+    let (env, arg_count) = new_binding env lambda_arg_name lambda_arg_type in
+    let body = typecheck env lambda_body in
+    if body.transfer then error loc "no transfer in lambda";
+    check_used env lambda_arg_name loc arg_count;
+    let desc = Lambda (arg_name, lambda_arg_type, loc, body, body.ty) in
+    let ty = Tlambda (lambda_arg_type, body.ty) in
+    mk desc ty
 
   | Closure _ -> assert false
 
   | Record (_loc, []) -> assert false
   | Record (loc, (( (label, _) :: _ ) as lab_x_exp_list)) ->
      let ty_name, _, _ =
-       try
-         StringMap.find label env.env.labels
-       with Not_found ->
-         error loc "unbound label %S" label
+       try StringMap.find label env.env.labels
+       with Not_found -> error loc "unbound label %S" label
      in
      let record_ty = StringMap.find ty_name env.env.types in
-     let len = List.length (match record_ty with
-         | Trecord rtys -> rtys
-         | _ -> assert false) in
-     let record_can_fail = ref false in
-     if env.only_typecheck then
-       let lab_exp = List.map (fun (label, exp) ->
-           let ty_name', _, ty = try
-               StringMap.find label env.env.labels
-             with Not_found -> error loc "unbound label %S" label
-           in
-           if ty_name <> ty_name' then error loc "inconsistent list of labels";
-           let exp, can_fail, transfer =
-             typecheck_expected ("label "^ label) env ty exp in
-           if transfer then error loc "transfer not allowed in record";
-           if can_fail then record_can_fail := true;
-           (label, exp)
-         ) lab_x_exp_list in
-       let ty = Ttype (ty_name, record_ty) in
-       mk (Record (loc, lab_exp)) ty !record_can_fail, !record_can_fail, false
-     else
-       let t = Array.make len None in
-       List.iteri (fun i (label, exp) ->
-           let ty_name', label_pos, ty = try
-               StringMap.find label env.env.labels
-             with Not_found ->
-               error loc "unbound label %S" label
-           in
-           if ty_name <> ty_name' then
-             error loc "inconsistent list of labels";
-           let exp, can_fail, transfer =
-             typecheck_expected ("label "^ label) env ty exp in
-           if transfer then
-             error loc "transfer not allowed in record";
-           t.(label_pos) <- Some exp;
-           if can_fail then record_can_fail := true
-         ) lab_x_exp_list;
-       let args = Array.to_list t in
-       let args = List.map (function
-           | None ->
-             error loc "some labels are not defined"
-           | Some exp -> exp) args in
-       let ty = Ttype (ty_name, record_ty) in
-       let desc = Apply(Prim_tuple, loc, args) in
-       mk desc ty !record_can_fail, !record_can_fail, false
+     let remaining_labels = match record_ty with
+       | Trecord rtys -> List.map fst rtys |> StringSet.of_list |> ref
+       | _ -> assert false in
+     let lab_exp = List.map (fun (label, exp) ->
+         let ty_name', _, ty = try
+             StringMap.find label env.env.labels
+           with Not_found -> error loc "unbound label %S" label
+         in
+         if ty_name <> ty_name' then error loc "inconsistent list of labels";
+         let exp = typecheck_expected ("label "^ label) env ty exp in
+         if exp.transfer then error loc "transfer not allowed in record";
+         remaining_labels := StringSet.remove label !remaining_labels;
+         (label, exp)
+       ) lab_x_exp_list in
+     if not (StringSet.is_empty !remaining_labels) then
+       error loc "label %s is not defined" (StringSet.choose !remaining_labels);
+     let ty = Ttype (ty_name, record_ty) in
+     mk (Record (loc, lab_exp)) ty
 
   | Constructor(loc, Constr constr, arg) ->
      let ty_name, arg_ty = StringMap.find constr env.env.constrs in
-     let arg, can_fail, transfer =
-       typecheck_expected "constr-arg" env arg_ty arg in
-     if transfer then
+     let arg = typecheck_expected "constr-arg" env arg_ty arg in
+     if arg.transfer then
        error loc "transfer not allowed in constructor argument";
      let constr_ty = StringMap.find ty_name env.env.types in
      let ty = Ttype (ty_name, constr_ty) in
-     if env.only_typecheck then
-       mk (Constructor(loc, Constr constr, arg)) ty can_fail, can_fail, false
-     else
-       let exp =
-         match constr_ty with
-         | Tsum constrs ->
-           let rec iter constrs orty =
-             match constrs, orty with
-             | [], _ -> assert false
-             | [c, _], orty ->
-               assert (c = constr);
-               arg
-             (* | (c, ty, left_ty, right_ty) :: constrs -> *)
-             | (c, cty) :: constrs, orty ->
-               let left_ty, right_ty = match orty with
-                 | Tor (left_ty, right_ty) -> left_ty, right_ty
-                 | _ -> assert false
-               in
-               let desc =
-                 if c = constr then
-                   (* We use an unused argument to carry the type to
-                      the code generator *)
-                   Apply(Prim_Left, loc, [arg; unused env right_ty])
-                 else
-                   let arg = iter constrs right_ty in
-                   Apply(Prim_Right, loc, [arg; unused env left_ty])
-               in
-               mk desc orty can_fail
-           in
-           iter constrs (encode_type ~keepalias:false ty)
-         | _ -> assert false
-       in
-       mk exp.desc ty can_fail, can_fail, false
+     mk (Constructor(loc, Constr constr, arg)) ty
 
   | Constructor(loc, Left right_ty, arg) ->
-     let arg, can_fail, transfer = typecheck env arg in
-     if transfer then
+     let arg = typecheck env arg in
+     if arg.transfer then
        error loc "transfer not allowed in constructor argument";
-     let ty = Tor(arg.ty, right_ty) in
-     let desc = Apply(Prim_Left,loc,[arg; unused env right_ty]) in
-     mk desc ty can_fail, can_fail, false
-
-  | Constructor(loc, Source (from_ty, to_ty), _arg) ->
-     let ty = Tcontract(from_ty, to_ty) in
-     let desc = Apply(Prim_Source,loc,[unused env from_ty; unused env to_ty]) in
-     mk desc ty false, false, false
+     let ty = Tor (arg.ty, right_ty) in
+     mk (Constructor(loc, Left right_ty, arg)) ty
 
   | Constructor(loc, Right left_ty, arg) ->
-     let arg, can_fail, transfer = typecheck env arg in
-     if transfer then
+     let arg = typecheck env arg in
+     if arg.transfer then
        error loc "transfer not allowed in constructor argument";
-     let ty = Tor(left_ty, arg.ty) in
-     let desc = Apply(Prim_Right,loc,[arg; unused env left_ty]) in
-     mk desc ty can_fail, can_fail, false
+     let ty = Tor (left_ty, arg.ty) in
+     mk (Constructor(loc, Right left_ty, arg)) ty
+
+  | Constructor(loc, Source (from_ty, to_ty), arg) ->
+    let arg = typecheck env arg in
+    let ty = Tcontract(from_ty, to_ty) in
+    mk (Constructor(loc, Source (from_ty, to_ty), arg)) ty
 
   | MatchVariant (arg, loc, cases) ->
-    let arg, can_fail, transfer1 = typecheck env arg in
+    let arg = typecheck env arg in
     let constrs, is_left_right =
       try
         match get_type arg.ty with
@@ -1094,10 +509,8 @@ let rec typecheck env ( exp : LiquidTypes.syntax_exp ) =
         error loc "not a variant type: %s"
           (LiquidPrinter.Liquid.string_of_type_expl arg.ty)
     in
-    let env = maybe_reset_vars env transfer1 in
-    let match_can_fail = ref can_fail in
+    let env = maybe_reset_vars env arg.transfer in
     let expected_type = ref None in
-    let has_transfer = ref transfer1 in
     let cases_extra_constrs =
       List.fold_left (fun acc -> function
           | CAny, _ -> acc
@@ -1129,42 +542,41 @@ let rec typecheck env ( exp : LiquidTypes.syntax_exp ) =
             (* if ty_name <> ty_name' then error loc "inconsistent constructors"; *)
             var_ty
         in
-        let name =
+        let env, count_opt =
           match vars with
-          | [] -> "_"
-          | [ var ] -> var
+          | [] -> env, None
+          | [ var ] ->
+            let (env, count) = new_binding env var var_ty in
+            env, Some count
           | _ ->
             error loc "cannot deconstruct constructor args"
         in
-        let (new_name, env, count) =
-          new_binding env name var_ty in
-        let (e, can_fail, transfer) =
+        let e =
           match !expected_type with
           | Some expected_type ->
             typecheck_expected "pattern matching branch" env expected_type e
           | None ->
-            let (e, can_fail, transfer) =
-              typecheck env e in
-            begin
-              match e.ty with
+            let e = typecheck env e in
+            begin match e.ty with
               | Tfail -> ()
               | _ -> expected_type := Some e.ty
             end;
-            (e, can_fail, transfer)
+            e
         in
-        if can_fail then match_can_fail := true;
-        if transfer then has_transfer := true;
-        check_used env name loc count;
-        (CConstr (constr, [new_name]), e)
+        begin match vars, count_opt with
+          | [name], Some count -> check_used env name loc count
+          | _ -> ()
+        end;
+        (CConstr (constr, vars), e)
       ) cases
     in
 
-    let desc = MatchVariant (arg, loc, cases ) in
+    let desc = MatchVariant (arg, loc, cases) in
     let ty = match !expected_type with
       | None -> Tfail
       | Some ty -> ty
     in
-    mk desc ty !match_can_fail, !match_can_fail, !has_transfer
+    mk desc ty
 
 and find_case loc env constr cases =
   match List.find_all (function
@@ -1181,12 +593,6 @@ and find_case loc env constr cases =
     match m with
     | CAny, e -> constr, [], e
     | CConstr (_, vars), e -> constr, vars, e
-
-and typecheck_case env name exp var_ty =
-  let (new_name, env, count) =
-    new_binding env name var_ty in
-  let (exp, can_fail, transfer) = typecheck env  exp in
-  (new_name, exp, can_fail, transfer)
 
 and typecheck_prim1 env prim loc args =
   match prim, args with
@@ -1433,14 +839,16 @@ and typecheck_prim2 env prim loc args =
      to_ty
 
   | ( Prim_list_map
-      (* | Prim_list_reduce *)
-      | Prim_set_reduce
+    | Prim_list_reduce
+    | Prim_set_reduce
     | Prim_map_reduce
     | Prim_map_map
     | Prim_coll_map
     | Prim_coll_reduce
     ), Tclosure _ :: _ ->
-     error loc "Cannot use closures in %s" (LiquidTypes.string_of_primitive prim)
+    error loc "Cannot use closures in %s" (LiquidTypes.string_of_primitive prim)
+
+  | Prim_list_rev, [ Tlist ty ] -> Tlist ty
 
   | Prim_list_map, [
       Tlambda (from_ty, to_ty);
@@ -1450,8 +858,7 @@ and typecheck_prim2 env prim loc args =
      Tlist to_ty
 
   | Prim_list_reduce, [
-      ( Tlambda (Ttuple [src_ty; dst_ty], dst_ty')
-               | Tclosure ((Ttuple [src_ty; dst_ty], _), dst_ty'));
+      Tlambda (Ttuple [src_ty; dst_ty], dst_ty');
       Tlist src_ty';
       acc_ty;
     ] ->
@@ -1520,45 +927,28 @@ and typecheck_prim2 env prim loc args =
     ;
 
 and typecheck_expected info env expected_ty exp =
-  let exp, fail, transfer = typecheck env exp in
+  let exp = typecheck env exp in
   let exp_ty = get_type exp.ty in
   if exp_ty <> get_type expected_ty && exp_ty <> Tfail then
     type_error (loc_exp env exp)
                ("Unexpected type for "^info) exp.ty expected_ty;
-  exp, fail, transfer
+  exp
 
 and typecheck_apply env prim loc args =
-  let can_fail = ref false in
   let args = List.map (fun arg ->
-                 let arg, fail, transfer = typecheck env arg in
-                 if transfer then
+                 let arg = typecheck env arg in
+                 if arg.transfer then
                    error loc "transfer within prim args";
-                 if fail then can_fail := true;
                  arg
                ) args in
   let prim, ty = typecheck_prim1 env prim loc args in
-  let can_fail =
-    match prim with
-    | Prim_fail -> true
-    | _ -> !can_fail
-  in
-  mk (Apply (prim, loc, args)) ty can_fail, can_fail, false
+  mk (Apply (prim, loc, args)) ty
 
 
-(* FIXME ugly hack *)
-and is_closure env exp =
-  match typecheck env exp with
-  | { ty = Tclosure ((ty_arg, ty_env), ty_ret) }, _, _ ->
-     Some ((ty_arg, ty_env), ty_ret)
-  | _ ->
-     None
-
-
-let typecheck_contract ~only_typecheck ~warnings env contract =
+let typecheck_contract ~warnings env contract =
   let env =
     {
       warnings;
-      only_typecheck;
       counter = ref 0;
       vars = StringMap.empty;
       to_inline = ref StringMap.empty;
@@ -1567,22 +957,17 @@ let typecheck_contract ~only_typecheck ~warnings env contract =
       contract;
     } in
 
-  (* "storage/1" *)
-  let (_ , env, _) = new_binding env  "storage" contract.storage in
-  (* "parameter/2" *)
-  let (_, env, _) = new_binding env "parameter" contract.parameter in
-
+  let (env, _) = new_binding env  "storage" contract.storage in
+  let (env, _) = new_binding env "parameter" contract.parameter in
   let expected_ty = Ttuple [contract.return; contract.storage] in
-
-  let code, _can_fail, _transfer =
+  let code =
     typecheck_expected "return value" env expected_ty contract.code in
-  { contract with code }, ! (env.to_inline)
+  { contract with code }
 
-let typecheck_code ~only_typecheck ~warnings env contract expected_ty code =
+let typecheck_code ~warnings env contract expected_ty code =
   let env =
     {
       warnings;
-      only_typecheck;
       counter = ref 0;
       vars = StringMap.empty;
       to_inline = ref StringMap.empty;
@@ -1591,9 +976,7 @@ let typecheck_code ~only_typecheck ~warnings env contract expected_ty code =
       contract ;
     } in
 
-  let code, _can_fail, _transfer =
-    typecheck_expected "value" env expected_ty code in
-  code
+  typecheck_expected "value" env expected_ty code
 
 
 let check_const_type ?(from_mic=false) ~to_tez loc ty cst =

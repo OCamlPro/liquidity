@@ -11,7 +11,7 @@ open LiquidTypes
 
 let noloc = LiquidLoc.noloc
 
-let mk desc = { desc; ty = (); bv = StringSet.empty; fail = false }
+let mk desc = mk desc ()
 
 let const_name_of_datatype = function
   | Tunit -> "u"

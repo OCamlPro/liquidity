@@ -23,9 +23,6 @@ let node loc kind args prevs =
   Hashtbl.add nodes num node;
   node
 
-let bv = StringSet.empty
-let mk desc = { desc ; ty = (); bv; fail = false }
-
 let fprint_stack msg fmt stack =
   Format.fprintf fmt "Stack %s:\n" msg;
   List.iter (fun node ->

@@ -15,6 +15,8 @@ exception InvalidFormat of string * string
 type tez = { tezzies : string; centiles : string option }
 type integer = { integer : string }
 
+type encoded
+
 type const =
   | CUnit
   | CBool of bool
@@ -371,9 +373,10 @@ type 'ty exp = {
     ty : 'ty;
     bv : StringSet.t;
     fail : bool;
+    transfer : bool;
   }
 
- and 'ty exp_desc =
+and 'ty exp_desc =
   | Let of string * location * 'ty exp * 'ty exp
   | Var of string * location * string list
   | SetVar of string * location * string list * 'ty exp
@@ -432,6 +435,47 @@ type typed_exp = datatype exp
 type live_exp = (datatype * datatype StringMap.t) exp
 
 
+let mk =
+  let bv = StringSet.empty in
+  fun desc ty ->
+    let fail, transfer = match desc with
+      | Const (_, _)
+      | Var (_, _, _) -> false, false
+
+      | LetTransfer _ -> true, true
+
+      | SetVar (_, _, _, e)
+      | Constructor (_, _, e)
+      | Lambda (_, _, _, e, _) -> e.fail, e.transfer
+
+      | Seq (e1, e2)
+      | Let (_, _, e1, e2)
+      | Loop (_, _, e1, e2) -> e1.fail || e2.fail, e1.transfer || e2.transfer
+
+      | If (e1, e2, e3)
+      | MatchOption (e1, _, e2, _, e3)
+      | MatchNat (e1, _, _, e2, _, e3)
+      | MatchList (e1, _, _, _, e2, e3) ->
+        e1.fail || e2.fail || e3.fail,
+        e1.transfer || e2.transfer || e3.transfer
+
+      | Apply (prim, _, l) ->
+        prim = Prim_fail || List.exists (fun e -> e.fail) l,
+        List.exists (fun e -> e.transfer) l
+
+      | Closure (_, _, _, env, e, _) ->
+        e.fail || List.exists (fun (_, e) -> e.fail) env,
+        e.transfer || List.exists (fun (_, e) -> e.transfer) env
+
+      | Record (_, labels) ->
+        List.exists (fun (_, e) -> e.fail) labels,
+        List.exists (fun (_, e) -> e.transfer) labels
+
+      | MatchVariant (e, _, cases) ->
+        e.fail || List.exists (fun (_, e) -> e.fail) cases,
+        e.transfer || List.exists (fun (_, e) -> e.transfer) cases
+    in
+    { desc; ty; bv; fail; transfer }
 
 
 type michelson_exp =
@@ -554,7 +598,6 @@ type env = {
 (* fields updated in LiquidCheck *)
 type 'a typecheck_env = {
     warnings : bool;
-    only_typecheck : bool;
     counter : int ref;
     vars : (string * datatype * int ref) StringMap.t;
     env : env;

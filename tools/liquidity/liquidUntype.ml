@@ -13,7 +13,7 @@
 
 open LiquidTypes
 
-let mk desc = { desc; ty = (); bv = StringSet.empty; fail = false }
+let mk desc = mk desc ()
 
 type env = {
     env_map : string StringMap.t;

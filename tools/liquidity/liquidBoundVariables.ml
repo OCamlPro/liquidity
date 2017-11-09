@@ -115,7 +115,7 @@ let rec bv code =
            StringSet.union set bv_case
          ) StringSet.empty args)
 
-let mk desc exp bv = { desc; ty = exp.ty; bv; fail = exp.fail }
+let mk desc exp bv = { exp with desc; bv }
 
 let rec bound code =
   match code.desc with
