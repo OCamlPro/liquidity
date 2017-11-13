@@ -8,7 +8,7 @@
 (**************************************************************************)
 
 (* The version that will be required to compile the generated files. *)
-let output_version = "0.12"
+let output_version = "0.13"
 
 (*
 type storage = ...
@@ -46,9 +46,8 @@ let rec convert_type ty =
   | Ttuple args -> Typ.tuple (List.map convert_type args)
   | Tor (x,y) -> typ_constr "variant" [convert_type x; convert_type y]
   | Tcontract (x,y) -> typ_constr "contract" [convert_type x;convert_type y]
-  | Tlambda (x,y) -> typ_constr "lambda" [convert_type x; convert_type y]
-  | Tclosure ((x,e),r) ->
-    typ_constr "closure" [convert_type x; convert_type e; convert_type r]
+  | Tlambda (x,y) -> Typ.arrow Nolabel (convert_type x) (convert_type y)
+  | Tclosure ((x,e),r) -> Typ.arrow Nolabel (convert_type x) (convert_type r)
   | Tmap (x,y) -> typ_constr "map" [convert_type x;convert_type y]
   | Tset x -> typ_constr "set" [convert_type x]
   | Tlist x -> typ_constr "list" [convert_type x]

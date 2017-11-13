@@ -1,7 +1,7 @@
 
 (* loops *)
 
-[%%version 0.12]
+[%%version 0.13]
 
 let%entry main
       (parameter : int)

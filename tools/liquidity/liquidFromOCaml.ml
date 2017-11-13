@@ -80,10 +80,10 @@ let () =
 
 
 (* The minimal version of liquidity files that are accepted by this compiler *)
-let minimal_version = 0.12
+let minimal_version = 0.13
 
 (* The maximal version of liquidity files that are accepted by this compiler *)
-let maximal_version = 0.12
+let maximal_version = 0.13
 
 
 open Asttypes
@@ -165,8 +165,8 @@ let rec translate_type env typ =
   | { ptyp_desc = Ptyp_constr ({ txt = Lident "map" },
                                [parameter_type; return_type]) } ->
      Tmap (translate_type env parameter_type, translate_type env return_type)
-  | { ptyp_desc = Ptyp_constr ({ txt = Lident "lambda" },
-                               [parameter_type; return_type]) } ->
+
+  | { ptyp_desc = Ptyp_arrow (_, parameter_type, return_type) } ->
      Tlambda (translate_type env parameter_type, translate_type env return_type)
 
   | { ptyp_desc = Ptyp_tuple types } ->
