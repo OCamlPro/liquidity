@@ -347,7 +347,7 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
      check_used env name loc count;
      let desc = MatchOption (arg, loc, ifnone, name, ifsome ) in
      let ty =
-       match ifnone.ty, ifsome.ty with
+       match get_type ifnone.ty, get_type ifsome.ty with
        | ty, Tfail | Tfail, ty -> ty
        | ty1, ty2 ->
           if ty1 <> ty2 then type_error loc "Bad option type in match" ty2 ty1;
@@ -366,7 +366,7 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
      check_used env minus_name loc count_m;
      let desc = MatchNat (arg, loc, plus_name, ifplus, minus_name, ifminus) in
      let ty =
-       match ifplus.ty, ifminus.ty with
+       match get_type ifplus.ty, get_type ifminus.ty with
        | ty, Tfail | Tfail, ty -> ty
        | ty1, ty2 ->
          if ty1 <> ty2 then
@@ -378,7 +378,7 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
 
   | Loop (name, loc, body, arg) ->
      let arg = typecheck env arg in
-     if arg.ty = Tfail then error loc "loop arg is a failure";
+     if get_type arg.ty = Tfail then error loc "loop arg is a failure";
      let env = maybe_reset_vars env arg.transfer in
      let (env, count) = new_binding env name arg.ty in
      let body =
@@ -388,7 +388,7 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
 
   | MatchList (arg, loc, head_name, tail_name, ifcons, ifnil) ->
      let arg  = typecheck env arg in
-     let arg_ty = match arg.ty with
+     let arg_ty = match get_type arg.ty with
        | Tfail -> error loc "cannot match failure"
        | Tlist ty -> ty
        | _ -> error loc "not a list type"
@@ -402,7 +402,7 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
      check_used env tail_name loc count;
      let desc = MatchList (arg, loc, head_name, tail_name, ifcons, ifnil) in
      let ty =
-       match ifnil.ty, ifcons.ty with
+       match get_type ifnil.ty, get_type ifcons.ty with
        | ty, Tfail | Tfail, ty -> ty
        | ty1, ty2 ->
           if ty1 <> ty2 then
