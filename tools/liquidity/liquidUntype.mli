@@ -9,4 +9,4 @@
 
 open LiquidTypes
 
-val untype_contract : typed_exp contract -> syntax_exp contract
+val untype_contract : encoded_exp contract -> syntax_exp contract

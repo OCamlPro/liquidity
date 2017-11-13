@@ -29,9 +29,9 @@ module Liquid : sig
   val string_of_type : datatype -> string
   val string_of_type_expl : datatype -> string
   val string_of_const : const -> string
-  val string_of_contract : ?debug:bool -> 'a exp contract -> string
-  val string_of_contract_types : ?debug:bool -> typed_exp contract -> string
-  val string_of_code : ?debug:bool -> 'a exp -> string
+  val string_of_contract : ?debug:bool -> ('a, 'b) exp contract -> string
+  val string_of_contract_types : ?debug:bool -> typed_contract -> string
+  val string_of_code : ?debug:bool -> ('a, 'b) exp -> string
   val string_of_code_types : ?debug:bool -> typed_exp -> string
 end
 
@@ -39,7 +39,7 @@ module Michelson : sig
   val string_of_type : datatype -> string
   val string_of_const : const -> string
   val line_of_const : const -> string
-  val string_of_contract : michelson_exp contract -> string
+  val string_of_contract : michelson_contract -> string
   val string_of_code : michelson_exp -> string
   val string_of_noloc_michelson : noloc_michelson -> string
   val string_of_loc_michelson : loc_michelson -> string

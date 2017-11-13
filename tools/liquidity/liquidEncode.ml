@@ -14,11 +14,20 @@ let noloc env = LiquidLoc.loc_in_file env.env.filename
 let error loc msg =
   LiquidLoc.raise_error ~loc ("Type error: " ^^ msg ^^ "%!")
 
+let mk_typed (desc: (datatype, typed) exp_desc) ty = mk desc ty
+let mk (desc: (datatype, encoded) exp_desc) ty = mk desc ty
+
+let mk_typed_nat i =
+  mk_typed (Const (Tnat, CNat (LiquidPrinter.integer_of_int i))) Tnat
+
 let mk_nat i =
   mk (Const (Tnat, CNat (LiquidPrinter.integer_of_int i))) Tnat
 
 let mk_nil list_ty =
   mk (Const (list_ty, CList [])) list_ty
+
+let mk_typed_nil list_ty =
+  mk_typed (Const (list_ty, CList [])) list_ty
 
 let mk_tuple loc l =
   let tuple_ty = Ttuple (List.map (fun t -> t.ty) l) in
@@ -268,7 +277,7 @@ let encode_prim_set arg n v =
   in
   prim, [arg; mk_nat n; v]
 
-let rec encode env ( exp : typed_exp ) =
+let rec encode env ( exp : typed_exp ) : encoded_exp =
   match exp.desc with
 
   | Const (ty, cst) ->
@@ -345,10 +354,9 @@ let rec encode env ( exp : typed_exp ) =
          let (new_name, env, count) = new_binding env tmp_name lty in
          let body =
            encode env
-             { exp with desc = SetVar (tmp_name, loc, labels, arg) }
+             (mk_typed (SetVar (tmp_name, loc, labels, arg)) exp.ty)
          in
-         { body with
-           desc = Let (new_name, loc, get_exp, body) }
+         mk (Let (new_name, loc, get_exp, body)) body.ty
      in
      let prim, args = encode_prim_set arg1 n arg in
      mk (Apply(prim, loc, args)) arg1.ty
@@ -475,27 +483,27 @@ let rec encode env ( exp : typed_exp ) =
     begin match get_type f'.ty with
       | Tlambda _ ->
         let l = encode env l in
-        { exp with desc = Apply (Prim_list_map, loc, [f'; l]) }
+        mk (Apply (Prim_list_map, loc, [f'; l])) exp.ty
       | Tclosure ((arg_ty, _), ty_ret) ->
         let arg_name = uniq_ident env "arg" in
         let acc_ty = Tlist ty_ret in
         let rarg_ty = Ttuple [arg_ty; Tlist ty_ret] in
-        let arg = mk (Var (arg_name, loc, [])) rarg_ty in
+        let arg = mk_typed (Var (arg_name, loc, [])) rarg_ty in
         let x =
-          mk (Apply(Prim_tuple_get, loc, [arg; mk_nat 0])) arg_ty in
+          mk_typed (Apply(Prim_tuple_get, loc, [arg; mk_typed_nat 0])) arg_ty in
         let acc =
-          mk (Apply(Prim_tuple_get, loc, [arg; mk_nat 1])) acc_ty in
-        let f_body = mk (Apply(Prim_Cons, loc, [
-            mk (Apply(Prim_exec, loc, [x; f])) ty_ret;
+          mk_typed (Apply(Prim_tuple_get, loc, [arg; mk_typed_nat 1])) acc_ty in
+        let f_body = mk_typed (Apply(Prim_Cons, loc, [
+            mk_typed (Apply(Prim_exec, loc, [x; f])) ty_ret;
             acc
           ])) acc_ty in
         let f_red =
-          mk (Lambda (arg_name, rarg_ty, loc, f_body, acc_ty))
+          mk_typed (Lambda (arg_name, rarg_ty, loc, f_body, acc_ty))
             (Tlambda (rarg_ty, acc_ty)) in
         let red =
-          mk (Apply (Prim_list_reduce, loc,
-                     [f_red; l; mk_nil acc_ty])) acc_ty in
-        let rev_red = mk (Apply (Prim_list_rev, loc, [red])) acc_ty in
+          mk_typed (Apply (Prim_list_reduce, loc,
+                     [f_red; l; mk_typed_nil acc_ty])) acc_ty in
+        let rev_red = mk_typed (Apply (Prim_list_rev, loc, [red])) acc_ty in
         encode env rev_red
       | _ -> assert false
     end
@@ -507,28 +515,30 @@ let rec encode env ( exp : typed_exp ) =
       | Tlambda _ ->
         let m = encode env m in
         let acc = encode env acc in
-        { exp with desc = Apply (Prim_map_reduce, loc, [f'; m; acc]) }
+        mk (Apply (Prim_map_reduce, loc, [f'; m; acc])) exp.ty
       | Tclosure ((Ttuple [kv_ty; acc_ty], _), ty_ret) ->
         let arg_name = uniq_ident env "arg" in
         let elts_ty = Tlist kv_ty in
         let arg_ty = Ttuple [kv_ty; elts_ty] in
-        let arg = mk (Var (arg_name, loc, [])) elts_ty in
+        let arg = mk_typed (Var (arg_name, loc, [])) elts_ty in
         let kv =
-          mk (Apply(Prim_tuple_get, loc, [arg; mk_nat 0])) kv_ty in
+          mk_typed (Apply(Prim_tuple_get, loc, [arg; mk_typed_nat 0])) kv_ty in
         let acc_elts =
-          mk (Apply(Prim_tuple_get, loc, [arg; mk_nat 1])) elts_ty in
+          mk_typed (Apply(Prim_tuple_get, loc, [arg; mk_typed_nat 1])) elts_ty in
         let gather_body =
-          mk (Apply(Prim_Cons, loc, [kv; acc_elts])) elts_ty in
+          mk_typed (Apply(Prim_Cons, loc, [kv; acc_elts])) elts_ty in
         let gather_fun =
-          mk (Lambda (arg_name, arg_ty, loc, gather_body, elts_ty))
+          mk_typed (Lambda (arg_name, arg_ty, loc, gather_body, elts_ty))
             (Tlambda (arg_ty, elts_ty))
         in
         let rev_elts =
-          mk (Apply(Prim_map_reduce, loc, [gather_fun; m; mk_nil elts_ty]))
+          mk_typed (Apply(Prim_map_reduce, loc,
+                          [gather_fun; m; mk_typed_nil elts_ty]))
             elts_ty
         in
-        let elts = mk (Apply(Prim_list_rev, loc, [rev_elts])) elts_ty in
-        let red = mk (Apply(Prim_list_reduce, loc, [f; elts; acc])) acc_ty in
+        let elts = mk_typed (Apply(Prim_list_rev, loc, [rev_elts])) elts_ty in
+        let red = mk_typed
+            (Apply(Prim_list_reduce, loc, [f; elts; acc])) acc_ty in
         encode env red
       | _ -> assert false
     end
@@ -539,35 +549,35 @@ let rec encode env ( exp : typed_exp ) =
     begin match get_type f'.ty with
       | Tlambda _ ->
         let m = encode env m in
-        { exp with desc = Apply (Prim_map_map, loc, [f'; m]) }
+        mk (Apply (Prim_map_map, loc, [f'; m])) exp.ty
       | Tclosure ((Ttuple [k_ty; v_ty] as kv_ty, _), ty_ret) ->
         let arg_name = uniq_ident env "arg" in
         let acc_ty = Tmap (k_ty, ty_ret) in
         let arg_ty = Ttuple [kv_ty; acc_ty] in
-        let arg = mk (Var (arg_name, loc, [])) arg_ty in
+        let arg = mk_typed (Var (arg_name, loc, [])) arg_ty in
         let kv =
-          mk (Apply(Prim_tuple_get, loc, [arg; mk_nat 0])) kv_ty in
+          mk_typed (Apply(Prim_tuple_get, loc, [arg; mk_typed_nat 0])) kv_ty in
         let acc =
-          mk (Apply(Prim_tuple_get, loc, [arg; mk_nat 1])) acc_ty in
+          mk_typed (Apply(Prim_tuple_get, loc, [arg; mk_typed_nat 1])) acc_ty in
         let k =
-          mk (Apply(Prim_tuple_get, loc, [kv; mk_nat 0])) k_ty in
+          mk_typed (Apply(Prim_tuple_get, loc, [kv; mk_typed_nat 0])) k_ty in
         let acc_ty = Tmap (k_ty, ty_ret) in
         let update_body =
-          mk (Apply(Prim_map_update, loc, [
+          mk_typed (Apply(Prim_map_update, loc, [
               k;
-              mk (Apply(Prim_Some, loc, [
-                  mk (Apply(Prim_exec, loc, [kv; f])) ty_ret
+              mk_typed (Apply(Prim_Some, loc, [
+                  mk_typed (Apply(Prim_exec, loc, [kv; f])) ty_ret
                 ])) (Toption ty_ret);
               acc
             ])) acc_ty in
         let update_fun =
-          mk (Lambda (arg_name, arg_ty, loc, update_body, acc_ty))
+          mk_typed (Lambda (arg_name, arg_ty, loc, update_body, acc_ty))
             (Tlambda (arg_ty, acc_ty))
         in
         let red =
-          mk (Apply (Prim_map_reduce, loc, [
+          mk_typed (Apply (Prim_map_reduce, loc, [
               update_fun; m;
-              mk (Const (acc_ty, CMap [])) acc_ty
+              mk_typed (Const (acc_ty, CMap [])) acc_ty
             ])) acc_ty in
         encode env red
       | _ -> assert false
@@ -580,35 +590,37 @@ let rec encode env ( exp : typed_exp ) =
       | Tlambda _ ->
         let s = encode env s in
         let acc = encode env acc in
-        { exp with desc = Apply (Prim_set_reduce, loc, [f'; s; acc]) }
+        mk (Apply (Prim_set_reduce, loc, [f'; s; acc])) exp.ty
       | Tclosure ((Ttuple [elt_ty; acc_ty], _), ty_ret) ->
         let arg_name = uniq_ident env "arg" in
         let elts_ty = Tlist elt_ty in
         let arg_ty = Ttuple [elt_ty; elts_ty] in
-        let arg = mk (Var (arg_name, loc, [])) arg_ty in
+        let arg = mk_typed (Var (arg_name, loc, [])) arg_ty in
         let elt =
-          mk (Apply(Prim_tuple_get, loc, [arg; mk_nat 0])) elt_ty in
+          mk_typed (Apply(Prim_tuple_get, loc, [arg; mk_typed_nat 0])) elt_ty in
         let acc_elts =
-          mk (Apply(Prim_tuple_get, loc, [arg; mk_nat 1])) elts_ty in
+          mk_typed
+            (Apply(Prim_tuple_get, loc, [arg; mk_typed_nat 1])) elts_ty in
         let gather_body =
-          mk (Apply(Prim_Cons, loc, [elt; acc_elts])) elts_ty in
+          mk_typed (Apply(Prim_Cons, loc, [elt; acc_elts])) elts_ty in
         let gather_fun =
-          mk (Lambda (arg_name, arg_ty, loc, gather_body, elts_ty))
+          mk_typed (Lambda (arg_name, arg_ty, loc, gather_body, elts_ty))
             (Tlambda (arg_ty, elts_ty))
         in
         let rev_elts =
-          mk (Apply(Prim_set_reduce, loc, [gather_fun; s; mk_nil elts_ty]))
+          mk_typed (Apply(Prim_set_reduce, loc,
+                          [gather_fun; s; mk_typed_nil elts_ty]))
             elts_ty
         in
-        let elts = mk (Apply(Prim_list_rev, loc, [rev_elts])) elts_ty in
-        let red = mk (Apply(Prim_list_reduce, loc, [f; elts; acc])) acc_ty in
+        let elts = mk_typed (Apply(Prim_list_rev, loc, [rev_elts])) elts_ty in
+        let red = mk_typed
+            (Apply(Prim_list_reduce, loc, [f; elts; acc])) acc_ty in
         encode env red
       | _ -> assert false
     end
 
   | Apply (prim, loc, args) ->
     encode_apply env prim loc args exp.ty
-    (* { exp with desc = Apply (prim, loc, List.map (encode env) args) } *)
 
   | MatchOption (arg, loc, ifnone, name, ifsome) ->
      let arg = encode env arg in
@@ -620,8 +632,7 @@ let rec encode env ( exp : typed_exp ) =
      let ifnone = encode env ifnone in
      let (new_name, env, count) = new_binding env name name_ty in
      let ifsome = encode env ifsome in
-     (* check_used env name loc count; *)
-     { exp with desc = MatchOption (arg, loc, ifnone, new_name, ifsome) }
+     mk (MatchOption (arg, loc, ifnone, new_name, ifsome)) exp.ty
 
   | MatchNat (arg, loc, plus_name, ifplus, minus_name, ifminus) ->
      let arg = encode env arg in
@@ -632,8 +643,7 @@ let rec encode env ( exp : typed_exp ) =
      let ifminus = encode env3 ifminus in
      (* check_used env plus_name loc count_p; *)
      (* check_used env minus_name loc count_m; *)
-     { exp with
-       desc = MatchNat (arg, loc, plus_name, ifplus, minus_name, ifminus) }
+     mk (MatchNat (arg, loc, plus_name, ifplus, minus_name, ifminus)) exp.ty
 
   | Loop (name, loc, body, arg) ->
      let arg = encode env arg in
@@ -641,7 +651,7 @@ let rec encode env ( exp : typed_exp ) =
      let (new_name, env, count) = new_binding env name arg.ty in
      let body = encode env body in
      (* check_used env name loc count; *)
-     { exp with desc = Loop (new_name, loc, body, arg) }
+     mk (Loop (new_name, loc, body, arg)) exp.ty
 
   | MatchList (arg, loc, head_name, tail_name, ifcons, ifnil) ->
      let arg = encode env arg in
@@ -656,9 +666,8 @@ let rec encode env ( exp : typed_exp ) =
      let ifcons = encode env ifcons in
      (* check_used env head_name loc count; *)
      (* check_used env tail_name loc count; *)
-     { exp with
-       desc =
-         MatchList (arg, loc, new_head_name, new_tail_name, ifcons, ifnil) }
+     mk (MatchList (arg, loc, new_head_name, new_tail_name, ifcons, ifnil))
+       exp.ty
 
   | Lambda (arg_name, arg_type, loc, body, _) ->
      let env_at_lambda = env in
@@ -798,7 +807,7 @@ let rec encode env ( exp : typed_exp ) =
        (CConstr (c, [var]), e)
       ) cases
     in
-    { exp with desc = MatchVariant (arg, loc, cases) }
+    mk (MatchVariant (arg, loc, cases)) exp.ty
 
 
 and encode_apply env prim loc args ty =

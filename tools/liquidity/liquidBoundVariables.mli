@@ -10,6 +10,6 @@
 open LiquidTypes
 
 (* Compute free variables of an expression *)
-val bound_contract : 'a exp contract -> 'a exp contract
-val bound : 'a exp -> 'a exp
-val bv : 'a exp -> StringSet.t
+val bound_contract : ('a, 'b) exp contract -> ('a, 'b) exp contract
+val bound : ('a, 'b) exp -> ('a, 'b) exp
+val bv : ('a, 'b) exp -> StringSet.t

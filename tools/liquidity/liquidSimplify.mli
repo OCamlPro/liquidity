@@ -10,4 +10,4 @@
 open LiquidTypes
 
 val simplify_contract :
-  typed_exp contract -> typed_exp StringMap.t -> typed_exp contract
+  encoded_exp contract -> encoded_exp StringMap.t -> encoded_exp contract

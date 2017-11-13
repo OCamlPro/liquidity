@@ -87,18 +87,7 @@ let find_var ?(count_used=true) env loc name =
     if count_used then incr count;
     mk (Var (name, loc, [])) ty
   with Not_found ->
-  match env.clos_env with
-  | None -> error loc "unbound variable %S" name
-  | Some ce ->
-    try
-      let v, (cpt_in, cpt_out) = StringMap.find name ce.env_bindings in
-      if count_used then begin
-        incr cpt_in;
-        incr cpt_out;
-      end;
-      v
-    with Not_found ->
-      error loc "unbound variable %S" name
+    error loc "unbound variable %S" name
 
 let maybe_reset_vars env transfer =
   if transfer then
@@ -170,7 +159,7 @@ let rec loc_exp env e = match e.desc with
    * whether the expression can fail
    * whether the expression performs a TRANSFER_TOKENS
    *)
-let rec typecheck env ( exp : LiquidTypes.syntax_exp ) =
+let rec typecheck env ( exp : syntax_exp ) : typed_exp =
   match exp.desc with
 
   | Const (ty, cst) ->

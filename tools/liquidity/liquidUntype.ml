@@ -75,7 +75,7 @@ let find_free env var_arg bv =
 scopes. Unfortunately, without hash-consing, this can be quite expensive.
  *)
 
-let rec untype (env : env) (code : typed_exp) =
+let rec untype (env : env) (code : encoded_exp) : syntax_exp =
   let desc =
     match code.desc with
     | If (cond, ifthen, ifelse) ->

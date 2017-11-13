@@ -15,8 +15,6 @@ exception InvalidFormat of string * string
 type tez = { tezzies : string; centiles : string option }
 type integer = { integer : string }
 
-type encoded
-
 type const =
   | CUnit
   | CBool of bool
@@ -368,71 +366,74 @@ type pattern =
   | CConstr of string * string list
   | CAny
 
-type 'ty exp = {
-    desc : 'ty exp_desc;
+type ('ty, 'a) exp = {
+    desc : ('ty, 'a) exp_desc;
     ty : 'ty;
     bv : StringSet.t;
     fail : bool;
     transfer : bool;
   }
 
-and 'ty exp_desc =
-  | Let of string * location * 'ty exp * 'ty exp
+and ('ty, 'a) exp_desc =
+  | Let of string * location * ('ty, 'a) exp * ('ty, 'a) exp
   | Var of string * location * string list
-  | SetVar of string * location * string list * 'ty exp
+  | SetVar of string * location * string list * ('ty, 'a) exp
   | Const of datatype * const
-  | Apply of primitive * location * 'ty exp list
-  | If of 'ty exp * 'ty exp * 'ty exp
-  | Seq of 'ty exp * 'ty exp
+  | Apply of primitive * location * ('ty, 'a) exp list
+  | If of ('ty, 'a) exp * ('ty, 'a) exp * ('ty, 'a) exp
+  | Seq of ('ty, 'a) exp * ('ty, 'a) exp
   | LetTransfer of (* storage *) string * (* result *) string
                                  * location
-                   * (* contract_ *) 'ty exp
-                   * (* tez_ *) 'ty exp
-                   * (* storage_ *) 'ty exp
-                   * (* arg_ *) 'ty exp
-                   * 'ty exp (* body *)
-  | MatchOption of 'ty exp  (* argument *)
+                   * (* contract_ *) ('ty, 'a) exp
+                   * (* tez_ *) ('ty, 'a) exp
+                   * (* storage_ *) ('ty, 'a) exp
+                   * (* arg_ *) ('ty, 'a) exp
+                   * ('ty, 'a) exp (* body *)
+  | MatchOption of ('ty, 'a) exp  (* argument *)
                      * location
-                     * 'ty exp  (* ifnone *)
-                     * string * 'ty exp (*  ifsome *)
-  | MatchList of 'ty exp  (* argument *)
+                     * ('ty, 'a) exp  (* ifnone *)
+                     * string * ('ty, 'a) exp (*  ifsome *)
+  | MatchList of ('ty, 'a) exp  (* argument *)
                  * location
-                 * string * string * 'ty exp * (* ifcons *)
-                       'ty exp (*  ifnil *)
+                 * string * string * ('ty, 'a) exp * (* ifcons *)
+                       ('ty, 'a) exp (*  ifnil *)
   | Loop of string * location
-              * 'ty exp  (* body *)
-              * 'ty exp (*  arg *)
+              * ('ty, 'a) exp  (* body *)
+              * ('ty, 'a) exp (*  arg *)
 
   | Lambda of string (* argument name *)
               * datatype (* argument type *)
               * location
-              * 'ty exp (* body *)
+              * ('ty, 'a) exp (* body *)
               * datatype (* final datatype,
                             inferred during typechecking *)
 
   | Closure of string (* argument name *)
               * datatype (* argument type *)
               * location
-              * (string * 'ty exp) list (* call environment *)
-              * 'ty exp (* body *)
+              * (string * ('ty, 'a) exp) list (* call environment *)
+              * ('ty, 'a) exp (* body *)
               * datatype (* final datatype,
                             inferred during typechecking *)
 
-  | Record of location * (string * 'ty exp) list
-  | Constructor of location * constructor * 'ty exp
+  | Record of location * (string * ('ty, 'a) exp) list
+  | Constructor of location * constructor * ('ty, 'a) exp
 
-  | MatchVariant of 'ty exp
+  | MatchVariant of ('ty, 'a) exp
                     * location
-                    * (pattern * 'ty exp) list
+                    * (pattern * ('ty, 'a) exp) list
 
-  | MatchNat of 'ty exp  (* argument *)
+  | MatchNat of ('ty, 'a) exp  (* argument *)
                 * location
-                * string * 'ty exp (* ifplus *)
-                * string * 'ty exp (* ifminus *)
+                * string * ('ty, 'a) exp (* ifplus *)
+                * string * ('ty, 'a) exp (* ifminus *)
 
-type syntax_exp = unit exp
-type typed_exp = datatype exp
-type live_exp = (datatype * datatype StringMap.t) exp
+type typed
+type encoded
+type syntax_exp = (unit, unit) exp
+type typed_exp = (datatype, typed) exp
+type encoded_exp = (datatype, encoded) exp
+type live_exp = (datatype * datatype StringMap.t, encoded) exp
 
 
 let mk =
@@ -575,11 +576,11 @@ type closure_env = {
                * (int ref * (* usage counter inside closure *)
                   int ref (* usage counter outside closure *)
                  )) StringMap.t;
-  env_bindings : (typed_exp (* expression to access variable inside closure *)
+  env_bindings : (encoded_exp (* expression to access variable inside closure *)
                   * (int ref * (* usage counter inside closure *)
                      int ref (* usage counter outside closure *)
                     )) StringMap.t;
-  call_bindings : (string * typed_exp) list;
+  call_bindings : (string * encoded_exp) list;
 }
 
 type env = {
@@ -601,7 +602,7 @@ type 'a typecheck_env = {
     counter : int ref;
     vars : (string * datatype * int ref) StringMap.t;
     env : env;
-    to_inline : datatype exp StringMap.t ref;
+    to_inline : encoded_exp StringMap.t ref;
     contract : 'a contract;
     clos_env : closure_env option;
 }
@@ -659,6 +660,13 @@ type node = {
    | N_ABS
 
 type node_exp = node * node
+
+type syntax_contract = syntax_exp contract
+type typed_contract = typed_exp contract
+type encoded_contract = encoded_exp contract
+type michelson_contract = michelson_exp contract
+type node_contract = node_exp contract
+type noloc_michelson_contract = noloc_michelson contract
 
 type warning =
   | Unused of string

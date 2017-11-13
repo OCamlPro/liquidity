@@ -14,7 +14,7 @@ val error :
   ('a, Format.formatter, unit, unit, unit, 'b) format6 -> 'a
 
 val typecheck_contract :
-  warnings:bool -> env -> syntax_exp contract -> typed_exp contract
+  warnings:bool -> env -> syntax_contract -> typed_contract
 
                        (*
 val uniq_ident : string -> string
@@ -22,7 +22,7 @@ val uniq_ident : string -> string
 
 val typecheck_code :
   warnings:bool -> env ->
-  syntax_exp contract ->
+  syntax_contract ->
   LiquidTypes.datatype ->
   syntax_exp ->
   typed_exp

@@ -12,8 +12,8 @@ open LiquidTypes
 val encode_type : ?keepalias:bool -> datatype -> datatype
 
 val encode_contract :
-  warnings:bool -> env -> typed_exp contract ->
-  typed_exp contract * datatype exp StringMap.t
+  warnings:bool -> env -> typed_contract ->
+  encoded_contract * encoded_exp StringMap.t
 
 val encode_code :
-  warnings:bool -> env -> syntax_exp contract -> typed_exp -> typed_exp
+  warnings:bool -> env -> syntax_contract -> typed_exp -> encoded_exp
