@@ -177,7 +177,7 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
 
   | Var (name, loc, (_::_ as labels)) ->
     begin match find_var env loc name with
-      | { desc = Var (name, _, []); ty = (Ttype _) as ty } ->
+      | { desc = Var (name, _, []); ty } ->
         let ty =
           List.fold_left (fun ty label ->
               match get_type ty with
@@ -190,7 +190,8 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
                     ty'
                   with Not_found -> error loc "bad label"
                 end
-              | _ -> error loc "not a record"
+              | _ -> error loc "not a record : %s"
+                       (LiquidPrinter.Liquid.string_of_type_expl ty)
             ) ty labels
         in
         mk (Var (name, loc, labels)) ty
@@ -335,7 +336,7 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
 
   | MatchOption (arg, loc, ifnone, name, ifsome) ->
      let arg = typecheck env arg in
-     let arg_ty = match arg.ty with
+     let arg_ty = match get_type arg.ty with
        | Tfail -> error loc "cannot match failure"
        | Toption ty -> ty
        | _ -> error loc "not an option type"

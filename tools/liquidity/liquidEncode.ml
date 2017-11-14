@@ -85,20 +85,22 @@ let find_var ?(count_used=true) env loc name =
 (* Create environment for closure *)
 let env_for_clos env loc bvs arg_name arg_type =
   let _, free_vars = StringSet.fold (fun v (index, free_vars) ->
-      try
-        let index = index + 1 in
-        match env.clos_env with
-        | None ->
+      let index = index + 1 in
+      let free_vars =
+        try
           let (bname, btype, cpt_out) = StringMap.find v env.vars in
-          (index,
-           StringMap.add v (bname, btype, index, (ref 0, cpt_out)) free_vars)
+          StringMap.add v (bname, btype, index, (ref 0, cpt_out)) free_vars
+        with Not_found ->
+        match env.clos_env with
+        | None -> free_vars
         | Some ce ->
-          let bname, btype, _, (cpt_in, cpt_out) =
-            StringMap.find v ce.env_vars in
-          (index,
-           StringMap.add v (bname, btype, index, (cpt_in, cpt_out)) free_vars)
-      with Not_found ->
-        (index, free_vars)
+          try
+            let bname, btype, _, (cpt_in, cpt_out) =
+              StringMap.find v ce.env_vars in
+            StringMap.add v (bname, btype, index, (cpt_in, cpt_out)) free_vars
+          with Not_found -> free_vars
+      in
+      (index, free_vars)
     ) bvs (0, StringMap.empty)
   in
   let free_vars_l =
@@ -305,17 +307,15 @@ let rec encode env ( exp : typed_exp ) : encoded_exp =
     let e = find_var env loc name in
     List.fold_left
       (fun e label ->
-         let ty_name, ty = match first_alias e.ty with
-           | Some (ty_name, (Trecord _ as ty)) -> ty_name, ty
-           | _ -> error loc "not a record"
-         in
-         let arg1 = mk e.desc ty in
+         (* let ty = match first_alias e.ty with *)
+         (*   | Some (ty_name, (Trecord _ as ty)) -> ty_name, ty *)
+         (*   | _ -> error loc "not a record" *)
+         (* in *)
+         let arg1 = mk e.desc e.ty in
          let n, label_ty =
            try
              let (ty_name', n, label_ty) =
                StringMap.find label env.env.labels in
-             if ty_name' <> ty_name then
-               error loc "label for wrong record";
              n, label_ty
            with Not_found ->
              error loc "bad label"
@@ -365,13 +365,13 @@ let rec encode env ( exp : typed_exp ) : encoded_exp =
     (* TODO: if not exp.fail then remove exp1 *)
     let exp1 = encode env exp1 in
     let exp2 = encode env exp2 in
-    mk (Seq (exp1, exp2)) exp2.ty
+    mk (Seq (exp1, exp2)) exp.ty
 
   | If (cond, ifthen, ifelse) ->
     let cond = encode env cond in
     let ifthen = encode env ifthen in
     let ifelse = encode env ifelse in
-    mk (If (cond, ifthen, ifelse)) ifthen.ty
+    mk (If (cond, ifthen, ifelse)) exp.ty
 
   | LetTransfer (storage_name, result_name,
                  loc,
@@ -692,13 +692,12 @@ let rec encode env ( exp : typed_exp ) : encoded_exp =
        (* begin match env.clos_env with *)
        (*   | None -> () *)
        (*   | Some clos_env -> *)
-       (*     Format.eprintf "--- Closure %s (real:%b)---@." arg_name is_real_closure; *)
+       (*     Format.eprintf "--- Closure %s ---@." arg_name; *)
        (*     StringMap.iter (fun name (e, (cpt_in, cpt_out)) -> *)
        (*         Format.eprintf "%s -> %s , (%d, %d)@." *)
        (*           name (LiquidPrinter.Liquid.string_of_code e) !cpt_in !cpt_out *)
        (*       ) clos_env.env_bindings *)
        (* end; *)
-       (* check_used_in_env env lambda_arg_name loc; *)
        let desc =
          Closure (arg_name, arg_type, loc, call_env, body, body.ty) in
        let call_env_type = match call_env with
