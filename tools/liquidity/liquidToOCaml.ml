@@ -165,11 +165,7 @@ let rec convert_code expr =
      Exp.construct (lid "Some") (Some (convert_code arg))
   | Apply (Prim_tuple, _loc, args) ->
      Exp.tuple (List.map convert_code args)
-  | Apply (prim_name, _loc, args) ->
-     let prim = match prim_name with
-       | Prim_tuple_get_last -> Prim_tuple_get
-       | _ -> prim_name
-     in
+  | Apply (prim, _loc, args) ->
      let prim_name =
        try
          LiquidTypes.string_of_primitive prim

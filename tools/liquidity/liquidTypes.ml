@@ -130,6 +130,10 @@ let first_alias ty =
 let eq_types t1 t2 =
   get_type t1 = get_type t2
 
+let size_of_type ty = match get_type ty with
+  | Ttuple l -> List.length l
+  | Trecord l -> List.length l
+  | _ -> raise (Invalid_argument "size_of_type")
 
 type 'exp contract = {
     parameter : datatype;
@@ -163,9 +167,7 @@ type primitive =
   | Prim_unused
 
   (* primitives *)
-  | Prim_tuple_get_last
   | Prim_tuple_get
-  | Prim_tuple_set_last
   | Prim_tuple_set
   | Prim_tuple
 
@@ -250,8 +252,6 @@ let () =
     )
             [
               "get", Prim_tuple_get;
-              "get_last", Prim_tuple_get_last;
-              "set_last", Prim_tuple_set_last;
               "set", Prim_tuple_set;
               "tuple", Prim_tuple;
 

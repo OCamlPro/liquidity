@@ -596,15 +596,7 @@ and typecheck_prim1 env prim loc args =
      in
      let n = LiquidPrinter.int_of_integer n in
      let size = List.length tuple in
-     let prim =
-       if size <= n then
-         error loc "get outside tuple"
-       else
-         if size = n + 1 then
-           Prim_tuple_get_last
-         else
-           Prim_tuple_get
-     in
+     if size <= n then error loc "get outside tuple";
      let ty = List.nth tuple n in
      prim, ty
 
@@ -620,15 +612,7 @@ and typecheck_prim1 env prim loc args =
      let n = LiquidPrinter.int_of_integer n in
      let expected_ty = List.nth tuple n in
      let size = List.length tuple in
-     let prim =
-       if size <= n then
-         error loc "set outside tuple"
-       else
-         if size = n + 1 then
-           Prim_tuple_set_last
-         else
-           Prim_tuple_set
-     in
+     if size <= n then error loc "set outside tuple";
      let ty = if not (eq_types ty expected_ty || eq_types ty Tfail) then
                 error loc "prim set bad type"
               else tuple_ty

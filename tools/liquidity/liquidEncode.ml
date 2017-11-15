@@ -122,14 +122,11 @@ let env_for_clos env loc bvs arg_name arg_type =
     let env_vars =
       StringMap.add arg_name
         (new_name, arg_type, 0, (ref 0, ref 0)) free_vars in
-    let size = StringMap.cardinal env_vars in
+    (* let size = StringMap.cardinal env_vars in *)
     let env_bindings =
       StringMap.map (fun (_, ty, index, count) ->
           let ei = mk_nat index in
-          let accessor =
-            if index + 1 = size then Prim_tuple_get_last
-            else Prim_tuple_get in
-          let exp = mk (Apply(accessor, loc, [env_arg_var; ei])) ty in
+          let exp = mk (Apply(Prim_tuple_get, loc, [env_arg_var; ei])) ty in
           exp, count
         ) env_vars
     in
@@ -249,36 +246,6 @@ let rec encode_const env c = match c with
     with Not_found ->
       error (noloc env)  "unknown constructor %s" constr
 
-
-let encode_prim_get arg n =
-  let size = match (get_type arg.ty) with
-    | Ttuple tuple -> List.length tuple
-    | Trecord rtys -> List.length rtys
-    | _ -> assert false
-  in
-  let prim =
-    if size = n + 1 then
-      Prim_tuple_get_last
-    else
-      Prim_tuple_get
-  in
-  prim, [arg; mk_nat n]
-
-
-let encode_prim_set arg n v =
-  let size = match (get_type arg.ty) with
-    | Ttuple tuple -> List.length tuple
-    | Trecord rtys -> List.length rtys
-    | _ -> assert false
-  in
-  let prim =
-    if size = n + 1 then
-      Prim_tuple_set_last
-    else
-      Prim_tuple_set
-  in
-  prim, [arg; mk_nat n; v]
-
 let rec encode env ( exp : typed_exp ) : encoded_exp =
   match exp.desc with
 
@@ -320,8 +287,7 @@ let rec encode env ( exp : typed_exp ) : encoded_exp =
            with Not_found ->
              error loc "bad label"
          in
-         let prim, args = encode_prim_get arg1 n in
-         mk (Apply(prim, loc, args)) label_ty
+         mk (Apply(Prim_tuple_get, loc, [arg1; mk_nat n])) label_ty
       ) e labels
 
   | SetVar (name, loc, [], e) -> encode env e
@@ -348,8 +314,7 @@ let rec encode env ( exp : typed_exp ) : encoded_exp =
          if arg.transfer then error loc "transfer within set-field";
          arg
        | _::_ ->
-         let prim, args = encode_prim_get arg1 n in
-         let get_exp = mk (Apply(prim, loc, args)) lty in
+         let get_exp = mk (Apply(Prim_tuple_get, loc, [arg1; mk_nat n])) lty in
          let tmp_name = uniq_ident env "tmp#" in
          let (new_name, env, count) = new_binding env tmp_name lty in
          let body =
@@ -358,8 +323,7 @@ let rec encode env ( exp : typed_exp ) : encoded_exp =
          in
          mk (Let (new_name, loc, get_exp, body)) body.ty
      in
-     let prim, args = encode_prim_set arg1 n arg in
-     mk (Apply(prim, loc, args)) arg1.ty
+     mk (Apply(Prim_tuple_set, loc, [arg1; mk_nat n; arg])) arg1.ty
 
   | Seq (exp1, exp2) ->
     (* TODO: if not exp.fail then remove exp1 *)
@@ -413,7 +377,7 @@ let rec encode env ( exp : typed_exp ) : encoded_exp =
     let arg = mk (Var (arg_name, loc, [])) arg_ty in
     let e = mk (Apply(Prim_tuple_get, loc, [arg; mk_nat 0])) elt_ty in
     let acc =
-      mk (Apply(Prim_tuple_get_last, loc, [arg; mk_nat 1])) list_ty in
+      mk (Apply(Prim_tuple_get, loc, [arg; mk_nat 1])) list_ty in
     let f_body = mk (Apply (Prim_Cons, loc, [e; acc])) list_ty in
     let f_desc = Lambda (arg_name, arg_ty, loc, f_body, list_ty) in
     let f = mk f_desc (Tlambda (arg_ty, list_ty)) in
@@ -445,7 +409,7 @@ let rec encode env ( exp : typed_exp ) : encoded_exp =
         let l' =
           mk (Apply(Prim_tuple_get, loc, [arg; mk_nat 0])) list_ty in
         let acc' =
-          mk (Apply(Prim_tuple_get_last, loc, [arg; mk_nat 1])) acc_ty in
+          mk (Apply(Prim_tuple_get, loc, [arg; mk_nat 1])) acc_ty in
         let nil_case = mk_tuple loc [
             const_false ;
             mk_tuple loc [mk_nil list_ty; acc']
@@ -471,7 +435,7 @@ let rec encode env ( exp : typed_exp ) : encoded_exp =
                    mk_tuple loc [l; acc]))
             (Ttuple [list_ty; acc_ty])
         in
-        mk (Apply (Prim_tuple_get_last, loc, [loop; mk_nat 1]))
+        mk (Apply (Prim_tuple_get, loc, [loop; mk_nat 1]))
           acc_ty
       | _ ->
         mk (Apply (Prim_list_reduce, loc, args)) acc.ty
@@ -814,43 +778,6 @@ and encode_apply env prim loc args ty =
   match prim, args with
   | Prim_exec, [ x; { ty = Tclosure (_, ty) | Tlambda (_,ty) } ] ->
     mk (Apply (prim, loc, args)) ty
-
-  | Prim_tuple_get, [ { ty = tuple_ty };
-                      { desc = Const (_, (CInt n | CNat n)) }] ->
-     let tuple = match (get_type tuple_ty) with
-       | Ttuple tuple -> tuple
-       | Trecord rtys -> List.map snd rtys
-       | _ -> assert false
-     in
-     let n = LiquidPrinter.int_of_integer n in
-     let size = List.length tuple in
-     let prim =
-       if size = n + 1 then
-         Prim_tuple_get_last
-       else
-         Prim_tuple_get
-     in
-     let ty = List.nth tuple n in
-     mk (Apply (prim, loc, args)) ty
-
-  | Prim_tuple_set, [ { ty = tuple_ty };
-                      { desc = Const (_, (CInt n | CNat n)) };
-                      { ty } ] ->
-     let tuple = match (get_type tuple_ty) with
-       | Ttuple tuple -> tuple
-       | Trecord rtys -> List.map snd rtys
-       | _ -> assert false
-     in
-     let n = LiquidPrinter.int_of_integer n in
-     let size = List.length tuple in
-     let prim =
-       if size = n + 1 then
-         Prim_tuple_set_last
-       else
-         Prim_tuple_set
-     in
-     let ty =  tuple_ty in
-     mk (Apply (prim, loc, args)) ty
 
   | _ -> mk (Apply (prim, loc, args)) ty
 

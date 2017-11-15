@@ -278,16 +278,17 @@ let translate_code code =
        compile_tuple depth env (List.rev args)
 
     | Prim_tuple_get, [arg; { desc = Const (_, (CInt n | CNat n))} ] ->
+       let size = size_of_type arg.ty in
        let arg = compile_no_transfer depth env arg in
        let n = LiquidPrinter.int_of_integer n in
-       arg @ [  {i=CDAR n} ]
+       let ins =
+         if size = n + 1 then
+           {i=CDDR (n-1)}
+         else
+           {i=CDAR n}
+       in
+       arg @ [ ins ]
     | Prim_tuple_get, _ -> assert false
-
-    | Prim_tuple_get_last, [arg; { desc = Const (_, (CInt n | CNat n))} ] ->
-       let arg = compile_no_transfer depth env arg in
-       let n = LiquidPrinter.int_of_integer n in
-       arg @ [  {i=CDDR (n-1)} ]
-    | Prim_tuple_get_last, _ -> assert false
 
     (*
 set x n y = x + [ DUP; CAR; SWAP; CDR ]*n +
@@ -298,16 +299,11 @@ set x n y = x + [ DUP; CAR; SWAP; CDR ]*n +
     | Prim_tuple_set, [x; { desc = Const (_, (CInt n | CNat n))}; y ] ->
        let x_code = compile_no_transfer depth env x in
        let n = LiquidPrinter.int_of_integer n in
-       let set_code = compile_prim_set false (depth+1) env n y in
+       let size = size_of_type x.ty in
+       let is_last = size = n + 1 in
+       let set_code = compile_prim_set is_last (depth+1) env n y in
        x_code @ set_code
     | Prim_tuple_set, _ -> assert false
-
-    | Prim_tuple_set_last, [x; { desc = Const (_, (CInt n | CNat n))}; y ] ->
-       let x_code = compile_no_transfer depth env x in
-       let n = LiquidPrinter.int_of_integer n in
-       let set_code = compile_prim_set true (depth+1) env n y in
-       x_code @ set_code
-    | Prim_tuple_set_last, _ -> assert false
 
     | Prim_fail,_ -> [ ii FAIL ]
     | Prim_self, _ -> [ ii SELF ]
@@ -430,8 +426,8 @@ the ending NIL is not annotated with a type *)
            assert false
          (*                           | prim, args -> *)
 
-         | (Prim_unknown|Prim_tuple_get_last|Prim_tuple_get
-           | Prim_tuple_set_last|Prim_tuple_set|Prim_tuple|Prim_fail
+         | (Prim_unknown|Prim_tuple_get
+           | Prim_tuple_set|Prim_tuple|Prim_fail
            | Prim_self|Prim_balance|Prim_now|Prim_amount|Prim_gas
            | Prim_Left|Prim_Right|Prim_Source|Prim_unused
            | Prim_coll_find|Prim_coll_update|Prim_coll_mem
