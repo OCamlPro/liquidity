@@ -174,8 +174,7 @@ let rec translate_type env typ =
 
   | { ptyp_desc = Ptyp_constr ({ txt = Lident ty_name }, []) } ->
      begin
-       try
-         Ttype (ty_name, StringMap.find ty_name env.types)
+       try StringMap.find ty_name env.types
        with Not_found ->
          unbound_type typ.ptyp_loc ty_name
      end
@@ -801,7 +800,7 @@ let rec translate_head env ext_funs head_exp args =
     let return = match translate_type env return_type with
       | Ttuple [ ret_ty; sto_ty ] ->
         let storage = List.assoc "storage" args in
-        if not (eq_types sto_ty storage) then
+        if sto_ty <> storage then
           error_loc pexp_loc
             "Second component of return type must be identical to storage type";
         ret_ty
@@ -865,7 +864,7 @@ let translate_record ty_name labels env =
          env.labels <- StringMap.add label (ty_name, i, ty) env.labels;
          label, ty) labels
   in
-  let ty = Trecord rtys in
+  let ty = Trecord (ty_name, rtys) in
   env.types <- StringMap.add ty_name ty env.types
 
 let translate_variant ty_name constrs env =
@@ -884,7 +883,7 @@ let translate_variant ty_name constrs env =
          env.constrs <- StringMap.add constr (ty_name, ty) env.constrs;
          constr, ty) constrs
   in
-  let ty = Tsum constrs in
+  let ty = Tsum (ty_name, constrs) in
   env.types <- StringMap.add ty_name ty env.types
 
 let check_version = function

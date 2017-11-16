@@ -152,18 +152,18 @@ let env_for_clos env loc bvs arg_name arg_type =
     env, env_arg_name, env_arg_type, call_bindings
 
 
-let rec encode_type ?(keepalias=true) ty =
+let rec encode_type ty =
   (* if env.only_typecheck then ty *)
   (* else *)
   match ty with
   | Ttez | Tunit | Ttimestamp | Tint | Tnat | Tbool | Tkey | Tkey_hash
   | Tsignature | Tstring | Tfail -> ty
   | Ttuple tys ->
-    let tys' = List.map (encode_type ~keepalias) tys in
+    let tys' = List.map encode_type tys in
     if List.for_all2 (==) tys tys' then ty
     else Ttuple tys'
   | Tset t | Tlist t | Toption t ->
-    let t' = encode_type ~keepalias t in
+    let t' = encode_type t in
     if t' == t then ty
     else begin match ty with
       | Tset t -> Tset t'
@@ -172,7 +172,7 @@ let rec encode_type ?(keepalias=true) ty =
       | _ -> assert false
     end
   | Tor (t1, t2) | Tcontract (t1, t2) | Tlambda (t1, t2) | Tmap (t1, t2) ->
-    let t1', t2' = encode_type ~keepalias t1, encode_type ~keepalias t2 in
+    let t1', t2' = encode_type t1, encode_type t2 in
     if t1 == t1' && t2 == t2' then ty
     else begin match ty with
       | Tor (t1, t2) -> Tor (t1', t2')
@@ -182,28 +182,23 @@ let rec encode_type ?(keepalias=true) ty =
       | _ -> assert false
     end
   | Tclosure  ((t1, t2), t3) ->
-    let t1' = encode_type ~keepalias t1 in
-    let t2' = encode_type ~keepalias t2 in
-    let t3' = encode_type ~keepalias t3 in
+    let t1' = encode_type t1 in
+    let t2' = encode_type t2 in
+    let t3' = encode_type t3 in
     if t1 == t1' && t2 == t2' && t3 == t3' then ty
     else Tclosure ((t1', t2'), t3')
-  | Ttype (name, t) ->
-    let t' = encode_type ~keepalias t in
-    if not keepalias then t'
-    else if t' == t then ty
-    else Ttype (name, t')
-  | Trecord labels -> encode_record_type ~keepalias labels
-  | Tsum cstys -> encode_sum_type ~keepalias cstys
+  | Trecord (_, labels) -> encode_record_type labels
+  | Tsum (_, cstys) -> encode_sum_type cstys
 
-and encode_record_type ~keepalias labels =
-  Ttuple (List.map (fun (_, ty) -> encode_type ~keepalias ty) labels)
+and encode_record_type labels =
+  Ttuple (List.map (fun (_, ty) -> encode_type ty) labels)
 
-and encode_sum_type ~keepalias cstys =
+and encode_sum_type cstys =
   let rec rassoc = function
     | [] -> assert false
-    | [_, ty] -> encode_type ~keepalias ty
+    | [_, ty] -> encode_type ty
     | (_, lty) :: rstys ->
-      Tor (encode_type ~keepalias lty, rassoc rstys)
+      Tor (encode_type lty, rassoc rstys)
   in
   rassoc cstys
 
@@ -230,7 +225,7 @@ let rec encode_const env c = match c with
       let ty_name, _ = StringMap.find constr env.env.constrs in
       let constr_ty = StringMap.find ty_name env.env.types in
       match constr_ty with
-      | Tsum constrs ->
+      | Tsum (_, constrs) ->
         let rec iter constrs =
           match constrs with
           | [] -> assert false
@@ -294,8 +289,8 @@ let rec encode env ( exp : typed_exp ) : encoded_exp =
 
   | SetVar (name, loc, label :: labels, arg) ->
      let arg1 = find_var env loc name in
-     let label_types = match get_type arg1.ty with
-       | Trecord label_types -> label_types
+     let label_types = match arg1.ty with
+       | Trecord (_, label_types) -> label_types
        | _ -> assert false
      in
      let exception Return of (int * datatype) in
@@ -444,7 +439,7 @@ let rec encode env ( exp : typed_exp ) : encoded_exp =
   (* List.map (closure) -> {List.rev(List.reduce (closure)} *)
   | Apply (Prim_list_map, loc, [f; l]) ->
     let f' = encode env f in
-    begin match get_type f'.ty with
+    begin match f'.ty with
       | Tlambda _ ->
         let l = encode env l in
         mk (Apply (Prim_list_map, loc, [f'; l])) exp.ty
@@ -475,7 +470,7 @@ let rec encode env ( exp : typed_exp ) : encoded_exp =
   (* Map.reduce (closure) -> {Map.reduce (::) |> List.rev |> List.reduce} *)
   | Apply (Prim_map_reduce, loc, [f; m; acc]) ->
     let f' = encode env f in
-    begin match get_type f'.ty with
+    begin match f'.ty with
       | Tlambda _ ->
         let m = encode env m in
         let acc = encode env acc in
@@ -510,7 +505,7 @@ let rec encode env ( exp : typed_exp ) : encoded_exp =
   (* Map.map (closure) -> {Map.reduce (Map.update)} *)
   | Apply (Prim_map_map, loc, [f; m]) ->
     let f' = encode env f in
-    begin match get_type f'.ty with
+    begin match f'.ty with
       | Tlambda _ ->
         let m = encode env m in
         mk (Apply (Prim_map_map, loc, [f'; m])) exp.ty
@@ -550,7 +545,7 @@ let rec encode env ( exp : typed_exp ) : encoded_exp =
   (* Set.reduce (closure) -> {Set.reduce (::) |> List.rev |> List.reduce} *)
   | Apply (Prim_set_reduce, loc, [f; s; acc]) ->
     let f' = encode env f in
-    begin match get_type f'.ty with
+    begin match f'.ty with
       | Tlambda _ ->
         let s = encode env s in
         let acc = encode env acc in
@@ -684,7 +679,7 @@ let rec encode env ( exp : typed_exp ) : encoded_exp =
      in
      let record_ty = StringMap.find ty_name env.env.types in
      let len = List.length (match record_ty with
-         | Trecord rtys -> rtys
+         | Trecord (_, rtys) -> rtys
          | _ -> assert false) in
      let t = Array.make len const_unit in
      List.iteri (fun i (label, exp) ->
@@ -693,18 +688,16 @@ let rec encode env ( exp : typed_exp ) : encoded_exp =
          t.(label_pos) <- exp;
        ) lab_x_exp_list;
      let args = Array.to_list t in
-     let ty = Ttype (ty_name, record_ty) in
      let desc = Apply(Prim_tuple, loc, args) in
-     mk desc ty
+     mk desc record_ty
 
   | Constructor(loc, Constr constr, arg) ->
      let ty_name, arg_ty = StringMap.find constr env.env.constrs in
      let arg = encode env arg in
      let constr_ty = StringMap.find ty_name env.env.types in
-     let ty = Ttype (ty_name, constr_ty) in
      let exp =
        match constr_ty with
-       | Tsum constrs ->
+       | Tsum (_, constrs) ->
          let rec iter constrs orty =
            match constrs, orty with
            | [], _ -> assert false
@@ -728,10 +721,10 @@ let rec encode env ( exp : typed_exp ) : encoded_exp =
              in
              mk desc orty
          in
-         iter constrs (encode_type ~keepalias:false ty)
+         iter constrs (encode_type constr_ty)
        | _ -> assert false
      in
-     mk exp.desc ty
+     mk exp.desc constr_ty
 
   | Constructor(loc, Left right_ty, arg) ->
      let arg = encode env arg in
@@ -752,8 +745,8 @@ let rec encode env ( exp : typed_exp ) : encoded_exp =
 
   | MatchVariant (arg, loc, cases) ->
     let arg = encode env arg in
-    let constrs = match get_type arg.ty with
-      | Tsum constrs -> constrs
+    let constrs = match arg.ty with
+      | Tsum (_, constrs) -> constrs
       | Tor (left_ty, right_ty) ->
         [ "Left", left_ty; "Right", right_ty]
       | _ -> assert false

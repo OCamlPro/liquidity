@@ -52,7 +52,6 @@ let rec convert_type ty =
   | Tset x -> typ_constr "set" [convert_type x]
   | Tlist x -> typ_constr "list" [convert_type x]
   | Toption x -> typ_constr "option" [convert_type x]
-  | Ttype (_, ty) -> convert_type ty
   | Tfail | Trecord _ | Tsum _ -> assert false
 
 let rec convert_const expr =

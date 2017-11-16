@@ -173,9 +173,6 @@ module Michelson = struct
          bprint_type b indent
                      (Ttuple [Tlambda (Ttuple [ty_arg; ty_env], ty_r);
                               ty_env ]);
-      | Ttype (ty_name, ty) ->
-         (*     Printf.bprintf b "%S =\n%s  " ty_name indent; *)
-         bprint_type_rec b indent ty_name ty
 
     and bprint_type_pairs b indent tys =
       match tys with
@@ -458,7 +455,7 @@ end
 module Liquid = struct
 
 
-  let bprint_type_base expand definition b indent ty =
+  let bprint_type_base expand b indent ty =
     let rec bprint_type b indent ty =
       match ty with
       | Tfail -> Printf.bprintf b "failure"
@@ -481,8 +478,8 @@ module Liquid = struct
             bprint_type b "" ty;
           ) tys;
         Printf.bprintf b ")";
-      | Trecord [] -> assert false
-      | Trecord ((f, ty) :: rtys) ->
+      | Trecord (_, []) -> assert false
+      | Trecord (_, (f, ty) :: rtys) when expand ->
         Printf.bprintf b "{ ";
         Printf.bprintf b "%s: " f;
         bprint_type b "" ty;
@@ -491,14 +488,18 @@ module Liquid = struct
             bprint_type b "" ty;
           ) rtys;
         Printf.bprintf b " }";
-      | Tsum [] -> assert false
-      | Tsum ((c, ty) :: rtys) ->
+      | Trecord (name, _) ->
+        Printf.bprintf b "%s" name;
+      | Tsum (_, []) -> assert false
+      | Tsum (_, (c, ty) :: rtys) when expand ->
         Printf.bprintf b "%s of " c;
         bprint_type b "" ty;
         List.iter (fun (c, ty) ->
             Printf.bprintf b " | %s of " c;
             bprint_type b "" ty;
           ) rtys;
+      | Tsum (name, _) ->
+        Printf.bprintf b "%s" name;
       | Tcontract (ty1, ty2) ->
         Printf.bprintf b "(";
         bprint_type b "" ty1;
@@ -536,19 +537,11 @@ module Liquid = struct
         bprint_type b "" ty_env;
         Printf.bprintf b "}-> ";
         bprint_type b "" ty_r;
-      | Ttype (ty_name, ty) when definition ->
-        Printf.bprintf b "%S = " ty_name;
-        bprint_type b "" ty;
-      | Ttype (ty_name, ty) when expand ->
-        bprint_type b "" ty;
-      | Ttype (ty_name, ty) ->
-        Printf.bprintf b "%s" ty_name
-
     in
     bprint_type b indent ty
 
-  let rec bprint_type ?(expand=false) ?(definition=false) b indent ty =
-    bprint_type_base expand definition b indent ty
+  let rec bprint_type ?(expand=false) b indent ty =
+    bprint_type_base expand b indent ty
 
 
   let bprint_type2 b indent ty =
@@ -837,7 +830,7 @@ module Liquid = struct
     bprint_code ~debug b indent contract.code
 
   let string_of_type = to_string bprint_type
-  let string_of_type_expl = to_string (fun b -> bprint_type ~definition:true b)
+  let string_of_type_expl = to_string (fun b -> bprint_type ~expand:true b)
   let string_of_const = to_string bprint_const
   let string_of_code ?(debug=false) code =
     to_string (bprint_code ~debug) code

@@ -98,7 +98,6 @@ let rec convert_type expr =
   | Tlist x -> prim "list" [convert_type x]
   | Toption x -> prim "option" [convert_type x]
   | Tfail | Trecord _ | Tsum _ -> assert false
-  | Ttype (_, ty) -> convert_type ty
 
 let rec convert_code expr =
   match expr.i with

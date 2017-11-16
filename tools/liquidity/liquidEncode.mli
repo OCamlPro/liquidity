@@ -9,7 +9,7 @@
 
 open LiquidTypes
 
-val encode_type : ?keepalias:bool -> datatype -> datatype
+val encode_type : datatype -> datatype
 
 val encode_contract :
   warnings:bool -> env -> typed_contract ->

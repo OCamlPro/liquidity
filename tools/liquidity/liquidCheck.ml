@@ -36,7 +36,7 @@ let error loc msg =
   LiquidLoc.raise_error ~loc ("Type error:  " ^^ msg ^^ "%!")
 
 let comparable_ty ty1 ty2 =
-  match get_type ty1, get_type ty2 with
+  match ty1, ty2 with
   | (Tint|Tnat), (Tint|Tnat)
   | Ttez, Ttez
   | Ttimestamp, Ttimestamp
@@ -114,7 +114,7 @@ let error_prim loc prim args expected_args =
   else
     let args = List.map (fun { ty } -> ty) args in
     List.iteri (fun i (arg, expected) ->
-        if not (eq_types arg expected) then
+        if arg <> expected then
           error loc
                 "Primitive %s, argument %d:\nExpected type:%sProvided type:%s"
                 prim (i+1)
@@ -167,7 +167,7 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
 
   | Let (name, loc, exp, body) ->
      let exp = typecheck env exp in
-     if eq_types exp.ty Tfail then error loc "cannot assign failure";
+     if exp.ty = Tfail then error loc "cannot assign failure";
      let env = maybe_reset_vars env exp.transfer in
      let (env, count) = new_binding env name exp.ty in
      let body = typecheck env body in
@@ -180,17 +180,15 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
       | { desc = Var (name, _, []); ty } ->
         let ty =
           List.fold_left (fun ty label ->
-              match get_type ty with
-              | Trecord ltys ->
-                begin try
-                    let _, _, ty = StringMap.find label env.env.labels in
-                    let ty' = List.assoc label ltys in
-                    if not (eq_types ty ty') then
-                      error loc "label for wrong record";
-                    ty'
-                  with Not_found -> error loc "bad label"
+              match ty with
+              | Trecord (record_name, ltys) ->
+                begin
+                  try List.assoc label ltys
+                  with Not_found ->
+                    error loc "label %s does not belong to type %s"
+                      label record_name;
                 end
-              | _ -> error loc "not a record : %s"
+              | _ -> error loc "not a record type: %s"
                        (LiquidPrinter.Liquid.string_of_type_expl ty)
             ) ty labels
         in
@@ -225,7 +223,7 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
             with Not_found -> error loc "unbound label %S" label
           in
           let record_ty = StringMap.find ty_name env.env.types in
-          if not (eq_types lty record_ty) then
+          if lty <> record_ty then
             error loc "label %s does not belong to type %s" l
               (LiquidPrinter.Liquid.string_of_type_expl lty);
           ty
@@ -336,7 +334,7 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
 
   | MatchOption (arg, loc, ifnone, name, ifsome) ->
      let arg = typecheck env arg in
-     let arg_ty = match get_type arg.ty with
+     let arg_ty = match arg.ty with
        | Tfail -> error loc "cannot match failure"
        | Toption ty -> ty
        | _ -> error loc "not an option type"
@@ -348,11 +346,12 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
      check_used env name loc count;
      let desc = MatchOption (arg, loc, ifnone, name, ifsome ) in
      let ty =
-       match get_type ifnone.ty, get_type ifsome.ty with
+       match ifnone.ty, ifsome.ty with
        | ty, Tfail | Tfail, ty -> ty
        | ty1, ty2 ->
-          if ty1 <> ty2 then type_error loc "Bad option type in match" ty2 ty1;
-          ty1
+         if ty1 <> ty2 then
+           type_error loc "branches of match have different types" ty2 ty1;
+         ty1
      in
      mk desc ty
 
@@ -367,7 +366,7 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
      check_used env minus_name loc count_m;
      let desc = MatchNat (arg, loc, plus_name, ifplus, minus_name, ifminus) in
      let ty =
-       match get_type ifplus.ty, get_type ifminus.ty with
+       match ifplus.ty, ifminus.ty with
        | ty, Tfail | Tfail, ty -> ty
        | ty1, ty2 ->
          if ty1 <> ty2 then
@@ -379,7 +378,7 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
 
   | Loop (name, loc, body, arg) ->
      let arg = typecheck env arg in
-     if get_type arg.ty = Tfail then error loc "loop arg is a failure";
+     if arg.ty = Tfail then error loc "loop arg is a failure";
      let env = maybe_reset_vars env arg.transfer in
      let (env, count) = new_binding env name arg.ty in
      let body =
@@ -389,7 +388,7 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
 
   | MatchList (arg, loc, head_name, tail_name, ifcons, ifnil) ->
      let arg  = typecheck env arg in
-     let arg_ty = match get_type arg.ty with
+     let arg_ty = match arg.ty with
        | Tfail -> error loc "cannot match failure"
        | Tlist ty -> ty
        | _ -> error loc "not a list type"
@@ -403,11 +402,12 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
      check_used env tail_name loc count;
      let desc = MatchList (arg, loc, head_name, tail_name, ifcons, ifnil) in
      let ty =
-       match get_type ifnil.ty, get_type ifcons.ty with
+       match ifnil.ty, ifcons.ty with
        | ty, Tfail | Tfail, ty -> ty
        | ty1, ty2 ->
-          if ty1 <> ty2 then
-            error loc "not the same type";
+         if ty1 <> ty2 then
+           type_error loc "branches of match must have the same type"
+             ty2 ty1;
           ty1
      in
      mk desc ty
@@ -436,7 +436,7 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
      in
      let record_ty = StringMap.find ty_name env.env.types in
      let remaining_labels = match record_ty with
-       | Trecord rtys -> List.map fst rtys |> StringSet.of_list |> ref
+       | Trecord (_, rtys) -> List.map fst rtys |> StringSet.of_list |> ref
        | _ -> assert false in
      let lab_exp = List.map (fun (label, exp) ->
          let ty_name', _, ty = try
@@ -451,8 +451,7 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
        ) lab_x_exp_list in
      if not (StringSet.is_empty !remaining_labels) then
        error loc "label %s is not defined" (StringSet.choose !remaining_labels);
-     let ty = Ttype (ty_name, record_ty) in
-     mk (Record (loc, lab_exp)) ty
+     mk (Record (loc, lab_exp)) record_ty
 
   | Constructor(loc, Constr constr, arg) ->
      let ty_name, arg_ty = StringMap.find constr env.env.constrs in
@@ -460,8 +459,7 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
      if arg.transfer then
        error loc "transfer not allowed in constructor argument";
      let constr_ty = StringMap.find ty_name env.env.types in
-     let ty = Ttype (ty_name, constr_ty) in
-     mk (Constructor(loc, Constr constr, arg)) ty
+     mk (Constructor(loc, Constr constr, arg)) constr_ty
 
   | Constructor(loc, Left right_ty, arg) ->
      let arg = typecheck env arg in
@@ -486,10 +484,10 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
     let arg = typecheck env arg in
     let constrs, is_left_right =
       try
-        match get_type arg.ty with
+        match arg.ty with
         | Tfail ->
           error loc "cannot match failure"
-        | Tsum constrs ->
+        | Tsum (_, constrs) ->
           (List.map fst constrs, None)
         | Tor (left_ty, right_ty) ->
           (* Left, Right pattern matching *)
@@ -588,9 +586,9 @@ and typecheck_prim1 env prim loc args =
   match prim, args with
   | Prim_tuple_get, [ { ty = tuple_ty };
                       { desc = Const (_, (CInt n | CNat n)) }] ->
-     let tuple = match (get_type tuple_ty) with
+     let tuple = match tuple_ty with
        | Ttuple tuple -> tuple
-       | Trecord rtys -> List.map snd rtys
+       | Trecord (_, rtys) -> List.map snd rtys
        | _ -> error loc "get takes a tuple as first argument, got:\n%s"
                 (LiquidPrinter.Liquid.string_of_type_expl tuple_ty)
      in
@@ -603,9 +601,9 @@ and typecheck_prim1 env prim loc args =
   | Prim_tuple_set, [ { ty = tuple_ty };
                       { desc = Const (_, (CInt n | CNat n)) };
                       { ty } ] ->
-     let tuple = match (get_type tuple_ty) with
+     let tuple = match tuple_ty with
        | Ttuple tuple -> tuple
-       | Trecord rtys -> List.map snd rtys
+       | Trecord (_, rtys) -> List.map snd rtys
        | _ -> error loc "set takes a tuple as first argument, got:\n%s"
                 (LiquidPrinter.Liquid.string_of_type_expl tuple_ty)
      in
@@ -613,9 +611,9 @@ and typecheck_prim1 env prim loc args =
      let expected_ty = List.nth tuple n in
      let size = List.length tuple in
      if size <= n then error loc "set outside tuple";
-     let ty = if not (eq_types ty expected_ty || eq_types ty Tfail) then
-                error loc "prim set bad type"
-              else tuple_ty
+     let ty = if not (ty = expected_ty || ty = Tfail) then
+         error loc "prim set bad type"
+       else tuple_ty
      in
      prim, ty
 
@@ -643,7 +641,7 @@ and typecheck_prim1 env prim loc args =
      prim, typecheck_prim2 env prim loc args
 
 and typecheck_prim2 env prim loc args =
-  match prim, List.map (fun a -> get_type a.ty) args with
+  match prim, List.map (fun a -> a.ty) args with
   | ( Prim_neq | Prim_lt | Prim_gt | Prim_eq | Prim_le | Prim_ge ),
     [ ty1; ty2 ] ->
      if comparable_ty ty1 ty2 then Tbool
@@ -902,8 +900,7 @@ and typecheck_prim2 env prim loc args =
 
 and typecheck_expected info env expected_ty exp =
   let exp = typecheck env exp in
-  let exp_ty = get_type exp.ty in
-  if exp_ty <> get_type expected_ty && exp_ty <> Tfail then
+  if exp.ty <> expected_ty && exp.ty <> Tfail then
     type_error (loc_exp env exp)
                ("Unexpected type for "^info) exp.ty expected_ty;
   exp
@@ -955,7 +952,7 @@ let typecheck_code ~warnings env contract expected_ty code =
 
 let check_const_type ?(from_mic=false) ~to_tez loc ty cst =
   let rec check_const_type ty cst =
-    match get_type ty, cst with
+    match ty, cst with
     | Tunit, CUnit -> CUnit
     | Tbool, CBool b -> CBool b
 
@@ -996,24 +993,22 @@ let check_const_type ?(from_mic=false) ~to_tez loc ty cst =
     | Tset ty, CSet csts ->
        CSet (List.map (check_const_type ty) csts)
 
-    | Trecord labels, CRecord fields ->
+    | Trecord (rname, labels), CRecord fields ->
       CRecord (List.map (fun (f, cst) ->
           try
             let ty = List.assoc f labels in
             f, check_const_type ty cst
           with Not_found ->
-            error loc "Record field %s is not in type %s" f
-              (LiquidPrinter.Liquid.string_of_type ty)
+            error loc "Record field %s is not in type %s" f rname
         ) fields)
 
-    | Tsum constrs, CConstr (c, cst) ->
+    | Tsum (sname, constrs), CConstr (c, cst) ->
       CConstr (c,
                try
                  let ty = List.assoc c constrs in
                  check_const_type ty cst
                with Not_found ->
-                 error loc "Constructor %s does not belong to type %s" c
-                   (LiquidPrinter.Liquid.string_of_type ty)
+                 error loc "Constructor %s does not belong to type %s" c sname
               )
 
     | _ ->

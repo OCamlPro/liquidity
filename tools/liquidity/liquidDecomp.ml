@@ -35,7 +35,6 @@ let const_name_of_datatype = function
   | Tor _ -> "or"
   | Tlambda _ | Tclosure _  -> "fun"
   | Tfail -> "fail"
-  | Ttype _ -> "ty"
 
 
 let rec var_of node =
