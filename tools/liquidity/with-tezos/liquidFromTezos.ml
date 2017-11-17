@@ -43,6 +43,8 @@ let rec convert_const expr =
   | Script_repr.Prim(_, "None", [], _debug) -> CNone
 
   | Script_repr.Prim(_, "Some", [x], _debug) -> CSome (convert_const x)
+  | Script_repr.Prim(_, "Left", [x], _debug) -> CLeft (convert_const x)
+  | Script_repr.Prim(_, "Right", [x], _debug) -> CRight (convert_const x)
   | Script_repr.Prim(_, "Pair", [x;y], _debug) -> CTuple [convert_const x;
                                                   convert_const y]
   | Script_repr.Prim(_, "List", args, _debug) -> CList (List.map convert_const args)

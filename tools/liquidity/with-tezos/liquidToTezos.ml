@@ -35,6 +35,9 @@ let rec convert_const expr =
   | CNone -> Script_repr.Prim(0, "None", [], debug)
 
   | CSome x -> Script_repr.Prim(0, "Some", [convert_const x], debug)
+  | CLeft x -> Script_repr.Prim(0, "Left", [convert_const x], debug)
+  | CRight x -> Script_repr.Prim(0, "Right", [convert_const x], debug)
+
   | CTuple [] -> assert false
   | CTuple [_] -> assert false
   | CTuple [x;y] ->
@@ -45,6 +48,7 @@ let rec convert_const expr =
                                   convert_const (CTuple y)], debug)
   | CList args -> Script_repr.Prim(0, "List",
                                    List.map convert_const args, debug)
+
   | CMap args ->
      Script_repr.Prim(0, "Map",
                       List.map (fun (x,y) ->

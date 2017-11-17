@@ -957,7 +957,7 @@ let check_const_type ?(from_mic=false) ~to_tez loc ty cst =
     | Tbool, CBool b -> CBool b
 
     | Tint, CInt s
-      | Tint, CNat s -> CInt s
+    | Tint, CNat s -> CInt s
 
     | Tnat, CInt s
     | Tnat, CNat s -> CNat s
@@ -981,6 +981,12 @@ let check_const_type ?(from_mic=false) ~to_tez loc ty cst =
 
     | Toption _, CNone -> CNone
     | Toption ty, CSome cst -> CSome (check_const_type ty cst)
+
+    | Tor (left_ty, _), CLeft cst ->
+      CLeft (check_const_type left_ty cst)
+
+    | Tor (_, right_ty), CRight cst ->
+      CRight (check_const_type right_ty cst)
 
     | Tmap (ty1, ty2), CMap csts ->
        CMap (List.map (fun (cst1, cst2) ->
