@@ -217,7 +217,21 @@ let string_of_contract c =
   Client_proto_programs.print_program (fun _ -> None) ppf (c, []);
   Format.flush_str_formatter ()
 
-
+let line_of_contract c =
+  let ppf = Format.str_formatter in
+  let ffs = Format.pp_get_formatter_out_functions ppf () in
+  let new_ffs =
+    { ffs with
+      Format.out_newline = (fun () -> ffs.Format.out_spaces 1);
+      (* Format.out_indent = (fun _ -> ()); *)
+    } in
+  Format.pp_set_formatter_out_functions ppf new_ffs;
+  Format.pp_set_max_boxes ppf 0;
+  Format.pp_set_max_indent ppf 0;
+  Client_proto_programs.print_program (fun _ -> None) ppf (c, []);
+  let s = Format.flush_str_formatter () in
+  Format.pp_set_formatter_out_functions ppf ffs;
+  s
 
 
 let contract_amount = ref "1000.00"

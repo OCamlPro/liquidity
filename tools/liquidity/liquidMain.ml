@@ -30,6 +30,7 @@ let arg_peephole = ref true
 let arg_keepon = ref false
 let arg_typeonly = ref false
 let arg_parseonly = ref false
+let arg_singleline = ref false
 
 let compile_liquid_file filename =
   let ocaml_ast = LiquidFromOCaml.read_file filename in
@@ -73,9 +74,13 @@ let compile_liquid_file filename =
   (*  let michelson_ast = LiquidEmit.emit_contract pre_michelson in *)
 
   let output = filename ^ ".tz" in
-  FileString.write_file output
-                        (LiquidToTezos.string_of_contract
-                           (LiquidToTezos.convert_contract pre_michelson));
+  let c = LiquidToTezos.convert_contract pre_michelson in
+  let s =
+    if !arg_singleline
+    then LiquidToTezos.line_of_contract c
+    else LiquidToTezos.string_of_contract c
+  in
+  FileString.write_file output s;
   Printf.eprintf "File %S generated\n%!" output;
   Printf.eprintf "If tezos is compiled, you may want to typecheck with:\n";
   Printf.eprintf "  tezos-client typecheck program %s\n" output
@@ -171,6 +176,8 @@ let main () =
       " Disable peephole optimizations";
       "--type-only", Arg.Set arg_typeonly, "Stop after type checking";
       "--parse-only", Arg.Set arg_parseonly, "Stop after parsing";
+      "--single-line", Arg.Set arg_singleline,
+      "Output Michelson on a single line";
       "--data", Arg.Tuple [
         Arg.String (fun s -> Data.contract := s);
         Arg.String (fun s -> Data.parameter := s);
