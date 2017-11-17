@@ -830,7 +830,6 @@ module Liquid = struct
     bprint_code ~debug b indent contract.code
 
   let string_of_type = to_string bprint_type
-  let string_of_type_expl = to_string (fun b -> bprint_type ~expand:true b)
   let string_of_const = to_string bprint_const
   let string_of_code ?(debug=false) code =
     to_string (bprint_code ~debug) code

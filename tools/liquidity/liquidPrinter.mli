@@ -27,7 +27,6 @@ val integer_of_int : int -> integer
 
 module Liquid : sig
   val string_of_type : datatype -> string
-  val string_of_type_expl : datatype -> string
   val string_of_const : const -> string
   val string_of_contract : ?debug:bool -> ('a, 'b) exp contract -> string
   val string_of_contract_types : ?debug:bool -> typed_contract -> string

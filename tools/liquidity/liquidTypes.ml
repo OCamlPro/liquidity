@@ -255,7 +255,9 @@ let () =
 
               "::", Prim_Cons;
               "or", Prim_or;
+              "||", Prim_or;
               "&", Prim_and;
+              "&&", Prim_and;
               "xor", Prim_xor;
               "not", Prim_not;
               "abs", Prim_abs;
