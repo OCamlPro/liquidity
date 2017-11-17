@@ -213,17 +213,17 @@ module Michelson = struct
        let indent = fmt.increase_indent indent in
        Printf.bprintf b "(Some%c%s" fmt.newline indent;
        bprint_const fmt b indent cst;
-       Printf.bprintf b "%c%s)" fmt.newline indent;
+       Printf.bprintf b ")";
     | CLeft cst ->
        let indent = fmt.increase_indent indent in
        Printf.bprintf b "(Left%c%s" fmt.newline indent;
        bprint_const fmt b indent cst;
-       Printf.bprintf b "%c%s)" fmt.newline indent;
+       Printf.bprintf b ")";
     | CRight cst ->
        let indent = fmt.increase_indent indent in
        Printf.bprintf b "(Right%c%s" fmt.newline indent;
        bprint_const fmt b indent cst;
-       Printf.bprintf b "%c%s)" fmt.newline indent;
+       Printf.bprintf b ")";
     | CTuple tys -> bprint_const_pairs fmt b indent tys
     | CMap pairs ->
        let indent = fmt.increase_indent indent in
@@ -235,9 +235,9 @@ module Michelson = struct
            bprint_const fmt b indent cst1;
            Printf.bprintf b "%c%s" fmt.newline indent;
            bprint_const fmt b indent cst2;
-           Printf.bprintf b "%c%s)" fmt.newline indent;
+           Printf.bprintf b ")";
          ) pairs;
-       Printf.bprintf b "%c%s)" fmt.newline indent;
+       Printf.bprintf b ")";
     | CList csts ->
        let indent = fmt.increase_indent indent in
        Printf.bprintf b "(List";
@@ -245,7 +245,7 @@ module Michelson = struct
            Printf.bprintf b "%c%s" fmt.newline indent;
            bprint_const fmt b indent cst;
          ) csts;
-       Printf.bprintf b "%c%s)" fmt.newline indent;
+       Printf.bprintf b ")";
     | CSet csts ->
        let indent = fmt.increase_indent indent in
        Printf.bprintf b "(Set";
@@ -253,7 +253,7 @@ module Michelson = struct
            Printf.bprintf b "%c%s" fmt.newline indent;
            bprint_const fmt b indent cst;
          ) csts;
-       Printf.bprintf b "%c%s)" fmt.newline indent;
+       Printf.bprintf b ")";
     | CConstr _ | CRecord _ -> assert false
 
   and bprint_const_pairs fmt b indent tys =
