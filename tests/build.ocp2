@@ -2,7 +2,7 @@
 OCaml.library("ocplib-liquidity-examples",
   ocaml + {
     files = [
-    
+
        "liquidTestSimple.ml", {
          file2string = [
                      "test0.liq";
@@ -23,7 +23,20 @@ OCaml.library("ocplib-liquidity-examples",
                      "test15.liq";
                      "test16.liq";
                      "test17.liq";
-                     "test18.liq";
+                     "test19.liq";
+                     "test20.liq";
+                     "test21.liq";
+                     "test22.liq";
+                     "test23.liq";
+                     "test24.liq";
+                     "test25.liq";
+                     "test26.liq";
+                     "test27.liq";
+                     "test28.liq";
+                     "test29.liq";
+                     "test30.liq";
+                     "test31.liq";
+                     "test32.liq";
                      ];
        };
 
@@ -57,6 +70,7 @@ OCaml.library("ocplib-liquidity-examples",
                   "others/demo.liq";
                   "others/broker.liq";
                   "others/auction.liq";
+                  "others/multisig.liq";
           ];
        };
 
