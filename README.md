@@ -46,15 +46,16 @@ next release.
 Documentation
 -------------
 
-See the `docs/` directory for Documentation and many examples in the
-`tests/` and `tests/others/` directories.
+Documentation can be found in [docs/liquidity.md](docs/liquidity.md)
+and many examples are in the [tests](tests/) and
+[tests/others](tests/others/) directories.
 
 Status
 ------
 
-All features of Michelson are supported in Liquidity.
-All tests from `tezos/test/contracts/` can be decompiled to Liquidity
-and recompiled to Michelson.
+All features of Michelson are supported in Liquidity. All tests from
+https://github.com/tezos/tezos/tree/alphanet/test/contracts can be
+decompiled to Liquidity and recompiled to Michelson.
 
 Roadmap
 -------

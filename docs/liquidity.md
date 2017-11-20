@@ -21,8 +21,8 @@ Contract Format
 
 All the contracts have the following form:
 
-```
-[%%version 0.1]
+```ocaml
+[%%version 0.13]
 <... local declarations ...>
 let%entry main
       (parameter : TYPE)
@@ -52,16 +52,48 @@ of a pair where the first component is the return type of the function
 specified in its signature and the second is the type of the argument
 `storage` of `main`.
 
-<... local declarations ...> is an optional set of optional type and
+`<... local declarations ...>` is an optional set of optional type and
 function declarations. Type declarations can be used to define records
 and variants (sum-types), described later in this documentation.
+
+Types
+-----
+
+Types in Liquidity are monomorphic. The built-in base types are:
+
+- `unit`: whose only constructor is `()`
+- `bool`: Booleans
+- `int`: unbounded integers
+- `nat`: unbounded naturals
+- `tez`: the type of amounts
+- `string`: character strings
+- `timestamp`: dates and timestamps
+- `key`: cryptographic keys
+- `key_hash`: hashes of cryptographic keys
+- `signature`: cryptographic signatures
+
+The other types are:
+- tuples: noted `(t1 * t2 * t3)`
+- option type: `'a option = None | Some of 'a`
+- variant type: `('a, 'b) variant = Left of 'a | Right of 'b`
+- lists: `'a list` is the type of lists of elements in `'a`
+- sets: `'a set` is the type of sets of elements in `'a`
+- maps: `('a, 'b) map`  is the type of maps whose keys are of type
+  `'a` and values of type `'b`
+- contracts: `('a, 'b) contract` for contracts whose parameter is of
+  type `'a` and return value if of type `'b`
+- functions: `'a -> 'b` is the type of functions from `'a` to `'b`
+
+Record and variant types must be declared beforehand and are referred
+to by their names.
+
 
 Calling another contract
 ------------------------
 
 Calling another contract is done by using the following form:
 
-```
+```ocaml
 let (RESULT, storage) = Contract.call CONTRACT AMOUNT STORAGE ARG
 in
 BODY
@@ -98,7 +130,7 @@ Liquidity functions:
        transfered when the contract was called.
 * `STEPS_TO_QUOTA` : `Current.gas ()`. Returns the current gas available
        to execute the end of the contract.
-* `SOURCE arg_type res_type` : `( Source : (arg_type, res_type) contract)`.
+* `SOURCE arg_type res_type` : `(Source : (arg_type, res_type) contract)`.
        Returns the contract that called the current contract.
 * `CONS` : `x :: y`
 * `NIL ele_type` : `( [] : ele_type list )`
@@ -117,7 +149,7 @@ Liquidity functions:
 Comparison operators
 --------------------
 
-These operators take two values of the same type, and return a boolean value:
+These operators take two values of the same type, and return a Boolean value:
 * `COMPARE; EQ` : `x = y`
 * `COMPARE; NEQ` : `x <> y`
 * `COMPARE; LE` : `x <= y`
@@ -149,11 +181,11 @@ Liquidity also provides additional operations:
 Arithmetic and logic operators
 ------------------------------
 
-* `OR` : `x or y`
-* `AND` : `x & y`
+* `OR` : `x || y`
+* `AND` : `x && y`
 * `XOR` : `x xor y`
 * `NOT` : `not x`
-* `ABS` : `abs x`
+* `ABS` : `abs x` with the difference that `abs` returns an integer
 * `INT` : `int x`
 * `NEG` : `-x`
 * `ADD` : `x + y`
@@ -163,8 +195,30 @@ Arithmetic and logic operators
 * `LSR` : `x >> y`
 * `LSL` : `x << y`
 
+For converting `int` to `nat`, Liquidity provides a special
+pattern-matching construct `match%nat`, on two constructors `Plus` and
+`Minus`. For instance, in the following where `x` has type `int`:
+
+```ocaml
+match%nat x with
+| Plus p -> p + 1p
+| Minus m -> m + 1p
+```
+
+`m` and `p` are of type `nat` and:
+
+* `x = int m` when `x` is positive or null
+* `x = - (int p)` when `x` is negative
+
+
 Constants
 ---------
+
+The unique constructor of type `unit` is `()`.
+
+The two Booleans constants are:
+* `true`
+* `false`
 
 As in Michelson, there are different types of integers:
 * int : an unbounded integer, positive or negative, simply
@@ -175,16 +229,19 @@ As in Michelson, there are different types of integers:
     a `tz` suffix (`1.00tz`, etc.) or as a string with type coercion
     (`("1.00" : tez)`).
 
-Timestamps are written in ISO 8601 format, like in Michelson:
-* `("2015-12-01T10:01:00+01:00" : timestamp)`
+Strings are delimited by the characters `"` and `"`.
 
-Keys and signatures constants are the same as the ones in Michelson:
-* `("tz1hxLtJnSYCVabeGio3M87Yp8ChLF9LFmCM" : key)`
+Timestamps are written in ISO 8601 format, like in Michelson:
+* `2015-12-01T10:01:00+01:00`
+
+Keys, hashes, and signatures constants are the same as the ones in
+Michelson:
+* `tz1YLtLqD1fWHthSVHPD116oYvsd4PTAHUoc` is a key hash
 
 There are also three types of collections: lists, sets and
 maps. Constants collections can be created directly:
-* Lists: `["x";"y"]`;
-* Sets: `Set [1;2;3;4]`;
+* Lists: `["x"; "y"]`;
+* Sets: `Set [1; 2; 3; 4]`;
 * Maps: `Map [1, "x"; 2, "y"; 3, "z"]`;
 
 In the case of an empty collection, whose type cannot be inferred, the
@@ -199,11 +256,11 @@ Tuples
 
 Tuples in Liquidity are compiled to pairs in Michelson:
 ```
-x * y * z <=> pair x (pair y z)
+(x, y, z) <=> Pair x (Pair y z)
 ```
 
 Tuples can be accessed using the field access notation of Liquidity:
-```
+```ocaml
 let t = (x,y,z) in
 let should_be_true = t.(2) = z in
 ...
@@ -211,24 +268,34 @@ let should_be_true = t.(2) = z in
 
 A new tuple can be created from another one using the field access update
 notation of Liquidity:
-```
+```ocaml
 let t = (1,2,3) in
 let z = t.(2) <- 4 in
 ...
 ```
 
+Tuples can be deconstructed:
+```ocaml
+(* t : (int * (bool * nat) * int) *)
+let _, (b, _), i = t in
+...
+(* b : bool
+   i : int *)
+```
+
+
 Records
 -------
 
 Record types can be declared and used inside a liquidity contract:
-```
+```ocaml
 type storage = {
   x : string;
   y : int;
 }
 ```
 Such types can be created and used inside programs:
-```
+```ocaml
 let r = { x = "foo"; y = 3 } in
 r.x
 ```
@@ -236,7 +303,7 @@ r.x
 Records are compiled as tuples.
 
 Deep record creation is possible using the notation:
-```
+```ocaml
 let r1 = { x = 1; y = { z = 3 } } in
 let r2 = r1.y.z <- 4 in
 ...
@@ -248,7 +315,7 @@ Variants
 Variants should be defined before use, before the contract
 declaration:
 
-```
+```ocaml
 type t =
 | X
 | Y of int
@@ -257,7 +324,7 @@ type t =
 
 Variants can be created using:
 
-```
+```ocaml
 let x = X 3 in
 let y = Z s in
 ...
@@ -266,7 +333,7 @@ let y = Z s in
 The `match` construct can be used to pattern-match on them, but only
 on the first constructor:
 
-```
+```ocaml
 match x with
 | X -> ...
 | Y i -> ...
@@ -276,9 +343,19 @@ match x with
 where `i` and `s` are variables that are bound by the construct to the
 parameter of the variant.
 
+Parameters of variants can also be deconstructed when they are tuples,
+so one can write:
+```ocaml
+match x with
+| X -> ...
+| Y i -> ...
+| Z (s, n) -> ...
+```
+
+
 A special case of variants is the `Left | Right` predefined variant,
 called `variant`:
-```
+```ocaml
 type (`left, `right) variant =
 | Left of `left
 | Right of `right
@@ -287,7 +364,7 @@ type (`left, `right) variant =
 All occurrences of these variants should be constrained with type
 annotations:
 
-```
+```ocaml
 let x = (Left 3 : (int, string) variant) in
 match x with
 | Left left  -> ...
@@ -297,8 +374,8 @@ match x with
 Another special variant is the `Source` variant: it is used to refer to
 the contract that called the current contract.
 
-```
-let s = ( Source : (unit, unit) contract ) in
+```ocaml
+let s = (Source : (unit, unit) contract) in
 ...
 ```
 
@@ -311,12 +388,13 @@ Functions and Closures
 Unlike Michelson, functions in Liquidity can also be closures. They can take
 multiple arguments and are curryfied. Because closures are lambda-lifted, it is
 however recommended to use a single tuple argument when possible.  Arguments
-must be annotated with their (monomorphic) type.
+must be annotated with their (monomorphic) type, while the return type
+is inferred.
 
 Function applications are often done using the `Lambda.pipe` function
 or the `|>` operator:
 
-```
+```ocaml
   let succ = fun (x : int) -> x + 1 in
   let one = 0 |> succ in
 ...
@@ -324,7 +402,7 @@ or the `|>` operator:
 
 but they can also be done directly:
 
-```
+```ocaml
 ...
   let succ (x : int) = x + 1 in
   let one = succ 0 in
@@ -332,9 +410,11 @@ but they can also be done directly:
 ```
 
 A toplevel function can also be defined before the main entry point:
-```
-let version = 1.0
+```ocaml
+[%%version 0.13]
+
 let succ (x : int) = x + 1
+
 let%entry main ... =
    ...
    let one = succ 0 in
@@ -342,7 +422,7 @@ let%entry main ... =
 ```
 
 Closures can be created with the same syntax:
-```
+```ocaml
 let p = 10 in
 let sum_and_add_p (x : int) (y : int) = x + y + p in
 let r = add_p 3 4 in
@@ -350,7 +430,7 @@ let r = add_p 3 4 in
 ```
 
 This is equivalent to:
-```
+```ocaml
 let p = 10 in
 let sum_and_add_p =
   fun (x : int) ->
@@ -362,6 +442,20 @@ let r = 4 |> (3 |> add_p) in
 ```
 
 
+Functions with multiple arguments should take a tuple as argument because
+curried versions will generate larger code and should be avoided
+unless partial application is important. The previous function should
+be written as:
+```ocaml
+let sum_and_add_p ((x : int), (y : int)) =
+  let p = 10 in
+  x + y + p
+in
+let r = add_p (3, 4) in
+...
+```
+
+
 Loops
 -----
 
@@ -369,11 +463,11 @@ Loops in liquidity share some syntax with functions, but the body of
 the loop is not a function, so it can access the environment, as would
 a closure do:
 
-```
+```ocaml
 let end_loop = 5 in
 let x = Loop.loop (fun x ->
-  ...
-  ( x < end_loop, x')
+    ...
+    (x < end_loop, x')
   ) x_init
 in
 ...
