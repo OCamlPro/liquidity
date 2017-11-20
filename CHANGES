@@ -1,0 +1,42 @@
+0.13  2017-11-20
+    NEW FEATURES
+    * match%nat construct for int -> nat coercion
+    * abs is now int -> int
+    * Command line options --parse-only --type-only
+    * Command line option --single-line to output Michelson on a
+      single line
+    * Support &&, || Boolean connectors
+    * Lambda types are now written as t1 -> t2 instead of
+      (t1, t2) lambda
+    * Constant amounts written as litterals: 1.00tz
+    * Constant keys and key_hashes as litterals: edpk... tz1...
+    * Timestamps as litterals in ISO-8601 format
+
+    IMPROVEMENTS
+    * Split typechecking and encoding phases
+    * Allow transfers in conditions (for if-then-else and match)
+    * Encode to constants when possible
+    * Better error messages
+    * Accept any name for result of Contract.call
+
+    BUG FIXES
+    * Fix bug in encoding of closures
+    * Fix bug in compilation of branches with transfers
+
+0.11 2017-10-16
+    NEW FEATURES
+    * Compilation of Liquidity contracts to OCaml bytecode
+    * Deconstruct tuples in let, fun and pattern matching
+    * Support _ for pattern
+    * OCaml syntax for return type of contract's entry point
+    * Support for type key_hash
+
+    IMPROVEMENTS
+    * Allow compilation without Tezos
+    * Better error messages
+    * Error location in Michelson source when decompiling
+    * Declare type storage when decompiling
+    * More efficient encoding of closures
+
+0.1  2017-10-05
+    Initial release
