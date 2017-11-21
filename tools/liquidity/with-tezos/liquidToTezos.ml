@@ -8,10 +8,9 @@
 (**************************************************************************)
 
 open LiquidTypes
-open Tezos_context
+open Micheline
 
-
-type tezos_code = Tezos_context.Script.code
+type tezos_code = (unit,string) Micheline.node
 
 (*
 type expr =
@@ -23,52 +22,52 @@ type expr =
 
 let debug = None
 
-let prim name args = Script_repr.Prim(0, name, args, debug)
+let prim name args = Micheline.Prim(0, name, args, debug)
 
 let rec convert_const expr =
   match expr with
-  | CInt n -> Script_repr.Int (0, LiquidPrinter.mic_of_integer n)
-  | CString s -> Script_repr.String (0, s)
-  | CUnit -> Script_repr.Prim(0, "Unit", [], debug)
-  | CBool true -> Script_repr.Prim(0, "True", [], debug)
-  | CBool false -> Script_repr.Prim(0, "False", [], debug)
-  | CNone -> Script_repr.Prim(0, "None", [], debug)
+  | CInt n -> Micheline.Int (0, LiquidPrinter.mic_of_integer n)
+  | CString s -> Micheline.String (0, s)
+  | CUnit -> Micheline.Prim(0, "Unit", [], debug)
+  | CBool true -> Micheline.Prim(0, "True", [], debug)
+  | CBool false -> Micheline.Prim(0, "False", [], debug)
+  | CNone -> Micheline.Prim(0, "None", [], debug)
 
-  | CSome x -> Script_repr.Prim(0, "Some", [convert_const x], debug)
-  | CLeft x -> Script_repr.Prim(0, "Left", [convert_const x], debug)
-  | CRight x -> Script_repr.Prim(0, "Right", [convert_const x], debug)
+  | CSome x -> Micheline.Prim(0, "Some", [convert_const x], debug)
+  | CLeft x -> Micheline.Prim(0, "Left", [convert_const x], debug)
+  | CRight x -> Micheline.Prim(0, "Right", [convert_const x], debug)
 
   | CTuple [] -> assert false
   | CTuple [_] -> assert false
   | CTuple [x;y] ->
-     Script_repr.Prim(0, "Pair", [convert_const x;
+     Micheline.Prim(0, "Pair", [convert_const x;
                                   convert_const y], debug)
   | CTuple (x :: y) ->
-     Script_repr.Prim(0, "Pair", [convert_const x;
+     Micheline.Prim(0, "Pair", [convert_const x;
                                   convert_const (CTuple y)], debug)
-  | CList args -> Script_repr.Prim(0, "List",
+  | CList args -> Micheline.Prim(0, "List",
                                    List.map convert_const args, debug)
 
   | CMap args ->
-     Script_repr.Prim(0, "Map",
+     Micheline.Prim(0, "Map",
                       List.map (fun (x,y) ->
-                          Script_repr.Prim(0, "Item", [convert_const x;
+                          Micheline.Prim(0, "Item", [convert_const x;
                                                        convert_const y], debug
                                           ))
                                args, debug)
-  | CSet args -> Script_repr.Prim(0, "Set",
+  | CSet args -> Micheline.Prim(0, "Set",
                                   List.map convert_const args, debug)
-  | CNat n -> Script_repr.Int (0, LiquidPrinter.mic_of_integer n)
-  | CTez n -> Script_repr.String (0, LiquidPrinter.mic_of_tez n)
+  | CNat n -> Micheline.Int (0, LiquidPrinter.mic_of_integer n)
+  | CTez n -> Micheline.String (0, LiquidPrinter.mic_of_tez n)
            (*
   | CTez tez
     |CKey _|
    | CSignature _|CLeft _|CRight _)
             *)
-  | CTimestamp s -> Script_repr.String (0, s)
-  | CKey s -> Script_repr.String (0, s)
-  | CKey_hash s -> Script_repr.String (0, s)
-  | CSignature s -> Script_repr.String (0, s)
+  | CTimestamp s -> Micheline.String (0, s)
+  | CKey s -> Micheline.String (0, s)
+  | CKey_hash s -> Micheline.String (0, s)
+  | CSignature s -> Micheline.String (0, s)
 
   | _ ->
     LiquidLoc.raise_error "to-tezos: unimplemented const:\n%s%!"
@@ -106,7 +105,7 @@ let rec convert_type expr =
 let rec convert_code expr =
   match expr.i with
   | SEQ exprs ->
-     Script_repr.Seq (0, List.map convert_code exprs, debug)
+     Micheline.Seq (0, List.map convert_code exprs, debug)
   | DROP -> prim "DROP" []
   | DIP (0, arg) -> assert false
   | DIP (1, arg) -> prim "DIP" [ convert_code arg ]
@@ -205,16 +204,28 @@ let convert_contract c =
   let arg_type = convert_type c.parameter in
   let storage_type = convert_type c.storage in
   let code = convert_code c.code in
-  {
-    Script_repr.ret_type;
-    Script_repr.arg_type;
-    Script_repr.storage_type;
-    Script_repr.code;
-  }
+  let nodes = Micheline.Prim(0, "return", [ret_type], None) ::
+                Micheline.Prim(0, "parameter", [arg_type], None) ::
+                  Micheline.Prim(0, "storage", [storage_type], None) ::
+                    Micheline.Prim(0, "code", [code], None) ::
+                      []
+  in
+  List.map Micheline.strip_locations nodes
+
+let print_program comment_of_loc ppf (c, loc_table) =
+  let c = List.map (Micheline.inject_locations
+                          (fun _ -> { Micheline_printer.comment = None })
+                       ) c in
+  List.iter (fun node ->
+      Format.fprintf  ppf
+                      "%a;@."
+                      Micheline_printer.print_expr_unwrapped node
+    ) c
+
 
 let string_of_contract c =
   let ppf = Format.str_formatter in
-  Client_proto_programs.print_program (fun _ -> None) ppf (c, []);
+  print_program (fun _ -> None) ppf (c, []);
   Format.flush_str_formatter ()
 
 let line_of_contract c =
@@ -228,15 +239,16 @@ let line_of_contract c =
   Format.pp_set_formatter_out_functions ppf new_ffs;
   Format.pp_set_max_boxes ppf 0;
   Format.pp_set_max_indent ppf 0;
-  Client_proto_programs.print_program (fun _ -> None) ppf (c, []);
+  print_program (fun _ -> None) ppf (c, []);
   let s = Format.flush_str_formatter () in
   Format.pp_set_formatter_out_functions ppf ffs;
   s
 
+    (*
 
 let contract_amount = ref "1000.00"
-let contract_arg = ref (Script_repr.Prim(0, "Unit", [], debug))
-let contract_storage = ref (Script_repr.Prim(0, "Unit", [], debug))
+let contract_arg = ref (Micheline.Prim(0, "Unit", [], debug))
+let contract_storage = ref (Micheline.Prim(0, "Unit", [], debug))
 
 let context = ref None
 
@@ -256,6 +268,8 @@ let get_context () =
         context := Some ctxt;
         ctxt
 
+     *)
+
 let read_tezos_file filename =
   let s = FileString.read_file filename in
   let contract_hash = Hash.Operation_hash.hash_bytes [s] in
@@ -267,7 +281,10 @@ let read_tezos_file filename =
      Printf.eprintf "Errors parsing in %S\n%!" filename;
      exit 2
 
+          (*
 let execute_contract_file filename =
+  assert false
+         (*
   let contract, contract_hash, _ = read_tezos_file filename in
 
   let origination = Contract.initial_origination_nonce contract_hash in
@@ -282,11 +299,11 @@ let execute_contract_file filename =
     match Tez_repr.of_string !contract_amount with
     | None -> assert false
     | Some amount -> amount in
-  let (storage : Script_repr.storage) = {
-      Script_repr.storage_type = contract.Script.storage_type;
-      Script_repr.storage = !contract_storage;
+  let (storage : Micheline.storage) = {
+      Micheline.storage_type = contract.Script.storage_type;
+      Micheline.storage = !contract_storage;
     } in
-  let (arg : Script_repr.expr) = !contract_arg in
+  let (arg : Micheline.expr) = !contract_arg in
   let (qta : int) = 1000 in
 
   match
@@ -317,8 +334,11 @@ let execute_contract_file filename =
      Format.fprintf Format.err_formatter "@.";
 
      exit 2
+          *)
+          *)
 
 let arg_list work_done = [
+    (*
     "--exec", Arg.String (fun s ->
                   work_done := true;
                   execute_contract_file s),
@@ -337,7 +357,9 @@ let arg_list work_done = [
     "FILE Use data from file as initial storage";
     "--amount", Arg.String (fun s -> contract_amount := s),
     "NNN.00 Number of Tez sent";
+     *)
   ]
 
-(* force linking *)
+(* force linking not anymore ?
 let execute = Script_interpreter.execute
+ *)

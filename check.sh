@@ -6,8 +6,9 @@ RED='\033[0;31m'
 test=$1
 echo "\n[check.sh] test = $test"
 
+. ./config.sh
+
 LIQUIDITY=liquidity
-TEZOS_FULL_PATH=./tezos/_obuild/tezos-client/tezos-client.asm
 LIQUID_FULL_PATH=./_obuild/${LIQUIDITY}/${LIQUIDITY}.asm
 LIQARGS=--verbose
 LIQEXEC="${LIQUID_FULL_PATH} ${LIQARGS}"

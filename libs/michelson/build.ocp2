@@ -40,23 +40,61 @@ function pp_minutils(file){
   return file, { more_deps = [ tezos_dir + "minutils/" + file ] };
 }
 
+function pp_micheline(file){
+  return file, { more_deps = [ tezos_dir + "micheline/" + file ] };
+}
+
 function pp_client_emdebbed(file){
   return file, { more_deps = [ tezos_dir + "client/embedded/alpha/" + file ] };
 }
 
 
+OCaml.library("michelson-base",
+  ocaml + {
+     bytelink = [ "-custom" ];
+     pp = [ "ocp-pp" ];
+     files = [
+        pp_minutils("compare.ml");
+        pp_minutils("data_encoding.ml");
+        pp_utils("error_monad_sig.ml");
+        pp_utils("error_monad.ml");
 
+     ];
+     requires = [
+              "michelson-deps";
+              "ezjsonm";
+              "zarith";
+              "ocplib-json-typed.bson"; (* data_encoding *)
+              "ocplib-endian";     (* data_encoding *)
+              "calendar";
+     ];
+   });
+
+OCaml.library("micheline", ocaml + {
+     bytelink = [ "-custom" ];
+     pp = [ "ocp-pp" ];
+     files = [
+        pp_micheline("micheline.ml");
+        pp_micheline("micheline_parser.ml");
+        pp_micheline("micheline_printer.ml");
+     ];
+     requires = [
+              "michelson-deps";
+              "michelson-base";
+              "ezjsonm";
+              "zarith";
+              "ocplib-json-typed.bson"; (* data_encoding *)
+              "ocplib-endian";     (* data_encoding *)
+              "calendar";
+
+     ];
+   });
+     
 OCaml.library("michelson", ocaml + {
      bytelink = [ "-custom" ];
      pp = [ "ocp-pp" ];
      files = [
 
-
-        pp_minutils("compare.ml");
-        pp_minutils("data_encoding.ml");
-
-        pp_utils("error_monad_sig.ml");
-        pp_utils("error_monad.ml");
         "data_encoding_ezjsonm.ml"; 
         pp_utils("cli_entries.ml");
         pp_utils("time.ml");
@@ -65,10 +103,13 @@ OCaml.library("michelson", ocaml + {
         "ed25519.ml";
         pp_utils("tezos_data.ml");
 
+(*
         pp_proto_alpha("tezos_hash.ml");
         pp_proto_alpha("qty_repr.ml");
         pp_proto_alpha("tez_repr.ml");
         pp_proto_alpha("script_int_repr.ml");
+        pp_proto_alpha("manager_repr.ml");
+        pp_proto_alpha("michelson_v1_primitives.ml");
         pp_proto_alpha("script_repr.ml");
         pp_proto_alpha("contract_repr.ml");
         pp_proto_alpha("period_repr.ml");
@@ -86,6 +127,7 @@ OCaml.library("michelson", ocaml + {
         "persist.ml";
         "context.ml";
 
+        pp_proto_alpha("raw_context.ml");
         pp_proto_alpha("storage_sigs.ml");
         pp_proto_alpha("storage_functors.ml");
         pp_proto_alpha("storage.ml");
@@ -110,14 +152,13 @@ OCaml.library("michelson", ocaml + {
         "packed_protocol.ml";
 
         pp_client_emdebbed("script_located_ir.ml");
-        pp_client_emdebbed("michelson_macros.ml");
-        pp_client_emdebbed("michelson_parser.ml");
         pp_client_emdebbed("client_proto_args.ml");
         pp_client_emdebbed("client_proto_programs.ml");
-
+*)
      ];
      requires = [
               "michelson-deps";
+              "micheline";
               "ezjsonm";
               "zarith";
               "ocplib-json-typed.bson"; (* data_encoding *)
@@ -129,3 +170,8 @@ OCaml.library("michelson", ocaml + {
 
 }
 
+
+OCaml.program("ocp-micheline", ocaml + {
+                               files = [ "test.ml" ];
+                               requires = [ "micheline"; "ocplib-file" ];
+                               });

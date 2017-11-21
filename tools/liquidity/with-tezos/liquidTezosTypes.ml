@@ -7,7 +7,8 @@
 (*                                                                        *)
 (**************************************************************************)
 
-open LiquidTypes
+type contract = string Micheline.canonical list
 
-let convert_contract loc_table string = assert false (* NOT IMPLEMENTED *)
-let contract_of_string filename string = assert false (* NOT IMPLEMENTED *)
+type loc_table = (int * LiquidTypes.location) list
+
+type hash = Hash.Operation_hash.t

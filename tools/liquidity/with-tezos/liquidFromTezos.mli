@@ -7,12 +7,12 @@
 (*                                                                        *)
 (**************************************************************************)
 
-open LiquidTypes
-
 val convert_contract :
-  Script_repr.code -> pre_michelson contract
+  LiquidTezosTypes.loc_table ->
+  LiquidTezosTypes.contract ->
+  LiquidTypes.loc_michelson LiquidTypes.contract
 
-val contract_of_string : string -> Tezos_context.Script.code option
-
-val data_of_string : string -> Tezos_context.Script.expr option
-val pp : Format.formatter -> Tezos_context.error -> unit
+val contract_of_string :
+  string -> (* maybe filename *)
+  string -> (* content *)
+  (LiquidTezosTypes.contract * LiquidTezosTypes.loc_table) option

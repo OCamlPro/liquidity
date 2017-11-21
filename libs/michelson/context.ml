@@ -9,15 +9,22 @@
 
 (* Liquidity: an implementation of contexts with simple maps *)
 
-
 module StringMap = Map.Make(String)
+
+type key = string list
+type value = MBytes.t
 
 type t = {
      value : MBytes.t option;
      map : t StringMap.t;
    }
+type context = t
 
 let empty = { value = None; map = StringMap.empty }
+
+let fold = assert false
+let keys = assert false
+let fold_keys = assert false
 
 let rec get t key =
   match key with

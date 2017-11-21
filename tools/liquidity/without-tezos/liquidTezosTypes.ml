@@ -7,7 +7,6 @@
 (*                                                                        *)
 (**************************************************************************)
 
-open LiquidTypes
-
-let convert_contract loc_table string = assert false (* NOT IMPLEMENTED *)
-let contract_of_string filename string = assert false (* NOT IMPLEMENTED *)
+type loc_table = unit
+type contract = LiquidTypes.michelson_exp LiquidTypes.contract
+type hash

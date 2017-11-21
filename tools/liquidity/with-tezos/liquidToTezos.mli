@@ -7,8 +7,15 @@
 (*                                                                        *)
 (**************************************************************************)
 
-open LiquidTypes
+val convert_contract : LiquidTypes.noloc_michelson_contract ->
+                       LiquidTezosTypes.contract
 
-val convert_contract : pre_michelson contract -> Script_repr.code
+val line_of_contract : LiquidTezosTypes.contract -> string
+val string_of_contract : LiquidTezosTypes.contract -> string
 
-val string_of_contract : Tezos_context.Script.code -> string
+val read_tezos_file :
+  string ->
+  LiquidTezosTypes.contract * LiquidTezosTypes.hash * LiquidTezosTypes.loc_table
+
+val arg_list : bool ref ->
+         (Arg.key * Arg.spec * Arg.doc) list
