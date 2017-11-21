@@ -148,6 +148,9 @@ module Map : sig
   val update : 'key -> 'value option  -> ('key, 'value) map ->
                ('key, 'value) map
 
+  val add : 'key -> 'value  -> ('key, 'value) map -> ('key, 'value) map
+  val remove : 'key -> ('key, 'value) map -> ('key, 'value) map
+
   val mem : 'key -> ('key, 'value) map -> bool (* NOT TESTED *)
   val size : ('key, 'value) map -> int
 
@@ -193,8 +196,34 @@ end = struct
       Some (ObjMap.find key map)
     with Not_found -> None
 
-  let update key value map = assert false (* TODO *)
-  let mem key map = assert false (* TODO, NOT TESTED *)
+  let update (key: 'key) (value: 'value option) (map: ('key, 'value) map) =
+    let key = Obj.repr key in
+    let map = (Obj.magic map : 'value ObjMap.t) in
+    let map = match value with
+      | Some value ->
+        ObjMap.add key value map
+      | None ->
+        ObjMap.remove key map
+    in
+    Obj.magic map
+
+  let add (key: 'key) (value: 'value) (map: ('key, 'value) map) =
+    let key = Obj.repr key in
+    let map = (Obj.magic map : 'value ObjMap.t) in
+    let map = ObjMap.add key value map in
+    Obj.magic map
+
+  let remove (key: 'key) (map: ('key, 'value) map) =
+    let key = Obj.repr key in
+    let map = (Obj.magic map : 'value ObjMap.t) in
+    let map = ObjMap.remove key map in
+    Obj.magic map
+
+  let mem (key: 'key) (map: ('key, 'value) map) =
+    let key = Obj.repr key in
+    let map = (Obj.magic map : 'value ObjMap.t) in
+    ObjMap.mem key map
+
   let size map = ObjMap.cardinal (Obj.magic map)
 
 end
@@ -209,6 +238,8 @@ module Set : sig
   val empty : unit -> 'key set
   val make : 'key list -> 'key set
   val update : 'key -> bool -> 'key set -> 'key set
+  val add : 'key -> 'key set -> 'key set
+  val remove : 'key -> 'key set -> 'key set
   val mem : 'key -> 'key set -> bool
   val reduce : ( 'key * 'acc -> 'acc) ->
                'key set -> 'acc -> 'acc
@@ -242,6 +273,16 @@ end = struct
       else
         ObjSet.remove key set
     in
+    Obj.magic set
+  let add key set =
+    let key = Obj.repr key in
+    let set = (Obj.magic set : ObjSet.t) in
+    let set = ObjSet.add key set in
+    Obj.magic set
+  let remove key set =
+    let key = Obj.repr key in
+    let set = (Obj.magic set : ObjSet.t) in
+    let set = ObjSet.remove key set in
     Obj.magic set
   let mem key set =
     let key = Obj.repr key in

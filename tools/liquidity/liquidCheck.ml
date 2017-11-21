@@ -706,6 +706,23 @@ and typecheck_prim2 env prim loc args =
      if expected_value_ty <> value_ty then
        error loc "bad Map.update value type";
      Tmap (key_ty, value_ty)
+  | Prim_map_add, [ key_ty;
+                       value_ty;
+                       Tmap (expected_key_ty, expected_value_ty)]
+    ->
+     if expected_key_ty <> key_ty then
+       error loc "bad Map.add key type";
+     if expected_value_ty <> value_ty then
+       error loc "bad Map.add value type";
+     Tmap (key_ty, value_ty)
+  | Prim_map_remove, [ key_ty;
+                       Tmap (expected_key_ty, expected_value_ty)]
+    ->
+     if expected_key_ty <> key_ty then
+       error loc "bad Map.remove key type";
+     Tmap (key_ty, expected_value_ty)
+
+
   | Prim_map_mem, [ key_ty; Tmap (expected_key_ty,_)]
     ->
      if expected_key_ty <> key_ty then
@@ -727,7 +744,16 @@ and typecheck_prim2 env prim loc args =
      if expected_key_ty <> key_ty then
        error loc "bad Set.update key type";
      Tset key_ty
-
+  | Prim_set_add, [ key_ty; Tset expected_key_ty]
+    ->
+     if expected_key_ty <> key_ty then
+       error loc "bad Set.add key type";
+     Tset key_ty
+  | Prim_set_remove, [ key_ty; Tset expected_key_ty]
+    ->
+     if expected_key_ty <> key_ty then
+       error loc "bad Set.remove key type";
+     Tset key_ty
 
   | Prim_Some, [ ty ] -> Toption ty
   | Prim_fail, [ Tunit ] -> Tfail

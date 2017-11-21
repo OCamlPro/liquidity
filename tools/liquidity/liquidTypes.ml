@@ -136,12 +136,16 @@ type primitive =
 
   | Prim_map_find
   | Prim_map_update
+  | Prim_map_add
+  | Prim_map_remove
   | Prim_map_mem
   | Prim_map_reduce
   | Prim_map_map
   | Prim_map_size
 
   | Prim_set_update
+  | Prim_set_add
+  | Prim_set_remove
   | Prim_set_mem
   | Prim_set_reduce
   | Prim_set_size
@@ -224,12 +228,16 @@ let () =
 
               "Map.find", Prim_map_find;
               "Map.update", Prim_map_update;
+              "Map.add", Prim_map_add;
+              "Map.remove", Prim_map_remove;
               "Map.mem", Prim_map_mem;
               "Map.reduce", Prim_map_reduce;
               "Map.map", Prim_map_map;
               "Map.size", Prim_map_size;
 
               "Set.update", Prim_set_update;
+              "Set.add", Prim_set_add;
+              "Set.remove", Prim_set_remove;
               "Set.mem", Prim_set_mem;
               "Set.reduce", Prim_set_reduce;
               "Set.map", Prim_set_map;

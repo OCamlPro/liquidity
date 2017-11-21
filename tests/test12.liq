@@ -9,8 +9,9 @@ let%entry main
       : unit * string set =
 
       let set = (Set : string set) in
-      let set = Set.update "a" true set in
-      let set = Set.update "b" true set in
+      let set = Set.add "a" set in
+      let set = Set.add "b" set in
+      let set = Set.remove "c" set in
       let storage = if Set.mem parameter set then
            storage
         else

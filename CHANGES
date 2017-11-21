@@ -6,6 +6,7 @@
     * Command line option --single-line to output Michelson on a
       single line
     * Support &&, || Boolean connectors
+    * Support Map.add, Map.remove, Set.add, Set.remove
     * Lambda types are now written as t1 -> t2 instead of
       (t1, t2) lambda
     * Constant amounts written as litterals: 1.00tz
@@ -23,7 +24,7 @@
     * Fix bug in encoding of closures
     * Fix bug in compilation of branches with transfers
 
-0.11 2017-10-16
+0.11  2017-10-16
     NEW FEATURES
     * Compilation of Liquidity contracts to OCaml bytecode
     * Deconstruct tuples in let, fun and pattern matching
@@ -38,5 +39,5 @@
     * Declare type storage when decompiling
     * More efficient encoding of closures
 
-0.1  2017-10-05
+0.1   2017-10-05
     Initial release

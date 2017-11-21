@@ -147,6 +147,42 @@ let decompile contract =
          let vx = mk (Var (x, noloc, [])) in
          mklet node (MatchNat(arg_of arg, noloc, x, vx, x, vx))
 
+       (* UPDATE true -> Set.add *)
+       | N_PRIM "UPDATE", [arg1;
+                           { kind = N_CONST (_, CBool true) };
+                           arg3] ->
+         let arg1, arg3 = arg_of arg1, arg_of arg3 in
+         mklet node (Apply (Prim_set_add, noloc, [arg1; arg3]))
+
+       (* UPDATE false -> Set.remove *)
+       | N_PRIM "UPDATE", [arg1;
+                           { kind = N_CONST (_, CBool false) };
+                           arg3] ->
+         let arg1, arg3 = arg_of arg1, arg_of arg3 in
+         mklet node (Apply (Prim_set_remove, noloc, [arg1; arg3]))
+
+       (* UPDATE None -> Map.remove *)
+       | N_PRIM "UPDATE", [arg1;
+                           { kind = N_CONST (_, CNone) };
+                           arg3] ->
+         let arg1, arg3 = arg_of arg1, arg_of arg3 in
+         mklet node (Apply (Prim_map_remove, noloc, [arg1; arg3]))
+
+       (* UPDATE Some -> Map.add *)
+       | N_PRIM "UPDATE", [arg1;
+                           { kind = N_CONST (cty, CSome c) };
+                           arg3] ->
+         let arg1, arg3 = arg_of arg1, arg_of arg3 in
+         let v = mk (Const (cty, c)) in
+         mklet node (Apply (Prim_map_add, noloc, [arg1; v; arg3]))
+
+       (* UPDATE Some -> Map.add *)
+       | N_PRIM "UPDATE", [arg1;
+                           { kind = N_PRIM "SOME"; args = [arg2]};
+                           arg3] ->
+         let arg1, arg2, arg3 = arg_of arg1, arg_of arg2, arg_of arg3 in
+         mklet node (Apply (Prim_map_add, noloc, [arg1; arg2; arg3]))
+
        | N_PRIM prim, _ ->
           let prim, args =
             match prim, node.args with

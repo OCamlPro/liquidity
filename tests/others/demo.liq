@@ -14,6 +14,6 @@ let%entry main
     match Map.find parameter storage with
     | None -> Current.fail ()
     | Some x ->
-       let storage = Map.update parameter (Some (x+1)) storage in
+       let storage = Map.add parameter (x+1) storage in
        ( (), storage )
 

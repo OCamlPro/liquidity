@@ -176,7 +176,13 @@ but not in a polymorphic way, i.e. `Coll.` is immediately replaced by the
 type-specific version for the type of its argument.)
 
 Liquidity also provides additional operations:
-* `List.rev` : List reversal
+* `List.rev : 'a list -> 'a list` : List reversal
+* `Map.add : 'a -> 'b -> ('a, 'b) map -> ('a, 'b) map` : add (or
+  replace) a binding to a map
+* `Map.remove : 'a -> ('a, 'b) map -> ('a, 'b) map` : remove a binding,
+  if it exists, in a map
+* `Set.add : 'a -> 'a set -> 'a set` : add an element to a set
+* `Map.remove : 'a -> 'a set -> 'a set` : remove an element in a set
 
 Arithmetic and logic operators
 ------------------------------

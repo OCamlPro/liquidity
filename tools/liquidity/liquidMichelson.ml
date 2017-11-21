@@ -347,16 +347,18 @@ the ending NIL is not annotated with a type *)
        Prim_coll_map|Prim_coll_size), _ -> assert false
 
     | ( Prim_eq|Prim_neq|Prim_lt|Prim_le|Prim_gt|Prim_ge
-       | Prim_compare|Prim_add|Prim_sub|Prim_mul|Prim_ediv|Prim_map_find
-       | Prim_map_update|Prim_map_mem|Prim_map_reduce|Prim_map_map
-       | Prim_set_update|Prim_set_mem|Prim_set_reduce|Prim_Some
-       | Prim_concat|Prim_list_reduce|Prim_list_map|Prim_manager
-       | Prim_create_account|Prim_create_contract|Prim_set_map
-       | Prim_hash|Prim_hash_key|Prim_check|Prim_default_account|Prim_list_size
-       | Prim_set_size|Prim_map_size|Prim_or|Prim_and|Prim_xor
-       | Prim_not|Prim_abs|Prim_int|Prim_neg|Prim_lsr|Prim_lsl
-       | Prim_exec|Prim_Cons),_ ->
-       let _depth, args_code = compile_args depth env args in
+      | Prim_compare|Prim_add|Prim_sub|Prim_mul|Prim_ediv|Prim_map_find
+      | Prim_map_update|Prim_map_add|Prim_map_remove
+      | Prim_map_mem|Prim_map_reduce|Prim_map_map
+      | Prim_set_update|Prim_set_add|Prim_set_remove
+      | Prim_set_mem|Prim_set_reduce|Prim_Some
+      | Prim_concat|Prim_list_reduce|Prim_list_map|Prim_manager
+      | Prim_create_account|Prim_create_contract|Prim_set_map
+      | Prim_hash|Prim_hash_key|Prim_check|Prim_default_account|Prim_list_size
+      | Prim_set_size|Prim_map_size|Prim_or|Prim_and|Prim_xor
+      | Prim_not|Prim_abs|Prim_int|Prim_neg|Prim_lsr|Prim_lsl
+      | Prim_exec|Prim_Cons),_ ->
+      let _depth, args_code = compile_args depth env args in
        let prim_code = match prim, List.length args with
          | Prim_eq, 2 -> [ ii COMPARE; ii EQ ]
          | Prim_neq, 2 -> [ ii COMPARE; ii NEQ ]
@@ -371,11 +373,20 @@ the ending NIL is not annotated with a type *)
          | Prim_ediv, 2 -> [ ii EDIV ]
          | Prim_map_find, 2 -> [ ii GET ]
          | Prim_map_update, 3 -> [ ii UPDATE ]
+         | Prim_map_add, 3 -> [dip 1 [ii SOME]; ii UPDATE ]
+         | Prim_map_remove, 2 ->
+           let ty = match args with
+             | [_; { ty = Tmap (_, ty) }] -> ty
+             | _ -> assert false
+           in
+           [dip 1 [push (Toption ty) CNone]; ii UPDATE ]
          | Prim_map_mem, 2 -> [ ii MEM ]
          | Prim_map_reduce, 3 -> [ ii REDUCE ]
          | Prim_map_map, 2 -> [ ii MAP ]
 
          | Prim_set_update, 3 -> [ ii UPDATE ]
+         | Prim_set_add, 2 -> [dip 1 [push Tbool (CBool true)]; ii UPDATE ]
+         | Prim_set_remove, 2 -> [dip 1 [push Tbool (CBool false)]; ii UPDATE ]
          | Prim_set_mem, 2 -> [ ii MEM ]
          | Prim_set_reduce, 3 -> [ ii REDUCE ]
          | Prim_set_map, 2 -> [ ii MAP ]
@@ -412,8 +423,10 @@ the ending NIL is not annotated with a type *)
 
          | (Prim_eq|Prim_neq|Prim_lt|Prim_le|Prim_gt|Prim_ge
            | Prim_compare|Prim_add|Prim_sub|Prim_mul|Prim_ediv|Prim_map_find
-           | Prim_map_update|Prim_map_mem|Prim_map_reduce|Prim_map_map
-           | Prim_set_update|Prim_set_mem|Prim_set_reduce|Prim_Some
+           | Prim_map_update|Prim_map_add|Prim_map_remove
+           | Prim_map_mem|Prim_map_reduce|Prim_map_map
+           | Prim_set_update|Prim_set_add|Prim_set_remove
+           | Prim_set_mem|Prim_set_reduce|Prim_Some
            | Prim_concat|Prim_list_reduce|Prim_list_map|Prim_manager
            | Prim_create_account|Prim_create_contract
            | Prim_hash|Prim_hash_key|Prim_check|Prim_default_account|Prim_list_size
