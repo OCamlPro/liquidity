@@ -31,6 +31,7 @@ let arg_keepon = ref false
 let arg_typeonly = ref false
 let arg_parseonly = ref false
 let arg_singleline = ref false
+let arg_annotmic = ref true
 
 let compile_liquid_file filename =
   let ocaml_ast = LiquidFromOCaml.read_file filename in
@@ -50,7 +51,7 @@ let compile_liquid_file filename =
       (LiquidPrinter.Liquid.string_of_contract_types
          typed_ast);
   let encoded_ast, to_inline =
-    LiquidEncode.encode_contract ~warnings:true env typed_ast in
+    LiquidEncode.encode_contract ~annot:!arg_annotmic env typed_ast in
   if !verbosity>0 then
     FileString.write_file (filename ^ ".encoded")
       (LiquidPrinter.Liquid.string_of_contract
@@ -107,11 +108,11 @@ let compile_tezos_file filename =
                          (LiquidPrinter.Liquid.string_of_contract c);
   let env = LiquidFromOCaml.initial_env filename in
   let typed_ast = LiquidCheck.typecheck_contract ~warnings:false env c in
-  let encode_ast, to_inline =
-    LiquidEncode.encode_contract ~warnings:false env typed_ast in
-  (*  Printf.eprintf "Inlining: %d\n%!" (StringMap.cardinal to_inline); *)
-  let live_ast = LiquidSimplify.simplify_contract encode_ast to_inline in
+  let encode_ast, to_inline = LiquidEncode.encode_contract env typed_ast in
+  let live_ast = LiquidSimplify.simplify_contract
+      ~decompile:true encode_ast to_inline in
   let untyped_ast = LiquidUntype.untype_contract live_ast in
+  (* let untyped_ast = c in *)
   let output = filename ^ ".liq" in
   FileString.write_file  output
                          (try
@@ -178,6 +179,11 @@ let main () =
       "--parse-only", Arg.Set arg_parseonly, "Stop after parsing";
       "--single-line", Arg.Set arg_singleline,
       "Output Michelson on a single line";
+      "--annot-mic", Arg.Set arg_annotmic,
+      "Annotate Michelson with variable names (default: true)";
+      "--compact", Arg.Unit (fun () ->
+          arg_annotmic := false;
+          arg_singleline := true), "Produce compact Michelson";
       "--data", Arg.Tuple [
         Arg.String (fun s -> Data.contract := s);
         Arg.String (fun s -> Data.parameter := s);

@@ -10,4 +10,5 @@
 open LiquidTypes
 
 val simplify_contract :
+  ?decompile:bool ->
   encoded_exp contract -> encoded_exp StringMap.t -> encoded_exp contract

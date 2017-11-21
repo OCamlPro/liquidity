@@ -11,7 +11,7 @@ open LiquidTypes
 
 let noloc = LiquidLoc.noloc
 
-let mk desc = mk desc ()
+let mk ?name desc = mk ?name desc ()
 
 let const_name_of_datatype = function
   | Tunit -> "u"
@@ -37,34 +37,65 @@ let const_name_of_datatype = function
   | Tfail -> "fail"
 
 
+let rec check_prev_names node prevs =
+  match node.name with
+  | Some name ->
+    List.iter (fun n ->
+        begin match n with
+          | { name = Some name'} ->
+            if name' = name then assert (n != node);
+          | _ -> ()
+        end;
+        check_prev_names node n.prevs
+      ) prevs
+  | _ -> ()
+
 let rec var_of node =
   match node.kind with
   | N_VAR name -> name
-  | N_PRIM p -> Printf.sprintf "%s%d" (String.lowercase_ascii p) node.num
-  | N_IF _ -> Printf.sprintf "branch%d" node.num
-  | N_IF_THEN _ -> Printf.sprintf "then%d" node.num
-  | N_IF_ELSE _ -> Printf.sprintf "else%d" node.num
-  | N_IF_NIL _ -> Printf.sprintf "if_nil%d" node.num
-  | N_IF_CONS _ -> Printf.sprintf "if_cons%d" node.num
-  | N_IF_LEFT _ -> Printf.sprintf "if_left%d" node.num
-  | N_IF_RIGHT _ -> Printf.sprintf "if_right%d" node.num
-  | N_IF_PLUS _ -> Printf.sprintf "if_plus%d" node.num
-  | N_IF_MINUS _ -> Printf.sprintf "if_minus%d" node.num
-  | N_LEFT _ -> Printf.sprintf "left%d" node.num
-  | N_RIGHT _ -> Printf.sprintf "right%d" node.num
-  | N_TRANSFER _ -> Printf.sprintf "transfer%d" node.num
-  | N_TRANSFER_RESULT _ -> Printf.sprintf "transfer_res%d" node.num
-  | N_IF_RESULT _ | N_IF_END_RESULT _ | N_LOOP_RESULT _ ->
-    Printf.sprintf "res%d" node.num
-  | N_SOURCE _ -> Printf.sprintf "source%d" node.num
-  | N_FAIL -> Printf.sprintf "fail%d" node.num
-  | N_LOOP _ -> Printf.sprintf "loop%d" node.num
-  | N_LAMBDA _ -> Printf.sprintf "fun%d" node.num
-  | N_LAMBDA_BEGIN -> Printf.sprintf "arg%d" node.num
-  | N_LOOP_BEGIN _ ->  Printf.sprintf "loop_arg%d" node.num
-  | N_CONST (ty, _) ->
-    Printf.sprintf "%s%d" (const_name_of_datatype ty) node.num
-  | _ -> Printf.sprintf "exp%d" node.num
+  | _ -> match node.name with
+
+    | Some name when name.[0] = '@' ->
+      (* check_prev_names node node.prevs; *)
+      String.sub name 1 (String.length name - 1)
+    | _ -> match node.kind with
+
+      (* | N_VAR name -> name *)
+      | N_PRIM "CAR" ->
+        begin match node.args with
+          | [n] -> Printf.sprintf "%s_fst%d" (var_of n) node.num
+          | _ -> assert false
+        end
+      | N_PRIM "CDR" ->
+        begin match node.args with
+          | [n] -> Printf.sprintf "%s_snd%d" (var_of n) node.num
+          | _ -> assert false
+        end
+      | N_PRIM p -> Printf.sprintf "%s%d" (String.lowercase_ascii p) node.num
+      | N_IF _ -> Printf.sprintf "branch%d" node.num
+      | N_IF_THEN _ -> Printf.sprintf "then%d" node.num
+      | N_IF_ELSE _ -> Printf.sprintf "else%d" node.num
+      | N_IF_NIL _ -> Printf.sprintf "if_nil%d" node.num
+      | N_IF_CONS _ -> Printf.sprintf "if_cons%d" node.num
+      | N_IF_LEFT _ -> Printf.sprintf "if_left%d" node.num
+      | N_IF_RIGHT _ -> Printf.sprintf "if_right%d" node.num
+      | N_IF_PLUS _ -> Printf.sprintf "if_plus%d" node.num
+      | N_IF_MINUS _ -> Printf.sprintf "if_minus%d" node.num
+      | N_LEFT _ -> Printf.sprintf "left%d" node.num
+      | N_RIGHT _ -> Printf.sprintf "right%d" node.num
+      | N_TRANSFER _ -> Printf.sprintf "transfer%d" node.num
+      | N_TRANSFER_RESULT _ -> Printf.sprintf "transfer_res%d" node.num
+      | N_IF_RESULT _ | N_IF_END_RESULT _ | N_LOOP_RESULT _ ->
+        Printf.sprintf "res%d" node.num
+      | N_SOURCE _ -> Printf.sprintf "source%d" node.num
+      | N_FAIL -> Printf.sprintf "fail%d" node.num
+      | N_LOOP _ -> Printf.sprintf "loop%d" node.num
+      | N_LAMBDA _ -> Printf.sprintf "fun%d" node.num
+      | N_LAMBDA_BEGIN -> Printf.sprintf "arg%d" node.num
+      | N_LOOP_BEGIN _ ->  Printf.sprintf "loop_arg%d" node.num
+      | N_CONST (ty, _) ->
+        Printf.sprintf "%s%d" (const_name_of_datatype ty) node.num
+      | _ -> Printf.sprintf "exp%d" node.num
 
 
 let nat_n n = mk (Const (Tnat,CNat (LiquidPrinter.integer_of_int n)))
@@ -390,7 +421,7 @@ let decompile contract =
 
   and mklet node desc =
     mk (Let (var_of node, noloc,
-             mk desc, decompile_next node))
+             mk ?name:node.name desc, decompile_next node))
 
   in
   let (begin_node, end_node) = contract.code in

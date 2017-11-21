@@ -496,10 +496,16 @@ the ending NIL is not annotated with a type *)
        arg @ [ ii PAIR ] @ args
 
   and compile depth env e =
-    compile_desc depth env e.desc
+    let code, transfer = compile_desc depth env e.desc in
+    match e.name with
+    | Some name -> code @ [ ii (ANNOT name) ], transfer
+    | None -> code, transfer
 
   and compile_no_transfer depth env e =
-    compile_desc_no_transfer depth env e.desc
+    let code = compile_desc_no_transfer depth env e.desc in
+    match e.name with
+    | Some name -> code @ [ ii (ANNOT name) ]
+    | None -> code
 
   in
 

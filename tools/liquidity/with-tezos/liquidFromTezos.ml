@@ -85,6 +85,8 @@ let loc_of_int loc_table index =
 
 let rec convert_code loc_table expr =
   match expr with
+  | Micheline.Seq (index, [], Some name) ->
+    mic_loc (loc_of_int loc_table index) (ANNOT name)
   | Micheline.Seq (index, exprs, _debug) ->
     mic_loc (loc_of_int loc_table index)
       (SEQ (List.map (convert_code loc_table) exprs))

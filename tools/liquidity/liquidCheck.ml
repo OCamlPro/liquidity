@@ -57,7 +57,9 @@ let uniq_ident env name =
 let new_binding env name ty =
   let count = ref 0 in
   let env = { env with
-              vars = StringMap.add name (name, ty, count) env.vars } in
+              vars = StringMap.add name (name, ty) env.vars;
+              vars_counts = StringMap.add name count env.vars_counts;
+            } in
   (env, count)
 
 let check_used env name loc count =
@@ -67,7 +69,7 @@ let check_used env name loc count =
 
 let check_used_in_env env name loc =
   try
-    let (_, _, count) = StringMap.find name env.vars in
+    let count = StringMap.find name env.vars_counts in
     check_used env name loc count;
   with Not_found ->
   match env.clos_env with
@@ -79,11 +81,11 @@ let check_used_in_env env name loc =
     with Not_found ->
       check_used env name loc (ref 0)
 
-(* Find variable name in either the global environment or the closure
-   environment, returns a corresponding variable expression *)
+(* Find variable name in either the global environment *)
 let find_var ?(count_used=true) env loc name =
   try
-    let (name, ty, count) = StringMap.find name env.vars in
+    let (name, ty) = StringMap.find name env.vars in
+    let count = StringMap.find name env.vars_counts in
     if count_used then incr count;
     mk (Var (name, loc, [])) ty
   with Not_found ->
@@ -163,7 +165,7 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
   match exp.desc with
 
   | Const (ty, cst) ->
-    mk (Const (ty, cst)) ty
+    mk ?name:exp.name (Const (ty, cst)) ty
 
   | Let (name, loc, exp, body) ->
      let exp = typecheck env exp in
@@ -173,7 +175,7 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
      let body = typecheck env body in
      let desc = Let (name, loc, exp, body ) in
      check_used env name loc count;
-     mk desc body.ty
+     mk ?name:exp.name desc body.ty
 
   | Var (name, loc, (_::_ as labels)) ->
     begin match find_var env loc name with
@@ -192,7 +194,7 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
                        (LiquidPrinter.Liquid.string_of_type ty)
             ) ty labels
         in
-        mk (Var (name, loc, labels)) ty
+        mk ?name:exp.name (Var (name, loc, labels)) ty
       | _ -> assert false
     end
 
@@ -200,7 +202,7 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
 
   | SetVar (name, loc, [], e) ->
     let e = typecheck env e in
-    mk (SetVar (name, loc, [], e)) e.ty
+    mk ?name:exp.name (SetVar (name, loc, [], e)) e.ty
 
   | SetVar (name, loc, ((l :: _) as labels), arg) ->
     (* let arg = typecheck env arg in *)
@@ -230,14 +232,14 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
         ) ty labels
     in
     let arg = typecheck_expected "field update" env exp_ty arg in
-    mk (SetVar (name, loc, labels, arg)) ty
+    mk ?name:exp.name (SetVar (name, loc, labels, arg)) ty
 
   | Seq (exp1, exp2) ->
     let exp1 = typecheck_expected "sequence" env Tunit exp1 in
     let exp2 = typecheck env exp2 in
     let desc = Seq (exp1, exp2) in
     (* TODO: if not fail1 then remove exp1 *)
-    mk desc exp2.ty
+    mk ?name:exp.name desc exp2.ty
 
   | If (cond, ifthen, ifelse) ->
      let cond =
@@ -253,7 +255,7 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
          ifelse, ifthen.ty
      in
      let desc = If(cond, ifthen, ifelse) in
-     mk desc ty
+     mk ?name:exp.name desc ty
 
   | LetTransfer (storage_name, result_name,
                  loc,
@@ -283,7 +285,7 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
                                  contract_exp, tez_exp,
                                  storage_exp, arg_exp, body)
           in
-          mk desc body.ty
+          mk ?name:exp.name desc body.ty
        | ty ->
          error (loc_exp env contract_exp)
            "Bad contract type.\nExpected type:\n  ('a, 'b) contract\n\
@@ -330,7 +332,7 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
 
 
 
-  | Apply (prim, loc, args) -> typecheck_apply env prim loc args
+  | Apply (prim, loc, args) -> typecheck_apply ?name:exp.name env prim loc args
 
   | MatchOption (arg, loc, ifnone, name, ifsome) ->
      let arg = typecheck env arg in
@@ -353,7 +355,7 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
            type_error loc "branches of match have different types" ty2 ty1;
          ty1
      in
-     mk desc ty
+     mk ?name:exp.name desc ty
 
   | MatchNat (arg, loc, plus_name, ifplus, minus_name, ifminus) ->
      let arg = typecheck_expected "match%nat" env Tint arg in
@@ -374,7 +376,7 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
              ty2 ty1;
          ty1
      in
-     mk desc ty
+     mk ?name:exp.name desc ty
 
   | Loop (name, loc, body, arg) ->
      let arg = typecheck env arg in
@@ -384,7 +386,7 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
      let body =
        typecheck_expected "loop body" env (Ttuple [Tbool; arg.ty]) body in
      check_used env name loc count;
-     mk (Loop (name, loc, body, arg)) arg.ty
+     mk ?name:exp.name (Loop (name, loc, body, arg)) arg.ty
 
   | MatchList (arg, loc, head_name, tail_name, ifcons, ifnil) ->
      let arg  = typecheck env arg in
@@ -410,7 +412,7 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
              ty2 ty1;
           ty1
      in
-     mk desc ty
+     mk ?name:exp.name desc ty
 
   | Lambda (arg_name, arg_type, loc, body, res_type) ->
     let lambda_arg_type = arg_type in
@@ -424,7 +426,7 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
     check_used env lambda_arg_name loc arg_count;
     let desc = Lambda (arg_name, lambda_arg_type, loc, body, body.ty) in
     let ty = Tlambda (lambda_arg_type, body.ty) in
-    mk desc ty
+    mk ?name:exp.name desc ty
 
   | Closure _ -> assert false
 
@@ -451,7 +453,7 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
        ) lab_x_exp_list in
      if not (StringSet.is_empty !remaining_labels) then
        error loc "label %s is not defined" (StringSet.choose !remaining_labels);
-     mk (Record (loc, lab_exp)) record_ty
+     mk ?name:exp.name (Record (loc, lab_exp)) record_ty
 
   | Constructor(loc, Constr constr, arg) ->
      let ty_name, arg_ty = StringMap.find constr env.env.constrs in
@@ -459,26 +461,26 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
      if arg.transfer then
        error loc "transfer not allowed in constructor argument";
      let constr_ty = StringMap.find ty_name env.env.types in
-     mk (Constructor(loc, Constr constr, arg)) constr_ty
+     mk ?name:exp.name (Constructor(loc, Constr constr, arg)) constr_ty
 
   | Constructor(loc, Left right_ty, arg) ->
      let arg = typecheck env arg in
      if arg.transfer then
        error loc "transfer not allowed in constructor argument";
      let ty = Tor (arg.ty, right_ty) in
-     mk (Constructor(loc, Left right_ty, arg)) ty
+     mk ?name:exp.name (Constructor(loc, Left right_ty, arg)) ty
 
   | Constructor(loc, Right left_ty, arg) ->
      let arg = typecheck env arg in
      if arg.transfer then
        error loc "transfer not allowed in constructor argument";
      let ty = Tor (left_ty, arg.ty) in
-     mk (Constructor(loc, Right left_ty, arg)) ty
+     mk ?name:exp.name (Constructor(loc, Right left_ty, arg)) ty
 
   | Constructor(loc, Source (from_ty, to_ty), arg) ->
     let arg = typecheck env arg in
     let ty = Tcontract(from_ty, to_ty) in
-    mk (Constructor(loc, Source (from_ty, to_ty), arg)) ty
+    mk ?name:exp.name (Constructor(loc, Source (from_ty, to_ty), arg)) ty
 
   | MatchVariant (arg, loc, cases) ->
     let arg = typecheck env arg in
@@ -564,7 +566,7 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
       | None -> Tfail
       | Some ty -> ty
     in
-    mk desc ty
+    mk ?name:exp.name desc ty
 
 and find_case loc env constr cases =
   match List.find_all (function
@@ -931,7 +933,7 @@ and typecheck_expected info env expected_ty exp =
                ("Unexpected type for "^info) exp.ty expected_ty;
   exp
 
-and typecheck_apply env prim loc args =
+and typecheck_apply ?name env prim loc args =
   let args = List.map (fun arg ->
                  let arg = typecheck env arg in
                  if arg.transfer then
@@ -939,15 +941,17 @@ and typecheck_apply env prim loc args =
                  arg
                ) args in
   let prim, ty = typecheck_prim1 env prim loc args in
-  mk (Apply (prim, loc, args)) ty
+  mk ?name (Apply (prim, loc, args)) ty
 
 
 let typecheck_contract ~warnings env contract =
   let env =
     {
       warnings;
+      annot=false;
       counter = ref 0;
       vars = StringMap.empty;
+      vars_counts = StringMap.empty;
       to_inline = ref StringMap.empty;
       env = env;
       clos_env = None;
@@ -965,8 +969,10 @@ let typecheck_code ~warnings env contract expected_ty code =
   let env =
     {
       warnings;
+      annot=false;
       counter = ref 0;
       vars = StringMap.empty;
+      vars_counts = StringMap.empty;
       to_inline = ref StringMap.empty;
       env = env;
       clos_env = None;

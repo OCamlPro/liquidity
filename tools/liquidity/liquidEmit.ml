@@ -12,6 +12,7 @@ open LiquidTypes
 
 let rec emit_code code =
   match code.i with
+  | ANNOT s -> M_INS_ANNOT s
   | SEQ exprs -> M_INS_EXP ("SEQ", [], List.map emit_code exprs)
   | IF (ifthen, ifelse) ->
      M_INS_EXP ("IF", [], [emit_code ifthen; emit_code ifelse])

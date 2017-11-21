@@ -319,12 +319,13 @@ type pattern =
   | CAny
 
 type ('ty, 'a) exp = {
-    desc : ('ty, 'a) exp_desc;
-    ty : 'ty;
-    bv : StringSet.t;
-    fail : bool;
-    transfer : bool;
-  }
+  desc : ('ty, 'a) exp_desc;
+  name : string option;
+  ty : 'ty;
+  bv : StringSet.t;
+  fail : bool;
+  transfer : bool;
+}
 
 and ('ty, 'a) exp_desc =
   | Let of string * location * ('ty, 'a) exp * ('ty, 'a) exp
@@ -390,7 +391,7 @@ type live_exp = (datatype * datatype StringMap.t, encoded) exp
 
 let mk =
   let bv = StringSet.empty in
-  fun desc ty ->
+  fun ?name desc ty ->
     let fail, transfer = match desc with
       | Const (_, _)
       | Var (_, _, _) -> false, false
@@ -428,15 +429,17 @@ let mk =
         e.fail || List.exists (fun (_, e) -> e.fail) cases,
         e.transfer || List.exists (fun (_, e) -> e.transfer) cases
     in
-    { desc; ty; bv; fail; transfer }
+    { desc; name; ty; bv; fail; transfer }
 
 
 type michelson_exp =
   | M_INS of string
+  | M_INS_ANNOT of string
   | M_INS_CST of string * datatype * const
   | M_INS_EXP of string * datatype list * michelson_exp list
 
 type 'a pre_michelson =
+  | ANNOT of string
   | SEQ of 'a list
   | DIP of int * 'a
   | IF of 'a * 'a
@@ -551,8 +554,10 @@ type env = {
 (* fields updated in LiquidCheck *)
 type 'a typecheck_env = {
     warnings : bool;
+    annot : bool;
     counter : int ref;
-    vars : (string * datatype * int ref) StringMap.t;
+    vars : (string * datatype) StringMap.t;
+    vars_counts : int ref StringMap.t;
     env : env;
     to_inline : encoded_exp StringMap.t ref;
     contract : 'a contract;
@@ -564,6 +569,7 @@ type 'a typecheck_env = {
 type node = {
   num : int;
   loc : location;
+  mutable name : string option;
   mutable kind : node_kind;
   mutable args : node list; (* dependencies *)
 

@@ -66,8 +66,7 @@ let data_of_liq ~filename ~contract ~parameter ~storage =
       let sy_exp = LiquidFromOCaml.translate_expression env ml_exp in
       let ty_exp = LiquidCheck.typecheck_code
           ~warnings:true env contract ty sy_exp in
-      let enc_exp = LiquidEncode.encode_code
-          ~warnings:true env contract ty_exp in
+      let enc_exp = LiquidEncode.encode_code env contract ty_exp in
       let loc = LiquidLoc.loc_in_file filename in
       let c = translate_const_exp loc enc_exp in
       let s = LiquidPrinter.Michelson.line_of_const c in

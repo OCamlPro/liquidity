@@ -39,7 +39,7 @@ let compute code to_inline =
              else
                if v.ty <> Tunit then raise Exit
                else
-                 { exp with desc = Seq(v, body) }
+                 { exp with desc = Seq(v, body); name = None }
            with Exit ->
              { exp with desc = Let(name, loc, v, body) }
          end
@@ -124,5 +124,16 @@ let compute code to_inline =
 
   iter code
 
-let simplify_contract contract to_inline =
+let simplify_contract ?(decompile=false) contract to_inline =
+  let to_inline =
+    if decompile
+    then
+      StringMap.filter
+        (fun _ e -> match e with
+           | { ty = Tlambda _ } -> false
+           | { name = Some _ } -> false
+           | _ -> true
+        ) to_inline
+    else to_inline
+  in
   { contract with code = compute contract.code to_inline }
