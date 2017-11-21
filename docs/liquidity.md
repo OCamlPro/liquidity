@@ -182,7 +182,8 @@ Liquidity also provides additional operations:
 * `Map.remove : 'a -> ('a, 'b) map -> ('a, 'b) map` : remove a binding,
   if it exists, in a map
 * `Set.add : 'a -> 'a set -> 'a set` : add an element to a set
-* `Map.remove : 'a -> 'a set -> 'a set` : remove an element in a set
+* `Set.remove : 'a -> 'a set -> 'a set` : remove an element, if it
+  exists, in a set
 
 Arithmetic and logic operators
 ------------------------------
