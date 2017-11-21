@@ -1,5 +1,7 @@
 (* Script to build Tezos with ocp-build.
 
+LAST COMMIT Tezos/gitlab: 67aac91d9f2286daa347716577f7b5e8c36d2da4
+
 To use this script, checkout Tezos in a sub-directory `tezos/`, and
 create a file `build.ocp2` in `tezos/src/` containing only:
 

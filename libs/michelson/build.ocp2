@@ -58,7 +58,6 @@ OCaml.library("michelson-base",
         pp_minutils("data_encoding.ml");
         pp_utils("error_monad_sig.ml");
         pp_utils("error_monad.ml");
-
      ];
      requires = [
               "michelson-deps";
@@ -102,6 +101,8 @@ OCaml.library("michelson", ocaml + {
         pp_utils("hash.ml");
         "ed25519.ml";
         pp_utils("tezos_data.ml");
+
+        pp_client_emdebbed("michelson_macros.ml");
 
 (*
         pp_proto_alpha("tezos_hash.ml");
@@ -170,8 +171,3 @@ OCaml.library("michelson", ocaml + {
 
 }
 
-
-OCaml.program("ocp-micheline", ocaml + {
-                               files = [ "test.ml" ];
-                               requires = [ "micheline"; "ocplib-file" ];
-                               });

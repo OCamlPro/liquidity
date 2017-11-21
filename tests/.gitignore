@@ -9,3 +9,5 @@
 *.dot
 *.pre
 *.simple
+*.encoded
+*.ocaml

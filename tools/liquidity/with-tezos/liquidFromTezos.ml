@@ -243,10 +243,19 @@ let rec find nodes name =
      else find nodes name
   | _ -> failwith "LiquidFromTezos.find: invalid format"
 
+let rec expand expr =
+  match Michelson_macros.expand expr with
+  | Seq (loc, items, annot) ->
+     Seq (loc, List.map expand items, annot)
+  | Prim (loc, name, args, annot) ->
+     Prim (loc, name, List.map expand args, annot)
+  | Int _ | String _ as atom -> atom
 
 let convert_contract loc_table c =
   let c =
-    List.map (Micheline.inject_locations (fun _ -> 0)) c in
+    List.map (fun c ->
+        let c = Micheline.inject_locations (fun _ -> 0) c in
+      expand c) c in
   let return = convert_type (find c "return") in
   let parameter = convert_type (find c "parameter") in
   let storage = convert_type (find c "storage") in
