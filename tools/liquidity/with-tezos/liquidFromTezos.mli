@@ -7,6 +7,8 @@
 (*                                                                        *)
 (**************************************************************************)
 
+exception Missing_program_field of string
+
 val convert_contract :
   LiquidTezosTypes.loc_table ->
   LiquidTezosTypes.contract ->

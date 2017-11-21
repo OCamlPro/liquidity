@@ -12,3 +12,5 @@ type contract = string Micheline.canonical list
 type loc_table = (int * LiquidTypes.location) list
 
 type hash = Hash.Operation_hash.t
+
+exception ParseError of Error_monad.error

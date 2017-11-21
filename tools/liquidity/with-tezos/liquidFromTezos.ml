@@ -11,6 +11,8 @@ open LiquidTypes
 
 open Micheline;;
 
+exception Missing_program_field of string
+
 let unknown_expr f_name expr =
   LiquidLoc.raise_error ~loc:(LiquidLoc.loc_in_file f_name) "%s"
     (match expr with
@@ -237,11 +239,11 @@ let rec convert_code loc_table expr =
 
 let rec find nodes name =
   match nodes with
-  | [] -> Printf.kprintf failwith "LiquidFromTezos.find: field %S not found" name
+  | [] -> raise (Missing_program_field name)
   | Micheline.Prim(_, name_maybe, [ v ], _) :: nodes ->
      if name_maybe = name then v
      else find nodes name
-  | _ -> failwith "LiquidFromTezos.find: invalid format"
+  | _ -> raise (Missing_program_field name)
 
 let rec expand expr =
   match Michelson_macros.expand expr with
@@ -250,6 +252,7 @@ let rec expand expr =
   | Prim (loc, name, args, annot) ->
      Prim (loc, name, List.map expand args, annot)
   | Int _ | String _ as atom -> atom
+
 
 let convert_contract loc_table c =
   let c =
@@ -265,66 +268,29 @@ let convert_contract loc_table c =
 
 
 
-    (*
-let liquid_loc_of_script_loc f { Script_located_ir.start; stop } =
+let liquid_loc_of_script_loc f { Micheline_parser.start; stop } =
   { loc_file = f;
     loc_pos = Some (
-        (start.Script_located_ir.line, start.Script_located_ir.column),
-        (stop.Script_located_ir.line, stop.Script_located_ir.column))
+        (start.Micheline_parser.line, start.Micheline_parser.column),
+        (stop.Micheline_parser.line, stop.Micheline_parser.column))
   }
 
 let convert_loc_table f loc_table =
   let loc_table = List.assoc "code" loc_table in
   List.map (fun (i, p) -> (i, liquid_loc_of_script_loc f p)) loc_table
-     *)
-
 
 let contract_of_string filename s =
   let tokens, errors = Micheline_parser.tokenize s in
   match errors with
-  | _ :: _ -> None
+  | error :: _ -> raise (LiquidTezosTypes.ParseError error)
   | [] ->
      let nodes, errors = Micheline_parser.parse_toplevel tokens in
      match errors with
-     | _ :: _ -> None
+     | error :: _ -> raise (LiquidTezosTypes.ParseError error)
      | [] ->
         let nodes = List.map Micheline.extract_locations nodes in
         let (nodes, loc_table) = List.split nodes in
-        Some (nodes, [])
-
-             (*  convert_loc_table filename parsed.loc_table) *)
-
-
-
-                 (*
-let data_of_string s =
-  match Client_proto_programs.parse_data s with
-  | Ok data -> Some data.ast
-  | Error _ -> None
-
- *)
-
-                 (*
-let pp = Tezos_context.pp
-
-module JSON = struct
-
-  open OcpJson.TYPES
-
-  let rec convert json =
-    match json with
-    | `Bool bool -> B bool
-    | `Float f -> F f
-    | `Null -> Z
-    | `String s -> S s
-    | `A list -> L (List.map convert list)
-    | `O list -> O (List.map (fun (s,e) -> (s, convert e)) list)
-
-  let to_string j =
-    OcpJson.to_string ~minify:false (convert j)
-
-  let () =
-    Error_monad.json_to_string := to_string
-
-end
-                  *)
+        Some (nodes,
+              List.map (fun (n, l) ->
+                  (n, liquid_loc_of_script_loc filename l))
+                       (List.flatten loc_table))

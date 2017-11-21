@@ -12,14 +12,6 @@ open Micheline
 
 type tezos_code = (unit,string) Micheline.node
 
-(*
-type expr =
-  | Int of location * string
-  | String of location * string
-  | Prim of location * string * expr list
-  | Seq of location * expr list
- *)
-
 let debug = None
 
 let prim name args = Micheline.Prim(0, name, args, debug)
@@ -244,6 +236,19 @@ let line_of_contract c =
   Format.pp_set_formatter_out_functions ppf ffs;
   s
 
+let read_tezos_file filename =
+  let s = FileString.read_file filename in
+  let contract_hash = Hash.Operation_hash.hash_bytes [s] in
+  match LiquidFromTezos.contract_of_string filename s with
+  | Some (code, loc_table) ->
+     Printf.eprintf "Program %S parsed\n%!" filename;
+     code, contract_hash, loc_table
+  | None ->
+     Printf.eprintf "Errors parsing in %S\n%!" filename;
+     exit 2
+
+
+
     (*
 
 let contract_amount = ref "1000.00"
@@ -268,20 +273,6 @@ let get_context () =
         context := Some ctxt;
         ctxt
 
-     *)
-
-let read_tezos_file filename =
-  let s = FileString.read_file filename in
-  let contract_hash = Hash.Operation_hash.hash_bytes [s] in
-  match LiquidFromTezos.contract_of_string filename s with
-  | Some (code, loc_table) ->
-     Printf.eprintf "Program %S parsed\n%!" filename;
-     code, contract_hash, loc_table
-  | None ->
-     Printf.eprintf "Errors parsing in %S\n%!" filename;
-     exit 2
-
-          (*
 let execute_contract_file filename =
   assert false
          (*
