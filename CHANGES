@@ -2,9 +2,9 @@
     NEW FEATURES
     * match%nat construct for int -> nat coercion
     * abs is now int -> int
-    * Command line options --parse-only --type-only
-    * Command line option --single-line to output Michelson on a
-      single line
+    * Command line options --parse-only, --type-only
+    * Command line options --single-line, --compact to output
+      Michelson on a single line
     * Support &&, || Boolean connectors
     * Support Map.add, Map.remove, Set.add, Set.remove
     * Lambda types are now written as t1 -> t2 instead of
@@ -19,6 +19,7 @@
     * Encode to constants when possible
     * Better error messages
     * Accept any name for result of Contract.call
+    * Recover variable names when decompiling
 
     BUG FIXES
     * Fix bug in encoding of closures
