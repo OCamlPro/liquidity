@@ -22,11 +22,15 @@ let to_string contract =
       Hashtbl.find nodes node.num
     with Not_found ->
       let name =
-        Printf.sprintf "%d:%s" node.num
-                       (match node.kind with
-                        | N_PRIM prim -> prim
-                        | N_VAR var -> Printf.sprintf "var:%s" var
-                        | _ -> LiquidPrinter.string_of_node node)
+        Printf.sprintf "%d:%s%s" node.num
+          (match node.node_name with
+           | Some name -> Printf.sprintf "var:%s =\n" name
+           | None -> ""
+          )
+          (match node.kind with
+           | N_PRIM prim -> prim
+           | N_VAR var -> Printf.sprintf "var:%s" var
+           | _ -> LiquidPrinter.string_of_node node)
       in
       let n = Ocamldot.node g name [] in
       Hashtbl.add nodes node.num n;

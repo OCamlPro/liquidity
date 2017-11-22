@@ -88,9 +88,9 @@ let compile_liquid_file filename =
 
 
 let compile_tezos_file filename =
-  let code, contract_hash, loc_table = LiquidToTezos.read_tezos_file filename in
+  let code, contract_hash, env = LiquidToTezos.read_tezos_file filename in
 
-  let c = LiquidFromTezos.convert_contract loc_table code in
+  let c, annoted_tz = LiquidFromTezos.convert_contract env code in
   let c = LiquidClean.clean_contract c in
   let c = LiquidInterp.interp c in
   if !arg_parseonly then exit 0;
@@ -110,7 +110,7 @@ let compile_tezos_file filename =
   let typed_ast = LiquidCheck.typecheck_contract ~warnings:false env c in
   let encode_ast, to_inline = LiquidEncode.encode_contract env typed_ast in
   let live_ast = LiquidSimplify.simplify_contract
-      ~decompile:true encode_ast to_inline in
+      ~decompile_annoted:annoted_tz encode_ast to_inline in
   let untyped_ast = LiquidUntype.untype_contract live_ast in
   (* let untyped_ast = c in *)
   let output = filename ^ ".liq" in
@@ -220,6 +220,12 @@ let () =
   with
   | LiquidError error ->
     LiquidLoc.report_error error;
+    exit 1
+  | LiquidFromTezos.Missing_program_field f ->
+    Format.eprintf "Missing script field %s@." f;
+    exit 1
+  | Failure f ->
+    Format.eprintf "Failure: %s@." f;
     exit 2
 (*
   | exn ->

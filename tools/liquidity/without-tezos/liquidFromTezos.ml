@@ -11,5 +11,7 @@ open LiquidTypes
 
 exception Missing_program_field of string
 
-let convert_contract loc_table string = assert false (* NOT IMPLEMENTED *)
-let contract_of_string filename string = assert false (* NOT IMPLEMENTED *)
+let convert_contract loc_table string =
+    failwith "mini version cannot decompile"
+let contract_of_string filename string =
+    failwith "mini version cannot decompile"

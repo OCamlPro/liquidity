@@ -131,5 +131,5 @@ let compute decompile code to_inline =
 
   iter code
 
-let simplify_contract ?(decompile=false) contract to_inline =
-  { contract with code = compute decompile contract.code to_inline }
+let simplify_contract ?(decompile_annoted=false) contract to_inline =
+  { contract with code = compute decompile_annoted contract.code to_inline }

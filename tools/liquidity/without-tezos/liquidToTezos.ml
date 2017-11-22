@@ -18,6 +18,7 @@ let line_of_contract (c : michelson_exp contract) =
 let convert_contract (c : noloc_michelson contract) =
   LiquidEmit.emit_contract c
 
-let read_tezos_file (_filename : string) = assert false
+let read_tezos_file (_filename : string) =
+  failwith "mini version cannot decompile"
 
 let arg_list work_done = []

@@ -41,10 +41,46 @@ let loc_error filename =
     liquid_loc_of_script_loc filename loc
   | _ -> LiquidLoc.loc_in_file filename
 
-let error_to_liqerror filename e =
-  let err_msg = Format.asprintf "%a" Error_monad.pp e in
-  let err_loc = loc_error filename e in
-  { err_loc; err_msg }
+let string_of_token = function
+  | Micheline_parser.Open_paren
+  | Micheline_parser.Close_paren -> "parenthesis"
+  | Micheline_parser.Open_brace
+  | Micheline_parser.Close_brace -> "curly brace"
+  | Micheline_parser.String _ -> "string constant"
+  | Micheline_parser.Int _ -> "integer constant"
+  | Micheline_parser.Ident _ -> "identifier"
+  | Micheline_parser.Annot _ -> "annotation"
+  | Micheline_parser.Comment _
+  | Micheline_parser.Eol_comment _ -> "comment"
+  | Micheline_parser.Semi -> "semi colon"
+
+let msg_error =
+  let open Micheline_parser in
+  function
+  | Invalid_utf8_sequence (point, msg) ->
+    Printf.sprintf "Invalid UTF-8 sequence %S" msg
+  | Unexpected_character (point, msg) ->
+    Printf.sprintf "Unexpected character %s" msg
+  | Undefined_escape_sequence (point, msg) ->
+    Printf.sprintf "Undefined escape character %S" msg
+  | Missing_break_after_number point -> "Missing break"
+  | Unterminated_string loc -> "Unterminated string"
+  | Unterminated_integer loc -> "Unterminated integer"
+  | Unterminated_comment loc -> "Unterminated comment"
+  | Unclosed { loc ; token } ->
+    Printf.sprintf "Unclosed %s" (string_of_token token)
+  | Unexpected { loc ; token } ->
+    Printf.sprintf "Unexpected %s" (string_of_token token)
+  | Extra { loc ; token } ->
+    Printf.sprintf "Extra %s" (string_of_token token)
+  | Misaligned node -> "Misaligned expression"
+  | Empty -> "Empty expression"
+  | _ -> ""
+
+let error_to_liqerror filename e = {
+  err_loc = loc_error filename e;
+  err_msg = msg_error e
+}
 
 let loc_of_int env index =
   try IntMap.find index env.loc_table
@@ -128,6 +164,7 @@ let liq_annot name =
 let rec convert_code env expr =
   match expr with
   | Seq (index, [], Some name) when is_liq_annot name ->
+    env.annoted <- true;
     mic_loc (loc_of_int env index) (ANNOT (liq_annot name))
   | Seq (index, exprs, _debug) ->
     mic_loc (loc_of_int env index)
@@ -308,7 +345,7 @@ let convert_contract env c =
   let parameter = convert_type env (find c "parameter") in
   let storage = convert_type env (find c "storage") in
   let code = convert_code env (find c "code") in
-  { code; storage; return; parameter }
+  { code; storage; return; parameter }, env.annoted
 
 
 let convert_loc_table f loc_tables =
@@ -332,6 +369,7 @@ let contract_of_string filename s =
         let nodes = List.map Micheline.extract_locations nodes in
         let (nodes, loc_tables) = List.split nodes in
         let env = { filename;
-                    loc_table = convert_loc_table filename loc_tables
+                    loc_table = convert_loc_table filename loc_tables;
+                    annoted = false;
                   } in
         Some (nodes, env)
