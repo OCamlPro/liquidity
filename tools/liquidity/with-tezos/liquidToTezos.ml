@@ -97,7 +97,7 @@ let rec convert_type expr =
 let rec convert_code expr =
   match expr.i with
   | ANNOT a ->
-    Micheline.Seq (0, [], Some a)
+    Micheline.Seq (0, [], Some ("@"^a))
   | SEQ exprs ->
     Micheline.Seq (0, List.map convert_code exprs, debug)
   | DROP -> prim "DROP" []

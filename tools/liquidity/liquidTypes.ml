@@ -9,6 +9,7 @@
 
 module StringMap = Map.Make(String)
 module StringSet = Set.Make(String)
+module IntMap = Map.Make(struct type t = int let compare = compare end)
 
 exception InvalidFormat of string * string
 

@@ -15,7 +15,7 @@ val string_of_contract : LiquidTezosTypes.contract -> string
 
 val read_tezos_file :
   string ->
-  LiquidTezosTypes.contract * LiquidTezosTypes.hash * LiquidTezosTypes.loc_table
+  LiquidTezosTypes.contract * LiquidTezosTypes.hash * LiquidTezosTypes.env
 
 val arg_list : bool ref ->
          (Arg.key * Arg.spec * Arg.doc) list

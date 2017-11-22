@@ -10,11 +10,11 @@
 exception Missing_program_field of string
 
 val convert_contract :
-  LiquidTezosTypes.loc_table ->
+  LiquidTezosTypes.env ->
   LiquidTezosTypes.contract ->
   LiquidTypes.loc_michelson LiquidTypes.contract
 
 val contract_of_string :
   string -> (* maybe filename *)
   string -> (* content *)
-  (LiquidTezosTypes.contract * LiquidTezosTypes.loc_table) option
+  (LiquidTezosTypes.contract * LiquidTezosTypes.env) option

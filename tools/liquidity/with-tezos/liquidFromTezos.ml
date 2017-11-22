@@ -8,241 +8,277 @@
 (**************************************************************************)
 
 open LiquidTypes
+open LiquidTezosTypes
 
 open Micheline;;
 
 exception Missing_program_field of string
 
-let unknown_expr f_name expr =
-  LiquidLoc.raise_error ~loc:(LiquidLoc.loc_in_file f_name) "%s"
-    (match expr with
-     | Micheline.Seq (_loc, _exprs, _debug) -> "Seq (_)"
-     | Micheline.String (_loc, s) ->
-       Printf.sprintf "String %S" s
-     | Micheline.Int (_loc, s) ->
-       Printf.sprintf "Int %s" s
-     | Micheline.Prim(_, s, args, _debug) ->
-       Printf.sprintf "Prim(%S,[%d])" s (List.length args)
-    )
+let liquid_loc_of_script_loc f { Micheline_parser.start; stop } =
+  { loc_file = f;
+    loc_pos = Some (
+        (start.Micheline_parser.line, start.Micheline_parser.column),
+        (stop.Micheline_parser.line, stop.Micheline_parser.column))
+  }
 
-let rec convert_const expr =
-  match expr with
-  | Micheline.Int (_loc, n) -> CInt (LiquidPrinter.integer_of_mic n)
-  | Micheline.String (_loc, s) -> CString s
-  | Micheline.Prim(_, "Unit", [], _debug) -> CUnit
-  | Micheline.Prim(_, "True", [], _debug) -> CBool true
-  | Micheline.Prim(_, "False", [], _debug) -> CBool false
-  | Micheline.Prim(_, "None", [], _debug) -> CNone
+let loc_error filename =
+  let open Micheline_parser in
+  function
+  | Invalid_utf8_sequence (pt, _)
+  | Unexpected_character (pt, _)
+  | Undefined_escape_sequence (pt, _)
+  | Missing_break_after_number pt ->
+    liquid_loc_of_script_loc filename { start = pt; stop = pt }
+  | Unterminated_string loc
+  | Unterminated_integer loc
+  | Unterminated_comment loc
+  | Unclosed { loc }
+  | Unexpected { loc }
+  | Extra { loc } ->
+    liquid_loc_of_script_loc filename loc
+  | Misaligned n ->
+    let loc = Micheline.location n in
+    liquid_loc_of_script_loc filename loc
+  | _ -> LiquidLoc.loc_in_file filename
 
-  | Micheline.Prim(_, "Some", [x], _debug) -> CSome (convert_const x)
-  | Micheline.Prim(_, "Left", [x], _debug) -> CLeft (convert_const x)
-  | Micheline.Prim(_, "Right", [x], _debug) -> CRight (convert_const x)
-  | Micheline.Prim(_, "Pair", [x;y], _debug) -> CTuple [convert_const x;
-                                                  convert_const y]
-  | Micheline.Prim(_, "List", args, _debug) -> CList (List.map convert_const args)
-  | Micheline.Prim(_, "Map", args, _debug) ->
-     CMap (List.map (function
-                     | Micheline.Prim(_, "Item", [x;y], _debug) ->
-                        convert_const x, convert_const y
-                     | expr ->
-                        unknown_expr "convert_const_item" expr) args)
-  | Micheline.Prim(_, "Set", args, _debug) -> CSet (List.map convert_const args)
-  | _ -> unknown_expr "convert_const" expr
+let error_to_liqerror filename e =
+  let err_msg = Format.asprintf "%a" Error_monad.pp e in
+  let err_loc = loc_error filename e in
+  { err_loc; err_msg }
 
-let rec convert_type expr =
-  match expr with
-  | Micheline.Prim(_, "unit", [], _debug) -> Tunit
-  | Micheline.Prim(_, "timestamp", [], _debug) -> Ttimestamp
-  | Micheline.Prim(_, "tez", [], _debug) -> Ttez
-  | Micheline.Prim(_, "int", [], _debug) -> Tint
-  | Micheline.Prim(_, "nat", [], _debug) -> Tnat
-  | Micheline.Prim(_, "bool", [], _debug) -> Tbool
-  | Micheline.Prim(_, "key", [], _debug) -> Tkey
-  | Micheline.Prim(_, "key_hash", [], _debug) -> Tkey_hash
-  | Micheline.Prim(_, "signature", [], _debug) -> Tsignature
-  | Micheline.Prim(_, "string", [], _debug) -> Tstring
-  | Micheline.Prim(_, "pair", [x;y], _debug) -> Ttuple [convert_type x;
-                                                  convert_type y]
-  | Micheline.Prim(_, "or", [x;y], _debug) -> Tor (convert_type x,
-                                                  convert_type y)
-  | Micheline.Prim(_, "contract", [x;y], _debug) -> Tcontract
-                                                (convert_type x,
-                                                 convert_type y)
-  | Micheline.Prim(_, "lambda", [x;y], _debug) -> Tlambda
-                                                (convert_type x,
-                                                 convert_type y)
-  | Micheline.Prim(_, "map", [x;y], _debug) -> Tmap
-                                           (convert_type x,
-                                            convert_type y)
-  | Micheline.Prim(_, "set", [x], _debug) -> Tset (convert_type x)
-  | Micheline.Prim(_, "list", [x], _debug) -> Tlist (convert_type x)
-  | Micheline.Prim(_, "option", [x], _debug) -> Toption (convert_type x)
-  | _ -> unknown_expr "convert_type" expr
-
-let loc_of_int loc_table index =
-  try List.assoc index loc_table
+let loc_of_int env index =
+  try IntMap.find index env.loc_table
   with Not_found -> LiquidLoc.noloc
 
-let rec convert_code loc_table expr =
-  match expr with
-  | Micheline.Seq (index, [], Some name) ->
-    mic_loc (loc_of_int loc_table index) (ANNOT name)
-  | Micheline.Seq (index, exprs, _debug) ->
-    mic_loc (loc_of_int loc_table index)
-      (SEQ (List.map (convert_code loc_table) exprs))
-  | Micheline.Prim(index, "DUP", [], _debug) ->
-    mic_loc (loc_of_int loc_table index) (DUP 1)
-  | Micheline.Prim(index, "DROP", [], _debug) ->
-    mic_loc (loc_of_int loc_table index) (DROP)
-  | Micheline.Prim(index, "DIP", [ arg ], _debug) ->
-    mic_loc (loc_of_int loc_table index) (DIP (1, convert_code loc_table arg))
-  | Micheline.Prim(index, "CAR", [], _debug) ->
-    mic_loc (loc_of_int loc_table index) (CAR)
-  | Micheline.Prim(index, "CDR", [], _debug) ->
-    mic_loc (loc_of_int loc_table index) (CDR)
-  | Micheline.Prim(index, "SWAP", [], _debug) ->
-    mic_loc (loc_of_int loc_table index) (SWAP)
-  | Micheline.Prim(index, "IF", [x;y], _debug) ->
-    mic_loc (loc_of_int loc_table index)
-      (IF (convert_code loc_table x, convert_code loc_table y))
-  | Micheline.Prim(index, "IF_NONE", [x;y], _debug) ->
-    mic_loc (loc_of_int loc_table index)
-      (IF_NONE (convert_code loc_table x, convert_code loc_table y))
-  | Micheline.Prim(index, "IF_LEFT", [x;y], _debug) ->
-    mic_loc (loc_of_int loc_table index)
-      (IF_LEFT (convert_code loc_table x, convert_code loc_table y))
-  | Micheline.Prim(index, "IF_CONS", [x;y], _debug) ->
-    mic_loc (loc_of_int loc_table index)
-      (IF_CONS (convert_code loc_table x, convert_code loc_table y))
-  | Micheline.Prim(index, "NOW", [], _debug) ->
-    mic_loc (loc_of_int loc_table index) (NOW)
-  | Micheline.Prim(index, "PAIR", [], _debug) ->
-    mic_loc (loc_of_int loc_table index) (PAIR)
-  | Micheline.Prim(index, "BALANCE", [], _debug) ->
-    mic_loc (loc_of_int loc_table index) (BALANCE)
-  | Micheline.Prim(index, "SUB", [], _debug) ->
-    mic_loc (loc_of_int loc_table index) (SUB)
-  | Micheline.Prim(index, "ADD", [], _debug) ->
-    mic_loc (loc_of_int loc_table index) (ADD)
-  | Micheline.Prim(index, "MUL", [], _debug) ->
-    mic_loc (loc_of_int loc_table index) (MUL)
-  | Micheline.Prim(index, "NEQ", [], _debug) ->
-    mic_loc (loc_of_int loc_table index) (NEQ)
-  | Micheline.Prim(index, "EQ", [], _debug) ->
-    mic_loc (loc_of_int loc_table index) (EQ)
-  | Micheline.Prim(index, "LT", [], _debug) ->
-    mic_loc (loc_of_int loc_table index) (LT)
-  | Micheline.Prim(index, "LE", [], _debug) ->
-    mic_loc (loc_of_int loc_table index) (LE)
-  | Micheline.Prim(index, "GT", [], _debug) ->
-    mic_loc (loc_of_int loc_table index) (GT)
-  | Micheline.Prim(index, "GE", [], _debug) ->
-    mic_loc (loc_of_int loc_table index) (GE)
-  | Micheline.Prim(index, "GET", [], _debug) ->
-    mic_loc (loc_of_int loc_table index) (GET)
-  | Micheline.Prim(index, "UPDATE", [], _debug) ->
-    mic_loc (loc_of_int loc_table index) (UPDATE)
-  | Micheline.Prim(index, "MEM", [], _debug) ->
-    mic_loc (loc_of_int loc_table index) (MEM)
-  | Micheline.Prim(index, "SOME", [], _debug) ->
-    mic_loc (loc_of_int loc_table index) (SOME)
-  | Micheline.Prim(index, "MANAGER", [], _debug) ->
-    mic_loc (loc_of_int loc_table index) (MANAGER)
-  | Micheline.Prim(index, "SOURCE", [ty1; ty2], _debug) ->
-    mic_loc (loc_of_int loc_table index)
-      (SOURCE (convert_type ty1, convert_type ty2))
-  | Micheline.Prim(index, "MAP", [], _debug) ->
-    mic_loc (loc_of_int loc_table index) (MAP)
-  | Micheline.Prim(index, "OR", [], _debug) ->
-    mic_loc (loc_of_int loc_table index) (OR)
-  | Micheline.Prim(index, "LAMBDA", [ty1; ty2; expr], _debug) ->
-    mic_loc (loc_of_int loc_table index)
-      (LAMBDA (convert_type ty1, convert_type ty2, convert_code loc_table expr))
-  | Micheline.Prim(index, "REDUCE", [], _debug) ->
-    mic_loc (loc_of_int loc_table index) (REDUCE)
-  | Micheline.Prim(index, "COMPARE", [], _debug) ->
-    mic_loc (loc_of_int loc_table index) (COMPARE)
-  | Micheline.Prim(index, "FAIL", [], _debug) ->
-    mic_loc (loc_of_int loc_table index) (FAIL)
-  | Micheline.Prim(index, "UNIT", [], _debug) ->
-    mic_loc (loc_of_int loc_table index) (PUSH (Tunit, CUnit))
-  | Micheline.Prim(index, "TRANSFER_TOKENS", [], _debug) ->
-    mic_loc (loc_of_int loc_table index) (TRANSFER_TOKENS)
-  | Micheline.Prim(index, "PUSH", [ ty; cst ], _debug) ->
-     begin match convert_type ty, convert_const cst with
-     | Tnat, CInt n ->
-        mic_loc (loc_of_int loc_table index) (PUSH (Tnat, CNat n))
-     | ty, cst ->
-        mic_loc (loc_of_int loc_table index) (PUSH (ty, cst))
-     end
-  | Micheline.Prim(index, "H", [], _debug) ->
-    mic_loc (loc_of_int loc_table index) (H)
-  | Micheline.Prim(index, "HASH_KEY", [], _debug) ->
-    mic_loc (loc_of_int loc_table index) (HASH_KEY)
-  | Micheline.Prim(index, "CHECK_SIGNATURE", [], _debug) ->
-    mic_loc (loc_of_int loc_table index) (CHECK_SIGNATURE)
-  | Micheline.Prim(index, "CONCAT", [], _debug) ->
-    mic_loc (loc_of_int loc_table index) (CONCAT)
-  | Micheline.Prim(index, "EDIV", [], _debug) ->
-    mic_loc (loc_of_int loc_table index) (EDIV)
-  | Micheline.Prim(index, "EXEC", [], _debug) ->
-    mic_loc (loc_of_int loc_table index) (EXEC)
-  | Micheline.Prim(index, "MOD", [], _debug) ->
-    mic_loc (loc_of_int loc_table index) (MOD)
-  | Micheline.Prim(index, "DIV", [], _debug) ->
-    mic_loc (loc_of_int loc_table index) (DIV)
-  | Micheline.Prim(index, "AMOUNT", [], _debug) ->
-    mic_loc (loc_of_int loc_table index) (AMOUNT)
-  | Micheline.Prim(index, "NIL", [ty], _debug) ->
-    mic_loc (loc_of_int loc_table index)
-      (PUSH (Tlist (convert_type ty), CList []))
-  | Micheline.Prim(index, "EMPTY_SET", [ty], _debug) ->
-    mic_loc (loc_of_int loc_table index)
-      (PUSH (Tset (convert_type ty), CSet []))
-  | Micheline.Prim(index, "EMPTY_MAP", [ty1; ty2], _debug) ->
-    mic_loc (loc_of_int loc_table index)
-      (PUSH (Tmap (convert_type ty1, convert_type ty2), CMap []))
-  | Micheline.Prim(index, "NONE", [ty], _debug) ->
-    mic_loc (loc_of_int loc_table index)
-      (PUSH (Toption (convert_type ty), CNone))
-  | Micheline.Prim(index, "LEFT", [ty], _debug) ->
-    mic_loc (loc_of_int loc_table index)
-      (LEFT (convert_type ty))
-  | Micheline.Prim(index, "CONS", [], _debug) ->
-    mic_loc (loc_of_int loc_table index) (CONS)
-  | Micheline.Prim(index, "LOOP", [loop], _debug) ->
-    mic_loc (loc_of_int loc_table index)
-      (LOOP (convert_code loc_table loop))
-  | Micheline.Prim(index, "RIGHT", [ty], _debug) ->
-    mic_loc (loc_of_int loc_table index)
-      (RIGHT (convert_type ty))
-  | Micheline.Prim(index, "INT", [], _debug) ->
-    mic_loc (loc_of_int loc_table index) (INT)
-  | Micheline.Prim(index, "SIZE", [], _debug) ->
-    mic_loc (loc_of_int loc_table index) (SIZE)
-  | Micheline.Prim(index, "AND", [], _debug) ->
-    mic_loc (loc_of_int loc_table index) (AND)
-  | Micheline.Prim(index, "XOR", [], _debug) ->
-    mic_loc (loc_of_int loc_table index) (XOR)
-  | Micheline.Prim(index, "ABS", [], _debug) ->
-    mic_loc (loc_of_int loc_table index) (ABS)
-  | Micheline.Prim(index, "NOT", [], _debug) ->
-    mic_loc (loc_of_int loc_table index) (NOT)
-  | Micheline.Prim(index, "STEPS_TO_QUOTA", [], _debug) ->
-    mic_loc (loc_of_int loc_table index) (STEPS_TO_QUOTA)
-  | Micheline.Prim(index, "CREATE_ACCOUNT", [], _debug) ->
-    mic_loc (loc_of_int loc_table index) (CREATE_ACCOUNT)
-  | Micheline.Prim(index, "CREATE_CONTRACT", [], _debug) ->
-    mic_loc (loc_of_int loc_table index) (CREATE_CONTRACT)
-  | Micheline.Prim(index, "DEFAULT_ACCOUNT", [], _debug) ->
-    mic_loc (loc_of_int loc_table index) (DEFAULT_ACCOUNT)
+let unknown_expr env msg expr =
+  let loc = loc_of_int env (Micheline.location expr) in
+  LiquidLoc.raise_error ~loc "in %s, %s" msg
+    (match expr with
+     | Seq (_loc, _exprs, _debug) -> "unknwon sequence"
+     | String (_loc, s) ->
+       Printf.sprintf "unknwon string %S" s
+     | Int (_loc, s) ->
+       Printf.sprintf "unknown integer %s" s
+     | Prim(i, s, args, _debug) ->
+       Printf.sprintf "unknown primitive %S with %d arguments"
+         s (List.length args)
+    )
 
-  | _ -> unknown_expr "convert_code" expr
+let rec convert_const env expr =
+  match expr with
+  | Int (_loc, n) -> CInt (LiquidPrinter.integer_of_mic n)
+  | String (_loc, s) -> CString s
+  | Prim(_, "Unit", [], _debug) -> CUnit
+  | Prim(_, "True", [], _debug) -> CBool true
+  | Prim(_, "False", [], _debug) -> CBool false
+  | Prim(_, "None", [], _debug) -> CNone
+
+  | Prim(_, "Some", [x], _debug) -> CSome (convert_const env x)
+  | Prim(_, "Left", [x], _debug) -> CLeft (convert_const env x)
+  | Prim(_, "Right", [x], _debug) -> CRight (convert_const env x)
+  | Prim(_, "Pair", [x;y], _debug) -> CTuple [convert_const env x;
+                                              convert_const env y]
+  | Prim(_, "List", args, _debug) -> CList (List.map (convert_const env) args)
+  | Prim(_, "Map", args, _debug) ->
+     CMap (List.map (function
+                     | Prim(_, "Item", [x;y], _debug) ->
+                        convert_const env x, convert_const env y
+                     | expr ->
+                        unknown_expr env "convert_const_item" expr) args)
+  | Prim(_, "Set", args, _debug) -> CSet (List.map (convert_const env) args)
+  | _ -> unknown_expr env "convert_const" expr
+
+let rec convert_type env expr =
+  match expr with
+  | Prim(_, "unit", [], _debug) -> Tunit
+  | Prim(_, "timestamp", [], _debug) -> Ttimestamp
+  | Prim(_, "tez", [], _debug) -> Ttez
+  | Prim(_, "int", [], _debug) -> Tint
+  | Prim(_, "nat", [], _debug) -> Tnat
+  | Prim(_, "bool", [], _debug) -> Tbool
+  | Prim(_, "key", [], _debug) -> Tkey
+  | Prim(_, "key_hash", [], _debug) -> Tkey_hash
+  | Prim(_, "signature", [], _debug) -> Tsignature
+  | Prim(_, "string", [], _debug) -> Tstring
+  | Prim(_, "pair", [x;y], _debug) -> Ttuple [convert_type env x;
+                                              convert_type env y]
+  | Prim(_, "or", [x;y], _debug) -> Tor (convert_type env x,
+                                         convert_type env y)
+  | Prim(_, "contract", [x;y], _debug) -> Tcontract
+                                                (convert_type env x,
+                                                 convert_type env y)
+  | Prim(_, "lambda", [x;y], _debug) -> Tlambda
+                                                (convert_type env x,
+                                                 convert_type env y)
+  | Prim(_, "map", [x;y], _debug) -> Tmap
+                                           (convert_type env x,
+                                            convert_type env y)
+  | Prim(_, "set", [x], _debug) -> Tset (convert_type env x)
+  | Prim(_, "list", [x], _debug) -> Tlist (convert_type env x)
+  | Prim(_, "option", [x], _debug) -> Toption (convert_type env x)
+  | _ -> unknown_expr env "convert_type" expr
+
+let rec convert_code env expr =
+  match expr with
+  | Seq (index, [], Some name) ->
+    mic_loc (loc_of_int env index) (ANNOT name)
+  | Seq (index, exprs, _debug) ->
+    mic_loc (loc_of_int env index)
+      (SEQ (List.map (convert_code env) exprs))
+  | Prim(index, "DUP", [], _debug) ->
+    mic_loc (loc_of_int env index) (DUP 1)
+  | Prim(index, "DROP", [], _debug) ->
+    mic_loc (loc_of_int env index) (DROP)
+  | Prim(index, "DIP", [ arg ], _debug) ->
+    mic_loc (loc_of_int env index) (DIP (1, convert_code env arg))
+  | Prim(index, "CAR", [], _debug) ->
+    mic_loc (loc_of_int env index) (CAR)
+  | Prim(index, "CDR", [], _debug) ->
+    mic_loc (loc_of_int env index) (CDR)
+  | Prim(index, "SWAP", [], _debug) ->
+    mic_loc (loc_of_int env index) (SWAP)
+  | Prim(index, "IF", [x;y], _debug) ->
+    mic_loc (loc_of_int env index)
+      (IF (convert_code env x, convert_code env y))
+  | Prim(index, "IF_NONE", [x;y], _debug) ->
+    mic_loc (loc_of_int env index)
+      (IF_NONE (convert_code env x, convert_code env y))
+  | Prim(index, "IF_LEFT", [x;y], _debug) ->
+    mic_loc (loc_of_int env index)
+      (IF_LEFT (convert_code env x, convert_code env y))
+  | Prim(index, "IF_CONS", [x;y], _debug) ->
+    mic_loc (loc_of_int env index)
+      (IF_CONS (convert_code env x, convert_code env y))
+  | Prim(index, "NOW", [], _debug) ->
+    mic_loc (loc_of_int env index) (NOW)
+  | Prim(index, "PAIR", [], _debug) ->
+    mic_loc (loc_of_int env index) (PAIR)
+  | Prim(index, "BALANCE", [], _debug) ->
+    mic_loc (loc_of_int env index) (BALANCE)
+  | Prim(index, "SUB", [], _debug) ->
+    mic_loc (loc_of_int env index) (SUB)
+  | Prim(index, "ADD", [], _debug) ->
+    mic_loc (loc_of_int env index) (ADD)
+  | Prim(index, "MUL", [], _debug) ->
+    mic_loc (loc_of_int env index) (MUL)
+  | Prim(index, "NEQ", [], _debug) ->
+    mic_loc (loc_of_int env index) (NEQ)
+  | Prim(index, "EQ", [], _debug) ->
+    mic_loc (loc_of_int env index) (EQ)
+  | Prim(index, "LT", [], _debug) ->
+    mic_loc (loc_of_int env index) (LT)
+  | Prim(index, "LE", [], _debug) ->
+    mic_loc (loc_of_int env index) (LE)
+  | Prim(index, "GT", [], _debug) ->
+    mic_loc (loc_of_int env index) (GT)
+  | Prim(index, "GE", [], _debug) ->
+    mic_loc (loc_of_int env index) (GE)
+  | Prim(index, "GET", [], _debug) ->
+    mic_loc (loc_of_int env index) (GET)
+  | Prim(index, "UPDATE", [], _debug) ->
+    mic_loc (loc_of_int env index) (UPDATE)
+  | Prim(index, "MEM", [], _debug) ->
+    mic_loc (loc_of_int env index) (MEM)
+  | Prim(index, "SOME", [], _debug) ->
+    mic_loc (loc_of_int env index) (SOME)
+  | Prim(index, "MANAGER", [], _debug) ->
+    mic_loc (loc_of_int env index) (MANAGER)
+  | Prim(index, "SOURCE", [ty1; ty2], _debug) ->
+    mic_loc (loc_of_int env index)
+      (SOURCE (convert_type env ty1, convert_type env ty2))
+  | Prim(index, "MAP", [], _debug) ->
+    mic_loc (loc_of_int env index) (MAP)
+  | Prim(index, "OR", [], _debug) ->
+    mic_loc (loc_of_int env index) (OR)
+  | Prim(index, "LAMBDA", [ty1; ty2; expr], _debug) ->
+    mic_loc (loc_of_int env index)
+      (LAMBDA (convert_type env ty1, convert_type env ty2,
+               convert_code env expr))
+  | Prim(index, "REDUCE", [], _debug) ->
+    mic_loc (loc_of_int env index) (REDUCE)
+  | Prim(index, "COMPARE", [], _debug) ->
+    mic_loc (loc_of_int env index) (COMPARE)
+  | Prim(index, "FAIL", [], _debug) ->
+    mic_loc (loc_of_int env index) (FAIL)
+  | Prim(index, "UNIT", [], _debug) ->
+    mic_loc (loc_of_int env index) (PUSH (Tunit, CUnit))
+  | Prim(index, "TRANSFER_TOKENS", [], _debug) ->
+    mic_loc (loc_of_int env index) (TRANSFER_TOKENS)
+  | Prim(index, "PUSH", [ ty; cst ], _debug) ->
+     begin match convert_type env ty, convert_const env cst with
+     | Tnat, CInt n ->
+        mic_loc (loc_of_int env index) (PUSH (Tnat, CNat n))
+     | ty, cst ->
+        mic_loc (loc_of_int env index) (PUSH (ty, cst))
+     end
+  | Prim(index, "H", [], _debug) ->
+    mic_loc (loc_of_int env index) (H)
+  | Prim(index, "HASH_KEY", [], _debug) ->
+    mic_loc (loc_of_int env index) (HASH_KEY)
+  | Prim(index, "CHECK_SIGNATURE", [], _debug) ->
+    mic_loc (loc_of_int env index) (CHECK_SIGNATURE)
+  | Prim(index, "CONCAT", [], _debug) ->
+    mic_loc (loc_of_int env index) (CONCAT)
+  | Prim(index, "EDIV", [], _debug) ->
+    mic_loc (loc_of_int env index) (EDIV)
+  | Prim(index, "EXEC", [], _debug) ->
+    mic_loc (loc_of_int env index) (EXEC)
+  | Prim(index, "MOD", [], _debug) ->
+    mic_loc (loc_of_int env index) (MOD)
+  | Prim(index, "DIV", [], _debug) ->
+    mic_loc (loc_of_int env index) (DIV)
+  | Prim(index, "AMOUNT", [], _debug) ->
+    mic_loc (loc_of_int env index) (AMOUNT)
+  | Prim(index, "NIL", [ty], _debug) ->
+    mic_loc (loc_of_int env index)
+      (PUSH (Tlist (convert_type env ty), CList []))
+  | Prim(index, "EMPTY_SET", [ty], _debug) ->
+    mic_loc (loc_of_int env index)
+      (PUSH (Tset (convert_type env ty), CSet []))
+  | Prim(index, "EMPTY_MAP", [ty1; ty2], _debug) ->
+    mic_loc (loc_of_int env index)
+      (PUSH (Tmap (convert_type env ty1, convert_type env ty2), CMap []))
+  | Prim(index, "NONE", [ty], _debug) ->
+    mic_loc (loc_of_int env index)
+      (PUSH (Toption (convert_type env ty), CNone))
+  | Prim(index, "LEFT", [ty], _debug) ->
+    mic_loc (loc_of_int env index)
+      (LEFT (convert_type env ty))
+  | Prim(index, "CONS", [], _debug) ->
+    mic_loc (loc_of_int env index) (CONS)
+  | Prim(index, "LOOP", [loop], _debug) ->
+    mic_loc (loc_of_int env index)
+      (LOOP (convert_code env loop))
+  | Prim(index, "RIGHT", [ty], _debug) ->
+    mic_loc (loc_of_int env index)
+      (RIGHT (convert_type env ty))
+  | Prim(index, "INT", [], _debug) ->
+    mic_loc (loc_of_int env index) (INT)
+  | Prim(index, "SIZE", [], _debug) ->
+    mic_loc (loc_of_int env index) (SIZE)
+  | Prim(index, "AND", [], _debug) ->
+    mic_loc (loc_of_int env index) (AND)
+  | Prim(index, "XOR", [], _debug) ->
+    mic_loc (loc_of_int env index) (XOR)
+  | Prim(index, "ABS", [], _debug) ->
+    mic_loc (loc_of_int env index) (ABS)
+  | Prim(index, "NOT", [], _debug) ->
+    mic_loc (loc_of_int env index) (NOT)
+  | Prim(index, "STEPS_TO_QUOTA", [], _debug) ->
+    mic_loc (loc_of_int env index) (STEPS_TO_QUOTA)
+  | Prim(index, "CREATE_ACCOUNT", [], _debug) ->
+    mic_loc (loc_of_int env index) (CREATE_ACCOUNT)
+  | Prim(index, "CREATE_CONTRACT", [], _debug) ->
+    mic_loc (loc_of_int env index) (CREATE_CONTRACT)
+  | Prim(index, "DEFAULT_ACCOUNT", [], _debug) ->
+    mic_loc (loc_of_int env index) (DEFAULT_ACCOUNT)
+
+  | _ -> unknown_expr env "convert_code" expr
 
 let rec find nodes name =
   match nodes with
   | [] -> raise (Missing_program_field name)
-  | Micheline.Prim(_, name_maybe, [ v ], _) :: nodes ->
+  | Prim(_, name_maybe, [ v ], _) :: nodes ->
      if name_maybe = name then v
      else find nodes name
   | _ -> raise (Missing_program_field name)
@@ -256,43 +292,39 @@ let rec expand expr =
   | Int _ | String _ as atom -> atom
 
 
-let convert_contract loc_table c =
+let convert_contract env c =
   let c =
     List.map (fun c ->
-        let c = Micheline.inject_locations (fun _ -> 0) c in
+        let c = Micheline.inject_locations (fun i -> i) c in
       expand c) c in
-  let return = convert_type (find c "return") in
-  let parameter = convert_type (find c "parameter") in
-  let storage = convert_type (find c "storage") in
-  let code = convert_code loc_table (find c "code") in
+  let return = convert_type env (find c "return") in
+  let parameter = convert_type env (find c "parameter") in
+  let storage = convert_type env (find c "storage") in
+  let code = convert_code env (find c "code") in
   { code; storage; return; parameter }
 
 
-
-
-let liquid_loc_of_script_loc f { Micheline_parser.start; stop } =
-  { loc_file = f;
-    loc_pos = Some (
-        (start.Micheline_parser.line, start.Micheline_parser.column),
-        (stop.Micheline_parser.line, stop.Micheline_parser.column))
-  }
-
-let convert_loc_table f loc_table =
-  let loc_table = List.assoc "code" loc_table in
-  List.map (fun (i, p) -> (i, liquid_loc_of_script_loc f p)) loc_table
+let convert_loc_table f loc_tables =
+  List.fold_left (
+    List.fold_left (fun acc (i, p) ->
+        IntMap.add i (liquid_loc_of_script_loc f p) acc
+      )
+  ) IntMap.empty loc_tables
 
 let contract_of_string filename s =
   let tokens, errors = Micheline_parser.tokenize s in
   match errors with
-  | error :: _ -> raise (LiquidTezosTypes.ParseError error)
+  | error :: _ ->
+    raise (LiquidError (error_to_liqerror filename error))
   | [] ->
      let nodes, errors = Micheline_parser.parse_toplevel tokens in
      match errors with
-     | error :: _ -> raise (LiquidTezosTypes.ParseError error)
+     | error :: _ ->
+       raise (LiquidError (error_to_liqerror filename error))
      | [] ->
         let nodes = List.map Micheline.extract_locations nodes in
-        let (nodes, loc_table) = List.split nodes in
-        Some (nodes,
-              List.map (fun (n, l) ->
-                  (n, liquid_loc_of_script_loc filename l))
-                       (List.flatten loc_table))
+        let (nodes, loc_tables) = List.split nodes in
+        let env = { filename;
+                    loc_table = convert_loc_table filename loc_tables
+                  } in
+        Some (nodes, env)

@@ -7,6 +7,6 @@
 (*                                                                        *)
 (**************************************************************************)
 
-type loc_table = unit
+type env = unit
 type contract = LiquidTypes.michelson_exp LiquidTypes.contract
 type hash
