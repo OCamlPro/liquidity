@@ -118,10 +118,17 @@ let rec convert_type env expr =
   | Prim(_, "option", [x], _debug) -> Toption (convert_type env x)
   | _ -> unknown_expr env "convert_type" expr
 
+let is_liq_annot name =
+  try Scanf.sscanf name "@liq_" true
+  with _ -> false
+
+let liq_annot name =
+  Scanf.sscanf name "@liq_%s" (fun s -> s)
+
 let rec convert_code env expr =
   match expr with
-  | Seq (index, [], Some name) ->
-    mic_loc (loc_of_int env index) (ANNOT name)
+  | Seq (index, [], Some name) when is_liq_annot name ->
+    mic_loc (loc_of_int env index) (ANNOT (liq_annot name))
   | Seq (index, exprs, _debug) ->
     mic_loc (loc_of_int env index)
       (SEQ (List.map (convert_code env) exprs))

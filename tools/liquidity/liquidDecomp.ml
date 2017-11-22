@@ -55,10 +55,10 @@ let rec var_of node =
   | N_VAR name -> name
   | _ -> match node.node_name with
 
-    | Some name when name.[0] = '@' ->
+    | Some name ->
       (* check_prev_names node node.prevs; *)
-      String.sub name 1 (String.length name - 1)
-    | _ -> match node.kind with
+      name
+    | None -> match node.kind with
 
       (* | N_VAR name -> name *)
       | N_PRIM "CAR" ->
