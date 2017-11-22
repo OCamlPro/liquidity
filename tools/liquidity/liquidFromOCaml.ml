@@ -520,7 +520,7 @@ let deconstruct_pat env pat e =
   | [v, _loc, []] -> v, ty, e
   | _ ->
     let var_name =
-      String.concat "_" (List.rev_map (fun (v,_,_) -> v) vars_infos) in
+      String.concat "_" ( "" :: (List.rev_map (fun (v,_,_) -> v) vars_infos)) in
     let e =
       List.fold_left (fun e (v, loc, indexes) ->
           let access = access_of_deconstruct var_name loc indexes in

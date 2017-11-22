@@ -14,7 +14,7 @@ let nodes = Hashtbl.create 1000
 let node loc kind args prevs =
   incr counter;
   let num = !counter in
-  let node = { num; loc; name = None; kind; args; next = None; prevs } in
+  let node = { num; loc; node_name = None; kind; args; next = None; prevs } in
   List.iter (fun prev ->
     match prev.next with
     | None -> prev.next <- Some node
@@ -48,7 +48,7 @@ let rec uniformize_stack if_stack stack =
     else
       LiquidMisc.list_make (stack_length - if_stack_length)
         { num = -1; loc = LiquidLoc.noloc;
-          name = None;
+          node_name = None;
           kind = N_UNKNOWN "STACK"; args = [];
           next = None; prevs = [] }
       @ if_stack
@@ -112,10 +112,6 @@ let interp contract =
     match code, stack with
     | [], _ -> (stack, seq)
 
-    | {ins = ANNOT name} :: code, (x :: _ as stack) ->
-      x.name <- Some name;
-      decompile_seq stack seq code
-
     (* Special case for abs *)
     | {ins=ABS; loc} :: {ins=INT} :: code, x :: stack ->
       let n = node loc N_ABS [x] [seq] in
@@ -153,6 +149,15 @@ let interp contract =
 
   and decompile stack (seq : node) ins =
     match ins.ins, stack with
+    | ANNOT name, x :: _ ->
+      x.node_name <- Some name;
+      begin match x.kind, seq.kind with
+        | N_IF_END_RESULT _, N_IF _ ->
+          seq.node_name <- Some name;
+        | _ -> ()
+      end;
+      stack, seq
+
     | ANNOT name, _ -> stack, seq (* ignore *)
 
     | SEQ exprs, _ ->

@@ -570,7 +570,7 @@ type 'a typecheck_env = {
 type node = {
   num : int;
   loc : location;
-  mutable name : string option;
+  mutable node_name : string option;
   mutable kind : node_kind;
   mutable args : node list; (* dependencies *)
 

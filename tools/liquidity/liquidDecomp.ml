@@ -38,11 +38,11 @@ let const_name_of_datatype = function
 
 
 let rec check_prev_names node prevs =
-  match node.name with
+  match node.node_name with
   | Some name ->
     List.iter (fun n ->
         begin match n with
-          | { name = Some name'} ->
+          | { node_name = Some name'} ->
             if name' = name then assert (n != node);
           | _ -> ()
         end;
@@ -53,7 +53,7 @@ let rec check_prev_names node prevs =
 let rec var_of node =
   match node.kind with
   | N_VAR name -> name
-  | _ -> match node.name with
+  | _ -> match node.node_name with
 
     | Some name when name.[0] = '@' ->
       (* check_prev_names node node.prevs; *)
@@ -112,14 +112,14 @@ let rec arg_of node =
        match pos, List.length args with
        | 0, 1 -> arg_of if_node
        | _ ->
-          mk (Apply (Prim_tuple_get, noloc, [ arg_of if_node; nat_n pos ]))
+         mk (Apply (Prim_tuple_get, noloc, [ arg_of if_node; nat_n pos ]))
      end
   | N_LOOP_ARG ({ kind = N_LOOP_BEGIN ( _); args } as begin_node, pos ) ->
      begin
        match pos, List.length args with
        | 0, 1 -> arg_of begin_node
        | _ ->
-          mk (Apply (Prim_tuple_get, noloc, [ arg_of begin_node; nat_n pos ]))
+         mk (Apply (Prim_tuple_get, noloc, [ arg_of begin_node; nat_n pos ]))
      end
   | N_LOOP_RESULT (loop_node, begin_node, pos ) ->
      begin
@@ -421,7 +421,7 @@ let decompile contract =
 
   and mklet node desc =
     mk (Let (var_of node, noloc,
-             mk ?name:node.name desc, decompile_next node))
+             mk ?name:node.node_name desc, decompile_next node))
 
   in
   let (begin_node, end_node) = contract.code in

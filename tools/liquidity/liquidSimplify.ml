@@ -9,24 +9,31 @@
 
 open LiquidTypes
 
-let compute code to_inline =
+let compute decompile code to_inline =
 
+  let to_inline = ref (if decompile then StringMap.empty else to_inline) in
+  
   let rec iter exp =
     match exp.desc with
     | Const _ -> exp
     | Var (name, _loc, []) ->
        begin
          try
-           let v = StringMap.find name to_inline in
-           assert (not v.fail);
+           let v = StringMap.find name !to_inline in
+           if not decompile then assert (not v.fail);
            iter v
          with Not_found -> exp
        end
     | Var (name, _loc, _::_) -> assert false
     | SetVar (name, _loc, _, _) -> assert false
+    | Let (name, loc, v, { desc = Var (vname, _loc, []) })
+      when vname = name -> (* special case for let x = e in x *)
+      iter v
     | Let (name, loc, v, body) ->
+      if decompile && v.name = None && not v.fail && not v.transfer then
+         to_inline := StringMap.add name v !to_inline;
        let body = iter body in
-       if StringMap.mem name to_inline then
+       if StringMap.mem name !to_inline then
          body
        else
          let v = iter v in
@@ -125,15 +132,4 @@ let compute code to_inline =
   iter code
 
 let simplify_contract ?(decompile=false) contract to_inline =
-  let to_inline =
-    if decompile
-    then
-      StringMap.filter
-        (fun _ e -> match e with
-           | { ty = Tlambda _ } -> false
-           | { name = Some _ } -> false
-           | _ -> true
-        ) to_inline
-    else to_inline
-  in
-  { contract with code = compute contract.code to_inline }
+  { contract with code = compute decompile contract.code to_inline }

@@ -101,7 +101,9 @@ let find_var ?(count_used=true) env loc name =
     let (name, ty) = StringMap.find name env.vars in
     let count = StringMap.find name env.vars_counts in
     if count_used then incr count;
-    let aname = if env.annot then Some (sanitize_name vname) else None in
+    let aname =
+      if env.annot  && name.[0] <> '_' then Some (sanitize_name vname)
+      else None in
     mk ?name:aname (Var (name, loc, [])) ty
   with Not_found ->
   match env.clos_env with
@@ -337,7 +339,7 @@ let rec encode env ( exp : typed_exp ) : encoded_exp =
   | Let (name, loc, e, body) ->
 
      let e = encode env e in
-     let e = if env.annot
+     let e = if env.annot && name.[0] <> '_'
        then { e with name = Some (sanitize_name name) }
        else e
      in
