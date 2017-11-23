@@ -142,6 +142,7 @@ let int_one = int_n 1
 let unit = mk (Const (Tunit, CUnit))
 
 let decompile contract =
+  Hashtbl.reset vars_nums;
 
   let rec decompile_next node =
     match node.next with
