@@ -183,6 +183,12 @@ type primitive =
   | Prim_exec
 
 
+type prim_iter =
+  | Prim_map_iter
+  | Prim_set_iter
+  | Prim_list_iter
+
+
 let primitive_of_string = Hashtbl.create 101
 let string_of_primitive = Hashtbl.create 101
 
@@ -305,6 +311,35 @@ let string_of_primitive prim =
     raise Not_found
 
 
+let iter_primitive_of_string = Hashtbl.create 3
+let string_of_iter_primitive = Hashtbl.create 3
+let () =
+  List.iter (fun (n,p) ->
+      Hashtbl.add iter_primitive_of_string n p;
+      Hashtbl.add string_of_iter_primitive p n;
+    )
+            [
+              "Map.iter", Prim_map_iter;
+              "Set.iter", Prim_set_iter;
+              "List.iter", Prim_list_iter;
+            ]
+
+let iter_primitive_of_string s =
+  try
+    Hashtbl.find iter_primitive_of_string s
+  with Not_found ->
+    Printf.eprintf "Debug: iter_primitive_of_string(%S) raised Not_found\n%!" s;
+    raise Not_found
+
+let string_of_iter_primitive prim =
+  try
+    Hashtbl.find string_of_iter_primitive prim
+  with Not_found ->
+    Printf.eprintf "Debug: string_of_iter_primitive(%d) raised Not_found\n%!"
+                   (Obj.magic prim : int);
+    raise Not_found
+
+
 (* `variant` is the only parameterized type authorized in Liquidity.
    Its constructors, `Left` and `Right` must be constrained with type
    annotations, for the correct types to be propagated in the sources.
@@ -352,6 +387,11 @@ and ('ty, 'a) exp_desc =
                  * string * string * ('ty, 'a) exp * (* ifcons *)
                        ('ty, 'a) exp (*  ifnil *)
   | Loop of string * location
+              * ('ty, 'a) exp  (* body *)
+              * ('ty, 'a) exp (*  arg *)
+
+  | Iter of prim_iter (* Map.iter, List.iter, Set.iter *)
+              * string * location
               * ('ty, 'a) exp  (* body *)
               * ('ty, 'a) exp (*  arg *)
 
@@ -405,7 +445,8 @@ let mk =
 
       | Seq (e1, e2)
       | Let (_, _, e1, e2)
-      | Loop (_, _, e1, e2) -> e1.fail || e2.fail, e1.transfer || e2.transfer
+      | Loop (_, _, e1, e2)
+      | Iter (_, _, _, e1, e2) -> e1.fail || e2.fail, e1.transfer || e2.transfer
 
       | If (e1, e2, e3)
       | MatchOption (e1, _, e2, _, e3)
@@ -448,6 +489,7 @@ type 'a pre_michelson =
   | IF_CONS of 'a * 'a
   | IF_LEFT of 'a * 'a
   | LOOP of 'a
+  | ITER of 'a
 
   | LAMBDA of datatype * datatype * 'a
   | EXEC
@@ -609,6 +651,11 @@ type node = {
    | N_LOOP_END of (* N_LOOP *) node
                                 * (* N_LOOP_BEGIN *) node
                                 * (* final_cond *) node
+   | N_ITER of node * node
+   | N_ITER_BEGIN of node
+   | N_ITER_ARG of node * int
+   | N_ITER_END of node (* N_ITER *)
+                   * node (* N_ITER_BEGIN *)
    | N_LAMBDA of node * node * datatype * datatype
    | N_LAMBDA_BEGIN
    | N_LAMBDA_END of node

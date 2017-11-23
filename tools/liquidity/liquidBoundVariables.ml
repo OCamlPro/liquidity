@@ -88,7 +88,8 @@ let rec bv code =
                           arg_exp]
 
 
-  | Loop (var_arg, loc, body_exp, arg_exp) ->
+  | Loop (var_arg, loc, body_exp, arg_exp)
+  | Iter (_, var_arg, loc, body_exp, arg_exp) ->
      StringSet.union (bv arg_exp)
                      (StringSet.remove var_arg
                                        (bv body_exp))
@@ -282,6 +283,17 @@ let rec bound code =
                                          (body_exp.bv))
      in
      let desc = Loop (var_arg, loc, body_exp, arg_exp) in
+     mk desc code bv
+
+  | Iter (prim, var_arg, loc, body_exp, arg_exp) ->
+     let arg_exp = bound arg_exp in
+     let body_exp = bound body_exp in
+     let bv =
+       StringSet.union (arg_exp.bv)
+                       (StringSet.remove var_arg
+                                         (body_exp.bv))
+     in
+     let desc = Iter (prim, var_arg, loc, body_exp, arg_exp) in
      mk desc code bv
 
   | Record (loc, labels) ->

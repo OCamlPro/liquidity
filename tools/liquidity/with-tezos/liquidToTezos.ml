@@ -162,6 +162,7 @@ let rec convert_code expr =
      prim "LEFT" [convert_type ty]
   | CONS -> prim "CONS" []
   | LOOP loop -> prim "LOOP" [convert_code loop]
+  | ITER body -> prim "ITER" [convert_code body]
   | RIGHT ty ->
      prim "RIGHT" [convert_type ty]
   | INT -> prim "INT" []

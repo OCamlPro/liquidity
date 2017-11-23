@@ -296,7 +296,8 @@ let rec decr_counts_vars env e =
 
   | Seq (e1, e2)
   | Let (_, _, e1, e2)
-  | Loop (_, _, e1, e2) ->
+  | Loop (_, _, e1, e2)
+  | Iter (_, _, _, e1, e2) ->
     decr_counts_vars env e1;
     decr_counts_vars env e2;
 
@@ -704,6 +705,19 @@ let rec encode env ( exp : typed_exp ) : encoded_exp =
      let body = encode env body in
      (* check_used env name loc count; *)
      mk ?name:exp.name (Loop (new_name, loc, body, arg)) exp.ty
+
+  | Iter (prim, name, loc, body, arg) ->
+    let arg = encode env arg in
+    let name_ty = match prim, arg.ty with
+      | Prim_map_iter, Tmap (k_ty, v_ty) -> Ttuple [k_ty; v_ty]
+      | Prim_set_iter, Tset elt_ty -> elt_ty
+      | Prim_list_iter, Tlist elt_ty -> elt_ty
+      | _ -> assert false
+    in
+    let env = maybe_reset_vars env arg.transfer in
+    let (new_name, env, count) = new_binding env name name_ty in
+    let body = encode env body in
+    mk ?name:exp.name (Iter (prim, new_name, loc, body, arg)) exp.ty
 
   | MatchList (arg, loc, head_name, tail_name, ifcons, ifnil) ->
      let arg = encode env arg in

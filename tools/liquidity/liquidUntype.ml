@@ -118,6 +118,12 @@ let rec untype (env : env) (code : encoded_exp) : syntax_exp =
        let (var_arg', env') = find_free env var_arg bv in
        Loop (var_arg', loc, untype env' body_exp, arg_exp)
 
+    | Iter (prim, var_arg, loc, body_exp, arg_exp) ->
+       let arg_exp = untype env arg_exp in
+       let bv = body_exp.bv in
+       let (var_arg', env') = find_free env var_arg bv in
+       Iter (prim, var_arg', loc, untype env' body_exp, arg_exp)
+
     | Let (var_arg, loc, arg_exp, body_exp) ->
        let arg_exp = untype env arg_exp in
        let bv = body_exp.bv in

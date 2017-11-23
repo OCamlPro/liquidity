@@ -257,6 +257,15 @@ let rec convert_code expr =
                  Nolabel, convert_code arg_exp
                ]
 
+  | Iter (prim, var_arg, _loc, body_exp, arg_exp) ->
+     Exp.apply (Exp.ident (lid (LiquidTypes.string_of_iter_primitive prim)))
+               [
+                 Nolabel, Exp.fun_ Nolabel None
+                                   (Pat.var (loc var_arg))
+                                   (convert_code body_exp);
+                 Nolabel, convert_code arg_exp
+               ]
+
   | Record (_loc, fields) ->
      Exp.record (List.map (fun (name, exp) ->
                      lid name, convert_code exp

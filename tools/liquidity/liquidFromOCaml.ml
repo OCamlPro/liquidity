@@ -640,6 +640,42 @@ let rec translate_code env exp =
 
     | { pexp_desc =
           Pexp_apply (
+              { pexp_desc = Pexp_ident ( { txt = Ldot(Lident iter_coll,
+                                                      "iter");
+                                           loc } ) },
+              [
+                Nolabel, { pexp_desc =
+                             Pexp_fun (Nolabel,None,
+                                       { ppat_desc = Ppat_var { txt = name } },
+                                       body
+                         ) };
+                Nolabel, arg
+      ]) } ->
+       let body = translate_code env body in
+       let arg = translate_code env arg in
+       let prim = LiquidTypes.iter_primitive_of_string (iter_coll^".iter") in
+       Iter (prim, name, loc_of_loc exp.pexp_loc, body, arg)
+
+    | { pexp_desc =
+          Pexp_apply (
+            { pexp_desc = Pexp_ident ( { txt = Ldot(Lident iter_coll,
+                                                    "iter");
+                                         loc } ) },
+            [
+              Nolabel, f_exp;
+              Nolabel, arg
+            ]) } ->
+      let f = translate_code env f_exp in
+      let name = "_iter_arg" in
+      let name_var = mk (Var(name, loc_of_loc loc, [])) in
+      let body =
+        mk (Apply(Prim_exec, loc_of_loc f_exp.pexp_loc, [name_var; f])) in
+      let arg = translate_code env arg in
+      let prim = LiquidTypes.iter_primitive_of_string (iter_coll^".iter") in
+      Iter (prim, name, loc_of_loc exp.pexp_loc, body, arg)
+
+    | { pexp_desc =
+          Pexp_apply (
               exp,
               args); pexp_loc = loc } ->
        let exp = translate_code env exp in

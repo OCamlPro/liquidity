@@ -90,6 +90,8 @@ let to_string contract =
           | N_IF_END (x,y)
           | N_IF (x,y)
           | N_LOOP (x,y)
+          | N_ITER (x,y)
+          | N_ITER_END (x,y)
           | N_LAMBDA (x,y,_,_) -> [x;y]
 
           | N_IF_END_RESULT (x,None,_)
@@ -100,6 +102,8 @@ let to_string contract =
           | N_IF_NIL x
           | N_LOOP_BEGIN x
           | N_LOOP_ARG (x,_)
+          | N_ITER_BEGIN x
+          | N_ITER_ARG (x,_)
           | N_LAMBDA_END x -> [x]
         in
         List.iter (fun arg ->

@@ -24,6 +24,8 @@ let rec emit_code code =
      M_INS_EXP ("IF_LEFT", [], [emit_code left; emit_code right])
   | LOOP loop ->
      M_INS_EXP ("LOOP", [], [emit_code loop])
+  | ITER body ->
+     M_INS_EXP ("ITER", [], [emit_code body])
   | LAMBDA (arg_type, res_type, body) ->
      M_INS_EXP ("LAMBDA",
                 [arg_type; res_type],

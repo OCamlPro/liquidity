@@ -268,6 +268,20 @@ let translate_code code =
        @ [ {i=LOOP (seq (body @ body_end))} ],
        transfer1 || transfer2
 
+    | Iter (_prim, name, _loc, body, arg) ->
+       let arg, transfer1 = compile depth env arg in
+       let (depth, env) =
+         if transfer1 then (0, StringMap.empty) else (depth, env)
+       in
+       let env = StringMap.add name depth env in
+       let depth = depth + 1 in
+       let body, transfer2 = compile depth env body in
+       let body_end = [ {i=DROP}; {i=DROP} ] in
+       arg @ [ {i=ITER (seq (body @ body_end))} ;
+               {i=PUSH (Tunit, CUnit)} ;
+             ],
+       transfer1 || transfer2
+
     (* removed during typechecking, replaced by tuple *)
     | Record _ -> assert false
     | Constructor _ -> assert false

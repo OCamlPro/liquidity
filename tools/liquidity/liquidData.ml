@@ -46,6 +46,7 @@ let rec translate_const_exp loc (exp : encoded_exp) =
   | MatchNat (_, _, _, _, _, _)
   | MatchList (_, _, _, _, _, _)
   | Loop (_, _, _, _)
+  | Iter (_, _, _, _, _)
   | Lambda (_, _, _, _, _)
   | Closure (_, _, _, _, _, _)
   | MatchVariant (_, _, _)

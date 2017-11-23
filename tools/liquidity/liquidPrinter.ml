@@ -357,6 +357,9 @@ module Michelson = struct
     | LOOP a ->
       Printf.bprintf b "LOOP ";
       bprint_arg fmt b a;
+    | ITER a ->
+      Printf.bprintf b "ITER ";
+      bprint_arg fmt b a;
     | LAMBDA (ty1, ty2, a) ->
       Printf.bprintf b "LAMBDA ";
       bprint_type fmt b "" ty1;
@@ -757,6 +760,15 @@ module Liquid = struct
        Printf.bprintf b ")\n%s" indent2;
        bprint_code_rec ~debug b indent2 arg;
        ()
+    | Iter (prim, name, _loc, body, arg) ->
+       let indent2 = indent ^ "  " in
+       let indent4 = indent2 ^ "  " in
+       Printf.bprintf b "\n%s%s (fun %s -> "
+         indent (LiquidTypes.string_of_iter_primitive prim) name;
+       bprint_code_rec ~debug b indent4 body;
+       Printf.bprintf b ")\n%s" indent2;
+       bprint_code_rec ~debug b indent2 arg;
+       ()
     | Closure (arg_name, arg_type, _loc, _, body, res_type)
     (* FIXME change this *)
     | Lambda (arg_name, arg_type, _loc, body, res_type) ->
@@ -888,6 +900,10 @@ let string_of_node node =
   | N_LOOP_END _ -> "N_LOOP_END"
   | N_LOOP_ARG (_,int) -> Printf.sprintf "N_LOOP_ARG %d" int
   | N_LOOP_RESULT (_,_, int) -> Printf.sprintf "N_LOOP_RESULT %d" int
+  | N_ITER _ -> "N_ITER"
+  | N_ITER_BEGIN _ -> "N_ITER_BEGIN"
+  | N_ITER_END _ -> "N_ITER_END"
+  | N_ITER_ARG (_,int) -> Printf.sprintf "N_ITER_ARG %d" int
   | N_LAMBDA _ -> "N_LAMBDA"
   | N_LAMBDA_BEGIN -> "N_LAMBDA_BEGIN"
   | N_LAMBDA_END _ -> "N_LAMBDA_END"
