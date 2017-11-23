@@ -81,10 +81,11 @@ let compute decompile code to_inline =
        let arg = iter arg in
        { exp with desc = Loop(name, loc, body, arg) }
 
-    | Iter(prim, name, loc, body, arg) ->
+    | Fold(prim, name, loc, body, arg, acc) ->
        let body = iter body in
        let arg = iter arg in
-       { exp with desc = Iter(prim, name, loc, body, arg) }
+       let acc = iter acc in
+       { exp with desc = Fold(prim, name, loc, body, arg, acc) }
 
     | Seq(e1, e2) ->
        let e1 = iter e1 in

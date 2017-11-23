@@ -268,19 +268,24 @@ let translate_code code =
        @ [ {i=LOOP (seq (body @ body_end))} ],
        transfer1 || transfer2
 
-    | Iter (_prim, name, _loc, body, arg) ->
-       let arg, transfer1 = compile depth env arg in
-       let (depth, env) =
-         if transfer1 then (0, StringMap.empty) else (depth, env)
-       in
-       let env = StringMap.add name depth env in
-       let depth = depth + 1 in
-       let body, transfer2 = compile depth env body in
-       let body_end = [ {i=DROP}; {i=DROP} ] in
-       arg @ [ {i=ITER (seq (body @ body_end))} ;
-               {i=PUSH (Tunit, CUnit)} ;
-             ],
-       transfer1 || transfer2
+    | Fold (prim, name, _loc, body, arg, acc) ->
+      let acc, transfer1 = compile depth env acc in
+      let depth = depth + 1 in
+      let arg, transfer2 = compile depth env arg in
+      let (depth, env) =
+        if transfer1 || transfer2 then (0, StringMap.empty) else (depth, env)
+      in
+      let env = StringMap.add name depth env in
+      let depth = depth + 1 in
+      let body, transfer3 = compile depth env body in
+      let body_begin, body_end = match prim with
+        | Prim_map_iter | Prim_set_iter | Prim_list_iter ->
+          [], [ {i=DIP_DROP (1,2)} ]
+        | _ -> [ {i=PAIR} ], [ {i=DIP_DROP (1,1)} ]
+      in
+      acc @ arg @
+      [ {i=ITER (seq (body_begin @ body @ body_end))} ],
+      transfer1 || transfer2 || transfer3
 
     (* removed during typechecking, replaced by tuple *)
     | Record _ -> assert false

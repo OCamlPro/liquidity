@@ -760,14 +760,25 @@ module Liquid = struct
        Printf.bprintf b ")\n%s" indent2;
        bprint_code_rec ~debug b indent2 arg;
        ()
-    | Iter (prim, name, _loc, body, arg) ->
+    | Fold ((Prim_map_iter|Prim_set_iter|Prim_list_iter as prim),
+            name, _loc, body, arg, _acc) ->
        let indent2 = indent ^ "  " in
        let indent4 = indent2 ^ "  " in
        Printf.bprintf b "\n%s%s (fun %s -> "
-         indent (LiquidTypes.string_of_iter_primitive prim) name;
+         indent (LiquidTypes.string_of_fold_primitive prim) name;
        bprint_code_rec ~debug b indent4 body;
        Printf.bprintf b ")\n%s" indent2;
        bprint_code_rec ~debug b indent2 arg;
+       ()
+    | Fold (prim, name, _loc, body, arg, acc) ->
+       let indent2 = indent ^ "  " in
+       let indent4 = indent2 ^ "  " in
+       Printf.bprintf b "\n%s%s (fun %s -> "
+         indent (LiquidTypes.string_of_fold_primitive prim) name;
+       bprint_code_rec ~debug b indent4 body;
+       Printf.bprintf b ")\n%s" indent2;
+       bprint_code_rec ~debug b indent2 arg;
+       bprint_code_rec ~debug b indent2 acc;
        ()
     | Closure (arg_name, arg_type, _loc, _, body, res_type)
     (* FIXME change this *)

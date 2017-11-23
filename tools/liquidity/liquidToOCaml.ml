@@ -257,13 +257,23 @@ let rec convert_code expr =
                  Nolabel, convert_code arg_exp
                ]
 
-  | Iter (prim, var_arg, _loc, body_exp, arg_exp) ->
-     Exp.apply (Exp.ident (lid (LiquidTypes.string_of_iter_primitive prim)))
+  | Fold ((Prim_map_iter|Prim_set_iter|Prim_list_iter as prim),
+          var_arg, _loc, body_exp, arg_exp, _acc_exp) ->
+     Exp.apply (Exp.ident (lid (LiquidTypes.string_of_fold_primitive prim)))
                [
                  Nolabel, Exp.fun_ Nolabel None
                                    (Pat.var (loc var_arg))
                                    (convert_code body_exp);
-                 Nolabel, convert_code arg_exp
+                 Nolabel, convert_code arg_exp;
+               ]
+  | Fold (prim, var_arg, _loc, body_exp, arg_exp, acc_exp) ->
+     Exp.apply (Exp.ident (lid (LiquidTypes.string_of_fold_primitive prim)))
+               [
+                 Nolabel, Exp.fun_ Nolabel None
+                                   (Pat.var (loc var_arg))
+                                   (convert_code body_exp);
+                 Nolabel, convert_code arg_exp;
+                 Nolabel, convert_code acc_exp;
                ]
 
   | Record (_loc, fields) ->

@@ -296,15 +296,15 @@ let rec decr_counts_vars env e =
 
   | Seq (e1, e2)
   | Let (_, _, e1, e2)
-  | Loop (_, _, e1, e2)
-  | Iter (_, _, _, e1, e2) ->
+  | Loop (_, _, e1, e2) ->
     decr_counts_vars env e1;
     decr_counts_vars env e2;
 
   | If (e1, e2, e3)
   | MatchOption (e1, _, e2, _, e3)
   | MatchNat (e1, _, _, e2, _, e3)
-  | MatchList (e1, _, _, _, e2, e3) ->
+  | MatchList (e1, _, _, _, e2, e3)
+  | Fold (_, _, _, e1, e2, e3) ->
     decr_counts_vars env e1;
     decr_counts_vars env e2;
     decr_counts_vars env e3;
@@ -706,18 +706,22 @@ let rec encode env ( exp : typed_exp ) : encoded_exp =
      (* check_used env name loc count; *)
      mk ?name:exp.name (Loop (new_name, loc, body, arg)) exp.ty
 
-  | Iter (prim, name, loc, body, arg) ->
+  | Fold (prim, name, loc, body, arg, acc) ->
     let arg = encode env arg in
+    let acc = encode env acc in
     let name_ty = match prim, arg.ty with
       | Prim_map_iter, Tmap (k_ty, v_ty) -> Ttuple [k_ty; v_ty]
       | Prim_set_iter, Tset elt_ty -> elt_ty
       | Prim_list_iter, Tlist elt_ty -> elt_ty
+      | Prim_map_fold, Tmap (k_ty, v_ty) -> Ttuple [Ttuple [k_ty; v_ty]; acc.ty]
+      | Prim_set_fold, Tset elt_ty -> Ttuple [elt_ty; acc.ty]
+      | Prim_list_fold, Tlist elt_ty -> Ttuple [elt_ty; acc.ty]
       | _ -> assert false
     in
     let env = maybe_reset_vars env arg.transfer in
     let (new_name, env, count) = new_binding env name name_ty in
     let body = encode env body in
-    mk ?name:exp.name (Iter (prim, new_name, loc, body, arg)) exp.ty
+    mk ?name:exp.name (Fold (prim, new_name, loc, body, arg, acc)) exp.ty
 
   | MatchList (arg, loc, head_name, tail_name, ifcons, ifnil) ->
      let arg = encode env arg in

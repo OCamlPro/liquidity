@@ -138,7 +138,7 @@ let rec loc_exp env e = match e.desc with
   | MatchNat (_, loc, _, _, _, _)
   | MatchList (_, loc, _, _, _, _)
   | Loop (_, loc, _, _)
-  | Iter (_, _, loc, _, _)
+  | Fold (_, _, loc, _, _, _)
   | Lambda (_, _, loc, _, _)
   | Closure (_, _, loc, _, _, _)
   | Record (loc, _)
@@ -389,28 +389,32 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
      check_used env name loc count;
      mk ?name:exp.name (Loop (name, loc, body, arg)) arg.ty
 
-  | Iter (prim, name, loc, body, arg) ->
+  | Fold (prim, name, loc, body, arg, acc) ->
     let arg = typecheck env arg in
-    let name_ty = match prim, arg.ty with
-      | Prim_map_iter, Tmap (k_ty, v_ty) -> Ttuple [k_ty; v_ty]
-      | Prim_set_iter, Tset elt_ty -> elt_ty
-      | Prim_list_iter, Tlist elt_ty -> elt_ty
+    let acc = typecheck env acc in
+    let prim, name_ty = match prim, arg.ty, acc.ty with
+      | Prim_map_iter, Tmap (k_ty, v_ty), Tunit -> prim, Ttuple [k_ty; v_ty]
+      | Prim_set_iter, Tset elt_ty, Tunit -> prim, elt_ty
+      | Prim_list_iter, Tlist elt_ty, Tunit -> prim, elt_ty
 
-      | Prim_map_iter, ty ->
-        error (loc_exp env arg) "Map.iter expects type ('a, 'b) map, got %s"
-          (LiquidPrinter.Liquid.string_of_type ty)
-      | Prim_set_iter, ty ->
-        error (loc_exp env arg) "Set.iter expects type 'a set, got %s"
-          (LiquidPrinter.Liquid.string_of_type ty)
-      | Prim_list_iter, ty ->
-        error (loc_exp env arg) "List.iter expects type 'a list, got %s"
-          (LiquidPrinter.Liquid.string_of_type ty)
+      | (Prim_map_fold|Prim_coll_fold), Tmap (k_ty, v_ty), acc_ty ->
+        Prim_map_fold, Ttuple[Ttuple [k_ty; v_ty]; acc_ty]
+      | (Prim_set_fold|Prim_coll_fold), Tset elt_ty, acc_ty ->
+        Prim_set_fold, Ttuple[elt_ty; acc_ty]
+      | (Prim_list_fold|Prim_coll_fold), Tlist elt_ty, acc_ty ->
+        Prim_list_fold, Ttuple[elt_ty; acc_ty]
+
+      | _ ->
+        error (loc_exp env arg) "%s expects a collection, got %s"
+          (LiquidTypes.string_of_fold_primitive prim)
+          (LiquidPrinter.Liquid.string_of_type arg.ty)
     in
     let env = maybe_reset_vars env arg.transfer in
     let (env, count) = new_binding env name name_ty in
-    let body = typecheck_expected "iter body" env Tunit body in
+    let body = typecheck_expected
+        (LiquidTypes.string_of_fold_primitive prim ^" body") env acc.ty body in
     check_used env name loc count;
-    mk ?name:exp.name (Iter (prim, name, loc, body, arg)) Tunit
+    mk ?name:exp.name (Fold (prim, name, loc, body, arg, acc)) acc.ty
 
   | MatchList (arg, loc, head_name, tail_name, ifcons, ifnil) ->
      let arg  = typecheck env arg in

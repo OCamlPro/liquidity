@@ -183,10 +183,14 @@ type primitive =
   | Prim_exec
 
 
-type prim_iter =
+type prim_fold =
   | Prim_map_iter
   | Prim_set_iter
   | Prim_list_iter
+  | Prim_map_fold
+  | Prim_set_fold
+  | Prim_list_fold
+  | Prim_coll_fold
 
 
 let primitive_of_string = Hashtbl.create 101
@@ -311,31 +315,35 @@ let string_of_primitive prim =
     raise Not_found
 
 
-let iter_primitive_of_string = Hashtbl.create 3
-let string_of_iter_primitive = Hashtbl.create 3
+let fold_primitive_of_string = Hashtbl.create 3
+let string_of_fold_primitive = Hashtbl.create 3
 let () =
   List.iter (fun (n,p) ->
-      Hashtbl.add iter_primitive_of_string n p;
-      Hashtbl.add string_of_iter_primitive p n;
+      Hashtbl.add fold_primitive_of_string n p;
+      Hashtbl.add string_of_fold_primitive p n;
     )
             [
               "Map.iter", Prim_map_iter;
               "Set.iter", Prim_set_iter;
               "List.iter", Prim_list_iter;
+              "Map.fold", Prim_map_fold;
+              "Set.fold", Prim_set_fold;
+              "List.fold", Prim_list_fold;
+              "Coll.fold", Prim_coll_fold;
             ]
 
-let iter_primitive_of_string s =
+let fold_primitive_of_string s =
   try
-    Hashtbl.find iter_primitive_of_string s
+    Hashtbl.find fold_primitive_of_string s
   with Not_found ->
-    Printf.eprintf "Debug: iter_primitive_of_string(%S) raised Not_found\n%!" s;
+    Printf.eprintf "Debug: fold_primitive_of_string(%S) raised Not_found\n%!" s;
     raise Not_found
 
-let string_of_iter_primitive prim =
+let string_of_fold_primitive prim =
   try
-    Hashtbl.find string_of_iter_primitive prim
+    Hashtbl.find string_of_fold_primitive prim
   with Not_found ->
-    Printf.eprintf "Debug: string_of_iter_primitive(%d) raised Not_found\n%!"
+    Printf.eprintf "Debug: string_of_fold_primitive(%d) raised Not_found\n%!"
                    (Obj.magic prim : int);
     raise Not_found
 
@@ -390,10 +398,11 @@ and ('ty, 'a) exp_desc =
               * ('ty, 'a) exp  (* body *)
               * ('ty, 'a) exp (*  arg *)
 
-  | Iter of prim_iter (* Map.iter, List.iter, Set.iter *)
+  | Fold of prim_fold (* iter/fold *)
               * string * location
-              * ('ty, 'a) exp  (* body *)
-              * ('ty, 'a) exp (*  arg *)
+              * ('ty, 'a) exp (* body *)
+              * ('ty, 'a) exp (* arg *)
+              * ('ty, 'a) exp (* acc *)
 
   | Lambda of string (* argument name *)
               * datatype (* argument type *)
@@ -445,13 +454,13 @@ let mk =
 
       | Seq (e1, e2)
       | Let (_, _, e1, e2)
-      | Loop (_, _, e1, e2)
-      | Iter (_, _, _, e1, e2) -> e1.fail || e2.fail, e1.transfer || e2.transfer
+      | Loop (_, _, e1, e2) -> e1.fail || e2.fail, e1.transfer || e2.transfer
 
       | If (e1, e2, e3)
       | MatchOption (e1, _, e2, _, e3)
       | MatchNat (e1, _, _, e2, _, e3)
-      | MatchList (e1, _, _, _, e2, e3) ->
+      | MatchList (e1, _, _, _, e2, e3)
+      | Fold (_, _, _, e1, e2, e3) ->
         e1.fail || e2.fail || e3.fail,
         e1.transfer || e2.transfer || e3.transfer
 
