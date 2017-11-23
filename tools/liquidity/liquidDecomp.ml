@@ -37,18 +37,7 @@ let const_name_of_datatype = function
   | Tfail -> "fail"
 
 
-let rec check_prev_names node prevs =
-  match node.node_name with
-  | Some name ->
-    List.iter (fun n ->
-        begin match n with
-          | { node_name = Some name'} ->
-            if name' = name then assert (n != node);
-          | _ -> ()
-        end;
-        check_prev_names node n.prevs
-      ) prevs
-  | _ -> ()
+let vars_nums = Hashtbl.create 101
 
 let rec var_of node =
   match node.kind with
@@ -56,8 +45,11 @@ let rec var_of node =
   | _ -> match node.node_name with
 
     | Some name ->
-      (* check_prev_names node node.prevs; *)
-      name
+      begin try
+          if Hashtbl.find vars_nums name = node.num then name
+          else Printf.sprintf "%s%d" name node.num
+        with Not_found -> name
+      end
     | None -> match node.kind with
 
       (* | N_VAR name -> name *)
@@ -96,6 +88,12 @@ let rec var_of node =
       | N_CONST (ty, _) ->
         Printf.sprintf "%s%d" (const_name_of_datatype ty) node.num
       | _ -> Printf.sprintf "exp%d" node.num
+
+
+let var_of node =
+  let name = var_of node in
+  Hashtbl.add vars_nums name node.num;
+  name
 
 
 let nat_n n = mk (Const (Tnat,CNat (LiquidPrinter.integer_of_int n)))
