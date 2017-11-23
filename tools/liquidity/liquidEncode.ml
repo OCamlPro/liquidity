@@ -76,11 +76,11 @@ let uniq_ident env name =
 (*     incr cpt; *)
 (*     Printf.sprintf "tmp#%d" !cpt *)
 
-let new_binding env name ty =
+let new_binding env name ?(fail=false) ty =
   let new_name = uniq_ident env name in
   let count = ref 0 in
   let env = { env with
-              vars = StringMap.add name (new_name, ty) env.vars;
+              vars = StringMap.add name (new_name, ty, fail) env.vars;
               vars_counts = StringMap.add new_name count env.vars_counts;
             } in
   (new_name, env, count)
@@ -98,13 +98,13 @@ let maybe_reset_vars env transfer =
 let find_var ?(count_used=true) env loc name =
   try
     let vname = name in
-    let (name, ty) = StringMap.find name env.vars in
+    let (name, ty, fail) = StringMap.find name env.vars in
     let count = StringMap.find name env.vars_counts in
     if count_used then incr count;
     let aname =
       if env.annot && name.[0] <> '_' then Some (sanitize_name vname)
       else None in
-    mk ?name:aname (Var (name, loc, [])) ty
+    { (mk ?name:aname (Var (name, loc, [])) ty) with fail }
   with Not_found ->
   match env.clos_env with
   | None -> error loc "unbound variable %S" name
@@ -125,7 +125,7 @@ let env_for_clos env loc bvs arg_name arg_type =
       let index = index + 1 in
       let free_vars =
         try
-          let (bname, btype) = StringMap.find v env.vars in
+          let (bname, btype, _) = StringMap.find v env.vars in
           let cpt_out = StringMap.find bname env.vars_counts in
           StringMap.add v (bname, btype, index, (ref 0, cpt_out)) free_vars
         with Not_found ->
@@ -280,6 +280,7 @@ let rec encode_const env c = match c with
       error (noloc env)  "unknown constructor %s" constr
 
 let rec decr_counts_vars env e =
+  if e.fail || e.transfer then () else
   match e.desc with
   | Var (v, _, []) ->
     begin try
@@ -345,7 +346,7 @@ let rec encode env ( exp : typed_exp ) : encoded_exp =
        else e
      in
      let env = maybe_reset_vars env e.transfer in
-     let (new_name, env, count) = new_binding env name e.ty in
+     let (new_name, env, count) = new_binding env name ~fail:e.fail e.ty in
      let body = encode env body in
      (* check_used env name loc count; *)
      if (not e.transfer) && (not e.fail) then begin

@@ -281,7 +281,7 @@ let translate_code code =
       let body_begin, body_end = match prim with
         | Prim_map_iter | Prim_set_iter | Prim_list_iter ->
           [], [ {i=DIP_DROP (1,2)} ]
-        | _ -> [ {i=PAIR} ], [ {i=DIP_DROP (1,1)} ]
+        | _ -> [ dip 1 [{i=DUP 1}]; {i=PAIR} ], [ {i=DIP_DROP (1,2)} ]
       in
       acc @ arg @
       [ {i=ITER (seq (body_begin @ body @ body_end))} ],

@@ -44,7 +44,7 @@ let rec var_of node =
   | N_VAR name -> name
   | _ -> match node.node_name with
 
-    | Some name ->
+    | Some name -> 
       begin try
           if Hashtbl.find vars_nums name = node.num then name
           else Printf.sprintf "%s%d" name node.num
@@ -126,6 +126,28 @@ let rec arg_of node =
        | _ ->
           mk (Apply (Prim_tuple_get, noloc, [ arg_of loop_node; nat_n pos ]))
      end
+  | N_FOLD_ARG ({ kind = N_FOLD_BEGIN ( _); args } as begin_node, pos ) ->
+    Format.eprintf "fold args: %d@." (List.length args);
+     let x = begin
+       match pos, List.length args with
+       | 0, 1 -> arg_of begin_node
+       | _ ->
+         mk (Apply (Prim_tuple_get, noloc, [ arg_of begin_node; nat_n pos ]))
+     end
+     in
+     Format.eprintf "fold arg = %s@." (LiquidPrinter.Liquid.string_of_code x);
+     x
+  | N_FOLD_RESULT (fold_node, end_node, pos ) ->
+    Format.eprintf "fold result: %d, %d@." pos (List.length end_node.args);
+     let x = begin
+       match pos, List.length end_node.args with
+       | 0, 1 -> arg_of fold_node
+       | _ ->
+          mk (Apply (Prim_tuple_get, noloc, [ arg_of fold_node; nat_n pos ]))
+     end
+     in
+     Format.eprintf "fold result = %s@." (LiquidPrinter.Liquid.string_of_code x);
+     x
   | N_CONST (ty, ((
                    CUnit | CBool _ | CInt _ | CNat _ | CTez _
              ) as cst)) ->
@@ -352,6 +374,18 @@ let decompile contract =
                     [arg_of final_cond;
                      value_of_args args]))
 
+       | N_FOLD ({args = _ :: rargs} as begin_node, end_node), [arg] ->
+         let desc = Fold (Prim_coll_fold,
+                          var_of begin_node, noloc,
+                          decompile_next begin_node,
+                          arg_of arg,
+                          value_of_args rargs
+                         )
+         in
+         mklet node desc
+
+       | N_FOLD_END (_,_,_), args -> value_of_args args
+
        | N_LAMBDA (begin_node, end_node, arg_ty, res_ty), [] ->
           let desc = Lambda (var_of begin_node,
                              arg_ty,
@@ -378,6 +412,7 @@ let decompile contract =
        | N_LAMBDA _
        | N_TRANSFER _
        | N_LOOP _
+       | N_FOLD _
        | N_IF _
        | N_CONST _
        | N_END
@@ -405,6 +440,9 @@ let decompile contract =
        | N_LOOP_BEGIN _
        | N_LOOP_ARG (_, _)
        | N_LOOP_RESULT (_, _, _)
+       | N_FOLD_BEGIN _
+       | N_FOLD_ARG (_, _)
+       | N_FOLD_RESULT (_, _, _)
        ), _->
          LiquidLoc.raise_error
            "not implemented at node %s%!"

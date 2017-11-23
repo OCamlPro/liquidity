@@ -76,11 +76,13 @@ let to_string contract =
             -> []
 
           | N_LOOP_END (x,y,z)
+          | N_FOLD_END (x,y,z)
           | N_IF_CONS (x, y, z)-> [x;y;z]
 
 
           | N_TRANSFER (x,y)
           | N_LOOP_RESULT (x,y,_)
+          | N_FOLD_RESULT (x,y,_)
           | N_IF_SOME (x,y)
           | N_IF_LEFT (x,y)
           | N_IF_RIGHT (x,y)
@@ -90,8 +92,7 @@ let to_string contract =
           | N_IF_END (x,y)
           | N_IF (x,y)
           | N_LOOP (x,y)
-          | N_ITER (x,y)
-          | N_ITER_END (x,y)
+          | N_FOLD (x,y)
           | N_LAMBDA (x,y,_,_) -> [x;y]
 
           | N_IF_END_RESULT (x,None,_)
@@ -102,15 +103,15 @@ let to_string contract =
           | N_IF_NIL x
           | N_LOOP_BEGIN x
           | N_LOOP_ARG (x,_)
-          | N_ITER_BEGIN x
-          | N_ITER_ARG (x,_)
+          | N_FOLD_BEGIN x
+          | N_FOLD_ARG (x,_)
           | N_LAMBDA_END x -> [x]
         in
         List.iter (fun arg ->
             add_edge node arg [ ]
           ) deps;
         List.iter (fun arg ->
-            add_edge node arg [  EdgeStyle Dotted ]
+            add_edge node arg [  EdgeStyle Dotted; EdgeLabel "\"; constraint=\"false" ]
           ) node.args;
         List.iter iter deps;
         List.iter iter node.args;

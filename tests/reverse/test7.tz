@@ -1,0 +1,17 @@
+return int;
+parameter (list int);
+storage unit;
+code { DUP ;
+       DIP { CDR } ;
+       CAR ;
+       DUUP ;
+       PUSH int 3 ;
+       PUSH (list int) (List 1 2 3 4 5 6) ;
+       ITER { DUUP ;
+              DUUP ;
+              COMPARE ;
+              GT ;
+              IF { DROP; } { DIP { DROP } };
+            } ;
+       DIIP { DROP ; DROP } ;
+       PAIR };

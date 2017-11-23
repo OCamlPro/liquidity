@@ -315,8 +315,8 @@ let string_of_primitive prim =
     raise Not_found
 
 
-let fold_primitive_of_string = Hashtbl.create 3
-let string_of_fold_primitive = Hashtbl.create 3
+let fold_primitive_of_string = Hashtbl.create 7
+let string_of_fold_primitive = Hashtbl.create 7
 let () =
   List.iter (fun (n,p) ->
       Hashtbl.add fold_primitive_of_string n p;
@@ -608,7 +608,7 @@ type 'a typecheck_env = {
     warnings : bool;
     annot : bool;
     counter : int ref;
-    vars : (string * datatype) StringMap.t;
+    vars : (string * datatype * bool (* fails *) ) StringMap.t;
     vars_counts : int ref StringMap.t;
     env : env;
     to_inline : encoded_exp StringMap.t ref;
@@ -660,11 +660,14 @@ type node = {
    | N_LOOP_END of (* N_LOOP *) node
                                 * (* N_LOOP_BEGIN *) node
                                 * (* final_cond *) node
-   | N_ITER of node * node
-   | N_ITER_BEGIN of node
-   | N_ITER_ARG of node * int
-   | N_ITER_END of node (* N_ITER *)
-                   * node (* N_ITER_BEGIN *)
+   | N_FOLD of node * node
+   | N_FOLD_BEGIN of node
+   | N_FOLD_ARG of node * int
+   | N_FOLD_RESULT of node (* N_FOLD *)
+                      * node * int (* N_FOLD_BEGIN *)
+   | N_FOLD_END of node (* N_FOLD *)
+                   * node (* N_FOLD_BEGIN *)
+                   * node (* accumulator *)
    | N_LAMBDA of node * node * datatype * datatype
    | N_LAMBDA_BEGIN
    | N_LAMBDA_END of node

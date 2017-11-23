@@ -911,10 +911,11 @@ let string_of_node node =
   | N_LOOP_END _ -> "N_LOOP_END"
   | N_LOOP_ARG (_,int) -> Printf.sprintf "N_LOOP_ARG %d" int
   | N_LOOP_RESULT (_,_, int) -> Printf.sprintf "N_LOOP_RESULT %d" int
-  | N_ITER _ -> "N_ITER"
-  | N_ITER_BEGIN _ -> "N_ITER_BEGIN"
-  | N_ITER_END _ -> "N_ITER_END"
-  | N_ITER_ARG (_,int) -> Printf.sprintf "N_ITER_ARG %d" int
+  | N_FOLD _ -> "N_FOLD"
+  | N_FOLD_BEGIN _ -> "N_FOLD_BEGIN"
+  | N_FOLD_END _ -> "N_FOLD_END"
+  | N_FOLD_ARG (_,int) -> Printf.sprintf "N_FOLD_ARG %d" int
+  | N_FOLD_RESULT (_,_, int) -> Printf.sprintf "N_FOLD_RESULT %d" int
   | N_LAMBDA _ -> "N_LAMBDA"
   | N_LAMBDA_BEGIN -> "N_LAMBDA_BEGIN"
   | N_LAMBDA_END _ -> "N_LAMBDA_END"

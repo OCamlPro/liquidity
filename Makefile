@@ -28,12 +28,13 @@ distclean: clean
 # All of these tests must be run with with_tezos=true
 
 NTESTS=32
-NREVTESTS=6
+NREVTESTS=7
 SIMPLE_TESTS= `seq -f 'test%.0f' 0 $(NTESTS)`
 MORE_TESTS=test_ifcons test_if test_loop test_option test_transfer test_left \
   test_extfun test_left_constr test_closure test_closure2 test_closure3 \
   test_map test_rev test_reduce_closure test_map_closure test_mapreduce_closure \
-  test_mapmap_closure test_setreduce_closure test_left_match
+  test_mapmap_closure test_setreduce_closure test_left_match \
+  test_fold test_iter
 OTHER_TESTS=others/broker others/demo others/auction others/multisig
 REV_TESTS=`seq -f  'test%.0f' 0 $(NREVTESTS)`
 

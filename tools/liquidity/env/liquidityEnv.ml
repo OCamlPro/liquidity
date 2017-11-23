@@ -138,6 +138,9 @@ module Map : sig
   val make : ('key * 'value) list -> ('key, 'value) map
   val reduce : ( ('key * 'value) * 'acc -> 'acc) ->
                ('key,'value) map -> 'acc -> 'acc
+  val fold : ( ('key * 'value) * 'acc -> 'acc) ->
+               ('key,'value) map -> 'acc -> 'acc
+  val iter : ( ('key * 'value) -> unit) -> ('key,'value) map -> unit
 
   val map : ( 'key * 'value -> 'res) ->
                ('key,'value) map ->
@@ -182,6 +185,15 @@ end = struct
                           ) map acc
     in
     Obj.magic acc
+
+  let fold f map acc = reduce f map acc
+
+  let iter f map =
+    let f = (Obj.magic f : (Obj.t * 'value) -> unit) in
+    let map = (Obj.magic map : 'value ObjMap.t) in
+    ObjMap.iter (fun key value ->
+        f ( (key,value) )
+      ) map
 
   let map f map =
     let f = (Obj.magic f : Obj.t * 'value -> 'value) in
@@ -439,6 +451,8 @@ type ('a,'b) variant = Left of 'a | Right of 'b
 module List : sig
 
   val reduce : ('a * 'b -> 'b) -> 'a list -> 'b -> 'b
+  val fold : ('a * 'b -> 'b) -> 'a list -> 'b -> 'b
+  val iter : ('a -> unit) -> 'a list -> unit
   val map : ('a -> 'b) -> 'a list -> 'b list
   val rev : 'a list -> 'a list
   val size : 'a list -> integer
@@ -451,6 +465,9 @@ end = struct
     | a :: list ->
        reduce f list (f (a,b))
 
+  let fold f list b = reduce f list b
+
+  let iter = List.iter
   let map = List.map
   let rev = List.rev
   let size list = Int (Z.of_int (List.length list))

@@ -54,10 +54,10 @@ let uniq_ident env name =
   env.counter := !(env.counter) + 1;
   Printf.sprintf "%s/%d" name !(env.counter)
 
-let new_binding env name ty =
+let new_binding env name ?(fail=false) ty =
   let count = ref 0 in
   let env = { env with
-              vars = StringMap.add name (name, ty) env.vars;
+              vars = StringMap.add name (name, ty, fail) env.vars;
               vars_counts = StringMap.add name count env.vars_counts;
             } in
   (env, count)
@@ -84,10 +84,10 @@ let check_used_in_env env name loc =
 (* Find variable name in either the global environment *)
 let find_var ?(count_used=true) env loc name =
   try
-    let (name, ty) = StringMap.find name env.vars in
+    let (name, ty, fail) = StringMap.find name env.vars in
     let count = StringMap.find name env.vars_counts in
     if count_used then incr count;
-    mk (Var (name, loc, [])) ty
+    { (mk (Var (name, loc, [])) ty) with fail }
   with Not_found ->
     error loc "unbound variable %S" name
 
@@ -171,8 +171,10 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
   | Let (name, loc, exp, body) ->
      let exp = typecheck env exp in
      if exp.ty = Tfail then error loc "cannot assign failure";
+     Format.eprintf "%s fails: %b@." name exp.fail;
+
      let env = maybe_reset_vars env exp.transfer in
-     let (env, count) = new_binding env name exp.ty in
+     let (env, count) = new_binding env name ~fail:exp.fail exp.ty in
      let body = typecheck env body in
      let desc = Let (name, loc, exp, body ) in
      check_used env name loc count;
@@ -414,7 +416,11 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
     let body = typecheck_expected
         (LiquidTypes.string_of_fold_primitive prim ^" body") env acc.ty body in
     check_used env name loc count;
-    mk ?name:exp.name (Fold (prim, name, loc, body, arg, acc)) acc.ty
+    let  l = mk ?name:exp.name (Fold (prim, name, loc, body, arg, acc)) acc.ty
+    in
+    
+    Format.eprintf "fold %s -> ... fails: %b@." name l.fail;
+    l
 
   | MatchList (arg, loc, head_name, tail_name, ifcons, ifnil) ->
      let arg  = typecheck env arg in
@@ -454,7 +460,9 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
     check_used env lambda_arg_name loc arg_count;
     let desc = Lambda (arg_name, lambda_arg_type, loc, body, body.ty) in
     let ty = Tlambda (lambda_arg_type, body.ty) in
-    mk ?name:exp.name desc ty
+    let l = mk ?name:exp.name desc ty in
+    Format.eprintf "fun %s -> ... fails: %b@." arg_name l.fail;
+    l
 
   | Closure _ -> assert false
 
@@ -966,10 +974,20 @@ and typecheck_apply ?name env prim loc args =
                  let arg = typecheck env arg in
                  if arg.transfer then
                    error loc "transfer within prim args";
+                 (* if (\* prim = Prim_exec &&  *\) arg.fail then *)
+                   Format.eprintf "FAILS %s : %b@."
+                     (LiquidPrinter.Liquid.string_of_code arg) arg.fail;
                  arg
                ) args in
   let prim, ty = typecheck_prim1 env prim loc args in
-  mk ?name (Apply (prim, loc, args)) ty
+  let l = mk ?name (Apply (prim, loc, args)) ty
+  in
+  if prim = Prim_exec then
+    Format.eprintf "||| %s fails: %b@."
+      (LiquidPrinter.Liquid.string_of_code (let x::_ = List.rev args in x)) l.fail;
+  l
+
+
 
 
 let typecheck_contract ~warnings env contract =
