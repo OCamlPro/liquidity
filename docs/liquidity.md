@@ -170,6 +170,8 @@ Operations on data structures
 * `CONCAT` : `@`
 * `REDUCE` : `Map.reduce` or `Set.reduce` or `List.reduce`
 * `SIZE` : `List.size` or `Set.size` or `Map.size`
+* `ITER` : `List.iter` or `Set.iter` or `Map.iter` or `List.fold` or
+  `Set.fold` or `Map.fold`
 
 (it is possible to use the generic `Coll.` prefix for all collections,
 but not in a polymorphic way, i.e. `Coll.` is immediately replaced by the

@@ -83,8 +83,8 @@ let rec var_of node =
       | N_FAIL -> Printf.sprintf "fail%d" node.num
       | N_LOOP _ -> Printf.sprintf "loop%d" node.num
       | N_LAMBDA _ -> Printf.sprintf "fun%d" node.num
-      | N_LAMBDA_BEGIN -> Printf.sprintf "arg%d" node.num
-      | N_LOOP_BEGIN _ ->  Printf.sprintf "loop_arg%d" node.num
+      | N_LAMBDA_BEGIN | N_LOOP_BEGIN _ | N_FOLD_BEGIN _ ->
+        Printf.sprintf "arg%d" node.num
       | N_CONST (ty, _) ->
         Printf.sprintf "%s%d" (const_name_of_datatype ty) node.num
       | _ -> Printf.sprintf "exp%d" node.num
@@ -126,28 +126,23 @@ let rec arg_of node =
        | _ ->
           mk (Apply (Prim_tuple_get, noloc, [ arg_of loop_node; nat_n pos ]))
      end
-  | N_FOLD_ARG ({ kind = N_FOLD_BEGIN ( _); args } as begin_node, pos ) ->
-    Format.eprintf "fold args: %d@." (List.length args);
-     let x = begin
-       match pos, List.length args with
-       | 0, 1 -> arg_of begin_node
+  | N_FOLD_ARG ({ kind = N_FOLD_BEGIN ( _); args = acc } as begin_node, pos ) ->
+    begin
+       match pos, acc with
+       | 0, [] -> arg_of begin_node
+       | 0, [ { kind = N_CONST (_, CUnit)}] -> (* iter *) arg_of begin_node
        | _ ->
-         mk (Apply (Prim_tuple_get, noloc, [ arg_of begin_node; nat_n pos ]))
+         mk ?name:node.node_name
+           (Apply (Prim_tuple_get, noloc, [ arg_of begin_node; nat_n pos ]))
      end
-     in
-     Format.eprintf "fold arg = %s@." (LiquidPrinter.Liquid.string_of_code x);
-     x
   | N_FOLD_RESULT (fold_node, end_node, pos ) ->
-    Format.eprintf "fold result: %d, %d@." pos (List.length end_node.args);
-     let x = begin
+    begin
        match pos, List.length end_node.args with
        | 0, 1 -> arg_of fold_node
        | _ ->
           mk (Apply (Prim_tuple_get, noloc, [ arg_of fold_node; nat_n pos ]))
      end
-     in
-     Format.eprintf "fold result = %s@." (LiquidPrinter.Liquid.string_of_code x);
-     x
+
   | N_CONST (ty, ((
                    CUnit | CBool _ | CInt _ | CNat _ | CTez _
              ) as cst)) ->
@@ -374,13 +369,23 @@ let decompile contract =
                     [arg_of final_cond;
                      value_of_args args]))
 
-       | N_FOLD ({args = _ :: rargs} as begin_node, end_node), [arg] ->
-         let desc = Fold (Prim_coll_fold,
-                          var_of begin_node, noloc,
-                          decompile_next begin_node,
-                          arg_of arg,
-                          value_of_args rargs
-                         )
+       | N_FOLD ({args = rargs} as begin_node, end_node), [arg] ->
+         let acc = value_of_args rargs in
+         let desc = match acc.desc with
+           | Const (_, CUnit) ->
+             Fold (Prim_coll_iter,
+                   var_of begin_node, noloc,
+                   decompile_next begin_node,
+                   arg_of arg,
+                   acc
+                  )
+           | _ ->
+             Fold (Prim_coll_fold,
+                   var_of begin_node, noloc,
+                   decompile_next begin_node,
+                   arg_of arg,
+                   acc
+                  )
          in
          mklet node desc
 

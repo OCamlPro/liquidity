@@ -171,8 +171,6 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
   | Let (name, loc, exp, body) ->
      let exp = typecheck env exp in
      if exp.ty = Tfail then error loc "cannot assign failure";
-     Format.eprintf "%s fails: %b@." name exp.fail;
-
      let env = maybe_reset_vars env exp.transfer in
      let (env, count) = new_binding env name ~fail:exp.fail exp.ty in
      let body = typecheck env body in
@@ -395,9 +393,12 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
     let arg = typecheck env arg in
     let acc = typecheck env acc in
     let prim, name_ty = match prim, arg.ty, acc.ty with
-      | Prim_map_iter, Tmap (k_ty, v_ty), Tunit -> prim, Ttuple [k_ty; v_ty]
-      | Prim_set_iter, Tset elt_ty, Tunit -> prim, elt_ty
-      | Prim_list_iter, Tlist elt_ty, Tunit -> prim, elt_ty
+      | (Prim_coll_iter|Prim_map_iter), Tmap (k_ty, v_ty), Tunit ->
+        Prim_map_iter, Ttuple [k_ty; v_ty]
+      | (Prim_coll_iter|Prim_set_iter), Tset elt_ty, Tunit ->
+        Prim_set_iter, elt_ty
+      | (Prim_coll_iter|Prim_list_iter), Tlist elt_ty, Tunit ->
+        Prim_list_iter, elt_ty
 
       | (Prim_map_fold|Prim_coll_fold), Tmap (k_ty, v_ty), acc_ty ->
         Prim_map_fold, Ttuple[Ttuple [k_ty; v_ty]; acc_ty]
@@ -416,11 +417,7 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
     let body = typecheck_expected
         (LiquidTypes.string_of_fold_primitive prim ^" body") env acc.ty body in
     check_used env name loc count;
-    let  l = mk ?name:exp.name (Fold (prim, name, loc, body, arg, acc)) acc.ty
-    in
-    
-    Format.eprintf "fold %s -> ... fails: %b@." name l.fail;
-    l
+    mk ?name:exp.name (Fold (prim, name, loc, body, arg, acc)) acc.ty
 
   | MatchList (arg, loc, head_name, tail_name, ifcons, ifnil) ->
      let arg  = typecheck env arg in
@@ -460,9 +457,7 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
     check_used env lambda_arg_name loc arg_count;
     let desc = Lambda (arg_name, lambda_arg_type, loc, body, body.ty) in
     let ty = Tlambda (lambda_arg_type, body.ty) in
-    let l = mk ?name:exp.name desc ty in
-    Format.eprintf "fun %s -> ... fails: %b@." arg_name l.fail;
-    l
+    mk ?name:exp.name desc ty
 
   | Closure _ -> assert false
 
@@ -974,20 +969,10 @@ and typecheck_apply ?name env prim loc args =
                  let arg = typecheck env arg in
                  if arg.transfer then
                    error loc "transfer within prim args";
-                 (* if (\* prim = Prim_exec &&  *\) arg.fail then *)
-                   Format.eprintf "FAILS %s : %b@."
-                     (LiquidPrinter.Liquid.string_of_code arg) arg.fail;
                  arg
                ) args in
   let prim, ty = typecheck_prim1 env prim loc args in
-  let l = mk ?name (Apply (prim, loc, args)) ty
-  in
-  if prim = Prim_exec then
-    Format.eprintf "||| %s fails: %b@."
-      (LiquidPrinter.Liquid.string_of_code (let x::_ = List.rev args in x)) l.fail;
-  l
-
-
+  mk ?name (Apply (prim, loc, args)) ty
 
 
 let typecheck_contract ~warnings env contract =

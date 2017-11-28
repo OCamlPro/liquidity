@@ -258,6 +258,14 @@ let rec convert_code expr =
                ]
 
   | Fold ((Prim_map_iter|Prim_set_iter|Prim_list_iter as prim),
+          var_arg, _loc,
+          { desc = Apply(Prim_exec, _, [ { desc = Var (iter_arg, _, []) }; f])},
+          arg_exp, _acc_exp) when iter_arg = var_arg ->
+     Exp.apply (Exp.ident (lid (LiquidTypes.string_of_fold_primitive prim)))
+               [ Nolabel, convert_code f;
+                 Nolabel, convert_code arg_exp;
+               ]
+  | Fold ((Prim_map_iter|Prim_set_iter|Prim_list_iter as prim),
           var_arg, _loc, body_exp, arg_exp, _acc_exp) ->
      Exp.apply (Exp.ident (lid (LiquidTypes.string_of_fold_primitive prim)))
                [
@@ -265,6 +273,16 @@ let rec convert_code expr =
                                    (Pat.var (loc var_arg))
                                    (convert_code body_exp);
                  Nolabel, convert_code arg_exp;
+               ]
+  | Fold (prim, var_arg, _loc,
+          { desc = Apply(Prim_exec, _, [ { desc = Var (iter_arg, _, []) }; f])},
+          arg_exp,
+          acc_exp) when iter_arg = var_arg ->
+     Exp.apply (Exp.ident (lid (LiquidTypes.string_of_fold_primitive prim)))
+               [
+                 Nolabel, convert_code f;
+                 Nolabel, convert_code arg_exp;
+                 Nolabel, convert_code acc_exp;
                ]
   | Fold (prim, var_arg, _loc, body_exp, arg_exp, acc_exp) ->
      Exp.apply (Exp.ident (lid (LiquidTypes.string_of_fold_primitive prim)))

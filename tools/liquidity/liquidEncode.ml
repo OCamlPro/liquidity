@@ -38,6 +38,40 @@ let sanitize_name s =
     if !last >= len then !new_s
     else !new_s ^ String.sub s !last (len - !last)
 
+let unsanitize s =
+  let len = String.length s in
+  let b = Buffer.create len in
+  let rec aux s i =
+    if i >= len then Buffer.contents b
+    else
+      let next () =
+        Buffer.add_char b s.[i];
+        aux s (i+1)
+      in
+      if s.[i] = '_' && len - i >= 6 then
+        if s.[i+1] = 'p' && s.[i+2] = 'r' && s.[i+3] = 'i'
+           && s.[i+4] = 'm' && s.[i+5] = '_' then begin
+          Buffer.add_char b '\'';
+          aux s (i+6)
+        end
+        else if len >= 7 then
+          if s.[i+1] = 's' then
+            if s.[i+2] = 'h' && s.[i+3] = 'a' && s.[i+4] = 'r'
+               && s.[i+5] = 'p'  && s.[i+6] = '_' then begin
+              Buffer.add_char b '#';
+              aux s (i+7)
+            end
+            else if s.[i+2] = 'l' && s.[i+3] = 'a' && s.[i+4] = 's'
+                    && s.[i+5] = 'h'  && s.[i+6] = '_' then begin
+              Buffer.add_char b '/';
+              aux s (i+7)
+            end else next ()
+          else next ()
+        else next ()
+      else next ()
+  in
+  aux s 0
+
 let mk_typed ?name (desc: (datatype, typed) exp_desc) ty = mk ?name desc ty
 let mk ?name (desc: (datatype, encoded) exp_desc) ty = mk ?name desc ty
 

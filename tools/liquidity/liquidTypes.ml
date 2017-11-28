@@ -190,6 +190,8 @@ type prim_fold =
   | Prim_map_fold
   | Prim_set_fold
   | Prim_list_fold
+
+  | Prim_coll_iter
   | Prim_coll_fold
 
 
@@ -315,8 +317,8 @@ let string_of_primitive prim =
     raise Not_found
 
 
-let fold_primitive_of_string = Hashtbl.create 7
-let string_of_fold_primitive = Hashtbl.create 7
+let fold_primitive_of_string = Hashtbl.create 8
+let string_of_fold_primitive = Hashtbl.create 8
 let () =
   List.iter (fun (n,p) ->
       Hashtbl.add fold_primitive_of_string n p;
@@ -329,6 +331,7 @@ let () =
               "Map.fold", Prim_map_fold;
               "Set.fold", Prim_set_fold;
               "List.fold", Prim_list_fold;
+              "Coll.iter", Prim_coll_iter;
               "Coll.fold", Prim_coll_fold;
             ]
 

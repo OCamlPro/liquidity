@@ -150,9 +150,11 @@ let interp contract =
   and decompile stack (seq : node) ins =
     match ins.ins, stack with
     | ANNOT name, x :: _ ->
-      x.node_name <- Some name;
+      if x.node_name = None then x.node_name <- Some name;
       begin match x.kind, seq.kind with
-        | N_IF_END_RESULT _, N_IF _ ->
+        | N_IF_END_RESULT _, N_IF _
+        | N_LOOP_RESULT _, N_LOOP _
+        | N_FOLD_RESULT _, N_FOLD _ ->
           seq.node_name <- Some name;
         | _ -> ()
       end;
@@ -322,95 +324,17 @@ let interp contract =
              stack, loop_node
        end
 
-
-    | ITER code, x :: prev_stack when false ->
-       let fold_node = node ins.loc (N_UNKNOWN "FOLD") [] [seq] in
-       let begin_node = node code.loc (N_FOLD_BEGIN fold_node) [x] [] in
-
-       let pseudo_node = node ins.loc (N_UNKNOWN "FOLD") [] [] in
-       begin match decompile (begin_node :: prev_stack) pseudo_node code with
-       | [],_ -> assert false
-       | x :: end_stack, _ ->
-
-          let rec merge i stack1 stack2 =
-            Format.eprintf "stack1 : %d stack2: %d@."
-              (List.length stack1) (List.length stack2);
-            if stack1 == stack2 then stack1
-            else
-              match stack1, stack2 with
-              | [], [] -> []
-              | { kind = N_FAIL } :: _, _ -> stack2
-              | _, { kind = N_FAIL } :: _ -> stack1
-              | s1 :: stack1, s2 :: stack2 ->
-                 if s1 == s2 then
-                   s1 :: (merge i stack1 stack2)
-                 else
-                   let arg = node code.loc (N_FOLD_ARG (begin_node,i)) [] [] in
-                   begin_node.args <- s1 :: begin_node.args;
-                   arg :: (merge (i+1) stack1 (s2::stack2))
-              | _ ->
-                assert false
-          in
-          let stack = merge 0 prev_stack end_stack in
-            Format.eprintf "merged stack : %d@."
-              (List.length stack);
-
-            Format.eprintf "begin args : %d@."
-              (List.length begin_node.args);
-
-          begin_node.args <- List.rev begin_node.args;
-
-          match decompile ( x :: stack) begin_node code with
-          | [], _ -> assert false
-          | x :: _ as end_stack, fold_seq ->
-
-             let end_node = node x.loc
-                 (N_FOLD_END (fold_node, begin_node, x)) [ x ]
-                 [ fold_seq ] in
-
-             let rec merge i stack1 stack2 =
-            Format.eprintf ">> stack1 : %d stack2: %d@."
-              (List.length stack1) (List.length stack2);
-               if stack1 == stack2 then stack1
-               else
-                 match stack1, stack2 with
-                 | [], [] -> []
-                 | { kind = N_FAIL } :: _, _ -> stack2
-                 | _, { kind = N_FAIL } :: _ -> stack1
-                 | { kind = N_FOLD_ARG (n, i) }:: stack1, s2 :: stack2
-                      when n == begin_node
-                      ->
-                      assert false;
-                   let arg = node ins.loc
-                       (N_FOLD_RESULT (fold_node, begin_node, i)) [] [] in
-                   end_node.args <- s2 :: end_node.args;
-                   arg :: merge (i+1) stack1 stack2
-                 | s1 :: stack1, s2 :: stack2 ->
-                   assert (s1 == s2);
-                   s1 :: (merge i stack1 stack2)
-                 | _ -> assert false
-             in
-
-             (* let stack = merge 0 stack end_stack in *)
-             end_node.args <- List.rev end_node.args;
-             fold_node.kind <- N_FOLD (begin_node, end_node);
-             stack, fold_node
-       end
-
     | ITER code, x :: prev_stack ->
        let fold_node = node ins.loc (N_UNKNOWN "FOLD") [x] [seq] in
        let begin_node = node code.loc (N_FOLD_BEGIN fold_node) [(* x *)] [] in
 
        let pseudo_node = node ins.loc (N_UNKNOWN "FOLD") [] [] in
-       begin match decompile (begin_node :: prev_stack) pseudo_node code with
-       | [],_ -> assert false
-       | x ::_ as end_stack, fold_seq ->
+       let arg = node code.loc (N_FOLD_ARG (begin_node,0)) [] [] in
 
-         begin_node.args <- x :: begin_node.args;
+       begin match decompile (arg :: prev_stack) pseudo_node code with
+       | end_stack, fold_seq ->
 
           let rec merge i stack1 stack2 =
-            Format.eprintf "stack1 : %d stack2: %d@."
-              (List.length stack1) (List.length stack2);
             if stack1 == stack2 then stack1
             else
               match stack1, stack2 with
@@ -423,26 +347,14 @@ let interp contract =
                  else
                    let arg = node code.loc (N_FOLD_ARG (begin_node,i)) [] [] in
                    begin_node.args <- s1 :: begin_node.args;
-                   arg :: (merge (i+1) stack1 ((* s2:: *)stack2))
+                   arg :: (merge (i+1) stack1 stack2)
               | _ ->
                 assert false
           in
           let stack = merge 1 prev_stack end_stack in
-            Format.eprintf "merged stack : %d@."
-              (List.length stack);
-
-            Format.eprintf "begin args : %d@."
-              (List.length begin_node.args);
-
           begin_node.args <- List.rev begin_node.args;
 
-             (* let end_node = node x.loc *)
-             (*     (N_FOLD_END (fold_node, begin_node, x)) [  ] *)
-             (*     [ fold_seq ] in *)
-         let arg = node code.loc (N_FOLD_ARG (begin_node,0)) [] [] in
-
-          match decompile ( arg :: stack) begin_node code with
-          | [], _ -> assert false
+         match decompile ( arg :: stack) begin_node code with
           | end_stack, fold_seq ->
 
              let end_node = node x.loc
@@ -450,8 +362,6 @@ let interp contract =
                  [ fold_seq ] in
 
              let rec merge i stack1 stack2 =
-            Format.eprintf ">>(%d) stack1 : %d stack2: %d@." i
-              (List.length stack1) (List.length stack2);
                if stack1 == stack2 then stack1
                else
                  match stack1, stack2 with
@@ -461,8 +371,6 @@ let interp contract =
                  | { kind = N_FOLD_ARG (n, _) }:: stack1, s2 :: stack2
                       when n == begin_node
                       ->
-                      (* assert false; *)
-                      Format.eprintf ">> end arg AT %d@." i;
                    let arg = node ins.loc
                        (N_FOLD_RESULT (fold_node, end_node, i)) [] [] in
                    end_node.args <- s2 :: end_node.args;
@@ -475,10 +383,12 @@ let interp contract =
 
              let stack = merge 0 stack end_stack in
              end_node.args <- List.rev end_node.args;
-             
-            Format.eprintf "end args : %d@."
-              (List.length end_node.args);
-
+             begin match begin_node.next with
+               | Some { node_name = Some name } ->
+                 begin_node.node_name <- Some name
+               | _ ->
+                 begin_node.node_name <- arg.node_name
+             end;
              fold_node.kind <- N_FOLD (begin_node, end_node);
              stack, fold_node
        end
