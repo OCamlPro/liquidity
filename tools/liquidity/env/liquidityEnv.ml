@@ -253,8 +253,9 @@ module Set : sig
   val add : 'key -> 'key set -> 'key set
   val remove : 'key -> 'key set -> 'key set
   val mem : 'key -> 'key set -> bool
-  val reduce : ( 'key * 'acc -> 'acc) ->
-               'key set -> 'acc -> 'acc
+  val reduce : ( 'key * 'acc -> 'acc) -> 'key set -> 'acc -> 'acc
+  val fold : ( 'key * 'acc -> 'acc) -> 'key set -> 'acc -> 'acc
+  val iter : ( 'key -> unit) -> 'key set -> unit
   val map : ('key -> 'res) -> 'key set -> 'res set
   val size : 'key set -> int
 
@@ -311,7 +312,19 @@ end = struct
     in
     Obj.magic acc
 
-  let map f set = assert false (* TODO, NOT TESTED *)
+  let fold f set acc = reduce f set acc
+
+  let map f set =  (* TODO, NOT TESTED *)
+    let f = (Obj.magic f : Obj.t -> Obj.t) in
+    let set = (Obj.magic set : ObjSet.t) in
+    let set = ObjSet.map (fun x -> f x) set in
+    Obj.magic set
+
+  let iter f set =  (* TODO, NOT TESTED *)
+    let f = (Obj.magic f : Obj.t -> unit) in
+    let set = (Obj.magic set : ObjSet.t) in
+    ObjSet.iter (fun x -> f x) set
+
   let size set = ObjSet.cardinal (Obj.magic set)
 
 end

@@ -381,7 +381,7 @@ let rec encode env ( exp : typed_exp ) : encoded_exp =
          arg
        | _::_ ->
          let get_exp = mk (Apply(Prim_tuple_get, loc, [arg1; mk_nat n])) lty in
-         let tmp_name = uniq_ident env "tmp#" in
+         let tmp_name = uniq_ident env "_tmp#" in
          let (new_name, env, count) = new_binding env tmp_name lty in
          let body =
            encode env

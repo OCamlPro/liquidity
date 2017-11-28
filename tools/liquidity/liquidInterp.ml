@@ -41,6 +41,7 @@ let unsanitize_name s =
           Buffer.add_char b '\'';
           aux s (i+6)
         end
+        (*
         else if len >= 7 then
           if s.[i+1] = 's' then
             if s.[i+2] = 'h' && s.[i+3] = 'a' && s.[i+4] = 'r'
@@ -54,6 +55,7 @@ let unsanitize_name s =
               aux s (i+7)
             end else next ()
           else next ()
+        *)
         else next ()
       else next ()
   in
