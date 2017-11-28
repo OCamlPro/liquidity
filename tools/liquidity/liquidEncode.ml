@@ -15,7 +15,12 @@ let error loc msg =
   LiquidLoc.raise_error ~loc ("Type error: " ^^ msg ^^ "%!")
 
 let mk_typed ?name (desc: (datatype, typed) exp_desc) ty = mk ?name desc ty
-let mk ?name (desc: (datatype, encoded) exp_desc) ty = mk ?name desc ty
+let mk ?name (desc: (datatype, encoded) exp_desc) ty =
+  let name = match name with
+    | Some n when n.[0] <> '_' -> name
+    | _ -> None
+  in
+  mk ?name desc ty
 
 let mk_typed_nat i =
   mk_typed (Const (Tnat, CNat (LiquidPrinter.integer_of_int i))) Tnat
@@ -78,7 +83,7 @@ let find_var ?(count_used=true) env loc name =
     let count = StringMap.find name env.vars_counts in
     if count_used then incr count;
     let aname =
-      if env.annot && name.[0] <> '_' then Some vname
+      if env.annot then Some vname
       else None in
     { (mk ?name:aname (Var (name, loc, [])) ty) with fail }
   with Not_found ->
@@ -138,9 +143,9 @@ let env_for_clos env loc bvs arg_name arg_type =
         (new_name, arg_type, 0, (ref 0, ref 0)) free_vars in
     (* let size = StringMap.cardinal env_vars in *)
     let env_bindings =
-      StringMap.map (fun (_, ty, index, count) ->
+      StringMap.map (fun (name, ty, index, count) ->
           let ei = mk_nat index in
-          let exp = mk (Apply(Prim_tuple_get, loc, [env_arg_var; ei])) ty in
+          let exp = mk ~name (Apply(Prim_tuple_get, loc, [env_arg_var; ei])) ty in
           exp, count
         ) env_vars
     in
@@ -317,7 +322,7 @@ let rec encode env ( exp : typed_exp ) : encoded_exp =
   | Let (name, loc, e, body) ->
 
      let e = encode env e in
-     let e = if env.annot && e.name = None && name.[0] <> '_'
+     let e = if env.annot && e.name = None
        then { e with name = Some name }
        else e
      in

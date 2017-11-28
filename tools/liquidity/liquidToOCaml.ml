@@ -164,6 +164,9 @@ let rec convert_code expr =
      Exp.construct (lid "Some") (Some (convert_code arg))
   | Apply (Prim_tuple, _loc, args) ->
      Exp.tuple (List.map convert_code args)
+  | Apply (Prim_exec, _loc, [x; f]) ->
+    Exp.apply (convert_code f) [Nolabel, convert_code x]
+
   | Apply (prim, _loc, args) ->
      let prim_name =
        try

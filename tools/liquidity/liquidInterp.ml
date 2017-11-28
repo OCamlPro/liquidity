@@ -41,21 +41,21 @@ let unsanitize_name s =
           Buffer.add_char b '\'';
           aux s (i+6)
         end
-        (*
         else if len >= 7 then
           if s.[i+1] = 's' then
+            (*
             if s.[i+2] = 'h' && s.[i+3] = 'a' && s.[i+4] = 'r'
                && s.[i+5] = 'p'  && s.[i+6] = '_' then begin
               Buffer.add_char b '#';
               aux s (i+7)
             end
-            else if s.[i+2] = 'l' && s.[i+3] = 'a' && s.[i+4] = 's'
+            else *)
+            if s.[i+2] = 'l' && s.[i+3] = 'a' && s.[i+4] = 's'
                     && s.[i+5] = 'h'  && s.[i+6] = '_' then begin
               Buffer.add_char b '/';
               aux s (i+7)
             end else next ()
           else next ()
-        *)
         else next ()
       else next ()
   in
@@ -141,18 +141,23 @@ let rec merge_stacks if_stack end_node1 end_node2 stack1 stack2 =
          (fprint_stack "stack1 ") stack1
          (fprint_stack "stack2 ") stack2
 
-let add_name stack seq ins =
-  match ins.loc_name, stack with
-  | Some name, x :: _ ->
+let add_name stack seq name =
+  match stack with
+  | x :: _ ->
     let name = unsanitize_name name in
     if x.node_name = None then x.node_name <- Some name;
     begin match x.kind, seq.kind with
       | N_IF_END_RESULT _, N_IF _
       | N_LOOP_RESULT _, N_LOOP _
       | N_FOLD_RESULT _, N_FOLD _ ->
-        seq.node_name <- Some name;
+        if seq.node_name = None then seq.node_name <- Some name;
       | _ -> ()
     end;
+  | [] -> ()
+
+let add_name_to_ins stack seq ins =
+  match ins.loc_name, stack with
+  | Some name, x :: _ -> add_name stack seq name
   | _, _ -> ()
 
 let interp contract =
@@ -200,21 +205,11 @@ let interp contract =
        decompile_seq stack seq code
 
   and decompile stack (seq : node) ins =
-    add_name stack seq ins;
+    add_name_to_ins stack seq ins;
     match ins.ins, stack with
-    | ANNOT name, x :: _ ->
-      let name = unsanitize_name name in
-      if x.node_name = None then x.node_name <- Some name;
-      begin match x.kind, seq.kind with
-        | N_IF_END_RESULT _, N_IF _
-        | N_LOOP_RESULT _, N_LOOP _
-        | N_FOLD_RESULT _, N_FOLD _ ->
-          seq.node_name <- Some name;
-        | _ -> ()
-      end;
+    | ANNOT name, _ ->
+      add_name stack seq name;
       stack, seq
-
-    | ANNOT name, _ -> stack, seq (* ignore *)
 
     | SEQ exprs, _ ->
        decompile_seq stack seq exprs

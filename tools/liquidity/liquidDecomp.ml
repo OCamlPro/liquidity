@@ -230,6 +230,15 @@ let decompile contract =
          let arg1, arg2, arg3 = arg_of arg1, arg_of arg2, arg_of arg3 in
          mklet node (Apply (Prim_map_add, noloc, [arg1; arg2; arg3]))
 
+       | N_PRIM "PAIR", [{ kind = N_LAMBDA _ } as f; env]  ->
+         begin match f.node_name with
+         | None -> f.node_name <-node.node_name
+         | Some _ -> ()
+         end;
+         let f = arg_of f in
+         let env = arg_of env in
+         mklet node (Apply (Prim_tuple, noloc, [f; env]))
+
        | N_PRIM prim, _ ->
           let prim, args =
             match prim, node.args with
