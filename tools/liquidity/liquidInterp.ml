@@ -23,6 +23,40 @@ let node loc kind args prevs =
   Hashtbl.add nodes num node;
   node
 
+let unsanitize_name s =
+  let len = String.length s in
+  let b = Buffer.create len in
+  let rec aux s i =
+    if i >= len then Buffer.contents b
+    else
+      let next () =
+        Buffer.add_char b s.[i];
+        aux s (i+1)
+      in
+      if s.[i] = '_' && len - i >= 6 then
+        if s.[i+1] = 'p' && s.[i+2] = 'r' && s.[i+3] = 'i'
+           && s.[i+4] = 'm' && s.[i+5] = '_' then begin
+          Buffer.add_char b '\'';
+          aux s (i+6)
+        end
+        else if len >= 7 then
+          if s.[i+1] = 's' then
+            if s.[i+2] = 'h' && s.[i+3] = 'a' && s.[i+4] = 'r'
+               && s.[i+5] = 'p'  && s.[i+6] = '_' then begin
+              Buffer.add_char b '#';
+              aux s (i+7)
+            end
+            else if s.[i+2] = 'l' && s.[i+3] = 'a' && s.[i+4] = 's'
+                    && s.[i+5] = 'h'  && s.[i+6] = '_' then begin
+              Buffer.add_char b '/';
+              aux s (i+7)
+            end else next ()
+          else next ()
+        else next ()
+      else next ()
+  in
+  aux s 0
+
 let fprint_stack msg fmt stack =
   Format.fprintf fmt "Stack %s:\n" msg;
   List.iter (fun node ->
@@ -150,6 +184,7 @@ let interp contract =
   and decompile stack (seq : node) ins =
     match ins.ins, stack with
     | ANNOT name, x :: _ ->
+      let name = unsanitize_name name in
       if x.node_name = None then x.node_name <- Some name;
       begin match x.kind, seq.kind with
         | N_IF_END_RESULT _, N_IF _

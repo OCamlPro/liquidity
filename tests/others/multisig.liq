@@ -44,7 +44,7 @@ let equal_props ((p1:proposition), (p2:proposition)) =
 (* returns true if a proposition p should be executed immediately *)
 let should_execute ((p : proposition), (storage : storage)) =
   let nb_agree =
-    Map.reduce (fun (((_:key_hash), (p':proposition)), (cpt:nat)) ->
+    Map.fold (fun (((_:key_hash), (p':proposition)), (cpt:nat)) ->
         if equal_props (p, p') then cpt + 1p else cpt
       ) storage.actions 0p
   in

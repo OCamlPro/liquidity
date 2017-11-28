@@ -14,64 +14,6 @@ let noloc env = LiquidLoc.loc_in_file env.env.filename
 let error loc msg =
   LiquidLoc.raise_error ~loc ("Type error: " ^^ msg ^^ "%!")
 
-let sanitize_name s =
-  let to_change = ref [] in
-  let sharp_s = "_sharp_" in
-  let slash_s = "_slash_" in
-  let prim_s = "_prim_" in
-  String.iteri (fun i -> function
-      | '#' -> to_change := (i, sharp_s) :: !to_change
-      | '/' -> to_change := (i, slash_s) :: !to_change
-      | '\'' -> to_change := (i, prim_s) :: !to_change
-      | _ -> ()
-    ) s;
-  match !to_change with
-  | [] -> s
-  | to_change ->
-    let new_s = ref "" in
-    let last = ref 0 in
-    List.iter(fun (i, repl) ->
-        new_s := !new_s ^ String.sub s !last (i - !last) ^ repl;
-        last := i + 1;
-      ) (List.rev to_change);
-    let len = String.length s in
-    if !last >= len then !new_s
-    else !new_s ^ String.sub s !last (len - !last)
-
-let unsanitize s =
-  let len = String.length s in
-  let b = Buffer.create len in
-  let rec aux s i =
-    if i >= len then Buffer.contents b
-    else
-      let next () =
-        Buffer.add_char b s.[i];
-        aux s (i+1)
-      in
-      if s.[i] = '_' && len - i >= 6 then
-        if s.[i+1] = 'p' && s.[i+2] = 'r' && s.[i+3] = 'i'
-           && s.[i+4] = 'm' && s.[i+5] = '_' then begin
-          Buffer.add_char b '\'';
-          aux s (i+6)
-        end
-        else if len >= 7 then
-          if s.[i+1] = 's' then
-            if s.[i+2] = 'h' && s.[i+3] = 'a' && s.[i+4] = 'r'
-               && s.[i+5] = 'p'  && s.[i+6] = '_' then begin
-              Buffer.add_char b '#';
-              aux s (i+7)
-            end
-            else if s.[i+2] = 'l' && s.[i+3] = 'a' && s.[i+4] = 's'
-                    && s.[i+5] = 'h'  && s.[i+6] = '_' then begin
-              Buffer.add_char b '/';
-              aux s (i+7)
-            end else next ()
-          else next ()
-        else next ()
-      else next ()
-  in
-  aux s 0
-
 let mk_typed ?name (desc: (datatype, typed) exp_desc) ty = mk ?name desc ty
 let mk ?name (desc: (datatype, encoded) exp_desc) ty = mk ?name desc ty
 
@@ -136,7 +78,7 @@ let find_var ?(count_used=true) env loc name =
     let count = StringMap.find name env.vars_counts in
     if count_used then incr count;
     let aname =
-      if env.annot && name.[0] <> '_' then Some (sanitize_name vname)
+      if env.annot && name.[0] <> '_' then Some vname
       else None in
     { (mk ?name:aname (Var (name, loc, [])) ty) with fail }
   with Not_found ->
@@ -376,7 +318,7 @@ let rec encode env ( exp : typed_exp ) : encoded_exp =
 
      let e = encode env e in
      let e = if env.annot && e.name = None && name.[0] <> '_'
-       then { e with name = Some (sanitize_name name) }
+       then { e with name = Some name }
        else e
      in
      let env = maybe_reset_vars env e.transfer in

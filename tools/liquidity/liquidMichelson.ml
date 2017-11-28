@@ -23,6 +23,30 @@ let dip n exprs = {i=DIP (n, seq exprs)}
 
 let push ty cst = {i=PUSH (LiquidEncode.encode_type ty, cst)}
 
+let sanitize_name s =
+  let to_change = ref [] in
+  let sharp_s = "_sharp_" in
+  let slash_s = "_slash_" in
+  let prim_s = "_prim_" in
+  String.iteri (fun i -> function
+      | '#' -> to_change := (i, sharp_s) :: !to_change
+      | '/' -> to_change := (i, slash_s) :: !to_change
+      | '\'' -> to_change := (i, prim_s) :: !to_change
+      | _ -> ()
+    ) s;
+  match !to_change with
+  | [] -> s
+  | to_change ->
+    let new_s = ref "" in
+    let last = ref 0 in
+    List.iter(fun (i, repl) ->
+        new_s := !new_s ^ String.sub s !last (i - !last) ^ repl;
+        last := i + 1;
+      ) (List.rev to_change);
+    let len = String.length s in
+    if !last >= len then !new_s
+    else !new_s ^ String.sub s !last (len - !last)
+
 (* n = size of preserved head of stack *)
 let drop_stack n depth =
   if depth = 0 then [] else
@@ -517,13 +541,13 @@ the ending NIL is not annotated with a type *)
   and compile depth env e =
     let code, transfer = compile_desc depth env e.desc in
     match e.name with
-    | Some name -> code @ [ ii (ANNOT name) ], transfer
+    | Some name -> code @ [ ii (ANNOT (sanitize_name name)) ], transfer
     | None -> code, transfer
 
   and compile_no_transfer depth env e =
     let code = compile_desc_no_transfer depth env e.desc in
     match e.name with
-    | Some name -> code @ [ ii (ANNOT name) ]
+    | Some name -> code @ [ ii (ANNOT (sanitize_name name)) ]
     | None -> code
 
   in
