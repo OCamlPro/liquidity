@@ -26,19 +26,12 @@ let verbosity = ref (try
                      | _ -> 1 (* LIQUID_DEBUG not a number *)
                     )
 
-let arg_peephole = ref true
-let arg_keepon = ref false
-let arg_typeonly = ref false
-let arg_parseonly = ref false
-let arg_singleline = ref false
-let arg_annotmic = ref true
-
 let compile_liquid_file filename =
   let ocaml_ast = LiquidFromOCaml.read_file filename in
   if !verbosity>0 then
   FileString.write_file (filename ^ ".ocaml")
     (LiquidOCamlPrinter.contract_ast ocaml_ast);
-  if !arg_parseonly then exit 0;
+  if !LiquidOptions.parseonly then exit 0;
   let syntax_ast, env = LiquidFromOCaml.translate filename ocaml_ast in
   if !verbosity>0 then
   FileString.write_file (filename ^ ".syntax")
@@ -51,12 +44,12 @@ let compile_liquid_file filename =
       (LiquidPrinter.Liquid.string_of_contract_types
          typed_ast);
   let encoded_ast, to_inline =
-    LiquidEncode.encode_contract ~annot:!arg_annotmic env typed_ast in
+    LiquidEncode.encode_contract ~annot:!LiquidOptions.annotmic env typed_ast in
   if !verbosity>0 then
     FileString.write_file (filename ^ ".encoded")
       (LiquidPrinter.Liquid.string_of_contract
          encoded_ast);
-  if !arg_typeonly then exit 0;
+  if !LiquidOptions.typeonly then exit 0;
 
   let live_ast = LiquidSimplify.simplify_contract encoded_ast to_inline in
   if !verbosity>0 then
@@ -67,7 +60,7 @@ let compile_liquid_file filename =
   let pre_michelson = LiquidMichelson.translate live_ast in
 
   let pre_michelson =
-    if !arg_peephole then
+    if !LiquidOptions.peephole then
       LiquidPeephole.simplify pre_michelson
     else
       pre_michelson
@@ -77,7 +70,7 @@ let compile_liquid_file filename =
   let output = filename ^ ".tz" in
   let c = LiquidToTezos.convert_contract pre_michelson in
   let s =
-    if !arg_singleline
+    if !LiquidOptions.singleline
     then LiquidToTezos.line_of_contract c
     else LiquidToTezos.string_of_contract c
   in
@@ -93,7 +86,7 @@ let compile_tezos_file filename =
   let c, annoted_tz = LiquidFromTezos.convert_contract env code in
   let c = LiquidClean.clean_contract c in
   let c = LiquidInterp.interp c in
-  if !arg_parseonly then exit 0;
+  if !LiquidOptions.parseonly then exit 0;
   if !verbosity>0 then begin
     FileString.write_file  (filename ^ ".dot")
                            (LiquidDot.to_string c);
@@ -101,7 +94,7 @@ let compile_tezos_file filename =
     if Sys.command cmd <> 0 then
       Printf.eprintf "Warning: could not generate pdf from .dot file\n%!";
   end;
-  if !arg_typeonly then exit 0;
+  if !LiquidOptions.typeonly then exit 0;
   let c = LiquidDecomp.decompile c in
   if !verbosity>0 then
   FileString.write_file  (filename ^ ".liq.pre")
@@ -141,7 +134,7 @@ let handle_file filename =
   try
     handle_file filename
   with (LiquidError _) as e ->
-       if not !arg_keepon then raise e
+       if not !LiquidOptions.keepon then raise e
 
 
 module Data = struct
@@ -171,19 +164,30 @@ end
 let main () =
   let work_done = ref false in
   let arg_list = Arg.align [
-      "-k", Arg.Set arg_keepon, " Continue on error";
+      "-k", Arg.Set LiquidOptions.keepon, " Continue on error";
+
       "--verbose", Arg.Unit (fun () -> incr verbosity), " Increment verbosity";
-      "--no-peephole", Arg.Clear arg_peephole,
+
+      "--no-peephole", Arg.Clear LiquidOptions.peephole,
       " Disable peephole optimizations";
-      "--type-only", Arg.Set arg_typeonly, "Stop after type checking";
-      "--parse-only", Arg.Set arg_parseonly, "Stop after parsing";
-      "--single-line", Arg.Set arg_singleline,
+
+      "--type-only", Arg.Set LiquidOptions.typeonly, "Stop after type checking";
+
+      "--parse-only", Arg.Set LiquidOptions.parseonly, "Stop after parsing";
+
+      "--single-line", Arg.Set LiquidOptions.singleline,
       "Output Michelson on a single line";
-      "--annot-mic", Arg.Set arg_annotmic,
-      "Annotate Michelson with variable names (default: true)";
+
+      "--no-annot", Arg.Clear LiquidOptions.annotmic,
+      "Don't annotate Michelson with variable names";
+
+      "--annot-prim", Arg.Clear LiquidOptions.annotafter,
+      "Annotate Michelson primitives directly";
+
       "--compact", Arg.Unit (fun () ->
-          arg_annotmic := false;
-          arg_singleline := true), "Produce compact Michelson";
+          LiquidOptions.annotmic := false;
+          LiquidOptions.singleline := true), "Produce compact Michelson";
+
       "--data", Arg.Tuple [
         Arg.String (fun s -> Data.contract := s);
         Arg.String (fun s -> Data.parameter := s);
@@ -193,6 +197,7 @@ let main () =
             Data.translate ());
       ],
       "FILE.liq PARAMETER STORAGE Translate to Michelson";
+
     ] @ LiquidToTezos.arg_list work_done
 
   in

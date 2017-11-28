@@ -12,16 +12,16 @@ open LiquidTypes
 
 (*  Translation to Michelson *)
 
-let ii i = {i}
+let ii i = { i; noloc_name = None }
 
-let seq exprs = {i=SEQ exprs}
+let seq exprs = ii (SEQ exprs)
 
-let dup n = {i=DUP n}
+let dup n = ii (DUP n)
 
 (* n = size of preserved head of stack *)
-let dip n exprs = {i=DIP (n, seq exprs)}
+let dip n exprs = ii (DIP (n, seq exprs))
 
-let push ty cst = {i=PUSH (LiquidEncode.encode_type ty, cst)}
+let push ty cst = ii (PUSH (LiquidEncode.encode_type ty, cst))
 
 let sanitize_name s =
   let to_change = ref [] in
@@ -47,15 +47,19 @@ let sanitize_name s =
     if !last >= len then !new_s
     else !new_s ^ String.sub s !last (len - !last)
 
+let sanitize_opt = function
+  | Some s -> Some (sanitize_name s)
+  | None -> None
+
 (* n = size of preserved head of stack *)
 let drop_stack n depth =
   if depth = 0 then [] else
     let rec drop_stack depth =
       if depth = 0 then [] else
-        {i=DROP} :: (drop_stack (depth-1))
+        ii DROP :: (drop_stack (depth-1))
     in
     let exps = drop_stack depth in
-    if n = 0 then exps else [{i=DIP_DROP (n, List.length exps)}]
+    if n = 0 then exps else [ii @@ DIP_DROP (n, List.length exps)]
 
 (* The type of a contract code is usually:
      lambda (pair (pair tez 'arg) 'global) -> (pair 'ret 'global) *)
@@ -93,7 +97,7 @@ let translate_code code =
        let depth = depth + 1 in
        let e2, transfer2 = compile depth env e2 in
        let cleanup_stack =
-         if transfer2 then [] else [ {i=DIP_DROP (1,1)}]
+         if transfer2 then [] else [ii (DIP_DROP (1,1))]
        in
        e1 @ e2 @ cleanup_stack, transfer1 || transfer2
 
@@ -104,8 +108,8 @@ let translate_code code =
        let arg_type = LiquidEncode.encode_type arg_type in
        let res_type = LiquidEncode.encode_type res_type in
        let body = compile_no_transfer depth env body in
-       [ {i=LAMBDA (arg_type, res_type, seq (body @ [
-             {i=DIP_DROP (1,1)}]))} ], false
+       [ ii @@ LAMBDA (arg_type, res_type,
+                       seq (body @ [ii @@ DIP_DROP (1,1)])) ], false
 
     | Closure (arg_name, p_arg_type, loc, call_env, body, res_type) ->
       let call_env_code = match call_env with
@@ -136,8 +140,8 @@ let translate_code code =
         | true, false -> [], drop_stack 1 depth
         | false, true -> drop_stack 1 depth, []
       in
-      cond @ [  {i= IF (seq (ifthen @ ifthen_end),
-                        seq (ifelse @ ifelse_end) )}],
+      cond @ [ ii @@ IF (seq (ifthen @ ifthen_end),
+                         seq (ifelse @ ifelse_end))],
       transfer1 || transfer2 || transfer3
 
     | LetTransfer( storage_name, result_name,
@@ -156,7 +160,7 @@ let translate_code code =
        let body, transfer = compile 2 env body_exp in
        let cleanup_stack =
          if transfer then []
-         else [ {i=DIP_DROP (1,2)} ]
+         else [ ii @@ DIP_DROP (1,2) ]
        in
        storage @ contract @ amount @ arg @ drop @
          [ ii TRANSFER_TOKENS ] @ body @
@@ -187,13 +191,13 @@ let translate_code code =
        let ifsome, transfer3 = compile depth env ifsome in
        let (ifnone_end, ifsome_end) =
          match transfer2, transfer3 with
-         | false, false -> [], [ {i=DIP_DROP(1,1)} ]
+         | false, false -> [], [ii @@ DIP_DROP(1,1)]
          | true, true -> [], []
          | true, false -> [], drop_stack 1 depth
          | false, true -> drop_stack 1 (depth-1), []
        in
-       arg @ [ {i=IF_NONE (seq (ifnone @ ifnone_end),
-                          seq (ifsome @ ifsome_end) )}],
+       arg @ [ ii @@ IF_NONE (seq (ifnone @ ifnone_end),
+                              seq (ifsome @ ifsome_end) )],
        transfer1 || transfer2 || transfer3
 
     | MatchNat(arg, loc, plus_name, ifplus, minus_name, ifminus) ->
@@ -208,15 +212,15 @@ let translate_code code =
        let depth = depth + 1 in
        let (ifplus_end, ifminus_end) =
          match transfer2, transfer3 with
-         | false, false -> [ {i=DIP_DROP(1,1)} ], [ {i=DIP_DROP(1,1)} ]
+         | false, false -> [ ii @@ DIP_DROP(1,1) ], [ ii @@ DIP_DROP(1,1) ]
          | true, true -> [], []
          | true, false -> [], drop_stack 1 depth
          | false, true -> drop_stack 1 depth, []
        in
        arg @ [
          dup 1; ii ABS; ii SWAP; ii GE;
-         {i=IF (seq (ifplus @ ifplus_end),
-                seq (ifminus @ ifminus_end) )}],
+         ii @@ IF (seq (ifplus @ ifplus_end),
+                   seq (ifminus @ ifminus_end) )],
        transfer1 || transfer2 || transfer3
 
     | MatchList(arg, loc, head_name, tail_name, ifcons, ifnil) ->
@@ -231,13 +235,13 @@ let translate_code code =
        let ifcons, transfer3 = compile depth env ifcons in
        let (ifnil_end, ifcons_end) =
          match transfer2, transfer3 with
-         | false, false -> [], [ {i=DIP_DROP(1,2)} ]
+         | false, false -> [], [ii @@ DIP_DROP(1,2)]
          | true, true -> [], []
          | true, false -> [], drop_stack 1 depth
          | false, true -> drop_stack 1 (depth-2), []
        in
-       arg @ [ {i=IF_CONS (seq (ifcons @ ifcons_end),
-                          seq (ifnil @ ifnil_end) )}],
+       arg @ [ ii @@ IF_CONS (seq (ifcons @ ifcons_end),
+                              seq (ifnil @ ifnil_end) )],
        transfer1 || transfer2 || transfer3
 
     | MatchVariant(arg, loc, cases) ->
@@ -262,7 +266,7 @@ let translate_code code =
             let left_end =
               match !has_transfer, transfer with
               | true, true -> []
-              | false, false -> [ {i=DIP_DROP(1,1)} ]
+              | false, false -> [ii @@ DIP_DROP(1,1)]
               | false, true -> assert false
               | true, false -> drop_stack 1 depth
             in
@@ -271,7 +275,7 @@ let translate_code code =
             | [] -> left
             | _ ->
                let right = iter cases in
-               [ {i=IF_LEFT( seq left, seq right )} ]
+               [ii @@ IF_LEFT( seq left, seq right )]
        in
        arg @ iter cases, transfer1 || !has_transfer
 
@@ -283,13 +287,13 @@ let translate_code code =
        let env = StringMap.add name depth env in
        let depth = depth + 1 in
        let body, transfer2 = compile depth env body in
-       let body_end = [ {i=DIP_DROP (1,1)};
-                        {i=DUP 1};
+       let body_end = [ ii @@ DIP_DROP (1,1);
+                        ii @@ DUP 1;
                         ii CAR;
-                        {i=DIP (1, seq [ ii CDR ])} ] in
+                        ii @@ DIP (1, seq [ ii CDR ]) ] in
        arg
-       @ [ {i=PUSH (Tbool, CBool true)}]
-       @ [ {i=LOOP (seq (body @ body_end))} ],
+       @ [ ii @@ PUSH (Tbool, CBool true) ]
+       @ [ ii @@ LOOP (seq (body @ body_end)) ],
        transfer1 || transfer2
 
     | Fold (prim, name, _loc, body, arg, acc) ->
@@ -304,11 +308,11 @@ let translate_code code =
       let body, transfer3 = compile depth env body in
       let body_begin, body_end = match prim with
         | Prim_map_iter | Prim_set_iter | Prim_list_iter ->
-          [], [ {i=DIP_DROP (1,2)} ]
-        | _ -> [ dip 1 [{i=DUP 1}]; {i=PAIR} ], [ {i=DIP_DROP (1,2)} ]
+          [], [ii @@ DIP_DROP (1,2) ]
+        | _ -> [ dip 1 [ii @@ DUP 1]; ii PAIR ], [ ii @@ DIP_DROP (1,2) ]
       in
       acc @ arg @
-      [ {i=ITER (seq (body_begin @ body @ body_end))} ],
+      [ii @@ ITER (seq (body_begin @ body @ body_end))],
       transfer1 || transfer2 || transfer3
 
     (* removed during typechecking, replaced by tuple *)
@@ -326,9 +330,9 @@ let translate_code code =
        let n = LiquidPrinter.int_of_integer n in
        let ins =
          if size = n + 1 then
-           {i=CDDR (n-1)}
+           ii @@ CDDR (n-1)
          else
-           {i=CDAR n}
+           ii @@ CDAR n
        in
        arg @ [ ins ]
     | Prim_tuple_get, _ -> assert false
@@ -358,19 +362,19 @@ set x n y = x + [ DUP; CAR; SWAP; CDR ]*n +
     | Prim_Left, [ arg; { ty = right_ty }] ->
       let right_ty = LiquidEncode.encode_type right_ty in
       compile_no_transfer depth env arg @
-      [ {i=LEFT right_ty} ]
+      [ ii (LEFT right_ty) ]
     | Prim_Left, _ -> assert false
 
     | Prim_Right, [ arg; { ty = left_ty } ] ->
       let left_ty = LiquidEncode.encode_type left_ty in
       compile_no_transfer depth env arg @
-      [ {i=RIGHT left_ty} ]
+      [ ii (RIGHT left_ty) ]
     | Prim_Right, _ -> assert false
 
     | Prim_Source, [ { ty = from_ty }; { ty = to_ty } ] ->
       let from_ty = LiquidEncode.encode_type from_ty in
       let to_ty = LiquidEncode.encode_type to_ty in
-      [ {i=SOURCE (from_ty, to_ty)} ]
+      [ ii @@ SOURCE (from_ty, to_ty) ]
     | Prim_Source, _ -> assert false
 
     (* catch the special case of [a;b;c] where
@@ -378,7 +382,7 @@ the ending NIL is not annotated with a type *)
     | Prim_Cons, [ { ty } as arg; { ty = Tunit } ] ->
       let ty = LiquidEncode.encode_type ty in
       let arg = compile_no_transfer (depth+1) env arg in
-      [ {i=PUSH (Tlist ty, CList[])} ] @ arg @ [ ii CONS ]
+      [ push (Tlist ty) (CList[]) ] @ arg @ [ ii CONS ]
 
     (* Should be removed in LiquidCheck *)
     | Prim_unknown, _
@@ -504,7 +508,7 @@ the ending NIL is not annotated with a type *)
       else
         [ ii CDR ] @ compile_no_transfer depth env y @ [ ii PAIR ]
     else
-      [ {i=DUP 1}; ii CAR; ii SWAP; ii CDR ] @
+      [ ii (DUP 1); ii CAR; ii SWAP; ii CDR ] @
         compile_prim_set last (depth+1) env (n-1) y @
           [ ii SWAP; ii PAIR ]
 
@@ -540,15 +544,24 @@ the ending NIL is not annotated with a type *)
 
   and compile depth env e =
     let code, transfer = compile_desc depth env e.desc in
-    match e.name with
-    | Some name -> code @ [ ii (ANNOT (sanitize_name name)) ], transfer
-    | None -> code, transfer
+    compile_name e.name code, transfer
 
   and compile_no_transfer depth env e =
     let code = compile_desc_no_transfer depth env e.desc in
-    match e.name with
-    | Some name -> code @ [ ii (ANNOT (sanitize_name name)) ]
-    | None -> code
+    compile_name e.name code
+
+  and compile_name name code =
+    if !LiquidOptions.annotafter then
+      match name with
+      | Some name ->
+        code @ [ii (ANNOT (sanitize_name name))]
+      | None -> code
+    else
+      match List.rev code with
+      | c :: _ ->
+        c.noloc_name <- sanitize_opt name;
+        code
+      | [] -> code
 
   in
 

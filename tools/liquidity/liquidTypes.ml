@@ -487,10 +487,10 @@ let mk =
 
 
 type michelson_exp =
-  | M_INS of string
+  | M_INS of string * string option
   | M_INS_ANNOT of string
-  | M_INS_CST of string * datatype * const
-  | M_INS_EXP of string * datatype list * michelson_exp list
+  | M_INS_CST of string * datatype * const * string option
+  | M_INS_EXP of string * datatype list * michelson_exp list * string option
 
 type 'a pre_michelson =
   | ANNOT of string
@@ -569,15 +569,19 @@ type 'a pre_michelson =
   | MOD
   | DIV
 
-type noloc_michelson = { i : noloc_michelson pre_michelson }
+type noloc_michelson = {
+  i : noloc_michelson pre_michelson;
+  mutable noloc_name : string option;
+}
 
 type loc_michelson = {
   loc : location;
   ins : loc_michelson pre_michelson;
+  mutable loc_name : string option;
 }
 
-let mic ins = ins
-let mic_loc loc ins = { loc; ins }
+(* let mic ins = ins *)
+(* let mic_loc loc ins = { loc; ins } *)
 
 type closure_env = {
   env_vars :  (string (* name outside closure *)

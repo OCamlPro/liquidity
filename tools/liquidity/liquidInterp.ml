@@ -23,6 +23,8 @@ let node loc kind args prevs =
   Hashtbl.add nodes num node;
   node
 
+let mic_loc loc ins = { loc; ins; loc_name = None }
+
 let unsanitize_name s =
   let len = String.length s in
   let b = Buffer.create len in
@@ -137,6 +139,20 @@ let rec merge_stacks if_stack end_node1 end_node2 stack1 stack2 =
          (fprint_stack "stack1 ") stack1
          (fprint_stack "stack2 ") stack2
 
+let add_name stack seq ins =
+  match ins.loc_name, stack with
+  | Some name, x :: _ ->
+    let name = unsanitize_name name in
+    if x.node_name = None then x.node_name <- Some name;
+    begin match x.kind, seq.kind with
+      | N_IF_END_RESULT _, N_IF _
+      | N_LOOP_RESULT _, N_LOOP _
+      | N_FOLD_RESULT _, N_FOLD _ ->
+        seq.node_name <- Some name;
+      | _ -> ()
+    end;
+  | _, _ -> ()
+
 let interp contract =
 
   counter := 0;
@@ -182,6 +198,7 @@ let interp contract =
        decompile_seq stack seq code
 
   and decompile stack (seq : node) ins =
+    add_name stack seq ins;
     match ins.ins, stack with
     | ANNOT name, x :: _ ->
       let name = unsanitize_name name in

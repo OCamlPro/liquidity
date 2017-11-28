@@ -12,43 +12,50 @@ open Micheline
 
 type tezos_code = (unit,string) Micheline.node
 
-let debug = None
+let ii i = { i; noloc_name  = None }
 
-let prim name args = Micheline.Prim(0, name, args, debug)
+let prim name args annot =
+  let annot = match annot with
+    | Some s -> Some ("@" ^ s)
+    | None -> None
+  in
+  Micheline.Prim(0, name, args, annot)
+
+let prim_type name args = Micheline.Prim(0, name, args, None)
 
 let rec convert_const expr =
   match expr with
   | CInt n -> Micheline.Int (0, LiquidPrinter.mic_of_integer n)
   | CString s -> Micheline.String (0, s)
-  | CUnit -> Micheline.Prim(0, "Unit", [], debug)
-  | CBool true -> Micheline.Prim(0, "True", [], debug)
-  | CBool false -> Micheline.Prim(0, "False", [], debug)
-  | CNone -> Micheline.Prim(0, "None", [], debug)
+  | CUnit -> Micheline.Prim(0, "Unit", [], None)
+  | CBool true -> Micheline.Prim(0, "True", [], None)
+  | CBool false -> Micheline.Prim(0, "False", [], None)
+  | CNone -> Micheline.Prim(0, "None", [], None)
 
-  | CSome x -> Micheline.Prim(0, "Some", [convert_const x], debug)
-  | CLeft x -> Micheline.Prim(0, "Left", [convert_const x], debug)
-  | CRight x -> Micheline.Prim(0, "Right", [convert_const x], debug)
+  | CSome x -> Micheline.Prim(0, "Some", [convert_const x], None)
+  | CLeft x -> Micheline.Prim(0, "Left", [convert_const x], None)
+  | CRight x -> Micheline.Prim(0, "Right", [convert_const x], None)
 
   | CTuple [] -> assert false
   | CTuple [_] -> assert false
   | CTuple [x;y] ->
      Micheline.Prim(0, "Pair", [convert_const x;
-                                  convert_const y], debug)
+                                  convert_const y], None)
   | CTuple (x :: y) ->
      Micheline.Prim(0, "Pair", [convert_const x;
-                                  convert_const (CTuple y)], debug)
+                                  convert_const (CTuple y)], None)
   | CList args -> Micheline.Prim(0, "List",
-                                   List.map convert_const args, debug)
+                                   List.map convert_const args, None)
 
   | CMap args ->
      Micheline.Prim(0, "Map",
                       List.map (fun (x,y) ->
                           Micheline.Prim(0, "Item", [convert_const x;
-                                                       convert_const y], debug
+                                                       convert_const y], None
                                           ))
-                               args, debug)
+                               args, None)
   | CSet args -> Micheline.Prim(0, "Set",
-                                  List.map convert_const args, debug)
+                                  List.map convert_const args, None)
   | CNat n -> Micheline.Int (0, LiquidPrinter.mic_of_integer n)
   | CTez n -> Micheline.String (0, LiquidPrinter.mic_of_tez n)
            (*
@@ -68,90 +75,91 @@ let rec convert_const expr =
 
 let rec convert_type expr =
   match expr with
-  | Tunit -> prim "unit" []
-  | Ttimestamp -> prim "timestamp" []
-  | Ttez -> prim "tez" []
-  | Tint -> prim "int" []
-  | Tnat -> prim "nat" []
-  | Tbool -> prim "bool" []
-  | Tkey -> prim "key" []
-  | Tkey_hash -> prim "key_hash" []
-  | Tsignature -> prim "signature" []
-  | Tstring -> prim "string" []
+  | Tunit -> prim_type "unit" []
+  | Ttimestamp -> prim_type "timestamp" []
+  | Ttez -> prim_type "tez" []
+  | Tint -> prim_type "int" []
+  | Tnat -> prim_type "nat" []
+  | Tbool -> prim_type "bool" []
+  | Tkey -> prim_type "key" []
+  | Tkey_hash -> prim_type "key_hash" []
+  | Tsignature -> prim_type "signature" []
+  | Tstring -> prim_type "string" []
   | Ttuple [x] -> assert false
   | Ttuple [] -> assert false
-  | Ttuple [x;y] -> prim "pair" [convert_type x; convert_type y]
+  | Ttuple [x;y] -> prim_type "pair" [convert_type x; convert_type y]
   | Ttuple (x :: tys) ->
-     prim "pair" [convert_type x; convert_type (Ttuple tys)]
-  | Tor (x,y) -> prim "or" [convert_type x; convert_type y]
-  | Tcontract (x,y) -> prim "contract" [convert_type x;convert_type y]
-  | Tlambda (x,y) -> prim "lambda" [convert_type x; convert_type y]
+     prim_type "pair" [convert_type x; convert_type (Ttuple tys)]
+  | Tor (x,y) -> prim_type "or" [convert_type x; convert_type y]
+  | Tcontract (x,y) -> prim_type "contract" [convert_type x;convert_type y]
+  | Tlambda (x,y) -> prim_type "lambda" [convert_type x; convert_type y]
   | Tclosure ((x,e),r) ->
     convert_type (Ttuple [Tlambda (Ttuple [x; e], r); e ]);
-  | Tmap (x,y) -> prim "map" [convert_type x;convert_type y]
-  | Tset x -> prim "set" [convert_type x]
-  | Tlist x -> prim "list" [convert_type x]
-  | Toption x -> prim "option" [convert_type x]
+  | Tmap (x,y) -> prim_type "map" [convert_type x;convert_type y]
+  | Tset x -> prim_type "set" [convert_type x]
+  | Tlist x -> prim_type "list" [convert_type x]
+  | Toption x -> prim_type "option" [convert_type x]
   | Tfail | Trecord _ | Tsum _ -> assert false
 
 let rec convert_code expr =
+  let name = expr.noloc_name in
   match expr.i with
   | ANNOT a ->
-    Micheline.Seq (0, [], Some ("@liq_"^a))
+    Micheline.Seq (0, [], Some ("@"^a))
   | SEQ exprs ->
-    Micheline.Seq (0, List.map convert_code exprs, debug)
-  | DROP -> prim "DROP" []
+    Micheline.Seq (0, List.map convert_code exprs, name)
+  | DROP -> prim "DROP" [] name
   | DIP (0, arg) -> assert false
-  | DIP (1, arg) -> prim "DIP" [ convert_code arg ]
+  | DIP (1, arg) -> prim "DIP" [ convert_code arg ] name
   | DIP (n, arg) -> prim (Printf.sprintf "D%sP"
                                          (String.make n 'I'))
-                         [ convert_code arg ]
-  | CAR -> prim "CAR" []
-  | CDR -> prim "CDR" []
-  | SWAP -> prim "SWAP" []
-  | IF (x,y) -> prim "IF" [convert_code x; convert_code y]
-  | IF_NONE (x,y) -> prim "IF_NONE" [convert_code x; convert_code y]
-  | IF_LEFT (x,y) -> prim "IF_LEFT" [convert_code x; convert_code y]
-  | IF_CONS (x,y) -> prim "IF_CONS" [convert_code x; convert_code y]
-  | NOW -> prim "NOW" []
-  | PAIR -> prim "PAIR" []
-  | BALANCE -> prim "BALANCE" []
-  | SUB -> prim "SUB" []
-  | ADD -> prim "ADD" []
-  | MUL -> prim "MUL" []
-  | NEQ -> prim "NEQ" []
-  | EQ -> prim "EQ" []
-  | LT -> prim "LT" []
-  | LE -> prim "LE" []
-  | GT -> prim "GT" []
-  | GE -> prim "GE" []
-  | GET -> prim "GET" []
-  | UPDATE -> prim "UPDATE" []
-  | MEM -> prim "MEM" []
-  | SOME -> prim "SOME" []
-  | MANAGER -> prim "MANAGER" []
+                         [ convert_code arg ] name
+  | CAR -> prim "CAR" [] name
+  | CDR -> prim "CDR" [] name
+  | SWAP -> prim "SWAP" [] name
+  | IF (x,y) -> prim "IF" [convert_code x; convert_code y] name
+  | IF_NONE (x,y) -> prim "IF_NONE" [convert_code x; convert_code y] name
+  | IF_LEFT (x,y) -> prim "IF_LEFT" [convert_code x; convert_code y] name
+  | IF_CONS (x,y) -> prim "IF_CONS" [convert_code x; convert_code y] name
+  | NOW -> prim "NOW" [] name
+  | PAIR -> prim "PAIR" [] name
+  | BALANCE -> prim "BALANCE" [] name
+  | SUB -> prim "SUB" [] name
+  | ADD -> prim "ADD" [] name
+  | MUL -> prim "MUL" [] name
+  | NEQ -> prim "NEQ" [] name
+  | EQ -> prim "EQ" [] name
+  | LT -> prim "LT" [] name
+  | LE -> prim "LE" [] name
+  | GT -> prim "GT" [] name
+  | GE -> prim "GE" [] name
+  | GET -> prim "GET" [] name
+  | UPDATE -> prim "UPDATE" [] name
+  | MEM -> prim "MEM" [] name
+  | SOME -> prim "SOME" [] name
+  | MANAGER -> prim "MANAGER" [] name
   | SOURCE (ty1,ty2) ->
-     prim "SOURCE" [convert_type ty1; convert_type ty2]
-  | MAP -> prim "MAP" []
-  | OR -> prim "OR" []
+     prim "SOURCE" [convert_type ty1; convert_type ty2] name
+  | MAP -> prim "MAP" [] name
+  | OR -> prim "OR" [] name
   | LAMBDA (ty1, ty2, expr) ->
-     prim "LAMBDA" [convert_type ty1; convert_type ty2; convert_code expr]
-  | REDUCE -> prim "REDUCE" []
-  | COMPARE -> prim "COMPARE" []
-  | FAIL -> prim "FAIL" []
-  | PUSH (Tunit, CUnit) -> prim "UNIT" []
-  | TRANSFER_TOKENS -> prim "TRANSFER_TOKENS" []
+     prim "LAMBDA" [convert_type ty1; convert_type ty2; convert_code expr] name
+  | REDUCE -> prim "REDUCE" [] name
+  | COMPARE -> prim "COMPARE" [] name
+  | FAIL -> prim "FAIL" [] name
+  | PUSH (Tunit, CUnit) -> prim "UNIT" [] name
+  | TRANSFER_TOKENS -> prim "TRANSFER_TOKENS" [] name
   | PUSH (ty, cst) -> prim "PUSH" [ convert_type ty;
-                                    convert_const cst ]
-  | H -> prim "H" []
-  | HASH_KEY -> prim "HASH_KEY" []
-  | CHECK_SIGNATURE -> prim "CHECK_SIGNATURE" []
-  | CONCAT -> prim "CONCAT" []
-  | EDIV -> prim "EDIV" []
-  | EXEC -> prim "EXEC" []
-  | MOD -> prim "MOD" []
-  | DIV -> prim "DIV" []
-  | AMOUNT -> prim "AMOUNT" []
+                                    convert_const cst ] name
+  | H -> prim "H" [] name
+  | HASH_KEY -> prim "HASH_KEY" [] name
+  | CHECK_SIGNATURE -> prim "CHECK_SIGNATURE" [] name
+  | CONCAT -> prim "CONCAT" [] name
+  | EDIV -> prim "EDIV" [] name
+  | EXEC -> prim "EXEC" [] name
+  | MOD -> prim "MOD" [] name
+  | DIV -> prim "DIV" [] name
+  | AMOUNT -> prim "AMOUNT" [] name
                    (*
   | prim "EMPTY_MAP" [ty1; ty2] ->
      PUSH (Tmap (convert_type ty1, convert_type ty2), CMap [])
@@ -159,39 +167,38 @@ let rec convert_code expr =
      PUSH (Toption (convert_type ty), CNone)
                     *)
   | LEFT ty ->
-     prim "LEFT" [convert_type ty]
-  | CONS -> prim "CONS" []
-  | LOOP loop -> prim "LOOP" [convert_code loop]
-  | ITER body -> prim "ITER" [convert_code body]
+     prim "LEFT" [convert_type ty] name
+  | CONS -> prim "CONS" [] name
+  | LOOP loop -> prim "LOOP" [convert_code loop] name
+  | ITER body -> prim "ITER" [convert_code body] name
   | RIGHT ty ->
-     prim "RIGHT" [convert_type ty]
-  | INT -> prim "INT" []
-  | ABS -> prim "ABS" []
-  | DUP 1 -> prim "DUP" []
+     prim "RIGHT" [convert_type ty] name
+  | INT -> prim "INT" [] name
+  | ABS -> prim "ABS" [] name
+  | DUP 1 -> prim "DUP" [] name
   | DUP 0 -> assert false
   | DUP n ->
-     prim (Printf.sprintf "D%sP" (String.make n 'U')) []
+    prim (Printf.sprintf "D%sP" (String.make n 'U')) [] name
 
+  | SELF -> prim "SELF" [] name
+  | STEPS_TO_QUOTA -> prim "STEPS_TO_QUOTA" [] name
+  | CREATE_ACCOUNT -> prim "CREATE_ACCOUNT" [] name
+  | CREATE_CONTRACT -> prim "CREATE_CONTRACT" [] name
 
-  | SELF -> prim "SELF" []
-  | STEPS_TO_QUOTA -> prim "STEPS_TO_QUOTA" []
-  | CREATE_ACCOUNT -> prim "CREATE_ACCOUNT" []
-  | CREATE_CONTRACT -> prim "CREATE_CONTRACT" []
-
-  | XOR -> prim "XOR" []
-  | AND -> prim "AND" []
-  | NOT -> prim "NOT" []
-  | NEG -> prim "NEG" []
-  | LSL -> prim "LSL" []
-  | LSR -> prim "LSR"  []
+  | XOR -> prim "XOR" [] name
+  | AND -> prim "AND" [] name
+  | NOT -> prim "NOT" [] name
+  | NEG -> prim "NEG" [] name
+  | LSL -> prim "LSL" [] name
+  | LSR -> prim "LSR"  [] name
   | DIP_DROP (ndip, ndrop) ->
-     convert_code {i=DIP (ndip,
-                          {i=SEQ (LiquidMisc.list_init ndrop
-                                                       (fun _ -> {i=DROP}))})}
-  | CDAR n -> prim (Printf.sprintf "C%sAR" (String.make n 'D')) []
-  | CDDR n -> prim (Printf.sprintf "C%sDR" (String.make n 'D')) []
-  | SIZE -> prim "SIZE" []
-  | DEFAULT_ACCOUNT -> prim "DEFAULT_ACCOUNT"  []
+    convert_code @@
+    ii @@ DIP (ndip, ii @@ SEQ (LiquidMisc.list_init ndrop (fun _ -> ii DROP)))
+
+  | CDAR n -> prim (Printf.sprintf "C%sAR" (String.make n 'D')) [] name
+  | CDDR n -> prim (Printf.sprintf "C%sDR" (String.make n 'D')) [] name
+  | SIZE -> prim "SIZE" [] name
+  | DEFAULT_ACCOUNT -> prim "DEFAULT_ACCOUNT" [] name
 
 
 let convert_contract c =

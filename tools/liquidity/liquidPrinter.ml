@@ -275,30 +275,33 @@ module Michelson = struct
        Printf.bprintf b ")";
        ()
 
+  let annot = function
+    | Some s -> " @" ^ s
+    | None -> ""
 
   let rec bprint_code fmt b indent code =
     match code with
-    | M_INS_ANNOT s -> Printf.bprintf b "{ @liq_%s }" s
-    | M_INS ins -> Printf.bprintf b "%s ;" ins
-    | M_INS_CST (ins,ty,cst) ->
+    | M_INS_ANNOT s -> Printf.bprintf b "{ @%s }" s
+    | M_INS (ins, name) -> Printf.bprintf b "%s%s ;" ins (annot name)
+    | M_INS_CST (ins,ty,cst,name) ->
        let indent = fmt.increase_indent indent in
-       Printf.bprintf b "%s%c%s" ins fmt.newline indent;
+       Printf.bprintf b "%s%s%c%s" ins (annot name) fmt.newline indent;
        bprint_type fmt b indent ty;
        Printf.bprintf b "%c%s" fmt.newline indent;
        bprint_const fmt b indent cst;
        Printf.bprintf b " ;";
-    | M_INS_EXP ("SEQ", [], []) ->
-       Printf.bprintf b "{}"
-    | M_INS_EXP ("SEQ", [], exps) ->
-       Printf.bprintf b "{";
+    | M_INS_EXP ("SEQ", [], [], name) ->
+       Printf.bprintf b "{%s}" (annot name)
+    | M_INS_EXP ("SEQ", [], exps, name) ->
+       Printf.bprintf b "{%s" (annot name);
        let indent_in = fmt.increase_indent indent in
        List.iter (fun exp ->
            Printf.bprintf b "%c%s" fmt.newline indent_in;
            bprint_code fmt b indent_in exp) exps;
        Printf.bprintf b "%c%s}" fmt.newline indent
-    | M_INS_EXP (ins,tys, exps) ->
+    | M_INS_EXP (ins,tys, exps, name) ->
        let indent = fmt.increase_indent indent in
-       Printf.bprintf b "%s" ins;
+       Printf.bprintf b "%s%s" ins (annot name);
        List.iter (fun ty ->
            Printf.bprintf b "%c%s" fmt.newline indent;
            bprint_type fmt b indent ty) tys;
@@ -329,7 +332,7 @@ module Michelson = struct
 
   let bprint_pre_michelson fmt bprint_arg b = function
     | ANNOT a ->
-      Printf.bprintf b "{ @liq_%s }" a;
+      Printf.bprintf b "{ @%s }" a;
     | SEQ args ->
       Printf.bprintf b "{ ";
       List.iter (fun a -> bprint_arg fmt b a; Printf.bprintf b " ; ") args;

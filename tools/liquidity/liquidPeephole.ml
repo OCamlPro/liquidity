@@ -16,15 +16,16 @@ open LiquidTypes
 (* Try to simplify Michelson with peepholes optims: mostly, move
    DIP_DROPs backwards to decrease the size of the stack. *)
 
-let ii i = { i }
+let ii i = { i; noloc_name = None }
 
 let drops n = LiquidMisc.list_init n (fun _ -> ii DROP)
 
 let dip_drop (a,b)=
   if a = 0 then drops b else [ii (DIP_DROP(a,b))]
 
-let rec simplify_pre { i } =
-  ii (
+let rec simplify_pre ({ i } as e) =
+  { e with
+    i =
       match i with
       | SEQ expr -> SEQ (simplify_seq expr)
       | IF (e1, e2) -> IF (simplify_pre e1, simplify_pre e2)
@@ -34,9 +35,9 @@ let rec simplify_pre { i } =
       | DIP (n, e) -> DIP (n, simplify_pre e)
       | LOOP e -> LOOP (simplify_pre e)
       | LAMBDA (arg_type, res_type, e) ->
-         LAMBDA (arg_type, res_type, simplify_pre e)
+        LAMBDA (arg_type, res_type, simplify_pre e)
       | _ -> i
-    )
+  }
 
 and simplify_seq exprs =
   match exprs with
@@ -62,9 +63,9 @@ and simplify_step e exprs =
      begin
        match i1.i, i2.i,exprs with
        | SEQ ({i=DROP} :: e1), SEQ ({i=DROP} :: e2), exprs ->
-          simplify_stepi (DIP_DROP(1,1))
-                        (simplify_stepi (IF ( { i = SEQ e1 },
-                                                { i = SEQ e2 })) exprs)
+         simplify_stepi (DIP_DROP(1,1))
+           (simplify_stepi (IF ( ii @@ SEQ e1,
+                                 ii @@ SEQ e2 )) exprs)
 
        | SEQ ({ i=DIP_DROP(n,m)} :: e1),
          SEQ ({ i=DIP_DROP(n',m')} :: e2),
@@ -72,34 +73,32 @@ and simplify_step e exprs =
          ->
           let min_m = min m m' in
           simplify_stepi (DIP_DROP(n,min_m))
-                        (simplify_stepi
-                           (IF
-                              ({i=SEQ
-                                   (simplify_stepi (DIP_DROP(n,m-min_m)) e1)},
-                               {i=SEQ
-                                    (simplify_stepi (DIP_DROP(n,m'-min_m)) e2)}
-                           )) exprs)
+            (simplify_stepi
+               (IF
+                  (ii @@ SEQ (simplify_stepi (DIP_DROP(n,m-min_m)) e1),
+                   ii @@ SEQ (simplify_stepi (DIP_DROP(n,m'-min_m)) e2)
+                  )) exprs)
 
        | SEQ [{i=FAIL}],
          SEQ [{i=PUSH _}],
          {i=DROP} :: exprs ->
-          simplify_step {i=IF ({i=SEQ [ii FAIL]}, {i=SEQ []})} exprs
+          simplify_step (ii @@ IF (ii @@ SEQ [ii FAIL], ii @@ SEQ [])) exprs
 
        | SEQ [{i=FAIL}],
          SEQ [],
          {i=DROP} :: exprs ->
           simplify_stepi (DIP_DROP(1,1))
                         (simplify_stepi
-                           (IF ({i=SEQ [ii FAIL]},
-                                  {i=SEQ []})) exprs)
+                           (IF (ii @@ SEQ [ii FAIL],
+                                ii @@ SEQ [])) exprs)
 
        | SEQ [{i=FAIL}],
          SEQ [],
          {i=DIP_DROP(n,m)} :: exprs ->
           simplify_stepi (DIP_DROP(n+1,m))
                         (simplify_stepi
-                           (IF ({i=SEQ [ii FAIL]},
-                                  {i=SEQ []})) exprs)
+                           (IF (ii @@ SEQ [ii FAIL],
+                                ii @@ SEQ [])) exprs)
 
        | _ -> e :: exprs
      end
@@ -115,7 +114,7 @@ and simplify_step e exprs =
        if m = 1 then
          exprs
        else
-         {i=DIP_DROP (n,m-1)} :: exprs
+         ii (DIP_DROP (n,m-1)) :: exprs
 
   | (PUSH _ | NOW | BALANCE | SELF | SOURCE _ | AMOUNT | STEPS_TO_QUOTA
      | LAMBDA _
@@ -137,7 +136,7 @@ and simplify_step e exprs =
      | MANAGER | H | NOT | ABS | INT | NEG | LEFT _ | RIGHT _
      | EDIV | LSL | LSR
     ),
-    {i=DROP} :: exprs -> {i=DROP} :: exprs
+    {i=DROP} :: exprs -> ii DROP :: exprs
 
 
   (* takes two items on stack, creates one : 2 -> 1 *)
@@ -168,11 +167,11 @@ and simplify_step e exprs =
 
 
   | DIP (n,e), {i=DROP} :: exprs when n > 0 ->
-     {i=DROP} :: simplify_stepi (DIP(n-1,e)) exprs
+     ii DROP :: simplify_stepi (DIP(n-1,e)) exprs
 
 
   | DIP_DROP (n,m), {i=DIP_DROP (n',m')} :: exprs when n = n' ->
-     {i=DIP_DROP (n, m+m')} :: exprs
+     ii (DIP_DROP (n, m+m')) :: exprs
 
   | PUSH (ty', CList tail), {i=PUSH (ty, head)} :: {i=CONS} :: exprs
        when ty' = Tlist ty ->
@@ -211,7 +210,7 @@ and simplify_step e exprs =
                            (simplify_stepi (DUP (n-p)) exprs)
          else
            if p = 1 then
-             {i=DUP n} :: {i=DIP_DROP(m,p)} :: exprs
+             {e with i=DUP n} :: ii (DIP_DROP(m,p)) :: exprs
            else
              let x = n-m in
              let y = p -x - 1 in
@@ -240,7 +239,7 @@ and simplify_step e exprs =
      after
   | _ -> e :: exprs
 
-and simplify_stepi i code = simplify_step {i} code
+and simplify_stepi i code = simplify_step (ii i) code
 
 and simplify_steps list tail =
   let rec iter list_rev tail =

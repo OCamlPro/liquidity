@@ -154,171 +154,187 @@ let rec convert_type env expr =
   | Prim(_, "option", [x], _debug) -> Toption (convert_type env x)
   | _ -> unknown_expr env "convert_type" expr
 
+(*
 let is_liq_annot name =
   try Scanf.sscanf name "@liq_" true
   with _ -> false
 
 let liq_annot name =
   Scanf.sscanf name "@liq_%s" (fun s -> s)
+*)
+
+
+let name_of_annot name =
+  Scanf.sscanf name "@%s" (fun s -> s)
+
+let mic_loc env index annot ins =
+  let loc_name = match annot with
+    | Some annot ->
+      env.annoted <- true;
+      Some (name_of_annot annot)
+    | _ -> None
+  in
+  let loc = loc_of_int env index in
+  { ins; loc; loc_name }
 
 let rec convert_code env expr =
   match expr with
-  | Seq (index, [], Some name) when is_liq_annot name ->
+  | Seq (index, [], Some name) ->
     env.annoted <- true;
-    mic_loc (loc_of_int env index) (ANNOT (liq_annot name))
-  | Seq (index, exprs, _debug) ->
-    mic_loc (loc_of_int env index)
+    mic_loc env index (Some name) (ANNOT (name_of_annot name)) (* TODO remove *)
+  | Seq (index, exprs, annot) ->
+    mic_loc env index annot
       (SEQ (List.map (convert_code env) exprs))
-  | Prim(index, "DUP", [], _debug) ->
-    mic_loc (loc_of_int env index) (DUP 1)
-  | Prim(index, "DROP", [], _debug) ->
-    mic_loc (loc_of_int env index) (DROP)
-  | Prim(index, "DIP", [ arg ], _debug) ->
-    mic_loc (loc_of_int env index) (DIP (1, convert_code env arg))
-  | Prim(index, "CAR", [], _debug) ->
-    mic_loc (loc_of_int env index) (CAR)
-  | Prim(index, "CDR", [], _debug) ->
-    mic_loc (loc_of_int env index) (CDR)
-  | Prim(index, "SWAP", [], _debug) ->
-    mic_loc (loc_of_int env index) (SWAP)
-  | Prim(index, "IF", [x;y], _debug) ->
-    mic_loc (loc_of_int env index)
+  | Prim(index, "DUP", [], annot) ->
+    mic_loc env index annot (DUP 1)
+  | Prim(index, "DROP", [], annot) ->
+    mic_loc env index annot (DROP)
+  | Prim(index, "DIP", [ arg ], annot) ->
+    mic_loc env index annot (DIP (1, convert_code env arg))
+  | Prim(index, "CAR", [], annot) ->
+    mic_loc env index annot (CAR)
+  | Prim(index, "CDR", [], annot) ->
+    mic_loc env index annot (CDR)
+  | Prim(index, "SWAP", [], annot) ->
+    mic_loc env index annot (SWAP)
+  | Prim(index, "IF", [x;y], annot) ->
+    mic_loc env index annot
       (IF (convert_code env x, convert_code env y))
-  | Prim(index, "IF_NONE", [x;y], _debug) ->
-    mic_loc (loc_of_int env index)
+  | Prim(index, "IF_NONE", [x;y], annot) ->
+    mic_loc env index annot
       (IF_NONE (convert_code env x, convert_code env y))
-  | Prim(index, "IF_LEFT", [x;y], _debug) ->
-    mic_loc (loc_of_int env index)
+  | Prim(index, "IF_LEFT", [x;y], annot) ->
+    mic_loc env index annot
       (IF_LEFT (convert_code env x, convert_code env y))
-  | Prim(index, "IF_CONS", [x;y], _debug) ->
-    mic_loc (loc_of_int env index)
+  | Prim(index, "IF_CONS", [x;y], annot) ->
+    mic_loc env index annot
       (IF_CONS (convert_code env x, convert_code env y))
-  | Prim(index, "NOW", [], _debug) ->
-    mic_loc (loc_of_int env index) (NOW)
-  | Prim(index, "PAIR", [], _debug) ->
-    mic_loc (loc_of_int env index) (PAIR)
-  | Prim(index, "BALANCE", [], _debug) ->
-    mic_loc (loc_of_int env index) (BALANCE)
-  | Prim(index, "SUB", [], _debug) ->
-    mic_loc (loc_of_int env index) (SUB)
-  | Prim(index, "ADD", [], _debug) ->
-    mic_loc (loc_of_int env index) (ADD)
-  | Prim(index, "MUL", [], _debug) ->
-    mic_loc (loc_of_int env index) (MUL)
-  | Prim(index, "NEQ", [], _debug) ->
-    mic_loc (loc_of_int env index) (NEQ)
-  | Prim(index, "EQ", [], _debug) ->
-    mic_loc (loc_of_int env index) (EQ)
-  | Prim(index, "LT", [], _debug) ->
-    mic_loc (loc_of_int env index) (LT)
-  | Prim(index, "LE", [], _debug) ->
-    mic_loc (loc_of_int env index) (LE)
-  | Prim(index, "GT", [], _debug) ->
-    mic_loc (loc_of_int env index) (GT)
-  | Prim(index, "GE", [], _debug) ->
-    mic_loc (loc_of_int env index) (GE)
-  | Prim(index, "GET", [], _debug) ->
-    mic_loc (loc_of_int env index) (GET)
-  | Prim(index, "UPDATE", [], _debug) ->
-    mic_loc (loc_of_int env index) (UPDATE)
-  | Prim(index, "MEM", [], _debug) ->
-    mic_loc (loc_of_int env index) (MEM)
-  | Prim(index, "SOME", [], _debug) ->
-    mic_loc (loc_of_int env index) (SOME)
-  | Prim(index, "MANAGER", [], _debug) ->
-    mic_loc (loc_of_int env index) (MANAGER)
-  | Prim(index, "SOURCE", [ty1; ty2], _debug) ->
-    mic_loc (loc_of_int env index)
+  | Prim(index, "NOW", [], annot) ->
+    mic_loc env index annot (NOW)
+  | Prim(index, "PAIR", [], annot) ->
+    mic_loc env index annot (PAIR)
+  | Prim(index, "BALANCE", [], annot) ->
+    mic_loc env index annot (BALANCE)
+  | Prim(index, "SUB", [], annot) ->
+    mic_loc env index annot (SUB)
+  | Prim(index, "ADD", [], annot) ->
+    mic_loc env index annot (ADD)
+  | Prim(index, "MUL", [], annot) ->
+    mic_loc env index annot (MUL)
+  | Prim(index, "NEQ", [], annot) ->
+    mic_loc env index annot (NEQ)
+  | Prim(index, "EQ", [], annot) ->
+    mic_loc env index annot (EQ)
+  | Prim(index, "LT", [], annot) ->
+    mic_loc env index annot (LT)
+  | Prim(index, "LE", [], annot) ->
+    mic_loc env index annot (LE)
+  | Prim(index, "GT", [], annot) ->
+    mic_loc env index annot (GT)
+  | Prim(index, "GE", [], annot) ->
+    mic_loc env index annot (GE)
+  | Prim(index, "GET", [], annot) ->
+    mic_loc env index annot (GET)
+  | Prim(index, "UPDATE", [], annot) ->
+    mic_loc env index annot (UPDATE)
+  | Prim(index, "MEM", [], annot) ->
+    mic_loc env index annot (MEM)
+  | Prim(index, "SOME", [], annot) ->
+    mic_loc env index annot (SOME)
+  | Prim(index, "MANAGER", [], annot) ->
+    mic_loc env index annot (MANAGER)
+  | Prim(index, "SOURCE", [ty1; ty2], annot) ->
+    mic_loc env index annot
       (SOURCE (convert_type env ty1, convert_type env ty2))
-  | Prim(index, "MAP", [], _debug) ->
-    mic_loc (loc_of_int env index) (MAP)
-  | Prim(index, "OR", [], _debug) ->
-    mic_loc (loc_of_int env index) (OR)
-  | Prim(index, "LAMBDA", [ty1; ty2; expr], _debug) ->
-    mic_loc (loc_of_int env index)
+  | Prim(index, "MAP", [], annot) ->
+    mic_loc env index annot (MAP)
+  | Prim(index, "OR", [], annot) ->
+    mic_loc env index annot (OR)
+  | Prim(index, "LAMBDA", [ty1; ty2; expr], annot) ->
+    mic_loc env index annot
       (LAMBDA (convert_type env ty1, convert_type env ty2,
                convert_code env expr))
-  | Prim(index, "REDUCE", [], _debug) ->
-    mic_loc (loc_of_int env index) (REDUCE)
-  | Prim(index, "COMPARE", [], _debug) ->
-    mic_loc (loc_of_int env index) (COMPARE)
-  | Prim(index, "FAIL", [], _debug) ->
-    mic_loc (loc_of_int env index) (FAIL)
-  | Prim(index, "UNIT", [], _debug) ->
-    mic_loc (loc_of_int env index) (PUSH (Tunit, CUnit))
-  | Prim(index, "TRANSFER_TOKENS", [], _debug) ->
-    mic_loc (loc_of_int env index) (TRANSFER_TOKENS)
-  | Prim(index, "PUSH", [ ty; cst ], _debug) ->
+  | Prim(index, "REDUCE", [], annot) ->
+    mic_loc env index annot (REDUCE)
+  | Prim(index, "COMPARE", [], annot) ->
+    mic_loc env index annot (COMPARE)
+  | Prim(index, "FAIL", [], annot) ->
+    mic_loc env index annot (FAIL)
+  | Prim(index, "UNIT", [], annot) ->
+    mic_loc env index annot (PUSH (Tunit, CUnit))
+  | Prim(index, "TRANSFER_TOKENS", [], annot) ->
+    mic_loc env index annot (TRANSFER_TOKENS)
+  | Prim(index, "PUSH", [ ty; cst ], annot) ->
      begin match convert_type env ty, convert_const env cst with
      | Tnat, CInt n ->
-        mic_loc (loc_of_int env index) (PUSH (Tnat, CNat n))
+        mic_loc env index annot (PUSH (Tnat, CNat n))
      | ty, cst ->
-        mic_loc (loc_of_int env index) (PUSH (ty, cst))
+        mic_loc env index annot (PUSH (ty, cst))
      end
-  | Prim(index, "H", [], _debug) ->
-    mic_loc (loc_of_int env index) (H)
-  | Prim(index, "HASH_KEY", [], _debug) ->
-    mic_loc (loc_of_int env index) (HASH_KEY)
-  | Prim(index, "CHECK_SIGNATURE", [], _debug) ->
-    mic_loc (loc_of_int env index) (CHECK_SIGNATURE)
-  | Prim(index, "CONCAT", [], _debug) ->
-    mic_loc (loc_of_int env index) (CONCAT)
-  | Prim(index, "EDIV", [], _debug) ->
-    mic_loc (loc_of_int env index) (EDIV)
-  | Prim(index, "EXEC", [], _debug) ->
-    mic_loc (loc_of_int env index) (EXEC)
-  | Prim(index, "MOD", [], _debug) ->
-    mic_loc (loc_of_int env index) (MOD)
-  | Prim(index, "DIV", [], _debug) ->
-    mic_loc (loc_of_int env index) (DIV)
-  | Prim(index, "AMOUNT", [], _debug) ->
-    mic_loc (loc_of_int env index) (AMOUNT)
-  | Prim(index, "NIL", [ty], _debug) ->
-    mic_loc (loc_of_int env index)
+  | Prim(index, "H", [], annot) ->
+    mic_loc env index annot (H)
+  | Prim(index, "HASH_KEY", [], annot) ->
+    mic_loc env index annot (HASH_KEY)
+  | Prim(index, "CHECK_SIGNATURE", [], annot) ->
+    mic_loc env index annot (CHECK_SIGNATURE)
+  | Prim(index, "CONCAT", [], annot) ->
+    mic_loc env index annot (CONCAT)
+  | Prim(index, "EDIV", [], annot) ->
+    mic_loc env index annot (EDIV)
+  | Prim(index, "EXEC", [], annot) ->
+    mic_loc env index annot (EXEC)
+  | Prim(index, "MOD", [], annot) ->
+    mic_loc env index annot (MOD)
+  | Prim(index, "DIV", [], annot) ->
+    mic_loc env index annot (DIV)
+  | Prim(index, "AMOUNT", [], annot) ->
+    mic_loc env index annot (AMOUNT)
+  | Prim(index, "NIL", [ty], annot) ->
+    mic_loc env index annot
       (PUSH (Tlist (convert_type env ty), CList []))
-  | Prim(index, "EMPTY_SET", [ty], _debug) ->
-    mic_loc (loc_of_int env index)
+  | Prim(index, "EMPTY_SET", [ty], annot) ->
+    mic_loc env index annot
       (PUSH (Tset (convert_type env ty), CSet []))
-  | Prim(index, "EMPTY_MAP", [ty1; ty2], _debug) ->
-    mic_loc (loc_of_int env index)
+  | Prim(index, "EMPTY_MAP", [ty1; ty2], annot) ->
+    mic_loc env index annot
       (PUSH (Tmap (convert_type env ty1, convert_type env ty2), CMap []))
-  | Prim(index, "NONE", [ty], _debug) ->
-    mic_loc (loc_of_int env index)
+  | Prim(index, "NONE", [ty], annot) ->
+    mic_loc env index annot
       (PUSH (Toption (convert_type env ty), CNone))
-  | Prim(index, "LEFT", [ty], _debug) ->
-    mic_loc (loc_of_int env index)
+  | Prim(index, "LEFT", [ty], annot) ->
+    mic_loc env index annot
       (LEFT (convert_type env ty))
-  | Prim(index, "CONS", [], _debug) ->
-    mic_loc (loc_of_int env index) (CONS)
-  | Prim(index, "LOOP", [loop], _debug) ->
-    mic_loc (loc_of_int env index)
+  | Prim(index, "CONS", [], annot) ->
+    mic_loc env index annot (CONS)
+  | Prim(index, "LOOP", [loop], annot) ->
+    mic_loc env index annot
       (LOOP (convert_code env loop))
-  | Prim(index, "ITER", [body], _debug) ->
-    mic_loc (loc_of_int env index)
+  | Prim(index, "ITER", [body], annot) ->
+    mic_loc env index annot
       (ITER (convert_code env body))
-  | Prim(index, "RIGHT", [ty], _debug) ->
-    mic_loc (loc_of_int env index)
+  | Prim(index, "RIGHT", [ty], annot) ->
+    mic_loc env index annot
       (RIGHT (convert_type env ty))
-  | Prim(index, "INT", [], _debug) ->
-    mic_loc (loc_of_int env index) (INT)
-  | Prim(index, "SIZE", [], _debug) ->
-    mic_loc (loc_of_int env index) (SIZE)
-  | Prim(index, "AND", [], _debug) ->
-    mic_loc (loc_of_int env index) (AND)
-  | Prim(index, "XOR", [], _debug) ->
-    mic_loc (loc_of_int env index) (XOR)
-  | Prim(index, "ABS", [], _debug) ->
-    mic_loc (loc_of_int env index) (ABS)
-  | Prim(index, "NOT", [], _debug) ->
-    mic_loc (loc_of_int env index) (NOT)
-  | Prim(index, "STEPS_TO_QUOTA", [], _debug) ->
-    mic_loc (loc_of_int env index) (STEPS_TO_QUOTA)
-  | Prim(index, "CREATE_ACCOUNT", [], _debug) ->
-    mic_loc (loc_of_int env index) (CREATE_ACCOUNT)
-  | Prim(index, "CREATE_CONTRACT", [], _debug) ->
-    mic_loc (loc_of_int env index) (CREATE_CONTRACT)
-  | Prim(index, "DEFAULT_ACCOUNT", [], _debug) ->
-    mic_loc (loc_of_int env index) (DEFAULT_ACCOUNT)
+  | Prim(index, "INT", [], annot) ->
+    mic_loc env index annot (INT)
+  | Prim(index, "SIZE", [], annot) ->
+    mic_loc env index annot (SIZE)
+  | Prim(index, "AND", [], annot) ->
+    mic_loc env index annot (AND)
+  | Prim(index, "XOR", [], annot) ->
+    mic_loc env index annot (XOR)
+  | Prim(index, "ABS", [], annot) ->
+    mic_loc env index annot (ABS)
+  | Prim(index, "NOT", [], annot) ->
+    mic_loc env index annot (NOT)
+  | Prim(index, "STEPS_TO_QUOTA", [], annot) ->
+    mic_loc env index annot (STEPS_TO_QUOTA)
+  | Prim(index, "CREATE_ACCOUNT", [], annot) ->
+    mic_loc env index annot (CREATE_ACCOUNT)
+  | Prim(index, "CREATE_CONTRACT", [], annot) ->
+    mic_loc env index annot (CREATE_CONTRACT)
+  | Prim(index, "DEFAULT_ACCOUNT", [], annot) ->
+    mic_loc env index annot (DEFAULT_ACCOUNT)
 
   | _ -> unknown_expr env "convert_code" expr
 

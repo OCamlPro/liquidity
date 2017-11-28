@@ -43,6 +43,7 @@ OCaml.library("ocplib-liquidity",
 
        "iSO8601.ml";
 
+       "liquidOptions.ml";
        "liquidVersion.ml", version_info;
        "liquidMisc.ml";
 
