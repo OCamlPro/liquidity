@@ -5,6 +5,11 @@ dist: trusty
 language: ocaml
 sudo: required
 
+cache:
+  directories:
+  - $HOME/.opam
+#  - tezos
+
 before_install:
 - sh travis-scripts/prepare-trusty.sh
 
