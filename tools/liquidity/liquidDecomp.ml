@@ -361,15 +361,19 @@ let decompile contract =
        | N_IF_END _, args -> value_of_args args
 
        | N_LOOP (begin_node, end_node), [cond] ->
-          let desc =
-            If (arg_of cond,
-                mk (Loop
-                      (var_of begin_node, noloc,
-                       decompile_next begin_node,
-                       value_of_args begin_node.args
-                   )),
-                value_of_args begin_node.args
-               )
+         let cond_e = arg_of cond in
+         let loop_e =
+           mk (Loop
+                 (var_of begin_node, noloc,
+                  decompile_next begin_node,
+                  value_of_args begin_node.args
+                 ))
+         in
+         let desc = match cond_e.desc with
+           | Const (_, CBool true) ->
+             loop_e.desc
+           | _ ->
+             If (arg_of cond, loop_e, value_of_args begin_node.args)
           in
           mklet node desc
 

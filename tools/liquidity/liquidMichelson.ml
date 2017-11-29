@@ -108,8 +108,10 @@ let translate_code code =
        let arg_type = LiquidEncode.encode_type arg_type in
        let res_type = LiquidEncode.encode_type res_type in
        let body = compile_no_transfer depth env body in
+       let arg_annot = compile_arg_name arg_name in
        [ ii @@ LAMBDA (arg_type, res_type,
-                       seq (body @ [ii @@ DIP_DROP (1,1)])) ], false
+                       seq (arg_annot @ body @ [ii @@ DIP_DROP (1,1)])) ],
+       false
 
     | Closure (arg_name, p_arg_type, loc, call_env, body, res_type) ->
       let call_env_code = match call_env with
@@ -256,13 +258,13 @@ let translate_code code =
              let depth = depth + 1 in
              let e, transfer = compile depth env e in
              if transfer then has_transfer := true;
-             e, transfer, depth
+             arg_name, e, transfer, depth
            | _ -> assert false) cases
        in
        let rec iter cases =
          match cases with
          | [] -> assert false
-         | (left, transfer, depth) :: cases ->
+         | (arg_name, left, transfer, depth) :: cases ->
             let left_end =
               match !has_transfer, transfer with
               | true, true -> []
@@ -270,12 +272,13 @@ let translate_code code =
               | false, true -> assert false
               | true, false -> drop_stack 1 depth
             in
-            let left = left @ left_end in
+            (* let arg_annot = compile_arg_name arg_name in *)
+            let left = (* arg_annot @ *) left @ left_end in
             match cases with
             | [] -> left
             | _ ->
                let right = iter cases in
-               [ii @@ IF_LEFT( seq left, seq right )]
+               [ii @@ IF_LEFT( seq (left), seq right )]
        in
        arg @ iter cases, transfer1 || !has_transfer
 
@@ -287,13 +290,14 @@ let translate_code code =
        let env = StringMap.add name depth env in
        let depth = depth + 1 in
        let body, transfer2 = compile depth env body in
+       let arg_annot = compile_arg_name name in
        let body_end = [ ii @@ DIP_DROP (1,1);
                         ii @@ DUP 1;
                         ii CAR;
                         ii @@ DIP (1, seq [ ii CDR ]) ] in
        arg
        @ [ ii @@ PUSH (Tbool, CBool true) ]
-       @ [ ii @@ LOOP (seq (body @ body_end)) ],
+       @ [ ii @@ LOOP (seq (arg_annot @ body @ body_end)) ],
        transfer1 || transfer2
 
     | Fold (prim, name, _loc, body, arg, acc) ->
@@ -306,13 +310,14 @@ let translate_code code =
       let env = StringMap.add name depth env in
       let depth = depth + 1 in
       let body, transfer3 = compile depth env body in
+      let arg_annot = compile_arg_name name in
       let body_begin, body_end = match prim with
         | Prim_map_iter | Prim_set_iter | Prim_list_iter ->
           [], [ii @@ DIP_DROP (1,2) ]
         | _ -> [ dip 1 [ii @@ DUP 1]; ii PAIR ], [ ii @@ DIP_DROP (1,2) ]
       in
       acc @ arg @
-      [ii @@ ITER (seq (body_begin @ body @ body_end))],
+      [ii @@ ITER (seq (arg_annot @ body_begin @ body @ body_end))],
       transfer1 || transfer2 || transfer3
 
     (* removed during typechecking, replaced by tuple *)
@@ -562,6 +567,11 @@ the ending NIL is not annotated with a type *)
         c.noloc_name <- sanitize_opt name;
         code
       | [] -> code
+
+  and compile_arg_name arg_name =
+    if !LiquidOptions.annotmic
+    then [ii (ANNOT (sanitize_name arg_name))]
+    else []
 
   in
 

@@ -354,9 +354,10 @@ let interp contract =
                  | [], [] -> []
                  | { kind = N_FAIL } :: _, _ -> stack2
                  | _, { kind = N_FAIL } :: _ -> stack1
-                 | { kind = N_LOOP_ARG (n, i) }:: stack1, s2 :: stack2
+                 | { kind = N_LOOP_ARG (n, i); node_name }:: stack1, s2 :: stack2
                       when n == begin_node
                    ->
+                   if i = 0 then begin_node.node_name <- node_name;
                    let arg = node ins.loc
                        (N_LOOP_RESULT (loop_node, begin_node, i)) [] [] in
                    end_node.args <- s2 :: end_node.args;
@@ -375,7 +376,7 @@ let interp contract =
 
     | ITER code, x :: prev_stack ->
        let fold_node = node ins.loc (N_UNKNOWN "FOLD") [x] [seq] in
-       let begin_node = node code.loc (N_FOLD_BEGIN fold_node) [(* x *)] [] in
+       let begin_node = node code.loc (N_FOLD_BEGIN fold_node) [] [] in
 
        let pseudo_node = node ins.loc (N_UNKNOWN "FOLD") [] [] in
        let arg = node code.loc (N_FOLD_ARG (begin_node,0)) [] [] in
