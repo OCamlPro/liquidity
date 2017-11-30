@@ -1,4 +1,4 @@
-0.13  2017-11-20
+0.13  2017-11-30
     NEW FEATURES
     * match%nat construct for int -> nat coercion
     * abs is now int -> int
