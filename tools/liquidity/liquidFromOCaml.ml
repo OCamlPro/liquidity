@@ -1031,6 +1031,24 @@ let rec translate_head env ext_funs head_exp args =
        return = List.assoc "return" args;
      }
 
+let rec translate_initial_storage env exp args =
+  match exp with
+  | { pexp_desc =
+        Pexp_fun (
+            Nolabel, None,
+            { ppat_desc =
+                Ppat_constraint(
+                    { ppat_desc = Ppat_var { txt = arg; loc } },
+                    arg_type)
+            },
+            exp) } ->
+    translate_initial_storage env exp
+      ((arg, loc_of_loc loc, translate_type env arg_type) :: args)
+
+  | _ ->
+    let init_code = translate_code env exp in
+    (List.rev args, init_code)
+
 let translate_record ty_name labels env =
   let rtys = List.mapi
       (fun i pld ->
@@ -1075,7 +1093,7 @@ let check_version = function
                      "(requires %.2f while compiler has maximal %.2f )" req_version maximal_version;
   | { pexp_loc } -> error_loc pexp_loc "version must be a floating point number"
 
-let rec translate_structure funs env ast =
+let rec translate_structure funs env init ast =
   match ast with
   | { pstr_desc =
         Pstr_extension
@@ -1083,7 +1101,29 @@ let rec translate_structure funs env ast =
              PStr [{ pstr_desc = Pstr_eval (exp,[])}]),[])
     } :: ast ->
     check_version exp;
-    translate_structure funs env ast
+    translate_structure funs env init ast
+
+  | { pstr_desc =
+        Pstr_extension
+          (({ txt = "init" },
+            PStr
+              [{ pstr_desc =
+                   Pstr_value (
+                     Nonrecursive,
+                     [ {
+                       pvb_pat = { ppat_desc = Ppat_var { txt = "storage" } };
+                       pvb_expr = sto_exp;
+                     }
+                     ]) } ]
+           ), []);
+      pstr_loc } :: ast
+    ->
+    begin match init with
+      | Some _ -> error_loc pstr_loc "Initial storage already defined"
+      | None -> ()
+    end;
+    let init = translate_initial_storage env sto_exp [] in
+    translate_structure funs env (Some init) ast
 
   | { pstr_desc =
         Pstr_extension
@@ -1097,9 +1137,10 @@ let rec translate_structure funs env ast =
                           pvb_expr = head_exp;
                         }
              ]) } ]
-           ), []) } :: _ast  (* TODO *)
+           ), []) } :: [] (* _ast TODO *)
     ->
-     translate_head env funs head_exp default_args
+    let contract = translate_head env funs head_exp default_args in
+    contract, init
 
   | { pstr_desc =
          Pstr_value (
@@ -1109,7 +1150,7 @@ let rec translate_structure funs env ast =
                  pvb_expr = { pexp_desc = Pexp_fun _ };
                } as f_pvb
     ]); pstr_loc = f_loc } :: ast ->
-    translate_structure ((f_pvb, f_loc) :: funs) env ast
+    translate_structure ((f_pvb, f_loc) :: funs) env init ast
 
   | { pstr_desc = Pstr_type (Recursive,
                              [
@@ -1139,7 +1180,7 @@ let rec translate_structure funs env ast =
           end;
         translate_variant ty_name constrs env;
      end;
-     translate_structure funs env ast
+     translate_structure funs env init ast
 
   (* type alias *)
   | { pstr_desc = Pstr_type (Recursive,
@@ -1156,7 +1197,7 @@ let rec translate_structure funs env ast =
     ]) } :: ast ->
     let ty = translate_type env ct in
     env.types <- StringMap.add ty_name ty env.types;
-    translate_structure funs env ast
+    translate_structure funs env init ast
 
   | [] ->
     Location.raise_errorf "No entry point found in file %S%!" env.filename
@@ -1263,7 +1304,8 @@ let translate_exn exn =
 let translate ~filename ast =
   let env = initial_env filename in
   try
-    translate_structure [] env ast, env
+    let contract, init = translate_structure [] env None ast in
+    contract, init, env
   with exn -> translate_exn exn
 
 let ocaml_of_file parser file =

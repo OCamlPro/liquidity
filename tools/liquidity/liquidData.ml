@@ -57,7 +57,7 @@ let data_of_liq ~filename ~contract ~parameter ~storage =
   (* first, extract the types *)
   let ocaml_ast = LiquidFromOCaml.structure_of_string
                     ~filename contract in
-  let contract, env = LiquidFromOCaml.translate ~filename ocaml_ast in
+  let contract, _, env = LiquidFromOCaml.translate ~filename ocaml_ast in
   let _ = LiquidCheck.typecheck_contract
                ~warnings:true env contract in
 

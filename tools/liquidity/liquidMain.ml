@@ -32,7 +32,8 @@ let compile_liquid_file filename =
   FileString.write_file (filename ^ ".ocaml")
     (LiquidOCamlPrinter.contract_ast ocaml_ast);
   if !LiquidOptions.parseonly then exit 0;
-  let syntax_ast, env = LiquidFromOCaml.translate filename ocaml_ast in
+  let syntax_ast, syntax_init, env =
+    LiquidFromOCaml.translate filename ocaml_ast in
   if !verbosity>0 then
   FileString.write_file (filename ^ ".syntax")
                         (LiquidPrinter.Liquid.string_of_contract
@@ -66,6 +67,9 @@ let compile_liquid_file filename =
       pre_michelson
   in
   (*  let michelson_ast = LiquidEmit.emit_contract pre_michelson in *)
+
+  (* Output initial(izer/value) *)
+  LiquidInit.compile_liquid_input env syntax_ast syntax_init;
 
   let output = filename ^ ".tz" in
   let c = LiquidToTezos.convert_contract pre_michelson in

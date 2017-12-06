@@ -110,7 +110,7 @@ OCaml.program("ocp-liquidity-comp",
 if ( with_tezos ) {
 OCaml.library("ocplib-liquidity-with-tezos",
    ocaml + {
-     files = [     
+     files = [
        "with-tezos/liquidTezosTypes.ml";
        "with-tezos/liquidFromTezos.ml";
        "with-tezos/liquidToTezos.ml";
@@ -126,7 +126,8 @@ OCaml.library("ocplib-liquidity-with-tezos",
 OCaml.program("liquidity",
    ocaml + {
      files = [
-       "liquidMain.ml";      
+       "liquidInit.ml";
+       "liquidMain.ml";
      ];
      requires = [
         "ocplib-dot";
@@ -153,7 +154,8 @@ OCaml.library("ocplib-liquidity-without-tezos",
 OCaml.program("liquidity-mini",
    ocaml + {
      files = [
-       "liquidMain.ml";      
+       "liquidInit.ml";
+       "liquidMain.ml";
      ];
      requires = [
         "ocplib-dot";

@@ -686,6 +686,12 @@ type node = {
 
 type node_exp = node * node
 
+
+type syntax_init = (
+    (string * location * datatype) list (* arguments *)
+    * syntax_exp (* init code *)
+  ) option
+
 type syntax_contract = syntax_exp contract
 type typed_contract = typed_exp contract
 type encoded_contract = encoded_exp contract
