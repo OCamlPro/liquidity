@@ -31,7 +31,26 @@ let lid s = loc (Longident.parse s)
 
 let typ_constr s args = Typ.constr (lid s) args
 
-let rec convert_type ty =
+let cpt_abbrev = ref 0
+let abbrevs = Hashtbl.create 101
+let rev_abbrevs = Hashtbl.create 101
+let get_abbrev ty = let s, _, _ = Hashtbl.find abbrevs ty in s
+let add_abbrev s ty caml_ty =
+  incr cpt_abbrev;
+  let s =
+    try Hashtbl.find rev_abbrevs s; s ^ string_of_int !cpt_abbrev
+    with Not_found -> s in
+  Hashtbl.add abbrevs ty (s, caml_ty, !cpt_abbrev);
+  Hashtbl.replace rev_abbrevs s ();
+  typ_constr s []
+
+let clean_abbrevs () = cpt_abbrev := 0; Hashtbl.clear abbrevs
+let list_caml_abbrevs_in_order () =
+  Hashtbl.fold (fun ty v l -> (ty, v) :: l) abbrevs []
+  |> List.fast_sort (fun (_, (_, _, i1)) (_, (_, _, i2)) -> i1 - i2)
+  |> List.map (fun (ty, (s, caml_ty, _)) -> s, caml_ty)
+
+let rec convert_type ?name ty =
   match ty with
   | Ttez ->  typ_constr "tez" []
   | Tunit -> typ_constr "unit" []
@@ -43,16 +62,40 @@ let rec convert_type ty =
   | Tkey_hash -> typ_constr "key_hash" []
   | Tsignature -> typ_constr "signature" []
   | Tstring -> typ_constr "string" []
-  | Ttuple args -> Typ.tuple (List.map convert_type args)
-  | Tor (x,y) -> typ_constr "variant" [convert_type x; convert_type y]
-  | Tcontract (x,y) -> typ_constr "contract" [convert_type x;convert_type y]
-  | Tlambda (x,y) -> Typ.arrow Nolabel (convert_type x) (convert_type y)
-  | Tclosure ((x,e),r) -> Typ.arrow Nolabel (convert_type x) (convert_type r)
-  | Tmap (x,y) -> typ_constr "map" [convert_type x;convert_type y]
-  | Tset x -> typ_constr "set" [convert_type x]
-  | Tlist x -> typ_constr "list" [convert_type x]
-  | Toption x -> typ_constr "option" [convert_type x]
   | Tfail | Trecord _ | Tsum _ -> assert false
+  | _ ->
+    try typ_constr (get_abbrev ty) []
+    with Not_found ->
+    let caml_ty, t_name = match ty with
+    | Ttez | Tunit | Ttimestamp | Tint | Tnat | Tbool
+    | Tkey | Tkey_hash | Tsignature | Tstring
+    | Tfail | Trecord _ | Tsum _ -> assert false
+    | Ttuple args ->
+      Typ.tuple (List.map convert_type args), "pair_t"
+    | Tor (x,y) ->
+      typ_constr "variant" [convert_type x; convert_type y], "variant_t"
+    | Tcontract (x,y) ->
+      typ_constr "contract" [convert_type x;convert_type y], "contract_t"
+    | Tlambda (x,y) ->
+      Typ.arrow Nolabel (convert_type x) (convert_type y), "lambda_t"
+    | Tclosure ((x,e),r) ->
+      Typ.arrow Nolabel (convert_type x) (convert_type r), "closure_t"
+    | Tmap (x,y) ->
+      typ_constr "map" [convert_type x;convert_type y], "map_t"
+    | Tset x ->
+      typ_constr "set" [convert_type x], "set_t"
+    | Tlist x ->
+      typ_constr "list" [convert_type x], "list_t"
+    | Toption x ->
+      typ_constr "option" [convert_type x], "option_t"
+    in
+    let name = match name with
+      | Some name -> name
+      | None -> t_name
+    in
+    add_abbrev name ty caml_ty
+
+
 
 let rec convert_const expr =
   match expr with
@@ -152,7 +195,7 @@ let rec convert_code expr =
      Exp.fun_ Nolabel None
               (Pat.constraint_
                  (Pat.var (loc arg_name))
-                 (convert_type arg_type))
+                 (convert_type ~name:(arg_name^"_t") arg_type))
               (convert_code body)
 
   | Closure _ -> assert false
@@ -350,40 +393,50 @@ let rec convert_code expr =
                     convert_type to_ty])
 
 let structure_of_contract contract =
+  clean_abbrevs ();
+  let storage_caml = convert_type ~name:"storage" contract.storage in
+  ignore (convert_type ~name:"parameter" contract.parameter);
+  ignore (convert_type ~name:"return" contract.return);
   let code = convert_code contract.code in
-  [
-    Str.extension ( { txt = "version"; loc = !default_loc },
-              PStr [
-                Str.eval
-                      (Exp.constant (Const.float output_version))
-              ]);
+  let contract_caml = Str.extension (
+      { txt = "entry"; loc = !default_loc },
+      PStr    [
+        Str.value Nonrecursive
+          [
+            Vb.mk (Pat.var (loc "main"))
+              (Exp.fun_ Nolabel None
+                 (Pat.constraint_
+                    (Pat.var (loc "parameter"))
+                    (convert_type contract.parameter)
+                 )
+                 (Exp.fun_ Nolabel None
+                    (Pat.constraint_
+                       (Pat.var (loc "storage"))
+                       (typ_constr "storage" [])
+                    )
+                    (Exp.constraint_
+                       code (Typ.tuple [convert_type contract.return;
+                                        storage_caml]))
+                 ))
+          ]
+      ])
+  in
+  let version_caml = Str.extension (
+      { txt = "version"; loc = !default_loc },
+      PStr [
+        Str.eval
+          (Exp.constant (Const.float output_version))
+      ])
+  in
+  let types_caml =
+    list_caml_abbrevs_in_order ()
+    |> List.map (fun (txt, manifest) ->
+                  Str.type_ Recursive [
+                  Type.mk ~manifest { txt; loc = !default_loc }
+                ])
+  in
 
-    Str.type_ Recursive [
-      Type.mk ~manifest:(convert_type contract.storage)
-        { txt = "storage"; loc = !default_loc }
-    ];
-
-    Str.extension ( { txt = "entry"; loc = !default_loc },
-               PStr    [
-                     Str.value Nonrecursive
-              [
-                Vb.mk (Pat.var (loc "main"))
-                      (Exp.fun_ Nolabel None
-                                (Pat.constraint_
-                                   (Pat.var (loc "parameter"))
-                                   (convert_type contract.parameter)
-                                )
-                      (Exp.fun_ Nolabel None
-                                (Pat.constraint_
-                                   (Pat.var (loc "storage"))
-                                   (typ_constr "storage" [])
-                                )
-                      (Exp.constraint_
-                         code (Typ.tuple [convert_type contract.return;
-                                          typ_constr "storage" []]))
-                      ))
-              ]
-  ])]
+  [ version_caml ] @ types_caml @ [ contract_caml ]
 
 let string_of_structure = LiquidOCamlPrinter.string_of_structure
 
