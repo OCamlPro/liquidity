@@ -556,6 +556,8 @@ the ending NIL is not annotated with a type *)
     compile_name e.name code
 
   and compile_name name code =
+    if not !LiquidOptions.annotmic then code
+    else
     if !LiquidOptions.annotafter then
       match name with
       | Some name ->
