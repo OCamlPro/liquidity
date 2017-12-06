@@ -10,13 +10,15 @@
 open LiquidTypes
 
 val initial_env : string -> env
-val translate : filename:string ->
-                Parsetree.structure -> syntax_exp contract * env
+
+val translate :
+  filename:string -> Parsetree.structure ->
+  syntax_exp contract * syntax_init * env
+
 val read_file : string -> Parsetree.structure
 
-val translate_expression :
-  LiquidTypes.env -> Parsetree.expression -> LiquidTypes.syntax_exp
-
+val translate_expression : env -> Parsetree.expression -> syntax_exp
 
 val structure_of_string : ?filename:string -> string -> Parsetree.structure
+
 val expression_of_string : ?filename:string -> string -> Parsetree.expression
