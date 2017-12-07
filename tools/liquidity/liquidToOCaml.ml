@@ -412,7 +412,7 @@ let structure_of_contract contract =
                  (Exp.fun_ Nolabel None
                     (Pat.constraint_
                        (Pat.var (loc "storage"))
-                       (typ_constr "storage" [])
+                       storage_caml
                     )
                     (Exp.constraint_
                        code (Typ.tuple [convert_type contract.return;
