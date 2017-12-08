@@ -9,6 +9,12 @@
 
 exception Missing_program_field of string
 
+val convert_const_type :
+  LiquidTezosTypes.env ->
+  LiquidTezosTypes.expr ->
+  LiquidTypes.datatype ->
+  LiquidTypes.const
+
 val convert_contract :
   LiquidTezosTypes.env ->
   LiquidTezosTypes.contract ->
@@ -18,3 +24,8 @@ val contract_of_string :
   string -> (* maybe filename *)
   string -> (* content *)
   (LiquidTezosTypes.contract * LiquidTezosTypes.env) option
+
+val const_of_string :
+  string -> (* maybe filename *)
+  string -> (* content *)
+  (LiquidTezosTypes.expr * LiquidTezosTypes.env) option
