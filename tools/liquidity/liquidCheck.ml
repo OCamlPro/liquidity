@@ -37,7 +37,9 @@ let error loc msg =
 
 let comparable_ty ty1 ty2 =
   match ty1, ty2 with
-  | (Tint|Tnat), (Tint|Tnat)
+  (* | (Tint|Tnat), (Tint|Tnat) *)
+  | Tint, Tint
+  | Tnat, Tnat
   | Ttez, Ttez
   | Ttimestamp, Ttimestamp
   | Tstring, Tstring
