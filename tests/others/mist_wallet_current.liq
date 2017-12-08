@@ -9,7 +9,7 @@
 [%%version 0.13]
 
 type pending_state = {
-  yetNeeded : int;
+  yetNeeded : nat;
   ownersDone : key_hash set;
 }
 
@@ -23,7 +23,7 @@ type operation =
   | ChangeOwner of key_hash * key_hash
   | AddOwner of key_hash
   | RemoveOwner of key_hash
-  | ChangeRequirement of int
+  | ChangeRequirement of nat
   | SetDailyLimit of tez
   | ResetSpentToday
   | Kill of key_hash
@@ -36,8 +36,8 @@ type parameter =
 type operation_hash = string
 
 type storage = {
-  m_required : int;
-  m_num_owners : int;
+  m_required : nat;
+  m_num_owners : nat;
   m_owners : key_hash set;
   m_pending : (operation_hash, pending_state) map;
   m_daily_limit : tez;
@@ -83,12 +83,16 @@ let confirmAndCheck ((op : operation), (storage: storage)) =
      previously *)
   if Set.mem owner pending.ownersDone then Current.fail ();
   (* check if count is enough to go ahead *)
-  if pending.yetNeeded <= 1 then
+  if pending.yetNeeded <= 1p then
     let storage =
       storage.m_pending <- (Map : (operation_hash, pending_state) map) in
     Execute storage
   else
-    let pending = pending.yetNeeded <- pending.yetNeeded - 1 in
+    let new_yetNeeded = match%nat int pending.yetNeeded - 1 with
+      | Plus n -> n
+      | Minus _ -> Current.fail ()
+    in
+    let pending = pending.yetNeeded <- new_yetNeeded in
     let pending = pending.ownersDone <- Set.add owner pending.ownersDone in
     let storage = storage.m_pending <- Map.add oph pending storage.m_pending in
     Confirmations_Needed storage
@@ -117,7 +121,7 @@ let revoke
   | Some pending ->
     let storage =
       if Set.mem owner pending.ownersDone then
-        let pending = pending.yetNeeded <- pending.yetNeeded + 1 in
+        let pending = pending.yetNeeded <- pending.yetNeeded + 1p in
         let pending =
           pending.ownersDone <- Set.remove owner pending.ownersDone in
         storage.m_pending <- Map.add oph pending storage.m_pending
@@ -152,7 +156,7 @@ let addOwner
   | Execute storage ->
     if is_owner (owner, storage) then Current.fail ();
     let storage = clearPending storage in
-    let storage = storage.m_num_owners <- storage.m_num_owners + 1 in
+    let storage = storage.m_num_owners <- storage.m_num_owners + 1p in
     let storage = storage.m_owners <- Set.add owner storage.m_owners in
     ((), storage)
 
@@ -166,14 +170,18 @@ let removeOwner
   | Execute storage ->
     if not (is_owner (owner,storage)) then Current.fail ();
     if storage.m_required >= storage.m_num_owners then Current.fail ();
-    let storage = storage.m_num_owners <- storage.m_num_owners - 1 in
+    let new_num_owners = match%nat int storage.m_num_owners - 1 with
+      | Plus n -> n
+      | Minus _ -> Current.fail ()
+    in
+    let storage = storage.m_num_owners <- new_num_owners in
     let storage = storage.m_owners <- Set.remove owner storage.m_owners in
     let storage = clearPending storage in
     ((), storage)
 
 
 let changeRequirement
-    ((required : int),
+    ((required : nat),
      (storage : storage)) =
   (* let storage = only_enough_owners (ChangeRequirement required, storage) in *)
   match confirmAndCheck (ChangeRequirement required, storage) with
@@ -198,12 +206,13 @@ let underLimit ((value: tez), (storage: storage)) =
     false, storage
 
 
-let%init storage (owners : key_hash set) (required : int) (limit : tez) =
-  if required >= Set.size owners then Current.fail ();
+let%init storage (owners : key_hash set) (required : nat) (limit : tez) =
+  let m_owners = Set.add (Contract.manager (Source : (unit, unit) contract)) owners in
+  let m_num_owners = Set.size m_owners in
+  if required > m_num_owners then Current.fail ();
   {
-    m_num_owners = Set.size owners + 1;
-    m_owners =
-      (Set.add (Contract.manager (Source : (unit, unit) contract)) owners);
+    m_num_owners;
+    m_owners;
     m_required = required;
     m_pending = (Map : (operation_hash, pending_state) map);
     m_daily_limit = limit;
