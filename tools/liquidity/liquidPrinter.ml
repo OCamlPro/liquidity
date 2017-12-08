@@ -601,9 +601,9 @@ module Liquid = struct
     | CKey s -> Printf.bprintf b "%s" s
     | CKey_hash s -> Printf.bprintf b "%s" s
     | CSignature s -> Printf.bprintf b "%s" s
-    | CTez s -> Printf.bprintf b "%S" (liq_of_tez s)
+    | CTez s -> Printf.bprintf b "%stz" (liq_of_tez s)
     | CInt n -> Printf.bprintf b "%s" (liq_of_integer n)
-    | CNat n -> Printf.bprintf b "%s" (liq_of_integer n)
+    | CNat n -> Printf.bprintf b "%sp" (liq_of_integer n)
     | CTimestamp s -> Printf.bprintf b "%s" s
     | CBool v -> Printf.bprintf b "%b" v
     | CUnit -> Printf.bprintf b "()"
@@ -659,7 +659,8 @@ module Liquid = struct
       Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt "; ")
         (fun _ (f, cst) ->
            Printf.bprintf b "%s = " f;
-           bprint_const b "" cst)
+           bprint_const b "" cst;
+           Printf.bprintf b "; ")
         (Format.formatter_of_buffer b) labels;
       Printf.bprintf b "}"
 

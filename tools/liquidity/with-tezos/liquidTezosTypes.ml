@@ -8,7 +8,8 @@
 (**************************************************************************)
 open LiquidTypes
 
-type contract = string Micheline.canonical list
+type expr = string Micheline.canonical
+type contract = expr list
 
 type env = {
   filename : string;

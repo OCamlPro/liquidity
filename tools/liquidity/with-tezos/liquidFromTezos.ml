@@ -100,28 +100,127 @@ let unknown_expr env msg expr =
          s (List.length args)
     )
 
-let rec convert_const env expr =
+let wrong_type env expr ty =
+  let loc = loc_of_int env (Micheline.location expr) in
+  LiquidLoc.raise_error ~loc "type of %s is not convertible with %s"
+    (match expr with
+     | Seq (_loc, _exprs, _debug) -> "sequence"
+     | String (_loc, s) ->
+       Printf.sprintf "string %S" s
+     | Int (_loc, s) ->
+       Printf.sprintf "integer %s" s
+     | Prim(i, s, args, _debug) ->
+       Printf.sprintf "primitive %S" s
+    )
+    (LiquidPrinter.Liquid.string_of_type ty)
+
+let rec convert_const env ?ty expr =
   match expr with
-  | Int (_loc, n) -> CInt (LiquidPrinter.integer_of_mic n)
-  | String (_loc, s) -> CString s
+  | Int (_loc, n) ->
+    begin match ty with
+      | Some Tnat -> CNat (LiquidPrinter.integer_of_mic n)
+      | Some Tint | None -> CInt (LiquidPrinter.integer_of_mic n)
+      | Some ty -> wrong_type env expr ty
+    end
+
+  | String (_loc, s) ->
+    begin match ty with
+      | Some Ttez ->
+        CTez (LiquidPrinter.tez_of_mic s)
+      | Some Ttimestamp -> CTimestamp s
+      | Some Tkey -> CKey s
+      | Some Tkey_hash -> CKey_hash s
+      | Some Tsignature -> CSignature s
+      | Some Tstring | None -> CString s
+      | Some ty -> wrong_type env expr ty
+    end
+
   | Prim(_, "Unit", [], _debug) -> CUnit
   | Prim(_, "True", [], _debug) -> CBool true
   | Prim(_, "False", [], _debug) -> CBool false
-  | Prim(_, "None", [], _debug) -> CNone
 
-  | Prim(_, "Some", [x], _debug) -> CSome (convert_const env x)
-  | Prim(_, "Left", [x], _debug) -> CLeft (convert_const env x)
-  | Prim(_, "Right", [x], _debug) -> CRight (convert_const env x)
-  | Prim(_, "Pair", [x;y], _debug) -> CTuple [convert_const env x;
-                                              convert_const env y]
-  | Prim(_, "List", args, _debug) -> CList (List.map (convert_const env) args)
+  | Prim(_, "None", [], _debug) -> CNone
+  | Prim(_, "Some", [x], _debug) ->
+    begin match ty with
+      | None -> CSome (convert_const env x)
+      | Some (Toption ty) -> CSome (convert_const env ~ty x)
+      | Some ty -> wrong_type env expr ty
+    end
+
+  | Prim(_, "Left", [x], _debug) ->
+    begin match ty with
+      | Some (Tsum (tname, (c, ty):: _)) ->
+        CConstr (c, convert_const env ~ty x)
+      | Some (Tor (ty, _)) -> CLeft (convert_const env ~ty x)
+      | None -> CLeft (convert_const env x)
+      | Some ty -> wrong_type env expr ty
+    end
+
+  | Prim(_, "Right", [x], _debug) ->
+    begin match ty with
+      | Some (Tsum (tname, [_; (c, ty)])) ->
+        CConstr (c, convert_const env ~ty x)
+      | Some (Tsum (tname, _ :: rconstrs)) ->
+        convert_const env ~ty:(Tsum(tname, rconstrs)) x
+      | Some (Tor (_, ty)) -> CRight (convert_const env ~ty x)
+      | None -> CRight (convert_const env x)
+      | Some ty -> wrong_type env expr ty
+    end
+
+  | Prim(_, "Pair", [x;y], _debug) ->
+    begin match ty with
+      | Some (Trecord (tname, [fx, tyx; fy, tyy])) ->
+        CRecord [fx, convert_const env ~ty:tyx x;
+                 fy, convert_const env ~ty:tyy y]
+      | Some (Trecord (tname, (f, ty):: rfields) as ty') ->
+        begin match convert_const env ~ty:(Trecord (tname, rfields)) y with
+          | CRecord fields -> CRecord ((f, convert_const env ~ty x) :: fields)
+          | _ -> wrong_type env expr ty'
+        end
+      | Some (Ttuple [tyx;tyy]) ->
+        CTuple [convert_const env ~ty:tyx x; convert_const env ~ty:tyy y]
+      | None ->
+        CTuple [convert_const env x; convert_const env y]
+      | Some (Ttuple (ty :: r) as ty') ->
+        begin match convert_const env ~ty:(Ttuple r) y with
+          | CTuple l -> CTuple (convert_const env ~ty x :: l)
+          | _ -> wrong_type env expr ty'
+        end
+      | Some ty -> wrong_type env expr ty
+    end
+
+  | Prim(_, "List", args, _debug) ->
+        begin match ty with
+      | Some (Tlist ty) ->
+        CList (List.map (convert_const ~ty env) args)
+      | None ->
+        CList (List.map (convert_const env) args)
+      | Some ty ->  wrong_type env expr ty
+    end
+
+  | Prim(_, "Set", args, _debug) ->
+    begin match ty with
+      | Some (Tset ty) ->
+        CSet (List.map (convert_const ~ty env) args)
+      | None ->
+        CSet (List.map (convert_const env) args)
+      | Some ty ->  wrong_type env expr ty
+    end
+
   | Prim(_, "Map", args, _debug) ->
      CMap (List.map (function
-                     | Prim(_, "Item", [x;y], _debug) ->
-                        convert_const env x, convert_const env y
-                     | expr ->
-                        unknown_expr env "convert_const_item" expr) args)
-  | Prim(_, "Set", args, _debug) -> CSet (List.map (convert_const env) args)
+        | Prim(_, "Item", [x;y], _debug) ->
+          begin match ty with
+            | None ->
+              convert_const env x, convert_const env y
+            | Some (Tmap (tyx, tyy)) ->
+              convert_const env ~ty:tyx x, convert_const env ~ty:tyy y
+            | Some ty ->
+               wrong_type env expr ty
+          end;
+        | expr ->
+          unknown_expr env "convert_const_item" expr) args)
+
   | _ -> unknown_expr env "convert_const" expr
 
 let rec convert_type env expr =
@@ -355,6 +454,10 @@ let rec expand expr =
   | Int _ | String _ as atom -> atom
 
 
+let convert_const_type env c ty =
+  let c = Micheline.inject_locations (fun i -> i) c in
+  convert_const env ~ty c
+
 let convert_contract env c =
   let c =
     List.map (fun c ->
@@ -392,3 +495,21 @@ let contract_of_string filename s =
                     annoted = false;
                   } in
         Some (nodes, env)
+
+let const_of_string filename s =
+  let tokens, errors = Micheline_parser.tokenize s in
+  match errors with
+  | error :: _ ->
+    raise (LiquidError (error_to_liqerror filename error))
+  | [] ->
+     let node, errors = Micheline_parser.parse_expression tokens in
+     match errors with
+     | error :: _ ->
+       raise (LiquidError (error_to_liqerror filename error))
+     | [] ->
+        let node, loc_table = Micheline.extract_locations node in
+        let env = { filename;
+                    loc_table = convert_loc_table filename [loc_table];
+                    annoted = false;
+                  } in
+        Some (node, env)
