@@ -7,11 +7,18 @@
 (*                                                                        *)
 (**************************************************************************)
 
-val convert_contract : LiquidTypes.noloc_michelson_contract ->
-                       LiquidTezosTypes.contract
+val convert_contract :
+  expand:bool -> LiquidTypes.noloc_michelson_contract ->
+  LiquidTezosTypes.contract
+val convert_const : LiquidTypes.const -> LiquidTezosTypes.expr
 
 val line_of_contract : LiquidTezosTypes.contract -> string
 val string_of_contract : LiquidTezosTypes.contract -> string
+val json_of_contract : LiquidTezosTypes.contract -> string
+val contract_of_json : string -> LiquidTezosTypes.contract
+val json_of_const : LiquidTezosTypes.expr -> string
+(* val const_of_json : string -> LiquidTezosTypes.expr *)
+
 
 val read_tezos_file :
   string ->
