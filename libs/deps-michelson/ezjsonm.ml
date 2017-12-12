@@ -116,3 +116,122 @@ let from_src src =
 let from_string str = from_src (`String str)
 
 let from_channel chan = from_src (`Channel chan)
+
+
+(* unit *)
+let unit () = `Null
+
+let get_unit = function
+  | `Null  -> ()
+  | j      -> parse_error j "Ezjsonm.get_unit"
+
+(* bool *)
+let bool b = `Bool b
+
+let get_bool = function
+  | `Bool b -> b
+  | j       -> parse_error j "Ezjsonm.get_bool"
+
+(* string *)
+let string s = `String s
+
+let get_string = function
+  | `String s -> s
+  | j         -> parse_error j "Ezjsonm.get_string"
+
+(* int *)
+let int i = `Float (float_of_int i)
+let int32 i = `Float (Int32.to_float i)
+let int64 i = `Float (Int64.to_float i)
+
+let get_int = function
+  | `Float f -> int_of_float f
+  | j        -> parse_error j "Ezjsonm.get_int"
+
+let get_int32 = function
+  | `Float f -> Int32.of_float f
+  | j        -> parse_error j "Ezjsonm.get_int32"
+
+let get_int64 = function
+  | `Float f -> Int64.of_float f
+  | j        -> parse_error j "Ezjsonm.get_int64"
+
+(* flooat *)
+let float f = `Float f
+
+let get_float = function
+  | `Float f -> f
+  | j        -> parse_error j "Ezjsonm.get_float"
+
+(* list *)
+let list fn l =
+  `A (List.map fn l)
+
+let get_list fn = function
+  | `A ks -> List.map fn ks
+  | j     -> parse_error j "Ezjsonm.get_list"
+
+
+(* options *)
+let option fn = function
+  | None   -> `Null
+  | Some x -> `A [fn x]
+
+let get_option fn = function
+  | `Null  -> None
+  | `A [j] -> Some (fn j)
+  | j -> parse_error j "Ezjsonm.get_option"
+
+(* dict *)
+let dict d = `O d
+
+let get_dict = function
+  | `O d -> d
+  | j    -> parse_error j "Ezjsonm.get_dict"
+
+(* pairs *)
+let pair fk fv (k, v) =
+  `A [fk k; fv v]
+
+let get_pair fk fv = function
+  | `A [k; v] -> (fk k, fv v)
+  | j         -> parse_error j "Ezjsonm.get_pair"
+
+(* triple *)
+
+let triple fa fb fc (a, b, c) =
+  `A [fa a; fb b; fc c]
+
+let get_triple fa fb fc = function
+  | `A [a; b; c] -> (fa a, fb b, fc c)
+  | j -> parse_error j "Ezjsonm.get_triple"
+
+let mem t path =
+  let rec aux j p = match p, j with
+    | []   , _    -> true
+    | h::tl, `O o -> List.mem_assoc h o && aux (List.assoc h o) tl
+    | _           -> false in
+  aux t path
+
+let find t path =
+  let rec aux j p = match p, j with
+    | []   , j    -> j
+    | h::tl, `O o -> aux (List.assoc h o) tl
+    | _           -> raise Not_found in
+  aux t path
+
+let map_dict f dict label =
+  let rec aux acc = function
+    | []    ->
+      begin match f `Null with
+        | None   -> List.rev acc
+        | Some j -> List.rev_append acc [label, j]
+      end
+    | (l,j) as e :: dict ->
+      if l = label then
+        match f j with
+        | None   -> List.rev_append acc dict
+        | Some j -> List.rev_append acc ((l,j)::dict)
+      else
+        aux (e::acc) dict in
+  aux [] dict

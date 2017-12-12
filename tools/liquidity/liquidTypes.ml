@@ -690,7 +690,7 @@ type node_exp = node * node
 type syntax_init = (
     (string * location * datatype) list (* arguments *)
     * syntax_exp (* init code *)
-  ) option
+  )
 
 type syntax_contract = syntax_exp contract
 type typed_contract = typed_exp contract
@@ -698,6 +698,13 @@ type encoded_contract = encoded_exp contract
 type michelson_contract = michelson_exp contract
 type node_contract = node_exp contract
 type noloc_michelson_contract = noloc_michelson contract
+
+let dummy_syntax_contract : syntax_contract = {
+    parameter = Tunit;
+    storage = Tunit;
+    return = Tunit;
+    code = mk (Const (Tunit, CUnit)) ();
+  }
 
 type warning =
   | Unused of string

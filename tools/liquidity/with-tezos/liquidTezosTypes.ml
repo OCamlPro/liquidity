@@ -17,4 +17,13 @@ type env = {
   mutable annoted : bool;
 }
 
+let empty_env filename = {
+  filename;
+  loc_table = IntMap.empty;
+  annoted = false;
+}
+
+
 type hash = Hash.Operation_hash.t
+
+type json = Data_encoding.json

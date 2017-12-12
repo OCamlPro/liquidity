@@ -296,6 +296,9 @@ let const_of_json j =
   Data_encoding_ezjsonm.from_string j
   |> Data_encoding.Json.destruct const_encoding
 
+let const_of_ezjson ezj =
+  Data_encoding.Json.destruct const_encoding ezj
+
 let read_tezos_file filename =
   let s = FileString.read_file filename in
   let contract_hash = Hash.Operation_hash.hash_bytes [s] in

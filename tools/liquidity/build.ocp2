@@ -123,16 +123,27 @@ OCaml.library("ocplib-liquidity-with-tezos",
      ];
    });
 
-OCaml.program("liquidity",
+OCaml.library("ocplib-liquidity-deploy",
    ocaml + {
      files = [
        "liquidInit.ml";
+       "liquidDeploy.ml";
+     ];
+     requires = [
+       "ocplib-liquidity-with-tezos";
+       "ocplib-liquidity-ocaml";
+       "curl";
+     ];
+   });
+
+OCaml.program("liquidity",
+   ocaml + {
+     files = [
        "liquidMain.ml";
      ];
      requires = [
         "ocplib-dot";
-        "ocplib-liquidity-with-tezos";
-        "ocplib-liquidity-ocaml";
+        "ocplib-liquidity-deploy";
         "ocplib-file";
      ];
    });
@@ -151,6 +162,13 @@ OCaml.library("ocplib-liquidity-without-tezos",
      ];
    });
 
+OCaml.library("ocplib-liquidity-deploy-without-tezos",
+   ocaml + {
+     files = [
+       "without-tezos/liquidDeploy.ml";
+     ];
+   });
+
 OCaml.program("liquidity-mini",
    ocaml + {
      files = [
@@ -158,10 +176,11 @@ OCaml.program("liquidity-mini",
        "liquidMain.ml";
      ];
      requires = [
-        "ocplib-dot";
-        "ocplib-liquidity-without-tezos";
-        "ocplib-liquidity-ocaml";
-        "ocplib-file";
+       "ocplib-dot";
+       "ocplib-liquidity-deploy-without-tezos";
+       "ocplib-liquidity-without-tezos";
+       "ocplib-liquidity-ocaml";
+       "ocplib-file";
      ];
 
    });

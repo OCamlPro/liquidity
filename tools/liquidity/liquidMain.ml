@@ -19,41 +19,34 @@ open LiquidTypes
   to Michelson. No type-checking yet.
  *)
 
-let verbosity = ref (try
-                   int_of_string (Sys.getenv "LIQUID_VERBOSITY")
-                     with
-                     | Not_found -> 0
-                     | _ -> 1 (* LIQUID_DEBUG not a number *)
-                    )
-
 let compile_liquid_file filename =
   let ocaml_ast = LiquidFromOCaml.read_file filename in
-  if !verbosity>0 then
+  if !LiquidOptions.verbosity>0 then
   FileString.write_file (filename ^ ".ocaml")
     (LiquidOCamlPrinter.contract_ast ocaml_ast);
   if !LiquidOptions.parseonly then exit 0;
   let syntax_ast, syntax_init, env =
     LiquidFromOCaml.translate filename ocaml_ast in
-  if !verbosity>0 then
+  if !LiquidOptions.verbosity>0 then
   FileString.write_file (filename ^ ".syntax")
                         (LiquidPrinter.Liquid.string_of_contract
                            syntax_ast);
   let typed_ast = LiquidCheck.typecheck_contract
       ~warnings:true env syntax_ast in
-  if !verbosity>0 then
+  if !LiquidOptions.verbosity>0 then
     FileString.write_file (filename ^ ".typed")
       (LiquidPrinter.Liquid.string_of_contract_types
          typed_ast);
   let encoded_ast, to_inline =
     LiquidEncode.encode_contract ~annot:!LiquidOptions.annotmic env typed_ast in
-  if !verbosity>0 then
+  if !LiquidOptions.verbosity>0 then
     FileString.write_file (filename ^ ".encoded")
       (LiquidPrinter.Liquid.string_of_contract
          encoded_ast);
   if !LiquidOptions.typeonly then exit 0;
 
   let live_ast = LiquidSimplify.simplify_contract encoded_ast to_inline in
-  if !verbosity>0 then
+  if !LiquidOptions.verbosity>0 then
   FileString.write_file (filename ^ ".simple")
                         (LiquidPrinter.Liquid.string_of_contract
                            live_ast);
@@ -69,7 +62,10 @@ let compile_liquid_file filename =
   (*  let michelson_ast = LiquidEmit.emit_contract pre_michelson in *)
 
   (* Output initial(izer/value) *)
-  begin match LiquidInit.compile_liquid_init env syntax_ast syntax_init with
+  begin match syntax_init with
+  | None -> ()
+  | Some syntax_init ->
+    match LiquidInit.compile_liquid_init env syntax_ast syntax_init with
     | LiquidInit.Init_constant c_init ->
       let s = LiquidPrinter.Michelson.line_of_const c_init in
       let output = env.filename ^ ".init.tz" in
@@ -123,7 +119,7 @@ let compile_tezos_file filename =
   let c = LiquidClean.clean_contract c in
   let c = LiquidInterp.interp c in
   if !LiquidOptions.parseonly then exit 0;
-  if !verbosity>0 then begin
+  if !LiquidOptions.verbosity>0 then begin
     FileString.write_file  (filename ^ ".dot")
                            (LiquidDot.to_string c);
     let cmd = Ocamldot.dot2pdf_cmd (filename ^ ".dot") (filename ^ ".pdf") in
@@ -132,7 +128,7 @@ let compile_tezos_file filename =
   end;
   if !LiquidOptions.typeonly then exit 0;
   let c = LiquidDecomp.decompile c in
-  if !verbosity>0 then
+  if !LiquidOptions.verbosity>0 then
   FileString.write_file  (filename ^ ".liq.pre")
                          (LiquidPrinter.Liquid.string_of_contract c);
   let env = LiquidFromOCaml.initial_env filename in
@@ -194,6 +190,13 @@ module Data = struct
            Printf.printf "%s: %s\n%!" s x)
               [ "parameter", p; "storage", s ]
 
+  let run () =
+    let result, r_storage =
+      LiquidDeploy.run (LiquidDeploy.From_file !contract) !parameter !storage
+    in
+    Printf.printf "%s\n%!"
+      (LiquidPrinter.Liquid.string_of_const (CTuple [result; r_storage]))
+
 end
 
 
@@ -202,27 +205,61 @@ let main () =
   let arg_list = Arg.align [
       "-k", Arg.Set LiquidOptions.keepon, " Continue on error";
 
-      "--verbose", Arg.Unit (fun () -> incr verbosity), " Increment verbosity";
+      "--verbose", Arg.Unit (fun () -> incr LiquidOptions.verbosity),
+      " Increment verbosity";
 
       "--no-peephole", Arg.Clear LiquidOptions.peephole,
       " Disable peephole optimizations";
 
-      "--type-only", Arg.Set LiquidOptions.typeonly, "Stop after type checking";
+      "--type-only", Arg.Set LiquidOptions.typeonly,
+      " Stop after type checking";
 
-      "--parse-only", Arg.Set LiquidOptions.parseonly, "Stop after parsing";
+      "--parse-only", Arg.Set LiquidOptions.parseonly,
+      " Stop after parsing";
 
       "--single-line", Arg.Set LiquidOptions.singleline,
-      "Output Michelson on a single line";
+      " Output Michelson on a single line";
 
       "--no-annot", Arg.Clear LiquidOptions.annotmic,
-      "Don't annotate Michelson with variable names";
+      " Don't annotate Michelson with variable names";
 
       "--annot-prim", Arg.Clear LiquidOptions.annotafter,
-      "Annotate Michelson primitives directly";
+      " Annotate Michelson primitives directly";
 
       "--compact", Arg.Unit (fun () ->
           LiquidOptions.annotmic := false;
-          LiquidOptions.singleline := true), "Produce compact Michelson";
+          LiquidOptions.singleline := true),
+      " Produce compact Michelson";
+
+      "--amount", Arg.String (fun amount ->
+          match LiquidData.translate (LiquidFromOCaml.initial_env "--amount")
+                  dummy_syntax_contract amount Ttez
+          with
+          | CTez t ->
+            let cents = match t.centiles with
+              | Some cents -> cents
+              | None  -> "00"
+            in
+            LiquidOptions.amount := t.tezzies ^ cents
+          | _ -> assert false),
+      "<1.99tz> Set amount for deploying or running a contract (default: 0tz)";
+
+      "--source", Arg.String (fun s -> LiquidOptions.source := Some s),
+      "<tz1...> Set the source for deploying or running a contract (default: none)";
+
+      "--tezos-node", Arg.String (fun s -> LiquidOptions.source := Some s),
+      "<addr:port> Set the address and port of a Tezos node to run or deploy \
+       contracts (default: 127.0.0.1:8732)";
+
+      "--run", Arg.Tuple [
+        Arg.String (fun s -> Data.contract := s);
+        Arg.String (fun s -> Data.parameter := s);
+        Arg.String (fun s -> Data.storage := s);
+        Arg.Unit (fun () ->
+            work_done := true;
+            Data.run ());
+      ],
+      "FILE.liq PARAMETER STORAGE Run Liquidity contract on Tezos node";
 
       "--data", Arg.Tuple [
         Arg.String (fun s -> Data.contract := s);

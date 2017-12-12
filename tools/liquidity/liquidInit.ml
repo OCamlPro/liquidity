@@ -33,33 +33,30 @@ let tmp_contract_of_init (args, code) storage_ty =
   let code = mk(Apply (Prim_tuple, LiquidLoc.noloc, [code; c_unit])) () in
   { parameter; storage; return; code }
 
-let compile_liquid_init env contract init =
-  match init with
-  | None -> raise Not_found
-  | Some ((args, sy_init) as init) ->
-    if sy_init.transfer then
-      LiquidLoc.raise_error ~loc:(LiquidLoc.loc_in_file env.filename)
-        "No transfer allowed in storage initializer";
-    try (* Maybe it is constant *)
-      let ty_init = LiquidCheck.typecheck_code
-          ~warnings:true env contract contract.storage sy_init in
-      let enc_init = LiquidEncode.encode_code env contract ty_init in
-      let c_init = LiquidData.translate_const_exp LiquidLoc.noloc enc_init in
-      Init_constant c_init
-      (* let s = LiquidPrinter.Michelson.line_of_const c_init in
-       * let output = env.filename ^ ".init.tz" in
-       * FileString.write_file output s;
-       * Printf.eprintf "Constant initial storage generated in %S\n%!" output *)
-    with LiquidError _ ->
-      (* non constant initial value *)
-      let init_contract = tmp_contract_of_init init contract.storage in
-      let typed_init = LiquidCheck.typecheck_contract
-          ~warnings:true env init_contract in
-      let encoded_init, _ = LiquidEncode.encode_contract env typed_init in
-      let pre_init = LiquidMichelson.translate encoded_init in
-      Init_code pre_init
-      (* let mic_init = LiquidToTezos.convert_contract pre_init in
-       * let s = LiquidToTezos.line_of_contract mic_init in
-       * let output = env.filename ^ ".initializer.tz" in
-       * FileString.write_file output s;
-       * Printf.eprintf "Storage initializer generated in %S\n%!" output *)
+let compile_liquid_init env contract ((args, sy_init) as init) =
+  if sy_init.transfer then
+    LiquidLoc.raise_error ~loc:(LiquidLoc.loc_in_file env.filename)
+      "No transfer allowed in storage initializer";
+  try (* Maybe it is constant *)
+    let ty_init = LiquidCheck.typecheck_code
+        ~warnings:true env contract contract.storage sy_init in
+    let enc_init = LiquidEncode.encode_code env contract ty_init in
+    let c_init = LiquidData.translate_const_exp LiquidLoc.noloc enc_init in
+    Init_constant c_init
+  (* let s = LiquidPrinter.Michelson.line_of_const c_init in
+   * let output = env.filename ^ ".init.tz" in
+   * FileString.write_file output s;
+   * Printf.eprintf "Constant initial storage generated in %S\n%!" output *)
+  with LiquidError _ ->
+    (* non constant initial value *)
+    let init_contract = tmp_contract_of_init init contract.storage in
+    let typed_init = LiquidCheck.typecheck_contract
+        ~warnings:true env init_contract in
+    let encoded_init, _ = LiquidEncode.encode_contract env typed_init in
+    let pre_init = LiquidMichelson.translate encoded_init in
+    Init_code pre_init
+(* let mic_init = LiquidToTezos.convert_contract pre_init in
+ * let s = LiquidToTezos.line_of_contract mic_init in
+ * let output = env.filename ^ ".initializer.tz" in
+ * FileString.write_file output s;
+ * Printf.eprintf "Storage initializer generated in %S\n%!" output *)
