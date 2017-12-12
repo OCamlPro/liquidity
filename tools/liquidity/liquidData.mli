@@ -16,3 +16,6 @@ val data_of_liq :
   contract:string ->
   parameter:string ->
   storage:string -> (string,error) result * (string,error) result
+
+val translate :
+  env -> syntax_contract -> string -> datatype -> const

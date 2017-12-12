@@ -33,6 +33,9 @@ let json_of_const _ =
 let const_of_json _ =
   failwith "mini version cannot do it"
 
+let const_of_ezjson _ =
+  failwith "mini version cannot do it"
+
 let read_tezos_file (_filename : string) =
   failwith "mini version cannot decompile"
 

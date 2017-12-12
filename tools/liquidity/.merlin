@@ -13,3 +13,4 @@ PKG ezjsonm
 PKG ocplib-json-typed
 PKG omd
 PKG menhir
+PKG curl
