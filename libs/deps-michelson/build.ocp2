@@ -59,10 +59,13 @@ OCaml.library("michelson-deps", ocaml + {
         "RPC.ml";
         "tezos_misc.ml";
         "updater.ml";
+
+        "ezjsonm.ml";
      ];
      requires = [
         
-        "ocplib-blockchain-crypto";
+       "ocplib-blockchain-crypto";
+       "jsonm";
      ];
 }); 
 

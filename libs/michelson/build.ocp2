@@ -61,7 +61,6 @@ OCaml.library("michelson-base",
      ];
      requires = [
               "michelson-deps";
-              "ezjsonm";
               "zarith";
               "ocplib-json-typed.bson"; (* data_encoding *)
               "ocplib-endian";     (* data_encoding *)
@@ -80,7 +79,6 @@ OCaml.library("micheline", ocaml + {
      requires = [
               "michelson-deps";
               "michelson-base";
-              "ezjsonm";
               "zarith";
               "ocplib-json-typed.bson"; (* data_encoding *)
               "ocplib-endian";     (* data_encoding *)
@@ -94,7 +92,7 @@ OCaml.library("michelson", ocaml + {
      pp = [ "ocp-pp" ];
      files = [
 
-        "data_encoding_ezjsonm.ml"; 
+        "data_encoding_ezjsonm.ml";
         pp_utils("cli_entries.ml");
         pp_utils("time.ml");
         pp_utils("base58.ml");
@@ -160,7 +158,6 @@ OCaml.library("michelson", ocaml + {
      requires = [
               "michelson-deps";
               "micheline";
-              "ezjsonm";
               "zarith";
               "ocplib-json-typed.bson"; (* data_encoding *)
               "ocplib-endian";     (* data_encoding *)

@@ -8,6 +8,10 @@
 
 open LiquidTypes
 
+type init =
+  | Init_constant of LiquidTypes.const
+  | Init_code of LiquidTypes.noloc_michelson_contract
+
 let c_unit = mk (Const (Tunit, CUnit)) ()
 let mk_nat i = mk (Const (Tnat, CNat (LiquidPrinter.integer_of_int i))) ()
 
@@ -29,9 +33,9 @@ let tmp_contract_of_init (args, code) storage_ty =
   let code = mk(Apply (Prim_tuple, LiquidLoc.noloc, [code; c_unit])) () in
   { parameter; storage; return; code }
 
-let compile_liquid_input env contract init =
+let compile_liquid_init env contract init =
   match init with
-  | None -> ()
+  | None -> raise Not_found
   | Some ((args, sy_init) as init) ->
     if sy_init.transfer then
       LiquidLoc.raise_error ~loc:(LiquidLoc.loc_in_file env.filename)
@@ -41,10 +45,11 @@ let compile_liquid_input env contract init =
           ~warnings:true env contract contract.storage sy_init in
       let enc_init = LiquidEncode.encode_code env contract ty_init in
       let c_init = LiquidData.translate_const_exp LiquidLoc.noloc enc_init in
-      let s = LiquidPrinter.Michelson.line_of_const c_init in
-      let output = env.filename ^ ".init.tz" in
-      FileString.write_file output s;
-      Printf.eprintf "Constant initial storage generated in %S\n%!" output
+      Init_constant c_init
+      (* let s = LiquidPrinter.Michelson.line_of_const c_init in
+       * let output = env.filename ^ ".init.tz" in
+       * FileString.write_file output s;
+       * Printf.eprintf "Constant initial storage generated in %S\n%!" output *)
     with LiquidError _ ->
       (* non constant initial value *)
       let init_contract = tmp_contract_of_init init contract.storage in
@@ -52,8 +57,9 @@ let compile_liquid_input env contract init =
           ~warnings:true env init_contract in
       let encoded_init, _ = LiquidEncode.encode_contract env typed_init in
       let pre_init = LiquidMichelson.translate encoded_init in
-      let mic_init = LiquidToTezos.convert_contract pre_init in
-      let s = LiquidToTezos.line_of_contract mic_init in
-      let output = env.filename ^ ".initializer.tz" in
-      FileString.write_file output s;
-      Printf.eprintf "Storage initializer generated in %S\n%!" output
+      Init_code pre_init
+      (* let mic_init = LiquidToTezos.convert_contract pre_init in
+       * let s = LiquidToTezos.line_of_contract mic_init in
+       * let output = env.filename ^ ".initializer.tz" in
+       * FileString.write_file output s;
+       * Printf.eprintf "Storage initializer generated in %S\n%!" output *)

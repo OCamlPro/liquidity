@@ -8,4 +8,8 @@
 
 open LiquidTypes
 
-val compile_liquid_input : env -> syntax_contract -> syntax_init -> unit
+type init =
+  | Init_constant of LiquidTypes.const
+  | Init_code of LiquidTypes.noloc_michelson_contract
+
+val compile_liquid_init : env -> syntax_contract -> syntax_init -> init

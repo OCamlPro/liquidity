@@ -14,38 +14,69 @@ let i exp = {
   noloc_name = None;
 }
 
-let rec emit_code code =
+let rec emit_code ~expand code =
   let name = code.noloc_name in
   match code.i with
   | ANNOT s -> M_INS_ANNOT s
-  | SEQ exprs -> M_INS_EXP ("SEQ", [], List.map emit_code exprs, name)
+  | SEQ exprs -> M_INS_EXP ("SEQ", [], List.map (emit_code ~expand) exprs, name)
   | IF (ifthen, ifelse) ->
-     M_INS_EXP ("IF", [], [emit_code ifthen; emit_code ifelse], name)
+    M_INS_EXP ("IF", [],
+               [emit_code ~expand ifthen; emit_code ~expand ifelse], name)
   | IF_NONE (ifthen, ifelse) ->
-     M_INS_EXP ("IF_NONE", [], [emit_code ifthen; emit_code ifelse], name)
+    M_INS_EXP ("IF_NONE", [],
+               [emit_code ~expand ifthen; emit_code ~expand ifelse], name)
   | IF_CONS (ifcons, ifnil) ->
-     M_INS_EXP ("IF_CONS", [], [emit_code ifcons; emit_code ifnil], name)
+    M_INS_EXP ("IF_CONS", [],
+               [emit_code ~expand ifcons; emit_code ~expand ifnil], name)
   | IF_LEFT (left, right) ->
-     M_INS_EXP ("IF_LEFT", [], [emit_code left; emit_code right], name)
+    M_INS_EXP ("IF_LEFT", [],
+               [emit_code ~expand left; emit_code ~expand right], name)
   | LOOP loop ->
-     M_INS_EXP ("LOOP", [], [emit_code loop], name)
+     M_INS_EXP ("LOOP", [], [emit_code ~expand loop], name)
   | ITER body ->
-     M_INS_EXP ("ITER", [], [emit_code body], name)
+     M_INS_EXP ("ITER", [], [emit_code ~expand body], name)
   | LAMBDA (arg_type, res_type, body) ->
      M_INS_EXP ("LAMBDA",
                 [arg_type; res_type],
-                [emit_code body], name)
+                [emit_code ~expand body], name)
   | LEFT ty -> M_INS_EXP ("LEFT", [ty], [], name)
   | RIGHT ty -> M_INS_EXP ("RIGHT", [ty], [], name)
 
 
   | PUSH (ty, cst) -> M_INS_CST ("PUSH", ty, cst, name)
-  | DIP (n, exp) -> M_INS_EXP (Printf.sprintf "D%sP" (String.make n 'I'),
-                               [],
-                               [emit_code exp], name)
-  | DUP n -> M_INS (Printf.sprintf "D%sP" (String.make n 'U'), name)
-  | CDAR n -> M_INS (Printf.sprintf "C%sAR" (String.make n 'D'), name)
-  | CDDR n -> M_INS (Printf.sprintf "C%sDR" (String.make n 'D'), name)
+  | DIP (0, exp) -> assert false
+  | DIP (1, exp) -> M_INS_EXP ("DIP", [], [emit_code ~expand exp], name)
+  | DIP (n, exp) ->
+    if expand then
+      M_INS_EXP ("DIP", [],
+                 [emit_code ~expand @@ i @@
+                  SEQ [{ code with i = DIP(n-1, exp) }]], None)
+    else
+      M_INS_EXP (Printf.sprintf "D%sP" (String.make n 'I'), [],
+                 [emit_code ~expand exp], name)
+  | DUP 0 -> assert false
+  | DUP 1 -> M_INS ("DUP", name)
+  | DUP n ->
+    if expand then
+      emit_code ~expand @@ i @@
+      SEQ [
+        i @@ DIP(1, i @@ SEQ [i @@ DUP(n-1)]);
+        {i = SWAP; noloc_name = name }
+      ]
+    else M_INS (Printf.sprintf "D%sP" (String.make n 'U'), name)
+
+  | CDAR 0 -> emit_code expand { code with i = CAR }
+  | CDDR 0 -> emit_code expand { code with i = CDR }
+  | CDAR n ->
+    if expand then
+      emit_code ~expand @@ i @@
+      SEQ (LiquidMisc.list_init n (fun _ -> i CDR) @ [{ code with i = CAR }])
+    else M_INS (Printf.sprintf "C%sAR" (String.make n 'D'), name)
+  | CDDR n ->
+    if expand then
+      emit_code ~expand @@ i @@
+      SEQ (LiquidMisc.list_init n (fun _ -> i CDR) @ [{ code with i = CDR }])
+    else M_INS (Printf.sprintf "C%sDR" (String.make n 'D'), name)
   | DROP -> M_INS ("DROP", name)
   | CAR -> M_INS ("CAR", name)
   | CDR -> M_INS ("CDR", name)
@@ -65,7 +96,7 @@ let rec emit_code code =
   | BALANCE -> M_INS ("BALANCE", name)
   | SWAP -> M_INS ("SWAP", name)
   | DIP_DROP (n,m) ->
-    emit_code @@
+    emit_code ~expand @@
     i @@ DIP (n, i @@ SEQ (LiquidMisc.list_init m (fun _ -> i DROP)))
   | SOME -> M_INS ("SOME", name)
   | GET -> M_INS ("GET", name)
@@ -103,4 +134,5 @@ let rec emit_code code =
   | DIV -> M_INS ("DIV", name)
   | CREATE_CONTRACT -> M_INS ("CREATE_CONTRACT", name)
 
-let emit_contract contract = { contract with code = emit_code contract.code }
+let emit_contract ~expand contract =
+  { contract with code = emit_code ~expand contract.code }

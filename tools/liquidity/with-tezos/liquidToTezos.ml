@@ -101,26 +101,34 @@ let rec convert_type expr =
   | Toption x -> prim_type "option" [convert_type x]
   | Tfail | Trecord _ | Tsum _ -> assert false
 
-let rec convert_code expr =
+let rec convert_code expand expr =
   let name = expr.noloc_name in
-  match expr.i with
-  | ANNOT a ->
+  match expr.i with | ANNOT a ->
     Micheline.Seq (0, [], Some ("@"^a))
   | SEQ exprs ->
-    Micheline.Seq (0, List.map convert_code exprs, name)
+    Micheline.Seq (0, List.map (convert_code expand) exprs, name)
   | DROP -> prim "DROP" [] name
   | DIP (0, arg) -> assert false
-  | DIP (1, arg) -> prim "DIP" [ convert_code arg ] name
-  | DIP (n, arg) -> prim (Printf.sprintf "D%sP"
-                                         (String.make n 'I'))
-                         [ convert_code arg ] name
+  | DIP (1, arg) -> prim "DIP" [ convert_code expand arg ] name
+  | DIP (n, arg) ->
+    if expand then
+      prim "DIP" [ convert_code expand @@ ii @@
+                   SEQ [{ expr with i = DIP(n-1, arg)}]
+                 ] None
+    else
+      prim (Printf.sprintf "D%sP" (String.make n 'I'))
+        [ convert_code expand arg ] name
   | CAR -> prim "CAR" [] name
   | CDR -> prim "CDR" [] name
   | SWAP -> prim "SWAP" [] name
-  | IF (x,y) -> prim "IF" [convert_code x; convert_code y] name
-  | IF_NONE (x,y) -> prim "IF_NONE" [convert_code x; convert_code y] name
-  | IF_LEFT (x,y) -> prim "IF_LEFT" [convert_code x; convert_code y] name
-  | IF_CONS (x,y) -> prim "IF_CONS" [convert_code x; convert_code y] name
+  | IF (x,y) ->
+    prim "IF" [convert_code expand x; convert_code expand y] name
+  | IF_NONE (x,y) ->
+    prim "IF_NONE" [convert_code expand x; convert_code expand y] name
+  | IF_LEFT (x,y) ->
+    prim "IF_LEFT" [convert_code expand x; convert_code expand y] name
+  | IF_CONS (x,y) ->
+    prim "IF_CONS" [convert_code expand x; convert_code expand y] name
   | NOW -> prim "NOW" [] name
   | PAIR -> prim "PAIR" [] name
   | BALANCE -> prim "BALANCE" [] name
@@ -143,7 +151,7 @@ let rec convert_code expr =
   | MAP -> prim "MAP" [] name
   | OR -> prim "OR" [] name
   | LAMBDA (ty1, ty2, expr) ->
-     prim "LAMBDA" [convert_type ty1; convert_type ty2; convert_code expr] name
+     prim "LAMBDA" [convert_type ty1; convert_type ty2; convert_code expand expr] name
   | REDUCE -> prim "REDUCE" [] name
   | COMPARE -> prim "COMPARE" [] name
   | FAIL -> prim "FAIL" [] name
@@ -169,8 +177,8 @@ let rec convert_code expr =
   | LEFT ty ->
      prim "LEFT" [convert_type ty] name
   | CONS -> prim "CONS" [] name
-  | LOOP loop -> prim "LOOP" [convert_code loop] name
-  | ITER body -> prim "ITER" [convert_code body] name
+  | LOOP loop -> prim "LOOP" [convert_code expand loop] name
+  | ITER body -> prim "ITER" [convert_code expand body] name
   | RIGHT ty ->
      prim "RIGHT" [convert_type ty] name
   | INT -> prim "INT" [] name
@@ -178,7 +186,14 @@ let rec convert_code expr =
   | DUP 1 -> prim "DUP" [] name
   | DUP 0 -> assert false
   | DUP n ->
-    prim (Printf.sprintf "D%sP" (String.make n 'U')) [] name
+    if expand then
+      convert_code expand @@ ii @@
+      SEQ [
+        ii @@ DIP(1, ii @@ SEQ [ii @@ DUP(n-1)]);
+        {i = SWAP; noloc_name = name }
+      ]
+    else
+      prim (Printf.sprintf "D%sP" (String.make n 'U')) [] name
 
   | SELF -> prim "SELF" [] name
   | STEPS_TO_QUOTA -> prim "STEPS_TO_QUOTA" [] name
@@ -192,20 +207,30 @@ let rec convert_code expr =
   | LSL -> prim "LSL" [] name
   | LSR -> prim "LSR"  [] name
   | DIP_DROP (ndip, ndrop) ->
-    convert_code @@
+    convert_code expand @@
     ii @@ DIP (ndip, ii @@ SEQ (LiquidMisc.list_init ndrop (fun _ -> ii DROP)))
 
-  | CDAR n -> prim (Printf.sprintf "C%sAR" (String.make n 'D')) [] name
-  | CDDR n -> prim (Printf.sprintf "C%sDR" (String.make n 'D')) [] name
+  | CDAR 0 -> convert_code expand { expr with i = CAR }
+  | CDDR 0 -> convert_code expand { expr with i = CDR }
+  | CDAR n ->
+    if expand then
+      convert_code expand @@ ii @@
+      SEQ (LiquidMisc.list_init n (fun _ -> ii CDR) @ [{ expr with i = CAR }])
+    else prim (Printf.sprintf "C%sAR" (String.make n 'D')) [] name
+  | CDDR n ->
+    if expand then
+      convert_code expand @@ ii @@
+      SEQ (LiquidMisc.list_init n (fun _ -> ii CDR) @ [{ expr with i = CDR }])
+    else prim (Printf.sprintf "C%sDR" (String.make n 'D')) [] name
   | SIZE -> prim "SIZE" [] name
   | DEFAULT_ACCOUNT -> prim "DEFAULT_ACCOUNT" [] name
 
 
-let convert_contract c =
+let convert_contract ~expand c =
   let ret_type = convert_type c.return in
   let arg_type = convert_type c.parameter in
   let storage_type = convert_type c.storage in
-  let code = convert_code c.code in
+  let code = convert_code expand c.code in
   let nodes = Micheline.Prim(0, "return", [ret_type], None) ::
                 Micheline.Prim(0, "parameter", [arg_type], None) ::
                   Micheline.Prim(0, "storage", [storage_type], None) ::
@@ -246,6 +271,31 @@ let line_of_contract c =
   Format.pp_set_formatter_out_functions ppf ffs;
   s
 
+let contract_encoding =
+  Micheline.canonical_encoding Data_encoding.string |> Data_encoding.list
+
+let json_of_contract c =
+  Data_encoding.Json.construct contract_encoding c
+  |> Data_encoding_ezjsonm.to_string
+
+
+let contract_of_json j =
+  (* let open Error_monad in *)
+  Data_encoding_ezjsonm.from_string j
+  |> Data_encoding.Json.destruct contract_encoding
+
+let const_encoding =
+  Micheline.canonical_encoding Data_encoding.string
+  (* Micheline.erased_encoding 0 Data_encoding.string *)
+
+let json_of_const c =
+  Data_encoding.Json.construct const_encoding c
+  |> Data_encoding_ezjsonm.to_string
+
+let const_of_json j =
+  Data_encoding_ezjsonm.from_string j
+  |> Data_encoding.Json.destruct const_encoding
+
 let read_tezos_file filename =
   let s = FileString.read_file filename in
   let contract_hash = Hash.Operation_hash.hash_bytes [s] in
@@ -258,6 +308,9 @@ let read_tezos_file filename =
      exit 2
 
 
+
+let convert_const c =
+  convert_const c |> Micheline.strip_locations
 
     (*
 
