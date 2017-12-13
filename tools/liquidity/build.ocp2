@@ -167,6 +167,9 @@ OCaml.library("ocplib-liquidity-deploy-without-tezos",
      files = [
        "without-tezos/liquidDeploy.ml";
      ];
+     requires = [
+        "ocplib-liquidity";
+     ];
    });
 
 OCaml.program("liquidity-mini",
