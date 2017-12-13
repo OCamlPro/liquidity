@@ -625,7 +625,7 @@ module Liquid = struct
       Printf.bprintf b "(";
       bprint_const b "" c;
       List.iter (fun c ->
-          Printf.bprintf b " * ";
+          Printf.bprintf b ", ";
           bprint_const b "" c;
         ) cs;
       Printf.bprintf b ")";
