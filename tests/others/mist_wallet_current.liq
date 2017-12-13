@@ -220,17 +220,18 @@ let%init storage (owners : key_hash set) (required : nat) (limit : tez) =
     m_last = Current.time ();
   }
 
-(* let%init storage = *)
-(* { *)
-(*   m_num_owners = 1; *)
-(*   m_owners = Set [ tz1XT2pgiSRWQqjHv5cefW7oacdaXmCVTKrU ]; *)
-(*   m_required = 1; *)
-(*   m_pending = (Map : (operation_hash, pending_state) map); *)
-(*   m_daily_limit = 10tz; *)
-(*   m_spent_today = 0tz; *)
-(*   m_last = 2017-12-06T10:23:55+01:00; *)
-(* } *)
-
+(*
+let%init storage =
+{
+  m_num_owners = 1p;
+  m_owners = Set [ tz1XT2pgiSRWQqjHv5cefW7oacdaXmCVTKrU ];
+  m_required = 1p;
+  m_pending = (Map : (operation_hash, pending_state) map);
+  m_daily_limit = 10tz;
+  m_spent_today = 0tz;
+  m_last = 2017-12-06T10:23:55+01:00;
+}
+*)
 
 
 

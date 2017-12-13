@@ -810,3 +810,20 @@ let encode_code env contract code =
     } in
 
   encode env code
+
+
+let encode_const env contract const =
+  let env =
+    {
+      warnings=false;
+      annot=false;
+      counter = ref 0;
+      vars = StringMap.empty;
+      vars_counts = StringMap.empty;
+      to_inline = ref StringMap.empty;
+      env = env;
+      clos_env = None;
+      contract ;
+    } in
+
+  encode_const env const

@@ -71,7 +71,7 @@ let compile_liquid_file filename =
       let output = env.filename ^ ".init.tz" in
       FileString.write_file output s;
       Printf.eprintf "Constant initial storage generated in %S\n%!" output
-    | LiquidInit.Init_code pre_init ->
+    | LiquidInit.Init_code (_, pre_init) ->
       let mic_init = LiquidToTezos.convert_contract ~expand:true pre_init in
       let js = LiquidToTezos.json_of_contract mic_init in
       Printf.eprintf "%s\n%!" js;
@@ -197,7 +197,33 @@ module Data = struct
     Printf.printf "%s\n%!"
       (LiquidPrinter.Liquid.string_of_const (CTuple [result; r_storage]))
 
+
+  let init_inputs = ref []
+
+  let register_deploy_input s =
+    init_inputs := s :: !init_inputs
+
+  let forge_deploy () =
+    let op =
+      LiquidDeploy.forge_deploy
+        (LiquidDeploy.From_file !contract) (List.rev !init_inputs)
+    in
+    Printf.eprintf "Raw operation:\n--------------\n%!";
+    Printf.printf "%s\n%!" op
+
 end
+
+let parse_tez_to_string expl amount =
+  match LiquidData.translate (LiquidFromOCaml.initial_env expl)
+          dummy_syntax_contract amount Ttez
+  with
+  | CTez t ->
+    let cents = match t.centiles with
+      | Some cents -> cents
+      | None  -> "00"
+    in
+    t.tezzies ^ cents
+  | _ -> assert false
 
 
 let main () =
@@ -232,17 +258,14 @@ let main () =
       " Produce compact Michelson";
 
       "--amount", Arg.String (fun amount ->
-          match LiquidData.translate (LiquidFromOCaml.initial_env "--amount")
-                  dummy_syntax_contract amount Ttez
-          with
-          | CTez t ->
-            let cents = match t.centiles with
-              | Some cents -> cents
-              | None  -> "00"
-            in
-            LiquidOptions.amount := t.tezzies ^ cents
-          | _ -> assert false),
+          LiquidOptions.amount := parse_tez_to_string "--amount" amount
+        ),
       "<1.99tz> Set amount for deploying or running a contract (default: 0tz)";
+
+      "--fee", Arg.String (fun fee ->
+          LiquidOptions.fee := parse_tez_to_string "--fee" fee
+        ),
+      "<0.50tz> Set fee for deploying a contract (default: 0.5tz)";
 
       "--source", Arg.String (fun s -> LiquidOptions.source := Some s),
       "<tz1...> Set the source for deploying or running a contract (default: none)";
@@ -260,6 +283,15 @@ let main () =
             Data.run ());
       ],
       "FILE.liq PARAMETER STORAGE Run Liquidity contract on Tezos node";
+
+      "--forge-deploy", Arg.Tuple [
+        Arg.String (fun s -> Data.contract := s);
+        Arg.Rest Data.register_deploy_input;
+        Arg.Unit (fun () ->
+            work_done := true;
+            Data.forge_deploy ());
+      ],
+      "FILE.liq INPUT1 INPUT2 ... Forge deployment operation for contract";
 
       "--data", Arg.Tuple [
         Arg.String (fun s -> Data.contract := s);
@@ -301,6 +333,9 @@ let () =
     exit 1
   | LiquidFromTezos.Missing_program_field f ->
     Format.eprintf "Missing script field %s@." f;
+    exit 1
+  | LiquidDeploy.RequestError msg ->
+    Format.eprintf "Request Error: %s@." msg;
     exit 1
   | Failure f ->
     Format.eprintf "Failure: %s@." f;

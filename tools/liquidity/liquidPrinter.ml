@@ -629,40 +629,54 @@ module Liquid = struct
           bprint_const b "" c;
         ) cs;
       Printf.bprintf b ")";
-    | CMap pairs ->
-      Printf.bprintf b "(Map [";
-      Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt "; ")
-        (fun _ (c1, c2) ->
-           bprint_const b "" c1;
-           Printf.bprintf b ", ";
-           bprint_const b "" c2)
-        (Format.formatter_of_buffer b) pairs;
+    | CMap [] -> Printf.bprintf b "(Map [])";
+    | CMap ((c1, c2) :: pairs) ->
+      let indent2 = indent ^ "      " in
+      Printf.bprintf b "\n%s(Map [" indent;
+      bprint_const b indent c1;
+      Printf.bprintf b ", ";
+      bprint_const b indent c2;
+      List.iter (fun (c1, c2) ->
+          bprint_const b indent2 c1;
+          Printf.bprintf b ", ";
+          bprint_const b indent2 c2;
+          Printf.bprintf b ";\n%s" indent2;
+        ) pairs;
       Printf.bprintf b "])";
-    | CList csts ->
-      Printf.bprintf b "[";
-      Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt "; ")
-        (fun _ c -> bprint_const b "" c)
-        (Format.formatter_of_buffer b) csts;
+    | CList [] -> Printf.bprintf b "[]";
+    | CList (c :: csts) ->
+      let indent2 = indent ^ " " in
+      Printf.bprintf b "\n%s[" indent;
+      bprint_const b "" c;
+      List.iter (fun c ->
+          Printf.bprintf b ";\n%s" indent2;
+          bprint_const b indent2 c
+        ) csts;
       Printf.bprintf b "]";
-    | CSet csts ->
-      Printf.bprintf b "(Set [";
-      Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt "; ")
-        (fun _ c -> bprint_const b "" c)
-        (Format.formatter_of_buffer b) csts;
-      Printf.bprintf b "])"
+    | CSet [] -> Printf.bprintf b "(Set [])";
+    | CSet (c :: csts) ->
+      let indent2 = indent ^ "      " in
+      Printf.bprintf b "\n%s(Set [" indent;
+      bprint_const b "" c;
+      List.iter (fun c ->
+          Printf.bprintf b ";\n%s" indent2;
+          bprint_const b indent2 c
+        ) csts;
+      Printf.bprintf b "])";
     | CConstr (c, cst) ->
       Printf.bprintf b "(%s " c;
       bprint_const b "" cst;
       Printf.bprintf b ")";
     | CRecord labels ->
-      Printf.bprintf b "{";
-      Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt "; ")
-        (fun _ (f, cst) ->
-           Printf.bprintf b "%s = " f;
-           bprint_const b "" cst;
-           Printf.bprintf b "; ")
-        (Format.formatter_of_buffer b) labels;
-      Printf.bprintf b "}"
+      let indent2 = indent ^ "  " in
+      let indent4 = indent2 ^ "  " in
+      Printf.bprintf b "\n%s{" indent;
+      List.iter (fun (label, cst) ->
+          Printf.bprintf b "\n%s%s = " indent2 label;
+          bprint_const b indent4 cst;
+          Printf.bprintf b ";";
+        ) labels;
+      Printf.bprintf b "\n%s}" indent
 
 
   let rec bprint_code_base bprint_code_rec ~debug b indent code =
@@ -803,7 +817,7 @@ module Liquid = struct
            bprint_code_rec ~debug b indent4 exp;
            Printf.bprintf b ";";
          ) lab_x_exp_list;
-       Printf.bprintf b "}"
+       Printf.bprintf b "\n%s}" indent
     | Constructor (_loc, Constr constr, arg) ->
        Printf.bprintf b "\n%s%s (" indent constr;
        bprint_code_rec ~debug b (indent ^ "  ") arg;

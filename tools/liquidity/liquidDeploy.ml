@@ -93,13 +93,41 @@ let compile_liquid liquid =
   let pre_init = match syntax_init with
     | None -> None
     | Some syntax_init ->
-      Some (LiquidInit.compile_liquid_init env syntax_ast syntax_init)
+      let inputs_infos = fst syntax_init in
+      Some (
+        LiquidInit.compile_liquid_init env syntax_ast syntax_init,
+        inputs_infos)
   in
 
   ( env, syntax_ast, pre_michelson, pre_init )
 
+let raise_request_error r msg =
+  try
+    let err = Ezjsonm.find r ["error"] in
+    (* let err_s = Ezjsonm.to_string ~minify:false (Data_encoding_ezjsonm.to_root err) in *)
+    let l = Ezjsonm.get_list (fun err ->
+        let kind = Ezjsonm.find err ["kind"] in
+        let id = Ezjsonm.find err ["id"] in
+        (* let err_s = Ezjsonm.to_string ~minify:false (Data_encoding_ezjsonm.to_root err) in *)
+        Data_encoding_ezjsonm.to_string kind ^" : "^
+        Data_encoding_ezjsonm.to_string id
+      ) err in
+    let err_s = "In "^msg^", "^ String.concat "\n" l in
+    raise (RequestError err_s)
+  with Not_found ->
+    raise (RequestError ("Bad response for "^msg))
 
-let run_pre env pre_michelson input storage =
+
+let mk_json_obj fields =
+  fields
+  |> List.map (fun (f,v) -> "\"" ^ f ^ "\":" ^ v)
+  |> String.concat ","
+  |> fun fs -> "{" ^ fs ^ "}"
+
+let mk_json_arr l = "[" ^ String.concat "," l ^ "]"
+
+
+let run_pre env syntax_contract pre_michelson input storage =
   let c = LiquidToTezos.convert_contract ~expand:true pre_michelson in
   let input_m = LiquidToTezos.convert_const input in
   let storage_m = LiquidToTezos.convert_const storage in
@@ -116,21 +144,11 @@ let run_pre env pre_michelson input storage =
       | Some source -> ["contract", Printf.sprintf "%S" source]
     )
   in
-  let run_json =
-    run_fields
-    |> List.map (fun (f,v) -> "\"" ^ f ^ "\":" ^ v)
-    |> String.concat ","
-    |> fun fs -> "{" ^ fs ^ "}"
-  in
+  let run_json = mk_json_obj run_fields in
   let r =
     request ~data:run_json "/blocks/prevalidation/proto/helpers/run_code"
     |> Ezjsonm.from_string
   in
-  try
-    let err = Ezjsonm.find r ["error"] in
-    let err_s = Data_encoding_ezjsonm.to_string err in
-    raise (RequestError err_s)
-  with Not_found ->
   try
     let storage_r = Ezjsonm.find r ["ok"; "storage"] in
     let result_r = Ezjsonm.find r ["ok"; "output"] in
@@ -138,22 +156,127 @@ let run_pre env pre_michelson input storage =
     let result_expr = LiquidToTezos.const_of_ezjson result_r in
     let env = LiquidTezosTypes.empty_env env.filename in
     let storage =
-      LiquidFromTezos.convert_const_type env storage_expr pre_michelson.storage
+      LiquidFromTezos.convert_const_type env storage_expr
+        syntax_contract.storage
     in
     let result =
-      LiquidFromTezos.convert_const_type env result_expr pre_michelson.return
+      LiquidFromTezos.convert_const_type env result_expr syntax_contract.return
     in
     (result, storage)
   with Not_found ->
-    raise (RequestError "Bad response for run")
+    raise_request_error r "run"
 
 
 let run liquid input_string storage_string =
-  let env, syntax_ast, pre_michelson, pre_init = compile_liquid liquid in
+  let env, syntax_ast, pre_michelson, _ = compile_liquid liquid in
   let input =
-    LiquidData.translate env syntax_ast input_string pre_michelson.parameter
+    LiquidData.translate { env with filename = "input" }
+      syntax_ast input_string pre_michelson.parameter
   in
   let storage =
-    LiquidData.translate env syntax_ast storage_string pre_michelson.storage
+    LiquidData.translate { env with filename = "storage" }
+      syntax_ast storage_string pre_michelson.storage
   in
-  run_pre env pre_michelson input storage
+  run_pre env syntax_ast pre_michelson input storage
+
+
+let get_counter source =
+  let r =
+    request
+      (Printf.sprintf "/blocks/prevalidation/proto/context/contracts/%s/counter"
+         source)
+    |> Ezjsonm.from_string
+  in
+  try
+    Ezjsonm.find r ["ok"] |> Ezjsonm.get_int
+  with Not_found ->
+    raise_request_error r "get_counter"
+
+
+let get_head () =
+  let r = request "/blocks/head" |> Ezjsonm.from_string in
+  try
+    Ezjsonm.find r ["hash"] |> Ezjsonm.get_string
+  with Not_found ->
+    raise_request_error r "get_head"
+
+
+let forge_deploy liquid init_params_strings =
+  let source = match !LiquidOptions.source with
+    | None -> raise (RequestError "get_counter: Missing source")
+    | Some source -> source
+  in
+  let env, syntax_ast, pre_michelson, pre_init_infos = compile_liquid liquid in
+  let pre_init, init_infos = match pre_init_infos with
+    | None -> raise (RequestError "forge_deploy: Missing init")
+    | Some pre_init_infos -> pre_init_infos
+  in
+  let init_storage = match pre_init with
+    | LiquidInit.Init_constant c ->
+      if init_params_strings <> [] then
+        raise (RequestError "forge_deploy: Constant storage, no inputs needed");
+      c
+    | LiquidInit.Init_code (syntax_c, c) ->
+      let init_params =
+        try
+          List.map2 (fun input_str (input_name,_, input_ty) ->
+            LiquidData.translate { env with filename = input_name }
+              syntax_ast input_str input_ty
+            ) init_params_strings init_infos
+        with Invalid_argument _ ->
+          raise
+            (RequestError
+               (Printf.sprintf
+                  "forge_deploy: init storage needs %d arguments, but was given %d"
+                  (List.length init_infos) (List.length init_params_strings)
+               ))
+      in
+      let eval_init_storage = CUnit in
+      let eval_init_input = CTuple init_params in
+      let eval_init_result, _ =
+        run_pre env syntax_c c eval_init_input eval_init_storage
+      in
+      Printf.eprintf "Evaluated initial storage:\n\
+                      --------------------------\n\
+                      %s\n%!"
+        (LiquidPrinter.Liquid.string_of_const eval_init_result);
+      LiquidEncode.encode_const env syntax_ast eval_init_result
+  in
+
+  let head = get_head () in
+  let counter = get_counter source in
+  let c = LiquidToTezos.convert_contract ~expand:true pre_michelson in
+  let init_storage_m = LiquidToTezos.convert_const init_storage in
+  let contract_json = LiquidToTezos.json_of_contract c in
+  let init_storage_json = LiquidToTezos.json_of_const init_storage_m in
+
+  let script_json = [
+    "code", contract_json;
+    "storage", init_storage_json
+  ] |> mk_json_obj
+  in
+  let origination_json = [
+    "kind", "\"origination\"";
+    "managerPubkey", Printf.sprintf "%S" source;
+    "balance", !LiquidOptions.amount;
+    "spendable", "false";
+    "delegatable", "false";
+    "script", script_json;
+  ] |> mk_json_obj
+  in
+  let data = [
+    "branch", Printf.sprintf "%S" head;
+    "source", Printf.sprintf "%S" source;
+    "fee", !LiquidOptions.fee;
+    "counter", string_of_int counter;
+    "operations", mk_json_arr [origination_json];
+  ] |> mk_json_obj
+  in
+  let r =
+    request ~data "/blocks/prevalidation/proto/helpers/forge/operations"
+    |> Ezjsonm.from_string
+  in
+  try
+    Ezjsonm.find r ["ok"; "operation"] |> Ezjsonm.get_string
+  with Not_found ->
+    raise_request_error r "forge_deploy"
