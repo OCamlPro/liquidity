@@ -16,3 +16,5 @@ val encode_contract :
   encoded_contract * encoded_exp StringMap.t
 
 val encode_code : env -> syntax_contract -> typed_exp -> encoded_exp
+
+val encode_const : env -> syntax_contract -> const -> const

@@ -6,9 +6,14 @@
 (*                                                                        *)
 (**************************************************************************)
 
+exception RequestError of string
+
 type from =
   | From_string of string
   | From_file of string
 
 let run _ _ _ =
   failwith "mini version cannot run"
+
+let forge_deploy _ _ =
+  failwith "mini version cannot deploy"

@@ -10,7 +10,8 @@ open LiquidTypes
 
 type init =
   | Init_constant of LiquidTypes.const
-  | Init_code of LiquidTypes.noloc_michelson_contract
+  | Init_code of (LiquidTypes.syntax_contract *
+                  LiquidTypes.noloc_michelson_contract)
 
 let c_unit = mk (Const (Tunit, CUnit)) ()
 let mk_nat i = mk (Const (Tnat, CNat (LiquidPrinter.integer_of_int i))) ()
@@ -54,7 +55,7 @@ let compile_liquid_init env contract ((args, sy_init) as init) =
         ~warnings:true env init_contract in
     let encoded_init, _ = LiquidEncode.encode_contract env typed_init in
     let pre_init = LiquidMichelson.translate encoded_init in
-    Init_code pre_init
+    Init_code (init_contract, pre_init)
 (* let mic_init = LiquidToTezos.convert_contract pre_init in
  * let s = LiquidToTezos.line_of_contract mic_init in
  * let output = env.filename ^ ".initializer.tz" in

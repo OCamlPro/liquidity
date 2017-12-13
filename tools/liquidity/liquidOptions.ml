@@ -27,3 +27,6 @@ let tezos_node = ref "127.0.0.1:8732"
 
 let source = ref (None : string option)
 let amount = ref "0"
+let fee = ref "5"
+
+(* let private_key = ref (None : string option) *)
