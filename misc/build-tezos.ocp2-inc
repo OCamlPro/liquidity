@@ -230,14 +230,16 @@ lib_without_opens("utils", {
                         "time.ml";
                         "hash.ml";
                         "crypto_box.ml";
-                        "lwt_exit.ml";
                         "logging.ml";
+                        "lwt_exit.ml";
                         "lwt_utils.ml";
-                        "lwt_pipe.ml"; "IO.ml";
+                        "lwt_pipe.ml";
+                        "IO.ml";
                         "moving_average.ml";
                         "ring.ml";
                         "watcher.ml";
                         "tezos_data.ml";
+                        "lwt_dropbox.ml";
                       ];
                     requires = [
                         "minutils";
@@ -339,8 +341,6 @@ function lib_with_alias(
        noimpldeps = [ modname ];
     };
 
-    print(inner_mods);
-
     OCaml.library(libname,
       ocaml + {
         dep = opens;
@@ -374,7 +374,7 @@ function lib_with_alias(
            return (ml[0], ml[1] + ".ml");},mls))
       +
       [ libname + ".ml", {
-          sources = [ dirname ];
+          sources = [ ];
           commands = [
             OCaml.system(
             [ "echo" ] +
@@ -490,7 +490,65 @@ lib_with_opens("node_updater",
              [ "node_db"; "sigs"; "micheline"; "tezos_protocol_compiler" ];
   });
 
+begin
+  function make_env(proto){
+    return [
+    "proto/" + proto + "/environment.ml", {
+       sources = [];
+       commands = [
+         OCaml.system([
+           "echo";
+           "include Tezos_protocol_environment.Make(struct let name = \"" +
+           proto + "\" end)()"
+         ],
+         { stdout = "proto/" + proto + "/environment.ml" }
+         )
+       ];
+    };
+  ];
+  }
+  
+  function make_registerer(proto, key){
+    return [
+    "proto/" + proto + "/registerer.ml", {
+       sources = [];
+       commands = [
+         OCaml.system([
+           "echo";
+           "let () = 
+  let module Ignored = State.Register_embedded_protocol
+    (Tezos_protocol_environment_" + proto + ".Environment)
+    (Tezos_embedded_raw_protocol_" + proto + ".Main)
+    (struct
+       let hash =
+         Some (Hash.Protocol_hash.of_b58check_exn
+                 \"" + key + "\")
+       let sources = Tezos_data.Protocol.{
+         expected_env = V1 ;
+         components = [(* FIXME ?? *)] ;
+                     } end) in ()"
 
+         ],
+         { stdout = "proto/" + proto + "/registerer.ml" }
+         )
+       ];
+    };
+  ];
+  }
+
+  build_rules =
+              make_env("alpha") +
+              make_env("genesis") +
+              make_env("demo") +
+              make_registerer("alpha",
+                "ProtoALphaALphaALphaALphaALphaALphaALphaALphaDdp3zK") +
+              make_registerer("genesis",
+                "ProtoGenesisGenesisGenesisGenesisGenesisGenesk612im") +
+              make_registerer("demo",
+                "ProtoDemoDemoDemoDemoDemoDemoDemoDemoDemoDemoD3c8k9") 
+             ;
+  OCaml.rules("envs", { build_rules = build_rules });
+end
 
 lib_with_alias(
       "tezos_protocol_environment_alpha",
@@ -504,41 +562,29 @@ lib_with_alias(
            mls = [
              "environment.ml", "Environment";
            ];
-           requires = utils_packages + [
+           requires = utils_packages + [ "envs";
                     "sigs"; "node_updater" ];
       }
    );
 
 
 
+begin
+  opens =    [
+     "-I"; "%{utils_FULL_DST_DIR}%";
+     "-I"; "%{minutils_FULL_DST_DIR}%";
+     "-I"; "%{tezos_protocol_environment_alpha_FULL_DST_DIR}%";
+     "-open"; "Tezos_protocol_environment_alpha__Environment" ];
 
 OCaml.library(
    "tezos_embedded_raw_protocol_alpha",
    ocaml_with_opens +
         {
-  dep = 
-   [
-     "-I"; "%{utils_FULL_DST_DIR}%";
-     "-I"; "%{minutils_FULL_DST_DIR}%";
-     "-I"; "%{tezos_protocol_environment_alpha_FULL_DST_DIR}%";
-     "-open"; "Tezos_protocol_environment_alpha__Environment" ]
-   + ocaml_with_opens.dep;
-  bytecomp = 
-   [
-     "-I"; "%{utils_FULL_DST_DIR}%";
-     "-I"; "%{minutils_FULL_DST_DIR}%";
-     "-I"; "%{tezos_protocol_environment_alpha_FULL_DST_DIR}%";
-     "-open"; "Tezos_protocol_environment_alpha__Environment" ]
-   + ocaml_with_opens.bytecomp;
-  asmcomp = 
-   [
-     "-I"; "%{utils_FULL_DST_DIR}%";
-     "-I"; "%{minutils_FULL_DST_DIR}%";
-     "-I"; "%{tezos_protocol_environment_alpha_FULL_DST_DIR}%";
-     "-open"; "Tezos_protocol_environment_alpha__Environment" ]
-   + ocaml_with_opens.asmcomp;
-  files = OCaml.pack("Tezos_embedded_raw_protocol_alpha",
-   [
+          dep = opens + ocaml_with_opens.dep;
+          bytecomp = opens + ocaml_with_opens.bytecomp;
+          asmcomp = opens + ocaml_with_opens.asmcomp;
+          files = OCaml.pack("Tezos_embedded_raw_protocol_alpha",
+             [
 "proto/alpha/period_repr.ml";
 "proto/alpha/qty_repr.ml";
 "proto/alpha/tez_repr.ml";
@@ -593,45 +639,47 @@ OCaml.library(
                     "tezos_protocol_environment_alpha";
          ];
          });
+end
 
 
+lib_with_alias(
+      "tezos_protocol_environment_genesis",
+      ocaml_with_opens,
+      {
+        modname = "Tezos_protocol_environment_genesis";
+        subdir = "proto/genesis";
+
+           mlis = [
+           ];
+           mls = [
+             "environment.ml", "Environment";
+           ];
+           requires = utils_packages + [ "envs";
+                    "sigs"; "node_updater" ];
+      }
+   );
+
+lib_with_alias(
+      "tezos_protocol_environment_demo",
+      ocaml_with_opens,
+      {
+        modname = "Tezos_protocol_environment_demo";
+        subdir = "proto/demo";
+
+           mlis = [
+           ];
+           mls = [
+             "environment.ml", "Environment";
+           ];
+           requires = utils_packages + [ "envs";
+                    "sigs"; "node_updater" ];
+      }
+   );
 
 
-
-
-
-
-
-
-(*
-
-
-lib_with_opens("packer", {
-    subdir = "packer";
-    files = [ "tezos_protocol_packer.ml" ];
-    requires = [] + utils_packages;
-    });
-
-
-lib_with_opens("compiler", {
-    subdir = "compiler";
+lib_with_opens("node_net",
+  ocaml + {
     files = [
-        "tezos_compiler_embedded_cmis.ml";
-        "tezos_compiler.ml"
-      ];
-    requires = [
-        (* We cannot depend directly on [cmis], because they would be linked
-       in this library. Instead, we depend on a "rules" package. *)
-        "embedded"; "packer";
-      ] + utils_packages;
-  });
-
-
-
-lib_with_opens("node", {
-
-                   files = [
-                     "compiler/node_compiler_main.ml";
                      "node/net/p2p_types.ml";
                      "node/net/p2p_io_scheduler.ml";
                      "node/net/p2p_connection.ml";
@@ -643,96 +691,223 @@ lib_with_opens("node", {
                      "node/net/p2p.ml";
                      "node/net/RPC_server.ml";
 
-                     "node/db/persist.ml";
-                     "node/db/context.ml";
+    ];
+    requires = more_packages + [
+       "minutils"; "utils"; "proto"; "sigs";
+       "node_db";
+    ];
+    });
 
-                     "node/db/raw_store.ml";
-                     "node/db/store_sigs.mli";
-                     "node/db/store_helpers.ml";
-                     "node/db/store.ml";
-                     "node/updater/updater.ml";
-                     "node/updater/tezos_protocol_environment.ml";
-                     "node/updater/register.ml";
+begin
+  opens =    [
+     "-I"; "%{utils_FULL_DST_DIR}%";
+     "-I"; "%{minutils_FULL_DST_DIR}%";
+     "-I"; "%{tezos_protocol_environment_demo_FULL_DST_DIR}%";
+     "-open"; "Tezos_protocol_environment_demo__Environment" ];
+     
+  lib_with_opens("tezos_embedded_raw_protocol_demo",
+    ocaml + {
+      dep = opens + ocaml_with_opens.dep;
+      bytecomp = opens + ocaml_with_opens.bytecomp;
+      asmcomp = opens + ocaml_with_opens.asmcomp;
 
-                     "node/shell/state.ml";
-                     "node/shell/distributed_db_functors.ml";
-                     "node/shell/distributed_db_message.ml";
-                     "node/shell/distributed_db_metadata.ml";
-                     "node/shell/distributed_db.ml";
-                     "node/shell/chain_traversal.ml";
-                     "node/shell/chain.ml";
-                     "node/shell/prevalidation.ml";
-                     "node/shell/prevalidator.ml";
-                     "node/shell/validator.ml";
+    files = 
+      OCaml.pack("Tezos_embedded_raw_protocol_demo", [
+        "proto/demo/error.ml";
+        "proto/demo/services.ml";
+        "proto/demo/main.ml";
+      ]);
+    requires =  [
+      "tezos_protocol_environment_demo";
+    ];
+  });
+end
 
-                     "node/shell/node_rpc_services.ml";
-                     "node/shell/node.ml";
-                     "node/shell/node_rpc.ml";
-                   ];
 
-                   requires = [
-                       "minutils"; "utils"; "compiler"; "proto"; "sigs";
-                     ] + more_packages;
+begin
+  opens =    [
+     "-I"; "%{utils_FULL_DST_DIR}%";
+     "-I"; "%{minutils_FULL_DST_DIR}%";
+     "-I"; "%{tezos_protocol_environment_genesis_FULL_DST_DIR}%";
+     "-open"; "Tezos_protocol_environment_genesis__Environment" ];
 
-              });
+  lib_with_opens("tezos_embedded_raw_protocol_genesis",
+  ocaml + {
+  dep = opens + ocaml_with_opens.dep;
+  bytecomp = opens + ocaml_with_opens.bytecomp;
+  asmcomp = opens + ocaml_with_opens.asmcomp;
 
-function read_sources(protocol)
-{
-  dir = "proto/" + protocol;
-  files = Sys_readdir(dir, "*.ml") + Sys_readdir(dir, "*.mli");
-  files = List.map(function(file){return dir + "/" + file;},files);
-  return files;
-}
+    files = 
+      OCaml.pack("Tezos_embedded_raw_protocol_genesis", [
+        "proto/genesis/data.ml";
+        "proto/genesis/services.ml";
+        "proto/genesis/main.ml";
+      ]);
+    requires =  [
+      "tezos_protocol_environment_genesis";
+    ];
+  });
+end
 
-protocol_sources["alpha"] = read_sources("alpha");
-protocol_sources["demo"] = read_sources("demo");
-protocol_sources["genesis"] = read_sources("genesis");
 
-  begin
+lib_with_opens("node_shell",
+  ocaml + {
+    files = [
+         "node/shell/state.ml";
+         "node/shell/chain_traversal.ml";
+         "node/shell/chain.ml";
+         "node/shell/block_locator.ml";
+         "node/shell/distributed_db_functors.ml";
+         "node/shell/mempool.ml";
+         "node/shell/distributed_db_message.ml";
+         "node/shell/distributed_db_metadata.ml";
+         "node/shell/distributed_db.ml";
+         "node/shell/protocol_validator.ml";
+         "node/shell/block_validator.ml";
+         "node/shell/bootstrap_pipeline.ml";
+         "node/shell/peer_validator.ml";
+         "node/shell/prevalidation.ml";
+         "node/shell/prevalidator.ml";
+         "node/shell/net_validator.ml";
+         "node/shell/node_rpc_services.ml";
+         "node/shell/validator.ml";
+         "node/shell/node.ml";
+         "node/shell/node_rpc.ml";
+    ];
+    requires = [
+       "minutils"; "utils"; "proto"; "sigs"; "node_net"; "node_updater";
+    ];
+    });
 
-    compiler =
-      "%{tezos-protocol-compiler_FULL_DST_DIR}%/tezos-protocol-compiler.asm";
 
-    function compile(lib, dir, sources){
+lib_with_alias(
+      "tezos_embedded_protocol_genesis",
+      ocaml_with_opens,
+      {
+        modname = "Tezos_embedded_protocol_genesis";
+        subdir = "proto/genesis";
 
-      return OCaml.make([
-                   "proto/" + lib + ".o";
-                   "proto/" + lib + ".cmi";
-                   "proto/" + lib + ".cmx";
-                  ],
-                  [ compiler ] + sources,
-                  [
-                    [
-                      compiler; "-static";
-                      "-bin-annot"; "-g";
-                      "proto/"+lib;
-                      dir;
-                    ]
-                  ]
-      );
-    }
+           mlis = [
+           ];
+           mls = [
+             "registerer.ml", "Registerer";
+           ];
+           requires = utils_packages + [
+                   "envs";   "tezos_embedded_raw_protocol_genesis";
+                    "sigs"; "node_updater"; "node_shell"; ];
+      }
+   );
 
-  function embedded_proto(name){
-    env.build_rules = List.flatten([
-      compile("tezos_embedded_protocol_" + name, "proto/" + name,
-              protocol_sources[name]);
-    ]);
-    env.requires = [ "tezos-protocol-compiler" ];
-    env.tolink = true;
-    env.asm_targets = [ "proto/tezos_embedded_protocol_" + name + ".cmx" ];
-    env.byte_targets = [ "proto/tezos_embedded_protocol_" + name + ".cma" ];
-    env.intf_targets = [ "proto/tezos_embedded_protocol_" + name + ".cmi";
-                         "proto/tezos_embedded_protocol_" + name + ".cmx";
-                       ];
+lib_with_alias(
+      "tezos_embedded_protocol_demo",
+      ocaml_with_opens,
+      {
+        modname = "Tezos_embedded_protocol_demo";
+        subdir = "proto/demo";
 
-    OCaml.rules("tezos_embedded_protocol_" + name, env);
-  }
+           mlis = [
+           ];
+           mls = [
+             "registerer.ml", "Registerer";
+           ];
+           requires = utils_packages + [ "envs";
+                    "tezos_embedded_raw_protocol_demo";
+                    "sigs"; "node_updater"; "node_shell"; ];
+      }
+   );
 
-      embedded_proto("alpha");
-      embedded_proto("demo");
-      embedded_proto("genesis");
 
-  end
+lib_with_opens("node_main_lib",
+  ocaml + {
+    files = [
+        "node/main/node_data_version.ml";
+        "node/main/node_config_file.ml";
+        "node/main/node_shared_arg.ml";
+        "node/main/node_config_command.ml";
+        "node/main/node_identity_file.ml";
+        "node/main/node_identity_command.ml";
+        "node/main/node_run_command.ml";
+
+    ];
+    requires = [ "node_shell";
+
+    ];
+  });
+
+lib_with_opens("client_lib",
+  ocaml + {
+    files = [
+        "client/client_rpcs.ml";
+        "client/client_commands.ml";
+        "client/client_aliases.ml";
+        "client/client_config.ml";
+        "client/client_node_rpcs.ml";
+        "client/client_generic_rpcs.ml";
+        "client/client_helpers.ml";
+        "client/client_keys.ml";
+        "client/client_network.ml";
+        "client/client_protocols.ml";
+        "client/client_tags.ml";
+    ];
+    requires = [ "node_shell";
+
+    ];
+  });
+
+begin
+  opens =    [
+     "-I"; "%{utils_FULL_DST_DIR}%";
+     "-I"; "%{minutils_FULL_DST_DIR}%";
+     "-open"; "Tezos_protocol_environment_genesis";
+     "-open"; "Tezos_embedded_raw_protocol_genesis";
+     ];
+
+
+  ocaml = ocaml + {
+  dep = ocaml_with_opens.dep + opens;
+  bytecomp = ocaml_with_opens.bytecomp + opens;
+  asmcomp = ocaml_with_opens.asmcomp + opens;
+  };
+  lib_with_alias(
+      "client_embedded_genesis",
+      ocaml,
+      {
+        modname = "Client_embedded_genesis";
+        subdir = "client/embedded/genesis";
+
+           mlis = [
+           ];
+           mls = [
+             "client_proto_main.ml", "Client_proto_main";
+           ];
+           requires = utils_packages + [
+                    "sigs"; "node_updater"; "node_shell"; "client_lib";
+                         "tezos_embedded_raw_protocol_genesis";
+                         "tezos_embedded_raw_protocol_alpha";
+                    ];
+      }
+   );
+end
+
+
+lib_with_alias(
+      "tezos_embedded_protocol_alpha",
+      ocaml_with_opens,
+      {
+        modname = "Tezos_embedded_protocol_alpha";
+        subdir = "proto/alpha";
+
+           mlis = [
+           ];
+           mls = [
+             "registerer.ml", "Registerer";
+           ];
+           requires = utils_packages + [ "envs";
+              "tezos_embedded_raw_protocol_alpha";
+                    "sigs"; "node_updater"; "node_shell"; ];
+      }
+   );
+
 
 program_with_opens("tezos-node",
                    {
@@ -740,12 +915,6 @@ program_with_opens("tezos-node",
                      asmlink = [ "-linkall"; "-g" ];
                      bytelink = [ "-linkall"; "-g" ];
                      files = [
-                         "node/main/node_identity_file.ml";
-                         "node/main/node_config_file.ml";
-                         "node/main/node_shared_arg.ml";
-                         "node/main/node_run_command.ml";
-                         "node/main/node_config_command.ml";
-                         "node/main/node_identity_command.ml";
                          "node_main.ml";
                        ];
                      requires = [
@@ -753,166 +922,65 @@ program_with_opens("tezos-node",
                          "tezos_embedded_protocol_demo";
                          "tezos_embedded_protocol_genesis";
 
-                         "minutils"; "utils"; "compiler"; "node";
+                         "minutils"; "utils"; "node_main_lib";
                        ] + more_packages;
                   });
 
+begin
+  opens =    [
+     "-I"; "%{utils_FULL_DST_DIR}%";
+     "-I"; "%{minutils_FULL_DST_DIR}%";
+     "-I"; "%{tezos_protocol_environment_alpha_FULL_DST_DIR}%";
+     "-open"; "Tezos_protocol_environment_alpha";
+     "-I"; "%{tezos_embedded_raw_protocol_alpha_FULL_DST_DIR}%";
+     "-open"; "Tezos_embedded_raw_protocol_alpha";
+     "-open"; "Tezos_context";
+     ];
+  ocaml = ocaml + {
+  dep = ocaml_with_opens.dep + opens;
+  bytecomp = ocaml_with_opens.bytecomp + opens;
+  asmcomp = ocaml_with_opens.asmcomp + opens;
+  };
+   
+lib_with_opens(
+        "client_embedded_alpha",
+        ocaml + {
+          files =
+            OCaml.pack("Client_embedded_alpha", [
+          
+            "client/embedded/alpha/client_proto_rpcs.ml";
+            "client/embedded/alpha/client_baking_blocks.ml";
+            "client/embedded/alpha/client_baking_operations.ml";
+            "client/embedded/alpha/client_baking_denunciation.ml";
+            "client/embedded/alpha/client_baking_endorsement.ml";
+            "client/embedded/alpha/client_baking_revelation.ml";
+            "client/embedded/alpha/client_proto_nonces.ml";
+            "client/embedded/alpha/client_baking_forge.ml";
+            "client/embedded/alpha/client_baking_daemon.ml";
+            "client/embedded/alpha/client_proto_args.ml";
+            "client/embedded/alpha/client_proto_contracts.ml";
+            "client/embedded/alpha/michelson_macros.ml";
+            "client/embedded/alpha/michelson_v1_parser.ml";
+            "client/embedded/alpha/michelson_v1_printer.ml";
+            "client/embedded/alpha/michelson_v1_error_reporter.ml";
+            "client/embedded/alpha/michelson_v1_emacs.ml";
+            "client/embedded/alpha/client_proto_programs.ml";
+            "client/embedded/alpha/client_proto_context.ml";
+            "client/embedded/alpha/client_proto_main.ml";
+            "client/embedded/alpha/client_baking_main.ml";
+            "client/embedded/alpha/script_located_ir.ml";
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-lib_with_opens("client", {
-
-                 subdir = "client";
-                 requires = basic_packages + utils_packages + [ "node" ];
-                 files = [
-                     "client_rpcs.ml";
-                     "client_node_rpcs.ml";
-                     "client_commands.ml";
-                     "client_config.ml";
-                     "client_generic_rpcs.ml";
-                     "client_helpers.ml";
-                     "client_aliases.ml";
-                     "client_tags.ml";
-                     "client_keys.ml";
-                     "client_protocols.ml";
-                     "client_network.ml";
-                   ];
-               });
-
-
-
-function client_objects(proto, o){
-
-
-  base_opens = [];
-
-  more_opens = [
-    "-open"; "Client_proto_" + proto;
-    "-open"; "Error_monad";
-    "-open"; "Hash";
-    "-open"; "Tezos_data"
-  ] + o.opens;
-
-  ocaml.subdir = "client/embedded/" + proto;
-  ocaml.more_deps =
-  [ "%{tezos_embedded_protocol_" + proto + "_FULL_SRC_DIR}%/proto/tezos_embedded_protocol_" + proto + ".cmx"; ];
-
-  requires = [ "utils"; "minutils"; "node"; "client"; "lwt"; "zarith";
-             "ocplib-json-typed"; "sodium"; "sigs"; "ocplib-endian"; "uri"];
-  includes =
-    List.flatten(
-      List.map(function(dep){
-        return ["-I"; DSTDIR(dep) ];
-      }, requires));
-
-  compflags += [ "-I"; "%{tezos_embedded_protocol_" + proto + "_FULL_SRC_DIR}%/proto" ] + includes;
-
-  packed_files =
-    [
-      "client_proto_" + proto + ".ml", {
-        dep = base_opens;
-        asmcomp = compflags + base_opens;
-        bytecomp = compflags + base_opens;
-      };
-    ] + List.map(function(file){
-                             return file, {
-                               dep = more_opens;
-                               asmcomp = compflags + more_opens;
-                               bytecomp = compflags + more_opens;
-                             };
-                           },o.packed_files);
-
-  ocaml.dep = more_opens;
-  ocaml.asmcomp = compflags;
-  ocaml.bytecomp = compflags;
-
-
-  ocaml.files = OCaml.pack("Client_" + proto, packed_files);
-  ocaml.requires = o.requires;
-  OCaml.objects("client_" + proto, ocaml);
-}
-
-
-
-client_objects("genesis", {
-                 opens = [];
-                 packed_files = [
-                   "client_proto_main.ml";
-                 ];
-                 requires = [
-                     "client"; "client_alpha";
-                     "tezos_embedded_protocol_alpha", { tolink = true; };
-                     "tezos_embedded_protocol_genesis", { tolink = true; };
-                   ];
-
-              });
-
-
-(* "client_alpha": specific part of the client to interact with
-   the "alpha" protocol. *)
-client_objects("alpha", {
-                 opens = [
-
-                   "-open"; "Error_monad"; "-open"; "Hash";  "-open"; "Tezos_data";
-                   "-open"; "Tezos_context";
-];
-                 packed_files = [
-                     "script_located_ir.ml";
-                     "michelson_macros.ml";
-                     "michelson_parser.ml";
-                     "client_proto_rpcs.ml";
-                     "client_proto_args.ml";
-                     "client_proto_contracts.ml";
-                     "client_proto_programs.ml";
-                     ] + liquidity_files + [
-                     "client_proto_context.ml";
-                     "client_proto_nonces.ml";
-                     "client_proto_main.ml";
-                     "baker/client_mining_blocks.ml";
-                     "baker/client_mining_operations.ml";
-                     "baker/client_mining_endorsement.ml";
-                     "baker/client_mining_denunciation.ml";
-                     "baker/client_mining_revelation.ml";
-                     "baker/client_mining_forge.ml";
-                     "baker/client_mining_daemon.ml";
-                     "baker/client_mining_main.ml";
-                   ];
-                 requires = [
-                     "tezos_embedded_protocol_alpha"; "node"; "client";
-                   ];
-               });
-
-client_objects("demo", {
-                 opens = [];
-                 packed_files = [
-                     "client_proto_rpcs.ml";
-                     "client_proto_main.ml";
-                   ];
-                 requires = [
-                     "tezos_embedded_protocol_demo"; "client"
-                   ];
-               });
-
+          ]);
+          requires = more_packages + [
+           "tezos_protocol_environment_alpha";
+            "tezos_embedded_raw_protocol_alpha";
+            "client_lib";
+          ];
+        
+        }
+);
+end
 
 program_with_opens("tezos-client", {
                      has_byte = false;
@@ -922,62 +990,28 @@ program_with_opens("tezos-client", {
                          "client_main.ml";
                        ];
                      requires = [
-                         "tezos_embedded_protocol_alpha", { tolink = true };
-                         "tezos_embedded_protocol_demo", { tolink = true };
-                         "tezos_embedded_protocol_genesis", { tolink = true };
-                         "client_alpha"; "client_demo"; "client_genesis";
-                         "minutils"; "utils"; "compiler"; "node"; "client";
+                         "tezos_embedded_protocol_alpha";
+                         "tezos_embedded_protocol_demo";
+                         "tezos_embedded_protocol_genesis";
+                         "minutils"; "utils"; "client_lib";
+                         "sigs";
+"micheline";
+"tezos_protocol_compiler";
+"node_db";
+"node_net";
+"node_updater";
+"node_shell";
+"tezos_protocol_environment_genesis";
+"tezos_embedded_raw_protocol_genesis";
+"tezos_embedded_protocol_genesis";
+"tezos_protocol_environment_alpha";
+"client_lib";
+"tezos_embedded_raw_protocol_alpha";
+"tezos_embedded_protocol_alpha";
+"client_embedded_genesis";
+"client_embedded_alpha";
+
                        ] + more_packages;
                    });
-
-
-*)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
