@@ -703,6 +703,8 @@ and typecheck_prim2 env prim loc args =
      Toption (Ttuple [Tint; Tnat])
   | Prim_ediv, [ Ttez; Tnat ] ->
      Toption (Ttuple [Ttez; Ttez])
+  | Prim_ediv, [ Ttez; Ttez ] ->
+     Toption (Ttuple [Tnat; Ttez])
 
   | Prim_xor, [ Tbool; Tbool ] -> Tbool
   | Prim_or, [ Tbool; Tbool ] -> Tbool
