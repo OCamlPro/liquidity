@@ -55,6 +55,8 @@ OCaml.library("michelson-base",
      pp = [ "ocp-pp" ];
      files = [
         pp_minutils("compare.ml");
+        pp_minutils("mBytes.ml");
+        pp_minutils("hex_encode.ml");
         pp_minutils("data_encoding.ml");
         pp_utils("error_monad_sig.ml");
         pp_utils("error_monad.ml");
@@ -64,6 +66,7 @@ OCaml.library("michelson-base",
               "zarith";
               "ocplib-json-typed.bson"; (* data_encoding *)
               "ocplib-endian";     (* data_encoding *)
+              "ocplib-endian.bigstring";
               "calendar";
      ];
    });
@@ -161,6 +164,7 @@ OCaml.library("michelson", ocaml + {
               "zarith";
               "ocplib-json-typed.bson"; (* data_encoding *)
               "ocplib-endian";     (* data_encoding *)
+              "ocplib-endian.bigstring";
               "calendar";
 
      ];

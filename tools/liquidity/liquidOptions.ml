@@ -29,4 +29,4 @@ let source = ref (None : string option)
 let amount = ref "0"
 let fee = ref "5"
 
-(* let private_key = ref (None : string option) *)
+let private_key = ref (None : string option)
