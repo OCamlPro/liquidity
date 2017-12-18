@@ -43,6 +43,7 @@ let comparable_ty ty1 ty2 =
   | Ttez, Ttez
   | Ttimestamp, Ttimestamp
   | Tstring, Tstring
+  | Tbool, Tbool
   | Tkey_hash, Tkey_hash -> true
   | _ -> false
 
