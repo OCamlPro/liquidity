@@ -10,6 +10,5 @@
 type env = unit
 type expr = LiquidTypes.michelson_exp
 type contract = LiquidTypes.michelson_exp LiquidTypes.contract
-type hash
 type json
 let empty_env _ = ()

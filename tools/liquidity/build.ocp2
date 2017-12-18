@@ -118,7 +118,6 @@ OCaml.library("ocplib-liquidity-with-tezos",
      requires = [
         "ocplib-liquidity";
         "michelson";
-        "ocplib-json";
         "ocplib-file";
      ];
    });
@@ -138,13 +137,12 @@ OCaml.library("ocplib-liquidity-deploy",
 
 OCaml.program("liquidity",
    ocaml + {
+     bytelink = ["-cclib"; "-lsodium_stubs -lsodium -lnocrypto_stubs"];
      files = [
        "liquidMain.ml";
      ];
      requires = [
-        "ocplib-dot";
         "ocplib-liquidity-deploy";
-        "ocplib-file";
      ];
    });
 }
@@ -158,7 +156,6 @@ OCaml.library("ocplib-liquidity-without-tezos",
      ];
      requires = [
         "ocplib-liquidity";
-        "ocplib-json";
      ];
    });
 
@@ -179,7 +176,6 @@ OCaml.program("liquidity-mini",
        "liquidMain.ml";
      ];
      requires = [
-       "ocplib-dot";
        "ocplib-liquidity-deploy-without-tezos";
        "ocplib-liquidity-without-tezos";
        "ocplib-liquidity-ocaml";

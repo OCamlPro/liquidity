@@ -113,7 +113,7 @@ let compile_liquid_file filename =
 
 
 let compile_tezos_file filename =
-  let code, contract_hash, env = LiquidToTezos.read_tezos_file filename in
+  let code, env = LiquidToTezos.read_tezos_file filename in
 
   let c, annoted_tz = LiquidFromTezos.convert_contract env code in
   let c = LiquidClean.clean_contract c in
@@ -211,6 +211,14 @@ module Data = struct
     Printf.eprintf "Raw operation:\n--------------\n%!";
     Printf.printf "%s\n%!" op
 
+  let deploy () =
+    let op_h, contract_id =
+      LiquidDeploy.deploy
+        (LiquidDeploy.From_file !contract) (List.rev !init_inputs)
+    in
+    Printf.printf "New contract %s deployed in operation %s\n%!"
+      contract_id op_h
+
 end
 
 let parse_tez_to_string expl amount =
@@ -270,7 +278,10 @@ let main () =
       "--source", Arg.String (fun s -> LiquidOptions.source := Some s),
       "<tz1...> Set the source for deploying or running a contract (default: none)";
 
-      "--tezos-node", Arg.String (fun s -> LiquidOptions.source := Some s),
+      "--private-key", Arg.String (fun s -> LiquidOptions.private_key := Some s),
+      "<edsk...> Set the private key for deploying a contract (default: none)";
+
+      "--tezos-node", Arg.String (fun s -> LiquidOptions.tezos_node := s),
       "<addr:port> Set the address and port of a Tezos node to run or deploy \
        contracts (default: 127.0.0.1:8732)";
 
@@ -292,6 +303,15 @@ let main () =
             Data.forge_deploy ());
       ],
       "FILE.liq INPUT1 INPUT2 ... Forge deployment operation for contract";
+
+      "--deploy", Arg.Tuple [
+        Arg.String (fun s -> Data.contract := s);
+        Arg.Rest Data.register_deploy_input;
+        Arg.Unit (fun () ->
+            work_done := true;
+            Data.deploy ());
+      ],
+      "FILE.liq INPUT1 INPUT2 ... Deploy contract";
 
       "--data", Arg.Tuple [
         Arg.String (fun s -> Data.contract := s);

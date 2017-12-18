@@ -301,11 +301,10 @@ let const_of_ezjson ezj =
 
 let read_tezos_file filename =
   let s = FileString.read_file filename in
-  let contract_hash = Hash.Operation_hash.hash_bytes [s] in
   match LiquidFromTezos.contract_of_string filename s with
   | Some (code, loc_table) ->
      Printf.eprintf "Program %S parsed\n%!" filename;
-     code, contract_hash, loc_table
+     code, loc_table
   | None ->
      Printf.eprintf "Errors parsing in %S\n%!" filename;
      exit 2

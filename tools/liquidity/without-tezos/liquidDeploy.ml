@@ -17,3 +17,6 @@ let run _ _ _ =
 
 let forge_deploy _ _ =
   failwith "mini version cannot deploy"
+
+let deploy _ _ =
+  failwith "mini version cannot deploy"

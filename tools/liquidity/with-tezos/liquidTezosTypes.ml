@@ -24,6 +24,4 @@ let empty_env filename = {
 }
 
 
-type hash = Hash.Operation_hash.t
-
 type json = Data_encoding.json

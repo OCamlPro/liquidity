@@ -193,18 +193,39 @@ let get_counter source =
     raise_request_error r "get_counter"
 
 
-let get_head () =
+let get_head_hash () =
   let r = request "/blocks/head" |> Ezjsonm.from_string in
   try
     Ezjsonm.find r ["hash"] |> Ezjsonm.get_string
   with Not_found ->
+    raise_request_error r "get_head_hash"
+
+type head = {
+  head_hash : string;
+  head_netId : string;
+}
+
+let get_head () =
+  let r = request "/blocks/head" |> Ezjsonm.from_string in
+  try
+    let head_hash = Ezjsonm.find r ["hash"] |> Ezjsonm.get_string in
+    let head_netId = Ezjsonm.find r ["net_id"] |> Ezjsonm.get_string in
+    { head_hash; head_netId }
+  with Not_found ->
     raise_request_error r "get_head"
 
+let get_predecessor () =
+  let r = request "/blocks/prevalidation/predecessor" |> Ezjsonm.from_string in
+  try
+    Ezjsonm.find r ["predecessor"] |> Ezjsonm.get_string
+  with Not_found ->
+    raise_request_error r "get_predecessor"
 
-let forge_deploy liquid init_params_strings =
-  let source = match !LiquidOptions.source with
-    | None -> raise (RequestError "get_counter: Missing source")
-    | Some source -> source
+
+let forge_deploy ?head ?source liquid init_params_strings =
+  let source = match source, !LiquidOptions.source with
+    | Some source, _ | _, Some source -> source
+    | None, None -> raise (RequestError "get_counter: Missing source")
   in
   let env, syntax_ast, pre_michelson, pre_init_infos = compile_liquid liquid in
   let pre_init, init_infos = match pre_init_infos with
@@ -243,8 +264,11 @@ let forge_deploy liquid init_params_strings =
       LiquidEncode.encode_const env syntax_ast eval_init_result
   in
 
-  let head = get_head () in
-  let counter = get_counter source in
+  let head = match head with
+    | Some head -> head
+    | None -> get_head_hash ()
+  in
+  let counter = get_counter source + 1 in
   let c = LiquidToTezos.convert_contract ~expand:true pre_michelson in
   let init_storage_m = LiquidToTezos.convert_const init_storage in
   let contract_json = LiquidToTezos.json_of_contract c in
@@ -280,3 +304,68 @@ let forge_deploy liquid init_params_strings =
     Ezjsonm.find r ["ok"; "operation"] |> Ezjsonm.get_string
   with Not_found ->
     raise_request_error r "forge_deploy"
+
+
+let deploy liquid init_params_strings =
+  let sk = match !LiquidOptions.private_key with
+    | None -> raise (RequestError "deploy: Missing private key")
+    | Some sk -> match Ed25519.Secret_key.of_b58check sk with
+      | Ok sk -> sk
+      | Error _ -> raise (RequestError "deploy: Bad private key")
+  in
+  let head = get_head () in
+  let pred = get_predecessor () in
+  let op =
+    forge_deploy ~head:head.head_hash liquid init_params_strings
+  in
+  let op_b = MBytes.of_string (Hex_encode.hex_decode op) in
+  let signature_b = Ed25519.sign sk op_b in
+  let signature = Ed25519.Signature.to_b58check signature_b in
+  let signed_op_b = MBytes.concat op_b signature_b in
+  let signed_op = Hex_encode.hex_encode (MBytes.to_string signed_op_b) in
+  let op_hash = Hash.Operation_hash.to_b58check @@
+    Hash.Operation_hash.hash_bytes [ signed_op_b ] in
+
+  let contract_id =
+    let data = [
+      "pred_block", Printf.sprintf "%S" pred;
+      "operation_hash", Printf.sprintf "%S" op_hash;
+      "forged_operation", Printf.sprintf "%S" op;
+      "signature", Printf.sprintf "%S" signature;
+    ] |> mk_json_obj
+    in
+    let r =
+      request ~data "/blocks/prevalidation/proto/helpers/apply_operation"
+      |> Ezjsonm.from_string
+    in
+    try
+      Ezjsonm.find r ["ok"; "contracts"] |> Ezjsonm.get_list Ezjsonm.get_string
+      |> function [c] -> c | _ -> raise Not_found
+    with Not_found ->
+      raise_request_error r "deploy (apply_operation)"
+  in
+
+  let injected_op_hash =
+    let data = [
+      "signedOperationContents", Printf.sprintf "%S" signed_op;
+      "net_id", Printf.sprintf "%S" head.head_netId;
+      "force", "true";
+    ] |> mk_json_obj
+    in
+    let r =
+      request ~data "/inject_operation"
+      |> Ezjsonm.from_string
+    in
+    try
+      Ezjsonm.find r ["ok"; "injectedOperation"] |> Ezjsonm.get_string
+    with Not_found ->
+      raise_request_error r "deploy (inject_operation)"
+  in
+  assert (injected_op_hash = op_hash);
+
+  (injected_op_hash, contract_id)
+
+
+(* Withoud optional argument head *)
+let forge_deploy liquid init_params_strings =
+  forge_deploy liquid init_params_strings

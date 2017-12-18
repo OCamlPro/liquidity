@@ -14,3 +14,5 @@ PKG ocplib-json-typed
 PKG omd
 PKG menhir
 PKG curl
+PKG sodium
+PKG nocrypto
