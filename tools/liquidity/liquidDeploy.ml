@@ -127,7 +127,7 @@ let mk_json_obj fields =
 let mk_json_arr l = "[" ^ String.concat "," l ^ "]"
 
 
-let run_pre env syntax_contract pre_michelson input storage =
+let run_pre env syntax_contract pre_michelson source input storage =
   let c = LiquidToTezos.convert_contract ~expand:true pre_michelson in
   let input_m = LiquidToTezos.convert_const input in
   let storage_m = LiquidToTezos.convert_const storage in
@@ -139,7 +139,7 @@ let run_pre env syntax_contract pre_michelson input storage =
       "input", input_json;
       "storage", storage_json;
       "amount", !LiquidOptions.amount;
-  ] @ (match !LiquidOptions.source with
+  ] @ (match source with
       | None -> []
       | Some source -> ["contract", Printf.sprintf "%S" source]
     )
@@ -177,7 +177,7 @@ let run liquid input_string storage_string =
     LiquidData.translate { env with filename = "storage" }
       syntax_ast storage_string pre_michelson.storage
   in
-  run_pre env syntax_ast pre_michelson input storage
+  run_pre env syntax_ast pre_michelson !LiquidOptions.source input storage
 
 
 let get_counter source =
@@ -222,6 +222,35 @@ let get_predecessor () =
     raise_request_error r "get_predecessor"
 
 
+let get_public_key_hash_from_secret_key sk =
+  let exception Found of string in
+  let pk =
+    sk
+    |> Sodium.Sign.secret_key_to_public_key
+    |> Ed25519.Public_key.to_b58check
+  in
+  let r =
+    request "/blocks/prevalidation/proto/context/keys"
+    |> Ezjsonm.from_string in
+  try
+    Ezjsonm.find r ["ok"] |> Ezjsonm.get_list (fun hp ->
+        let fpk = Ezjsonm.find hp ["public_key"] |> Ezjsonm.get_string in
+        if fpk = pk then
+          let pkh = Ezjsonm.find hp ["hash"] |> Ezjsonm.get_string in
+          raise (Found pkh)
+        else
+          ()
+      ) |> ignore;
+    raise Not_found
+  with
+  | Found pkh ->
+    Printf.eprintf "Found public key hash: %s\n%!" pkh;
+    pkh
+  | Not_found ->
+    raise_request_error r "No known public key matching given private key"
+
+
+
 let forge_deploy ?head ?source liquid init_params_strings =
   let source = match source, !LiquidOptions.source with
     | Some source, _ | _, Some source -> source
@@ -255,7 +284,7 @@ let forge_deploy ?head ?source liquid init_params_strings =
       let eval_init_storage = CUnit in
       let eval_init_input = CTuple init_params in
       let eval_init_result, _ =
-        run_pre env syntax_c c eval_init_input eval_init_storage
+        run_pre env syntax_c c (Some source) eval_init_input eval_init_storage
       in
       Printf.eprintf "Evaluated initial storage:\n\
                       --------------------------\n\
@@ -313,10 +342,14 @@ let deploy liquid init_params_strings =
       | Ok sk -> sk
       | Error _ -> raise (RequestError "deploy: Bad private key")
   in
+  let source = match !LiquidOptions.source with
+    | Some source -> source
+    | None -> get_public_key_hash_from_secret_key sk
+  in
   let head = get_head () in
   let pred = get_predecessor () in
   let op =
-    forge_deploy ~head:head.head_hash liquid init_params_strings
+    forge_deploy ~head:head.head_hash ~source liquid init_params_strings
   in
   let op_b = MBytes.of_string (Hex_encode.hex_decode op) in
   let signature_b = Ed25519.sign sk op_b in
