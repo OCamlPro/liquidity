@@ -20,3 +20,12 @@ let forge_deploy _ _ =
 
 let deploy _ _ =
   failwith "mini version cannot deploy"
+
+let get_storage _ _ =
+  failwith "mini version cannot query node"
+
+let forge_call _ _ _ =
+  failwith "mini version cannot call"
+
+let call _ _ _ =
+  failwith "mini version cannot call"

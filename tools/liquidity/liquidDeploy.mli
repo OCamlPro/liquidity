@@ -24,3 +24,13 @@ val forge_deploy : from -> string list -> string
 (** Deploy a Liquidity contract on the Tezos node specified in
    ![LiquidOptions], returns the operation hash and the contract address *)
 val deploy : from -> string list -> string * string
+
+val get_storage : from -> string -> LiquidTypes.const
+
+(** Forge an operation to call a deploy contract, returns the hex-encoded
+   operation *)
+val forge_call : from -> string -> string -> string
+
+(** Calls a deployed Liquidity contract on the Tezos node specified in
+   ![LiquidOptions], returns the operation hash *)
+val call : from -> string -> string -> string

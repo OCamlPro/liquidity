@@ -175,6 +175,8 @@ module Data = struct
   let parameter = ref ""
   let storage = ref ""
 
+  let contract_address = ref ""
+
   let translate () =
     let filename = !contract in
     let contract = FileString.read_file filename in
@@ -218,6 +220,24 @@ module Data = struct
     in
     Printf.printf "New contract %s deployed in operation %s\n%!"
       contract_id op_h
+
+  let get_storage () =
+    let r_storage =
+      LiquidDeploy.get_storage (LiquidDeploy.From_file !contract)
+        !contract_address
+    in
+    Printf.printf "%s\n%!"
+      (LiquidPrinter.Liquid.string_of_const r_storage)
+
+  let call () =
+    let op_h =
+      LiquidDeploy.call
+        (LiquidDeploy.From_file !contract)
+        !contract_address
+        !parameter
+    in
+    Printf.printf "Successful call to contract %s (at %s) in operation %s\n%!"
+      !contract !contract_address op_h
 
 end
 
@@ -312,6 +332,25 @@ let main () =
             Data.deploy ());
       ],
       "FILE.liq INPUT1 INPUT2 ... Deploy contract";
+
+      "--get-storage", Arg.Tuple [
+        Arg.String (fun s -> Data.contract := s);
+        Arg.String (fun s -> Data.contract_address := s);
+        Arg.Unit (fun () ->
+            work_done := true;
+            Data.get_storage ());
+      ],
+      "FILE.liq <TZ1...> Get deployed contract storage";
+
+      "--call", Arg.Tuple [
+        Arg.String (fun s -> Data.contract := s);
+        Arg.String (fun s -> Data.contract_address := s);
+        Arg.String (fun s -> Data.parameter := s);
+        Arg.Unit (fun () ->
+            work_done := true;
+            Data.call ());
+      ],
+      "FILE.liq <TZ1...> PARAMETER Call deployed contract";
 
       "--data", Arg.Tuple [
         Arg.String (fun s -> Data.contract := s);
