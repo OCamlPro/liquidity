@@ -171,11 +171,11 @@ let run liquid input_string storage_string =
   let env, syntax_ast, pre_michelson, _ = compile_liquid liquid in
   let input =
     LiquidData.translate { env with filename = "input" }
-      syntax_ast input_string pre_michelson.parameter
+      syntax_ast input_string syntax_ast.parameter
   in
   let storage =
     LiquidData.translate { env with filename = "storage" }
-      syntax_ast storage_string pre_michelson.storage
+      syntax_ast storage_string syntax_ast.storage
   in
   run_pre env syntax_ast pre_michelson !LiquidOptions.source input storage
 
@@ -254,7 +254,7 @@ let get_public_key_hash_from_secret_key sk =
 let forge_deploy ?head ?source liquid init_params_strings =
   let source = match source, !LiquidOptions.source with
     | Some source, _ | _, Some source -> source
-    | None, None -> raise (RequestError "get_counter: Missing source")
+    | None, None -> raise (RequestError "forge_deploy: Missing source")
   in
   let env, syntax_ast, pre_michelson, pre_init_infos = compile_liquid liquid in
   let pre_init, init_infos = match pre_init_infos with
@@ -286,9 +286,7 @@ let forge_deploy ?head ?source liquid init_params_strings =
       let eval_init_result, _ =
         run_pre env syntax_c c (Some source) eval_init_input eval_init_storage
       in
-      Printf.eprintf "Evaluated initial storage:\n\
-                      --------------------------\n\
-                      %s\n%!"
+      Printf.eprintf "Evaluated initial storage: %s\n%!"
         (LiquidPrinter.Liquid.string_of_const eval_init_result);
       LiquidEncode.encode_const env syntax_ast eval_init_result
   in
@@ -335,22 +333,8 @@ let forge_deploy ?head ?source liquid init_params_strings =
     raise_request_error r "forge_deploy"
 
 
-let deploy liquid init_params_strings =
-  let sk = match !LiquidOptions.private_key with
-    | None -> raise (RequestError "deploy: Missing private key")
-    | Some sk -> match Ed25519.Secret_key.of_b58check sk with
-      | Ok sk -> sk
-      | Error _ -> raise (RequestError "deploy: Bad private key")
-  in
-  let source = match !LiquidOptions.source with
-    | Some source -> source
-    | None -> get_public_key_hash_from_secret_key sk
-  in
-  let head = get_head () in
+let inject sk netId op =
   let pred = get_predecessor () in
-  let op =
-    forge_deploy ~head:head.head_hash ~source liquid init_params_strings
-  in
   let op_b = MBytes.of_string (Hex_encode.hex_decode op) in
   let signature_b = Ed25519.sign sk op_b in
   let signature = Ed25519.Signature.to_b58check signature_b in
@@ -358,8 +342,7 @@ let deploy liquid init_params_strings =
   let signed_op = Hex_encode.hex_encode (MBytes.to_string signed_op_b) in
   let op_hash = Hash.Operation_hash.to_b58check @@
     Hash.Operation_hash.hash_bytes [ signed_op_b ] in
-
-  let contract_id =
+  let contracts =
     let data = [
       "pred_block", Printf.sprintf "%S" pred;
       "operation_hash", Printf.sprintf "%S" op_hash;
@@ -373,15 +356,13 @@ let deploy liquid init_params_strings =
     in
     try
       Ezjsonm.find r ["ok"; "contracts"] |> Ezjsonm.get_list Ezjsonm.get_string
-      |> function [c] -> c | _ -> raise Not_found
     with Not_found ->
-      raise_request_error r "deploy (apply_operation)"
+      raise_request_error r "inject (apply_operation)"
   in
-
   let injected_op_hash =
     let data = [
       "signedOperationContents", Printf.sprintf "%S" signed_op;
-      "net_id", Printf.sprintf "%S" head.head_netId;
+      "net_id", Printf.sprintf "%S" netId;
       "force", "true";
     ] |> mk_json_obj
     in
@@ -396,9 +377,114 @@ let deploy liquid init_params_strings =
   in
   assert (injected_op_hash = op_hash);
 
-  (injected_op_hash, contract_id)
+  (injected_op_hash, contracts)
+
+
+let deploy liquid init_params_strings =
+  let sk = match !LiquidOptions.private_key with
+    | None -> raise (RequestError "deploy: Missing private key")
+    | Some sk -> match Ed25519.Secret_key.of_b58check sk with
+      | Ok sk -> sk
+      | Error _ -> raise (RequestError "deploy: Bad private key")
+  in
+  let source = match !LiquidOptions.source with
+    | Some source -> source
+    | None -> get_public_key_hash_from_secret_key sk
+  in
+  let head = get_head () in
+  let op =
+    forge_deploy ~head:head.head_hash ~source liquid init_params_strings
+  in
+  match inject sk head.head_netId op with
+  | op_h, [c] -> op_h, c
+  | _ -> raise (RequestError "deploy (inject)")
+
+
+let get_storage liquid address =
+  let env, syntax_ast, pre_michelson, pre_init_infos = compile_liquid liquid in
+  let r =
+    request
+      (Printf.sprintf
+         "/blocks/prevalidation/proto/context/contracts/%s/storage"
+         address)
+    |> Ezjsonm.from_string
+  in
+  try
+    let storage_r = Ezjsonm.find r ["ok"] in
+    let storage_expr = LiquidToTezos.const_of_ezjson storage_r in
+    let env = LiquidTezosTypes.empty_env env.filename in
+    LiquidFromTezos.convert_const_type env storage_expr
+      syntax_ast.storage
+  with Not_found ->
+    raise_request_error r "get_storage"
+
+
+let forge_call ?head ?source liquid address parameter_string =
+  let source = match source, !LiquidOptions.source with
+    | Some source, _ | _, Some source -> source
+    | None, None -> raise (RequestError "forge_call: Missing source")
+  in
+  let env, syntax_ast, pre_michelson, pre_init_infos = compile_liquid liquid in
+  let parameter =
+    LiquidData.translate { env with filename = "parameter" }
+      syntax_ast parameter_string syntax_ast.parameter
+  in
+  let parameter_m = LiquidToTezos.convert_const parameter in
+  let parameter_json = LiquidToTezos.json_of_const parameter_m in
+  let head = match head with
+    | Some head -> head
+    | None -> get_head_hash ()
+  in
+  let counter = get_counter source + 1 in
+  let transaction_json = [
+    "kind", "\"transaction\"";
+    "amount", !LiquidOptions.amount;
+    "destination", Printf.sprintf "%S" address;
+    "parameters", parameter_json;
+  ] |> mk_json_obj
+  in
+  let data = [
+    "branch", Printf.sprintf "%S" head;
+    "source", Printf.sprintf "%S" source;
+    "fee", !LiquidOptions.fee;
+    "counter", string_of_int counter;
+    "operations", mk_json_arr [transaction_json];
+  ] |> mk_json_obj
+  in
+  let r =
+    request ~data "/blocks/prevalidation/proto/helpers/forge/operations"
+    |> Ezjsonm.from_string
+  in
+  try
+    Ezjsonm.find r ["ok"; "operation"] |> Ezjsonm.get_string
+  with Not_found ->
+    raise_request_error r "forge_call"
+
+
+let call liquid address parameter_string =
+  let sk = match !LiquidOptions.private_key with
+    | None -> raise (RequestError "call: Missing private key")
+    | Some sk -> match Ed25519.Secret_key.of_b58check sk with
+      | Ok sk -> sk
+      | Error _ -> raise (RequestError "call: Bad private key")
+  in
+  let source = match !LiquidOptions.source with
+    | Some source -> source
+    | None -> get_public_key_hash_from_secret_key sk
+  in
+  let head = get_head () in
+  let op =
+    forge_call ~head:head.head_hash ~source liquid address parameter_string
+  in
+  match inject sk head.head_netId op with
+  | op_h, [] -> op_h
+  | _ -> raise (RequestError "call (inject)")
 
 
 (* Withoud optional argument head *)
+
 let forge_deploy liquid init_params_strings =
   forge_deploy liquid init_params_strings
+
+let forge_call liquid address parameter_string =
+  forge_call liquid address parameter_string
