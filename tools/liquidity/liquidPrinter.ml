@@ -311,6 +311,51 @@ module Michelson = struct
        Printf.bprintf b "%c%s;" fmt.newline indent;
        ()
 
+(*
+  let json_annot = function
+    | Some s -> Printf.sprintf {|;"annot":%S|} ("@"^s)
+    | None -> ""
+
+  let rec bprint_code_json fmt b code =
+    match code with
+    | M_INS_ANNOT s -> () (* ignore *)
+    | M_INS (ins, name) ->
+      Printf.bprintf b {|{"prim":%S;"args":[]%s}|} ins (json_annot name)
+    | M_INS_CST (ins,ty,cst,name) ->
+      Printf.bprintf b {|{"prim":%S;"args":[|} ins;
+      bprint_type_json fmt b ty;
+      Printf.bprintf b ",";
+      bprint_const_json fmt b cst;
+      Printf.bprintf b "]%s}" (json_annot name);
+    | M_INS_EXP ("SEQ", [], [], name) ->
+      () (* ignore *)
+    | M_INS_EXP ("SEQ", [], e :: exps, name) ->
+      Printf.bprintf b "[";
+      bprint_code_json fmt b e;
+      List.iter (fun e ->
+          Printf.bprintf b ",";
+          bprint_code_json fmt b e;
+        ) exps;
+      Printf.bprintf b "]";
+    | M_INS_EXP (ins,tys, exps, name) ->
+      Printf.bprintf b {|{"prim":%S;"args":[|} ins;
+      List.iter (fun ty ->
+          bprint_type_json fmt b ty;
+          Printf.bprintf b ",";
+        ) tys;
+      (match exps with
+       | [] -> assert false;
+       | [e] -> bprint_code_json fmt b e
+       | e :: exps ->
+         bprint_code_json fmt b e;
+         List.iter (fun e ->
+             Printf.bprintf b ",";
+             bprint_code_json fmt b e;
+           ) exps;
+      );
+      Printf.bprintf b "]%s}" (json_annot name);
+      ()
+*)
 
   let bprint_contract bprint_code fmt b indent contract =
     Printf.bprintf b "parameter%c%s" fmt.newline indent;

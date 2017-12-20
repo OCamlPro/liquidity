@@ -228,8 +228,8 @@ end
       let size = Some 20
     end)
 
-  let () =
-    Base58.check_encoded_prefix Public_key_hash.b58check_encoding "tz1" 36
+  (* let () =
+   *   Base58.check_encoded_prefix Public_key_hash.b58check_encoding "tz1" 36 *)
 
   module Public_key = struct
 
@@ -273,8 +273,8 @@ end
     let param ?(name="ed25519-public") ?(desc="Ed25519 public key (b58check-encoded)") t =
       Cli_entries.(param ~name ~desc (parameter (fun _ str -> Lwt.return (of_b58check str))) t)
 
-    let () =
-      Base58.check_encoded_prefix b58check_encoding "edpk" 54
+    (* let () =
+     *   Base58.check_encoded_prefix b58check_encoding "edpk" 54 *)
 
     let encoding =
       let open Data_encoding in
@@ -335,8 +335,8 @@ end
     let param ?(name="ed25519-secret") ?(desc="Ed25519 secret key (b58check-encoded)") t =
       Cli_entries.(param ~name ~desc (parameter (fun _ str -> Lwt.return (of_b58check str))) t)
 
-    let () =
-      Base58.check_encoded_prefix b58check_encoding "edsk" 98
+    (* let () =
+     *   Base58.check_encoded_prefix b58check_encoding "edsk" 98 *)
 
     let encoding =
       let open Data_encoding in
@@ -394,8 +394,8 @@ end
     let param ?(name="signature") ?(desc="Signature (b58check-encoded)") t =
       Cli_entries.(param ~name ~desc (parameter (fun _ str -> Lwt.return (of_b58check str))) t)
 
-    let () =
-      Base58.check_encoded_prefix b58check_encoding "edsig" 99
+    (* let () =
+     *   Base58.check_encoded_prefix b58check_encoding "edsig" 99 *)
 
     let encoding =
       let open Data_encoding in
