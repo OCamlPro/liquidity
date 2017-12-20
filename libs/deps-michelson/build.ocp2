@@ -12,6 +12,37 @@ to be able to run code that was directly extracted from Tezos *)
 
 if( with_tezos ) {
 
+if( without_crypto ) {
+
+OCaml.library("michelson-deps", ocaml + {
+     files = [
+       (* "mBytes.ml"; *)
+       (* "hex_encode.ml"; *)
+       "nocrypto.ml";
+       "sodium.ml";
+
+       "utils.ml";
+(*
+       "lwt.ml";
+       "lwt_list.ml";
+       "lwt_mutex.ml";
+       "lwt_stream.ml";
+       "lwt_io.ml";
+
+       "RPC.ml";
+       "tezos_misc.ml";
+       "updater.ml";
+*)
+     ];
+     requires = [
+       "lwt";
+       (* "ocplib-endian"; *)
+       "ezjsonm";
+     ];
+});
+
+} else {
+
 OCaml.library("michelson-deps", ocaml + {
      files = [
 
@@ -35,4 +66,5 @@ OCaml.library("michelson-deps", ocaml + {
      ];
 }); 
 
+}
 }

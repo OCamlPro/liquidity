@@ -264,8 +264,6 @@ let line_of_contract c =
       (* Format.out_indent = (fun _ -> ()); *)
     } in
   Format.pp_set_formatter_out_functions ppf new_ffs;
-  Format.pp_set_max_boxes ppf 0;
-  Format.pp_set_max_indent ppf 0;
   print_program (fun _ -> None) ppf (c, []);
   let s = Format.flush_str_formatter () in
   Format.pp_set_formatter_out_functions ppf ffs;
@@ -299,8 +297,22 @@ let const_of_json j =
 let const_of_ezjson ezj =
   Data_encoding.Json.destruct const_encoding ezj
 
+(* let read_file = FileString.read_file *)
+
+let read_file filename =
+  let lines = ref [] in
+  let chan = open_in filename in
+  begin try
+    while true; do
+      lines := input_line chan :: !lines
+    done;
+    with
+      End_of_file -> close_in chan
+  end;
+  !lines |> List.rev |> String.concat "\n"
+
 let read_tezos_file filename =
-  let s = FileString.read_file filename in
+  let s = read_file filename in
   match LiquidFromTezos.contract_of_string filename s with
   | Some (code, loc_table) ->
      Printf.eprintf "Program %S parsed\n%!" filename;

@@ -19,8 +19,8 @@ module Generichash = struct
 
   module Bytes = struct
     let hash = Nocrypto.blake2b
-    let to_hash s = s
-    let of_hash s = s
+    let to_hash s = assert false
+    let of_hash s = assert false
     let update = Nocrypto.blake2b_update
   end
 
@@ -33,12 +33,12 @@ module Sign = struct
   let secret_key_size = 32
 
   module Bytes = struct
-    let of_public_key s = s
-    let to_public_key s = s
-    let of_secret_key s = s
-    let to_secret_key s = s
-    let of_signature s = s
-    let to_signature s = s
+    let of_public_key s = assert false
+    let to_public_key s = assert false
+    let of_secret_key s = assert false
+    let to_secret_key s = assert false
+    let of_signature s = assert false
+    let to_signature s = assert false
     let sign_detached _secret_key _msg = assert false
     let verify _public_key _signature _msg = assert false
   end
@@ -46,4 +46,5 @@ module Sign = struct
   type public_key = string
   let compare_public_keys _ _ = assert false
   type secret_key = string
+  let secret_key_to_public_key _ = assert false
 end
