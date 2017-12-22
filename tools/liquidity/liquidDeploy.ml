@@ -43,7 +43,7 @@ end
 
 exception RequestError of string
 
-let request ?(data="{}") path =
+let curl_request ?(data="{}") path =
   let host = !LiquidOptions.tezos_node in
   if !LiquidOptions.verbosity > 0 then
     Printf.eprintf "\nRequest to %s%s:\n--------------\n%s\n%!"
@@ -65,6 +65,8 @@ let request ?(data="{}") path =
              (Printf.sprintf "[%d] [%s] Curl exception: %s\n%!"
                 i host s))
     (* raise exn *)
+
+let request = ref curl_request
 
 
 type from =
@@ -146,7 +148,7 @@ let run_pre env syntax_contract pre_michelson source input storage =
   in
   let run_json = mk_json_obj run_fields in
   let r =
-    request ~data:run_json "/blocks/prevalidation/proto/helpers/run_code"
+    !request ~data:run_json "/blocks/prevalidation/proto/helpers/run_code"
     |> Ezjsonm.from_string
   in
   try
@@ -182,7 +184,7 @@ let run liquid input_string storage_string =
 
 let get_counter source =
   let r =
-    request
+    !request
       (Printf.sprintf "/blocks/prevalidation/proto/context/contracts/%s/counter"
          source)
     |> Ezjsonm.from_string
@@ -194,7 +196,7 @@ let get_counter source =
 
 
 let get_head_hash () =
-  let r = request "/blocks/head" |> Ezjsonm.from_string in
+  let r = !request "/blocks/head" |> Ezjsonm.from_string in
   try
     Ezjsonm.find r ["hash"] |> Ezjsonm.get_string
   with Not_found ->
@@ -206,7 +208,7 @@ type head = {
 }
 
 let get_head () =
-  let r = request "/blocks/head" |> Ezjsonm.from_string in
+  let r = !request "/blocks/head" |> Ezjsonm.from_string in
   try
     let head_hash = Ezjsonm.find r ["hash"] |> Ezjsonm.get_string in
     let head_netId = Ezjsonm.find r ["net_id"] |> Ezjsonm.get_string in
@@ -215,7 +217,7 @@ let get_head () =
     raise_request_error r "get_head"
 
 let get_predecessor () =
-  let r = request "/blocks/prevalidation/predecessor" |> Ezjsonm.from_string in
+  let r = !request "/blocks/prevalidation/predecessor" |> Ezjsonm.from_string in
   try
     Ezjsonm.find r ["predecessor"] |> Ezjsonm.get_string
   with Not_found ->
@@ -230,7 +232,7 @@ let get_public_key_hash_from_secret_key sk =
     |> Ed25519.Public_key.to_b58check
   in
   let r =
-    request "/blocks/prevalidation/proto/context/keys"
+    !request "/blocks/prevalidation/proto/context/keys"
     |> Ezjsonm.from_string in
   try
     Ezjsonm.find r ["ok"] |> Ezjsonm.get_list (fun hp ->
@@ -324,7 +326,7 @@ let forge_deploy ?head ?source liquid init_params_strings =
   ] |> mk_json_obj
   in
   let r =
-    request ~data "/blocks/prevalidation/proto/helpers/forge/operations"
+    !request ~data "/blocks/prevalidation/proto/helpers/forge/operations"
     |> Ezjsonm.from_string
   in
   try
@@ -351,7 +353,7 @@ let inject sk netId op =
     ] |> mk_json_obj
     in
     let r =
-      request ~data "/blocks/prevalidation/proto/helpers/apply_operation"
+      !request ~data "/blocks/prevalidation/proto/helpers/apply_operation"
       |> Ezjsonm.from_string
     in
     try
@@ -367,7 +369,7 @@ let inject sk netId op =
     ] |> mk_json_obj
     in
     let r =
-      request ~data "/inject_operation"
+      !request ~data "/inject_operation"
       |> Ezjsonm.from_string
     in
     try
@@ -403,7 +405,7 @@ let deploy liquid init_params_strings =
 let get_storage liquid address =
   let env, syntax_ast, pre_michelson, pre_init_infos = compile_liquid liquid in
   let r =
-    request
+    !request
       (Printf.sprintf
          "/blocks/prevalidation/proto/context/contracts/%s/storage"
          address)
@@ -452,7 +454,7 @@ let forge_call ?head ?source liquid address parameter_string =
   ] |> mk_json_obj
   in
   let r =
-    request ~data "/blocks/prevalidation/proto/helpers/forge/operations"
+    !request ~data "/blocks/prevalidation/proto/helpers/forge/operations"
     |> Ezjsonm.from_string
   in
   try

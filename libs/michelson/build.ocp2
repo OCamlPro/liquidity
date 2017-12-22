@@ -63,7 +63,6 @@ OCaml.library("michelson-base",
      ];
      requires = [
               "michelson-deps";
-              "zarith";
               "ocplib-json-typed.bson"; (* data_encoding *)
               "ocplib-endian";     (* data_encoding *)
               "ocplib-endian.bigstring";
@@ -82,7 +81,6 @@ OCaml.library("micheline", ocaml + {
      requires = [
               "michelson-deps";
               "michelson-base";
-              "zarith";
               "ocplib-json-typed.bson"; (* data_encoding *)
               "ocplib-endian";     (* data_encoding *)
               "calendar";
@@ -161,7 +159,6 @@ OCaml.library("michelson", ocaml + {
      requires = [
               "michelson-deps";
               "micheline";
-              "zarith";
               "ocplib-json-typed.bson"; (* data_encoding *)
               "ocplib-endian";     (* data_encoding *)
               "ocplib-endian.bigstring";

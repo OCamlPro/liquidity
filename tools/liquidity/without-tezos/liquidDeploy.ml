@@ -29,3 +29,6 @@ let forge_call _ _ _ =
 
 let call _ _ _ =
   failwith "mini version cannot call"
+
+let request = ref (fun ?data _ ->
+  failwith "mini version cannot request")
