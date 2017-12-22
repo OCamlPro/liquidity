@@ -20,6 +20,7 @@ OCaml.library("michelson-deps", ocaml + {
        (* "hex_encode.ml"; *)
        "nocrypto.ml";
        "sodium.ml";
+       "z.ml";
 
        "utils.ml";
 (*
@@ -35,6 +36,7 @@ OCaml.library("michelson-deps", ocaml + {
 *)
      ];
      requires = [
+       "nums";
        "lwt";
        (* "ocplib-endian"; *)
        "ezjsonm";
@@ -59,6 +61,7 @@ OCaml.library("michelson-deps", ocaml + {
         "updater.ml";
      ];
      requires = [
+       "zarith";
        "cstruct";
        "nocrypto";
        "sodium";

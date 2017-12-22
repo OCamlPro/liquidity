@@ -12,6 +12,8 @@ type from =
   | From_string of string
   | From_file of string
 
+val request : (?data:string -> string -> string) ref
+
 (** Run contract with given parameter and storage on the Tezos node specified
    in ![LiquidOptions], returns a pair containig the return value and the
    storage *)
