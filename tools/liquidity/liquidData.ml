@@ -79,4 +79,4 @@ let data_of_liq ~filename ~contract ~parameter ~storage =
       Error error
   in
   (translate "parameter" parameter contract.parameter),
-  (translate"storage" storage contract.storage)
+  (translate "storage" storage contract.storage)

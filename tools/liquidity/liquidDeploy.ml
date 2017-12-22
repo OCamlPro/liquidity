@@ -74,12 +74,14 @@ type from =
   | From_file of string
 
 let compile_liquid liquid =
-  let ocaml_ast = match liquid with
-    | From_string s -> LiquidFromOCaml.structure_of_string s
-    | From_file f -> LiquidFromOCaml.read_file f
+  let ocaml_ast, filename = match liquid with
+    | From_string s ->
+      LiquidFromOCaml.structure_of_string ~filename:"liquidity_buffer" s,
+      "liquidity_buffer"
+    | From_file f -> LiquidFromOCaml.read_file f, f
   in
   let syntax_ast, syntax_init, env =
-    LiquidFromOCaml.translate "buffer" ocaml_ast in
+    LiquidFromOCaml.translate ~filename ocaml_ast in
   let typed_ast = LiquidCheck.typecheck_contract
       ~warnings:true env syntax_ast in
   let encoded_ast, to_inline =
@@ -172,11 +174,11 @@ let run_pre env syntax_contract pre_michelson source input storage =
 let run liquid input_string storage_string =
   let env, syntax_ast, pre_michelson, _ = compile_liquid liquid in
   let input =
-    LiquidData.translate { env with filename = "input" }
+    LiquidData.translate { env with filename = "run_input" }
       syntax_ast input_string syntax_ast.parameter
   in
   let storage =
-    LiquidData.translate { env with filename = "storage" }
+    LiquidData.translate { env with filename = "run_storage" }
       syntax_ast storage_string syntax_ast.storage
   in
   run_pre env syntax_ast pre_michelson !LiquidOptions.source input storage
