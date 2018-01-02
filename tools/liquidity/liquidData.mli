@@ -9,6 +9,8 @@
 
 open LiquidTypes
 
+val default_const : datatype -> const
+
 val translate_const_exp : location -> encoded_exp -> const
 
 val data_of_liq :
