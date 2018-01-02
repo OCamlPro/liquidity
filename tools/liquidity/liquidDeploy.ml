@@ -433,7 +433,7 @@ let forge_call ?head ?source liquid address parameter_string =
   in
   let env, syntax_ast, pre_michelson, pre_init_infos = compile_liquid liquid in
   let parameter =
-    LiquidData.translate { env with filename = "parameter" }
+    LiquidData.translate { env with filename = "call_parameter" }
       syntax_ast parameter_string syntax_ast.parameter
   in
   let parameter_m = LiquidToTezos.convert_const parameter in
