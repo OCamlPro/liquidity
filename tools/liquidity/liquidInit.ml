@@ -19,17 +19,26 @@ let mk_nat i = mk (Const (Tnat, CNat (LiquidPrinter.integer_of_int i))) ()
 let tmp_contract_of_init (args, code) storage_ty =
   let return = storage_ty in
   let storage = Tunit in
-  let parameter = Ttuple (List.map (fun (_,_,ty) -> ty) args) in
   let parameter_var = mk (Var ("parameter", LiquidLoc.noloc, [])) () in
-  let code, _ = List.fold_right (fun (arg, loc, ty) (code, i) ->
-      let i = i - 1 in
-      let code = mk (
-          Let (arg, loc,
-               mk (Apply (Prim_tuple_get, loc, [parameter_var; mk_nat i])) (),
-               code)) ()
+  let parameter, code = match args with
+    | [] -> Tunit, code
+    | [arg, loc, ty] ->
+      let code = mk (Let (arg, loc, parameter_var, code)) () in
+      ty, code
+    | _ ->
+      let parameter = Ttuple (List.map (fun (_,_,ty) -> ty) args) in
+      let code, _ = List.fold_right (fun (arg, loc, ty) (code, i) ->
+          let i = i - 1 in
+          let code = mk (
+              Let (arg, loc,
+                   mk (Apply
+                         (Prim_tuple_get, loc, [parameter_var; mk_nat i])) (),
+                   code)) ()
+          in
+          (code, i)
+        ) args (code, List.length args)
       in
-      (code, i)
-    ) args (code, List.length args)
+      parameter, code
   in
   let code = mk(Apply (Prim_tuple, LiquidLoc.noloc, [code; c_unit])) () in
   { parameter; storage; return; code }
