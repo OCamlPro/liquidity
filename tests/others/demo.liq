@@ -1,5 +1,7 @@
-
 [%%version 0.13]
+
+let%init storage (myname : string) =
+  Map.add myname 0 (Map ["ocaml", 0; "pro", 0])
 
 let%entry main
   (parameter : string)
