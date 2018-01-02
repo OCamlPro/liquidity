@@ -14,6 +14,45 @@
 
 open LiquidTypes
 
+
+let rec default_const = function
+  | Tunit -> CUnit
+  | Tbool -> CBool false
+  | Tint -> CInt (LiquidPrinter.integer_of_int 0)
+  | Tnat -> CNat (LiquidPrinter.integer_of_int 0)
+  | Ttez -> CTez (LiquidPrinter.tez_of_liq "0tz")
+  | Tstring -> CString ""
+  | Ttimestamp -> CTimestamp "1970-01-01T00:00:00+00:00"
+  | Tkey -> CKey "edpkuit3FiCUhd6pmqf9ztUTdUs1isMTbF9RBGfwKk1ZrdTmeP9ypN"
+  | Tkey_hash -> CKey_hash "tz1YLtLqD1fWHthSVHPD116oYvsd4PTAHUoc"
+  | Tsignature ->
+    CSignature
+      "96c724f3eab3da9eb0002caa5456aef9a7c716e6d6d20c07f3b3659369e7dcf\
+       5b66a5a8c33dac317fba6174217140b919493acd063c3800b825890a557c39e0a"
+  | Ttuple l ->
+    CTuple (List.map default_const l)
+
+  | Toption ty -> CSome (default_const ty)
+  | Tlist ty -> CList [default_const ty]
+  | Tset ty -> CSet [default_const ty]
+
+  | Tmap (ty1, ty2) -> CMap [default_const ty1, default_const ty2]
+  | Tor (ty, _) -> CLeft (default_const ty)
+
+  | Trecord (_, fields) ->
+    CRecord (
+      List.map (fun (name, ty) ->
+          name, default_const ty) fields
+    )
+  | Tsum (_, (c, ty) :: _) ->
+    CConstr (c, default_const ty)
+
+  | Tsum (_, [])
+  | Tfail
+  | Tcontract _
+  | Tclosure _
+  | Tlambda _ -> raise Not_found
+
 let rec translate_const_exp loc (exp : encoded_exp) =
   match exp.desc with
   | Let (_, loc, _, _) ->
@@ -52,6 +91,7 @@ let rec translate_const_exp loc (exp : encoded_exp) =
   | MatchVariant (_, _, _)
     ->
     LiquidLoc.raise_error ~loc "non-constant expression"
+
 
 let translate env contract s ty =
     let ml_exp =
