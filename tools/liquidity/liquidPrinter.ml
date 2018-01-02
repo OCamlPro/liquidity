@@ -646,7 +646,7 @@ module Liquid = struct
     | CKey s -> Printf.bprintf b "%s" s
     | CKey_hash s -> Printf.bprintf b "%s" s
     | CSignature s -> Printf.bprintf b "%s" s
-    | CTez s -> Printf.bprintf b "%stz" (liq_of_tez s)
+    | CTez s -> Printf.bprintf b "%s" (liq_of_tez s)
     | CInt n -> Printf.bprintf b "%s" (liq_of_integer n)
     | CNat n -> Printf.bprintf b "%sp" (liq_of_integer n)
     | CTimestamp s -> Printf.bprintf b "%s" s
@@ -677,21 +677,23 @@ module Liquid = struct
     | CMap [] -> Printf.bprintf b "(Map [])";
     | CMap ((c1, c2) :: pairs) ->
       let indent2 = indent ^ "      " in
-      Printf.bprintf b "\n%s(Map [" indent;
+      if String.length indent > 2 then Printf.bprintf b "\n%s" indent;
+      Printf.bprintf b "(Map [";
       bprint_const b indent c1;
       Printf.bprintf b ", ";
       bprint_const b indent c2;
       List.iter (fun (c1, c2) ->
+          Printf.bprintf b ";\n%s" indent2;
           bprint_const b indent2 c1;
           Printf.bprintf b ", ";
           bprint_const b indent2 c2;
-          Printf.bprintf b ";\n%s" indent2;
         ) pairs;
       Printf.bprintf b "])";
     | CList [] -> Printf.bprintf b "[]";
     | CList (c :: csts) ->
       let indent2 = indent ^ " " in
-      Printf.bprintf b "\n%s[" indent;
+      if String.length indent > 2 then Printf.bprintf b "\n%s" indent;
+      Printf.bprintf b "[";
       bprint_const b "" c;
       List.iter (fun c ->
           Printf.bprintf b ";\n%s" indent2;
@@ -701,7 +703,8 @@ module Liquid = struct
     | CSet [] -> Printf.bprintf b "(Set [])";
     | CSet (c :: csts) ->
       let indent2 = indent ^ "      " in
-      Printf.bprintf b "\n%s(Set [" indent;
+      if String.length indent > 2 then Printf.bprintf b "\n%s" indent;
+      Printf.bprintf b "(Set [";
       bprint_const b "" c;
       List.iter (fun c ->
           Printf.bprintf b ";\n%s" indent2;
@@ -715,7 +718,8 @@ module Liquid = struct
     | CRecord labels ->
       let indent2 = indent ^ "  " in
       let indent4 = indent2 ^ "  " in
-      Printf.bprintf b "\n%s{" indent;
+      if String.length indent > 2 then Printf.bprintf b "\n%s" indent;
+      Printf.bprintf b "{";
       List.iter (fun (label, cst) ->
           Printf.bprintf b "\n%s%s = " indent2 label;
           bprint_const b indent4 cst;
