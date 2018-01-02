@@ -286,7 +286,10 @@ let forge_deploy ?head ?source liquid init_params_strings =
                ))
       in
       let eval_init_storage = CUnit in
-      let eval_init_input = CTuple init_params in
+      let eval_init_input = match init_params with
+        | [] -> CUnit
+        | [x] -> x
+        | _ -> CTuple init_params in
       let eval_init_result, _ =
         run_pre env syntax_c c (Some source) eval_init_input eval_init_storage
       in
