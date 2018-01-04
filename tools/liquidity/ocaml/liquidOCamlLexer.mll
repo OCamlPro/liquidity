@@ -348,9 +348,9 @@ let day_literal =
 let hour_literal =
   digit digit ':' digit digit ( ':' digit digit )?
 let timezone_literal =
-  digit digit ':' digit digit
+  ('+' digit digit ':' digit digit | 'Z')
 let date_literal =
-  day_literal ('T' hour_literal ('+' timezone_literal )?)?
+  day_literal ('T' hour_literal ( timezone_literal )?)?
 
 (* remove hex_float_literal and remove exponential from float. *)
 
