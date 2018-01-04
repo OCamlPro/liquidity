@@ -340,6 +340,8 @@ let key_literal =
   "edpk" base58_char* (* 54 *)
 let signature_literal =
   "edsig" base58_char* (* 99 *)
+let hex_byte_literal = ['0'-'9' 'A'-'F' 'a'-'f'] ['0'-'9' 'A'-'F' 'a'-'f']
+let hex_signature_literal = '`' hex_byte_literal+
 let digit = [ '0'-'9']
 let day_literal =
   digit digit digit digit '-' digit digit '-' digit digit
@@ -403,7 +405,8 @@ rule token = parse
             LIDENT s
           end
       }
-  | signature_literal
+  (* Disabled, tezos does not support edsig *)
+  (* | signature_literal
       {
         let s = Lexing.lexeme lexbuf in
         if String.length s = 99 then
@@ -411,6 +414,17 @@ rule token = parse
         else begin
             (* TODO warning *)
             LIDENT s
+          end
+      } *)
+  | hex_signature_literal
+      {
+        let s = Lexing.lexeme lexbuf in
+        let l = String.length s - 1 in
+        if l = 128 then
+          INT (String.sub s 1 l, Some signature_char)
+        else begin
+            (* TODO warning *)
+          INT ("0x"^String.sub s 1 l, None)
           end
       }
   | date_literal

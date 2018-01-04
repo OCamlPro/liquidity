@@ -261,7 +261,7 @@ let rec translate_const env exp =
 
   (* Signature *)
   | { pexp_desc = Pexp_constant (Pconst_integer (s, Some '\235')) } ->
-     CSignature s, Some Tkey
+     CSignature s, Some Tsignature
 
   | { pexp_desc = Pexp_constant (Pconst_string (s, None)) } ->
      CString s, Some Tstring

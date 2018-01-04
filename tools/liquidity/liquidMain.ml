@@ -197,7 +197,7 @@ module Data = struct
       LiquidDeploy.run (LiquidDeploy.From_file !contract) !parameter !storage
     in
     Printf.printf "%s\n%!"
-      (LiquidPrinter.Liquid.string_of_const (CTuple [result; r_storage]))
+      (LiquidData.string_of_const (CTuple [result; r_storage]))
 
 
   let init_inputs = ref []
@@ -227,7 +227,7 @@ module Data = struct
         !contract_address
     in
     Printf.printf "%s\n%!"
-      (LiquidPrinter.Liquid.string_of_const r_storage)
+      (LiquidData.string_of_const r_storage)
 
   let call () =
     let op_h =
@@ -293,7 +293,7 @@ let main () =
       "--fee", Arg.String (fun fee ->
           LiquidOptions.fee := parse_tez_to_string "--fee" fee
         ),
-      "<0.50tz> Set fee for deploying a contract (default: 0.5tz)";
+      "<0.05tz> Set fee for deploying a contract (default: 0.05tz)";
 
       "--source", Arg.String (fun s -> LiquidOptions.source := Some s),
       "<tz1...> Set the source for deploying or running a contract (default: none)";

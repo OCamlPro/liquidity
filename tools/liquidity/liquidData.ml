@@ -20,15 +20,15 @@ let rec default_const = function
   | Tbool -> CBool false
   | Tint -> CInt (LiquidPrinter.integer_of_int 0)
   | Tnat -> CNat (LiquidPrinter.integer_of_int 0)
-  | Ttez -> CTez (LiquidPrinter.tez_of_liq "0tz")
+  | Ttez -> CTez (LiquidPrinter.tez_of_liq "0")
   | Tstring -> CString ""
   | Ttimestamp -> CTimestamp "1970-01-01T00:00:00+00:00"
   | Tkey -> CKey "edpkuit3FiCUhd6pmqf9ztUTdUs1isMTbF9RBGfwKk1ZrdTmeP9ypN"
   | Tkey_hash -> CKey_hash "tz1YLtLqD1fWHthSVHPD116oYvsd4PTAHUoc"
   | Tsignature ->
     CSignature
-      "96c724f3eab3da9eb0002caa5456aef9a7c716e6d6d20c07f3b3659369e7dcf\
-       5b66a5a8c33dac317fba6174217140b919493acd063c3800b825890a557c39e0a"
+      "96c724f3eab3da9eb0002caa5456aef9a7c716e6d6d20c07f3b3659369e7dcf5\
+       b66a5a8c33dac317fba6174217140b919493acd063c3800b825890a557c39e0a"
   | Ttuple l ->
     CTuple (List.map default_const l)
 
@@ -120,3 +120,13 @@ let data_of_liq ~filename ~contract ~parameter ~storage =
   in
   (translate "parameter" parameter contract.parameter),
   (translate "storage" storage contract.storage)
+
+
+let string_of_const ?ty c =
+  let e = LiquidToOCaml.convert_const c in
+  let e = match ty with
+    | None -> e
+    | Some ty ->
+      Ast_helper.Exp.constraint_ e (LiquidToOCaml.convert_type ty)
+  in
+  LiquidToOCaml.string_of_expression e

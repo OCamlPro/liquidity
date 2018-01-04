@@ -21,3 +21,5 @@ val data_of_liq :
 
 val translate :
   env -> syntax_contract -> string -> datatype -> const
+
+val string_of_const : ?ty:datatype -> const -> string

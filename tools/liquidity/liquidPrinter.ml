@@ -645,8 +645,8 @@ module Liquid = struct
     | CString s -> Printf.bprintf b "%S" s
     | CKey s -> Printf.bprintf b "%s" s
     | CKey_hash s -> Printf.bprintf b "%s" s
-    | CSignature s -> Printf.bprintf b "%s" s
-    | CTez s -> Printf.bprintf b "%s" (liq_of_tez s)
+    | CSignature s -> Printf.bprintf b "`%s" s
+    | CTez s -> Printf.bprintf b "%stz" (liq_of_tez s)
     | CInt n -> Printf.bprintf b "%s" (liq_of_integer n)
     | CNat n -> Printf.bprintf b "%sp" (liq_of_integer n)
     | CTimestamp s -> Printf.bprintf b "%s" s

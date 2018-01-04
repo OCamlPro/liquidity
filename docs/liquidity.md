@@ -243,9 +243,12 @@ Strings are delimited by the characters `"` and `"`.
 Timestamps are written in ISO 8601 format, like in Michelson:
 * `2015-12-01T10:01:00+01:00`
 
-Keys, hashes, and signatures constants are the same as the ones in
-Michelson:
+Keys and hashes are base58-check encoded, the same as in Michelson:
 * `tz1YLtLqD1fWHthSVHPD116oYvsd4PTAHUoc` is a key hash
+* `edpkuit3FiCUhd6pmqf9ztUTdUs1isMTbF9RBGfwKk1ZrdTmeP9ypN` is a public key
+
+Signatures are 64 bytes long hex encoded, prefixed with a backquote:
+* ``96c724f3eab3da9eb0002caa5456aef9a7c716e6d6d20c07f3b3659369e7dcf5b66a5a8c33dac317fba6174217140b919493acd063c3800b825890a557c39e0a`
 
 There are also three types of collections: lists, sets and
 maps. Constants collections can be created directly:
