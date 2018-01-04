@@ -176,13 +176,16 @@ let rec convert_code expr =
 
   | Const (ty, cst) -> begin
       match ty with
-        Tint
+      | Tint
       | Tnat
-        | Tstring
-        | Tunit
-        | Ttimestamp
-        | Ttez
-        | Tbool -> convert_const cst
+      | Tstring
+      | Tunit
+      | Ttimestamp
+      | Ttez
+      | Tbool
+      | Tsignature
+      | Tkey
+      | Tkey_hash -> convert_const cst
       | _ ->
          Exp.constraint_ (convert_const cst) (convert_type ty)
     end
@@ -443,3 +446,5 @@ let string_of_structure = LiquidOCamlPrinter.string_of_structure
 let translate_expression = convert_code
 
 let string_of_expression = LiquidOCamlPrinter.string_of_expression
+
+let convert_type ty = convert_type ty

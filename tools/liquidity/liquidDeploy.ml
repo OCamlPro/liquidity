@@ -294,7 +294,7 @@ let forge_deploy ?head ?source liquid init_params_strings =
         run_pre env syntax_c c (Some source) eval_init_input eval_init_storage
       in
       Printf.eprintf "Evaluated initial storage: %s\n%!"
-        (LiquidPrinter.Liquid.string_of_const eval_init_result);
+        (LiquidData.string_of_const eval_init_result);
       LiquidEncode.encode_const env syntax_ast eval_init_result
   in
 
