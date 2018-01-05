@@ -16,3 +16,4 @@ PKG menhir
 PKG curl
 PKG sodium
 PKG nocrypto
+PKG lwt

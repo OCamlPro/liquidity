@@ -194,7 +194,8 @@ module Data = struct
 
   let run () =
     let result, r_storage =
-      LiquidDeploy.run (LiquidDeploy.From_file !contract) !parameter !storage
+      LiquidDeploy.Sync.run
+        (LiquidDeploy.From_file !contract) !parameter !storage
     in
     Printf.printf "%s\n%!"
       (LiquidData.string_of_const (CTuple [result; r_storage]))
@@ -207,7 +208,7 @@ module Data = struct
 
   let forge_deploy () =
     let op =
-      LiquidDeploy.forge_deploy
+      LiquidDeploy.Sync.forge_deploy
         (LiquidDeploy.From_file !contract) (List.rev !init_inputs)
     in
     Printf.eprintf "Raw operation:\n--------------\n%!";
@@ -215,7 +216,7 @@ module Data = struct
 
   let deploy () =
     let op_h, contract_id =
-      LiquidDeploy.deploy
+      LiquidDeploy.Sync.deploy
         (LiquidDeploy.From_file !contract) (List.rev !init_inputs)
     in
     Printf.printf "New contract %s deployed in operation %s\n%!"
@@ -223,7 +224,7 @@ module Data = struct
 
   let get_storage () =
     let r_storage =
-      LiquidDeploy.get_storage (LiquidDeploy.From_file !contract)
+      LiquidDeploy.Sync.get_storage (LiquidDeploy.From_file !contract)
         !contract_address
     in
     Printf.printf "%s\n%!"
@@ -231,7 +232,7 @@ module Data = struct
 
   let call () =
     let op_h =
-      LiquidDeploy.call
+      LiquidDeploy.Sync.call
         (LiquidDeploy.From_file !contract)
         !contract_address
         !parameter

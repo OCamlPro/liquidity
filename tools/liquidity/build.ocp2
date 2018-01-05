@@ -131,6 +131,7 @@ OCaml.library("ocplib-liquidity-deploy",
        "ocplib-liquidity-with-tezos";
        "ocplib-liquidity-ocaml";
        "curl";
+       "curl.lwt";
      ];
    });
 
@@ -178,7 +179,8 @@ OCaml.library("ocplib-liquidity-deploy-without-tezos",
        "without-tezos/liquidDeploy.ml";
      ];
      requires = [
-        "ocplib-liquidity";
+       "ocplib-liquidity";
+       "ocplib-fake-lwt"
      ];
    });
 

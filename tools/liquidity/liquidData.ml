@@ -22,7 +22,7 @@ let rec default_const = function
   | Tnat -> CNat (LiquidPrinter.integer_of_int 0)
   | Ttez -> CTez (LiquidPrinter.tez_of_liq "0")
   | Tstring -> CString ""
-  | Ttimestamp -> CTimestamp "1970-01-01T00:00:00+00:00"
+  | Ttimestamp -> CTimestamp "1970-01-01T00:00:00Z"
   | Tkey -> CKey "edpkuit3FiCUhd6pmqf9ztUTdUs1isMTbF9RBGfwKk1ZrdTmeP9ypN"
   | Tkey_hash -> CKey_hash "tz1YLtLqD1fWHthSVHPD116oYvsd4PTAHUoc"
   | Tsignature ->
