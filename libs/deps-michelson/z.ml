@@ -33,6 +33,6 @@ let to_bits n =
   done;
   let b = Bytes.create (List.length !l) in
   List.iteri (fun i c ->
-      b.[i] <- c
+      Bytes.set b i c
     ) (List.rev !l);
   b

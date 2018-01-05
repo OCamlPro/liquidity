@@ -12,27 +12,36 @@ type from =
   | From_string of string
   | From_file of string
 
-val request : (?data:string -> string -> string) ref
+val request : (?data:string -> string -> string Lwt.t) ref
 
-(** Run contract with given parameter and storage on the Tezos node specified
-   in ![LiquidOptions], returns a pair containig the return value and the
-   storage *)
-val run : from -> string -> string -> LiquidTypes.const * LiquidTypes.const
+module type S = sig
+  type 'a t
 
-(** Forge a deployment operation contract on the Tezos node specified in
-   ![LiquidOptions], returns the hex-encoded operation *)
-val forge_deploy : from -> string list -> string
+  (** Run contract with given parameter and storage on the Tezos node specified
+      in ![LiquidOptions], returns a pair containig the return value and the
+      storage *)
+  val run : from -> string -> string -> (LiquidTypes.const * LiquidTypes.const) t
 
-(** Deploy a Liquidity contract on the Tezos node specified in
-   ![LiquidOptions], returns the operation hash and the contract address *)
-val deploy : from -> string list -> string * string
+  (** Forge a deployment operation contract on the Tezos node specified in
+      ![LiquidOptions], returns the hex-encoded operation *)
+  val forge_deploy : from -> string list -> string t
 
-val get_storage : from -> string -> LiquidTypes.const
+  (** Deploy a Liquidity contract on the Tezos node specified in
+      ![LiquidOptions], returns the operation hash and the contract address *)
+  val deploy : from -> string list -> (string * string) t
 
-(** Forge an operation to call a deploy contract, returns the hex-encoded
-   operation *)
-val forge_call : from -> string -> string -> string
+  val get_storage : from -> string -> LiquidTypes.const t
 
-(** Calls a deployed Liquidity contract on the Tezos node specified in
-   ![LiquidOptions], returns the operation hash *)
-val call : from -> string -> string -> string
+  (** Forge an operation to call a deploy contract, returns the hex-encoded
+      operation *)
+  val forge_call : from -> string -> string -> string t
+
+  (** Calls a deployed Liquidity contract on the Tezos node specified in
+      ![LiquidOptions], returns the operation hash *)
+  val call : from -> string -> string -> string t
+
+end
+
+module Async : S with type 'a t = 'a Lwt.t
+
+module Sync : S with type 'a t = 'a

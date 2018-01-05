@@ -7,10 +7,25 @@
 (**************************************************************************)
 
 open LiquidTypes
+open Lwt
 
+exception RequestError of string
 
-module Network = struct
-  open Curl
+type from =
+  | From_string of string
+  | From_file of string
+
+module type S = sig
+  type 'a t
+  val run : from -> string -> string -> (LiquidTypes.const * LiquidTypes.const) t
+  val forge_deploy : from -> string list -> string t
+  val deploy : from -> string list -> (string * string) t
+  val get_storage : from -> string -> LiquidTypes.const t
+  val forge_call : from -> string -> string -> string t
+  val call : from -> string -> string -> string t
+end
+
+module Network_sync = struct
   let writer_callback a d =
     Buffer.add_string a d;
     String.length d
@@ -40,8 +55,40 @@ module Network = struct
     rc, (Buffer.contents r)
 end
 
+module Network = struct
+  let writer_callback a d =
+    Buffer.add_string a d;
+    String.length d
 
-exception RequestError of string
+  let initialize_connection host path =
+    let url = Printf.sprintf "%s%s" host path in
+    let r = Buffer.create 16384
+    and c = Curl.init () in
+    Curl.set_timeout c 30;      (* Timeout *)
+    Curl.set_sslverifypeer c false;
+    Curl.set_sslverifyhost c Curl.SSLVERIFYHOST_EXISTENCE;
+    Curl.set_writefunction c (writer_callback r);
+    Curl.set_tcpnodelay c true;
+    Curl.set_verbose c false;
+    Curl.set_post c false;
+    Curl.set_url c url; r,c
+
+  let post ?(content_type = "application/json") host path data =
+    let r, c = initialize_connection host path in
+    Curl.set_post c true;
+    Curl.set_httpheader c [ "Content-Type: " ^ content_type ];
+    Curl.set_postfields c data;
+    Curl.set_postfieldsize c (String.length data);
+    Curl_lwt.perform c >>= fun cc ->
+    if cc <> Curl.CURLE_OK then
+      raise (RequestError
+               (Printf.sprintf "[%d] [%s] Curl exception: %s\n%!"
+                   (Curl.errno cc) host path))
+    else
+      let rc = Curl.get_responsecode c in
+      Curl.cleanup c;
+      Lwt.return (rc, (Buffer.contents r))
+end
 
 let curl_request ?(data="{}") path =
   let host = !LiquidOptions.tezos_node in
@@ -51,7 +98,7 @@ let curl_request ?(data="{}") path =
       (* data; *)
       (Ezjsonm.to_string ~minify:false (Ezjsonm.from_string data));
   try
-    let (status, json) = Network.post host path data in
+    Network.post host path data >>= fun (status, json) ->
     if status <> 200 then
       raise (RequestError (
           Printf.sprintf "'%d' : curl failure %s%s" status host path)) ;
@@ -59,19 +106,15 @@ let curl_request ?(data="{}") path =
       Printf.eprintf "\nNode Response %d:\n------------------\n%s\n%!"
         status
         (Ezjsonm.to_string ~minify:false (Ezjsonm.from_string json));
-    json
+    return json
   with Curl.CurlException (code, i, s) (* as exn *) ->
     raise (RequestError
-             (Printf.sprintf "[%d] [%s] Curl exception: %s\n%!"
-                i host s))
-    (* raise exn *)
+                (Printf.sprintf "[%d] [%s] Curl exception: %s\n%!"
+                   i host s))
+(* raise exn *)
 
 let request = ref curl_request
 
-
-type from =
-  | From_string of string
-  | From_file of string
 
 let compile_liquid liquid =
   let ocaml_ast, filename = match liquid with
@@ -149,10 +192,9 @@ let run_pre env syntax_contract pre_michelson source input storage =
     )
   in
   let run_json = mk_json_obj run_fields in
-  let r =
-    !request ~data:run_json "/blocks/prevalidation/proto/helpers/run_code"
-    |> Ezjsonm.from_string
-  in
+  !request ~data:run_json "/blocks/prevalidation/proto/helpers/run_code"
+  >>= fun r ->
+  let r = Ezjsonm.from_string r in
   try
     let storage_r = Ezjsonm.find r ["ok"; "storage"] in
     let result_r = Ezjsonm.find r ["ok"; "output"] in
@@ -166,7 +208,7 @@ let run_pre env syntax_contract pre_michelson source input storage =
     let result =
       LiquidFromTezos.convert_const_type env result_expr syntax_contract.return
     in
-    (result, storage)
+    return (result, storage)
   with Not_found ->
     raise_request_error r "run"
 
@@ -185,22 +227,22 @@ let run liquid input_string storage_string =
 
 
 let get_counter source =
-  let r =
-    !request
+  !request
       (Printf.sprintf "/blocks/prevalidation/proto/context/contracts/%s/counter"
          source)
-    |> Ezjsonm.from_string
-  in
+  >>= fun r ->
+  let r = Ezjsonm.from_string r in
   try
-    Ezjsonm.find r ["ok"] |> Ezjsonm.get_int
+    Ezjsonm.find r ["ok"] |> Ezjsonm.get_int |> return
   with Not_found ->
     raise_request_error r "get_counter"
 
 
 let get_head_hash () =
-  let r = !request "/blocks/head" |> Ezjsonm.from_string in
+  !request "/blocks/head" >>= fun r ->
+  let r = Ezjsonm.from_string r in
   try
-    Ezjsonm.find r ["hash"] |> Ezjsonm.get_string
+    Ezjsonm.find r ["hash"] |> Ezjsonm.get_string |> return
   with Not_found ->
     raise_request_error r "get_head_hash"
 
@@ -210,18 +252,20 @@ type head = {
 }
 
 let get_head () =
-  let r = !request "/blocks/head" |> Ezjsonm.from_string in
+  !request "/blocks/head" >>= fun r ->
+  let r = Ezjsonm.from_string r in
   try
     let head_hash = Ezjsonm.find r ["hash"] |> Ezjsonm.get_string in
     let head_netId = Ezjsonm.find r ["net_id"] |> Ezjsonm.get_string in
-    { head_hash; head_netId }
+    return { head_hash; head_netId }
   with Not_found ->
     raise_request_error r "get_head"
 
 let get_predecessor () =
-  let r = !request "/blocks/prevalidation/predecessor" |> Ezjsonm.from_string in
+  !request "/blocks/prevalidation/predecessor" >>= fun r ->
+  let r = Ezjsonm.from_string r in
   try
-    Ezjsonm.find r ["predecessor"] |> Ezjsonm.get_string
+    Ezjsonm.find r ["predecessor"] |> Ezjsonm.get_string |> return
   with Not_found ->
     raise_request_error r "get_predecessor"
 
@@ -233,9 +277,8 @@ let get_public_key_hash_from_secret_key sk =
     |> Sodium.Sign.secret_key_to_public_key
     |> Ed25519.Public_key.to_b58check
   in
-  let r =
-    !request "/blocks/prevalidation/proto/context/keys"
-    |> Ezjsonm.from_string in
+  !request "/blocks/prevalidation/proto/context/keys" >>= fun r ->
+  let r = Ezjsonm.from_string r in
   try
     Ezjsonm.find r ["ok"] |> Ezjsonm.get_list (fun hp ->
         let fpk = Ezjsonm.find hp ["public_key"] |> Ezjsonm.get_string in
@@ -249,7 +292,7 @@ let get_public_key_hash_from_secret_key sk =
   with
   | Found pkh ->
     Printf.eprintf "Found public key hash: %s\n%!" pkh;
-    pkh
+    return pkh
   | Not_found ->
     raise_request_error r "No known public key matching given private key"
 
@@ -265,11 +308,11 @@ let forge_deploy ?head ?source liquid init_params_strings =
     | None -> raise (RequestError "forge_deploy: Missing init")
     | Some pre_init_infos -> pre_init_infos
   in
-  let init_storage = match pre_init with
+  let init_storage_lwt = match pre_init with
     | LiquidInit.Init_constant c ->
       if init_params_strings <> [] then
         raise (RequestError "forge_deploy: Constant storage, no inputs needed");
-      c
+      return c
     | LiquidInit.Init_code (syntax_c, c) ->
       let init_params =
         try
@@ -290,19 +333,21 @@ let forge_deploy ?head ?source liquid init_params_strings =
         | [] -> CUnit
         | [x] -> x
         | _ -> CTuple init_params in
-      let eval_init_result, _ =
-        run_pre env syntax_c c (Some source) eval_init_input eval_init_storage
-      in
+
+      run_pre env syntax_c c (Some source) eval_init_input eval_init_storage
+      >>= fun (eval_init_result, _) ->
       Printf.eprintf "Evaluated initial storage: %s\n%!"
         (LiquidData.string_of_const eval_init_result);
-      LiquidEncode.encode_const env syntax_ast eval_init_result
+      return (LiquidEncode.encode_const env syntax_ast eval_init_result)
   in
+  init_storage_lwt >>= fun init_storage ->
 
-  let head = match head with
-    | Some head -> head
+  begin match head with
+    | Some head -> return head
     | None -> get_head_hash ()
-  in
-  let counter = get_counter source + 1 in
+  end >>= fun head ->
+  get_counter source >>= fun counter ->
+  let counter = counter + 1 in
   let c = LiquidToTezos.convert_contract ~expand:true pre_michelson in
   let init_storage_m = LiquidToTezos.convert_const init_storage in
   let contract_json = LiquidToTezos.json_of_contract c in
@@ -330,18 +375,17 @@ let forge_deploy ?head ?source liquid init_params_strings =
     "operations", mk_json_arr [origination_json];
   ] |> mk_json_obj
   in
-  let r =
-    !request ~data "/blocks/prevalidation/proto/helpers/forge/operations"
-    |> Ezjsonm.from_string
-  in
+  !request ~data "/blocks/prevalidation/proto/helpers/forge/operations"
+  >>= fun r ->
+  let r = Ezjsonm.from_string r in
   try
-    Ezjsonm.find r ["ok"; "operation"] |> Ezjsonm.get_string
+    Ezjsonm.find r ["ok"; "operation"] |> Ezjsonm.get_string |> return
   with Not_found ->
     raise_request_error r "forge_deploy"
 
 
 let inject sk netId op =
-  let pred = get_predecessor () in
+  get_predecessor () >>= fun pred ->
   let op_b = MBytes.of_string (Hex_encode.hex_decode op) in
   let signature_b = Ed25519.sign sk op_b in
   let signature = Ed25519.Signature.to_b58check signature_b in
@@ -349,42 +393,38 @@ let inject sk netId op =
   let signed_op = Hex_encode.hex_encode (MBytes.to_string signed_op_b) in
   let op_hash = Hash.Operation_hash.to_b58check @@
     Hash.Operation_hash.hash_bytes [ signed_op_b ] in
-  let contracts =
-    let data = [
-      "pred_block", Printf.sprintf "%S" pred;
-      "operation_hash", Printf.sprintf "%S" op_hash;
-      "forged_operation", Printf.sprintf "%S" op;
-      "signature", Printf.sprintf "%S" signature;
-    ] |> mk_json_obj
-    in
-    let r =
-      !request ~data "/blocks/prevalidation/proto/helpers/apply_operation"
-      |> Ezjsonm.from_string
-    in
-    try
-      Ezjsonm.find r ["ok"; "contracts"] |> Ezjsonm.get_list Ezjsonm.get_string
-    with Not_found ->
-      raise_request_error r "inject (apply_operation)"
+  let data = [
+    "pred_block", Printf.sprintf "%S" pred;
+    "operation_hash", Printf.sprintf "%S" op_hash;
+    "forged_operation", Printf.sprintf "%S" op;
+    "signature", Printf.sprintf "%S" signature;
+  ] |> mk_json_obj
   in
-  let injected_op_hash =
-    let data = [
-      "signedOperationContents", Printf.sprintf "%S" signed_op;
-      "net_id", Printf.sprintf "%S" netId;
-      "force", "true";
-    ] |> mk_json_obj
-    in
-    let r =
-      !request ~data "/inject_operation"
-      |> Ezjsonm.from_string
-    in
-    try
-      Ezjsonm.find r ["ok"; "injectedOperation"] |> Ezjsonm.get_string
-    with Not_found ->
-      raise_request_error r "deploy (inject_operation)"
+  !request ~data "/blocks/prevalidation/proto/helpers/apply_operation"
+  >>= fun r ->
+  let r = Ezjsonm.from_string r in
+  (try
+     Ezjsonm.find r ["ok"; "contracts"] |> Ezjsonm.get_list Ezjsonm.get_string
+     |> return
+   with Not_found ->
+     raise_request_error r "inject (apply_operation)"
+  ) >>= fun contracts ->
+  let data = [
+    "signedOperationContents", Printf.sprintf "%S" signed_op;
+    "net_id", Printf.sprintf "%S" netId;
+    "force", "true";
+  ] |> mk_json_obj
   in
+  !request ~data "/inject_operation" >>= fun r ->
+  let r = Ezjsonm.from_string r in
+  (try
+     Ezjsonm.find r ["ok"; "injectedOperation"] |> Ezjsonm.get_string |> return
+   with Not_found ->
+     raise_request_error r "deploy (inject_operation)"
+  ) >>= fun injected_op_hash ->
   assert (injected_op_hash = op_hash);
 
-  (injected_op_hash, contracts)
+  return (injected_op_hash, contracts)
 
 
 let deploy liquid init_params_strings =
@@ -394,34 +434,32 @@ let deploy liquid init_params_strings =
       | Ok sk -> sk
       | Error _ -> raise (RequestError "deploy: Bad private key")
   in
-  let source = match !LiquidOptions.source with
-    | Some source -> source
+  begin match !LiquidOptions.source with
+    | Some source -> return source
     | None -> get_public_key_hash_from_secret_key sk
-  in
-  let head = get_head () in
-  let op =
-    forge_deploy ~head:head.head_hash ~source liquid init_params_strings
-  in
-  match inject sk head.head_netId op with
-  | op_h, [c] -> op_h, c
+  end >>= fun source ->
+  get_head () >>= fun head ->
+  forge_deploy ~head:head.head_hash ~source liquid init_params_strings
+  >>= fun op ->
+  inject sk head.head_netId op >>= function
+  | op_h, [c] -> return (op_h, c)
   | _ -> raise (RequestError "deploy (inject)")
 
 
 let get_storage liquid address =
   let env, syntax_ast, pre_michelson, pre_init_infos = compile_liquid liquid in
-  let r =
-    !request
-      (Printf.sprintf
-         "/blocks/prevalidation/proto/context/contracts/%s/storage"
-         address)
-    |> Ezjsonm.from_string
-  in
+  !request
+    (Printf.sprintf
+       "/blocks/prevalidation/proto/context/contracts/%s/storage"
+       address)
+  >>= fun r ->
+  let r = Ezjsonm.from_string r in
   try
     let storage_r = Ezjsonm.find r ["ok"] in
     let storage_expr = LiquidToTezos.const_of_ezjson storage_r in
     let env = LiquidTezosTypes.empty_env env.filename in
-    LiquidFromTezos.convert_const_type env storage_expr
-      syntax_ast.storage
+    return
+      (LiquidFromTezos.convert_const_type env storage_expr syntax_ast.storage)
   with Not_found ->
     raise_request_error r "get_storage"
 
@@ -438,11 +476,12 @@ let forge_call ?head ?source liquid address parameter_string =
   in
   let parameter_m = LiquidToTezos.convert_const parameter in
   let parameter_json = LiquidToTezos.json_of_const parameter_m in
-  let head = match head with
-    | Some head -> head
+  begin match head with
+    | Some head -> return head
     | None -> get_head_hash ()
-  in
-  let counter = get_counter source + 1 in
+  end >>= fun head ->
+  get_counter source >>= fun counter ->
+  let counter = counter + 1 in
   let transaction_json = [
     "kind", "\"transaction\"";
     "amount", !LiquidOptions.amount;
@@ -458,12 +497,11 @@ let forge_call ?head ?source liquid address parameter_string =
     "operations", mk_json_arr [transaction_json];
   ] |> mk_json_obj
   in
-  let r =
-    !request ~data "/blocks/prevalidation/proto/helpers/forge/operations"
-    |> Ezjsonm.from_string
-  in
+  !request ~data "/blocks/prevalidation/proto/helpers/forge/operations"
+  >>= fun r ->
+  let r = Ezjsonm.from_string r in
   try
-    Ezjsonm.find r ["ok"; "operation"] |> Ezjsonm.get_string
+    Ezjsonm.find r ["ok"; "operation"] |> Ezjsonm.get_string |> return
   with Not_found ->
     raise_request_error r "forge_call"
 
@@ -475,23 +513,60 @@ let call liquid address parameter_string =
       | Ok sk -> sk
       | Error _ -> raise (RequestError "call: Bad private key")
   in
-  let source = match !LiquidOptions.source with
-    | Some source -> source
+  begin match !LiquidOptions.source with
+    | Some source -> return source
     | None -> get_public_key_hash_from_secret_key sk
-  in
-  let head = get_head () in
-  let op =
-    forge_call ~head:head.head_hash ~source liquid address parameter_string
-  in
-  match inject sk head.head_netId op with
-  | op_h, [] -> op_h
+  end >>= fun source ->
+  get_head () >>= fun head ->
+  forge_call ~head:head.head_hash ~source liquid address parameter_string
+  >>= fun op ->
+  inject sk head.head_netId op >>= function
+  | op_h, [] -> return op_h
   | _ -> raise (RequestError "call (inject)")
 
 
 (* Withoud optional argument head *)
+module Async = struct
+  type 'a t = 'a Lwt.t
 
-let forge_deploy liquid init_params_strings =
-  forge_deploy liquid init_params_strings
+  let forge_deploy liquid init_params_strings =
+    forge_deploy liquid init_params_strings
 
-let forge_call liquid address parameter_string =
-  forge_call liquid address parameter_string
+  let forge_call liquid address parameter_string =
+    forge_call liquid address parameter_string
+
+  let run liquid input_string storage_string =
+    run liquid input_string storage_string
+
+  let deploy liquid init_params_strings =
+    deploy liquid init_params_strings
+
+  let get_storage liquid address =
+    get_storage liquid address
+
+  let call liquid address parameter_string =
+    call liquid address parameter_string
+end
+
+module Sync = struct
+  type 'a t = 'a
+
+  let forge_deploy liquid init_params_strings =
+    Lwt_main.run (forge_deploy liquid init_params_strings)
+
+  let forge_call liquid address parameter_string =
+    Lwt_main.run (forge_call liquid address parameter_string)
+
+  let run liquid input_string storage_string =
+    Lwt_main.run (run liquid input_string storage_string)
+
+  let deploy liquid init_params_strings =
+    Lwt_main.run (deploy liquid init_params_strings)
+
+  let get_storage liquid address =
+    Lwt_main.run (get_storage liquid address)
+
+  let call liquid address parameter_string =
+    Lwt_main.run (call liquid address parameter_string)
+
+end
