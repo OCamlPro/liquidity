@@ -24,34 +24,19 @@ OCaml.library("ocplib-fake-lwt",
 
 if( with_tezos ) {
 
-if( without_crypto ) {
+if( for_javascript ) {
 
 OCaml.library("michelson-deps", ocaml + {
      files = [
-       (* "mBytes.ml"; *)
-       (* "hex_encode.ml"; *)
-       "nocrypto.ml";
-       "sodium.ml";
-       "z.ml";
-
        "utils.ml";
-(*
-       "lwt.ml";
-       "lwt_list.ml";
-       "lwt_mutex.ml";
-       "lwt_stream.ml";
-       "lwt_io.ml";
-
-       "RPC.ml";
-       "tezos_misc.ml";
-       "updater.ml";
-*)
+       "z.ml";
+       "nocrypto.ml";
      ];
      requires = [
        "nums";
        "lwt";
-       (* "ocplib-endian"; *)
        "ezjsonm";
+       "ocp-libsodium-js";
      ];
 });
 

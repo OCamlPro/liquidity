@@ -135,7 +135,7 @@ OCaml.library("ocplib-liquidity-deploy",
      ];
    });
 
-if (without_crypto) {
+if (for_javascript) {
 OCaml.program("liquidity",
    ocaml + {
      files = [
