@@ -153,11 +153,10 @@ let raise_request_error r msg =
     let err = Ezjsonm.find r ["error"] in
     (* let err_s = Ezjsonm.to_string ~minify:false (Data_encoding_ezjsonm.to_root err) in *)
     let l = Ezjsonm.get_list (fun err ->
-        let kind = Ezjsonm.find err ["kind"] in
-        let id = Ezjsonm.find err ["id"] in
+        let kind = Ezjsonm.find err ["kind"] |> Ezjsonm.get_string in
+        let id = Ezjsonm.find err ["id"] |> Ezjsonm.get_string in
         (* let err_s = Ezjsonm.to_string ~minify:false (Data_encoding_ezjsonm.to_root err) in *)
-        Data_encoding_ezjsonm.to_string kind ^" : "^
-        Data_encoding_ezjsonm.to_string id
+        kind ^ ": "^ id
       ) err in
     let err_s = "In "^msg^", "^ String.concat "\n" l in
     raise (RequestError err_s)

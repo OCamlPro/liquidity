@@ -25,7 +25,7 @@ default_with_version = !Sys.file_exists("DEVEL");
 try { with_version = with_version; }
   catch("unknown-variable",x){ with_version = default_with_version; }
 
-default_without_crypto = false;
+default_for_javascript = false;
 
-try { without_crypto = without_crypto; }
-  catch("unknown-variable",x){ without_crypto = default_without_crypto; }
+try { for_javascript = for_javascript; }
+  catch("unknown-variable",x){ for_javascript = default_for_javascript; }
