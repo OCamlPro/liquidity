@@ -35,7 +35,9 @@ OCaml.library("michelson-deps", ocaml + {
      requires = [
        "nums";
        "lwt";
-       "ezjsonm";
+       "cstruct";
+       "uutf";
+       "ocplib-ezjsonm-js";
        "ocp-libsodium-js";
      ];
 });
