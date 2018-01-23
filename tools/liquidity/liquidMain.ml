@@ -73,31 +73,11 @@ let compile_liquid_file filename =
       Printf.eprintf "Constant initial storage generated in %S\n%!" output
     | LiquidInit.Init_code (_, pre_init) ->
       let mic_init = LiquidToTezos.convert_contract ~expand:true pre_init in
-      let js = LiquidToTezos.json_of_contract mic_init in
-      Printf.eprintf "%s\n%!" js;
       let s = LiquidToTezos.line_of_contract mic_init in
       let output = env.filename ^ ".initializer.tz" in
       FileString.write_file output s;
       Printf.eprintf "Storage initializer generated in %S\n%!" output
   end;
-  (* Printf.eprintf "ici0\n%!"; *)
-
-  (* begin *)
-  (*   let read_tezos_const filename = *)
-  (*     let s = FileString.read_file filename in *)
-  (*     match LiquidFromTezos.const_of_string filename s with *)
-  (*     | Some (c, loc_table) -> c, loc_table *)
-  (*     | _ -> *)
-  (*       Printf.eprintf "Errors parsing in %S\n%!" filename; *)
-  (*       exit 2 *)
-  (*   in *)
-  (*   let filename = filename ^ ".init.tz" in *)
-  (*   Printf.eprintf "ici1\n%!"; *)
-  (*   let c, env = read_tezos_const filename in *)
-  (*   Printf.eprintf "ici\n%!"; *)
-  (*   let c = LiquidFromTezos.convert_const_type env c syntax_ast.storage in *)
-  (*   Printf.eprintf "Input: %s\n%!" (LiquidPrinter.Liquid.string_of_const c); *)
-  (* end; *)
 
   let output = filename ^ ".tz" in
   let c = LiquidToTezos.convert_contract ~expand:false pre_michelson in

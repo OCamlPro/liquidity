@@ -19,22 +19,22 @@ let convert_contract ~expand (c : noloc_michelson contract) =
   LiquidEmit.emit_contract ~expand c
 
 let convert_const (c : const) =
-  failwith "mini version cannot do it"
+  failwith "mini version cannot convert const"
 
 let json_of_contract (c : michelson_exp contract) =
-  failwith "mini version cannot do it"
+  failwith "mini version cannot generate json contract"
 
 let contract_of_json _ =
-  failwith "mini version cannot do it"
+  failwith "mini version cannot parse json contract"
 
 let json_of_const _ =
-  failwith "mini version cannot do it"
+  failwith "mini version cannot generate json constant"
 
 let const_of_json _ =
-  failwith "mini version cannot do it"
+  failwith "mini version cannot parse json constant"
 
 let const_of_ezjson _ =
-  failwith "mini version cannot do it"
+  failwith "mini version cannot parse ezjson constant"
 
 let read_tezos_file (_filename : string) =
   failwith "mini version cannot decompile"

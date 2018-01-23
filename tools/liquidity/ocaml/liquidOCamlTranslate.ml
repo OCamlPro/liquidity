@@ -31,7 +31,7 @@ let clean_ast =
 
     | { pstr_desc =
           Pstr_extension
-            (({ Asttypes.txt = "entry" },
+            (({ Asttypes.txt = "entry" | "init" },
               PStr [entry]),[])
       } ->
        mapper.structure_item mapper entry
