@@ -155,7 +155,7 @@ module Map : sig
   val remove : 'key -> ('key, 'value) map -> ('key, 'value) map
 
   val mem : 'key -> ('key, 'value) map -> bool (* NOT TESTED *)
-  val size : ('key, 'value) map -> int
+  val size : ('key, 'value) map -> nat
 
 end = struct
 
@@ -236,7 +236,7 @@ end = struct
     let map = (Obj.magic map : 'value ObjMap.t) in
     ObjMap.mem key map
 
-  let size map = ObjMap.cardinal (Obj.magic map)
+  let size map = Int (Z.of_int (ObjMap.cardinal (Obj.magic map)))
 
 end
 include Array (* Remove ? *)
@@ -257,7 +257,7 @@ module Set : sig
   val fold : ( 'key * 'acc -> 'acc) -> 'key set -> 'acc -> 'acc
   val iter : ( 'key -> unit) -> 'key set -> unit
   val map : ('key -> 'res) -> 'key set -> 'res set
-  val size : 'key set -> int
+  val size : 'key set -> nat
 
 end = struct
 
@@ -325,7 +325,7 @@ end = struct
     let set = (Obj.magic set : ObjSet.t) in
     ObjSet.iter (fun x -> f x) set
 
-  let size set = ObjSet.cardinal (Obj.magic set)
+  let size set = Int (Z.of_int (ObjSet.cardinal (Obj.magic set)))
 
 end
 
@@ -468,7 +468,7 @@ module List : sig
   val iter : ('a -> unit) -> 'a list -> unit
   val map : ('a -> 'b) -> 'a list -> 'b list
   val rev : 'a list -> 'a list
-  val size : 'a list -> integer
+  val size : 'a list -> nat
 
 end = struct
 
