@@ -1,4 +1,4 @@
-[%%version 0.13]
+[%%version 0.14]
 
 (* A proposition of transfer to a destination, the address of (unit, unit)
    contract *)
@@ -25,6 +25,18 @@ type storage = {
                                             agreements before proposition is
                                             executed *)
 }
+
+let%init storage (owners : key_hash set) (min_agree : nat) =
+  let owners =
+    Set.add (Contract.manager (Source : (unit, unit) contract)) owners in
+  let owners_length = Set.size owners in
+  if min_agree > owners_length then Current.fail ();
+  {
+    owners;
+    owners_length;
+    min_agree;
+    actions = (Map : (key_hash, proposition) map);
+  }
 
 (* fails if the proposition is not a valid one *)
 let check_proposition (p:proposition) =
