@@ -12,6 +12,7 @@ The Liquidity project contains:
 * A compiler from Liquidity files (.liq extension) to Michelson
 * A de-compiler from Michelson files (.tz extension) to Liquidity
 * An evaluator of Michelson contracts
+* An interface to a Tezos node for manipulating Liquidity contracts
 
 See [examples](http://github.com/OCamlPro/liquidity/tree/master/tests)
 in the [Github](http://github.com/OCamlPro/liquidity) project.
@@ -22,8 +23,16 @@ Contract Format
 All the contracts have the following form:
 
 ```ocaml
-[%%version 0.13]
+[%%version 0.14]
+
 <... local declarations ...>
+
+let%init storage
+      (x : TYPE)
+      (x : TYPE)
+      ... =
+      BODY
+
 let%entry main
       (parameter : TYPE)
       (storage : TYPE)
@@ -55,6 +64,11 @@ specified in its signature and the second is the type of the argument
 `<... local declarations ...>` is an optional set of optional type and
 function declarations. Type declarations can be used to define records
 and variants (sum-types), described later in this documentation.
+
+An optional initial storage or storage initializer can be given with
+`let%init storage`. When deploying a Liquidity contract, if the
+storage is not constant it is evaluated in the prevalidation context.
+
 
 Types
 -----
@@ -247,8 +261,10 @@ Keys and hashes are base58-check encoded, the same as in Michelson:
 * `tz1YLtLqD1fWHthSVHPD116oYvsd4PTAHUoc` is a key hash
 * `edpkuit3FiCUhd6pmqf9ztUTdUs1isMTbF9RBGfwKk1ZrdTmeP9ypN` is a public key
 
-Signatures are 64 bytes long hex encoded, prefixed with a backquote:
-* ``96c724f3eab3da9eb0002caa5456aef9a7c716e6d6d20c07f3b3659369e7dcf5b66a5a8c33dac317fba6174217140b919493acd063c3800b825890a557c39e0a`
+Signatures are 64 bytes long hex encoded, prefixed with a backtick:
+```
+`96c724f3eab3da9eb0002caa5456aef9a7c716e6d6d20c07f3b3659369e7dcf5b66a5a8c33dac317fba6174217140b919493acd063c3800b825890a557c39e0a
+```
 
 There are also three types of collections: lists, sets and
 maps. Constants collections can be created directly:
@@ -423,7 +439,7 @@ but they can also be done directly:
 
 A toplevel function can also be defined before the main entry point:
 ```ocaml
-[%%version 0.13]
+[%%version 0.14]
 
 let succ (x : int) = x + 1
 
