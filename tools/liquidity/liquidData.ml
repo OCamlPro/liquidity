@@ -50,7 +50,6 @@ let rec default_const = function
 
   | Tsum (_, [])
   | Tfail
-  | Tcontract _
   | Tclosure _
   | Tlambda _ -> raise Not_found
 
@@ -95,14 +94,17 @@ let rec translate_const_exp loc (exp : encoded_exp) =
 
 
 let translate env contract s ty =
-    let ml_exp =
-      LiquidFromOCaml.expression_of_string ~filename:env.filename s in
-    let sy_exp = LiquidFromOCaml.translate_expression env ml_exp in
-    let ty_exp = LiquidCheck.typecheck_code
-        ~warnings:true env contract ty sy_exp in
-    let enc_exp = LiquidEncode.encode_code env contract ty_exp in
-    let loc = LiquidLoc.loc_in_file env.filename in
-    translate_const_exp loc enc_exp
+  let ml_exp =
+    LiquidFromOCaml.expression_of_string ~filename:env.filename s in
+  (* hackish: add type annotation for constants *)
+  let ml_ty = LiquidToOCaml.convert_type ~abbrev:false ty in
+  let ml_exp = Ast_helper.Exp.constraint_ ml_exp ml_ty in
+  let sy_exp = LiquidFromOCaml.translate_expression env ml_exp in
+  let ty_exp = LiquidCheck.typecheck_code
+      ~warnings:true env contract ty sy_exp in
+  let enc_exp = LiquidEncode.encode_code env contract ty_exp in
+  let loc = LiquidLoc.loc_in_file env.filename in
+  translate_const_exp loc enc_exp
 
 let data_of_liq ~filename ~contract ~parameter ~storage =
   (* first, extract the types *)

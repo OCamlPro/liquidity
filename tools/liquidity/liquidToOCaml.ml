@@ -50,7 +50,7 @@ let list_caml_abbrevs_in_order () =
   |> List.fast_sort (fun (_, (_, _, i1)) (_, (_, _, i2)) -> i1 - i2)
   |> List.map (fun (ty, (s, caml_ty, _)) -> s, caml_ty)
 
-let rec convert_type ?name ty =
+let rec convert_type ?(abbrev=true) ?name ty =
   match ty with
   | Ttez ->  typ_constr "tez" []
   | Tunit -> typ_constr "unit" []
@@ -71,29 +71,32 @@ let rec convert_type ?name ty =
     | Tkey | Tkey_hash | Tsignature | Tstring
     | Tfail | Trecord _ | Tsum _ -> assert false
     | Ttuple args ->
-      Typ.tuple (List.map convert_type args), "pair_t"
+      Typ.tuple (List.map (convert_type ~abbrev) args), "pair_t"
     | Tor (x,y) ->
-      typ_constr "variant" [convert_type x; convert_type y], "variant_t"
+      typ_constr "variant" [convert_type ~abbrev x; convert_type ~abbrev y], "variant_t"
     | Tcontract (x,y) ->
-      typ_constr "contract" [convert_type x;convert_type y], "contract_t"
+      typ_constr "contract" [convert_type ~abbrev x;convert_type ~abbrev y], "contract_t"
     | Tlambda (x,y) ->
-      Typ.arrow Nolabel (convert_type x) (convert_type y), "lambda_t"
+      Typ.arrow Nolabel (convert_type ~abbrev x) (convert_type ~abbrev y), "lambda_t"
     | Tclosure ((x,e),r) ->
-      Typ.arrow Nolabel (convert_type x) (convert_type r), "closure_t"
+      Typ.arrow Nolabel (convert_type ~abbrev x) (convert_type ~abbrev r), "closure_t"
     | Tmap (x,y) ->
-      typ_constr "map" [convert_type x;convert_type y], "map_t"
+      typ_constr "map" [convert_type ~abbrev x;convert_type ~abbrev y], "map_t"
     | Tset x ->
-      typ_constr "set" [convert_type x], "set_t"
+      typ_constr "set" [convert_type ~abbrev x], "set_t"
     | Tlist x ->
-      typ_constr "list" [convert_type x], "list_t"
+      typ_constr "list" [convert_type ~abbrev x], "list_t"
     | Toption x ->
-      typ_constr "option" [convert_type x], "option_t"
+      typ_constr "option" [convert_type ~abbrev x], "option_t"
     in
     let name = match name with
       | Some name -> name
       | None -> t_name
     in
-    add_abbrev name ty caml_ty
+    if abbrev then
+      add_abbrev name ty caml_ty
+    else
+      caml_ty
 
 
 
@@ -122,6 +125,7 @@ let rec convert_const expr =
   | CKey_hash n -> Exp.constant (Pconst_integer (n, Some '\233'))
   | CKey n -> Exp.constant (Pconst_integer (n, Some '\234'))
   | CSignature n -> Exp.constant (Pconst_integer (n, Some '\235'))
+  | CContract n -> Exp.constant (Pconst_integer (n, Some '\236'))
 
   | CList [] -> Exp.construct (lid "[]") None
   | CList (head :: tail) ->
@@ -447,4 +451,4 @@ let translate_expression = convert_code
 
 let string_of_expression = LiquidOCamlPrinter.string_of_expression
 
-let convert_type ty = convert_type ty
+let convert_type ?(abbrev=true) ty = convert_type ~abbrev ty
