@@ -270,31 +270,10 @@ let get_predecessor () =
 
 
 let get_public_key_hash_from_secret_key sk =
-  let exception Found of string in
-  let pk =
     sk
     |> Sodium.Sign.secret_key_to_public_key
-    |> Ed25519.Public_key.to_b58check
-  in
-  !request "/blocks/prevalidation/proto/context/keys" >>= fun r ->
-  let r = Ezjsonm.from_string r in
-  try
-    Ezjsonm.find r ["ok"] |> Ezjsonm.get_list (fun hp ->
-        let fpk = Ezjsonm.find hp ["public_key"] |> Ezjsonm.get_string in
-        if fpk = pk then
-          let pkh = Ezjsonm.find hp ["hash"] |> Ezjsonm.get_string in
-          raise (Found pkh)
-        else
-          ()
-      ) |> ignore;
-    raise Not_found
-  with
-  | Found pkh ->
-    Printf.eprintf "Found public key hash: %s\n%!" pkh;
-    return pkh
-  | Not_found ->
-    raise_request_error r "No known public key matching given private key"
-
+    |> Ed25519.Public_key.hash
+    |> Ed25519.Public_key_hash.to_b58check
 
 
 let forge_deploy ?head ?source liquid init_params_strings =
@@ -433,10 +412,10 @@ let deploy liquid init_params_strings =
       | Ok sk -> sk
       | Error _ -> raise (RequestError "deploy: Bad private key")
   in
-  begin match !LiquidOptions.source with
-    | Some source -> return source
+  let source = match !LiquidOptions.source with
+    | Some source -> source
     | None -> get_public_key_hash_from_secret_key sk
-  end >>= fun source ->
+  in
   get_head () >>= fun head ->
   forge_deploy ~head:head.head_hash ~source liquid init_params_strings
   >>= fun op ->
@@ -512,10 +491,10 @@ let call liquid address parameter_string =
       | Ok sk -> sk
       | Error _ -> raise (RequestError "call: Bad private key")
   in
-  begin match !LiquidOptions.source with
-    | Some source -> return source
+  let source = match !LiquidOptions.source with
+    | Some source -> source
     | None -> get_public_key_hash_from_secret_key sk
-  end >>= fun source ->
+  in
   get_head () >>= fun head ->
   forge_call ~head:head.head_hash ~source liquid address parameter_string
   >>= fun op ->
