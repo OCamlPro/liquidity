@@ -255,6 +255,10 @@ let rec translate_const env exp =
   | { pexp_desc = Pexp_constant (Pconst_integer (s, Some '\233')) } ->
      CKey_hash s, Some Tkey_hash
 
+  (* Contract *)
+  | { pexp_desc = Pexp_constant (Pconst_integer (s, Some '\236')) } ->
+     CContract s, None
+
   (* Key *)
   | { pexp_desc = Pexp_constant (Pconst_integer (s, Some '\234')) } ->
      CKey s, Some Tkey
@@ -784,7 +788,7 @@ let rec translate_code env exp =
 
     | exp ->
        match translate_const env exp with
-       | _, None -> error_loc exp.pexp_loc "constant needs a type"
+       | _, None -> error_loc exp.pexp_loc "constant needs a type annotation"
        | cst, Some ty -> Const (ty, cst)
        | exception NotAConstant ->
           match exp with

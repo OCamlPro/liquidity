@@ -39,6 +39,7 @@ type const =
   | CRight of const
 
   | CKey_hash of string
+  | CContract of string
 
   | CRecord of (string * const) list
   | CConstr of string * const

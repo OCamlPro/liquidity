@@ -66,6 +66,7 @@ let rec convert_const expr =
   | CTimestamp s -> Micheline.String (0, s)
   | CKey s -> Micheline.String (0, s)
   | CKey_hash s -> Micheline.String (0, s)
+  | CContract s -> Micheline.String (0, s)
   | CSignature s -> Micheline.String (0, s)
 
   | _ ->

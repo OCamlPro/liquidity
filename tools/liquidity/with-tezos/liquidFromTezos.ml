@@ -130,6 +130,7 @@ let rec convert_const env ?ty expr =
       | Some Ttimestamp -> CTimestamp s
       | Some Tkey -> CKey s
       | Some Tkey_hash -> CKey_hash s
+      | Some Tcontract (_, _) -> CContract s
       | Some Tsignature -> CSignature s
       | Some Tstring | None -> CString s
       | Some ty -> wrong_type env expr ty

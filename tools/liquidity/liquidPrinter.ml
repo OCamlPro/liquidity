@@ -206,6 +206,7 @@ module Michelson = struct
     | CString s -> Printf.bprintf b "%S" s
     | CKey s -> Printf.bprintf b "%S" s
     | CKey_hash s -> Printf.bprintf b "%S" s
+    | CContract s -> Printf.bprintf b "%S" s
     | CSignature s -> Printf.bprintf b "%S" s
     | CTez s -> Printf.bprintf b "%S" (mic_of_tez s)
     | CInt n -> Printf.bprintf b "%s" (mic_of_integer n)
@@ -645,6 +646,7 @@ module Liquid = struct
     | CString s -> Printf.bprintf b "%S" s
     | CKey s -> Printf.bprintf b "%s" s
     | CKey_hash s -> Printf.bprintf b "%s" s
+    | CContract s -> Printf.bprintf b "%s" s
     | CSignature s -> Printf.bprintf b "`%s" s
     | CTez s -> Printf.bprintf b "%stz" (liq_of_tez s)
     | CInt n -> Printf.bprintf b "%s" (liq_of_integer n)

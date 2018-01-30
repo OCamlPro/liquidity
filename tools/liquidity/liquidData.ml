@@ -29,6 +29,7 @@ let rec default_const = function
     CSignature
       "96c724f3eab3da9eb0002caa5456aef9a7c716e6d6d20c07f3b3659369e7dcf5\
        b66a5a8c33dac317fba6174217140b919493acd063c3800b825890a557c39e0a"
+  | Tcontract (_, _) -> CContract "TZ1tPz6tdaY2XN9ZzpDQu9nFTCX22GivUDR7"
   | Ttuple l ->
     CTuple (List.map default_const l)
 

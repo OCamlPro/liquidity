@@ -223,7 +223,7 @@ and encode_sum_type cstys =
 
 let rec encode_const env c = match c with
   | CUnit | CBool _ | CInt _ | CNat _ | CTez _ | CTimestamp _ | CString _
-  | CKey _ | CSignature _ | CNone  | CKey_hash _ -> c
+  | CKey _ | CContract _ | CSignature _ | CNone  | CKey_hash _ -> c
 
   | CSome x -> CSome (encode_const env x)
   | CLeft x -> CLeft (encode_const env x)

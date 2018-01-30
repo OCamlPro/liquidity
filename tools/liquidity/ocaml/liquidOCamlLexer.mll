@@ -24,6 +24,7 @@ let timestamp_char = '\232'
 let keyhash_char = '\233'
 let key_char = '\234'
 let signature_char = '\235'
+let contract_char = '\236'
 
 open Lexing
 open Misc
@@ -335,7 +336,9 @@ let int_literal =
 let base58_char =
   ['1'-'9' 'A'-'H' 'J'-'N' 'P'-'Z' 'a'-'k' 'm'-'z' ]
 let keyhash_literal =
-  ['t' 'T'] "z1" base58_char* (* 36 *)
+  "tz1" base58_char* (* 36 *)
+let contract_literal =
+  "TZ1" base58_char* (* 36 *)
 let key_literal =
   "edpk" base58_char* (* 54 *)
 let signature_literal =
@@ -392,8 +395,18 @@ rule token = parse
           INT (s, Some keyhash_char)
         else begin
             (* TODO warning *)
-            if s.[0] = 'T' then UIDENT s else LIDENT s
+            LIDENT s
           end
+      }
+  | contract_literal
+      {
+        let s = Lexing.lexeme lexbuf in
+        if String.length s = 36 then
+          INT (s, Some contract_char)
+        else begin
+          (* TODO warning *)
+          UIDENT s
+        end
       }
   | key_literal
       {

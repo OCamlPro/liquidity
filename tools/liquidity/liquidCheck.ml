@@ -1036,6 +1036,7 @@ let check_const_type ?(from_mic=false) ~to_tez loc ty cst =
 
     | Tkey, CKey s -> CKey s
     | Tkey_hash, CKey_hash s -> CKey_hash s
+    | Tcontract (_, _), CContract s -> CContract s
     | Ttimestamp, CTimestamp s -> CTimestamp s
     | Tsignature, CSignature s -> CSignature s
 
@@ -1108,6 +1109,7 @@ let check_const_type ?(from_mic=false) ~to_tez loc ty cst =
 
          | Ttez, CString s -> CTez (to_tez s)
          | Tkey_hash, CString s -> CKey_hash s
+         | Tcontract (_, _), CString s -> CContract s
          | Tkey, CString s -> CKey s
          | Tsignature, CString s -> CSignature s
 
