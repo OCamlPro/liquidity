@@ -27,6 +27,9 @@ let json_of_contract (c : michelson_exp contract) =
 let contract_of_json _ =
   failwith "mini version cannot parse json contract"
 
+let contract_of_ezjson _ =
+  failwith "mini version cannot parse ezjson contract"
+
 let json_of_const _ =
   failwith "mini version cannot generate json constant"
 

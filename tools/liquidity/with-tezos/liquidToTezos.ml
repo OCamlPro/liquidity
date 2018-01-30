@@ -282,6 +282,9 @@ let contract_of_json j =
   Data_encoding_ezjsonm.from_string j
   |> Data_encoding.Json.destruct contract_encoding
 
+let contract_of_ezjson ezj =
+  Data_encoding.Json.destruct contract_encoding ezj
+
 let const_encoding =
   Micheline.canonical_encoding Data_encoding.string
   (* Micheline.erased_encoding 0 Data_encoding.string *)

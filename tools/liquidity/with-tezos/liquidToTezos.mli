@@ -16,6 +16,7 @@ val line_of_contract : LiquidTezosTypes.contract -> string
 val string_of_contract : LiquidTezosTypes.contract -> string
 val json_of_contract : LiquidTezosTypes.contract -> string
 val contract_of_json : string -> LiquidTezosTypes.contract
+val contract_of_ezjson : LiquidTezosTypes.json -> LiquidTezosTypes.contract
 val json_of_const : LiquidTezosTypes.expr -> string
 val const_of_json : string -> LiquidTezosTypes.expr
 val const_of_ezjson : LiquidTezosTypes.json -> LiquidTezosTypes.expr
