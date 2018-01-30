@@ -1,4 +1,4 @@
-[%%version 0.14]
+[%%version 0.15]
 
 (* A proposition of transfer to a destination, the address of (unit, unit)
    contract *)

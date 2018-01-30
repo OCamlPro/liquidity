@@ -1,4 +1,4 @@
-[%%version 0.14]
+[%%version 0.15]
 
 type t = A of int | B | C of (int * nat)
 

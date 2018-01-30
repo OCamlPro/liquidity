@@ -1,7 +1,7 @@
 
 (* constants *)
 
-[%%version 0.14]
+[%%version 0.15]
 
 type storage = bool *
                int option *
