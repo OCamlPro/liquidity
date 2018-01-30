@@ -189,6 +189,8 @@ module Data = struct
   let forge_deploy () =
     let op =
       LiquidDeploy.Sync.forge_deploy
+        ~delegatable:!LiquidOptions.delegatable
+        ~spendable:!LiquidOptions.spendable
         (LiquidDeploy.From_file !contract) (List.rev !init_inputs)
     in
     Printf.eprintf "Raw operation:\n--------------\n%!";
@@ -197,6 +199,8 @@ module Data = struct
   let deploy () =
     let op_h, contract_id =
       LiquidDeploy.Sync.deploy
+        ~delegatable:!LiquidOptions.delegatable
+        ~spendable:!LiquidOptions.spendable
         (LiquidDeploy.From_file !contract) (List.rev !init_inputs)
     in
     Printf.printf "New contract %s deployed in operation %s\n%!"
@@ -295,6 +299,12 @@ let main () =
             Data.run ());
       ],
       "FILE.liq PARAMETER STORAGE Run Liquidity contract on Tezos node";
+
+      "--delegatable", Arg.Set LiquidOptions.delegatable,
+      " With --[forge-]deploy, deploy a delegatable contract";
+
+      "--spendable", Arg.Set LiquidOptions.spendable,
+      " With --[forge-]deploy, deploy a spendable contract";
 
       "--forge-deploy", Arg.Tuple [
         Arg.String (fun s -> Data.contract := s);

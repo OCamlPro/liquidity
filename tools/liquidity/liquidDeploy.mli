@@ -20,15 +20,19 @@ module type S = sig
   (** Run contract with given parameter and storage on the Tezos node specified
       in ![LiquidOptions], returns a pair containig the return value and the
       storage *)
-  val run : from -> string -> string -> (LiquidTypes.const * LiquidTypes.const) t
+  val run :
+    from -> string -> string -> (LiquidTypes.const * LiquidTypes.const) t
 
   (** Forge a deployment operation contract on the Tezos node specified in
       ![LiquidOptions], returns the hex-encoded operation *)
-  val forge_deploy : from -> string list -> string t
+  val forge_deploy :
+    ?delegatable:bool -> ?spendable:bool -> from -> string list -> string t
 
   (** Deploy a Liquidity contract on the Tezos node specified in
       ![LiquidOptions], returns the operation hash and the contract address *)
-  val deploy : from -> string list -> (string * string) t
+  val deploy :
+    ?delegatable:bool -> ?spendable:bool -> from -> string list ->
+    (string * string) t
 
   val get_storage : from -> string -> LiquidTypes.const t
 

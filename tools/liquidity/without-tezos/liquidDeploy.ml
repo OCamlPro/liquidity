@@ -18,8 +18,10 @@ let request = ref (fun ?data _ ->
 module type S = sig
   type 'a t
   val run : from -> string -> string -> (LiquidTypes.const * LiquidTypes.const) t
-  val forge_deploy : from -> string list -> string t
-  val deploy : from -> string list -> (string * string) t
+  val forge_deploy : ?delegatable:bool -> ?spendable:bool ->
+    from -> string list -> string t
+  val deploy : ?delegatable:bool -> ?spendable:bool ->
+    from -> string list -> (string * string) t
   val get_storage : from -> string -> LiquidTypes.const t
   val forge_call : from -> string -> string -> string t
   val call : from -> string -> string -> string t
@@ -30,10 +32,10 @@ module Dummy = struct
   let run _ _ _ =
     failwith "mini version cannot run"
 
-  let forge_deploy _ _ =
+  let forge_deploy ?(delegatable=false) ?(spendable=false) _ _ =
     failwith "mini version cannot deploy"
 
-  let deploy _ _ =
+  let deploy ?(delegatable=false) ?(spendable=false) _ _ =
     failwith "mini version cannot deploy"
 
   let get_storage _ _ =

@@ -18,8 +18,10 @@ type from =
 module type S = sig
   type 'a t
   val run : from -> string -> string -> (LiquidTypes.const * LiquidTypes.const) t
-  val forge_deploy : from -> string list -> string t
-  val deploy : from -> string list -> (string * string) t
+  val forge_deploy : ?delegatable:bool -> ?spendable:bool ->
+    from -> string list -> string t
+  val deploy : ?delegatable:bool -> ?spendable:bool ->
+    from -> string list -> (string * string) t
   val get_storage : from -> string -> LiquidTypes.const t
   val forge_call : from -> string -> string -> string t
   val call : from -> string -> string -> string t
@@ -276,7 +278,8 @@ let get_public_key_hash_from_secret_key sk =
     |> Ed25519.Public_key_hash.to_b58check
 
 
-let forge_deploy ?head ?source liquid init_params_strings =
+let forge_deploy ?head ?source ?(delegatable=false) ?(spendable=false)
+    liquid init_params_strings =
   let source = match source, !LiquidOptions.source with
     | Some source, _ | _, Some source -> source
     | None, None -> raise (RequestError "forge_deploy: Missing source")
@@ -340,8 +343,8 @@ let forge_deploy ?head ?source liquid init_params_strings =
     "kind", "\"origination\"";
     "managerPubkey", Printf.sprintf "%S" source;
     "balance", !LiquidOptions.amount;
-    "spendable", "false";
-    "delegatable", "false";
+    "spendable", string_of_bool spendable;
+    "delegatable", string_of_bool delegatable;
     "script", script_json;
   ] |> mk_json_obj
   in
@@ -390,7 +393,7 @@ let inject sk netId op =
   let data = [
     "signedOperationContents", Printf.sprintf "%S" signed_op;
     "net_id", Printf.sprintf "%S" netId;
-    "force", "true";
+    "force", "false";
   ] |> mk_json_obj
   in
   !request ~data "/inject_operation" >>= fun r ->
@@ -405,7 +408,7 @@ let inject sk netId op =
   return (injected_op_hash, contracts)
 
 
-let deploy liquid init_params_strings =
+let deploy ?(delegatable=false) ?(spendable=false) liquid init_params_strings =
   let sk = match !LiquidOptions.private_key with
     | None -> raise (RequestError "deploy: Missing private key")
     | Some sk -> match Ed25519.Secret_key.of_b58check sk with
@@ -417,7 +420,8 @@ let deploy liquid init_params_strings =
     | None -> get_public_key_hash_from_secret_key sk
   in
   get_head () >>= fun head ->
-  forge_deploy ~head:head.head_hash ~source liquid init_params_strings
+  forge_deploy ~head:head.head_hash ~source ~delegatable ~spendable
+    liquid init_params_strings
   >>= fun op ->
   inject sk head.head_netId op >>= function
   | op_h, [c] -> return (op_h, c)
@@ -507,8 +511,8 @@ let call liquid address parameter_string =
 module Async = struct
   type 'a t = 'a Lwt.t
 
-  let forge_deploy liquid init_params_strings =
-    forge_deploy liquid init_params_strings
+  let forge_deploy ?(delegatable=false) ?(spendable=false) liquid init_params_strings =
+    forge_deploy ~delegatable ~spendable liquid init_params_strings
 
   let forge_call liquid address parameter_string =
     forge_call liquid address parameter_string
@@ -516,8 +520,8 @@ module Async = struct
   let run liquid input_string storage_string =
     run liquid input_string storage_string
 
-  let deploy liquid init_params_strings =
-    deploy liquid init_params_strings
+  let deploy ?(delegatable=false) ?(spendable=false) liquid init_params_strings =
+    deploy ~delegatable ~spendable liquid init_params_strings
 
   let get_storage liquid address =
     get_storage liquid address
@@ -529,7 +533,7 @@ end
 module Sync = struct
   type 'a t = 'a
 
-  let forge_deploy liquid init_params_strings =
+  let forge_deploy ?(delegatable=false) ?(spendable=false) liquid init_params_strings =
     Lwt_main.run (forge_deploy liquid init_params_strings)
 
   let forge_call liquid address parameter_string =
@@ -538,8 +542,8 @@ module Sync = struct
   let run liquid input_string storage_string =
     Lwt_main.run (run liquid input_string storage_string)
 
-  let deploy liquid init_params_strings =
-    Lwt_main.run (deploy liquid init_params_strings)
+  let deploy ?(delegatable=false) ?(spendable=false) liquid init_params_strings =
+    Lwt_main.run (deploy ~delegatable ~spendable liquid init_params_strings)
 
   let get_storage liquid address =
     Lwt_main.run (get_storage liquid address)
