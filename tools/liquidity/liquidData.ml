@@ -89,6 +89,7 @@ let rec translate_const_exp loc (exp : encoded_exp) =
   | Lambda (_, _, _, _, _)
   | Closure (_, _, _, _, _, _)
   | MatchVariant (_, _, _)
+  | Failwith (_, _)
     ->
     LiquidLoc.raise_error ~loc "non-constant expression"
 

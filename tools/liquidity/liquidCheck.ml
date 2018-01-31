@@ -146,7 +146,8 @@ let rec loc_exp env e = match e.desc with
   | Closure (_, _, loc, _, _, _)
   | Record (loc, _)
   | Constructor (loc, _, _)
-  | MatchVariant (_, loc, _) -> loc
+  | MatchVariant (_, loc, _)
+  | Failwith (_, loc) -> loc
 
   | Let (_, _, _, e) -> loc_exp env e
 
@@ -337,6 +338,8 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
 
 
   | Apply (prim, loc, args) -> typecheck_apply ?name:exp.name env prim loc args
+
+  | Failwith (s, loc) -> mk (Failwith (s, loc)) Tfail (* no name *)
 
   | MatchOption (arg, loc, ifnone, name, ifsome) ->
      let arg = typecheck env arg in

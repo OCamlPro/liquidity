@@ -42,12 +42,13 @@ let rec simplify_pre ({ i } as e) =
 and simplify_seq exprs =
   match exprs with
   | [] -> []
+  | ({i=ANNOT _} as a) :: ({i=FAIL} as f):: exprs -> [a; f]
   | e :: exprs ->
-     let e = simplify_pre e in
-     if e.i = FAIL then [ii FAIL]
-     else
-       let exprs =  simplify_seq exprs in
-       simplify_step e exprs
+    let e = simplify_pre e in
+    if e.i = FAIL then [e]
+    else
+      let exprs =  simplify_seq exprs in
+      simplify_step e exprs
 
 and simplify_step e exprs =
   match e.i, exprs with
@@ -56,8 +57,8 @@ and simplify_step e exprs =
   | DIP_DROP(n,0), exprs -> exprs
   | DIP (0, e), exprs -> simplify_step e exprs
   | DUP _, {i=DROP} :: exprs -> exprs
-  | PUSH _, {i=FAIL} :: _
-    | FAIL, _ -> [ii FAIL]
+  | PUSH _, ({i=FAIL} as fail) :: _ -> [fail]
+  | FAIL, _ -> [e]
 
   | IF(i1,i2), exprs ->
      begin
@@ -79,25 +80,25 @@ and simplify_step e exprs =
                    ii @@ SEQ (simplify_stepi (DIP_DROP(n,m'-min_m)) e2)
                   )) exprs)
 
-       | SEQ [{i=FAIL}],
+       | SEQ [{i=FAIL} as fail],
          SEQ [{i=PUSH _}],
          {i=DROP} :: exprs ->
-          simplify_step (ii @@ IF (ii @@ SEQ [ii FAIL], ii @@ SEQ [])) exprs
+          simplify_step (ii @@ IF (ii @@ SEQ [fail], ii @@ SEQ [])) exprs
 
-       | SEQ [{i=FAIL}],
+       | SEQ [{i=FAIL} as fail],
          SEQ [],
          {i=DROP} :: exprs ->
           simplify_stepi (DIP_DROP(1,1))
                         (simplify_stepi
-                           (IF (ii @@ SEQ [ii FAIL],
+                           (IF (ii @@ SEQ [fail],
                                 ii @@ SEQ [])) exprs)
 
-       | SEQ [{i=FAIL}],
+       | SEQ [{i=FAIL} as fail],
          SEQ [],
          {i=DIP_DROP(n,m)} :: exprs ->
           simplify_stepi (DIP_DROP(n+1,m))
                         (simplify_stepi
-                           (IF (ii @@ SEQ [ii FAIL],
+                           (IF (ii @@ SEQ [fail],
                                 ii @@ SEQ [])) exprs)
 
        | _ -> e :: exprs

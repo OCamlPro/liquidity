@@ -86,6 +86,7 @@ module Current : sig
 
   val amount : unit -> tez
   val fail : unit -> 'a
+  val failwith : string -> 'a
   val time : unit -> timestamp
   val balance : unit -> tez
   val gas : unit -> tez (* NOT TESTED *)
@@ -96,6 +97,7 @@ end = struct
 
   let amount () = Tez (Z.of_int 100)
   let fail () = raise Fail
+  let failwith s = failwith s
   let time () = Timestamp (Z.of_float (Unix.gettimeofday ()))
   let balance () = assert false (* TODO *)
   let gas () = assert false

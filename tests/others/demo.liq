@@ -11,10 +11,10 @@ let%entry main
   let amount = Current.amount() in
 
   if amount < 5.00tz then
-    Current.fail ()
+    Current.failwith "Not enough money, at least 5tz to vote"
   else
     match Map.find parameter storage with
-    | None -> Current.fail ()
+    | None -> Current.failwith "Bad vote"
     | Some x ->
        let storage = Map.add parameter (x+1) storage in
        ( (), storage )

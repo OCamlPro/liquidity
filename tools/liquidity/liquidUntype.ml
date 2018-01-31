@@ -82,6 +82,7 @@ let rec untype (env : env) (code : encoded_exp) : syntax_exp =
        If (untype env cond, untype env ifthen, untype env ifelse)
     | Seq (x, y) -> Seq (untype env x, untype env y)
     | Const (ty, cst) ->  Const (ty, cst)
+    | Failwith (s, loc) -> Failwith (s, loc)
 
     | Apply(Prim_Source, loc, [from_arg; to_arg]) ->
        Constructor(loc, Source (from_arg.ty, to_arg.ty), untype env from_arg)

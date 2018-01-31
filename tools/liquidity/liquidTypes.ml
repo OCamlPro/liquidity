@@ -435,6 +435,8 @@ and ('ty, 'a) exp_desc =
                 * string * ('ty, 'a) exp (* ifplus *)
                 * string * ('ty, 'a) exp (* ifminus *)
 
+  | Failwith of string * location
+
 type typed
 type encoded
 type syntax_exp = (unit, unit) exp
@@ -449,6 +451,8 @@ let mk =
     let fail, transfer = match desc with
       | Const (_, _)
       | Var (_, _, _) -> false, false
+
+      | Failwith _ -> true, false
 
       | LetTransfer _ -> true, true
 
@@ -483,6 +487,7 @@ let mk =
       | MatchVariant (e, _, cases) ->
         e.fail || List.exists (fun (_, e) -> e.fail) cases,
         e.transfer || List.exists (fun (_, e) -> e.transfer) cases
+
     in
     { desc; name; ty; bv; fail; transfer }
 
@@ -659,7 +664,7 @@ type node = {
    | N_TRANSFER_RESULT of int
    | N_CONST of datatype * const
    | N_PRIM of string
-   | N_FAIL
+   | N_FAIL of string option
    | N_LOOP of node * node
    | N_LOOP_BEGIN of node
    | N_LOOP_ARG of node * int

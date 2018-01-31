@@ -270,7 +270,7 @@ let rec decr_counts_vars env e =
       with Not_found -> ()
     end
 
-  | Const (_, _) | Var (_, _, _) -> ()
+  | Const (_, _) | Var (_, _, _) | Failwith (_, _) -> ()
 
   | SetVar (_, _, _, e)
   | Constructor (_, _, e)
@@ -431,6 +431,8 @@ let rec encode env ( exp : typed_exp ) : encoded_exp =
                     loc,
                     contract_exp, tez_exp,
                     storage_exp, arg_exp, body)) body.ty
+
+  | Failwith (s, loc) -> mk (Failwith (s, loc)) Tfail
 
   | Apply (Prim_unknown, _, _) -> assert false
 

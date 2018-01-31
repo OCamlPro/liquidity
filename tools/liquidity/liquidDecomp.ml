@@ -80,7 +80,7 @@ let rec var_of node =
       | N_IF_RESULT _ | N_IF_END_RESULT _ | N_LOOP_RESULT _ ->
         Printf.sprintf "res%d" node.num
       | N_SOURCE _ -> Printf.sprintf "source%d" node.num
-      | N_FAIL -> Printf.sprintf "fail%d" node.num
+      | N_FAIL _ -> Printf.sprintf "fail%d" node.num
       | N_LOOP _ -> Printf.sprintf "loop%d" node.num
       | N_LAMBDA _ -> Printf.sprintf "fun%d" node.num
       | N_LAMBDA_BEGIN | N_LOOP_BEGIN _ | N_FOLD_BEGIN _ ->
@@ -312,8 +312,12 @@ let decompile contract =
 
        | N_END, [ arg ] -> arg_of arg
 
-       | N_FAIL, _ ->
-          mk (Apply (Prim_fail, noloc, [unit]))
+       | N_FAIL None, _ ->
+         mk (Apply (Prim_fail, noloc, [unit]))
+
+       | N_FAIL (Some s), _ ->
+         mk (Failwith (s, noloc))
+
        | N_CONST (ty, cst), [] ->
           let cst = LiquidCheck.check_const_type ~from_mic:true
                       ~to_tez:LiquidPrinter.tez_of_mic noloc ty cst

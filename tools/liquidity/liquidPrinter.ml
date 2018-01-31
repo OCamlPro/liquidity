@@ -376,127 +376,251 @@ module Michelson = struct
     Printf.bprintf b "%c" fmt.newline;
     ()
 
-  let bprint_pre_michelson fmt bprint_arg b = function
+  let bprint_pre_name b name = match name with
+    | Some name -> Printf.bprintf b " @%s " name
+    | None -> ()
+
+  let bprint_pre_michelson fmt bprint_arg b name = function
     | ANNOT a ->
       Printf.bprintf b "{ @%s }" a;
     | SEQ args ->
       Printf.bprintf b "{ ";
+      bprint_pre_name b name;
       List.iter (fun a -> bprint_arg fmt b a; Printf.bprintf b " ; ") args;
       Printf.bprintf b " }";
     | DIP (i, a) ->
       Printf.bprintf b "D%sP "
         (String.concat "" (LiquidMisc.list_init i (fun _ -> "I")));
+      bprint_pre_name b name;
       bprint_arg fmt b a;
     | IF (a1, a2) ->
       Printf.bprintf b "IF ";
+      bprint_pre_name b name;
       bprint_arg fmt b a1;
       bprint_arg fmt b a2;
     | IF_NONE (a1, a2) ->
       Printf.bprintf b "IF_NONE ";
+      bprint_pre_name b name;
       bprint_arg fmt b a1;
       bprint_arg fmt b a2;
     | IF_CONS (a1, a2) ->
       Printf.bprintf b "IF_CONS ";
+      bprint_pre_name b name;
       bprint_arg fmt b a1;
       bprint_arg fmt b a2;
     | IF_LEFT (a1, a2) ->
       Printf.bprintf b "IF_LEFT ";
+      bprint_pre_name b name;
       bprint_arg fmt b a1;
       bprint_arg fmt b a2;
     | LOOP a ->
       Printf.bprintf b "LOOP ";
+      bprint_pre_name b name;
       bprint_arg fmt b a;
     | ITER a ->
       Printf.bprintf b "ITER ";
+      bprint_pre_name b name;
       bprint_arg fmt b a;
     | LAMBDA (ty1, ty2, a) ->
       Printf.bprintf b "LAMBDA ";
+      bprint_pre_name b name;
       bprint_type fmt b "" ty1;
       Printf.bprintf b " ";
       bprint_type fmt b "" ty2;
       bprint_arg fmt b a;
-    | EXEC -> Printf.bprintf b "EXEC"
+    | EXEC ->
+      Printf.bprintf b "EXEC";
+      bprint_pre_name b name;
     | DUP i ->
       Printf.bprintf b "D%sP"
         (String.concat "" (LiquidMisc.list_init i (fun _ -> "U")));
+      bprint_pre_name b name;
     | DIP_DROP (i, r) ->
       Printf.bprintf b "DIP_DROP (%d, %d)" i r;
-    | DROP -> Printf.bprintf b "DROP"
-    | CAR -> Printf.bprintf b "CAR"
-    | CDR -> Printf.bprintf b "CDR"
+      bprint_pre_name b name;
+    | DROP ->
+      Printf.bprintf b "DROP";
+      bprint_pre_name b name;
+    | CAR ->
+      Printf.bprintf b "CAR";
+      bprint_pre_name b name;
+    | CDR ->
+      Printf.bprintf b "CDR";
+      bprint_pre_name b name;
     | CDAR i ->
       Printf.bprintf b "C%sAR "
         (String.concat "" (LiquidMisc.list_init i (fun _ -> "D")));
+      bprint_pre_name b name;
     | CDDR i ->
       Printf.bprintf b "C%sDR "
         (String.concat "" (LiquidMisc.list_init i (fun _ -> "D")));
+      bprint_pre_name b name;
     | PUSH (ty, c) ->
       Printf.bprintf b "PUSH ";
+      bprint_pre_name b name;
       bprint_type fmt b "" ty;
+      Printf.bprintf b " ";
       bprint_const fmt b "" c;
-    | PAIR -> Printf.bprintf b "PAIR"
-    | COMPARE -> Printf.bprintf b "COMPARE"
-    | LE -> Printf.bprintf b "LE"
-    | LT -> Printf.bprintf b "LT"
-    | GE -> Printf.bprintf b "GE"
-    | GT -> Printf.bprintf b "GT"
-    | NEQ -> Printf.bprintf b "NEQ"
-    | EQ -> Printf.bprintf b "EQ"
-    | FAIL -> Printf.bprintf b "FAIL"
-    | NOW -> Printf.bprintf b "NOW"
-    | TRANSFER_TOKENS -> Printf.bprintf b "TRANSFER_TOKENS"
-    | ADD -> Printf.bprintf b "ADD"
-    | SUB -> Printf.bprintf b "SUB"
-    | BALANCE -> Printf.bprintf b "BALANCE"
-    | SWAP -> Printf.bprintf b "SWAP"
-    | GET -> Printf.bprintf b "GET"
-    | UPDATE -> Printf.bprintf b "UPDATE"
-    | SOME -> Printf.bprintf b "SOME"
-    | CONCAT -> Printf.bprintf b "CONCAT"
-    | MEM -> Printf.bprintf b "MEM"
-    | MAP -> Printf.bprintf b "MAP"
-    | REDUCE -> Printf.bprintf b "REDUCE"
-    | SELF -> Printf.bprintf b "SELF"
-    | AMOUNT -> Printf.bprintf b "AMOUNT"
-    | STEPS_TO_QUOTA -> Printf.bprintf b "STEPS_TO_QUOTA"
-    | MANAGER -> Printf.bprintf b "MANAGER"
-    | CREATE_ACCOUNT -> Printf.bprintf b "CREATE_ACCOUNT"
-    | CREATE_CONTRACT -> Printf.bprintf b "CREATE_CONTRACT"
-    | H -> Printf.bprintf b "H"
-    | HASH_KEY -> Printf.bprintf b "HASH_KEY"
-    | CHECK_SIGNATURE -> Printf.bprintf b "CHECK_SIGNATURE"
-    | CONS -> Printf.bprintf b "CONS"
-    | OR -> Printf.bprintf b "OR"
-    | XOR -> Printf.bprintf b "XOR"
-    | AND -> Printf.bprintf b "AND"
-    | NOT -> Printf.bprintf b "NOT"
-    | INT -> Printf.bprintf b "INT"
-    | ABS -> Printf.bprintf b "ABS"
-    | NEG -> Printf.bprintf b "NEG"
-    | MUL -> Printf.bprintf b "MUL"
+    | PAIR ->
+      Printf.bprintf b "PAIR";
+      bprint_pre_name b name;
+    | COMPARE ->
+      Printf.bprintf b "COMPARE";
+      bprint_pre_name b name;
+    | LE ->
+      Printf.bprintf b "LE";
+      bprint_pre_name b name;
+    | LT ->
+      Printf.bprintf b "LT";
+      bprint_pre_name b name;
+    | GE ->
+      Printf.bprintf b "GE";
+      bprint_pre_name b name;
+    | GT ->
+      Printf.bprintf b "GT";
+      bprint_pre_name b name;
+    | NEQ ->
+      Printf.bprintf b "NEQ";
+      bprint_pre_name b name;
+    | EQ ->
+      Printf.bprintf b "EQ";
+      bprint_pre_name b name;
+    | FAIL ->
+      Printf.bprintf b "FAIL";
+      bprint_pre_name b name;
+    | NOW ->
+      Printf.bprintf b "NOW";
+      bprint_pre_name b name;
+    | TRANSFER_TOKENS ->
+      Printf.bprintf b "TRANSFER_TOKENS";
+      bprint_pre_name b name;
+    | ADD ->
+      Printf.bprintf b "ADD";
+      bprint_pre_name b name;
+    | SUB ->
+      Printf.bprintf b "SUB";
+      bprint_pre_name b name;
+    | BALANCE ->
+      Printf.bprintf b "BALANCE";
+      bprint_pre_name b name;
+    | SWAP ->
+      Printf.bprintf b "SWAP";
+      bprint_pre_name b name;
+    | GET ->
+      Printf.bprintf b "GET";
+      bprint_pre_name b name;
+    | UPDATE ->
+      Printf.bprintf b "UPDATE";
+      bprint_pre_name b name;
+    | SOME ->
+      Printf.bprintf b "SOME";
+      bprint_pre_name b name;
+    | CONCAT ->
+      Printf.bprintf b "CONCAT";
+      bprint_pre_name b name;
+    | MEM ->
+      Printf.bprintf b "MEM";
+      bprint_pre_name b name;
+    | MAP ->
+      Printf.bprintf b "MAP";
+      bprint_pre_name b name;
+    | REDUCE ->
+      Printf.bprintf b "REDUCE";
+      bprint_pre_name b name;
+    | SELF ->
+      Printf.bprintf b "SELF";
+      bprint_pre_name b name;
+    | AMOUNT ->
+      Printf.bprintf b "AMOUNT";
+      bprint_pre_name b name;
+    | STEPS_TO_QUOTA ->
+      Printf.bprintf b "STEPS_TO_QUOTA";
+      bprint_pre_name b name;
+    | MANAGER ->
+      Printf.bprintf b "MANAGER";
+      bprint_pre_name b name;
+    | CREATE_ACCOUNT ->
+      Printf.bprintf b "CREATE_ACCOUNT";
+      bprint_pre_name b name;
+    | CREATE_CONTRACT ->
+      Printf.bprintf b "CREATE_CONTRACT";
+      bprint_pre_name b name;
+    | H ->
+      Printf.bprintf b "H";
+      bprint_pre_name b name;
+    | HASH_KEY ->
+      Printf.bprintf b "HASH_KEY";
+      bprint_pre_name b name;
+    | CHECK_SIGNATURE ->
+      Printf.bprintf b "CHECK_SIGNATURE";
+      bprint_pre_name b name;
+    | CONS ->
+      Printf.bprintf b "CONS";
+      bprint_pre_name b name;
+    | OR ->
+      Printf.bprintf b "OR";
+      bprint_pre_name b name;
+    | XOR ->
+      Printf.bprintf b "XOR";
+      bprint_pre_name b name;
+    | AND ->
+      Printf.bprintf b "AND";
+      bprint_pre_name b name;
+    | NOT ->
+      Printf.bprintf b "NOT";
+      bprint_pre_name b name;
+    | INT ->
+      Printf.bprintf b "INT";
+      bprint_pre_name b name;
+    | ABS ->
+      Printf.bprintf b "ABS";
+      bprint_pre_name b name;
+    | NEG ->
+      Printf.bprintf b "NEG";
+      bprint_pre_name b name;
+    | MUL ->
+      Printf.bprintf b "MUL";
+      bprint_pre_name b name;
     | LEFT ty ->
       Printf.bprintf b "LEFT";
+      bprint_pre_name b name;
       bprint_type fmt b "" ty;
     | RIGHT ty ->
       Printf.bprintf b "RIGHT";
+      bprint_pre_name b name;
       bprint_type fmt b "" ty;
-    | EDIV -> Printf.bprintf b "EDIV"
-    | LSL -> Printf.bprintf b "LSL"
-    | LSR -> Printf.bprintf b "LSR"
+    | EDIV ->
+      Printf.bprintf b "EDIV";
+      bprint_pre_name b name;
+    | LSL ->
+      Printf.bprintf b "LSL";
+      bprint_pre_name b name;
+    | LSR ->
+      Printf.bprintf b "LSR";
+      bprint_pre_name b name;
     | SOURCE (ty1, ty2) ->
       Printf.bprintf b "SOURCE";
+      bprint_pre_name b name;
       bprint_type fmt b "" ty1;
       bprint_type fmt b "" ty2;
-    | SIZE -> Printf.bprintf b "SIZE"
-    | DEFAULT_ACCOUNT -> Printf.bprintf b "DEFAULT_ACCOUNT"
-    | MOD -> Printf.bprintf b "MOD"
-    | DIV -> Printf.bprintf b "DIV"
+    | SIZE ->
+      Printf.bprintf b "SIZE";
+      bprint_pre_name b name;
+    | DEFAULT_ACCOUNT ->
+      Printf.bprintf b "DEFAULT_ACCOUNT";
+      bprint_pre_name b name;
+    | MOD ->
+      Printf.bprintf b "MOD";
+      bprint_pre_name b name;
+    | DIV ->
+      Printf.bprintf b "DIV";
+      bprint_pre_name b name
 
   let rec bprint_noloc_michelson fmt b ins=
-    bprint_pre_michelson fmt bprint_noloc_michelson b ins.i
+    bprint_pre_michelson fmt bprint_noloc_michelson b ins.noloc_name ins.i
 
   let rec bprint_loc_michelson fmt b m =
-    bprint_pre_michelson fmt bprint_loc_michelson b m.ins
+    bprint_pre_michelson fmt bprint_loc_michelson b m.loc_name m.ins
 
   let string_of_type = to_string multi_line bprint_type
   let line_of_type = to_string single_line bprint_type
@@ -756,6 +880,8 @@ module Liquid = struct
        Printf.bprintf b ")";
     | Var (name, _loc, labels) ->
        Printf.bprintf b "\n%s%s" indent (String.concat "." (name :: labels))
+    | Failwith (s, _loc) ->
+       Printf.bprintf b "\n%sCurrent.failwith %S" indent s
     | Apply (prim, _loc, args) ->
        Printf.bprintf b "\n%s(%s" indent
                       (LiquidTypes.string_of_primitive prim);
@@ -974,7 +1100,8 @@ let string_of_node node =
   | N_CONST (ty, cst) -> "N_CONST " ^ Michelson.string_of_const cst
   | N_PRIM string ->
      Printf.sprintf "N_PRIM %s" string
-  | N_FAIL -> "N_FAIL"
+  | N_FAIL None -> "N_FAIL"
+  | N_FAIL (Some s) -> Printf.sprintf "N_FAIL %S" s
   | N_LOOP _ -> "N_LOOP"
   | N_LOOP_BEGIN _ -> "N_LOOP_BEGIN"
   | N_LOOP_END _ -> "N_LOOP_END"

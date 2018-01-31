@@ -627,6 +627,18 @@ let rec translate_code env exp =
 
     | { pexp_desc =
           Pexp_apply (
+            { pexp_desc = Pexp_ident
+                  ( { txt = (Lident "failwith"
+                            | Ldot(Lident "Current", "failwith")) })},
+            [
+              Nolabel, { pexp_desc = Pexp_constant (Pconst_string (s, None)) }
+            ]);
+        pexp_loc
+      } ->
+      Failwith (s, loc_of_loc pexp_loc)
+
+    | { pexp_desc =
+          Pexp_apply (
               { pexp_desc = Pexp_ident ( { txt = Ldot(Lident "Loop",
                                                       "loop");
                                            loc } ) },

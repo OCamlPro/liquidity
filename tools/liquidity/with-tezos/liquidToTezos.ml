@@ -21,6 +21,13 @@ let prim name args annot =
   in
   Micheline.Prim(0, name, args, annot)
 
+let seq exprs annot =
+  let annot = match annot with
+    | Some s -> Some ("@" ^ s)
+    | None -> None
+  in
+  Micheline.Seq(0, exprs, annot)
+
 let prim_type name args = Micheline.Prim(0, name, args, None)
 
 let rec convert_const expr =
@@ -104,10 +111,10 @@ let rec convert_type expr =
 
 let rec convert_code expand expr =
   let name = expr.noloc_name in
-  match expr.i with | ANNOT a ->
-    Micheline.Seq (0, [], Some ("@"^a))
-  | SEQ exprs ->
-    Micheline.Seq (0, List.map (convert_code expand) exprs, name)
+  match expr.i with
+  | ANNOT a -> seq [] (Some a)
+  | SEQ exprs -> seq (List.map (convert_code expand) exprs) name
+
   | DROP -> prim "DROP" [] name
   | DIP (0, arg) -> assert false
   | DIP (1, arg) -> prim "DIP" [ convert_code expand arg ] name

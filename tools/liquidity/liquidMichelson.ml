@@ -51,6 +51,13 @@ let sanitize_opt = function
   | Some s -> Some (sanitize_name s)
   | None -> None
 
+let encode_failwith_param s =
+  let codes = Array.make (String.length s) "" in
+  String.iteri (fun i c ->
+      codes.(i) <- Printf.sprintf "%02x" (Char.code c)
+    ) s;
+  String.concat "" ("x" :: Array.to_list codes)
+
 (* n = size of preserved head of stack *)
 let drop_stack n depth =
   if depth = 0 then [] else
@@ -167,6 +174,16 @@ let translate_code code =
        storage @ contract @ amount @ arg @ drop @
          [ ii TRANSFER_TOKENS ] @ body @
            cleanup_stack, true
+
+    | Failwith (s, _loc) ->
+      let ins = ii FAIL in
+      let s = encode_failwith_param s in
+      if !LiquidOptions.annotafter then
+        [ ii (ANNOT s); ins ], false (* FAIL must be in tail position *)
+      else begin
+        ins.noloc_name <- Some s;
+        [ ins ], false
+      end
 
     | Apply (Prim_unknown, _loc, args) -> assert false
 
@@ -358,6 +375,7 @@ set x n y = x + [ DUP; CAR; SWAP; CDR ]*n +
     | Prim_tuple_set, _ -> assert false
 
     | Prim_fail,_ -> [ ii FAIL ]
+
     | Prim_self, _ -> [ ii SELF ]
     | Prim_balance, _ -> [ ii BALANCE ]
     | Prim_now, _ -> [ ii NOW ]
@@ -565,10 +583,10 @@ the ending NIL is not annotated with a type *)
       | None -> code
     else
       match List.rev code with
-      | c :: _ ->
+      | c :: _ when name <> None ->
         c.noloc_name <- sanitize_opt name;
         code
-      | [] -> code
+      | _ -> code
 
   and compile_arg_name arg_name =
     if !LiquidOptions.annotmic

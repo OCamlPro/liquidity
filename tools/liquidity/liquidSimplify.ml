@@ -132,6 +132,8 @@ let compute decompile code to_inline =
                                      lab_x_exp_list in
        { exp with desc = Record(loc, lab_x_exp_list) }
 
+    | Failwith (_, _) -> exp
+
     | Constructor _ -> assert false (* never found in typed_exp *)
   in
 

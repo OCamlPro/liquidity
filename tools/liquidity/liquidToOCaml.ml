@@ -228,6 +228,10 @@ let rec convert_code expr =
                     Nolabel,
                     convert_code arg) args)
 
+  | Failwith (s, _loc) ->
+    Exp.apply (Exp.ident (lid "Current.failwith"))
+      [Nolabel, Exp.constant (Const.string s)]
+
   | SetVar (name, _, fields, exp) -> begin
       match List.rev fields with
         field :: fields ->

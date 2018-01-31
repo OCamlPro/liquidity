@@ -62,7 +62,7 @@ let to_string contract =
           match node.kind with
           | N_UNKNOWN _
           | N_START
-          | N_FAIL
+          | N_FAIL _
           | N_LAMBDA_BEGIN
           | N_END
           | N_VAR _
