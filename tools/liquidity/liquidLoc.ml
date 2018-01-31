@@ -58,3 +58,19 @@ let warning_printer = ref default_warning_printer
 let warn loc w = !warning_printer loc w
 
 let loc_in_file loc_file = { loc_file; loc_pos = None }
+
+let compare_pos (l1, c1) (l2, c2) =
+  let c = compare l1 l2 in
+  if c <> 0 then c else compare c1 c2
+
+let max_pos p1 p2 = if p1 <= p2 then p2 else p1
+let min_pos p1 p2 = if p1 <= p2 then p1 else p2
+
+let merge l1 l2 =
+  let loc_file = l1.loc_file in
+  let loc_pos = match l1.loc_pos, l2.loc_pos with
+    | None, None -> None
+    | None, Some p | Some p, None -> Some p
+    | Some (b1, e1), Some (b2, e2) -> Some(min_pos b1 b2, max_pos e1 e2)
+  in
+  { loc_file; loc_pos }

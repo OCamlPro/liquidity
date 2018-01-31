@@ -8,7 +8,7 @@
 (**************************************************************************)
 
 val convert_contract :
-  expand:bool -> LiquidTypes.noloc_michelson_contract ->
+  expand:bool -> LiquidTypes.loc_michelson_contract ->
   LiquidTezosTypes.contract
 val convert_const : LiquidTypes.const -> LiquidTezosTypes.expr
 

@@ -575,11 +575,6 @@ type 'a pre_michelson =
   | MOD
   | DIV
 
-type noloc_michelson = {
-  i : noloc_michelson pre_michelson;
-  mutable noloc_name : string option;
-}
-
 type loc_michelson = {
   loc : location;
   ins : loc_michelson pre_michelson;
@@ -703,7 +698,7 @@ type typed_contract = typed_exp contract
 type encoded_contract = encoded_exp contract
 type michelson_contract = michelson_exp contract
 type node_contract = node_exp contract
-type noloc_michelson_contract = noloc_michelson contract
+type loc_michelson_contract = loc_michelson contract
 
 let dummy_syntax_contract : syntax_contract = {
     parameter = Tunit;

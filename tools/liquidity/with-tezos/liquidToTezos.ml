@@ -12,7 +12,7 @@ open Micheline
 
 type tezos_code = (unit,string) Micheline.node
 
-let ii i = { i; noloc_name  = None }
+let ii ~loc ins = { ins; loc; loc_name  = None }
 
 let prim name args annot =
   let annot = match annot with
@@ -110,8 +110,9 @@ let rec convert_type expr =
   | Tfail | Trecord _ | Tsum _ -> assert false
 
 let rec convert_code expand expr =
-  let name = expr.noloc_name in
-  match expr.i with
+  let name = expr.loc_name in
+  let ii = ii ~loc:expr.loc in
+  match expr.ins with
   | ANNOT a -> seq [] (Some a)
   | SEQ exprs -> seq (List.map (convert_code expand) exprs) name
 
@@ -121,7 +122,7 @@ let rec convert_code expand expr =
   | DIP (n, arg) ->
     if expand then
       prim "DIP" [ convert_code expand @@ ii @@
-                   SEQ [{ expr with i = DIP(n-1, arg)}]
+                   SEQ [{ expr with ins = DIP(n-1, arg)}]
                  ] None
     else
       prim (Printf.sprintf "D%sP" (String.make n 'I'))
@@ -198,7 +199,7 @@ let rec convert_code expand expr =
       convert_code expand @@ ii @@
       SEQ [
         ii @@ DIP(1, ii @@ SEQ [ii @@ DUP(n-1)]);
-        {i = SWAP; noloc_name = name }
+        { expr with ins = SWAP }
       ]
     else
       prim (Printf.sprintf "D%sP" (String.make n 'U')) [] name
@@ -218,17 +219,17 @@ let rec convert_code expand expr =
     convert_code expand @@
     ii @@ DIP (ndip, ii @@ SEQ (LiquidMisc.list_init ndrop (fun _ -> ii DROP)))
 
-  | CDAR 0 -> convert_code expand { expr with i = CAR }
-  | CDDR 0 -> convert_code expand { expr with i = CDR }
+  | CDAR 0 -> convert_code expand { expr with ins = CAR }
+  | CDDR 0 -> convert_code expand { expr with ins = CDR }
   | CDAR n ->
     if expand then
       convert_code expand @@ ii @@
-      SEQ (LiquidMisc.list_init n (fun _ -> ii CDR) @ [{ expr with i = CAR }])
+      SEQ (LiquidMisc.list_init n (fun _ -> ii CDR) @ [{ expr with ins = CAR }])
     else prim (Printf.sprintf "C%sAR" (String.make n 'D')) [] name
   | CDDR n ->
     if expand then
       convert_code expand @@ ii @@
-      SEQ (LiquidMisc.list_init n (fun _ -> ii CDR) @ [{ expr with i = CDR }])
+      SEQ (LiquidMisc.list_init n (fun _ -> ii CDR) @ [{ expr with ins = CDR }])
     else prim (Printf.sprintf "C%sDR" (String.make n 'D')) [] name
   | SIZE -> prim "SIZE" [] name
   | DEFAULT_ACCOUNT -> prim "DEFAULT_ACCOUNT" [] name

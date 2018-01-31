@@ -11,7 +11,7 @@ open LiquidTypes
 type init =
   | Init_constant of LiquidTypes.const
   | Init_code of (LiquidTypes.syntax_contract *
-                  LiquidTypes.noloc_michelson_contract)
+                  LiquidTypes.loc_michelson_contract)
 
 let c_unit = mk (Const (Tunit, CUnit)) ()
 let mk_nat i = mk (Const (Tnat, CNat (LiquidPrinter.integer_of_int i))) ()

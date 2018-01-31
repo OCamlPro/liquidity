@@ -15,7 +15,7 @@ let string_of_contract (c : michelson_exp contract) =
 let line_of_contract (c : michelson_exp contract) =
   LiquidPrinter.Michelson.line_of_contract c
 
-let convert_contract ~expand (c : noloc_michelson contract) =
+let convert_contract ~expand (c : loc_michelson contract) =
   LiquidEmit.emit_contract ~expand c
 
 let convert_const (c : const) =

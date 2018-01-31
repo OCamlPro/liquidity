@@ -21,3 +21,5 @@ val raise_error :
 val loc_in_file : string -> location
 
 val noloc : location
+
+val merge : location -> location -> location

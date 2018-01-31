@@ -9,14 +9,16 @@
 
 open LiquidTypes
 
-let i exp = {
-  i = exp;
-  noloc_name = None;
+let i ~loc exp = {
+  ins = exp;
+  loc;
+  loc_name = None;
 }
 
 let rec emit_code ~expand code =
-  let name = code.noloc_name in
-  match code.i with
+  let name = code.loc_name in
+  let i = i ~loc:code.loc in
+  match code.ins with
   | ANNOT s -> M_INS_ANNOT s
   | SEQ exprs -> M_INS_EXP ("SEQ", [], List.map (emit_code ~expand) exprs, name)
   | IF (ifthen, ifelse) ->
@@ -50,7 +52,7 @@ let rec emit_code ~expand code =
     if expand then
       M_INS_EXP ("DIP", [],
                  [emit_code ~expand @@ i @@
-                  SEQ [{ code with i = DIP(n-1, exp) }]], None)
+                  SEQ [{ code with ins = DIP(n-1, exp) }]], None)
     else
       M_INS_EXP (Printf.sprintf "D%sP" (String.make n 'I'), [],
                  [emit_code ~expand exp], name)
@@ -61,21 +63,21 @@ let rec emit_code ~expand code =
       emit_code ~expand @@ i @@
       SEQ [
         i @@ DIP(1, i @@ SEQ [i @@ DUP(n-1)]);
-        {i = SWAP; noloc_name = name }
+        {ins = SWAP; loc = code.loc; loc_name = name }
       ]
     else M_INS (Printf.sprintf "D%sP" (String.make n 'U'), name)
 
-  | CDAR 0 -> emit_code expand { code with i = CAR }
-  | CDDR 0 -> emit_code expand { code with i = CDR }
+  | CDAR 0 -> emit_code expand { code with ins = CAR }
+  | CDDR 0 -> emit_code expand { code with ins = CDR }
   | CDAR n ->
     if expand then
       emit_code ~expand @@ i @@
-      SEQ (LiquidMisc.list_init n (fun _ -> i CDR) @ [{ code with i = CAR }])
+      SEQ (LiquidMisc.list_init n (fun _ -> i CDR) @ [{ code with ins = CAR }])
     else M_INS (Printf.sprintf "C%sAR" (String.make n 'D'), name)
   | CDDR n ->
     if expand then
       emit_code ~expand @@ i @@
-      SEQ (LiquidMisc.list_init n (fun _ -> i CDR) @ [{ code with i = CDR }])
+      SEQ (LiquidMisc.list_init n (fun _ -> i CDR) @ [{ code with ins = CDR }])
     else M_INS (Printf.sprintf "C%sDR" (String.make n 'D'), name)
   | DROP -> M_INS ("DROP", name)
   | CAR -> M_INS ("CAR", name)
