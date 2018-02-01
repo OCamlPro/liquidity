@@ -10,111 +10,126 @@
 open LiquidTypes
 open Micheline
 
+type loc_table = (int * (LiquidTypes.location * string option)) list
+
 type tezos_code = (unit,string) Micheline.node
 
 let ii ~loc ins = { ins; loc; loc_name  = None }
 
-let prim name args annot =
+let loc_of_many (l : loc_michelson list) = match l, List.rev l with
+  | [], _ | _, [] -> LiquidLoc.noloc
+  | first :: _, last :: _ -> LiquidLoc.merge first.loc last.loc
+
+let prim ~loc name args annot =
   let annot = match annot with
     | Some s -> Some ("@" ^ s)
     | None -> None
   in
-  Micheline.Prim(0, name, args, annot)
+  Micheline.Prim(loc, name, args, annot)
 
-let seq exprs annot =
+let seq ~loc exprs annot =
   let annot = match annot with
     | Some s -> Some ("@" ^ s)
     | None -> None
   in
-  Micheline.Seq(0, exprs, annot)
+  Micheline.Seq(loc, exprs, annot)
 
-let prim_type name args = Micheline.Prim(0, name, args, None)
+let prim_type ~loc name args = Micheline.Prim(loc, name, args, None)
 
-let rec convert_const expr =
+let rec convert_const ~loc expr =
   match expr with
-  | CInt n -> Micheline.Int (0, LiquidPrinter.mic_of_integer n)
-  | CString s -> Micheline.String (0, s)
-  | CUnit -> Micheline.Prim(0, "Unit", [], None)
-  | CBool true -> Micheline.Prim(0, "True", [], None)
-  | CBool false -> Micheline.Prim(0, "False", [], None)
-  | CNone -> Micheline.Prim(0, "None", [], None)
+  | CInt n -> Micheline.Int (loc, LiquidPrinter.mic_of_integer n)
+  | CString s -> Micheline.String (loc, s)
+  | CUnit -> Micheline.Prim(loc, "Unit", [], None)
+  | CBool true -> Micheline.Prim(loc, "True", [], None)
+  | CBool false -> Micheline.Prim(loc, "False", [], None)
+  | CNone -> Micheline.Prim(loc, "None", [], None)
 
-  | CSome x -> Micheline.Prim(0, "Some", [convert_const x], None)
-  | CLeft x -> Micheline.Prim(0, "Left", [convert_const x], None)
-  | CRight x -> Micheline.Prim(0, "Right", [convert_const x], None)
+  | CSome x -> Micheline.Prim(loc, "Some", [convert_const ~loc x], None)
+  | CLeft x -> Micheline.Prim(loc, "Left", [convert_const ~loc x], None)
+  | CRight x -> Micheline.Prim(loc, "Right", [convert_const ~loc x], None)
 
   | CTuple [] -> assert false
   | CTuple [_] -> assert false
   | CTuple [x;y] ->
-     Micheline.Prim(0, "Pair", [convert_const x;
-                                  convert_const y], None)
+     Micheline.Prim(loc, "Pair", [convert_const ~loc x;
+                                  convert_const ~loc y], None)
   | CTuple (x :: y) ->
-     Micheline.Prim(0, "Pair", [convert_const x;
-                                  convert_const (CTuple y)], None)
-  | CList args -> Micheline.Prim(0, "List",
-                                   List.map convert_const args, None)
+     Micheline.Prim(loc, "Pair", [convert_const ~loc x;
+                                  convert_const ~loc (CTuple y)], None)
+  | CList args -> Micheline.Prim(loc, "List",
+                                   List.map (convert_const ~loc) args, None)
 
   | CMap args ->
-     Micheline.Prim(0, "Map",
+     Micheline.Prim(loc, "Map",
                       List.map (fun (x,y) ->
-                          Micheline.Prim(0, "Item", [convert_const x;
-                                                       convert_const y], None
+                          Micheline.Prim(loc, "Item", [convert_const ~loc x;
+                                                       convert_const ~loc y], None
                                           ))
                                args, None)
-  | CSet args -> Micheline.Prim(0, "Set",
-                                  List.map convert_const args, None)
-  | CNat n -> Micheline.Int (0, LiquidPrinter.mic_of_integer n)
-  | CTez n -> Micheline.String (0, LiquidPrinter.mic_of_tez n)
+  | CSet args -> Micheline.Prim(loc, "Set",
+                                  List.map (convert_const ~loc) args, None)
+  | CNat n -> Micheline.Int (loc, LiquidPrinter.mic_of_integer n)
+  | CTez n -> Micheline.String (loc, LiquidPrinter.mic_of_tez n)
            (*
   | CTez tez
     |CKey _|
    | CSignature _|CLeft _|CRight _)
             *)
-  | CTimestamp s -> Micheline.String (0, s)
-  | CKey s -> Micheline.String (0, s)
-  | CKey_hash s -> Micheline.String (0, s)
-  | CContract s -> Micheline.String (0, s)
-  | CSignature s -> Micheline.String (0, s)
+  | CTimestamp s -> Micheline.String (loc, s)
+  | CKey s -> Micheline.String (loc, s)
+  | CKey_hash s -> Micheline.String (loc, s)
+  | CContract s -> Micheline.String (loc, s)
+  | CSignature s -> Micheline.String (loc, s)
 
   | _ ->
-    LiquidLoc.raise_error "to-tezos: unimplemented const:\n%s%!"
+    LiquidLoc.raise_error ~loc:(fst loc) "to-tezos: unimplemented const:\n%s%!"
       (LiquidPrinter.Michelson.string_of_const expr)
 
 
-let rec convert_type expr =
+let rec convert_type ~loc expr =
   match expr with
-  | Tunit -> prim_type "unit" []
-  | Ttimestamp -> prim_type "timestamp" []
-  | Ttez -> prim_type "tez" []
-  | Tint -> prim_type "int" []
-  | Tnat -> prim_type "nat" []
-  | Tbool -> prim_type "bool" []
-  | Tkey -> prim_type "key" []
-  | Tkey_hash -> prim_type "key_hash" []
-  | Tsignature -> prim_type "signature" []
-  | Tstring -> prim_type "string" []
+  | Tunit -> prim_type ~loc "unit" []
+  | Ttimestamp -> prim_type ~loc "timestamp" []
+  | Ttez -> prim_type ~loc "tez" []
+  | Tint -> prim_type ~loc "int" []
+  | Tnat -> prim_type ~loc "nat" []
+  | Tbool -> prim_type ~loc "bool" []
+  | Tkey -> prim_type ~loc "key" []
+  | Tkey_hash -> prim_type ~loc "key_hash" []
+  | Tsignature -> prim_type ~loc "signature" []
+  | Tstring -> prim_type ~loc "string" []
   | Ttuple [x] -> assert false
   | Ttuple [] -> assert false
-  | Ttuple [x;y] -> prim_type "pair" [convert_type x; convert_type y]
+  | Ttuple [x;y] -> prim_type ~loc "pair" [convert_type ~loc x; convert_type ~loc y]
   | Ttuple (x :: tys) ->
-     prim_type "pair" [convert_type x; convert_type (Ttuple tys)]
-  | Tor (x,y) -> prim_type "or" [convert_type x; convert_type y]
-  | Tcontract (x,y) -> prim_type "contract" [convert_type x;convert_type y]
-  | Tlambda (x,y) -> prim_type "lambda" [convert_type x; convert_type y]
+     prim_type ~loc "pair" [convert_type ~loc x; convert_type ~loc (Ttuple tys)]
+  | Tor (x,y) -> prim_type ~loc "or" [convert_type ~loc x; convert_type ~loc y]
+  | Tcontract (x,y) -> prim_type ~loc "contract" [convert_type ~loc x;
+                                             convert_type ~loc y]
+  | Tlambda (x,y) -> prim_type ~loc "lambda" [convert_type ~loc x;
+                                         convert_type ~loc y]
   | Tclosure ((x,e),r) ->
-    convert_type (Ttuple [Tlambda (Ttuple [x; e], r); e ]);
-  | Tmap (x,y) -> prim_type "map" [convert_type x;convert_type y]
-  | Tset x -> prim_type "set" [convert_type x]
-  | Tlist x -> prim_type "list" [convert_type x]
-  | Toption x -> prim_type "option" [convert_type x]
+    convert_type ~loc (Ttuple [Tlambda (Ttuple [x; e], r); e ]);
+  | Tmap (x,y) -> prim_type ~loc "map" [convert_type ~loc x;convert_type ~loc y]
+  | Tset x -> prim_type ~loc "set" [convert_type ~loc x]
+  | Tlist x -> prim_type ~loc "list" [convert_type ~loc x]
+  | Toption x -> prim_type ~loc "option" [convert_type ~loc x]
   | Tfail | Trecord _ | Tsum _ -> assert false
 
 let rec convert_code expand expr =
   let name = expr.loc_name in
   let ii = ii ~loc:expr.loc in
+  let seq = seq ~loc:(expr.loc, None) in
+  let gprim = prim in
+  let prim = prim ~loc:(expr.loc, None) in
+  let convert_type = convert_type ~loc:(expr.loc, None) in
+  let convert_const = convert_const ~loc:(expr.loc, None) in
   match expr.ins with
   | ANNOT a -> seq [] (Some a)
   | SEQ exprs -> seq (List.map (convert_code expand) exprs) name
+
+  | FAIL s -> gprim ~loc:(expr.loc, s) "FAIL" [] name
 
   | DROP -> prim "DROP" [] name
   | DIP (0, arg) -> assert false
@@ -163,7 +178,6 @@ let rec convert_code expand expr =
      prim "LAMBDA" [convert_type ty1; convert_type ty2; convert_code expand expr] name
   | REDUCE -> prim "REDUCE" [] name
   | COMPARE -> prim "COMPARE" [] name
-  | FAIL -> prim "FAIL" [] name
   | PUSH (Tunit, CUnit) -> prim "UNIT" [] name
   | TRANSFER_TOKENS -> prim "TRANSFER_TOKENS" [] name
   | PUSH (ty, cst) -> prim "PUSH" [ convert_type ty;
@@ -236,26 +250,45 @@ let rec convert_code expand expr =
 
 
 let convert_contract ~expand c =
-  let ret_type = convert_type c.return in
-  let arg_type = convert_type c.parameter in
-  let storage_type = convert_type c.storage in
+  let loc = LiquidLoc.noloc in
+  let ret_type = convert_type ~loc c.return in
+  let arg_type = convert_type ~loc c.parameter in
+  let storage_type = convert_type ~loc c.storage in
   let code = convert_code expand c.code in
-  let nodes = Micheline.Prim(0, "return", [ret_type], None) ::
-                Micheline.Prim(0, "parameter", [arg_type], None) ::
-                  Micheline.Prim(0, "storage", [storage_type], None) ::
-                    Micheline.Prim(0, "code", [code], None) ::
-                      []
-  in
-  List.map Micheline.strip_locations nodes
+  let r = Micheline.Prim(loc, "return", [ret_type], None) in
+  let p = Micheline.Prim(loc, "parameter", [arg_type], None) in
+  let s = Micheline.Prim(loc, "storage", [storage_type], None) in
+  let c = Micheline.Prim((loc, None), "code", [code], None) in
+
+  let mr, tr = Micheline.extract_locations r in
+  let mp, tp = Micheline.extract_locations p in
+  let ms, ts = Micheline.extract_locations s in
+  let code_loc_offset =
+    List.length tr + List.length tp + List.length ts + 1 in
+
+  let mc, loc_table = Micheline.extract_locations c in
+  let loc_table = List.map (fun (i, l) ->
+      i + code_loc_offset, l
+    ) loc_table in
+
+  if !LiquidOptions.verbosity > 1 then
+    List.iter (fun (i, (l, s)) ->
+        match s with
+        | None -> Format.eprintf "%d -> %a@." i LiquidLoc.print_loc l
+        | Some s -> Format.eprintf "%d -> %a -> %S@." i LiquidLoc.print_loc l s
+      ) loc_table;
+
+  [mr; mp; ms; mc], loc_table
 
 let print_program comment_of_loc ppf (c, loc_table) =
-  let c = List.map (Micheline.inject_locations
-                          (fun _ -> { Micheline_printer.comment = None })
-                       ) c in
+  let c = List.map
+      (Micheline.inject_locations (fun l ->
+           (* { Micheline_printer.comment = Some (string_of_int l) } *)
+           { Micheline_printer.comment = None }
+         )) c in
   List.iter (fun node ->
-      Format.fprintf  ppf
-                      "%a;@."
-                      Micheline_printer.print_expr_unwrapped node
+      Format.fprintf ppf "%a;@."
+        Micheline_printer.print_expr_unwrapped node
     ) c
 
 
@@ -336,7 +369,7 @@ let read_tezos_file filename =
 
 
 let convert_const c =
-  convert_const c |> Micheline.strip_locations
+  convert_const ~loc:(LiquidLoc.noloc, None) c |> Micheline.strip_locations
 
     (*
 

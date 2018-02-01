@@ -69,7 +69,8 @@ type check_result =
 
 let confirmAndCheck ((op : operation), (storage: storage)) =
   let owner = Contract.manager (Source : (unit, unit) contract) in
-  if not (Set.mem owner storage.m_owners) then Current.fail ();
+  if not (Set.mem owner storage.m_owners) then
+    Current.failwith "You need to be an owner to perform this operation";
   let oph = Crypto.hash op in
   let pending = match Map.find oph storage.m_pending with
     | None ->
@@ -83,7 +84,8 @@ let confirmAndCheck ((op : operation), (storage: storage)) =
   in
   (* make sure we (the message sender) haven't confirmed this operation
      previously *)
-  if Set.mem owner pending.ownersDone then Current.fail ();
+  if Set.mem owner pending.ownersDone then
+    Current.failwith "You have already confirmed this pending operation";
   (* check if count is enough to go ahead *)
   if pending.yetNeeded <= 1p then
     let storage =
@@ -117,7 +119,7 @@ let has_confirmed ((op: operation), (owner: key_hash), (storage:storage)) =
 let underLimit ((value: tez), (storage: storage)) =
   if Set.mem (Contract.manager (Source : (unit, unit) contract)) storage.m_owners
   then ()
-  else Current.fail ();
+  else Current.failwith "Only owners can perform transfers";
   (* onlyowner storage; *)
   let storage =
     if Current.time () >= storage.m_last + 86400 (* 24h *) then
@@ -134,7 +136,9 @@ let underLimit ((value: tez), (storage: storage)) =
 let%init storage (owners : key_hash set) (required : nat) (limit : tez) =
   let m_owners = Set.add (Contract.manager (Source : (unit, unit) contract)) owners in
   let m_num_owners = Set.size m_owners in
-  if required > m_num_owners then Current.fail ();
+  if required > m_num_owners then
+    Current.failwith "Number of required confirmations must be smaller or \
+                      equal than the number of owners";
   {
     m_num_owners;
     m_owners;
@@ -196,7 +200,7 @@ let%entry main
     (storage : storage) : unit * storage =
   match parameter with
   | Deposit ->
-    if Current.amount () = 0tz then Current.fail ()
+    if Current.amount () = 0tz then Current.failwith "You cannot deposit 0tz"
     else ((), storage)
 
   (* | Revoke op -> ((), storage) *)
@@ -236,7 +240,8 @@ let%entry main
         | Confirmations_Needed storage -> (), storage
         | Execute storage ->
           (* if is_owner (owner, storage) then Current.fail (); *)
-          if Set.mem owner storage.m_owners then Current.fail ();
+          if Set.mem owner storage.m_owners then
+            Current.failwith "The owner you are trying to add already exists";
           let storage = clearPending storage in
           let storage = storage.m_num_owners <- storage.m_num_owners + 1p in
           let storage = storage.m_owners <- Set.add owner storage.m_owners in
@@ -248,7 +253,9 @@ let%entry main
         | Confirmations_Needed storage -> (), storage
         | Execute storage ->
           (* if not (is_owner (owner,storage)) then Current.fail (); *)
-          if not (Set.mem owner storage.m_owners) then Current.fail ();
+          if not (Set.mem owner storage.m_owners) then
+            Current.failwith
+              "The owner you are trying to remove does not exist";
           if storage.m_required >= storage.m_num_owners then Current.fail ();
           let new_num_owners = match%nat int storage.m_num_owners - 1 with
             | Plus n -> n
@@ -264,7 +271,8 @@ let%entry main
         match confirmAndCheck (ChangeRequirement required, storage) with
         | Confirmations_Needed storage -> (), storage
         | Execute storage ->
-          if required > storage.m_num_owners then Current.fail ();
+          if required > storage.m_num_owners then
+            Current.failwith "New requirement is invalid";
           let storage = clearPending storage in
           let storage = storage.m_required <- required in
           ((), storage)
@@ -296,7 +304,7 @@ let%entry main
       (* onlyowner storage; *)
       if Set.mem (Contract.manager (Source : (unit, unit) contract)) storage.m_owners
       then ()
-      else Current.fail ();
+      else Current.failwith "Only owners can issue transactions";
       (* execute directly if under limit *)
       let under, storage = underLimit (t.amount, storage) in
       if under then

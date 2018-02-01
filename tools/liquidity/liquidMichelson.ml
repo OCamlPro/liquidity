@@ -184,7 +184,7 @@ let translate_code code =
            cleanup_stack, true
 
     | Failwith (s, loc) ->
-      let ins = ii ~loc FAIL in
+      let ins = ii ~loc (FAIL (Some s)) in
       let s = encode_failwith_param s in
       if !LiquidOptions.annotafter then
         [ ii ~loc (ANNOT s); ins ], false (* FAIL must be in tail position *)
@@ -389,7 +389,7 @@ set x n y = x + [ DUP; CAR; SWAP; CDR ]*n +
        x_code @ set_code
     | Prim_tuple_set, _ -> assert false
 
-    | Prim_fail,_ -> [ ii FAIL ]
+    | Prim_fail,_ -> [ ii @@ FAIL None ]
 
     | Prim_self, _ -> [ ii SELF ]
     | Prim_balance, _ -> [ ii BALANCE ]

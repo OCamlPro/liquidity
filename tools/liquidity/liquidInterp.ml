@@ -178,7 +178,7 @@ let add_name stack seq name =
 
 let add_name_to_ins stack seq ins =
   match ins.loc_name, ins.ins, stack with
-  | Some _, FAIL, _ -> ()
+  | Some _, FAIL _, _ -> ()
   | Some name, _, x :: _ -> add_name stack seq name
   | _, _, _ -> ()
 
@@ -198,7 +198,7 @@ let interp contract =
       decompile_seq stack seq code
 
     (* Special case for failwith, annot is before *)
-    | {ins=ANNOT name} :: ({ins=FAIL} as fail) :: code, _ ->
+    | {ins=ANNOT name} :: ({ins=FAIL _} as fail) :: code, _ ->
       fail.loc_name <- Some name;
       let stack, seq = decompile stack seq fail in
       decompile_seq stack seq code
@@ -249,7 +249,7 @@ let interp contract =
    avoid infinite loops here...
 *)
 
-    | IF ({ins=SEQ [{ins=FAIL}]} as seq_fail,
+    | IF ({ins=SEQ [{ins=FAIL _}]} as seq_fail,
           {ins=SEQ ( (_ :: _) as ifelse )}),_ ->
       decompile stack seq
         (mic_loc ins.loc
@@ -257,20 +257,20 @@ let interp contract =
                    (IF (seq_fail,
                         mic_loc ins.loc (SEQ []))) :: ifelse)))
     | IF ({ins=SEQ ( (_ :: _) as ifthen )},
-          ({ins=SEQ [{ins=FAIL}]} as seq_fail)),_ ->
+          ({ins=SEQ [{ins=FAIL _}]} as seq_fail)),_ ->
       decompile stack seq
         (mic_loc ins.loc
            (SEQ (mic_loc ins.loc
                    (IF (mic_loc ins.loc (SEQ []),
                         seq_fail)) :: ifthen)))
     | IF_NONE ({ins=SEQ ( (_::_) as ifthen)},
-               ({ins=SEQ [{ins=FAIL}]} as seq_fail)),_ ->
+               ({ins=SEQ [{ins=FAIL _}]} as seq_fail)),_ ->
       decompile stack seq
         (mic_loc ins.loc
            (SEQ (mic_loc ins.loc
                    (IF_NONE (mic_loc ins.loc (SEQ []),
                              seq_fail)) :: ifthen)))
-    | IF_CONS ({ins=SEQ [{ins=FAIL}]} as seq_fail,
+    | IF_CONS ({ins=SEQ [{ins=FAIL _}]} as seq_fail,
                {ins=SEQ ( (_::_) as ifelse )} ),_ ->
       decompile stack seq
         (mic_loc ins.loc
@@ -507,7 +507,7 @@ let interp contract =
        let x = node ins.loc (N_CONST (ty, cst)) [] [seq] in
        x :: stack, x
 
-    | FAIL, _ ->
+    | FAIL _, _ ->
       let i = match ins.loc_name with
         | None -> N_FAIL None
         | Some enc_s ->

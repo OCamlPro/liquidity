@@ -359,7 +359,7 @@ let rec convert_code env expr =
   | Prim(index, "COMPARE", [], annot) ->
     mic_loc env index annot (COMPARE)
   | Prim(index, "FAIL", [], annot) ->
-    mic_loc env index annot (FAIL)
+    mic_loc env index annot (FAIL None)
   | Prim(index, "UNIT", [], annot) ->
     mic_loc env index annot (PUSH (Tunit, CUnit))
   | Prim(index, "TRANSFER_TOKENS", [], annot) ->

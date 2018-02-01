@@ -523,7 +523,7 @@ type 'a pre_michelson =
   | PAIR
   | COMPARE
   | LE | LT | GE | GT | NEQ | EQ
-  | FAIL
+  | FAIL of string option
   | NOW
   | TRANSFER_TOKENS
   | ADD

@@ -30,7 +30,8 @@ let%init storage (owners : key_hash set) (min_agree : nat) =
   let owners =
     Set.add (Contract.manager (Source : (unit, unit) contract)) owners in
   let owners_length = Set.size owners in
-  if min_agree > owners_length then Current.fail ();
+  if min_agree > owners_length then
+    Current.failwith "Number of owners must be greater or equal to quorum";
   {
     owners;
     owners_length;
@@ -40,7 +41,9 @@ let%init storage (owners : key_hash set) (min_agree : nat) =
 
 (* fails if the proposition is not a valid one *)
 let check_proposition (p:proposition) =
-  if p.amount > Current.balance () then Current.fail () else ()
+  if p.amount > Current.balance () then
+    Current.failwith "Balance to low for withdrawal"
+  else ()
 
 
 (* returns the address of the current caller of this multisig contract *)
@@ -78,7 +81,8 @@ let%entry main
     (* the caller must be an owner*)
     if not (Set.mem owner_kh storage.owners) then Current.fail ();
     (* Don't send money while managing multisig *)
-    if Current.amount () <> 0tz then Current.fail ();
+    if Current.amount () <> 0tz then
+      Current.failwith "Don't send money while managing multisig";
     (* Register the desired action in the storage *)
     let storage =
       storage.actions <- Map.update owner_kh action storage.actions in

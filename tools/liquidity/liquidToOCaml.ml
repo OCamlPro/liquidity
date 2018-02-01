@@ -62,7 +62,9 @@ let rec convert_type ?(abbrev=true) ?name ty =
   | Tkey_hash -> typ_constr "key_hash" []
   | Tsignature -> typ_constr "signature" []
   | Tstring -> typ_constr "string" []
-  | Tfail | Trecord _ | Tsum _ -> assert false
+  | Tsum (name, _)
+  | Trecord (name, _) -> typ_constr name []
+  | Tfail -> assert false
   | _ ->
     try typ_constr (get_abbrev ty) []
     with Not_found ->

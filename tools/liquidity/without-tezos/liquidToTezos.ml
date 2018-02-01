@@ -9,6 +9,8 @@
 
 open LiquidTypes
 
+type loc_table = (int * (LiquidTypes.location * string option)) list
+
 let string_of_contract (c : michelson_exp contract) =
   LiquidPrinter.Michelson.string_of_contract c
 
@@ -16,7 +18,8 @@ let line_of_contract (c : michelson_exp contract) =
   LiquidPrinter.Michelson.line_of_contract c
 
 let convert_contract ~expand (c : loc_michelson contract) =
-  LiquidEmit.emit_contract ~expand c
+  LiquidEmit.emit_contract ~expand c,
+  [] (* TODO : loc_table *)
 
 let convert_const (c : const) =
   failwith "mini version cannot convert const"

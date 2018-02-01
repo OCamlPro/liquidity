@@ -7,9 +7,12 @@
 (*                                                                        *)
 (**************************************************************************)
 
+
+type loc_table = (int * (LiquidTypes.location * string option)) list
+
 val convert_contract :
   expand:bool -> LiquidTypes.loc_michelson_contract ->
-  LiquidTezosTypes.contract
+  LiquidTezosTypes.contract * loc_table
 val convert_const : LiquidTypes.const -> LiquidTezosTypes.expr
 
 val line_of_contract : LiquidTezosTypes.contract -> string

@@ -485,8 +485,11 @@ module Michelson = struct
     | EQ ->
       Printf.bprintf b "EQ";
       bprint_pre_name b name;
-    | FAIL ->
+    | FAIL None ->
       Printf.bprintf b "FAIL";
+      bprint_pre_name b name;
+    | FAIL (Some s) ->
+      Printf.bprintf b "FAIL /* %S */" s;
       bprint_pre_name b name;
     | NOW ->
       Printf.bprintf b "NOW";
@@ -616,9 +619,6 @@ module Michelson = struct
       Printf.bprintf b "DIV";
       bprint_pre_name b name
 
-  (* let rec bprint_noloc_michelson fmt b ins=
-   *   bprint_pre_michelson fmt bprint_noloc_michelson b ins.noloc_name ins.i *)
-
   let rec bprint_loc_michelson fmt b m =
     bprint_pre_michelson fmt bprint_loc_michelson b m.loc_name m.ins
 
@@ -632,10 +632,6 @@ module Michelson = struct
     to_string multi_line (bprint_contract bprint_code) cmd
   let line_of_contract cmd =
     to_string single_line (bprint_contract bprint_code) cmd
-  (* let string_of_noloc_michelson =
-   *   to_string multi_line (fun fmt b _ -> bprint_noloc_michelson fmt b)
-   * let line_of_noloc_michelson =
-   *   to_string single_line (fun fmt b _ -> bprint_noloc_michelson fmt b) *)
   let string_of_loc_michelson =
     to_string multi_line (fun fmt b _ -> bprint_loc_michelson fmt b)
   let line_of_loc_michelson =

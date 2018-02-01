@@ -90,7 +90,7 @@ let rec emit_code ~expand code =
   | GT -> M_INS ("GT", name)
   | NEQ -> M_INS ("NEQ", name)
   | EQ -> M_INS ("EQ", name)
-  | FAIL -> M_INS ("FAIL", name)
+  | FAIL _ -> M_INS ("FAIL", name)
   | NOW -> M_INS ("NOW", name)
   | TRANSFER_TOKENS -> M_INS ("TRANSFER_TOKENS", name)
   | ADD -> M_INS ("ADD", name)

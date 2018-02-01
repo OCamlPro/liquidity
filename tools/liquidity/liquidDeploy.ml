@@ -10,6 +10,8 @@ open LiquidTypes
 open Lwt
 
 exception RequestError of string
+exception RuntimeError of error
+exception RuntimeFailure of error * string option
 
 type from =
   | From_string of string
@@ -150,18 +152,52 @@ let compile_liquid liquid =
 
   ( env, syntax_ast, pre_michelson, pre_init )
 
-let raise_request_error r msg =
+let raise_error_from_l ?loc_table err_msg l =
+  let default_error () =
+    let err_s =
+      List.map (fun (kind, id, _) ->
+          Printf.sprintf "%s: %s" kind id) l
+      |> String.concat "\n- "
+      |> Printf.sprintf "In %s:\n- %s" err_msg
+    in
+    raise (RequestError err_s)
+  in
+  match loc_table with
+  | None -> default_error ()
+  | Some loc_table ->
+    let err_msg = Printf.sprintf "in %s" err_msg in
+    try
+      List.iter (fun (kind, id, loc) ->
+          match loc, kind, id with
+          | Some loc, "temporary", "scriptRejectedRuntimeError" ->
+            let err_loc, fail_str = List.assoc loc loc_table in
+            raise (RuntimeFailure ({err_msg; err_loc}, fail_str))
+          | Some loc, "temporary", _ ->
+            let err_loc, _ = List.assoc loc loc_table in
+            raise (RuntimeError {err_msg; err_loc})
+          | _ -> ()
+        ) l;
+      default_error ()
+    with Not_found -> default_error ()
+
+let raise_request_error ?loc_table r msg =
   try
     let err = Ezjsonm.find r ["error"] in
-    (* let err_s = Ezjsonm.to_string ~minify:false (Data_encoding_ezjsonm.to_root err) in *)
+    (* let err_s =
+       Ezjsonm.to_string ~minify:false (Data_encoding_ezjsonm.to_root err) in *)
     let l = Ezjsonm.get_list (fun err ->
         let kind = Ezjsonm.find err ["kind"] |> Ezjsonm.get_string in
         let id = Ezjsonm.find err ["id"] |> Ezjsonm.get_string in
-        (* let err_s = Ezjsonm.to_string ~minify:false (Data_encoding_ezjsonm.to_root err) in *)
-        kind ^ ": "^ id
+        let loc =
+          try Some (Ezjsonm.find err ["location"] |> Ezjsonm.get_int)
+          with Not_found -> None
+        in
+        kind, id, loc
+        (* let err_s =
+           Ezjsonm.to_string
+           ~minify:false (Data_encoding_ezjsonm.to_root err) in *)
       ) err in
-    let err_s = "In "^msg^", "^ String.concat "\n" l in
-    raise (RequestError err_s)
+    raise_error_from_l ?loc_table msg l
   with Not_found ->
     raise (RequestError ("Bad response for "^msg))
 
@@ -176,7 +212,8 @@ let mk_json_arr l = "[" ^ String.concat "," l ^ "]"
 
 
 let run_pre env syntax_contract pre_michelson source input storage =
-  let c = LiquidToTezos.convert_contract ~expand:true pre_michelson in
+  let c, loc_table =
+    LiquidToTezos.convert_contract ~expand:true pre_michelson in
   let input_m = LiquidToTezos.convert_const input in
   let storage_m = LiquidToTezos.convert_const storage in
   let contract_json = LiquidToTezos.json_of_contract c in
@@ -211,7 +248,7 @@ let run_pre env syntax_contract pre_michelson source input storage =
     in
     return (result, storage)
   with Not_found ->
-    raise_request_error r "run"
+    raise_request_error ~loc_table r "run"
 
 
 let run liquid input_string storage_string =
@@ -329,7 +366,8 @@ let forge_deploy ?head ?source ?(delegatable=false) ?(spendable=false)
   end >>= fun head ->
   get_counter source >>= fun counter ->
   let counter = counter + 1 in
-  let c = LiquidToTezos.convert_contract ~expand:true pre_michelson in
+  let c, loc_table =
+    LiquidToTezos.convert_contract ~expand:true pre_michelson in
   let init_storage_m = LiquidToTezos.convert_const init_storage in
   let contract_json = LiquidToTezos.json_of_contract c in
   let init_storage_json = LiquidToTezos.json_of_const init_storage_m in
@@ -360,12 +398,13 @@ let forge_deploy ?head ?source ?(delegatable=false) ?(spendable=false)
   >>= fun r ->
   let r = Ezjsonm.from_string r in
   try
-    Ezjsonm.find r ["ok"; "operation"] |> Ezjsonm.get_string |> return
+    let op = Ezjsonm.find r ["ok"; "operation"] |> Ezjsonm.get_string in
+    return (op, loc_table)
   with Not_found ->
-    raise_request_error r "forge_deploy"
+    raise_request_error ~loc_table r "forge_deploy"
 
 
-let inject sk netId op =
+let inject ?loc_table sk netId op =
   get_predecessor () >>= fun pred ->
   let op_b = MBytes.of_string (Hex_encode.hex_decode op) in
   let signature_b = Ed25519.sign sk op_b in
@@ -388,7 +427,7 @@ let inject sk netId op =
      Ezjsonm.find r ["ok"; "contracts"] |> Ezjsonm.get_list Ezjsonm.get_string
      |> return
    with Not_found ->
-     raise_request_error r "inject (apply_operation)"
+     raise_request_error ?loc_table r "inject (apply_operation)"
   ) >>= fun contracts ->
   let data = [
     "signedOperationContents", Printf.sprintf "%S" signed_op;
@@ -401,7 +440,7 @@ let inject sk netId op =
   (try
      Ezjsonm.find r ["ok"; "injectedOperation"] |> Ezjsonm.get_string |> return
    with Not_found ->
-     raise_request_error r "deploy (inject_operation)"
+     raise_request_error ?loc_table r "deploy (inject_operation)"
   ) >>= fun injected_op_hash ->
   assert (injected_op_hash = op_hash);
 
@@ -422,8 +461,8 @@ let deploy ?(delegatable=false) ?(spendable=false) liquid init_params_strings =
   get_head () >>= fun head ->
   forge_deploy ~head:head.head_hash ~source ~delegatable ~spendable
     liquid init_params_strings
-  >>= fun op ->
-  inject sk head.head_netId op >>= function
+  >>= fun (op, loc_table) ->
+  inject ~loc_table sk head.head_netId op >>= function
   | op_h, [c] -> return (op_h, c)
   | _ -> raise (RequestError "deploy (inject)")
 
@@ -482,10 +521,13 @@ let forge_call ?head ?source liquid address parameter_string =
   !request ~data "/blocks/prevalidation/proto/helpers/forge/operations"
   >>= fun r ->
   let r = Ezjsonm.from_string r in
+  let _, loc_table =
+    LiquidToTezos.convert_contract ~expand:true pre_michelson in
   try
-    Ezjsonm.find r ["ok"; "operation"] |> Ezjsonm.get_string |> return
+    let op = Ezjsonm.find r ["ok"; "operation"] |> Ezjsonm.get_string in
+    return (op, loc_table)
   with Not_found ->
-    raise_request_error r "forge_call"
+    raise_request_error ~loc_table r "forge_call"
 
 
 let call liquid address parameter_string =
@@ -501,8 +543,8 @@ let call liquid address parameter_string =
   in
   get_head () >>= fun head ->
   forge_call ~head:head.head_hash ~source liquid address parameter_string
-  >>= fun op ->
-  inject sk head.head_netId op >>= function
+  >>= fun (op, loc_table) ->
+  inject ~loc_table sk head.head_netId op >>= function
   | op_h, [] -> return op_h
   | _ -> raise (RequestError "call (inject)")
 
@@ -513,9 +555,11 @@ module Async = struct
 
   let forge_deploy ?(delegatable=false) ?(spendable=false) liquid init_params_strings =
     forge_deploy ~delegatable ~spendable liquid init_params_strings
+    >>= fun (op, _) -> return op
 
   let forge_call liquid address parameter_string =
     forge_call liquid address parameter_string
+    >>= fun (op, _) -> return op
 
   let run liquid input_string storage_string =
     run liquid input_string storage_string
@@ -534,10 +578,12 @@ module Sync = struct
   type 'a t = 'a
 
   let forge_deploy ?(delegatable=false) ?(spendable=false) liquid init_params_strings =
-    Lwt_main.run (forge_deploy liquid init_params_strings)
+    Lwt_main.run (forge_deploy liquid init_params_strings
+                  >>= fun (op, _) -> return op)
 
   let forge_call liquid address parameter_string =
-    Lwt_main.run (forge_call liquid address parameter_string)
+    Lwt_main.run (forge_call liquid address parameter_string
+                  >>= fun (op, _) -> return op)
 
   let run liquid input_string storage_string =
     Lwt_main.run (run liquid input_string storage_string)

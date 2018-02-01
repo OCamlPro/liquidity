@@ -72,7 +72,7 @@ let compile_liquid_file filename =
       FileString.write_file output s;
       Printf.eprintf "Constant initial storage generated in %S\n%!" output
     | LiquidInit.Init_code (_, pre_init) ->
-      let mic_init = LiquidToTezos.convert_contract ~expand:true pre_init in
+      let mic_init, _ = LiquidToTezos.convert_contract ~expand:true pre_init in
       let s = LiquidToTezos.line_of_contract mic_init in
       let output = env.filename ^ ".initializer.tz" in
       FileString.write_file output s;
@@ -80,7 +80,8 @@ let compile_liquid_file filename =
   end;
 
   let output = filename ^ ".tz" in
-  let c = LiquidToTezos.convert_contract ~expand:false pre_michelson in
+  let c, loc_table =
+    LiquidToTezos.convert_contract ~expand:false pre_michelson in
   let s =
     if !LiquidOptions.singleline
     then LiquidToTezos.line_of_contract c
@@ -167,7 +168,7 @@ module Data = struct
     List.iter (fun (s,x) ->
         match x with
         | Error error ->
-           LiquidLoc.report_error error
+           LiquidLoc.report_error Format.err_formatter error
         | Ok x ->
            Printf.printf "%s: %s\n%!" s x)
               [ "parameter", p; "storage", s ]
@@ -379,13 +380,23 @@ let () =
     main ()
   with
   | LiquidError error ->
-    LiquidLoc.report_error error;
+    LiquidLoc.report_error Format.err_formatter error;
     exit 1
   | LiquidFromTezos.Missing_program_field f ->
     Format.eprintf "Missing script field %s@." f;
     exit 1
   | LiquidDeploy.RequestError msg ->
     Format.eprintf "Request Error: %s@." msg;
+    exit 1
+  | LiquidDeploy.RuntimeError error ->
+    LiquidLoc.report_error ~kind:"Runtime error" Format.err_formatter error;
+    exit 1
+  | LiquidDeploy.RuntimeFailure (error, None) ->
+    LiquidLoc.report_error ~kind:"Failed at runtime" Format.err_formatter error;
+    exit 1
+  | LiquidDeploy.RuntimeFailure (error, Some s) ->
+    LiquidLoc.report_error ~kind:"Failed at runtime" Format.err_formatter error;
+    Format.eprintf "Failed with %S@." s;
     exit 1
   | Failure f ->
     Format.eprintf "Failure: %s@." f;

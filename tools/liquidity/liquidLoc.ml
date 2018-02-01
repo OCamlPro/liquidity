@@ -40,8 +40,8 @@ let print_loc ppf loc =
   | None ->
      Format.fprintf ppf "%s" loc.loc_file
 
-let report_error { err_loc; err_msg } =
-  Format.eprintf "%a: Error: @[%s@]\n%!" print_loc err_loc err_msg
+let report_error ?(kind="Error") fmt { err_loc; err_msg } =
+  Format.fprintf fmt "%a: %s: @[%s@]\n%!" print_loc err_loc kind err_msg
 
 let default_warning_printer loc w =
   Format.eprintf "%a: Warning: @[%a@]\n%!" print_loc loc

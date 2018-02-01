@@ -18,4 +18,3 @@ let%entry main
     | Some x ->
        let storage = Map.add parameter (x+1) storage in
        ( (), storage )
-

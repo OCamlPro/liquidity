@@ -43,8 +43,6 @@ module Michelson : sig
   val line_of_contract : michelson_contract -> string
   val string_of_code : michelson_exp -> string
   val line_of_code : michelson_exp -> string
-  (* val string_of_noloc_michelson : noloc_michelson -> string
-   * val line_of_noloc_michelson : noloc_michelson -> string *)
   val string_of_loc_michelson : loc_michelson -> string
   val line_of_loc_michelson : loc_michelson -> string
 end

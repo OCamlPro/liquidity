@@ -7,6 +7,8 @@
 (**************************************************************************)
 
 exception RequestError of string
+exception RuntimeError of LiquidTypes.error
+exception RuntimeFailure of LiquidTypes.error * string option
 
 type from =
   | From_string of string
