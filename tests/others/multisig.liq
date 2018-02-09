@@ -73,34 +73,34 @@ let%entry main
   =
   match parameter with
   | Pay ->
-    (* Simple payment, nothing to do *)
-    (), storage
+      (* Simple payment, nothing to do *)
+      (), storage
   | Manage action ->
-    (* Owner wants to perform an action *)
-    let owner_kh = get_caller () in
-    (* the caller must be an owner*)
-    if not (Set.mem owner_kh storage.owners) then Current.fail ();
-    (* Don't send money while managing multisig *)
-    if Current.amount () <> 0tz then
-      Current.failwith "Don't send money while managing multisig";
-    (* Register the desired action in the storage *)
-    let storage =
-      storage.actions <- Map.update owner_kh action storage.actions in
-    let storage =
-      match action with
-      | None ->
-        (* action is to remove previous proposition: nothing to do *)
-        storage
-      | Some p ->
-        (* The action is new proposition *)
-        check_proposition p; (* it must be a valid one *)
-        if should_execute (p, storage) then
-          (* execute proposition, i.e. transfer tokens *)
-          let c_dest = Account.default p.destination in
-          let _, storage = Contract.call c_dest p.amount storage () in
-          (* reset the map of actions *)
-          storage.actions <- (Map [] : (key_hash, proposition) map)
-        else
-          storage
-    in
-    (), storage
+      (* Owner wants to perform an action *)
+      let owner_kh = get_caller () in
+      (* the caller must be an owner*)
+      if not (Set.mem owner_kh storage.owners) then Current.fail ();
+      (* Don't send money while managing multisig *)
+      if Current.amount () <> 0tz then
+        Current.failwith "Don't send money while managing multisig";
+      (* Register the desired action in the storage *)
+      let storage =
+        storage.actions <- Map.update owner_kh action storage.actions in
+      let storage =
+        match action with
+        | None ->
+            (* action is to remove previous proposition: nothing to do *)
+            storage
+        | Some p ->
+            (* The action is new proposition *)
+            check_proposition p; (* it must be a valid one *)
+            if should_execute (p, storage) then
+              (* execute proposition, i.e. transfer tokens *)
+              let c_dest = Account.default p.destination in
+              let _, storage = Contract.call c_dest p.amount storage () in
+              (* reset the map of actions *)
+              storage.actions <- (Map [] : (key_hash, proposition) map)
+            else
+              storage
+      in
+      (), storage
