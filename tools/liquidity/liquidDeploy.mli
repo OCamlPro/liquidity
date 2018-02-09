@@ -46,6 +46,8 @@ module type S = sig
       ![LiquidOptions], returns the operation hash *)
   val call : from -> string -> string -> string t
 
+  val faucet_to : string -> unit t
+
 end
 
 module Async : S with type 'a t = 'a Lwt.t

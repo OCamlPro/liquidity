@@ -27,6 +27,7 @@ module type S = sig
   val get_storage : from -> string -> LiquidTypes.const t
   val forge_call : from -> string -> string -> string t
   val call : from -> string -> string -> string t
+  val faucet_to : string -> unit t
 end
 
 module Network_sync = struct
@@ -309,13 +310,22 @@ let get_predecessor () =
 
 
 let get_public_key_hash_from_secret_key sk =
-    sk
-    |> Sodium.Sign.secret_key_to_public_key
-    |> Ed25519.Public_key.hash
-    |> Ed25519.Public_key_hash.to_b58check
+  sk
+  |> Sodium.Sign.secret_key_to_public_key
+  (* Replace by this when tezos is fixed *)
+  (* |> Ed25519.Secret_key.to_public_key *)
+  |> Ed25519.Public_key.hash
+  |> Ed25519.Public_key_hash.to_b58check
 
+let get_public_key_from_secret_key sk =
+  sk
+  |> Sodium.Sign.secret_key_to_public_key
+  (* Replace by this when tezos is fixed *)
+  (* |> Ed25519.Secret_key.to_public_key *)
+  |> Ed25519.Public_key.to_b58check
 
-let forge_deploy ?head ?source ?(delegatable=false) ?(spendable=false)
+let forge_deploy ?head ?source ?public_key
+    ?(delegatable=false) ?(spendable=false)
     liquid init_params_strings =
   let source = match source, !LiquidOptions.source with
     | Some source, _ | _, Some source -> source
@@ -386,14 +396,19 @@ let forge_deploy ?head ?source ?(delegatable=false) ?(spendable=false)
     "script", script_json;
   ] |> mk_json_obj
   in
-  let data = [
+  let datas = [
     "branch", Printf.sprintf "%S" head;
     "source", Printf.sprintf "%S" source;
     "fee", !LiquidOptions.fee;
     "counter", string_of_int counter;
     "operations", mk_json_arr [origination_json];
-  ] |> mk_json_obj
+  ]
   in
+  let datas = match public_key with
+    | None -> datas
+    | Some pk -> ("public_key", Printf.sprintf "%S" pk) :: datas
+  in
+  let data = mk_json_obj datas in
   !request ~data "/blocks/prevalidation/proto/helpers/forge/operations"
   >>= fun r ->
   let r = Ezjsonm.from_string r in
@@ -404,21 +419,32 @@ let forge_deploy ?head ?source ?(delegatable=false) ?(spendable=false)
     raise_request_error ~loc_table r "forge_deploy"
 
 
-let inject ?loc_table sk netId op =
+let inject ?loc_table ?sk netId op =
   get_predecessor () >>= fun pred ->
   let op_b = MBytes.of_string (Hex_encode.hex_decode op) in
-  let signature_b = Ed25519.sign sk op_b in
-  let signature = Ed25519.Signature.to_b58check signature_b in
-  let signed_op_b = MBytes.concat op_b signature_b in
-  let signed_op = Hex_encode.hex_encode (MBytes.to_string signed_op_b) in
-  let op_hash = Hash.Operation_hash.to_b58check @@
-    Hash.Operation_hash.hash_bytes [ signed_op_b ] in
-  let data = [
-    "pred_block", Printf.sprintf "%S" pred;
-    "operation_hash", Printf.sprintf "%S" op_hash;
-    "forged_operation", Printf.sprintf "%S" op;
-    "signature", Printf.sprintf "%S" signature;
-  ] |> mk_json_obj
+  let signed_op, op_hash, data = match sk with
+    | None ->
+      let op_hash = Hash.Operation_hash.to_b58check @@
+        Hash.Operation_hash.hash_bytes [ op_b ] in
+      op, op_hash, [
+        "pred_block", Printf.sprintf "%S" pred;
+        "operation_hash", Printf.sprintf "%S" op_hash;
+        "forged_operation", Printf.sprintf "%S" op;
+      ] |> mk_json_obj
+
+    | Some sk ->
+      let signature_b = Ed25519.sign sk op_b in
+      let signature = Ed25519.Signature.to_b58check signature_b in
+      let signed_op_b = MBytes.concat op_b signature_b in
+      let signed_op = Hex_encode.hex_encode (MBytes.to_string signed_op_b) in
+      let op_hash = Hash.Operation_hash.to_b58check @@
+        Hash.Operation_hash.hash_bytes [ signed_op_b ] in
+      signed_op, op_hash, [
+        "pred_block", Printf.sprintf "%S" pred;
+        "operation_hash", Printf.sprintf "%S" op_hash;
+        "forged_operation", Printf.sprintf "%S" op;
+        "signature", Printf.sprintf "%S" signature;
+      ] |> mk_json_obj
   in
   !request ~data "/blocks/prevalidation/proto/helpers/apply_operation"
   >>= fun r ->
@@ -440,7 +466,7 @@ let inject ?loc_table sk netId op =
   (try
      Ezjsonm.find r ["ok"; "injectedOperation"] |> Ezjsonm.get_string |> return
    with Not_found ->
-     raise_request_error ?loc_table r "deploy (inject_operation)"
+     raise_request_error ?loc_table r "inject (inject_operation)"
   ) >>= fun injected_op_hash ->
   assert (injected_op_hash = op_hash);
 
@@ -458,11 +484,12 @@ let deploy ?(delegatable=false) ?(spendable=false) liquid init_params_strings =
     | Some source -> source
     | None -> get_public_key_hash_from_secret_key sk
   in
+  let public_key = get_public_key_from_secret_key sk in
   get_head () >>= fun head ->
-  forge_deploy ~head:head.head_hash ~source ~delegatable ~spendable
+  forge_deploy ~head:head.head_hash ~source ~public_key ~delegatable ~spendable
     liquid init_params_strings
   >>= fun (op, loc_table) ->
-  inject ~loc_table sk head.head_netId op >>= function
+  inject ~loc_table ~sk head.head_netId op >>= function
   | op_h, [c] -> return (op_h, c)
   | _ -> raise (RequestError "deploy (inject)")
 
@@ -485,7 +512,7 @@ let get_storage liquid address =
     raise_request_error r "get_storage"
 
 
-let forge_call ?head ?source liquid address parameter_string =
+let forge_call ?head ?source ?public_key liquid address parameter_string =
   let source = match source, !LiquidOptions.source with
     | Some source, _ | _, Some source -> source
     | None, None -> raise (RequestError "forge_call: Missing source")
@@ -510,14 +537,19 @@ let forge_call ?head ?source liquid address parameter_string =
     "parameters", parameter_json;
   ] |> mk_json_obj
   in
-  let data = [
+  let datas = [
     "branch", Printf.sprintf "%S" head;
     "source", Printf.sprintf "%S" source;
     "fee", !LiquidOptions.fee;
     "counter", string_of_int counter;
     "operations", mk_json_arr [transaction_json];
-  ] |> mk_json_obj
+  ]
   in
+  let datas = match public_key with
+    | None -> datas
+    | Some pk -> ("public_key", Printf.sprintf "%S" pk) :: datas
+  in
+  let data = mk_json_obj datas in
   !request ~data "/blocks/prevalidation/proto/helpers/forge/operations"
   >>= fun r ->
   let r = Ezjsonm.from_string r in
@@ -541,12 +573,88 @@ let call liquid address parameter_string =
     | Some source -> source
     | None -> get_public_key_hash_from_secret_key sk
   in
+  let public_key = get_public_key_from_secret_key sk in
   get_head () >>= fun head ->
-  forge_call ~head:head.head_hash ~source liquid address parameter_string
+  forge_call ~head:head.head_hash ~source ~public_key
+    liquid address parameter_string
   >>= fun (op, loc_table) ->
-  inject ~loc_table sk head.head_netId op >>= function
+  inject ~loc_table ~sk head.head_netId op >>= function
   | op_h, [] -> return op_h
   | _ -> raise (RequestError "call (inject)")
+
+
+
+let faucet_to dest =
+  get_head () >>= fun head ->
+  let sk = match !LiquidOptions.private_key with
+    | None -> raise (RequestError "faucet_to: Missing private key")
+    | Some sk -> match Ed25519.Secret_key.of_b58check sk with
+      | Ok sk -> sk
+      | Error _ -> raise (RequestError "faucet_to: Bad private key")
+  in
+  let edpk = get_public_key_from_secret_key sk in
+  let source = match !LiquidOptions.source with
+    | Some source -> source
+    | None -> get_public_key_hash_from_secret_key sk
+  in
+  let nonce =
+    Sodium.Random.Bigbytes.generate 16
+    |> Hex_encode.hex_of_bytes
+  in
+  let transaction_json = [
+    "kind", "\"faucet\"";
+    "id", Printf.sprintf "%S" source;
+    "nonce", Printf.sprintf "%S" nonce;
+  ] |> mk_json_obj
+  in
+  let data = [
+    "branch", Printf.sprintf "%S" head.head_hash;
+    "operations", mk_json_arr [transaction_json];
+  ] |> mk_json_obj
+  in
+  !request ~data "/blocks/prevalidation/proto/helpers/forge/operations"
+  >>= fun r ->
+  let r = Ezjsonm.from_string r in
+  let op =
+    try
+      Ezjsonm.find r ["ok"; "operation"] |> Ezjsonm.get_string
+    with Not_found ->
+      raise_request_error r "forge faucet"
+  in
+  inject head.head_netId op >>= function
+  | _, ([] | _::_::_) -> raise (RequestError "faucet (inject)")
+  | op_h, [c] ->
+    (* get_counter source >>= fun counter -> *)
+    (* let counter = counter + 1 in *)
+    let transaction_json = [
+      "kind", "\"transaction\"";
+      "amount", "10000000";
+      "destination", Printf.sprintf "%S" dest;
+      "parameters", {|{"prim":"Unit","args":[]}|};
+    ] |> mk_json_obj
+    in
+    let data = [
+      "branch", Printf.sprintf "%S" head.head_hash;
+      "source", Printf.sprintf "%S" c;
+      "public_key", Printf.sprintf "%S" edpk;
+      "fee", "0";
+      "counter", "1"; (* string_of_int counter; *)
+      "operations", mk_json_arr [transaction_json];
+    ] |> mk_json_obj
+    in
+    !request ~data "/blocks/prevalidation/proto/helpers/forge/operations"
+    >>= fun r ->
+    let r = Ezjsonm.from_string r in
+    let op =
+      try
+        Ezjsonm.find r ["ok"; "operation"] |> Ezjsonm.get_string
+      with Not_found ->
+        raise_request_error r "forge transfer from faucet"
+    in
+    inject ~sk head.head_netId op >>= function
+    | op_h, [] -> return_unit (* ok *)
+    | _ -> raise (RequestError "faucet transfer (inject)")
+
 
 
 (* Withoud optional argument head *)
@@ -572,6 +680,9 @@ module Async = struct
 
   let call liquid address parameter_string =
     call liquid address parameter_string
+
+  let faucet_to dest =
+    faucet_to dest
 end
 
 module Sync = struct
@@ -596,5 +707,8 @@ module Sync = struct
 
   let call liquid address parameter_string =
     Lwt_main.run (call liquid address parameter_string)
+
+  let faucet_to dest =
+    Lwt_main.run (faucet_to dest)
 
 end

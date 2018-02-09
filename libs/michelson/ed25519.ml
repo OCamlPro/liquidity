@@ -424,9 +424,7 @@ end
 
   end
 
-                       (*
-  let generate_key () =
-    let secret, pub = Sodium.Sign.random_keypair () in
-        (Public_key.hash pub, pub, secret)
 
-        *)
+let generate_key () =
+  let secret, pub = Sodium.Sign.random_keypair () in
+  (Public_key.hash pub, pub, secret)
