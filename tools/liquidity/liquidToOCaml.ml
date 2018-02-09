@@ -118,6 +118,7 @@ let rec convert_const expr =
                              (Some (convert_const x))
   | CRight x -> Exp.construct (lid "Right")
                              (Some (convert_const x))
+  | CConstr (c, CUnit) -> Exp.construct (lid c) None
   | CConstr (c, x) -> Exp.construct (lid c)
                         (Some (convert_const x))
   | CTuple args -> Exp.tuple (List.map convert_const args)
