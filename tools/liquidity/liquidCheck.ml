@@ -695,6 +695,8 @@ and typecheck_prim2 env prim loc args =
      if comparable_ty ty1 ty2 then Tint
      else error_not_comparable loc prim ty1 ty2
 
+  | Prim_neg, [( Tint | Tnat )] -> Tint
+
   | (Prim_add | Prim_sub) , [ Ttez; Ttez ] -> Ttez
   | Prim_mul, ([ Tnat; Ttez ] | [ Ttez; Tnat ]) -> Ttez
 

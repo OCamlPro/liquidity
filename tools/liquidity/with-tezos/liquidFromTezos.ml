@@ -387,6 +387,8 @@ let rec convert_code env expr =
     mic_loc env index annot (MOD)
   | Prim(index, "DIV", [], annot) ->
     mic_loc env index annot (DIV)
+  | Prim(index, "NEG", [], annot) ->
+    mic_loc env index annot (NEG)
   | Prim(index, "AMOUNT", [], annot) ->
     mic_loc env index annot (AMOUNT)
   | Prim(index, "NIL", [ty], annot) ->

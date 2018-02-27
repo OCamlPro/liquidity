@@ -277,6 +277,7 @@ let decompile contract =
                  | "ADD" -> Prim_add
                  | "MUL" -> Prim_mul
                  | "EDIV" -> Prim_ediv
+                 | "NEG" -> Prim_neg
                  | "EXEC" -> Prim_exec
                  | "INT" -> Prim_int
                  | "H" -> Prim_hash

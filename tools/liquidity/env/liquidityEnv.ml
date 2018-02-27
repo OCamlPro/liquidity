@@ -339,6 +339,7 @@ module Arith : sig
   val (-) : integer -> integer -> integer
   val ( * ) : integer -> integer -> integer
   val ( / ) : integer -> integer -> (integer * integer) option
+  val (~-) : integer -> integer
 
   val int : integer -> integer
   val abs : integer -> integer
@@ -371,6 +372,12 @@ end = struct
       | (Int _ | Timestamp _), Tez _
     | Int _, Timestamp _
       -> assert false
+
+  let (~-) = Z.neg
+  let (~-) x =
+    match x with
+    | Int x -> Int (- x)
+    | Tez _ | Timestamp _ -> assert false
 
   let ediv x y =
     try

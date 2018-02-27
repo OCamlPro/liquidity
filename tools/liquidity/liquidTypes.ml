@@ -239,6 +239,7 @@ let () =
               "-", Prim_sub;
               "*", Prim_mul;
               "/", Prim_ediv;
+              "~-", Prim_neg;
 
               "Map.find", Prim_map_find;
               "Map.update", Prim_map_update;

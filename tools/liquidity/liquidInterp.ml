@@ -647,6 +647,9 @@ let interp contract =
     | SUB, x :: y :: stack ->
        let x = node ins.loc (N_PRIM "SUB") [x;y] [seq] in
        x :: stack, x
+    | NEG, x :: stack ->
+      let x = node ins.loc (N_PRIM "NEG") [x] [seq] in
+      x :: stack, x
     | PAIR, x :: y :: stack ->
        let x = node ins.loc (N_PRIM "PAIR") [x;y] [seq] in
        x :: stack, x
