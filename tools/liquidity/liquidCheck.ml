@@ -695,15 +695,17 @@ and typecheck_prim2 env prim loc args =
      if comparable_ty ty1 ty2 then Tint
      else error_not_comparable loc prim ty1 ty2
 
-  | (Prim_add|Prim_sub|Prim_mul),
-    (  [ Ttez; (Ttez | Tint | Tnat) ]
-       | [ (Tint | Tnat); Ttez ])
-    -> Ttez
+  | (Prim_add | Prim_sub) , [ Ttez; Ttez ] -> Ttez
+  | Prim_mul, ([ Tnat; Ttez ] | [ Ttez; Tnat ]) -> Ttez
+
   | (Prim_add|Prim_mul), [ Tnat; Tnat ] -> Tnat
   | (Prim_add|Prim_sub|Prim_mul), [ (Tint|Tnat);
                                     (Tint|Tnat) ] -> Tint
+
   | Prim_add, [ Ttimestamp; Tint|Tnat ] -> Ttimestamp
   | Prim_add, [ Tint|Tnat; Ttimestamp ] -> Ttimestamp
+  | Prim_sub, [ Ttimestamp; Tint|Tnat ] -> Ttimestamp
+  | Prim_sub, [ Ttimestamp; Ttimestamp ] -> Tint
 
   (* TODO: improve types of ediv in Michelson ! *)
   | Prim_ediv, [ Tnat; Tnat ] ->
