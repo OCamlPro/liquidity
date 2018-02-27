@@ -83,7 +83,7 @@ let () =
 let minimal_version = 0.13
 
 (* The maximal version of liquidity files that are accepted by this compiler *)
-let maximal_version = 0.15
+let maximal_version = 0.151
 
 
 open Asttypes
@@ -1103,10 +1103,12 @@ let check_version = function
     let req_version = float_of_string s in
     if req_version < minimal_version then
       Printf.kprintf (error_version pexp_loc)
-                     "(requires %.2f while compiler has minimal %.2f )" req_version minimal_version;
+        "(requires %F while compiler has minimal %F )"
+        req_version minimal_version;
     if req_version > maximal_version then
       Printf.kprintf (error_loc pexp_loc)
-                     "(requires %.2f while compiler has maximal %.2f )" req_version maximal_version;
+        "(requires %F while compiler has maximal %F )"
+        req_version maximal_version;
   | { pexp_loc } -> error_loc pexp_loc "version must be a floating point number"
 
 let rec translate_structure funs env init ast =
