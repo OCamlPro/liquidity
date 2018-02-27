@@ -439,11 +439,11 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
      in
      let env = maybe_reset_vars env arg.transfer in
      let ifnil = typecheck env ifnil in
-     let (env, count) = new_binding env head_name arg_ty in
-     let (env, count) = new_binding env tail_name (Tlist arg_ty) in
+     let (env, count_head) = new_binding env head_name arg_ty in
+     let (env, count_tail) = new_binding env tail_name (Tlist arg_ty) in
      let ifcons = typecheck env ifcons in
-     check_used env head_name loc count;
-     check_used env tail_name loc count;
+     check_used env head_name loc count_head;
+     check_used env tail_name loc count_tail;
      let desc = MatchList (arg, loc, head_name, tail_name, ifcons, ifnil) in
      let ty =
        match ifnil.ty, ifcons.ty with
