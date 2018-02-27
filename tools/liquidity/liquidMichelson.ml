@@ -72,6 +72,18 @@ let drop_stack ~loc n depth =
     let exps = drop_stack depth in
     if n = 0 then exps else [ii ~loc @@ DIP_DROP (n, List.length exps)]
 
+let cleanup_for_loop_transfer ~loc n depth env =
+  let stack_cleanup = drop_stack ~loc n (depth - n) in
+  let env = StringMap.fold (fun name d env ->
+      let d' = d - (depth - n) in
+      if d' >= 0 then StringMap.add name d' env
+      else env
+    ) env StringMap.empty
+  in
+  let depth = n in
+  stack_cleanup, depth, env
+
+
 (* The type of a contract code is usually:
      lambda (pair (pair tez 'arg) 'global) -> (pair 'ret 'global) *)
 let translate_code code =
@@ -319,15 +331,20 @@ let translate_code code =
        in
        let env = StringMap.add name depth env in
        let depth = depth + 1 in
-       let body, transfer2 = compile depth env body in
        let arg_annot = compile_arg_name name in
-       let body_end = [ ii ~loc @@ DIP_DROP (1,1);
-                        ii ~loc @@ DUP 1;
+       let stack_cleanup, depth, env =
+         if body.transfer then cleanup_for_loop_transfer ~loc 1 depth env
+         else [], depth, env in
+       let body, transfer2 = compile depth env body in
+       let body_end1 =
+         if transfer2 then [] else [ ii ~loc @@ DIP_DROP (1,1) ]
+       in
+       let body_end2 = [ ii ~loc @@ DUP 1;
                         ii ~loc CAR;
                         ii ~loc @@ DIP (1, seq [ ii ~loc CDR ]) ] in
-       arg
+       arg @ stack_cleanup
        @ [ ii ~loc @@ PUSH (Tbool, CBool true) ]
-       @ [ ii ~loc @@ LOOP (seq (arg_annot @ body @ body_end)) ],
+       @ [ ii ~loc @@ LOOP (seq (arg_annot @ body @ body_end1 @ body_end2)) ],
        transfer1 || transfer2
 
     | Fold (prim, name, loc, body, arg, acc) ->
@@ -339,15 +356,19 @@ let translate_code code =
       in
       let env = StringMap.add name depth env in
       let depth = depth + 1 in
-      let body, transfer3 = compile depth env body in
       let arg_annot = compile_arg_name name in
-      let body_begin, body_end = match prim with
+      let stack_cleanup, depth, env =
+        if body.transfer then cleanup_for_loop_transfer ~loc 2 depth env
+        else [], depth, env in
+      let body, transfer3 = compile depth env body in
+      let body_begin = match prim with
         | Prim_map_iter | Prim_set_iter | Prim_list_iter ->
-          [], [ii ~loc @@ DIP_DROP (1,2) ]
-        | _ -> [ dip ~loc 1 [ii ~loc @@ DUP 1]; ii ~loc PAIR ],
-               [ ii ~loc @@ DIP_DROP (1,2) ]
+          []
+        | _ ->
+          [ dip ~loc 1 [ii ~loc @@ DUP 1]; ii ~loc PAIR ]
       in
-      acc @ arg @
+      let body_end = if transfer3 then [] else [ ii ~loc @@ DIP_DROP (1,2) ] in
+      acc @ arg @ stack_cleanup @
       [ii ~loc @@ ITER (seq (arg_annot @ body_begin @ body @ body_end))],
       transfer1 || transfer2 || transfer3
 

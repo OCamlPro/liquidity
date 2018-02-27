@@ -393,7 +393,7 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
   | Loop (name, loc, body, arg) ->
      let arg = typecheck env arg in
      if arg.ty = Tfail then error loc "loop arg is a failure";
-     let env = maybe_reset_vars env arg.transfer in
+     let env = maybe_reset_vars env (arg.transfer || body.transfer) in
      let (env, count) = new_binding env name arg.ty in
      let body =
        typecheck_expected "loop body" env (Ttuple [Tbool; arg.ty]) body in
@@ -423,7 +423,7 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
           (LiquidTypes.string_of_fold_primitive prim)
           (LiquidPrinter.Liquid.string_of_type arg.ty)
     in
-    let env = maybe_reset_vars env arg.transfer in
+    let env = maybe_reset_vars env (arg.transfer || body.transfer) in
     let (env, count) = new_binding env name name_ty in
     let body = typecheck_expected
         (LiquidTypes.string_of_fold_primitive prim ^" body") env acc.ty body in
