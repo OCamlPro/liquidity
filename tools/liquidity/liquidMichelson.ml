@@ -101,8 +101,8 @@ let translate_code code =
        [ dup ~loc (depth - pos) ], false
     | Var (name, loc, _::_) ->  assert false
     | SetVar (name, loc, _, _) ->  assert false
-    | Const (ty, cst) ->
-       [ push ~loc:LiquidLoc.noloc ty cst ], false
+    | Const (loc, ty, cst) ->
+       [ push ~loc ty cst ], false
     | Seq (e1, e2) ->
        let e1, transfer1 = compile depth env e1 in
        let (depth, env) =
@@ -382,7 +382,7 @@ let translate_code code =
     | Prim_tuple, args ->
        compile_tuple ~loc depth env (List.rev args)
 
-    | Prim_tuple_get, [arg; { desc = Const (_, (CInt n | CNat n))} ] ->
+    | Prim_tuple_get, [arg; { desc = Const (loc, _, (CInt n | CNat n))} ] ->
        let size = size_of_type arg.ty in
        let arg = compile_no_transfer depth env arg in
        let n = LiquidPrinter.int_of_integer n in
@@ -401,7 +401,7 @@ set x n y = x + [ DUP; CAR; SWAP; CDR ]*n +
                 [ SWAP; PAIR ]*2
      *)
 
-    | Prim_tuple_set, [x; { desc = Const (_, (CInt n | CNat n))}; y ] ->
+    | Prim_tuple_set, [x; { desc = Const (loc, _, (CInt n | CNat n))}; y ] ->
        let x_code = compile_no_transfer depth env x in
        let n = LiquidPrinter.int_of_integer n in
        let size = size_of_type x.ty in

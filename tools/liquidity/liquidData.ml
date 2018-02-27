@@ -57,7 +57,7 @@ let rec translate_const_exp loc (exp : encoded_exp) =
   match exp.desc with
   | Let (_, loc, _, _) ->
      LiquidLoc.raise_error ~loc "'let' forbidden in constant"
-  | Const (ty, c) -> c
+  | Const (_loc, ty, c) -> c
 
   (* removed during typechecking *)
   | Record (_, _)

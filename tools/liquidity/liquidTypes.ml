@@ -380,7 +380,7 @@ and ('ty, 'a) exp_desc =
   | Let of string * location * ('ty, 'a) exp * ('ty, 'a) exp
   | Var of string * location * string list
   | SetVar of string * location * string list * ('ty, 'a) exp
-  | Const of datatype * const
+  | Const of location * datatype * const
   | Apply of primitive * location * ('ty, 'a) exp list
   | If of ('ty, 'a) exp * ('ty, 'a) exp * ('ty, 'a) exp
   | Seq of ('ty, 'a) exp * ('ty, 'a) exp
@@ -450,7 +450,7 @@ let mk =
   let bv = StringSet.empty in
   fun ?name desc ty ->
     let fail, transfer = match desc with
-      | Const (_, _)
+      | Const (_, _, _)
       | Var (_, _, _) -> false, false
 
       | Failwith _ -> true, false
@@ -701,11 +701,13 @@ type michelson_contract = michelson_exp contract
 type node_contract = node_exp contract
 type loc_michelson_contract = loc_michelson contract
 
+let noloc = { loc_file = "<unspecified>"; loc_pos = None }
+
 let dummy_syntax_contract : syntax_contract = {
     parameter = Tunit;
     storage = Tunit;
     return = Tunit;
-    code = mk (Const (Tunit, CUnit)) ();
+    code = mk (Const (noloc, Tunit, CUnit)) ();
   }
 
 type warning =

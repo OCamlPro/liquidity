@@ -169,19 +169,19 @@ let rec convert_code expr =
      List.fold_left (fun exp field ->
          Exp.field exp (lid field)
        ) (Exp.ident (lid name)) fields
-  | If (cond, ifthen, { desc = Const(Tunit,CUnit) }) ->
+  | If (cond, ifthen, { desc = Const(_loc, Tunit, CUnit) }) ->
      Exp.ifthenelse (convert_code cond)
                     (convert_code ifthen) None
   | If (cond, ifthen, ifelse) ->
      Exp.ifthenelse (convert_code cond)
                     (convert_code ifthen) (Some (convert_code ifelse))
-  | Seq (x, { desc = Const(Tunit,CUnit) }) ->
+  | Seq (x, { desc = Const(_loc, Tunit, CUnit) }) ->
      convert_code x
 
   | Seq (x, y) ->
      Exp.sequence (convert_code x) (convert_code y)
 
-  | Const (ty, cst) -> begin
+  | Const (_loc, ty, cst) -> begin
       match ty with
       | Tint
       | Tnat
@@ -381,7 +381,7 @@ let rec convert_code expr =
                 (convert_code exp)
           ) cases)
 
-  | Constructor (_loc, Constr id, { desc = Const (Tunit, CUnit) } ) ->
+  | Constructor (_loc, Constr id, { desc = Const (_loc', Tunit, CUnit) } ) ->
      Exp.construct (lid id) None
   | Constructor (_loc, Constr id, arg) ->
      Exp.construct (lid id) (Some (convert_code arg))

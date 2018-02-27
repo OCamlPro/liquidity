@@ -13,13 +13,14 @@ type init =
   | Init_code of (LiquidTypes.syntax_contract *
                   LiquidTypes.loc_michelson_contract)
 
-let c_unit = mk (Const (Tunit, CUnit)) ()
-let mk_nat i = mk (Const (Tnat, CNat (LiquidPrinter.integer_of_int i))) ()
+let c_unit ~loc = mk (Const (loc, Tunit, CUnit)) ()
+let mk_nat ~loc i =
+  mk (Const (loc, Tnat, CNat (LiquidPrinter.integer_of_int i))) ()
 
-let tmp_contract_of_init (args, code) storage_ty =
+let tmp_contract_of_init ~loc (args, code) storage_ty =
   let return = storage_ty in
   let storage = Tunit in
-  let parameter_var = mk (Var ("parameter", LiquidLoc.noloc, [])) () in
+  let parameter_var = mk (Var ("parameter", loc, [])) () in
   let parameter, code = match args with
     | [] -> Tunit, code
     | [arg, loc, ty] ->
@@ -32,7 +33,8 @@ let tmp_contract_of_init (args, code) storage_ty =
           let code = mk (
               Let (arg, loc,
                    mk (Apply
-                         (Prim_tuple_get, loc, [parameter_var; mk_nat i])) (),
+                         (Prim_tuple_get, loc, [parameter_var; mk_nat ~loc i]))
+                     (),
                    code)) ()
           in
           (code, i)
@@ -40,18 +42,20 @@ let tmp_contract_of_init (args, code) storage_ty =
       in
       parameter, code
   in
-  let code = mk(Apply (Prim_tuple, LiquidLoc.noloc, [code; c_unit])) () in
+  let code =
+    mk(Apply (Prim_tuple, loc, [code; c_unit ~loc ])) () in
   { parameter; storage; return; code }
 
 let compile_liquid_init env contract ((args, sy_init) as init) =
+  let loc = LiquidCheck.loc_exp sy_init in
   if sy_init.transfer then
-    LiquidLoc.raise_error ~loc:(LiquidLoc.loc_in_file env.filename)
+    LiquidLoc.raise_error ~loc
       "No transfer allowed in storage initializer";
   try (* Maybe it is constant *)
     let ty_init = LiquidCheck.typecheck_code
         ~warnings:true env contract contract.storage sy_init in
     let enc_init = LiquidEncode.encode_code env contract ty_init in
-    let c_init = LiquidData.translate_const_exp LiquidLoc.noloc enc_init in
+    let c_init = LiquidData.translate_const_exp loc enc_init in
     Init_constant c_init
   (* let s = LiquidPrinter.Michelson.line_of_const c_init in
    * let output = env.filename ^ ".init.tz" in
@@ -59,7 +63,7 @@ let compile_liquid_init env contract ((args, sy_init) as init) =
    * Printf.eprintf "Constant initial storage generated in %S\n%!" output *)
   with LiquidError _ ->
     (* non constant initial value *)
-    let init_contract = tmp_contract_of_init init contract.storage in
+    let init_contract = tmp_contract_of_init ~loc init contract.storage in
     let typed_init = LiquidCheck.typecheck_contract
         ~warnings:true env init_contract in
     let encoded_init, _ = LiquidEncode.encode_contract env typed_init in

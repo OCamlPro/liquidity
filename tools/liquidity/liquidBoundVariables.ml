@@ -18,7 +18,7 @@ let rec bv code =
      StringSet.union (bv cond)
                      (StringSet.union (bv ifthen) (bv ifelse))
   | Seq (x, y) -> StringSet.union (bv x) (bv y)
-  | Const (ty, cst) ->  StringSet.empty
+  | Const (loc, ty, cst) ->  StringSet.empty
   | Failwith _ -> StringSet.empty
 
   | Apply (Prim_unknown, _,
@@ -143,7 +143,7 @@ let rec bound code =
      let desc = Seq(x,y) in
      mk desc code bv
 
-  | Const (ty, cst) ->
+  | Const (loc, ty, cst) ->
      mk code.desc code StringSet.empty
 
   | Failwith _ ->

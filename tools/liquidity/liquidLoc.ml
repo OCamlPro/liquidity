@@ -24,7 +24,7 @@ let pp_ksprintf ?before k fmt = (* From Location in OCaml *)
       k msg)
     ppf fmt
 
-let noloc = { loc_file = "<unspecified>"; loc_pos = None }
+let noloc = noloc
 
 let raise_error ?(loc=noloc) =
   pp_ksprintf (fun msg -> raise (LiquidError { err_loc = loc;

@@ -866,7 +866,7 @@ module Liquid = struct
        bprint_code_rec ~debug b indent2 exp;
        Printf.bprintf b "\n%sin" indent;
        bprint_code_rec ~debug b indent body
-    | Const (ty, cst) ->
+    | Const (_loc, ty, cst) ->
        Printf.bprintf b "\n%s" indent;
        bprint_const b indent cst;
     | SetVar (name, _loc, labels, e) ->

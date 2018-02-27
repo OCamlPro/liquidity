@@ -19,6 +19,7 @@ val typecheck_contract :
                        (*
 val uniq_ident : string -> string
                         *)
+val loc_exp : ('a, 'b) exp -> location
 
 val typecheck_code :
   warnings:bool -> env ->

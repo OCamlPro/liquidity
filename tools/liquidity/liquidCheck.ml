@@ -132,7 +132,8 @@ let error_prim loc prim args expected_args =
 
 
   (* approximate location *)
-let rec loc_exp env e = match e.desc with
+let rec loc_exp e = match e.desc with
+  | Const (loc, _, _)
   | Var (_, loc, _)
   | SetVar (_, loc, _, _)
   | Apply (_, loc, _)
@@ -149,13 +150,11 @@ let rec loc_exp env e = match e.desc with
   | MatchVariant (_, loc, _)
   | Failwith (_, loc) -> loc
 
-  | Let (_, _, _, e) -> loc_exp env e
-
-  | Const _ -> noloc env
+  | Let (_, _, _, e) -> loc_exp e
 
   | If (e1, _, e2)
   | Seq (e1, e2) ->
-    match loc_exp env e1, loc_exp env e2 with
+    match loc_exp e1, loc_exp e2 with
     | ({ loc_pos = Some ( loc_begin , _ ) } as loc),
       { loc_pos = Some ( _, loc_end ) } ->
       { loc with loc_pos = Some (loc_begin, loc_end) }
@@ -169,8 +168,8 @@ let rec loc_exp env e = match e.desc with
 let rec typecheck env ( exp : syntax_exp ) : typed_exp =
   match exp.desc with
 
-  | Const (ty, cst) ->
-    mk ?name:exp.name (Const (ty, cst)) ty
+  | Const (loc, ty, cst) ->
+    mk ?name:exp.name (Const (loc, ty, cst)) ty
 
   | Let (name, loc, exp, body) ->
      let exp = typecheck env exp in
@@ -178,7 +177,8 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
        match exp.desc with
        | Failwith _ -> exp
        | _ ->
-         mk (Apply (Prim_fail, loc, [mk (Const (Tunit, CUnit)) Tunit])) Tfail
+         mk (Apply (Prim_fail, loc,
+                    [mk (Const (loc, Tunit, CUnit)) Tunit])) Tfail
      else
        let env = maybe_reset_vars env exp.transfer in
        let (env, count) = new_binding env name ~fail:exp.fail exp.ty in
@@ -297,7 +297,7 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
           in
           mk ?name:exp.name desc body.ty
        | ty ->
-         error (loc_exp env contract_exp)
+         error (loc_exp contract_exp)
            "Bad contract type.\nExpected type:\n  ('a, 'b) contract\n\
             Actual type:\n  %s"
            (LiquidPrinter.Liquid.string_of_type ty)
@@ -419,7 +419,7 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
         Prim_list_fold, Ttuple[elt_ty; acc_ty]
 
       | _ ->
-        error (loc_exp env arg) "%s expects a collection, got %s"
+        error (loc_exp arg) "%s expects a collection, got %s"
           (LiquidTypes.string_of_fold_primitive prim)
           (LiquidPrinter.Liquid.string_of_type arg.ty)
     in
@@ -620,7 +620,7 @@ and find_case loc env constr cases =
     error loc "non-exhaustive pattern. Constructor %s is not matched." constr
   | m :: unused ->
     List.iter (fun (_, e) ->
-        LiquidLoc.warn (loc_exp env e) (UnusedMatched constr)
+        LiquidLoc.warn (loc_exp e) (UnusedMatched constr)
       ) unused;
     match m with
     | CAny, e -> constr, [], e
@@ -629,7 +629,7 @@ and find_case loc env constr cases =
 and typecheck_prim1 env prim loc args =
   match prim, args with
   | Prim_tuple_get, [ { ty = tuple_ty };
-                      { desc = Const (_, (CInt n | CNat n)) }] ->
+                      { desc = Const (loc, _, (CInt n | CNat n)) }] ->
      let tuple = match tuple_ty with
        | Ttuple tuple -> tuple
        | Trecord (_, rtys) -> List.map snd rtys
@@ -643,7 +643,7 @@ and typecheck_prim1 env prim loc args =
      prim, ty
 
   | Prim_tuple_set, [ { ty = tuple_ty };
-                      { desc = Const (_, (CInt n | CNat n)) };
+                      { desc = Const (loc, _, (CInt n | CNat n)) };
                       { ty } ] ->
      let tuple = match tuple_ty with
        | Ttuple tuple -> tuple
@@ -977,7 +977,7 @@ and typecheck_prim2 env prim loc args =
 and typecheck_expected info env expected_ty exp =
   let exp = typecheck env exp in
   if exp.ty <> expected_ty && exp.ty <> Tfail then
-    type_error (loc_exp env exp)
+    type_error (loc_exp exp)
                ("Unexpected type for "^info) exp.ty expected_ty;
   exp
 
