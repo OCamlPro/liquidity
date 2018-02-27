@@ -32,24 +32,24 @@ let compute decompile code to_inline =
     | Let (name, loc, v, body) ->
       if decompile && v.name = None && not v.fail && not v.transfer then
          to_inline := StringMap.add name v !to_inline;
-       let body = iter body in
-       if StringMap.mem name !to_inline then
-         body
-       else
-         let v = iter v in
-         begin
-           try
-             if StringSet.mem name (LiquidBoundVariables.bv body) then
-               raise Exit;
-             if not v.fail then
-               body
-             else
-               if v.ty <> Tunit then raise Exit
-               else
-                 { exp with desc = Seq(v, body); name = None }
-           with Exit ->
-             { exp with desc = Let(name, loc, v, body) }
-         end
+      let body = iter body in
+      if StringMap.mem name !to_inline then
+        body
+      else
+        let v = iter v in
+        begin
+          try
+            if StringSet.mem name (LiquidBoundVariables.bv body) then
+              raise Exit;
+            if not v.fail then
+              body
+            else
+            if v.ty <> Tunit then raise Exit
+            else
+              { exp with desc = Seq(v, body); name = None }
+          with Exit ->
+            { exp with desc = Let(name, loc, v, body) }
+        end
 
     | MatchOption(arg, loc, ifnone, name, ifsome) ->
        let arg = iter arg in
@@ -90,7 +90,11 @@ let compute decompile code to_inline =
     | Seq(e1, e2) ->
        let e1 = iter e1 in
        let e2 = iter e2 in
-       { exp with desc = Seq(e1,e2) }
+       if e1.ty = Tfail (* e1 always fails *)
+       then e1
+       else if not e1.fail && not e1.transfer (* no side-effects *)
+       then e2
+       else { exp with desc = Seq(e1,e2) }
 
     | If(cond, ifthen, ifelse) ->
        let cond = iter cond in

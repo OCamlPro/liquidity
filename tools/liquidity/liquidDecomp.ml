@@ -479,8 +479,8 @@ let decompile contract =
        mk (Apply (Prim_tuple, noloc, List.map arg_of args))
 
   and mklet node desc =
-    mk (Let (var_of node, noloc,
-             mk ?name:node.node_name desc, decompile_next node))
+    let node_liq = mk ?name:node.node_name desc in
+    mk (Let (var_of node, noloc, node_liq, decompile_next node))
 
   in
   let (begin_node, end_node) = contract.code in

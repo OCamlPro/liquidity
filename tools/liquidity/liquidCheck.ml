@@ -174,13 +174,18 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
 
   | Let (name, loc, exp, body) ->
      let exp = typecheck env exp in
-     if exp.ty = Tfail then error loc "cannot assign failure";
-     let env = maybe_reset_vars env exp.transfer in
-     let (env, count) = new_binding env name ~fail:exp.fail exp.ty in
-     let body = typecheck env body in
-     let desc = Let (name, loc, exp, body ) in
-     check_used env name loc count;
-     mk ?name:exp.name desc body.ty
+     if exp.ty = Tfail then
+       match exp.desc with
+       | Failwith _ -> exp
+       | _ ->
+         mk (Apply (Prim_fail, loc, [mk (Const (Tunit, CUnit)) Tunit])) Tfail
+     else
+       let env = maybe_reset_vars env exp.transfer in
+       let (env, count) = new_binding env name ~fail:exp.fail exp.ty in
+       let body = typecheck env body in
+       let desc = Let (name, loc, exp, body ) in
+       check_used env name loc count;
+       mk ?name:exp.name desc body.ty
 
   | Var (name, loc, (_::_ as labels)) ->
     begin match find_var env loc name with
