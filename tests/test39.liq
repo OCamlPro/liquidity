@@ -1,4 +1,4 @@
-[%%version 0.151]
+[%%version 0.16]
 
 let%init storage (i: int) (j: int) = i <= j
 
