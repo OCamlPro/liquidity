@@ -149,6 +149,7 @@ Liquidity functions:
 * `CONS` : `x :: y`
 * `NIL ele_type` : `( [] : ele_type list )`
 * `H` : `Crypto.hash x`. Returns the hash of its argument, whatever it is.
+* `HASH_KEY` : `Crypto.hash_key k`. Compute the b58check of the key `k`.
 * `CHECK_SIGNATURE` : `Crypto.check key (signature,data)`. Returns `true` if
      the public key has been used to generate the signature of the data.
 * `CREATE_ACCOUNT` : `Account.create`: creates a new account
@@ -157,8 +158,8 @@ Liquidity functions:
      contract in argument
 * `EXEC` : `Lambda.pipe x f` or `x |> f` or `f x`, is the application of the
      lambda `f` on the argument `x`.
-* `DEFAULT_ACCOUNT` : `Account.default key`. Returns the default contract
-    (of type `(unit,unit) contract`) associated with a key.
+* `DEFAULT_ACCOUNT` : `Account.default key_hash`. Returns the default contract
+    (of type `(unit,unit) contract`) associated with a key hash.
 
 Comparison operators
 --------------------
@@ -204,10 +205,10 @@ Liquidity also provides additional operations:
 Arithmetic and logic operators
 ------------------------------
 
-* `OR` : `x || y`
-* `AND` : `x && y`
-* `XOR` : `x xor y`
-* `NOT` : `not x`
+* `OR` : `x || y` or `x lor y`
+* `AND` : `x && y` or `x land y`
+* `XOR` : `x xor y` or `x lxor y`
+* `NOT` : `not x` or `lnot x`
 * `ABS` : `abs x` with the difference that `abs` returns an integer
 * `INT` : `int x`
 * `NEG` : `-x`
@@ -215,8 +216,8 @@ Arithmetic and logic operators
 * `SUB` : `x - y`
 * `MUL` : `x * y`
 * `EDIV` : `x / y`
-* `LSR` : `x >> y`
-* `LSL` : `x << y`
+* `LSR` : `x >> y` or `x lsr y`
+* `LSL` : `x << y` or `x lsl y`
 
 For converting `int` to `nat`, Liquidity provides a special
 pattern-matching construct `match%nat`, on two constructors `Plus` and
