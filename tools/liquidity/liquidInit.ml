@@ -52,9 +52,10 @@ let compile_liquid_init env contract ((args, sy_init) as init) =
     LiquidLoc.raise_error ~loc
       "No transfer allowed in storage initializer";
   try (* Maybe it is constant *)
-    let ty_init = LiquidCheck.typecheck_code
-        ~warnings:true env contract contract.storage sy_init in
-    let enc_init = LiquidEncode.encode_code env contract ty_init in
+    let tenv = empty_typecheck_env ~warnings:true contract env in
+    let ty_init = LiquidCheck.typecheck_code tenv
+        ~expected_ty:contract.storage sy_init in
+    let enc_init = LiquidEncode.encode_code tenv ty_init in
     let c_init = LiquidData.translate_const_exp loc enc_init in
     Init_constant c_init
   (* let s = LiquidPrinter.Michelson.line_of_const c_init in

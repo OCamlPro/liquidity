@@ -277,16 +277,21 @@ let () =
               "Crypto.check", Prim_check;
 
               "::", Prim_Cons;
+              "lor", Prim_or;
               "or", Prim_or;
               "||", Prim_or;
               "&", Prim_and;
+              "land", Prim_and;
               "&&", Prim_and;
+              "lxor", Prim_xor;
               "xor", Prim_xor;
               "not", Prim_not;
               "abs", Prim_abs;
               "int", Prim_int;
               ">>", Prim_lsr;
+              "lsr", Prim_lsr;
               "<<", Prim_lsl;
+              "lsl", Prim_lsl;
 
               "Lambda.pipe" , Prim_exec;
               "|>", Prim_exec;
@@ -624,6 +629,28 @@ type 'a typecheck_env = {
     contract : 'a contract;
     clos_env : closure_env option;
 }
+
+let empty_typecheck_env ~warnings contract env = {
+  warnings;
+  annot=false;
+  counter = ref 0;
+  vars = StringMap.empty;
+  vars_counts = StringMap.empty;
+  to_inline = ref StringMap.empty;
+  env = env;
+  clos_env = None;
+  contract ;
+}
+
+
+let new_binding env name ?(fail=false) ty =
+  let count = ref 0 in
+  let env = { env with
+              vars = StringMap.add name (name, ty, fail) env.vars;
+              vars_counts = StringMap.add name count env.vars_counts;
+            } in
+  (env, count)
+
 
 (* decompilation *)
 

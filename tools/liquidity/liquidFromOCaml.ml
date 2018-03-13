@@ -74,6 +74,7 @@ let () =
     "land", INFIXOP3("land");
     "lsl", INFIXOP4("lsl");
     "lsr", INFIXOP4("lsr");
+    "xor", INFIXOP3("xor"); (* Should be INFIXOP2 *)
     "asr", INFIXOP4("asr")
 ]
 
@@ -818,7 +819,7 @@ from the head element. We use unit for that type. *)
             ->
              Apply(Prim_Cons, loc,
                    [translate_code env a;
-                    mk (Const (loc, Tunit, CUnit)) (* XXX ? *)
+                    mk (Const (loc, Tunit, CList [])) (* XXX ? *)
                   ])
 
           | { pexp_desc = Pexp_construct (
@@ -1367,3 +1368,5 @@ let structure_of_string ?filename impl =
   ocaml_of_string ?filename LiquidOCamlParse.implementation impl
 let expression_of_string ?filename s =
   ocaml_of_string ?filename LiquidOCamlParse.expression s
+
+let translate_type env ty = translate_type env ty

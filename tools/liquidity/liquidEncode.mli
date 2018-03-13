@@ -15,6 +15,6 @@ val encode_contract :
   ?annot:bool -> env -> typed_contract ->
   encoded_contract * encoded_exp StringMap.t
 
-val encode_code : env -> syntax_contract -> typed_exp -> encoded_exp
+val encode_code : syntax_exp typecheck_env -> typed_exp -> encoded_exp
 
 val encode_const : env -> syntax_contract -> const -> const

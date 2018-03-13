@@ -340,6 +340,13 @@ module Arith : sig
   val ( * ) : integer -> integer -> integer
   val ( / ) : integer -> integer -> (integer * integer) option
   val (~-) : integer -> integer
+  val lnot : integer -> integer
+  val (land) : integer -> integer -> integer
+  val (lor) : integer -> integer -> integer
+  val (lxor) : integer -> integer -> integer
+  val (lsl) : integer -> integer -> integer
+  val (lsr) : integer -> integer -> integer
+  val xor : bool -> bool -> bool
 
   val int : integer -> integer
   val abs : integer -> integer
@@ -378,6 +385,48 @@ end = struct
     match x with
     | Int x -> Int (- x)
     | Tez _ | Timestamp _ -> assert false
+
+  let xor x y = (x || y) && not (x && y)
+
+  let lnot = Z.lognot
+  let lnot x =
+    match x with
+    | Int x -> Int (lnot x)
+    | Tez _ | Timestamp _
+      -> assert false
+
+  let (land) = Z.(land)
+  let (land) x y =
+    match x,y with
+    | Int x, Int y -> Int (x land y)
+    | (Tez _ | Timestamp _| Int _), (Tez _ | Timestamp _ | Int _)
+      -> assert false
+
+  let (lor) = Z.(lor)
+  let (lor) x y =
+    match x,y with
+    | Int x, Int y -> Int (x lor y)
+    | (Tez _ | Timestamp _| Int _), (Tez _ | Timestamp _ | Int _)
+      -> assert false
+
+  let (lxor) = Z.(lxor)
+  let (lxor) x y =
+    match x,y with
+    | Int x, Int y -> Int (x lxor y)
+    | (Tez _ | Timestamp _| Int _), (Tez _ | Timestamp _ | Int _)
+      -> assert false
+
+  let (lsl) x y =
+    match x,y with
+    | Int x, Int y -> Int (Z.shift_left x (Z.to_int y))
+    | (Tez _ | Timestamp _| Int _), (Tez _ | Timestamp _ | Int _)
+      -> assert false
+
+  let (lsr) x y =
+    match x,y with
+    | Int x, Int y -> Int (Z.shift_right x (Z.to_int y))
+    | (Tez _ | Timestamp _| Int _), (Tez _ | Timestamp _ | Int _)
+      -> assert false
 
   let ediv x y =
     try

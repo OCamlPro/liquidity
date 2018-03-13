@@ -725,11 +725,8 @@ and typecheck_prim2 env prim loc args =
   | Prim_not, [ Tbool ] -> Tbool
 
   | Prim_xor, [ Tnat; Tnat ] -> Tnat
-  | Prim_xor, [ Tint|Tnat; Tint|Tnat ] -> Tint
   | Prim_or, [ Tnat; Tnat ] -> Tnat
-  | Prim_or, [ Tint|Tnat; Tint|Tnat ] -> Tint
   | Prim_and, [ Tnat; Tnat ] -> Tnat
-  | Prim_and, [ Tint|Tnat; Tint|Tnat ] -> Tint
   | Prim_not, [ Tint|Tnat ] -> Tint
 
   | Prim_abs, [ Tint ] -> Tint
@@ -1013,21 +1010,11 @@ let typecheck_contract ~warnings env contract =
     typecheck_expected "return value" env expected_ty contract.code in
   { contract with code }
 
-let typecheck_code ~warnings env contract expected_ty code =
-  let env =
-    {
-      warnings;
-      annot=false;
-      counter = ref 0;
-      vars = StringMap.empty;
-      vars_counts = StringMap.empty;
-      to_inline = ref StringMap.empty;
-      env = env;
-      clos_env = None;
-      contract ;
-    } in
 
-  typecheck_expected "value" env expected_ty code
+let typecheck_code env ?expected_ty code =
+  match expected_ty with
+  | Some expected_ty -> typecheck_expected "value" env expected_ty code
+  | None -> typecheck env code
 
 
 let check_const_type ?(from_mic=false) ~to_tez loc ty cst =

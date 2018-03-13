@@ -34,6 +34,6 @@ else
     echo "\n${RED}${TEZOS_FULL_PATH} not present ! typechecking of tests/$test.liq.tz.liq.tz skipped${DEFAULT}\n"
 fi
 
-echo ./_obuild/ocp-liquidity-comp/ocp-liquidity-comp.asm -I +../zarith zarith.cma -I _obuild/liquidity-env ./_obuild/liquidity-env/liquidity-env.cma -impl tests/$test.liq
+echo ./_obuild/ocp-liquidity-comp/ocp-liquidity-comp.asm -I +../zarith zarith.cma -I _obuild/liquidity-env unix.cma ./_obuild/liquidity-env/liquidity-env.cma -impl tests/$test.liq
 ./_obuild/ocp-liquidity-comp/ocp-liquidity-comp.asm -I +../zarith zarith.cma -I _obuild/liquidity-env unix.cma ./_obuild/liquidity-env/liquidity-env.cma -dsource -impl tests/$test.liq || exit 2
 rm -f a.out

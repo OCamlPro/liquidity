@@ -101,9 +101,9 @@ let translate env contract s ty =
   let ml_ty = LiquidToOCaml.convert_type ~abbrev:false ty in
   let ml_exp = Ast_helper.Exp.constraint_ ml_exp ml_ty in
   let sy_exp = LiquidFromOCaml.translate_expression env ml_exp in
-  let ty_exp = LiquidCheck.typecheck_code
-      ~warnings:true env contract ty sy_exp in
-  let enc_exp = LiquidEncode.encode_code env contract ty_exp in
+  let tenv = empty_typecheck_env ~warnings:true contract env in
+  let ty_exp = LiquidCheck.typecheck_code tenv ~expected_ty:ty sy_exp in
+  let enc_exp = LiquidEncode.encode_code tenv ty_exp in
   let loc = LiquidLoc.loc_in_file env.filename in
   translate_const_exp loc enc_exp
 

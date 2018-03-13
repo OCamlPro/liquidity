@@ -807,21 +807,8 @@ let encode_contract ?(annot=false) env contract =
   { contract with code }, ! (env.to_inline)
 
 
-let encode_code env contract code =
-  let env =
-    {
-      warnings=false;
-      annot=false;
-      counter = ref 0;
-      vars = StringMap.empty;
-      vars_counts = StringMap.empty;
-      to_inline = ref StringMap.empty;
-      env = env;
-      clos_env = None;
-      contract ;
-    } in
-
-  encode env code
+let encode_code tenv code =
+  encode tenv code
 
 
 let encode_const env contract const =

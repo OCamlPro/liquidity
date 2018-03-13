@@ -27,7 +27,7 @@ distclean: clean
 
 # All of these tests must be run with with_tezos=true
 
-NTESTS=38
+NTESTS=39
 NREVTESTS=7
 SIMPLE_TESTS= `seq -f 'test%.0f' 0 $(NTESTS)`
 MORE_TESTS=test_ifcons test_if test_loop test_option test_transfer test_left \

@@ -13,7 +13,7 @@
 
 open LiquidTypes
 
-let mk desc = mk desc ()
+let mk desc ty = mk desc ty
 
 type env = {
     env_map : string StringMap.t;
@@ -41,7 +41,8 @@ let base_of_var arg =
   try
     let pos = String.index arg '/' in
     String.sub arg 0 pos
-  with Not_found -> assert false
+  with Not_found ->
+    raise (Invalid_argument ("base_of_var: "^arg))
 
 let escape_var arg =
   try
@@ -69,13 +70,12 @@ let find_free env var_arg bv =
   let var_arg' = iter 0 var_arg' in
   let env' = new_binding var_arg var_arg' env in
   (var_arg', env')
-;;
 
 (* To improve the naming of variables, we compute bound-variables for their
 scopes. Unfortunately, without hash-consing, this can be quite expensive.
  *)
 
-let rec untype (env : env) (code : encoded_exp) : syntax_exp =
+let rec untype (env : env) code =
   let desc =
     match code.desc with
     | If (cond, ifthen, ifelse) ->
@@ -91,7 +91,7 @@ let rec untype (env : env) (code : encoded_exp) : syntax_exp =
     | Apply(Prim_Right, loc, [arg; unused]) ->
        Constructor(loc, Right unused.ty, untype env arg)
     | Apply (prim, loc, args) ->
-       Apply(prim, loc, List.map (untype env) args)
+      Apply(prim, loc, List.map (untype env) args)
 
     | Lambda (arg_name, arg_type, loc, body, res_type) ->
        let base = base_of_var arg_name in
@@ -196,7 +196,7 @@ let rec untype (env : env) (code : encoded_exp) : syntax_exp =
          (LiquidPrinter.Liquid.string_of_code code)
 
   in
-  mk desc
+  mk desc code.ty
 
 and untype_case env (var : string) arg =
   let bv = arg.bv in
@@ -210,3 +210,5 @@ let untype_contract contract =
   let env = new_binding "storage/1" "storage" env in
   let env = new_binding "parameter/2" "parameter" env in
   { contract with code = untype env contract.code }
+
+let untype_code code = untype (empty_env ()) code

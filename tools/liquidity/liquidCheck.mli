@@ -22,9 +22,8 @@ val uniq_ident : string -> string
 val loc_exp : ('a, 'b) exp -> location
 
 val typecheck_code :
-  warnings:bool -> env ->
-  syntax_contract ->
-  LiquidTypes.datatype ->
+  syntax_exp typecheck_env ->
+  ?expected_ty:LiquidTypes.datatype ->
   syntax_exp ->
   typed_exp
 

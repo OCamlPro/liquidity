@@ -7,7 +7,82 @@
 (*                                                                        *)
 (**************************************************************************)
 
-let clean_ast =
+open LiquidTypes
+
+let translate_entry env syntax_ast mapper ast =
+  let open Asttypes in
+  let open Parsetree in
+  let open Ast_helper in
+  let open Ast_mapper in
+  match ast with
+  | { pstr_desc =
+        Pstr_value (
+          Nonrecursive,
+          [ {
+            pvb_pat = ({ ppat_desc = Ppat_var { txt = "main" } } as patmain);
+            pvb_loc = loc_main;
+            pvb_expr =
+              { pexp_desc =
+                  Pexp_fun (Nolabel, None,
+                            ({ ppat_desc =
+                                Ppat_constraint(
+                                  { ppat_desc = Ppat_var { txt = "parameter" }},
+                                  parameter_ty)} as cparam),
+                            { pexp_desc =
+                            Pexp_fun (Nolabel, None,
+                                      ({ ppat_desc =
+                                          Ppat_constraint(
+                                              { ppat_desc = Ppat_var { txt = "storage" }},
+                                              storage_ty)}  as cstor),
+                                      _) }) };
+      } ]) } ->
+    let typed_ast = LiquidCheck.typecheck_contract
+        ~warnings:true env syntax_ast in
+    let ast = LiquidToOCaml.convert_code ~abbrev:false typed_ast.code in
+    Str.value Nonrecursive
+      [Vb.mk patmain
+         (Exp.fun_ Nolabel None cparam
+            (Exp.fun_ Nolabel None cstor
+               (mapper.expr mapper ast)
+                  ))]
+  | _ -> assert false
+
+let rec translate_init env syntax_ast mapper item =
+  let open Asttypes in
+  let open Longident in
+  let open Parsetree in
+  let open Ast_mapper in
+  let open Ast_helper in
+  let args = ref [] in
+  let init_mapper = {
+    mapper with
+    expr = (fun imapper exp ->
+        match exp with
+        | { pexp_desc =
+              Pexp_fun (
+                Nolabel, None,
+                ({ ppat_desc =
+                     Ppat_constraint ({ ppat_desc = Ppat_var { txt }}, ty)
+                 } as arg),
+                exp) } ->
+          args := (arg, txt, ty) :: !args;
+          Exp.fun_ Nolabel None arg (imapper.expr imapper exp)
+        | _ ->
+          let tenv = List.fold_left (fun tenv (_, name, ty) ->
+              fst (LiquidTypes.new_binding tenv name
+                     (LiquidFromOCaml.translate_type env ty))
+            ) (LiquidTypes.empty_typecheck_env ~warnings:true
+                 LiquidTypes.dummy_syntax_contract env) !args
+          in
+          let sy_init = LiquidFromOCaml.translate_expression env exp in
+          let ty_init = LiquidCheck.typecheck_code tenv sy_init in
+          let init_ast = LiquidToOCaml.convert_code ~abbrev:false ty_init in
+          mapper.expr mapper init_ast
+      )
+  } in
+  init_mapper.structure_item init_mapper item
+
+let clean_ast env syntax_ast =
   let open Asttypes in
   let open Longident in
   let open Parsetree in
@@ -31,10 +106,17 @@ let clean_ast =
 
     | { pstr_desc =
           Pstr_extension
-            (({ Asttypes.txt = "entry" | "init" },
+            (({ Asttypes.txt = "entry" },
               PStr [entry]),[])
       } ->
-       mapper.structure_item mapper entry
+      translate_entry env syntax_ast mapper entry
+
+    | { pstr_desc =
+          Pstr_extension
+            (({ Asttypes.txt = "init" },
+              PStr [init]),[])
+      } ->
+      translate_init env syntax_ast mapper init
 
     | _ ->
        default_mapper.structure_item mapper item
@@ -204,8 +286,23 @@ let clean_ast =
 
 
 let init () =
+  let open Asttypes in
+  let open Longident in
+  let open Parsetree in
   let open Ast_mapper in
+  let open Ast_helper in
   LiquidOCamlPparse.ImplementationHooks.add_hook
     "liquid" (fun hook_info ast ->
-      clean_ast.structure clean_ast ast
+          try
+
+            let syntax_ast, _, env =
+              LiquidFromOCaml.translate ~filename:"<<>>" ast in
+            let clean_mapper = clean_ast env syntax_ast in
+            clean_mapper.structure clean_mapper ast
+
+          with
+          | LiquidTypes.LiquidError error ->
+            LiquidLoc.report_error Format.err_formatter error;
+            exit 1
+
       )
