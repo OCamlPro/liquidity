@@ -931,6 +931,17 @@ and translate_case env case =
      match case.pc_lhs with
      | { ppat_desc = Ppat_any } ->
         (CAny, e)
+     | { ppat_desc =
+           Ppat_construct (
+             { txt = Lident ("Some" | "::" | "Plus" | "Minus" as c) },
+             None);
+         ppat_loc }  ->
+       error_loc ppat_loc
+         (Printf.sprintf "Constructor %S takes arguments, was given 0" c)
+     | { ppat_desc =
+           Ppat_construct ( { txt = Lident ("None" | "[]" as c) }, Some _);
+         ppat_loc }  ->
+       error_loc ppat_loc (Printf.sprintf "Constructor %S takes no arguments" c)
      | { ppat_desc = Ppat_construct ( { txt = Lident name } , None) }  ->
         (CConstr (name, []), e)
      | { ppat_desc =
