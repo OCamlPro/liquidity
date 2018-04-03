@@ -312,7 +312,9 @@ let line_of_contract c =
   s
 
 let contract_encoding =
-  Micheline.canonical_encoding Data_encoding.string |> Data_encoding.list
+  Micheline.canonical_encoding
+    ~variant:"michelson_v1"
+    Data_encoding.string |> Data_encoding.list
 
 let json_of_contract c =
   Data_encoding.Json.construct contract_encoding c
@@ -328,7 +330,9 @@ let contract_of_ezjson ezj =
   Data_encoding.Json.destruct contract_encoding ezj
 
 let const_encoding =
-  Micheline.canonical_encoding Data_encoding.string
+  Micheline.canonical_encoding
+    ~variant:"michelson_v1"
+    Data_encoding.string
   (* Micheline.erased_encoding 0 Data_encoding.string *)
 
 let json_of_const c =

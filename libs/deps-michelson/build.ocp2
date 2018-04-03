@@ -31,6 +31,7 @@ OCaml.library("michelson-deps", ocaml + {
        "utils.ml";
        "z.ml";
        "nocrypto.ml";
+       (* "blake2.ml"; TODO *)
      ];
      requires = [
        "nums";
@@ -46,8 +47,11 @@ OCaml.library("michelson-deps", ocaml + {
 
 OCaml.library("michelson-deps", ocaml + {
      files = [
+       "utils.ml";
 
-        "utils.ml"; 
+       "blake2b-ref.c";    (* from BLAKE/BLAKE *)
+       "blake2b-stubs.c";
+       "blake2.ml";
 (*
         "lwt.ml";
         "lwt_list.ml";
@@ -67,7 +71,7 @@ OCaml.library("michelson-deps", ocaml + {
        "sodium";
        "ezjsonm";
      ];
-}); 
+});
 
 }
 }

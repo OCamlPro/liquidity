@@ -421,28 +421,30 @@ let forge_deploy ?head ?source ?public_key
 
 let inject ?loc_table ?sk netId op =
   get_predecessor () >>= fun pred ->
-  let op_b = MBytes.of_string (Hex_encode.hex_decode op) in
+  let op_b = MBytes.of_string (Hex.to_string op) in
   let signed_op, op_hash, data = match sk with
     | None ->
-      let op_hash = Hash.Operation_hash.to_b58check @@
-        Hash.Operation_hash.hash_bytes [ op_b ] in
+      let op_hash =
+        Operation_hash.to_b58check @@
+        Operation_hash.hash_bytes [ op_b ] in
       op, op_hash, [
         "pred_block", Printf.sprintf "%S" pred;
         "operation_hash", Printf.sprintf "%S" op_hash;
-        "forged_operation", Printf.sprintf "%S" op;
+        "forged_operation", Printf.sprintf "%S" (Hex.show op);
       ] |> mk_json_obj
 
     | Some sk ->
       let signature_b = Ed25519.sign sk op_b in
       let signature = Ed25519.Signature.to_b58check signature_b in
       let signed_op_b = MBytes.concat op_b signature_b in
-      let signed_op = Hex_encode.hex_encode (MBytes.to_string signed_op_b) in
-      let op_hash = Hash.Operation_hash.to_b58check @@
-        Hash.Operation_hash.hash_bytes [ signed_op_b ] in
+      let signed_op = Hex.of_string (MBytes.to_string signed_op_b) in
+      let op_hash =
+        Operation_hash.to_b58check @@
+        Operation_hash.hash_bytes [ signed_op_b ] in
       signed_op, op_hash, [
         "pred_block", Printf.sprintf "%S" pred;
         "operation_hash", Printf.sprintf "%S" op_hash;
-        "forged_operation", Printf.sprintf "%S" op;
+        "forged_operation", Printf.sprintf "%S" (Hex.show op);
         "signature", Printf.sprintf "%S" signature;
       ] |> mk_json_obj
   in
@@ -456,7 +458,7 @@ let inject ?loc_table ?sk netId op =
      raise_request_error ?loc_table r "inject (apply_operation)"
   ) >>= fun contracts ->
   let data = [
-    "signedOperationContents", Printf.sprintf "%S" signed_op;
+    "signedOperationContents", Printf.sprintf "%S" (Hex.show signed_op);
     "net_id", Printf.sprintf "%S" netId;
     "force", "false";
   ] |> mk_json_obj
@@ -489,7 +491,7 @@ let deploy ?(delegatable=false) ?(spendable=false) liquid init_params_strings =
   forge_deploy ~head:head.head_hash ~source ~public_key ~delegatable ~spendable
     liquid init_params_strings
   >>= fun (op, loc_table) ->
-  inject ~loc_table ~sk head.head_netId op >>= function
+  inject ~loc_table ~sk head.head_netId (`Hex op) >>= function
   | op_h, [c] -> return (op_h, c)
   | _ -> raise (RequestError "deploy (inject)")
 
@@ -578,7 +580,7 @@ let call liquid address parameter_string =
   forge_call ~head:head.head_hash ~source ~public_key
     liquid address parameter_string
   >>= fun (op, loc_table) ->
-  inject ~loc_table ~sk head.head_netId op >>= function
+  inject ~loc_table ~sk head.head_netId (`Hex op) >>= function
   | op_h, [] -> return op_h
   | _ -> raise (RequestError "call (inject)")
 
@@ -598,13 +600,14 @@ let faucet_to dest =
     | None -> get_public_key_hash_from_secret_key sk
   in
   let nonce =
-    Sodium.Random.Bigbytes.generate 16
-    |> Hex_encode.hex_of_bytes
+    Sodium.Random.Bytes.generate 16
+    |> Bytes.unsafe_to_string
+    |> Hex.of_string
   in
   let transaction_json = [
     "kind", "\"faucet\"";
     "id", Printf.sprintf "%S" source;
-    "nonce", Printf.sprintf "%S" nonce;
+    "nonce", Printf.sprintf "%S" (Hex.show nonce);
   ] |> mk_json_obj
   in
   let data = [
@@ -621,14 +624,14 @@ let faucet_to dest =
     with Not_found ->
       raise_request_error r "forge faucet"
   in
-  inject head.head_netId op >>= function
+  inject head.head_netId (`Hex op) >>= function
   | _, ([] | _::_::_) -> raise (RequestError "faucet (inject)")
   | op_h, [c] ->
     (* get_counter source >>= fun counter -> *)
     (* let counter = counter + 1 in *)
     let transaction_json = [
       "kind", "\"transaction\"";
-      "amount", "10000000";
+      "amount", "100000000000";
       "destination", Printf.sprintf "%S" dest;
       "parameters", {|{"prim":"Unit","args":[]}|};
     ] |> mk_json_obj
@@ -651,7 +654,7 @@ let faucet_to dest =
       with Not_found ->
         raise_request_error r "forge transfer from faucet"
     in
-    inject ~sk head.head_netId op >>= function
+    inject ~sk head.head_netId (`Hex op) >>= function
     | op_h, [] -> return_unit (* ok *)
     | _ -> raise (RequestError "faucet transfer (inject)")
 

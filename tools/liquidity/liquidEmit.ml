@@ -44,6 +44,9 @@ let rec emit_code ~expand code =
   | LEFT ty -> M_INS_EXP ("LEFT", [ty], [], name)
   | RIGHT ty -> M_INS_EXP ("RIGHT", [ty], [], name)
 
+  (* Special case for empty map/set  TODO check if necessary *)
+  (* | PUSH (ty, CMap []) -> M_INS_EXP ("EMPTY_MAP", [ty], [], name)
+   * | PUSH (ty, CSet []) -> M_INS_EXP ("EMPTY_SET", [ty], [], name) *)
 
   | PUSH (ty, cst) -> M_INS_CST ("PUSH", ty, cst, name)
   | DIP (0, exp) -> assert false

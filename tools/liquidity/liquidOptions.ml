@@ -27,7 +27,7 @@ let tezos_node = ref "127.0.0.1:8732"
 
 let source = ref (None : string option)
 let amount = ref "0"
-let fee = ref "5"
+let fee = ref "50000"
 let delegatable = ref false
 let spendable = ref false
 

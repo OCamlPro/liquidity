@@ -449,12 +449,14 @@ let rec find nodes name =
   | _ -> raise (Missing_program_field name)
 
 let rec expand expr =
-  match Michelson_macros.expand expr with
-  | Seq (loc, items, annot) ->
-     Seq (loc, List.map expand items, annot)
-  | Prim (loc, name, args, annot) ->
-     Prim (loc, name, List.map expand args, annot)
-  | Int _ | String _ as atom -> atom
+  match Michelson_v1_macros.expand expr with
+  | Error _ -> invalid_arg "expand"
+  | Ok r -> match r with
+    | Seq (loc, items, annot) ->
+      Seq (loc, List.map expand items, annot)
+    | Prim (loc, name, args, annot) ->
+      Prim (loc, name, List.map expand args, annot)
+    | Int _ | String _ as atom -> atom
 
 
 let convert_const_type env c ty =

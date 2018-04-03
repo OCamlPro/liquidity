@@ -232,11 +232,11 @@ let parse_tez_to_string expl amount =
           dummy_syntax_contract amount Ttez
   with
   | CTez t ->
-    let cents = match t.centiles with
-      | Some cents -> cents
-      | None  -> "00"
+    let mutez = match t.mutez with
+      | Some mutez -> mutez
+      | None  -> "000000"
     in
-    t.tezzies ^ cents
+    t.tezzies ^ mutez
   | _ -> assert false
 
 

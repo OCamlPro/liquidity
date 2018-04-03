@@ -9,10 +9,10 @@
 
 open LiquidTypes
 
-let mic_of_tez { tezzies ; centiles } =
-  match centiles with
+let mic_of_tez { tezzies ; mutez } =
+  match mutez with
   | None -> tezzies
-  | Some centiles -> tezzies ^ "." ^ centiles
+  | Some mutez -> tezzies ^ "." ^ mutez
 
 let mic_of_integer { integer } = integer
 
@@ -35,8 +35,8 @@ let tez_of_mic s =
   let parts = Buffer.contents b :: !parts in
   match parts with
   | [ tezzies ]
-  | [ "" ; tezzies ] -> { tezzies; centiles = None }
-  | [ centiles; tezzies ] -> { tezzies; centiles = Some centiles }
+  | [ "" ; tezzies ] -> { tezzies; mutez = None }
+  | [ mutez; tezzies ] -> { tezzies; mutez = Some mutez }
   | _ -> invalid_arg "tez_of_mic" (* TODO exn *)
 
 let integer_of_mic integer = { integer }
@@ -62,22 +62,25 @@ let tez_of_liq s =
     let pos = String.index s '.' in
     let len = String.length s in
     let tezzies = String.sub s 0 pos in
-    let centiles = String.sub s (pos+1) (len - pos - 1) in
-    let centiles_len = String.length centiles in
-    let centiles = match centiles_len with
-        0 -> None
-      | 1 -> Some (centiles ^ "0")
-      | 2 -> Some centiles
-      | _ -> invalid_arg "bad centiles in tez_of_liq"
+    let mutez = String.sub s (pos+1) (len - pos - 1) in
+    let mutez_len = String.length mutez in
+    let mutez = match mutez_len with
+      | 0 -> None
+      | l when l <= 6 ->
+        let mutez = String.init 6 (fun i ->
+            if i < l then mutez.[i] else '0'
+          ) in
+        Some mutez
+      | _ -> invalid_arg "bad mutez in tez_of_liq"
     in
-    { tezzies; centiles }
+    { tezzies; mutez }
   with Not_found ->
-    { tezzies = s; centiles = None }
+    { tezzies = s; mutez = None }
 
-let liq_of_tez { tezzies ; centiles } =
-  match centiles with
+let liq_of_tez { tezzies ; mutez } =
+  match mutez with
   | None -> tezzies
-  | Some centiles -> tezzies ^ "." ^ centiles
+  | Some mutez -> tezzies ^ "." ^ mutez
 
 let liq_of_integer { integer } = integer
 
@@ -234,33 +237,31 @@ module Michelson = struct
     | CTuple tys -> bprint_const_pairs fmt b indent tys
     | CMap pairs ->
        let indent = fmt.increase_indent indent in
-       Printf.bprintf b "(Map";
-       List.iter (fun (cst1, cst2) ->
-           Printf.bprintf b "%c%s(Item" fmt.newline indent;
+       Printf.bprintf b "{";
+       let _ = List.fold_left (fun first (cst1, cst2) ->
+           if not first then Printf.bprintf b " ;";
+           Printf.bprintf b "%c%sElt" fmt.newline indent;
+           Printf.bprintf b "%c%s" fmt.newline indent;
            let indent = fmt.increase_indent indent in
            Printf.bprintf b "%c%s" fmt.newline indent;
            bprint_const fmt b indent cst1;
            Printf.bprintf b "%c%s" fmt.newline indent;
            bprint_const fmt b indent cst2;
-           Printf.bprintf b ")";
-         ) pairs;
-       Printf.bprintf b ")";
-    | CList csts ->
+           false
+         ) true pairs
+       in
+       Printf.bprintf b "}";
+    | CList csts | CSet csts ->
        let indent = fmt.increase_indent indent in
-       Printf.bprintf b "(List";
-       List.iter (fun cst ->
+       Printf.bprintf b "{";
+       let _ = List.fold_left (fun first cst ->
+           if not first then Printf.bprintf b " ;";
            Printf.bprintf b "%c%s" fmt.newline indent;
            bprint_const fmt b indent cst;
-         ) csts;
-       Printf.bprintf b ")";
-    | CSet csts ->
-       let indent = fmt.increase_indent indent in
-       Printf.bprintf b "(Set";
-       List.iter (fun cst ->
-           Printf.bprintf b "%c%s" fmt.newline indent;
-           bprint_const fmt b indent cst;
-         ) csts;
-       Printf.bprintf b ")";
+           false
+         ) true csts
+       in
+       Printf.bprintf b "}";
     | CConstr _ | CRecord _ -> assert false
 
   and bprint_const_pairs fmt b indent tys =
