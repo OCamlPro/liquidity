@@ -57,18 +57,18 @@ let rec convert_const ~loc expr =
   | CTuple (x :: y) ->
      Micheline.Prim(loc, "Pair", [convert_const ~loc x;
                                   convert_const ~loc (CTuple y)], None)
-  | CList args -> Micheline.Prim(loc, "List",
-                                   List.map (convert_const ~loc) args, None)
+
+  | CList args | CSet args ->
+    Micheline.Seq(loc, List.map (convert_const ~loc) args, None)
 
   | CMap args ->
-     Micheline.Prim(loc, "Map",
+     Micheline.Seq(loc,
                       List.map (fun (x,y) ->
-                          Micheline.Prim(loc, "Item", [convert_const ~loc x;
+                          Micheline.Prim(loc, "Elt", [convert_const ~loc x;
                                                        convert_const ~loc y], None
                                           ))
                                args, None)
-  | CSet args -> Micheline.Prim(loc, "Set",
-                                  List.map (convert_const ~loc) args, None)
+
   | CNat n -> Micheline.Int (loc, LiquidPrinter.mic_of_integer n)
   | CTez n -> Micheline.String (loc, LiquidPrinter.mic_of_tez n)
            (*

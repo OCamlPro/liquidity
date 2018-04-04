@@ -68,7 +68,7 @@ rev-tests: build
 		./check-rev.sh tests/reverse $$i $(EXIT_ON_ERROR); \
 	done
 	for i in $(TEZOS_TESTS); do \
-		./check-rev.sh tezos/test/contracts $$i $(EXIT_ON_ERROR); \
+		./check-rev.sh tezos/src/bin_client/test/contracts/ $$i $(EXIT_ON_ERROR); \
 	done
 
 

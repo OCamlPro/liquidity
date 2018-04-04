@@ -190,37 +190,23 @@ let rec convert_const env ?ty expr =
       | Some ty -> wrong_type env expr ty
     end
 
-  | Prim(_, "List", args, _debug) ->
-        begin match ty with
-      | Some (Tlist ty) ->
-        CList (List.map (convert_const ~ty env) args)
-      | None ->
-        CList (List.map (convert_const env) args)
-      | Some ty ->  wrong_type env expr ty
-    end
-
-  | Prim(_, "Set", args, _debug) ->
+  | Seq(_, elems, _debug) ->
     begin match ty with
+      | Some (Tlist ty) ->
+        CList (List.map (convert_const ~ty env) elems)
       | Some (Tset ty) ->
-        CSet (List.map (convert_const ~ty env) args)
+        CSet (List.map (convert_const ~ty env) elems)
+      | Some (Tmap (ty_k, ty_e)) ->
+        CMap (List.map (function
+            | Prim(_, "Elt", [k;e], _debug) ->
+                convert_const env ~ty:ty_k k, convert_const env ~ty:ty_e e
+            | expr ->
+              unknown_expr env "convert_const map element" expr
+          ) elems)
       | None ->
-        CSet (List.map (convert_const env) args)
+        CList (List.map (convert_const env) elems)
       | Some ty ->  wrong_type env expr ty
     end
-
-  | Prim(_, "Map", args, _debug) ->
-     CMap (List.map (function
-        | Prim(_, "Item", [x;y], _debug) ->
-          begin match ty with
-            | None ->
-              convert_const env x, convert_const env y
-            | Some (Tmap (tyx, tyy)) ->
-              convert_const env ~ty:tyx x, convert_const env ~ty:tyy y
-            | Some ty ->
-               wrong_type env expr ty
-          end;
-        | expr ->
-          unknown_expr env "convert_const_item" expr) args)
 
   | _ -> unknown_expr env "convert_const" expr
 
@@ -365,12 +351,13 @@ let rec convert_code env expr =
   | Prim(index, "TRANSFER_TOKENS", [], annot) ->
     mic_loc env index annot (TRANSFER_TOKENS)
   | Prim(index, "PUSH", [ ty; cst ], annot) ->
-     begin match convert_type env ty, convert_const env cst with
-     | Tnat, CInt n ->
+    let ty = convert_type env ty in
+    begin match ty, convert_const env ~ty cst with
+      | Tnat, CInt n ->
         mic_loc env index annot (PUSH (Tnat, CNat n))
-     | ty, cst ->
+      | ty, cst ->
         mic_loc env index annot (PUSH (ty, cst))
-     end
+    end
   | Prim(index, "H", [], annot) ->
     mic_loc env index annot (H)
   | Prim(index, "HASH_KEY", [], annot) ->
