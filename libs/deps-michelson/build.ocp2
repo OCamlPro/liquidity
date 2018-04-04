@@ -10,6 +10,11 @@
 (* This part of the library is made to create a minimal set of dependencies
 to be able to run code that was directly extracted from Tezos *)
 
+function pp_js(file) {
+    return file,
+           { pp =  ["camlp4o"; "%{js_of_ocaml-camlp4_SRC_DIR}%/pa_js.cma"]};
+}
+
 OCaml.library("ocplib-fake-lwt",
    ocaml + {
      files = [
@@ -31,7 +36,7 @@ OCaml.library("michelson-deps", ocaml + {
        "utils.ml";
        "z.ml";
        "nocrypto.ml";
-       (* "blake2.ml"; TODO *)
+       pp_js("js/blake2.ml");
      ];
      requires = [
        "nums";
@@ -40,7 +45,9 @@ OCaml.library("michelson-deps", ocaml + {
        "uutf";
        "ocplib-ezjsonm-js";
        "ocp-libsodium-js";
-     ];
+       "js_of_ocaml";
+       "hex";
+   ];
 });
 
 } else {

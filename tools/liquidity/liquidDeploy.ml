@@ -224,7 +224,7 @@ let run_pre env syntax_contract pre_michelson source input storage =
       "script", contract_json;
       "input", input_json;
       "storage", storage_json;
-      "amount", !LiquidOptions.amount;
+      "amount", Printf.sprintf "%S" !LiquidOptions.amount;
   ] @ (match source with
       | None -> []
       | Some source -> ["contract", Printf.sprintf "%S" source]
@@ -235,8 +235,8 @@ let run_pre env syntax_contract pre_michelson source input storage =
   >>= fun r ->
   let r = Ezjsonm.from_string r in
   try
-    let storage_r = Ezjsonm.find r ["ok"; "storage"] in
-    let result_r = Ezjsonm.find r ["ok"; "output"] in
+    let storage_r = Ezjsonm.find r ["storage"] in
+    let result_r = Ezjsonm.find r ["output"] in
     let storage_expr = LiquidToTezos.const_of_ezjson storage_r in
     let result_expr = LiquidToTezos.const_of_ezjson result_r in
     let env = LiquidTezosTypes.empty_env env.filename in
@@ -272,7 +272,7 @@ let get_counter source =
   >>= fun r ->
   let r = Ezjsonm.from_string r in
   try
-    Ezjsonm.find r ["ok"] |> Ezjsonm.get_int |> return
+    Ezjsonm.find r ["counter"] |> Ezjsonm.get_int |> return
   with Not_found ->
     raise_request_error r "get_counter"
 
@@ -287,7 +287,7 @@ let get_head_hash () =
 
 type head = {
   head_hash : string;
-  head_netId : string;
+  head_chain_id : string;
 }
 
 let get_head () =
@@ -295,8 +295,8 @@ let get_head () =
   let r = Ezjsonm.from_string r in
   try
     let head_hash = Ezjsonm.find r ["hash"] |> Ezjsonm.get_string in
-    let head_netId = Ezjsonm.find r ["net_id"] |> Ezjsonm.get_string in
-    return { head_hash; head_netId }
+    let head_chain_id = Ezjsonm.find r ["chain_id"] |> Ezjsonm.get_string in
+    return { head_hash; head_chain_id }
   with Not_found ->
     raise_request_error r "get_head"
 
@@ -390,7 +390,7 @@ let forge_deploy ?head ?source ?public_key
   let origination_json = [
     "kind", "\"origination\"";
     "managerPubkey", Printf.sprintf "%S" source;
-    "balance", !LiquidOptions.amount;
+    "balance", Printf.sprintf "%S" !LiquidOptions.amount;
     "spendable", string_of_bool spendable;
     "delegatable", string_of_bool delegatable;
     "script", script_json;
@@ -398,28 +398,29 @@ let forge_deploy ?head ?source ?public_key
   in
   let datas = [
     "branch", Printf.sprintf "%S" head;
+    "kind", "\"manager\"";
     "source", Printf.sprintf "%S" source;
     "fee", !LiquidOptions.fee;
     "counter", string_of_int counter;
     "operations", mk_json_arr [origination_json];
   ]
   in
-  let datas = match public_key with
-    | None -> datas
-    | Some pk -> ("public_key", Printf.sprintf "%S" pk) :: datas
-  in
+  (* let datas = match public_key with
+   *   | None -> datas
+   *   | Some pk -> ("public_key", Printf.sprintf "%S" pk) :: datas
+   * in *)
   let data = mk_json_obj datas in
   !request ~data "/blocks/prevalidation/proto/helpers/forge/operations"
   >>= fun r ->
   let r = Ezjsonm.from_string r in
   try
-    let op = Ezjsonm.find r ["ok"; "operation"] |> Ezjsonm.get_string in
+    let op = Ezjsonm.find r ["operation"] |> Ezjsonm.get_string in
     return (op, loc_table)
   with Not_found ->
     raise_request_error ~loc_table r "forge_deploy"
 
 
-let inject ?loc_table ?sk netId op =
+let inject ?loc_table ?sk chain_id op =
   get_predecessor () >>= fun pred ->
   let op_b = MBytes.of_string (Hex.to_string op) in
   let signed_op, op_hash, data = match sk with
@@ -452,21 +453,21 @@ let inject ?loc_table ?sk netId op =
   >>= fun r ->
   let r = Ezjsonm.from_string r in
   (try
-     Ezjsonm.find r ["ok"; "contracts"] |> Ezjsonm.get_list Ezjsonm.get_string
+     Ezjsonm.find r ["contracts"] |> Ezjsonm.get_list Ezjsonm.get_string
      |> return
    with Not_found ->
      raise_request_error ?loc_table r "inject (apply_operation)"
   ) >>= fun contracts ->
   let data = [
     "signedOperationContents", Printf.sprintf "%S" (Hex.show signed_op);
-    "net_id", Printf.sprintf "%S" netId;
-    "force", "false";
+    "chain_id", Printf.sprintf "%S" chain_id;
+    (* "force", "false"; *)
   ] |> mk_json_obj
   in
   !request ~data "/inject_operation" >>= fun r ->
   let r = Ezjsonm.from_string r in
   (try
-     Ezjsonm.find r ["ok"; "injectedOperation"] |> Ezjsonm.get_string |> return
+     Ezjsonm.find r ["injectedOperation"] |> Ezjsonm.get_string |> return
    with Not_found ->
      raise_request_error ?loc_table r "inject (inject_operation)"
   ) >>= fun injected_op_hash ->
@@ -491,7 +492,7 @@ let deploy ?(delegatable=false) ?(spendable=false) liquid init_params_strings =
   forge_deploy ~head:head.head_hash ~source ~public_key ~delegatable ~spendable
     liquid init_params_strings
   >>= fun (op, loc_table) ->
-  inject ~loc_table ~sk head.head_netId (`Hex op) >>= function
+  inject ~loc_table ~sk head.head_chain_id (`Hex op) >>= function
   | op_h, [c] -> return (op_h, c)
   | _ -> raise (RequestError "deploy (inject)")
 
@@ -505,8 +506,7 @@ let get_storage liquid address =
   >>= fun r ->
   let r = Ezjsonm.from_string r in
   try
-    let storage_r = Ezjsonm.find r ["ok"] in
-    let storage_expr = LiquidToTezos.const_of_ezjson storage_r in
+    let storage_expr = LiquidToTezos.const_of_ezjson r in
     let env = LiquidTezosTypes.empty_env env.filename in
     return
       (LiquidFromTezos.convert_const_type env storage_expr syntax_ast.storage)
@@ -534,23 +534,24 @@ let forge_call ?head ?source ?public_key liquid address parameter_string =
   let counter = counter + 1 in
   let transaction_json = [
     "kind", "\"transaction\"";
-    "amount", !LiquidOptions.amount;
+    "amount", Printf.sprintf "%S" !LiquidOptions.amount;
     "destination", Printf.sprintf "%S" address;
     "parameters", parameter_json;
   ] |> mk_json_obj
   in
   let datas = [
     "branch", Printf.sprintf "%S" head;
+    "kind", "\"manager\"";
     "source", Printf.sprintf "%S" source;
     "fee", !LiquidOptions.fee;
     "counter", string_of_int counter;
     "operations", mk_json_arr [transaction_json];
   ]
   in
-  let datas = match public_key with
-    | None -> datas
-    | Some pk -> ("public_key", Printf.sprintf "%S" pk) :: datas
-  in
+  (* let datas = match public_key with
+   *   | None -> datas
+   *   | Some pk -> ("public_key", Printf.sprintf "%S" pk) :: datas
+   * in *)
   let data = mk_json_obj datas in
   !request ~data "/blocks/prevalidation/proto/helpers/forge/operations"
   >>= fun r ->
@@ -558,7 +559,7 @@ let forge_call ?head ?source ?public_key liquid address parameter_string =
   let _, loc_table =
     LiquidToTezos.convert_contract ~expand:true pre_michelson in
   try
-    let op = Ezjsonm.find r ["ok"; "operation"] |> Ezjsonm.get_string in
+    let op = Ezjsonm.find r ["operation"] |> Ezjsonm.get_string in
     return (op, loc_table)
   with Not_found ->
     raise_request_error ~loc_table r "forge_call"
@@ -580,7 +581,7 @@ let call liquid address parameter_string =
   forge_call ~head:head.head_hash ~source ~public_key
     liquid address parameter_string
   >>= fun (op, loc_table) ->
-  inject ~loc_table ~sk head.head_netId (`Hex op) >>= function
+  inject ~loc_table ~sk head.head_chain_id (`Hex op) >>= function
   | op_h, [] -> return op_h
   | _ -> raise (RequestError "call (inject)")
 
@@ -620,29 +621,34 @@ let faucet_to dest =
   let r = Ezjsonm.from_string r in
   let op =
     try
-      Ezjsonm.find r ["ok"; "operation"] |> Ezjsonm.get_string
+      Ezjsonm.find r ["operation"] |> Ezjsonm.get_string
     with Not_found ->
       raise_request_error r "forge faucet"
   in
-  inject head.head_netId (`Hex op) >>= function
+  inject head.head_chain_id (`Hex op) >>= function
   | _, ([] | _::_::_) -> raise (RequestError "faucet (inject)")
   | op_h, [c] ->
     (* get_counter source >>= fun counter -> *)
     (* let counter = counter + 1 in *)
+    let reveal_json = [
+      "kind", "\"reveal\"";
+      "public_key", Printf.sprintf "%S" edpk;
+    ] |> mk_json_obj
+    in
     let transaction_json = [
       "kind", "\"transaction\"";
-      "amount", "100000000000";
+      "amount", "\"100000000000\"";
       "destination", Printf.sprintf "%S" dest;
-      "parameters", {|{"prim":"Unit","args":[]}|};
+      (* "parameters", {|{"prim":"Unit","args":[]}|}; *)
     ] |> mk_json_obj
     in
     let data = [
       "branch", Printf.sprintf "%S" head.head_hash;
+      "kind", "\"manager\"";
       "source", Printf.sprintf "%S" c;
-      "public_key", Printf.sprintf "%S" edpk;
       "fee", "0";
       "counter", "1"; (* string_of_int counter; *)
-      "operations", mk_json_arr [transaction_json];
+      "operations", mk_json_arr [reveal_json; transaction_json];
     ] |> mk_json_obj
     in
     !request ~data "/blocks/prevalidation/proto/helpers/forge/operations"
@@ -650,12 +656,42 @@ let faucet_to dest =
     let r = Ezjsonm.from_string r in
     let op =
       try
-        Ezjsonm.find r ["ok"; "operation"] |> Ezjsonm.get_string
+        Ezjsonm.find r ["operation"] |> Ezjsonm.get_string
       with Not_found ->
         raise_request_error r "forge transfer from faucet"
     in
-    inject ~sk head.head_netId (`Hex op) >>= function
-    | op_h, [] -> return_unit (* ok *)
+    inject ~sk head.head_chain_id (`Hex op) >>= function
+    | op_h, [] -> begin
+        (* Reveal for small tz1 *)
+        get_head () >>= fun head ->
+        get_counter source >>= fun counter ->
+        let reveal_json = [
+          "kind", "\"reveal\"";
+          "public_key", Printf.sprintf "%S" edpk;
+        ] |> mk_json_obj
+        in
+        let data = [
+          "branch", Printf.sprintf "%S" head.head_hash;
+          "kind", "\"manager\"";
+          "source", Printf.sprintf "%S" dest;
+          "fee", "0";
+          "counter", string_of_int (counter + 1);
+          "operations", mk_json_arr [reveal_json];
+        ] |> mk_json_obj
+        in
+        !request ~data "/blocks/prevalidation/proto/helpers/forge/operations"
+        >>= fun r ->
+        let r = Ezjsonm.from_string r in
+        let op =
+          try
+            Ezjsonm.find r ["operation"] |> Ezjsonm.get_string
+          with Not_found ->
+            raise_request_error r "forge reveal"
+        in
+        inject ~sk head.head_chain_id (`Hex op) >>= function
+        | op_h, [] -> return_unit (* ok *)
+        | _ -> raise (RequestError "faucet transfer (reveal tz1)")
+      end
     | _ -> raise (RequestError "faucet transfer (inject)")
 
 
