@@ -385,8 +385,11 @@ let () =
   | LiquidFromTezos.Missing_program_field f ->
     Format.eprintf "Missing script field %s@." f;
     exit 1
-  | LiquidDeploy.RequestError msg ->
-    Format.eprintf "Request Error: %s@." msg;
+  | LiquidDeploy.RequestError (code, msg) ->
+    Format.eprintf "Request Error (code %d):\n%s@." code msg;
+    exit 1
+  | LiquidDeploy.ResponseError msg ->
+    Format.eprintf "Response Error:\n%s@." msg;
     exit 1
   | LiquidDeploy.RuntimeError error ->
     LiquidLoc.report_error ~kind:"Runtime error" Format.err_formatter error;

@@ -9,7 +9,8 @@
 open LiquidTypes
 open Lwt
 
-exception RequestError of string
+exception RequestError of int * string
+exception ResponseError of string
 exception RuntimeError of error
 exception RuntimeFailure of error * string option
 
@@ -85,14 +86,14 @@ module Network = struct
     Curl.set_postfields c data;
     Curl.set_postfieldsize c (String.length data);
     Curl_lwt.perform c >>= fun cc ->
-    if cc <> Curl.CURLE_OK then
-      raise (RequestError
-               (Printf.sprintf "[%d] [%s] Curl exception: %s\n%!"
-                   (Curl.errno cc) host path))
-    else
-      let rc = Curl.get_responsecode c in
-      Curl.cleanup c;
-      Lwt.return (rc, (Buffer.contents r))
+    (* if cc <> Curl.CURLE_OK then
+     *   raise (RequestError
+     *            (Printf.sprintf "[%d] [%s] Curl exception: %s\n%!"
+     *                (Curl.errno cc) host path))
+     * else *)
+    let rc = Curl.get_responsecode c in
+    Curl.cleanup c;
+    Lwt.return (rc, (Buffer.contents r))
 end
 
 let curl_request ?(data="{}") path =
@@ -104,21 +105,95 @@ let curl_request ?(data="{}") path =
       (Ezjsonm.to_string ~minify:false (Ezjsonm.from_string data));
   try
     Network.post host path data >>= fun (status, json) ->
-    if status <> 200 then
-      raise (RequestError (
-          Printf.sprintf "'%d' : curl failure %s%s" status host path)) ;
+    if status <> 200 then raise (RequestError (status, json));
     if !LiquidOptions.verbosity > 0 then
       Printf.eprintf "\nNode Response %d:\n------------------\n%s\n%!"
         status
         (Ezjsonm.to_string ~minify:false (Ezjsonm.from_string json));
     return json
   with Curl.CurlException (code, i, s) (* as exn *) ->
-    raise (RequestError
-                (Printf.sprintf "[%d] [%s] Curl exception: %s\n%!"
-                   i host s))
-(* raise exn *)
+     raise (RequestError (Curl.errno code, s))
+
 
 let request = ref curl_request
+
+
+let raise_error_from_l ?loc_table err_msg l =
+  let default_error () =
+    let err_s =
+      List.map (fun (kind, id, _) ->
+          Printf.sprintf "%s: %s" kind id) l
+      |> String.concat "\n- "
+      |> Printf.sprintf "In %s:\n- %s" err_msg
+    in
+    raise (ResponseError err_s)
+  in
+  match loc_table with
+  | None -> default_error ()
+  | Some loc_table ->
+    let err_msg = Printf.sprintf "in %s" err_msg in
+    try
+      List.iter (fun (kind, id, loc) ->
+          match loc, kind, id with
+          | Some loc, "temporary", "scriptRejectedRuntimeError" ->
+            let err_loc, fail_str = List.assoc loc loc_table in
+            raise (RuntimeFailure ({err_msg; err_loc}, fail_str))
+          | Some loc, "temporary", _ ->
+            let err_loc, _ = List.assoc loc loc_table in
+            raise (RuntimeError {err_msg; err_loc})
+          | _ -> ()
+        ) l;
+      default_error ()
+    with Not_found -> default_error ()
+
+let extract_errors_from_json r =
+  try
+    Ezjsonm.find r ["error"]
+  with Not_found ->
+  match Ezjsonm.get_list (fun x -> x) r with
+  | err :: _ ->
+    Ezjsonm.find err ["ecoproto"]
+  | [] -> raise (ResponseError ("Could not parse error"))
+  | exception Ezjsonm.Parse_error _ -> r
+
+let raise_response_error ?loc_table msg r =
+  let err = extract_errors_from_json r in
+  (* let err_s =
+     Ezjsonm.to_string ~minify:false (Data_encoding_ezjsonm.to_root err) in *)
+  let l = Ezjsonm.get_list (fun err ->
+      let kind = Ezjsonm.find err ["kind"] |> Ezjsonm.get_string in
+      let id = Ezjsonm.find err ["id"] |> Ezjsonm.get_string in
+      let loc =
+        try Some (Ezjsonm.find err ["location"] |> Ezjsonm.get_int)
+        with Not_found -> None
+      in
+      kind, id, loc
+      (* let err_s =
+         Ezjsonm.to_string
+         ~minify:false (Data_encoding_ezjsonm.to_root err) in *)
+    ) err in
+  raise_error_from_l ?loc_table msg l
+
+
+let send_request ?loc_table ?data path =
+  Lwt.catch
+    (fun () -> !request ?data path)
+    (function
+      | RequestError (code, res) as exn ->
+        begin try raise_response_error ?loc_table path (Ezjsonm.from_string res)
+          with Ezjsonm.Parse_error _ | Not_found -> Lwt.fail exn
+        end
+      | exn -> Lwt.fail exn
+    )
+
+
+let mk_json_obj fields =
+  fields
+  |> List.map (fun (f,v) -> "\"" ^ f ^ "\":" ^ v)
+  |> String.concat ","
+  |> fun fs -> "{" ^ fs ^ "}"
+
+let mk_json_arr l = "[" ^ String.concat "," l ^ "]"
 
 
 let compile_liquid liquid =
@@ -153,65 +228,6 @@ let compile_liquid liquid =
 
   ( env, syntax_ast, pre_michelson, pre_init )
 
-let raise_error_from_l ?loc_table err_msg l =
-  let default_error () =
-    let err_s =
-      List.map (fun (kind, id, _) ->
-          Printf.sprintf "%s: %s" kind id) l
-      |> String.concat "\n- "
-      |> Printf.sprintf "In %s:\n- %s" err_msg
-    in
-    raise (RequestError err_s)
-  in
-  match loc_table with
-  | None -> default_error ()
-  | Some loc_table ->
-    let err_msg = Printf.sprintf "in %s" err_msg in
-    try
-      List.iter (fun (kind, id, loc) ->
-          match loc, kind, id with
-          | Some loc, "temporary", "scriptRejectedRuntimeError" ->
-            let err_loc, fail_str = List.assoc loc loc_table in
-            raise (RuntimeFailure ({err_msg; err_loc}, fail_str))
-          | Some loc, "temporary", _ ->
-            let err_loc, _ = List.assoc loc loc_table in
-            raise (RuntimeError {err_msg; err_loc})
-          | _ -> ()
-        ) l;
-      default_error ()
-    with Not_found -> default_error ()
-
-let raise_request_error ?loc_table r msg =
-  try
-    let err = Ezjsonm.find r ["error"] in
-    (* let err_s =
-       Ezjsonm.to_string ~minify:false (Data_encoding_ezjsonm.to_root err) in *)
-    let l = Ezjsonm.get_list (fun err ->
-        let kind = Ezjsonm.find err ["kind"] |> Ezjsonm.get_string in
-        let id = Ezjsonm.find err ["id"] |> Ezjsonm.get_string in
-        let loc =
-          try Some (Ezjsonm.find err ["location"] |> Ezjsonm.get_int)
-          with Not_found -> None
-        in
-        kind, id, loc
-        (* let err_s =
-           Ezjsonm.to_string
-           ~minify:false (Data_encoding_ezjsonm.to_root err) in *)
-      ) err in
-    raise_error_from_l ?loc_table msg l
-  with Not_found ->
-    raise (RequestError ("Bad response for "^msg))
-
-
-let mk_json_obj fields =
-  fields
-  |> List.map (fun (f,v) -> "\"" ^ f ^ "\":" ^ v)
-  |> String.concat ","
-  |> fun fs -> "{" ^ fs ^ "}"
-
-let mk_json_arr l = "[" ^ String.concat "," l ^ "]"
-
-
 let run_pre env syntax_contract pre_michelson source input storage =
   let c, loc_table =
     LiquidToTezos.convert_contract ~expand:true pre_michelson in
@@ -231,7 +247,8 @@ let run_pre env syntax_contract pre_michelson source input storage =
     )
   in
   let run_json = mk_json_obj run_fields in
-  !request ~data:run_json "/blocks/prevalidation/proto/helpers/run_code"
+  send_request ~loc_table ~data:run_json
+    "/blocks/prevalidation/proto/helpers/run_code"
   >>= fun r ->
   let r = Ezjsonm.from_string r in
   try
@@ -249,7 +266,7 @@ let run_pre env syntax_contract pre_michelson source input storage =
     in
     return (result, storage)
   with Not_found ->
-    raise_request_error ~loc_table r "run"
+    raise_response_error ~loc_table "run" r
 
 
 let run liquid input_string storage_string =
@@ -266,7 +283,7 @@ let run liquid input_string storage_string =
 
 
 let get_counter source =
-  !request
+  send_request
       (Printf.sprintf "/blocks/prevalidation/proto/context/contracts/%s/counter"
          source)
   >>= fun r ->
@@ -274,16 +291,16 @@ let get_counter source =
   try
     Ezjsonm.find r ["counter"] |> Ezjsonm.get_int |> return
   with Not_found ->
-    raise_request_error r "get_counter"
+    raise_response_error "get_counter" r
 
 
 let get_head_hash () =
-  !request "/blocks/head" >>= fun r ->
+  send_request "/blocks/head" >>= fun r ->
   let r = Ezjsonm.from_string r in
   try
     Ezjsonm.find r ["hash"] |> Ezjsonm.get_string |> return
   with Not_found ->
-    raise_request_error r "get_head_hash"
+    raise_response_error "get_head_hash" r
 
 type head = {
   head_hash : string;
@@ -291,22 +308,22 @@ type head = {
 }
 
 let get_head () =
-  !request "/blocks/head" >>= fun r ->
+  send_request "/blocks/head" >>= fun r ->
   let r = Ezjsonm.from_string r in
   try
     let head_hash = Ezjsonm.find r ["hash"] |> Ezjsonm.get_string in
     let head_chain_id = Ezjsonm.find r ["chain_id"] |> Ezjsonm.get_string in
     return { head_hash; head_chain_id }
   with Not_found ->
-    raise_request_error r "get_head"
+    raise_response_error "get_head" r
 
 let get_predecessor () =
-  !request "/blocks/prevalidation/predecessor" >>= fun r ->
+  send_request "/blocks/prevalidation/predecessor" >>= fun r ->
   let r = Ezjsonm.from_string r in
   try
     Ezjsonm.find r ["predecessor"] |> Ezjsonm.get_string |> return
   with Not_found ->
-    raise_request_error r "get_predecessor"
+    raise_response_error "get_predecessor" r
 
 
 let get_public_key_hash_from_secret_key sk =
@@ -329,17 +346,17 @@ let forge_deploy ?head ?source ?public_key
     liquid init_params_strings =
   let source = match source, !LiquidOptions.source with
     | Some source, _ | _, Some source -> source
-    | None, None -> raise (RequestError "forge_deploy: Missing source")
+    | None, None -> raise (ResponseError "forge_deploy: Missing source")
   in
   let env, syntax_ast, pre_michelson, pre_init_infos = compile_liquid liquid in
   let pre_init, init_infos = match pre_init_infos with
-    | None -> raise (RequestError "forge_deploy: Missing init")
+    | None -> raise (ResponseError "forge_deploy: Missing init")
     | Some pre_init_infos -> pre_init_infos
   in
   let init_storage_lwt = match pre_init with
     | LiquidInit.Init_constant c ->
       if init_params_strings <> [] then
-        raise (RequestError "forge_deploy: Constant storage, no inputs needed");
+        raise (ResponseError "forge_deploy: Constant storage, no inputs needed");
       return c
     | LiquidInit.Init_code (syntax_c, c) ->
       let init_params =
@@ -350,7 +367,7 @@ let forge_deploy ?head ?source ?public_key
             ) init_params_strings init_infos
         with Invalid_argument _ ->
           raise
-            (RequestError
+            (ResponseError
                (Printf.sprintf
                   "forge_deploy: init storage needs %d arguments, but was given %d"
                   (List.length init_infos) (List.length init_params_strings)
@@ -396,28 +413,35 @@ let forge_deploy ?head ?source ?public_key
     "script", script_json;
   ] |> mk_json_obj
   in
+  let operations = match public_key with
+    | None -> [origination_json]
+    | Some edpk ->
+      let reveal_json = [
+        "kind", "\"reveal\"";
+        "public_key", Printf.sprintf "%S" edpk;
+      ] |> mk_json_obj
+      in
+      [reveal_json; origination_json]
+  in
   let datas = [
     "branch", Printf.sprintf "%S" head;
     "kind", "\"manager\"";
     "source", Printf.sprintf "%S" source;
     "fee", !LiquidOptions.fee;
     "counter", string_of_int counter;
-    "operations", mk_json_arr [origination_json];
+    "operations", mk_json_arr operations;
   ]
   in
-  (* let datas = match public_key with
-   *   | None -> datas
-   *   | Some pk -> ("public_key", Printf.sprintf "%S" pk) :: datas
-   * in *)
   let data = mk_json_obj datas in
-  !request ~data "/blocks/prevalidation/proto/helpers/forge/operations"
+  send_request ~loc_table ~data
+    "/blocks/prevalidation/proto/helpers/forge/operations"
   >>= fun r ->
   let r = Ezjsonm.from_string r in
   try
     let op = Ezjsonm.find r ["operation"] |> Ezjsonm.get_string in
     return (op, loc_table)
   with Not_found ->
-    raise_request_error ~loc_table r "forge_deploy"
+    raise_response_error ~loc_table "forge_deploy" r
 
 
 let inject ?loc_table ?sk chain_id op =
@@ -449,14 +473,15 @@ let inject ?loc_table ?sk chain_id op =
         "signature", Printf.sprintf "%S" signature;
       ] |> mk_json_obj
   in
-  !request ~data "/blocks/prevalidation/proto/helpers/apply_operation"
+  send_request ?loc_table ~data
+    "/blocks/prevalidation/proto/helpers/apply_operation"
   >>= fun r ->
   let r = Ezjsonm.from_string r in
   (try
      Ezjsonm.find r ["contracts"] |> Ezjsonm.get_list Ezjsonm.get_string
      |> return
    with Not_found ->
-     raise_request_error ?loc_table r "inject (apply_operation)"
+     raise_response_error ?loc_table "inject (apply_operation)" r
   ) >>= fun contracts ->
   let data = [
     "signedOperationContents", Printf.sprintf "%S" (Hex.show signed_op);
@@ -464,12 +489,12 @@ let inject ?loc_table ?sk chain_id op =
     (* "force", "false"; *)
   ] |> mk_json_obj
   in
-  !request ~data "/inject_operation" >>= fun r ->
+  send_request ?loc_table ~data "/inject_operation" >>= fun r ->
   let r = Ezjsonm.from_string r in
   (try
      Ezjsonm.find r ["injectedOperation"] |> Ezjsonm.get_string |> return
    with Not_found ->
-     raise_request_error ?loc_table r "inject (inject_operation)"
+     raise_response_error ?loc_table "inject (inject_operation)" r
   ) >>= fun injected_op_hash ->
   assert (injected_op_hash = op_hash);
 
@@ -478,10 +503,10 @@ let inject ?loc_table ?sk chain_id op =
 
 let deploy ?(delegatable=false) ?(spendable=false) liquid init_params_strings =
   let sk = match !LiquidOptions.private_key with
-    | None -> raise (RequestError "deploy: Missing private key")
+    | None -> raise (ResponseError "deploy: Missing private key")
     | Some sk -> match Ed25519.Secret_key.of_b58check sk with
       | Ok sk -> sk
-      | Error _ -> raise (RequestError "deploy: Bad private key")
+      | Error _ -> raise (ResponseError "deploy: Bad private key")
   in
   let source = match !LiquidOptions.source with
     | Some source -> source
@@ -494,12 +519,12 @@ let deploy ?(delegatable=false) ?(spendable=false) liquid init_params_strings =
   >>= fun (op, loc_table) ->
   inject ~loc_table ~sk head.head_chain_id (`Hex op) >>= function
   | op_h, [c] -> return (op_h, c)
-  | _ -> raise (RequestError "deploy (inject)")
+  | _ -> raise (ResponseError "deploy (inject)")
 
 
 let get_storage liquid address =
   let env, syntax_ast, pre_michelson, pre_init_infos = compile_liquid liquid in
-  !request
+  send_request
     (Printf.sprintf
        "/blocks/prevalidation/proto/context/contracts/%s/storage"
        address)
@@ -511,19 +536,21 @@ let get_storage liquid address =
     return
       (LiquidFromTezos.convert_const_type env storage_expr syntax_ast.storage)
   with Not_found ->
-    raise_request_error r "get_storage"
+    raise_response_error "get_storage" r
 
 
 let forge_call ?head ?source ?public_key liquid address parameter_string =
   let source = match source, !LiquidOptions.source with
     | Some source, _ | _, Some source -> source
-    | None, None -> raise (RequestError "forge_call: Missing source")
+    | None, None -> raise (ResponseError "forge_call: Missing source")
   in
   let env, syntax_ast, pre_michelson, pre_init_infos = compile_liquid liquid in
   let parameter =
     LiquidData.translate { env with filename = "call_parameter" }
       syntax_ast parameter_string syntax_ast.parameter
   in
+  let _, loc_table =
+    LiquidToTezos.convert_contract ~expand:true pre_michelson in
   let parameter_m = LiquidToTezos.convert_const parameter in
   let parameter_json = LiquidToTezos.json_of_const parameter_m in
   begin match head with
@@ -539,38 +566,43 @@ let forge_call ?head ?source ?public_key liquid address parameter_string =
     "parameters", parameter_json;
   ] |> mk_json_obj
   in
+  let operations = match public_key with
+    | None -> [transaction_json]
+    | Some edpk ->
+      let reveal_json = [
+        "kind", "\"reveal\"";
+        "public_key", Printf.sprintf "%S" edpk;
+      ] |> mk_json_obj
+      in
+      [reveal_json; transaction_json]
+  in
   let datas = [
     "branch", Printf.sprintf "%S" head;
     "kind", "\"manager\"";
     "source", Printf.sprintf "%S" source;
     "fee", !LiquidOptions.fee;
     "counter", string_of_int counter;
-    "operations", mk_json_arr [transaction_json];
+    "operations", mk_json_arr operations;
   ]
   in
-  (* let datas = match public_key with
-   *   | None -> datas
-   *   | Some pk -> ("public_key", Printf.sprintf "%S" pk) :: datas
-   * in *)
   let data = mk_json_obj datas in
-  !request ~data "/blocks/prevalidation/proto/helpers/forge/operations"
+  send_request ~loc_table ~data
+    "/blocks/prevalidation/proto/helpers/forge/operations"
   >>= fun r ->
   let r = Ezjsonm.from_string r in
-  let _, loc_table =
-    LiquidToTezos.convert_contract ~expand:true pre_michelson in
   try
     let op = Ezjsonm.find r ["operation"] |> Ezjsonm.get_string in
     return (op, loc_table)
   with Not_found ->
-    raise_request_error ~loc_table r "forge_call"
+    raise_response_error ~loc_table "forge_call" r
 
 
 let call liquid address parameter_string =
   let sk = match !LiquidOptions.private_key with
-    | None -> raise (RequestError "call: Missing private key")
+    | None -> raise (ResponseError "call: Missing private key")
     | Some sk -> match Ed25519.Secret_key.of_b58check sk with
       | Ok sk -> sk
-      | Error _ -> raise (RequestError "call: Bad private key")
+      | Error _ -> raise (ResponseError "call: Bad private key")
   in
   let source = match !LiquidOptions.source with
     | Some source -> source
@@ -583,25 +615,57 @@ let call liquid address parameter_string =
   >>= fun (op, loc_table) ->
   inject ~loc_table ~sk head.head_chain_id (`Hex op) >>= function
   | op_h, [] -> return op_h
-  | _ -> raise (RequestError "call (inject)")
+  | _ -> raise (ResponseError "call (inject)")
 
+
+
+let reveal ~sk ~source edpk =
+  (* Reveal for small tz1 *)
+  get_head () >>= fun head ->
+  get_counter source >>= fun counter ->
+  let reveal_json = [
+    "kind", "\"reveal\"";
+    "public_key", Printf.sprintf "%S" edpk;
+  ] |> mk_json_obj
+  in
+  let data = [
+    "branch", Printf.sprintf "%S" head.head_hash;
+    "kind", "\"manager\"";
+    "source", Printf.sprintf "%S" source;
+    "fee", "0";
+    "counter", string_of_int (counter + 1);
+    "operations", mk_json_arr [reveal_json];
+  ] |> mk_json_obj
+  in
+  send_request ~data "/blocks/prevalidation/proto/helpers/forge/operations"
+  >>= fun r ->
+  let r = Ezjsonm.from_string r in
+  let op =
+    try
+      Ezjsonm.find r ["operation"] |> Ezjsonm.get_string
+    with Not_found ->
+      raise_response_error "forge reveal" r
+  in
+  inject ~sk head.head_chain_id (`Hex op) >>= function
+  | op_h, [] -> return_unit (* ok *)
+  | _ -> raise (ResponseError "reveal public key")
 
 
 let faucet_to dest =
-  get_head () >>= fun head ->
   let sk = match !LiquidOptions.private_key with
-    | None -> raise (RequestError "faucet_to: Missing private key")
+    | None -> raise (ResponseError "faucet_to: Missing private key")
     | Some sk -> match Ed25519.Secret_key.of_b58check sk with
       | Ok sk -> sk
-      | Error _ -> raise (RequestError "faucet_to: Bad private key")
+      | Error _ -> raise (ResponseError "faucet_to: Bad private key")
   in
   let edpk = get_public_key_from_secret_key sk in
   let source = match !LiquidOptions.source with
     | Some source -> source
     | None -> get_public_key_hash_from_secret_key sk
   in
+  get_head () >>= fun head ->
   let nonce =
-    Sodium.Random.Bytes.generate 16
+    Sodium.Random.Bytes.generate 32
     |> Bytes.unsafe_to_string
     |> Hex.of_string
   in
@@ -616,17 +680,17 @@ let faucet_to dest =
     "operations", mk_json_arr [transaction_json];
   ] |> mk_json_obj
   in
-  !request ~data "/blocks/prevalidation/proto/helpers/forge/operations"
+  send_request ~data "/blocks/prevalidation/proto/helpers/forge/operations"
   >>= fun r ->
   let r = Ezjsonm.from_string r in
   let op =
     try
       Ezjsonm.find r ["operation"] |> Ezjsonm.get_string
     with Not_found ->
-      raise_request_error r "forge faucet"
+      raise_response_error "forge faucet" r
   in
   inject head.head_chain_id (`Hex op) >>= function
-  | _, ([] | _::_::_) -> raise (RequestError "faucet (inject)")
+  | _, ([] | _::_::_) -> raise (ResponseError "faucet (inject)")
   | op_h, [c] ->
     (* get_counter source >>= fun counter -> *)
     (* let counter = counter + 1 in *)
@@ -637,6 +701,7 @@ let faucet_to dest =
     in
     let transaction_json = [
       "kind", "\"transaction\"";
+      (* "amount", "\"99999000000\""; *)
       "amount", "\"100000000000\"";
       "destination", Printf.sprintf "%S" dest;
       (* "parameters", {|{"prim":"Unit","args":[]}|}; *)
@@ -646,53 +711,26 @@ let faucet_to dest =
       "branch", Printf.sprintf "%S" head.head_hash;
       "kind", "\"manager\"";
       "source", Printf.sprintf "%S" c;
+      (* "fee", "1000000"; *)
       "fee", "0";
       "counter", "1"; (* string_of_int counter; *)
       "operations", mk_json_arr [reveal_json; transaction_json];
     ] |> mk_json_obj
     in
-    !request ~data "/blocks/prevalidation/proto/helpers/forge/operations"
+    send_request ~data "/blocks/prevalidation/proto/helpers/forge/operations"
     >>= fun r ->
     let r = Ezjsonm.from_string r in
     let op =
       try
         Ezjsonm.find r ["operation"] |> Ezjsonm.get_string
       with Not_found ->
-        raise_request_error r "forge transfer from faucet"
+        raise_response_error "forge transfer from faucet" r
     in
     inject ~sk head.head_chain_id (`Hex op) >>= function
-    | op_h, [] -> begin
-        (* Reveal for small tz1 *)
-        get_head () >>= fun head ->
-        get_counter source >>= fun counter ->
-        let reveal_json = [
-          "kind", "\"reveal\"";
-          "public_key", Printf.sprintf "%S" edpk;
-        ] |> mk_json_obj
-        in
-        let data = [
-          "branch", Printf.sprintf "%S" head.head_hash;
-          "kind", "\"manager\"";
-          "source", Printf.sprintf "%S" dest;
-          "fee", "0";
-          "counter", string_of_int (counter + 1);
-          "operations", mk_json_arr [reveal_json];
-        ] |> mk_json_obj
-        in
-        !request ~data "/blocks/prevalidation/proto/helpers/forge/operations"
-        >>= fun r ->
-        let r = Ezjsonm.from_string r in
-        let op =
-          try
-            Ezjsonm.find r ["operation"] |> Ezjsonm.get_string
-          with Not_found ->
-            raise_request_error r "forge reveal"
-        in
-        inject ~sk head.head_chain_id (`Hex op) >>= function
-        | op_h, [] -> return_unit (* ok *)
-        | _ -> raise (RequestError "faucet transfer (reveal tz1)")
-      end
-    | _ -> raise (RequestError "faucet transfer (inject)")
+    | op_h, [] ->
+      (* Reveal for small tz1 *)
+      reveal ~sk ~source edpk
+    | _ -> raise (ResponseError "faucet transfer (inject)")
 
 
 
