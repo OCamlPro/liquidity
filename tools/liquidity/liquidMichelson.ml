@@ -198,12 +198,7 @@ let translate_code code =
     | Failwith (s, loc) ->
       let ins = ii ~loc (FAIL (Some s)) in
       let s = encode_failwith_param s in
-      if !LiquidOptions.annotafter then
-        [ ii ~loc (ANNOT s); ins ], false (* FAIL must be in tail position *)
-      else begin
-        ins.loc_name <- Some s;
-        [ ins ], false
-      end
+      [ ii ~loc (ANNOT s); ins ], false (* FAIL must be in tail position *)
 
     | Apply (Prim_unknown, _loc, args) -> assert false
 
