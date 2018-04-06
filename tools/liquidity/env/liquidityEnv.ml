@@ -241,10 +241,14 @@ end = struct
   let size map = Int (Z.of_int (ObjMap.cardinal (Obj.magic map)))
 
 end
+
+module BigMap = Map
+
 include Array (* Remove ? *)
 
 
 type ('key,'value) map = ('key,'value) Map.map
+type ('key,'value) big_map = ('key,'value) map
 
 module Set : sig
 

@@ -182,6 +182,7 @@ let rec translate_type env ?expected typ =
     in
     Tor (translate_type env ?expected:expected1 left_type,
          translate_type env ?expected:expected2 right_type)
+
   | { ptyp_desc = Ptyp_constr ({ txt = Lident "map" },
                                [key_type; val_type]) } ->
     let expected1, expected2 = match expected with
@@ -190,6 +191,15 @@ let rec translate_type env ?expected typ =
     in
     Tmap (translate_type env ?expected:expected1 key_type,
           translate_type env ?expected:expected2 val_type)
+
+  | { ptyp_desc = Ptyp_constr ({ txt = Lident "big_map" },
+                               [key_type; val_type]) } ->
+    let expected1, expected2 = match expected with
+      | Some (Tbigmap (ty1, ty2)) -> Some ty1, Some ty2
+      | _ -> None, None
+    in
+    Tbigmap (translate_type env ?expected:expected1 key_type,
+             translate_type env ?expected:expected2 val_type)
 
   | { ptyp_desc = Ptyp_arrow (_, parameter_type, return_type) } ->
     let expected1, expected2 = match expected with
@@ -222,6 +232,7 @@ let rec translate_type env ?expected typ =
     end
 
   | { ptyp_loc } -> error_loc ptyp_loc "in type"
+
 
 exception NotAConstant
 
@@ -311,12 +322,15 @@ let rec translate_const env exp =
           error_loc exp.pexp_loc "inconsistent types in list"
      end
 
-  | { pexp_desc = Pexp_construct (
-                      { txt = Lident "Map" }, None) } ->
+  | { pexp_desc = Pexp_construct ({ txt = Lident "Map" }, None) } ->
      CMap [], None
 
+  | { pexp_desc = Pexp_construct ({ txt = Lident "BigMap" }, None) } ->
+     CBigMap [], None
+
   | { pexp_desc = Pexp_construct (
-                      { txt = Lident "Map" }, Some pair_list) } ->
+      { txt = Lident ("Map" | "BigMap" as map_kind) },
+      Some pair_list) } ->
      let pair_list = translate_list pair_list in
      let pair_list = List.map translate_pair pair_list in
      let pair_list = List.map (fun (e1,e2) ->
@@ -336,14 +350,21 @@ let rec translate_const env exp =
                      | _ -> error_loc exp.pexp_loc
                               "inconsistent map types"
                     )
-                    tail;
-          Some (Tmap (ty1, ty2))
+                     tail;
+          begin match map_kind with
+            | "Map" -> Some (Tmap (ty1, ty2))
+            | "BigMap" -> Some (Tbigmap (ty1, ty2))
+            | _ -> assert false
+          end
        | _ ->
           error_loc exp.pexp_loc
             "underspecified map types"
      in
-     CMap csts, tys
-
+     begin match map_kind with
+       | "Map" -> CMap csts, tys
+       | "BigMap" -> CBigMap csts, tys
+       | _ -> assert false
+     end
 
   | { pexp_desc = Pexp_construct (
                       { txt = Lident "Set" }, None) } ->
@@ -411,14 +432,17 @@ let rec translate_const env exp =
           | None -> CUnit
           | Some args ->
             let c, ty_opt = translate_const env args in
-            begin match ty_opt with
-              | None -> ()
-              | Some ty ->
-                if ty <> tya then
-                  error_loc exp.pexp_loc
-                    ("wrong type for argument of constructor "^lid)
-            end;
-            c
+            let loc = loc_of_loc args.pexp_loc in
+            LiquidCheck.check_const_type ~to_tez:LiquidPrinter.tez_of_liq
+              loc tya c
+            (* begin match ty_opt with
+             *   | None -> ()
+             *   | Some ty ->
+             *     if ty <> tya then
+             *       error_loc exp.pexp_loc
+             *         ("wrong type for argument of constructor "^lid)
+             * end;
+             * c *)
         in
         let ty = StringMap.find ty_name env.types in
         CConstr (lid, c), Some ty
@@ -429,14 +453,19 @@ let rec translate_const env exp =
     let lab_x_exp_list =
       List.map (function
             ({ txt = Lident label; loc }, exp) ->
+            let loc = loc_of_loc exp.pexp_loc in
+            let _, _, ty' = StringMap.find label env.labels in
             let c, ty_opt = translate_const env exp in
-            begin match ty_opt with
-            | None -> ()
-            | Some ty ->
-              let _, _, ty' = StringMap.find label env.labels in
-              if ty <> ty' then
-                error_loc loc ("wrong type for label "^label)
-            end;
+            (* begin match ty_opt with
+             * | None -> ()
+             * | Some ty ->
+             *   if ty <> ty' then
+             *     error_loc loc ("wrong type for label "^label)
+             * end; *)
+            let c =
+              LiquidCheck.check_const_type ~to_tez:LiquidPrinter.tez_of_liq
+                loc ty' c
+            in
             label, c
           | ( { loc }, _) ->
             error_loc loc "label expected"
@@ -977,6 +1006,7 @@ let rec inline_funs exp = function
     } in
     inline_funs f_in_exp funs
 
+
 let rec translate_head env ext_funs head_exp args =
   match head_exp with
   | { pexp_desc =
@@ -986,8 +1016,8 @@ let rec translate_head env ext_funs head_exp args =
                 Ppat_constraint(
                     { ppat_desc =
                         Ppat_var { txt =
-                                     (   "parameter"
-                                       | "storage"
+                                     ( "parameter"
+                                     | "storage"
                                      (*  | "return" *)
                                      ) as arg} },
                     arg_type)
@@ -1218,7 +1248,7 @@ let rec translate_structure funs env init ast =
                                  ptype_loc;
                                  ptype_kind;
                                }
-    ]) } :: ast ->
+                             ]) } :: ast ->
     let ty = translate_type env ct in
     env.types <- StringMap.add ty_name ty env.types;
     translate_structure funs env init ast

@@ -477,7 +477,7 @@ the ending NIL is not annotated with a type *)
          | Prim_map_add, 3 -> [dip ~loc 1 [ii SOME]; ii UPDATE ]
          | Prim_map_remove, 2 ->
            let ty = match args with
-             | [_; { ty = Tmap (_, ty) }] -> ty
+             | [_; { ty = (Tmap (_, ty) | Tbigmap (_, ty)) }] -> ty
              | _ -> assert false
            in
            [dip ~loc 1 [push ~loc (Toption ty) CNone]; ii UPDATE ]
@@ -663,7 +663,5 @@ let translate filename ~peephole contract =
   { contract with code }
  *)
 let translate contract =
-  { parameter = LiquidEncode.encode_type contract.parameter;
-    storage = LiquidEncode.encode_type contract.storage;
-    return = LiquidEncode.encode_type contract.return;
+  { contract with
     code = translate_code contract.code }

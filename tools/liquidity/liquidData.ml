@@ -32,14 +32,14 @@ let rec default_const = function
   | Tcontract (_, _) -> CContract "TZ1tPz6tdaY2XN9ZzpDQu9nFTCX22GivUDR7"
   | Ttuple l ->
     CTuple (List.map default_const l)
-
   | Toption ty -> CSome (default_const ty)
   | Tlist ty -> CList [default_const ty]
   | Tset ty -> CSet [default_const ty]
-
-  | Tmap (ty1, ty2) -> CMap [default_const ty1, default_const ty2]
+  | Tmap (ty1, ty2) ->
+    CMap [default_const ty1, default_const ty2]
+  | Tbigmap  (ty1, ty2) ->
+    CBigMap [default_const ty1, default_const ty2]
   | Tor (ty, _) -> CLeft (default_const ty)
-
   | Trecord (_, fields) ->
     CRecord (
       List.map (fun (name, ty) ->

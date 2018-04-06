@@ -190,7 +190,8 @@ let rec encode_type ty =
       | Toption t -> Toption t'
       | _ -> assert false
     end
-  | Tor (t1, t2) | Tcontract (t1, t2) | Tlambda (t1, t2) | Tmap (t1, t2) ->
+  | Tor (t1, t2) | Tcontract (t1, t2) | Tlambda (t1, t2)
+  | Tbigmap (t1, t2) | Tmap (t1, t2) ->
     let t1', t2' = encode_type t1, encode_type t2 in
     if t1 == t1' && t2 == t2' then ty
     else begin match ty with
@@ -198,6 +199,7 @@ let rec encode_type ty =
       | Tcontract (t1, t2) -> Tcontract (t1', t2')
       | Tlambda (t1, t2) -> Tlambda (t1', t2')
       | Tmap (t1, t2) -> Tmap (t1', t2')
+      | Tbigmap (t1, t2) -> Tbigmap (t1', t2')
       | _ -> assert false
     end
   | Tclosure  ((t1, t2), t3) ->
@@ -221,6 +223,46 @@ and encode_sum_type cstys =
   in
   rassoc cstys
 
+
+let rec has_big_map = function
+  | Tbigmap (_t1, _t2) -> true
+  | Ttez | Tunit | Ttimestamp | Tint | Tnat | Tbool | Tkey | Tkey_hash
+  | Tsignature | Tstring | Tfail -> false
+  | Ttuple tys ->
+    List.exists has_big_map tys
+  | Tset t | Tlist t | Toption t -> has_big_map t
+  | Tor (t1, t2) | Tcontract (t1, t2) | Tlambda (t1, t2)
+  | Tmap (t1, t2) ->
+    has_big_map t1 || has_big_map t2
+  | Tclosure  ((t1, t2), t3) ->
+    has_big_map t1 || has_big_map t2 || has_big_map t3
+  | Trecord (_, labels) ->
+    List.exists (fun (_, ty) -> has_big_map ty) labels
+  | Tsum (_, cstys) ->
+    List.exists (fun (_, ty) -> has_big_map ty) cstys
+
+let encode_storage_type env ty =
+  let ty = encode_type ty in
+  match ty with
+  | Ttuple (t1 :: r) when not @@ List.exists has_big_map r -> ty
+  | _ when not (has_big_map ty) -> ty
+  | _ ->
+    error (noloc env)
+      "only one big map is only allowed as first component of storage \
+       (either a tuple or a record)"
+
+let encode_parameter_type env ty =
+  let ty = encode_type ty in
+  if has_big_map ty then
+    error (noloc env) "big maps are not allowed in parameter type";
+  ty
+
+let encode_return_type env ty =
+  let ty = encode_type ty in
+  if has_big_map ty then
+    error (noloc env) "big maps are not allowed in return type";
+  ty
+
 let rec encode_const env c = match c with
   | CUnit | CBool _ | CInt _ | CNat _ | CTez _ | CTimestamp _ | CString _
   | CKey _ | CContract _ | CSignature _ | CNone  | CKey_hash _ -> c
@@ -235,6 +277,9 @@ let rec encode_const env c = match c with
 
   | CMap l ->
     CMap (List.map (fun (x,y) -> encode_const env x, encode_const env y) l)
+
+  | CBigMap l ->
+    CBigMap (List.map (fun (x,y) -> encode_const env x, encode_const env y) l)
 
   | CRecord labels ->
     CTuple (List.map (fun (_, x) -> encode_const env x) labels)
@@ -803,8 +848,13 @@ let encode_contract ?(annot=false) env contract =
   (* "parameter/2" *)
   let (_, env, _) = new_binding env "parameter" contract.parameter in
 
-  let code = encode env contract.code in
-  { contract with code }, ! (env.to_inline)
+  {
+    parameter = encode_parameter_type env contract.parameter;
+    storage = encode_storage_type env contract.storage;
+    return = encode_return_type env contract.return;
+    code = encode env contract.code
+  },
+  ! (env.to_inline)
 
 
 let encode_code tenv code =

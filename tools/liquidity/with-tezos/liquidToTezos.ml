@@ -61,7 +61,7 @@ let rec convert_const ~loc expr =
   | CList args | CSet args ->
     Micheline.Seq(loc, List.map (convert_const ~loc) args, None)
 
-  | CMap args ->
+  | CMap args | CBigMap args ->
      Micheline.Seq(loc,
                       List.map (fun (x,y) ->
                           Micheline.Prim(loc, "Elt", [convert_const ~loc x;
@@ -101,7 +101,8 @@ let rec convert_type ~loc expr =
   | Tstring -> prim_type ~loc "string" []
   | Ttuple [x] -> assert false
   | Ttuple [] -> assert false
-  | Ttuple [x;y] -> prim_type ~loc "pair" [convert_type ~loc x; convert_type ~loc y]
+  | Ttuple [x;y] ->
+    prim_type ~loc "pair" [convert_type ~loc x; convert_type ~loc y]
   | Ttuple (x :: tys) ->
      prim_type ~loc "pair" [convert_type ~loc x; convert_type ~loc (Ttuple tys)]
   | Tor (x,y) -> prim_type ~loc "or" [convert_type ~loc x; convert_type ~loc y]
@@ -112,6 +113,8 @@ let rec convert_type ~loc expr =
   | Tclosure ((x,e),r) ->
     convert_type ~loc (Ttuple [Tlambda (Ttuple [x; e], r); e ]);
   | Tmap (x,y) -> prim_type ~loc "map" [convert_type ~loc x;convert_type ~loc y]
+  | Tbigmap (x,y) ->
+    prim_type ~loc "big_map" [convert_type ~loc x;convert_type ~loc y]
   | Tset x -> prim_type ~loc "set" [convert_type ~loc x]
   | Tlist x -> prim_type ~loc "list" [convert_type ~loc x]
   | Toption x -> prim_type ~loc "option" [convert_type ~loc x]

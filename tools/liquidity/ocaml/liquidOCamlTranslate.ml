@@ -176,6 +176,17 @@ let clean_ast env syntax_ast =
          Exp.apply ~loc (exp_ident ~loc "Map.make") [Nolabel, list]
 
 
+      | Pexp_construct ({ txt = Lident "BigMap" }, None)
+        ->
+         Exp.apply ~loc (exp_ident ~loc "BigMap.empty") [Nolabel, exp_unit ~loc]
+
+      | Pexp_construct (
+              { txt = Lident "BigMap" }, Some list
+              )
+        ->
+         let list = default_mapper.expr mapper list in
+         Exp.apply ~loc (exp_ident ~loc "BigMap.make") [Nolabel, list]
+
       | Pexp_construct (
               { txt = Lident "Set" }, None
               )

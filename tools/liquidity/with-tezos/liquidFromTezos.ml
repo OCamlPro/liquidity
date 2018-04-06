@@ -203,6 +203,13 @@ let rec convert_const env ?ty expr =
             | expr ->
               unknown_expr env "convert_const map element" expr
           ) elems)
+      | Some (Tbigmap (ty_k, ty_e)) ->
+        CBigMap (List.map (function
+            | Prim(_, "Elt", [k;e], _debug) ->
+                convert_const env ~ty:ty_k k, convert_const env ~ty:ty_e e
+            | expr ->
+              unknown_expr env "convert_const big map element" expr
+          ) elems)
       | None ->
         CList (List.map (convert_const env) elems)
       | Some ty ->  wrong_type env expr ty
@@ -232,9 +239,10 @@ let rec convert_type env expr =
   | Prim(_, "lambda", [x;y], _debug) -> Tlambda
                                                 (convert_type env x,
                                                  convert_type env y)
-  | Prim(_, "map", [x;y], _debug) -> Tmap
-                                           (convert_type env x,
-                                            convert_type env y)
+  | Prim(_, "map", [x;y], _debug) ->
+    Tmap (convert_type env x, convert_type env y)
+  | Prim(_, "big_map", [x;y], _debug) ->
+    Tbigmap (convert_type env x, convert_type env y)
   | Prim(_, "set", [x], _debug) -> Tset (convert_type env x)
   | Prim(_, "list", [x], _debug) -> Tlist (convert_type env x)
   | Prim(_, "option", [x], _debug) -> Toption (convert_type env x)

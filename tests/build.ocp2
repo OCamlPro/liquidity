@@ -42,6 +42,7 @@ OCaml.library("ocplib-liquidity-examples",
 
        "liquidTestMore.ml", {
          file2string = [
+                  "test_big_map.liq";
                   "test_extfun.liq";
                   "test_ifcons.liq";
                   "test_if.liq";

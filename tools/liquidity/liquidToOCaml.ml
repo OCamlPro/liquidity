@@ -111,6 +111,8 @@ let rec convert_type ~abbrev ?name ty =
       Typ.arrow Nolabel (convert_type ~abbrev x) (convert_type ~abbrev r), "closure_t"
     | Tmap (x,y) ->
       typ_constr "map" [convert_type ~abbrev x;convert_type ~abbrev y], "map_t"
+    | Tbigmap (x,y) ->
+      typ_constr "big_map" [convert_type ~abbrev x;convert_type ~abbrev y], "big_map_t"
     | Tset x ->
       typ_constr "set" [convert_type ~abbrev x], "set_t"
     | Tlist x ->
@@ -169,7 +171,9 @@ let rec convert_const expr =
                    (Some (convert_const (CList list)))
   | CMap [] ->
      Exp.construct (lid "Map") None
-  | CMap list ->
+  | CBigMap [] ->
+     Exp.construct (lid "BigMap") None
+  | CMap list | CBigMap list ->
      let args =
        List.fold_left (fun tail (key,value) ->
            Exp.construct (lid "::")
@@ -184,7 +188,11 @@ let rec convert_const expr =
                          ]))
          ) (Exp.construct (lid "[]") None) list
      in
-     Exp.construct (lid "Map") (Some args)
+     let m = match expr with
+       | CMap _ -> "Map"
+       | CBigMap _ -> "BigMap"
+     in
+     Exp.construct (lid m) (Some args)
   | CRecord labels ->
     Exp.record
       (List.map (fun (f, x) -> lid f, convert_const x) labels)

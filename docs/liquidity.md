@@ -92,8 +92,10 @@ The other types are:
 - variant type: `('a, 'b) variant = Left of 'a | Right of 'b`
 - lists: `'a list` is the type of lists of elements in `'a`
 - sets: `'a set` is the type of sets of elements in `'a`
-- maps: `('a, 'b) map`  is the type of maps whose keys are of type
+- maps: `('a, 'b) map` is the type of maps whose keys are of type
   `'a` and values of type `'b`
+- big maps: `('a, 'b) big_map` is the type of lazily deserialized maps whose
+  keys are of type `'a` and values of type `'b`
 - contracts: `('a, 'b) contract` for contracts whose parameter is of
   type `'a` and return value if of type `'b`
 - functions: `'a -> 'b` is the type of functions from `'a` to `'b`
@@ -272,12 +274,14 @@ maps. Constants collections can be created directly:
 * Lists: `["x"; "y"]`;
 * Sets: `Set [1; 2; 3; 4]`;
 * Maps: `Map [1, "x"; 2, "y"; 3, "z"]`;
+* Big maps: `BigMap [1, "x"; 2, "y"; 3, "z"]`;
 
 In the case of an empty collection, whose type cannot be inferred, the
   type must be specified:
 * Lists: `([] : int list)`
 * Sets: `(Set : int set)`
 * Maps: `(Map : (int, string) map)`
+* Big maps: `(BigMap : (int, string) big_map)`
 
 
 Tuples

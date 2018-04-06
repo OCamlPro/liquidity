@@ -32,6 +32,7 @@ type const =
 
   (* Map [ key_x_value_list ] or (Map [] : ('key,'value) map) *)
   | CMap of (const * const) list
+  | CBigMap of (const * const) list
   | CList of const list
   | CSet of const list
 
@@ -64,6 +65,7 @@ type const =
   | Tset of datatype
 
   | Tmap of datatype * datatype
+  | Tbigmap of datatype * datatype
   | Tcontract of datatype * datatype
   | Tor of datatype * datatype
   | Tlambda of datatype * datatype

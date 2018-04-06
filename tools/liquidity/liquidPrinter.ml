@@ -171,6 +171,13 @@ module Michelson = struct
          Printf.bprintf b "%c%s" fmt.newline indent;
          bprint_type fmt b indent ty2;
          Printf.bprintf b ")";
+      | Tbigmap (ty1, ty2) ->
+         let indent = fmt.increase_indent indent in
+         Printf.bprintf b "(big_map%c%s" fmt.newline indent;
+         bprint_type fmt b indent ty1;
+         Printf.bprintf b "%c%s" fmt.newline indent;
+         bprint_type fmt b indent ty2;
+         Printf.bprintf b ")";
       | Tlambda (ty1, ty2) ->
          let indent = fmt.increase_indent indent in
          Printf.bprintf b "(lambda%c%s" fmt.newline indent;
@@ -235,7 +242,7 @@ module Michelson = struct
        bprint_const fmt b indent cst;
        Printf.bprintf b ")";
     | CTuple tys -> bprint_const_pairs fmt b indent tys
-    | CMap pairs ->
+    | CMap pairs | CBigMap pairs ->
        let indent = fmt.increase_indent indent in
        Printf.bprintf b "{";
        let _ = List.fold_left (fun first (cst1, cst2) ->
@@ -717,6 +724,12 @@ module Liquid = struct
         Printf.bprintf b ", ";
         bprint_type b "" ty2;
         Printf.bprintf b ") map";
+      | Tbigmap (ty1, ty2) ->
+        Printf.bprintf b "(";
+        bprint_type b "" ty1;
+        Printf.bprintf b ", ";
+        bprint_type b "" ty2;
+        Printf.bprintf b ") big_map";
       | Tlambda (ty1, ty2) ->
         bprint_type b "" ty1;
         Printf.bprintf b " -> ";
@@ -798,10 +811,14 @@ module Liquid = struct
         ) cs;
       Printf.bprintf b ")";
     | CMap [] -> Printf.bprintf b "(Map [])";
-    | CMap ((c1, c2) :: pairs) ->
+    | CBigMap [] -> Printf.bprintf b "(BigMap [])";
+    | CMap ((c1, c2) :: pairs) | CBigMap ((c1, c2) :: pairs) ->
       let indent2 = indent ^ "      " in
       if String.length indent > 2 then Printf.bprintf b "\n%s" indent;
-      Printf.bprintf b "(Map [";
+      Printf.bprintf b "(%s [" (match cst with
+          | CMap _ -> "Map"
+          | CBigMap _ -> "BigMap"
+          | _ -> assert false);
       bprint_const b indent c1;
       Printf.bprintf b ", ";
       bprint_const b indent c2;
