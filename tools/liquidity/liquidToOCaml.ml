@@ -191,6 +191,7 @@ let rec convert_const expr =
      let m = match expr with
        | CMap _ -> "Map"
        | CBigMap _ -> "BigMap"
+       | _ -> assert false
      in
      Exp.construct (lid m) (Some args)
   | CRecord labels ->

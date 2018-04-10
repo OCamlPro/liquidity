@@ -9,6 +9,7 @@
 exception RequestError of int * string
 exception ResponseError of string
 exception RuntimeError of LiquidTypes.error
+exception LocalizedError of LiquidTypes.error
 exception RuntimeFailure of LiquidTypes.error * string option
 
 type from =

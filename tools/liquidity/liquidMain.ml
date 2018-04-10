@@ -394,6 +394,9 @@ let () =
   | LiquidDeploy.RuntimeError error ->
     LiquidLoc.report_error ~kind:"Runtime error" Format.err_formatter error;
     exit 1
+  | LiquidDeploy.LocalizedError error ->
+    LiquidLoc.report_error ~kind:"Error" Format.err_formatter error;
+    exit 1
   | LiquidDeploy.RuntimeFailure (error, None) ->
     LiquidLoc.report_error ~kind:"Failed at runtime" Format.err_formatter error;
     exit 1

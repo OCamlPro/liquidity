@@ -12,6 +12,7 @@ open Lwt
 exception RequestError of int * string
 exception ResponseError of string
 exception RuntimeError of error
+exception LocalizedError of error
 exception RuntimeFailure of error * string option
 
 type from =
@@ -118,59 +119,141 @@ let curl_request ?(data="{}") path =
 let request = ref curl_request
 
 
+(* let error_string_of_michelson_error json =
+ *   let errors =  Ezjsonm.get_list Error_monad.error_of_json json in
+ *   let fmt = Format.str_formatter in
+ *   Michelson_v1_error_reporter.report_error
+ *     ~details:false
+ *     ~show_source:false
+ *     fmt
+ *     errors;
+ *   Format.flush_str_formatter () *)
+
+let error_schema =
+  lazy (!request "/errors" >|= Ezjsonm.from_string)
+
+
 let raise_error_from_l ?loc_table err_msg l =
   let default_error () =
-    let err_s =
-      List.map (fun (kind, id, _) ->
-          Printf.sprintf "%s: %s" kind id) l
-      |> String.concat "\n- "
-      |> Printf.sprintf "In %s:\n- %s" err_msg
+    let last_descr = match List.rev l with
+      | (_, _, _, _, Some descr) :: _ -> "\n  " ^ descr
+      | _ -> ""
     in
-    raise (ResponseError err_s)
+    let err_l =
+      List.map (fun (kind, id, _, title, descr) ->
+          match title with
+          | Some t -> t
+          | None -> Printf.sprintf "%s: %s" kind id
+        ) l
+      |> String.concat "\n- "
+    in
+    Printf.sprintf "in %s\n- %s%s" err_msg err_l last_descr
   in
   match loc_table with
-  | None -> default_error ()
+  | None -> raise (ResponseError (default_error ()))
   | Some loc_table ->
     let err_msg = Printf.sprintf "in %s" err_msg in
     try
-      List.iter (fun (kind, id, loc) ->
+      List.iter (fun (kind, id, loc, title, descr) ->
           match loc, kind, id with
           | Some loc, "temporary", "scriptRejectedRuntimeError" ->
             let err_loc, fail_str = List.assoc loc loc_table in
             raise (RuntimeFailure ({err_msg; err_loc}, fail_str))
           | Some loc, "temporary", _ ->
             let err_loc, _ = List.assoc loc loc_table in
+            let title = match title with Some t -> t | None -> id in
+            let err_msg = String.concat "\n- " [err_msg; title] in
             raise (RuntimeError {err_msg; err_loc})
+          | Some loc, _, _ ->
+            let err_loc, _ = List.assoc loc loc_table in
+            let err_msg = default_error () in
+            raise (LocalizedError {err_msg; err_loc})
           | _ -> ()
         ) l;
-      default_error ()
-    with Not_found -> default_error ()
+      raise (ResponseError (default_error ()))
+    with Not_found -> raise (ResponseError (default_error ()))
 
-let extract_errors_from_json r =
+let extract_errors_from_json r schema =
+  let schema_l = Ezjsonm.find schema ["oneOf"] in
   try
-    Ezjsonm.find r ["error"]
+    Ezjsonm.find r ["error"], schema_l
   with Not_found ->
   match Ezjsonm.get_list (fun x -> x) r with
   | err :: _ ->
-    Ezjsonm.find err ["ecoproto"]
+    begin try
+        let r = Ezjsonm.find err ["ecoproto"] in
+        let id = Ezjsonm.find err ["id"] |> Ezjsonm.get_string in
+        let schema_l =
+          schema_l
+          |> Ezjsonm.get_list (fun s ->
+              try
+                let s_id =
+                  Ezjsonm.find s ["properties"; "id"; "enum"]
+                  |> Ezjsonm.get_list Ezjsonm.get_string
+                  |> function [s] -> s | _ -> assert false
+                in
+                if s_id <> id then
+                  None
+                else
+                  Some (Ezjsonm.find s
+                          ["properties"; "ecoproto"; "items"; "oneOf"])
+              with Not_found -> None
+            )
+          |> List.find (function None -> false | Some _ -> true)
+          |> function None -> assert false | Some s -> s
+        in
+        r, schema_l
+      with Not_found -> r, schema_l
+    end
   | [] -> raise (ResponseError ("Could not parse error"))
-  | exception Ezjsonm.Parse_error _ -> r
+  | exception Ezjsonm.Parse_error _ -> r, schema_l
+
+let rec descr_of_id id schema =
+  try
+    schema
+    |> Ezjsonm.get_list (fun s ->
+        try
+          let schema = Ezjsonm.find s ["oneOf"] in
+          descr_of_id id schema
+        with Not_found ->
+        try
+          let s_id =
+            Ezjsonm.find s ["properties"; "id"; "enum"]
+            |> Ezjsonm.get_list Ezjsonm.get_string
+            |> function [s] -> s | _ -> assert false
+          in
+          if s_id <> id then
+            None, None
+          else (
+            let t =
+              try Some (Ezjsonm.find s ["title"] |> Ezjsonm.get_string)
+              with Not_found -> None
+            in
+            let d =
+              try Some (Ezjsonm.find s ["description"] |> Ezjsonm.get_string)
+              with Not_found -> None
+            in
+            (t, d)
+          )
+        with Not_found ->
+          None, None
+      )
+    |> List.find (function Some _, _ | _, Some _ -> true | _ -> false)
+  with Not_found ->
+    None, None
 
 let raise_response_error ?loc_table msg r =
-  let err = extract_errors_from_json r in
-  (* let err_s =
-     Ezjsonm.to_string ~minify:false (Data_encoding_ezjsonm.to_root err) in *)
+  Lazy.force error_schema >>= fun error_schema ->
+  let err, schema = extract_errors_from_json r error_schema in
   let l = Ezjsonm.get_list (fun err ->
       let kind = Ezjsonm.find err ["kind"] |> Ezjsonm.get_string in
       let id = Ezjsonm.find err ["id"] |> Ezjsonm.get_string in
+      let title, descr = descr_of_id id schema in
       let loc =
         try Some (Ezjsonm.find err ["location"] |> Ezjsonm.get_int)
         with Not_found -> None
       in
-      kind, id, loc
-      (* let err_s =
-         Ezjsonm.to_string
-         ~minify:false (Data_encoding_ezjsonm.to_root err) in *)
+      kind, id, loc, title, descr
     ) err in
   raise_error_from_l ?loc_table msg l
 
@@ -640,12 +723,11 @@ let reveal ~sk ~source edpk =
   send_request ~data "/blocks/prevalidation/proto/helpers/forge/operations"
   >>= fun r ->
   let r = Ezjsonm.from_string r in
-  let op =
-    try
-      Ezjsonm.find r ["operation"] |> Ezjsonm.get_string
-    with Not_found ->
-      raise_response_error "forge reveal" r
-  in
+  (try
+     Ezjsonm.find r ["operation"] |> Ezjsonm.get_string |> Lwt.return
+   with Not_found ->
+     raise_response_error "forge reveal" r
+  ) >>= fun op ->
   inject ~sk head.head_chain_id (`Hex op) >>= function
   | op_h, [] -> return_unit (* ok *)
   | _ -> raise (ResponseError "reveal public key")
@@ -683,12 +765,11 @@ let faucet_to dest =
   send_request ~data "/blocks/prevalidation/proto/helpers/forge/operations"
   >>= fun r ->
   let r = Ezjsonm.from_string r in
-  let op =
-    try
-      Ezjsonm.find r ["operation"] |> Ezjsonm.get_string
-    with Not_found ->
-      raise_response_error "forge faucet" r
-  in
+  (try
+     Ezjsonm.find r ["operation"] |> Ezjsonm.get_string |> Lwt.return
+   with Not_found ->
+     raise_response_error "forge faucet" r
+  ) >>= fun op ->
   inject head.head_chain_id (`Hex op) >>= function
   | _, ([] | _::_::_) -> raise (ResponseError "faucet (inject)")
   | op_h, [c] ->
@@ -720,12 +801,11 @@ let faucet_to dest =
     send_request ~data "/blocks/prevalidation/proto/helpers/forge/operations"
     >>= fun r ->
     let r = Ezjsonm.from_string r in
-    let op =
-      try
-        Ezjsonm.find r ["operation"] |> Ezjsonm.get_string
-      with Not_found ->
-        raise_response_error "forge transfer from faucet" r
-    in
+    (try
+       Ezjsonm.find r ["operation"] |> Ezjsonm.get_string |> Lwt.return
+     with Not_found ->
+       raise_response_error "forge transfer from faucet" r
+    ) >>= fun op ->
     inject ~sk head.head_chain_id (`Hex op) >>= function
     | op_h, [] ->
       (* Reveal for small tz1 *)
