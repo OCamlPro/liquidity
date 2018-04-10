@@ -174,12 +174,26 @@ module Data = struct
               [ "parameter", p; "storage", s ]
 
   let run () =
-    let result, r_storage =
+    let result, r_storage, big_map_diff =
       LiquidDeploy.Sync.run
         (LiquidDeploy.From_file !contract) !parameter !storage
     in
     Printf.printf "%s\n%!"
-      (LiquidData.string_of_const (CTuple [result; r_storage]))
+      (LiquidData.string_of_const (CTuple [result; r_storage]));
+    match big_map_diff with
+    | None -> ()
+    | Some diff ->
+      Printf.printf "\nBig map diff:\n";
+      List.iter (function
+          | LiquidDeploy.Big_map_add (k, v) ->
+            Printf.printf "+  %s --> %s\n"
+              (LiquidData.string_of_const k)
+              (LiquidData.string_of_const v)
+          | LiquidDeploy.Big_map_remove k ->
+            Printf.printf "-  %s\n"
+              (LiquidData.string_of_const k)
+        ) diff;
+      Printf.printf "%!"
 
 
   let init_inputs = ref []

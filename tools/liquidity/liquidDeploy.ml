@@ -19,9 +19,16 @@ type from =
   | From_string of string
   | From_file of string
 
+type big_map_diff_item =
+  | Big_map_add of const * const
+  | Big_map_remove of const
+
+type big_map_diff = big_map_diff_item list
+
 module type S = sig
   type 'a t
-  val run : from -> string -> string -> (LiquidTypes.const * LiquidTypes.const) t
+  val run : from -> string -> string ->
+    (LiquidTypes.const * LiquidTypes.const * big_map_diff option) t
   val forge_deploy : ?delegatable:bool -> ?spendable:bool ->
     from -> string list -> string t
   val deploy : ?delegatable:bool -> ?spendable:bool ->
@@ -311,6 +318,13 @@ let compile_liquid liquid =
 
   ( env, syntax_ast, pre_michelson, pre_init )
 
+
+let get_big_map_type syntax_contract =
+  match syntax_contract.storage with
+  | Ttuple (Tbigmap (k, v) :: _)
+  | Trecord (_, (_, Tbigmap (k, v)) :: _) -> Some (k, v)
+  | _ -> None
+
 let run_pre env syntax_contract pre_michelson source input storage =
   let c, loc_table =
     LiquidToTezos.convert_contract ~expand:true pre_michelson in
@@ -337,8 +351,28 @@ let run_pre env syntax_contract pre_michelson source input storage =
   try
     let storage_r = Ezjsonm.find r ["storage"] in
     let result_r = Ezjsonm.find r ["output"] in
+    let big_map_diff_r =
+      try Some (Ezjsonm.find r ["big_map_diff"])
+      with Not_found -> None
+    in
     let storage_expr = LiquidToTezos.const_of_ezjson storage_r in
     let result_expr = LiquidToTezos.const_of_ezjson result_r in
+    let big_map_diff_expr = match big_map_diff_r with
+      | None -> None
+      | Some json_diff ->
+        Some (Ezjsonm.get_list (fun pair ->
+            Ezjsonm.get_pair
+              (fun k -> LiquidToTezos.const_of_ezjson k)
+              (fun v ->
+                 match Ezjsonm.get_dict v with
+                 | [] -> None
+                 | _ :: _ ->
+                   Some (LiquidToTezos.const_of_ezjson v)
+                 | exception Ezjsonm.Parse_error _ ->
+                   Some (LiquidToTezos.const_of_ezjson v))
+              pair
+          ) json_diff)
+    in
     let env = LiquidTezosTypes.empty_env env.filename in
     let storage =
       LiquidFromTezos.convert_const_type env storage_expr
@@ -347,7 +381,19 @@ let run_pre env syntax_contract pre_michelson source input storage =
     let result =
       LiquidFromTezos.convert_const_type env result_expr syntax_contract.return
     in
-    return (result, storage)
+    let big_map_diff = match big_map_diff_expr, get_big_map_type syntax_contract with
+      | None, _ -> None
+      | Some _, None -> assert false
+      | Some d, Some (tk, tv) ->
+        Some (List.map (function
+            | k, Some v ->
+              Big_map_add (LiquidFromTezos.convert_const_type env k tk,
+                           LiquidFromTezos.convert_const_type env v tv)
+            | k, None ->
+              Big_map_remove (LiquidFromTezos.convert_const_type env k tk)
+          ) d)
+    in
+    return (result, storage, big_map_diff)
   with Not_found ->
     raise_response_error ~loc_table "run" r
 
@@ -463,7 +509,8 @@ let forge_deploy ?head ?source ?public_key
         | _ -> CTuple init_params in
 
       run_pre env syntax_c c (Some source) eval_init_input eval_init_storage
-      >>= fun (eval_init_result, _) ->
+      >>= fun (eval_init_result, _, _big_map_diff) ->
+      (* TODO check big_map_diff ? *)
       Printf.eprintf "Evaluated initial storage: %s\n%!"
         (LiquidData.string_of_const eval_init_result);
       return (LiquidEncode.encode_const env syntax_ast eval_init_result)

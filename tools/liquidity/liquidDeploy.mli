@@ -16,16 +16,23 @@ type from =
   | From_string of string
   | From_file of string
 
+type big_map_diff_item =
+  | Big_map_add of LiquidTypes.const * LiquidTypes.const
+  | Big_map_remove of LiquidTypes.const
+
+type big_map_diff = big_map_diff_item list
+
 val request : (?data:string -> string -> string Lwt.t) ref
 
 module type S = sig
   type 'a t
 
   (** Run contract with given parameter and storage on the Tezos node specified
-      in ![LiquidOptions], returns a pair containig the return value and the
-      storage *)
+     in ![LiquidOptions], returns the return value, the storage and a diff of a
+     big map id the contract contains any *)
   val run :
-    from -> string -> string -> (LiquidTypes.const * LiquidTypes.const) t
+    from -> string -> string ->
+    (LiquidTypes.const * LiquidTypes.const * big_map_diff option) t
 
   (** Forge a deployment operation contract on the Tezos node specified in
       ![LiquidOptions], returns the hex-encoded operation *)

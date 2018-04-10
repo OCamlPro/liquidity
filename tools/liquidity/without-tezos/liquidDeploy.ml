@@ -19,9 +19,16 @@ type from =
 let request = ref (fun ?data _ ->
   failwith "mini version cannot request")
 
+type big_map_diff_item =
+  | Big_map_add of LiquidTypes.const * LiquidTypes.const
+  | Big_map_remove of LiquidTypes.const
+
+type big_map_diff = big_map_diff_item list
+
 module type S = sig
   type 'a t
-  val run : from -> string -> string -> (LiquidTypes.const * LiquidTypes.const) t
+  val run : from -> string -> string ->
+    (LiquidTypes.const * LiquidTypes.const * big_map_diff option) t
   val forge_deploy : ?delegatable:bool -> ?spendable:bool ->
     from -> string list -> string t
   val deploy : ?delegatable:bool -> ?spendable:bool ->
