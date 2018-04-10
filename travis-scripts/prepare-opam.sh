@@ -11,6 +11,6 @@ opam init --comp 4.05.0
 eval `opam config env`
 
 opam update
-opam install ocp-build zarith uutf uri uchar stringext sexplib re ocplib-endian jsonm hex ezjsonm cstruct calendar ocurl nocrypto sodium
+opam install ocp-build zarith uutf uri uchar stringext sexplib re lwt.3.3.0 ocplib-endian jsonm hex ezjsonm cstruct calendar ocurl nocrypto sodium
 opam pin add ocplib-json-typed --dev
 # TODO > other deps are missing ?
