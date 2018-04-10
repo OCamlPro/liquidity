@@ -17,9 +17,120 @@ let c_unit ~loc = mk (Const (loc, Tunit, CUnit)) ()
 let mk_nat ~loc i =
   mk (Const (loc, Tnat, CNat (LiquidPrinter.integer_of_int i))) ()
 
+let rec subst_empty_big_map code =
+  let empty_big_map loc =
+    let storage_var = mk (Var ("storage", loc, [])) () in
+    Apply (Prim_tuple_get, loc, [storage_var; mk_nat ~loc 0])
+  in
+  let desc = code.desc in
+  let desc = match desc with
+    | Const (loc, ty, CBigMap []) ->
+      empty_big_map loc
+    | Const (loc, ty, CBigMap _) ->
+      LiquidLoc.raise_error ~loc
+        "Only use empty big map constants in storage initializer"
+    | Const _ -> desc
+    | LetTransfer _ -> assert false
+    | Var _
+    | Failwith _ -> desc
+    | SetVar (s, loc, l, e) ->
+      let e' = subst_empty_big_map e in
+      if e == e' then desc else SetVar (s, loc, l, e')
+    | Constructor (loc, c, e) ->
+      let e' = subst_empty_big_map e in
+      if e == e' then desc else Constructor (loc, c, e')
+
+    | Lambda (s, t, loc, e, tr) ->
+      let e' = subst_empty_big_map e in
+      if e == e' then desc else Lambda (s, t, loc, e, tr)
+
+    | Seq (e1, e2) ->
+      let e1' = subst_empty_big_map e1 in
+      let e2' = subst_empty_big_map e2 in
+      if e1 == e1' && e2 == e2' then desc else Seq (e1', e2')
+
+    | Let (s, loc, e1, e2) ->
+      let e1' = subst_empty_big_map e1 in
+      let e2' = subst_empty_big_map e2 in
+      if e1 == e1' && e2 == e2' then desc else Let (s, loc, e1', e2')
+
+    | Loop (s, loc, e1, e2) ->
+      let e1' = subst_empty_big_map e1 in
+      let e2' = subst_empty_big_map e2 in
+      if e1 == e1' && e2 == e2' then desc else Loop (s, loc, e1', e2')
+
+    | If (e1, e2, e3) ->
+      let e1' = subst_empty_big_map e1 in
+      let e2' = subst_empty_big_map e2 in
+      let e3' = subst_empty_big_map e3 in
+      if e1 == e1' && e2 == e2' && e3 == e3' then desc
+      else If (e1', e2', e3')
+
+    | MatchOption (e1, loc, e2, s, e3) ->
+      let e1' = subst_empty_big_map e1 in
+      let e2' = subst_empty_big_map e2 in
+      let e3' = subst_empty_big_map e3 in
+      if e1 == e1' && e2 == e2' && e3 == e3' then desc
+      else MatchOption (e1', loc, e2', s, e3')
+
+    | MatchNat (e1, loc, s, e2, r, e3) ->
+      let e1' = subst_empty_big_map e1 in
+      let e2' = subst_empty_big_map e2 in
+      let e3' = subst_empty_big_map e3 in
+      if e1 == e1' && e2 == e2' && e3 == e3' then desc
+      else MatchNat (e1', loc, s, e2', r, e3')
+
+    | MatchList (e1, loc, s, r, e2, e3) ->
+      let e1' = subst_empty_big_map e1 in
+      let e2' = subst_empty_big_map e2 in
+      let e3' = subst_empty_big_map e3 in
+      if e1 == e1' && e2 == e2' && e3 == e3' then desc
+      else MatchList (e1', loc, s, r, e2', e3')
+
+    | Fold (c, loc, s, e1, e2, e3) ->
+      let e1' = subst_empty_big_map e1 in
+      let e2' = subst_empty_big_map e2 in
+      let e3' = subst_empty_big_map e3 in
+      if e1 == e1' && e2 == e2' && e3 == e3' then desc
+      else Fold (c, loc, s, e1', e2', e3')
+
+    | Apply (p, loc, l) ->
+      let l' = List.map subst_empty_big_map l in
+      if List.for_all2 (==) l l' then desc
+      else Apply (p, loc, l')
+
+    | Closure (s, t, loc, env, e, tr) ->
+      let e' = subst_empty_big_map e in
+      let env' = List.map (fun (x, e) -> x, subst_empty_big_map e) env in
+      if e == e' &&
+         List.for_all2 (fun (_, e) (_, e') -> e == e') env env'
+      then desc
+      else Closure (s, t, loc, env', e', tr)
+
+    | Record (r, l) ->
+      let l' = List.map (fun (x, e) -> x, subst_empty_big_map e) l in
+      if List.for_all2 (fun (_, e) (_, e') -> e == e') l l'
+      then desc
+      else Record (r, l')
+
+    | MatchVariant (e, loc, l) ->
+      let e' = subst_empty_big_map e in
+      let l' = List.map (fun (x, e) -> x, subst_empty_big_map e) l in
+      if e == e' && List.for_all2 (fun (_, e) (_, e') -> e == e') l l'
+      then desc
+      else MatchVariant (e', loc, l')
+  in
+  if desc == code.desc then
+    code
+  else
+    { code with desc }
+
+
+
+
 let tmp_contract_of_init ~loc (args, code) storage_ty =
-  let return = storage_ty in
-  let storage = Tunit in
+  let storage = storage_ty in
+  let return = Tunit in
   let parameter_var = mk (Var ("parameter", loc, [])) () in
   let parameter, code = match args with
     | [] -> Tunit, code
@@ -42,8 +153,10 @@ let tmp_contract_of_init ~loc (args, code) storage_ty =
       in
       parameter, code
   in
+  (* Empty big map is fetched in given storage which is always empty *)
+  let code = subst_empty_big_map code in
   let code =
-    mk(Apply (Prim_tuple, loc, [code; c_unit ~loc ])) () in
+    mk(Apply (Prim_tuple, loc, [ c_unit ~loc; code ])) () in
   { parameter; storage; return; code }
 
 let compile_liquid_init env contract ((args, sy_init) as init) =

@@ -258,6 +258,8 @@ let raise_response_error ?loc_table msg r =
       let title, descr = descr_of_id id schema in
       let loc =
         try Some (Ezjsonm.find err ["location"] |> Ezjsonm.get_int)
+        with Not_found ->
+        try Some (Ezjsonm.find err ["loc"] |> Ezjsonm.get_int)
         with Not_found -> None
       in
       kind, id, loc, title, descr
@@ -502,18 +504,41 @@ let forge_deploy ?head ?source ?public_key
                   (List.length init_infos) (List.length init_params_strings)
                ))
       in
-      let eval_init_storage = CUnit in
-      let eval_init_input = match init_params with
+      let eval_input_storage =
+        try
+          LiquidData.default_const syntax_ast.storage
+          |> LiquidEncode.encode_const env syntax_ast
+        with Not_found -> failwith "could not construct dummy storage for eval"
+      in
+      let eval_input_parameter = match init_params with
         | [] -> CUnit
         | [x] -> x
         | _ -> CTuple init_params in
 
-      run_pre env syntax_c c (Some source) eval_init_input eval_init_storage
-      >>= fun (eval_init_result, _, _big_map_diff) ->
-      (* TODO check big_map_diff ? *)
+      run_pre env syntax_c c (Some source)
+        eval_input_parameter eval_input_storage
+      >>= fun (_, eval_init_storage, big_map_diff) ->
+      (* Add elements of big map *)
+      let eval_init_storage = match eval_init_storage, big_map_diff with
+        | CTuple (CBigMap m :: rtuple), Some l ->
+          let m = List.fold_left (fun m -> function
+              | Big_map_add (k, v) -> (k, v) :: m
+              | Big_map_remove _ -> m
+            ) m l
+          in
+          CTuple (CBigMap m :: rtuple)
+        | CRecord ((bname, CBigMap m) :: rrecord), Some l ->
+          let m = List.fold_left (fun m -> function
+              | Big_map_add (k, v) -> (k, v) :: m
+              | Big_map_remove _ -> m
+            ) m l
+          in
+          CRecord ((bname, CBigMap m) :: rrecord)
+        | _ -> eval_init_storage
+      in
       Printf.eprintf "Evaluated initial storage: %s\n%!"
-        (LiquidData.string_of_const eval_init_result);
-      return (LiquidEncode.encode_const env syntax_ast eval_init_result)
+        (LiquidData.string_of_const eval_init_storage);
+      return (LiquidEncode.encode_const env syntax_ast eval_init_storage)
   in
   init_storage_lwt >>= fun init_storage ->
 
