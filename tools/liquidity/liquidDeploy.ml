@@ -25,10 +25,20 @@ type big_map_diff_item =
 
 type big_map_diff = big_map_diff_item list
 
+type trace_item = {
+  loc : location option;
+  gas : int;
+  stack : const list;
+}
+
+type trace = trace_item array
+
 module type S = sig
   type 'a t
   val run : from -> string -> string ->
     (LiquidTypes.const * LiquidTypes.const * big_map_diff option) t
+  val run_debug : from -> string -> string ->
+    (LiquidTypes.const * LiquidTypes.const * big_map_diff option * trace) t
   val forge_deploy : ?delegatable:bool -> ?spendable:bool ->
     from -> string list -> string t
   val deploy : ?delegatable:bool -> ?spendable:bool ->
@@ -210,10 +220,11 @@ let extract_errors_from_json r schema =
           |> function None -> assert false | Some s -> s
         in
         r, schema_l
-      with Not_found -> r, schema_l
+      with Not_found  -> r, schema_l
     end
   | [] -> raise (ResponseError ("Could not parse error"))
   | exception Ezjsonm.Parse_error _ -> r, schema_l
+
 
 let rec descr_of_id id schema =
   try
@@ -252,18 +263,22 @@ let rec descr_of_id id schema =
 let raise_response_error ?loc_table msg r =
   Lazy.force error_schema >>= fun error_schema ->
   let err, schema = extract_errors_from_json r error_schema in
-  let l = Ezjsonm.get_list (fun err ->
-      let kind = Ezjsonm.find err ["kind"] |> Ezjsonm.get_string in
-      let id = Ezjsonm.find err ["id"] |> Ezjsonm.get_string in
-      let title, descr = descr_of_id id schema in
-      let loc =
-        try Some (Ezjsonm.find err ["location"] |> Ezjsonm.get_int)
-        with Not_found ->
-        try Some (Ezjsonm.find err ["loc"] |> Ezjsonm.get_int)
-        with Not_found -> None
-      in
-      kind, id, loc, title, descr
-    ) err in
+  let l =
+    try
+      Ezjsonm.get_list (fun err ->
+          let kind = Ezjsonm.find err ["kind"] |> Ezjsonm.get_string in
+          let id = Ezjsonm.find err ["id"] |> Ezjsonm.get_string in
+          let title, descr = descr_of_id id schema in
+          let loc =
+            try Some (Ezjsonm.find err ["location"] |> Ezjsonm.get_int)
+            with Not_found ->
+            try Some (Ezjsonm.find err ["loc"] |> Ezjsonm.get_int)
+            with Not_found -> None
+          in
+          kind, id, loc, title, descr
+        ) err
+    with Ezjsonm.Parse_error _ -> []
+  in
   raise_error_from_l ?loc_table msg l
 
 
@@ -327,7 +342,9 @@ let get_big_map_type syntax_contract =
   | Trecord (_, (_, Tbigmap (k, v)) :: _) -> Some (k, v)
   | _ -> None
 
-let run_pre env syntax_contract pre_michelson source input storage =
+let run_pre ?(debug=false)
+    env syntax_contract pre_michelson source input storage =
+  let rpc = if debug then "trace_code" else "run_code" in
   let c, loc_table =
     LiquidToTezos.convert_contract ~expand:true pre_michelson in
   let input_m = LiquidToTezos.convert_const input in
@@ -336,10 +353,10 @@ let run_pre env syntax_contract pre_michelson source input storage =
   let input_json = LiquidToTezos.json_of_const input_m in
   let storage_json = LiquidToTezos.json_of_const storage_m in
   let run_fields = [
-      "script", contract_json;
-      "input", input_json;
-      "storage", storage_json;
-      "amount", Printf.sprintf "%S" !LiquidOptions.amount;
+    "script", contract_json;
+    "input", input_json;
+    "storage", storage_json;
+    "amount", Printf.sprintf "%S" !LiquidOptions.amount;
   ] @ (match source with
       | None -> []
       | Some source -> ["contract", Printf.sprintf "%S" source]
@@ -347,7 +364,7 @@ let run_pre env syntax_contract pre_michelson source input storage =
   in
   let run_json = mk_json_obj run_fields in
   send_request ~loc_table ~data:run_json
-    "/blocks/prevalidation/proto/helpers/run_code"
+    (Printf.sprintf "/blocks/prevalidation/proto/helpers/%s" rpc)
   >>= fun r ->
   let r = Ezjsonm.from_string r in
   try
@@ -356,6 +373,10 @@ let run_pre env syntax_contract pre_michelson source input storage =
     let big_map_diff_r =
       try Some (Ezjsonm.find r ["big_map_diff"])
       with Not_found -> None
+    in
+    let trace_r =
+      if not debug then None
+      else Some (Ezjsonm.find r ["trace"])
     in
     let storage_expr = LiquidToTezos.const_of_ezjson storage_r in
     let result_expr = LiquidToTezos.const_of_ezjson result_r in
@@ -375,6 +396,19 @@ let run_pre env syntax_contract pre_michelson source input storage =
               pair
           ) json_diff)
     in
+    let trace_expr = match trace_r with
+      | None -> None
+      | Some trace_r ->
+        Some (Ezjsonm.get_list (fun step ->
+            let loc = Ezjsonm.find step ["location"] |> Ezjsonm.get_int in
+            let gas = Ezjsonm.find step ["gas"] |> Ezjsonm.get_int in
+            let stack =
+              Ezjsonm.find step ["stack"]
+              |> Ezjsonm.get_list LiquidToTezos.const_of_ezjson
+            in
+            (loc, gas, stack)
+          ) trace_r)
+    in
     let env = LiquidTezosTypes.empty_env env.filename in
     let storage =
       LiquidFromTezos.convert_const_type env storage_expr
@@ -383,7 +417,8 @@ let run_pre env syntax_contract pre_michelson source input storage =
     let result =
       LiquidFromTezos.convert_const_type env result_expr syntax_contract.return
     in
-    let big_map_diff = match big_map_diff_expr, get_big_map_type syntax_contract with
+    let big_map_diff =
+      match big_map_diff_expr, get_big_map_type syntax_contract with
       | None, _ -> None
       | Some _, None -> assert false
       | Some d, Some (tk, tv) ->
@@ -395,12 +430,32 @@ let run_pre env syntax_contract pre_michelson source input storage =
               Big_map_remove (LiquidFromTezos.convert_const_type env k tk)
           ) d)
     in
-    return (result, storage, big_map_diff)
+    let trace = match trace_expr with
+      | None -> None
+      | Some trace_expr ->
+        let l =
+          List.map (fun (loc, gas, stack) ->
+              let loc =  match List.assoc_opt loc loc_table with
+                | Some (loc, _) -> Some loc
+                | None ->
+                  match List.find_opt (fun (l, _) -> l <= loc)
+                          (List.rev loc_table) with
+                  | Some (_, (loc, _)) -> Some loc
+                  | None -> None
+              in
+              (* we don't know the liquidity type of elements in the stack *)
+              let stack =
+                List.map (LiquidFromTezos.convert_const_notype env) stack in
+              { loc; gas; stack }
+            ) trace_expr in
+        Some (Array.of_list l)
+    in
+    return (result, storage, big_map_diff, trace)
   with Not_found ->
     raise_response_error ~loc_table "run" r
 
 
-let run liquid input_string storage_string =
+let run ~debug liquid input_string storage_string =
   let env, syntax_ast, pre_michelson, _ = compile_liquid liquid in
   let input =
     LiquidData.translate { env with filename = "run_input" }
@@ -410,7 +465,19 @@ let run liquid input_string storage_string =
     LiquidData.translate { env with filename = "run_storage" }
       syntax_ast storage_string syntax_ast.storage
   in
-  run_pre env syntax_ast pre_michelson !LiquidOptions.source input storage
+  run_pre ~debug env syntax_ast
+    pre_michelson !LiquidOptions.source input storage
+
+let run_debug liquid input_string storage_string =
+  run ~debug:true liquid input_string storage_string
+  >>= function
+  | (res, sto, big_diff, Some trace) -> Lwt.return (res, sto, big_diff, trace)
+  | _ -> assert false
+
+let run liquid input_string storage_string =
+  run ~debug:false liquid input_string storage_string
+  >>= fun (res, sto, big_diff, _) ->
+  Lwt.return (res, sto, big_diff)
 
 
 let get_counter source =
@@ -517,7 +584,7 @@ let forge_deploy ?head ?source ?public_key
 
       run_pre env syntax_c c (Some source)
         eval_input_parameter eval_input_storage
-      >>= fun (_, eval_init_storage, big_map_diff) ->
+      >>= fun (_, eval_init_storage, big_map_diff, _) ->
       (* Add elements of big map *)
       let eval_init_storage = match eval_init_storage, big_map_diff with
         | CTuple (CBigMap m :: rtuple), Some l ->
@@ -901,6 +968,9 @@ module Async = struct
   let run liquid input_string storage_string =
     run liquid input_string storage_string
 
+  let run_debug liquid input_string storage_string =
+    run_debug liquid input_string storage_string
+
   let deploy ?(delegatable=false) ?(spendable=false) liquid init_params_strings =
     deploy ~delegatable ~spendable liquid init_params_strings
 
@@ -927,6 +997,9 @@ module Sync = struct
 
   let run liquid input_string storage_string =
     Lwt_main.run (run liquid input_string storage_string)
+
+  let run_debug liquid input_string storage_string =
+    Lwt_main.run (run_debug liquid input_string storage_string)
 
   let deploy ?(delegatable=false) ?(spendable=false) liquid init_params_strings =
     Lwt_main.run (deploy ~delegatable ~spendable liquid init_params_strings)

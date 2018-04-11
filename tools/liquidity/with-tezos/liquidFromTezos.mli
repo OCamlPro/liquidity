@@ -15,6 +15,11 @@ val convert_const_type :
   LiquidTypes.datatype ->
   LiquidTypes.const
 
+val convert_const_notype :
+  LiquidTezosTypes.env ->
+  LiquidTezosTypes.expr ->
+  LiquidTypes.const
+
 val convert_contract :
   LiquidTezosTypes.env ->
   LiquidTezosTypes.contract ->

@@ -25,10 +25,20 @@ type big_map_diff_item =
 
 type big_map_diff = big_map_diff_item list
 
+type trace_item = {
+  loc : LiquidTypes.location option;
+  gas : int;
+  stack : LiquidTypes.const list;
+}
+
+type trace = trace_item array
+
 module type S = sig
   type 'a t
   val run : from -> string -> string ->
     (LiquidTypes.const * LiquidTypes.const * big_map_diff option) t
+  val run_debug : from -> string -> string ->
+    (LiquidTypes.const * LiquidTypes.const * big_map_diff option * trace) t
   val forge_deploy : ?delegatable:bool -> ?spendable:bool ->
     from -> string list -> string t
   val deploy : ?delegatable:bool -> ?spendable:bool ->
@@ -43,6 +53,9 @@ module Dummy = struct
 
   let run _ _ _ =
     failwith "mini version cannot run"
+
+  let run_debug _ _ _ =
+    failwith "mini version cannot run debug"
 
   let forge_deploy ?(delegatable=false) ?(spendable=false) _ _ =
     failwith "mini version cannot deploy"

@@ -215,6 +215,16 @@ let rec convert_const env ?ty expr =
       | Some ty ->  wrong_type env expr ty
     end
 
+  | Prim(_, "Elt", [k;e], _debug) ->
+    begin match ty with
+      | Some (Tmap (ty_k, ty_e)) ->
+        CMap [convert_const env ~ty:ty_k k, convert_const env ~ty:ty_e e]
+      | None ->
+        CMap [convert_const env k, convert_const env e]
+      | Some ty ->
+        wrong_type env expr ty
+    end
+
   | _ -> unknown_expr env "convert_const" expr
 
 let rec convert_type env expr =
@@ -457,6 +467,10 @@ let rec expand expr =
 let convert_const_type env c ty =
   let c = Micheline.inject_locations (fun i -> i) c in
   convert_const env ~ty c
+
+let convert_const_notype env c =
+  let c = Micheline.inject_locations (fun i -> i) c in
+  convert_const env c
 
 let convert_contract env c =
   let c =
