@@ -460,11 +460,7 @@ let run_pre ?(debug=false)
           List.map (fun (loc, gas, stack) ->
               let loc =  match List.assoc_opt loc loc_table with
                 | Some (loc, _) -> Some loc
-                | None ->
-                  match List.find_opt (fun (l, _) -> l <= loc)
-                          (List.rev loc_table) with
-                  | Some (_, (loc, _)) -> Some loc
-                  | None -> None
+                | None -> None
               in
               (* we don't know the liquidity type of elements in the stack *)
               let stack = convert_stack env stack in
