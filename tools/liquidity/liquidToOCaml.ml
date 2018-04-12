@@ -8,7 +8,7 @@
 (**************************************************************************)
 
 (* The version that will be required to compile the generated files. *)
-let output_version = "0.161"
+let output_version = "0.162"
 
 (*
 type storage = ...
