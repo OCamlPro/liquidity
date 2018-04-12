@@ -25,10 +25,14 @@ type big_map_diff_item =
 
 type big_map_diff = big_map_diff_item list
 
+type stack_item =
+  | StackConst of const
+  | StackCode of int
+
 type trace_item = {
   loc : location option;
   gas : int;
-  stack : const list;
+  stack : stack_item list;
 }
 
 type trace = trace_item array
@@ -342,6 +346,25 @@ let get_big_map_type syntax_contract =
   | Trecord (_, (_, Tbigmap (k, v)) :: _) -> Some (k, v)
   | _ -> None
 
+let memo_stack_code_cpt = ref 0
+let memo_stack_code_tbl = Hashtbl.create 19
+let reset_memo_stack_code () =
+  memo_stack_code_cpt := 0;
+  Hashtbl.clear memo_stack_code_tbl
+let memo_stack_code e =
+  try Hashtbl.find memo_stack_code_tbl e
+  with Not_found ->
+    let cpt = !memo_stack_code_cpt in
+    incr memo_stack_code_cpt;
+    Hashtbl.add memo_stack_code_tbl e cpt;
+    cpt
+
+let convert_stack env stack_expr =
+  List.map (fun e ->
+      try StackConst (LiquidFromTezos.convert_const_notype env e)
+      with _ -> StackCode (memo_stack_code e)
+    ) stack_expr
+
 let run_pre ?(debug=false)
     env syntax_contract pre_michelson source input storage =
   let rpc = if debug then "trace_code" else "run_code" in
@@ -444,8 +467,8 @@ let run_pre ?(debug=false)
                   | None -> None
               in
               (* we don't know the liquidity type of elements in the stack *)
-              let stack =
-                List.map (LiquidFromTezos.convert_const_notype env) stack in
+              let stack = convert_stack env stack in
+              reset_memo_stack_code ();
               { loc; gas; stack }
             ) trace_expr in
         Some (Array.of_list l)

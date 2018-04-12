@@ -25,10 +25,14 @@ type big_map_diff_item =
 
 type big_map_diff = big_map_diff_item list
 
+type stack_item =
+  | StackConst of LiquidTypes.const
+  | StackCode of int
+
 type trace_item = {
   loc : LiquidTypes.location option;
   gas : int;
-  stack : LiquidTypes.const list;
+  stack : stack_item list;
 }
 
 type trace = trace_item array
