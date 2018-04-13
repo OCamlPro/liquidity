@@ -464,9 +464,9 @@ let run_pre ?(debug=false)
               in
               (* we don't know the liquidity type of elements in the stack *)
               let stack = convert_stack env stack in
-              reset_memo_stack_code ();
               { loc; gas; stack }
             ) trace_expr in
+        reset_memo_stack_code ();
         Some (Array.of_list l)
     in
     return (result, storage, big_map_diff, trace)
