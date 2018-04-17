@@ -262,6 +262,12 @@ let main () =
       "--verbose", Arg.Unit (fun () -> incr LiquidOptions.verbosity),
       " Increment verbosity";
 
+      "--version", Arg.Unit (fun () ->
+          Format.printf "%s@." LiquidToOCaml.output_version;
+          exit 0
+        ),
+      " Show version and exit";
+
       "--no-peephole", Arg.Clear LiquidOptions.peephole,
       " Disable peephole optimizations";
 
