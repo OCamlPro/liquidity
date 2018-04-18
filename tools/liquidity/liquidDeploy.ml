@@ -380,6 +380,7 @@ let run_pre ?(debug=false)
     "input", input_json;
     "storage", storage_json;
     "amount", Printf.sprintf "%S" !LiquidOptions.amount;
+    "contract", "\"TZ1tPz6tdaY2XN9ZzpDQu9nFTCX22GivUDR7\"" (* XXX dummy *);
   ] @ (match source with
       | None -> []
       | Some source -> ["contract", Printf.sprintf "%S" source]
