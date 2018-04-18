@@ -47,6 +47,7 @@ OCaml.library("michelson-deps", ocaml + {
        "ocp-libsodium-js";
        "js_of_ocaml";
        "hex";
+       "digestif.ocaml";
    ];
 });
 

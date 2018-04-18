@@ -387,7 +387,7 @@ let run_pre ?(debug=false)
   in
   let run_json = mk_json_obj run_fields in
   send_request ~loc_table ~data:run_json
-    (Printf.sprintf "/blocks/prevalidation/proto/helpers/%s" rpc)
+    (Printf.sprintf "/blocks/head/proto/helpers/%s" rpc)
   >>= fun r ->
   let r = Ezjsonm.from_string r in
   try
@@ -501,7 +501,7 @@ let run liquid input_string storage_string =
 
 let get_counter source =
   send_request
-      (Printf.sprintf "/blocks/prevalidation/proto/context/contracts/%s/counter"
+      (Printf.sprintf "/blocks/head/proto/context/contracts/%s/counter"
          source)
   >>= fun r ->
   let r = Ezjsonm.from_string r in
@@ -535,7 +535,7 @@ let get_head () =
     raise_response_error "get_head" r
 
 let get_predecessor () =
-  send_request "/blocks/prevalidation/predecessor" >>= fun r ->
+  send_request "/blocks/head/predecessor" >>= fun r ->
   let r = Ezjsonm.from_string r in
   try
     Ezjsonm.find r ["predecessor"] |> Ezjsonm.get_string |> return
@@ -675,7 +675,7 @@ let forge_deploy ?head ?source ?public_key
   in
   let data = mk_json_obj datas in
   send_request ~loc_table ~data
-    "/blocks/prevalidation/proto/helpers/forge/operations"
+    "/blocks/head/proto/helpers/forge/operations"
   >>= fun r ->
   let r = Ezjsonm.from_string r in
   try
@@ -715,7 +715,7 @@ let inject ?loc_table ?sk chain_id op =
       ] |> mk_json_obj
   in
   send_request ?loc_table ~data
-    "/blocks/prevalidation/proto/helpers/apply_operation"
+    "/blocks/head/proto/helpers/apply_operation"
   >>= fun r ->
   let r = Ezjsonm.from_string r in
   (try
@@ -767,7 +767,7 @@ let get_storage liquid address =
   let env, syntax_ast, pre_michelson, pre_init_infos = compile_liquid liquid in
   send_request
     (Printf.sprintf
-       "/blocks/prevalidation/proto/context/contracts/%s/storage"
+       "/blocks/head/proto/context/contracts/%s/storage"
        address)
   >>= fun r ->
   let r = Ezjsonm.from_string r in
@@ -828,7 +828,7 @@ let forge_call ?head ?source ?public_key liquid address parameter_string =
   in
   let data = mk_json_obj datas in
   send_request ~loc_table ~data
-    "/blocks/prevalidation/proto/helpers/forge/operations"
+    "/blocks/head/proto/helpers/forge/operations"
   >>= fun r ->
   let r = Ezjsonm.from_string r in
   try
@@ -878,7 +878,7 @@ let reveal ~sk ~source edpk =
     "operations", mk_json_arr [reveal_json];
   ] |> mk_json_obj
   in
-  send_request ~data "/blocks/prevalidation/proto/helpers/forge/operations"
+  send_request ~data "/blocks/head/proto/helpers/forge/operations"
   >>= fun r ->
   let r = Ezjsonm.from_string r in
   (try
@@ -920,7 +920,7 @@ let faucet_to dest =
     "operations", mk_json_arr [transaction_json];
   ] |> mk_json_obj
   in
-  send_request ~data "/blocks/prevalidation/proto/helpers/forge/operations"
+  send_request ~data "/blocks/head/proto/helpers/forge/operations"
   >>= fun r ->
   let r = Ezjsonm.from_string r in
   (try
@@ -956,7 +956,7 @@ let faucet_to dest =
       "operations", mk_json_arr [reveal_json; transaction_json];
     ] |> mk_json_obj
     in
-    send_request ~data "/blocks/prevalidation/proto/helpers/forge/operations"
+    send_request ~data "/blocks/head/proto/helpers/forge/operations"
     >>= fun r ->
     let r = Ezjsonm.from_string r in
     (try

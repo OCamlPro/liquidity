@@ -101,7 +101,7 @@ OCaml.library("michelson", ocaml + {
         pp_crypto("blake2B.ml");
         "ed25519.ml";
         "tezos_crypto.ml";
-        pp_base("operation_hash.ml");
+        pp_crypto("operation_hash.ml");
         pp_proto_client("michelson_v1_macros.ml");
      ];
      requires = [

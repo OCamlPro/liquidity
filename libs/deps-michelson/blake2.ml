@@ -20,9 +20,11 @@ external blake2b_final : blake2b_ctx -> string -> unit = "blake2b_final_ml"
 
 let blake2b_ctx_size = blake2b_size_of_context ()
 
-let blake2b_init ?(size=64) () =
+let blake2b_init ?key ?(size=64) () =
   let ctx = String.make blake2b_ctx_size '\000' in
-  blake2b_init ctx size, String.make size '\000'
+  match key with
+  | None -> blake2b_init ctx size, String.make size '\000'
+  | Some key -> blake2b_init_key ctx size key, String.make size '\000'
 
 let blake2b_update (ctx,_) input = blake2b_update ctx input
 
@@ -30,8 +32,8 @@ let blake2b_final (ctx, hash) =
   blake2b_final ctx hash;
   hash
 
-let blake2b input =
-  let ctx = blake2b_init () in
+let blake2b ?key input =
+  let ctx = blake2b_init ?key () in
   blake2b_update ctx input;
   blake2b_final ctx
 
@@ -41,26 +43,31 @@ module Blake2b : sig
   type t
   type hash = Hash of Cstruct.t
 
-  val init : int -> t
+  val init : ?key:Cstruct.t -> int -> t
 
   val update : t -> Cstruct.t -> unit
 
   val final : t -> hash
 
-  val direct : Cstruct.t -> int -> hash
+  val direct : ?key:Cstruct.t -> Cstruct.t -> int -> hash
 end = struct
 
   type t = blake2b_ctx * string
   type hash = Hash of Cstruct.t
 
-  let init size = blake2b_init ~size ()
+  let init ?key size =
+    let key = match key with
+      | Some k -> Some (Cstruct.to_string k)
+      | None -> None
+    in
+    blake2b_init ?key ~size ()
 
   let update t input = blake2b_update t (Cstruct.to_string input)
 
   let final t = Hash (Cstruct.of_string (blake2b_final t))
 
-  let direct input size =
-  let t = init size in
+  let direct ?key input size =
+  let t = init ?key size in
   update t input;
   final t
 

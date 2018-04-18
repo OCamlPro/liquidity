@@ -5,13 +5,13 @@ module Blake2b : sig
   type t
   type hash = Hash of Cstruct.t
 
-  val init : int -> t
+  val init : ?key:Cstruct.t -> int -> t
 
   val update : t -> Cstruct.t -> unit
 
   val final : t -> hash
 
-  val direct : Cstruct.t -> int -> hash
+  val direct : ?key:Cstruct.t -> Cstruct.t -> int -> hash
 end = struct
 
   type t
@@ -41,9 +41,17 @@ end = struct
 
   let blakejs = Js.Unsafe.global##blakejs
 
-  let init (size : int) : t = Js.Unsafe.(fun_call blakejs##blake2bInit [|
-      inject size
-    |])
+  let init ?key (size : int) : t =
+    match key with
+    | Some key ->
+      Js.Unsafe.(fun_call blakejs##blake2bInit [|
+          inject size;
+          inject (Js.string (Cstruct.to_string key));
+        |])
+    | None ->
+      Js.Unsafe.(fun_call blakejs##blake2bInit [|
+          inject size
+        |])
 
   let update (t : t)  (input : Cstruct.t) : unit =
     Js.Unsafe.(fun_call blakejs##blake2bUpdate [|
@@ -55,8 +63,8 @@ end = struct
       inject t;
     |]) |> string_of_typed_array |> Cstruct.of_string)
 
-  let direct input size =
-  let t = init size in
+  let direct ?key input size =
+  let t = init ?key size in
   update t input;
   final t
 
