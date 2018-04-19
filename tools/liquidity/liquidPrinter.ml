@@ -675,7 +675,6 @@ module Liquid = struct
             bprint_type b "" ty;
           ) tys;
         Printf.bprintf b ")";
-      | Trecord (_, []) -> assert false
       | Trecord (_, (f, ty) :: rtys) when expand ->
         Printf.bprintf b "{ ";
         Printf.bprintf b "%s: " f;
@@ -687,7 +686,6 @@ module Liquid = struct
         Printf.bprintf b " }";
       | Trecord (name, _) ->
         Printf.bprintf b "%s" name;
-      | Tsum (_, []) -> assert false
       | Tsum (_, (c, ty) :: rtys) when expand ->
         Printf.bprintf b "%s of " c;
         bprint_type b "" ty;

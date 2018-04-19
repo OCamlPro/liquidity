@@ -1073,8 +1073,8 @@ let rec type_of_const = function
   | CContract _ -> Tcontract (Tunit, Tunit)
 
   (* XXX just for printing *)
-  | CRecord _ -> Trecord ("record", [])
-  | CConstr _ -> Tsum ("sum", [])
+  | CRecord _ -> Trecord ("<record>", [])
+  | CConstr _ -> Tsum ("<sum>", [])
 
 
 let check_const_type ?(from_mic=false) ~to_tez loc ty cst =
