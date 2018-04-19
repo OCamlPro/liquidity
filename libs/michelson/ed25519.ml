@@ -97,13 +97,25 @@ open Error_monad
     type Base58.data +=
       | Secret_key of t
 
+    let to_bytes s =
+      Sodium.Sign.Bytes.of_seed (Sodium.Sign.secret_key_to_seed s)
+    let of_bytes s =
+      let l = Bytes.length s in
+      if l = Sodium.Sign.seed_size then
+        let sk, _ = Sodium.Sign.seed_keypair (Sodium.Sign.Bytes.to_seed s) in
+        sk
+      else if l = Sodium.Sign.secret_key_size then
+        Sodium.Sign.Bytes.to_secret_key s
+      else
+        Pervasives.failwith "Secret_key.of_bytes: Wrong size for secret key"
+
     let b58check_encoding =
       Base58.register_encoding
-        ~prefix: Base58.Prefix.ed25519_secret_key
-        ~length:Sodium.Sign.secret_key_size
-        ~to_raw:(fun x -> Bytes.to_string (Sodium.Sign.Bytes.of_secret_key x))
+        ~prefix: Base58.Prefix.ed25519_seed
+        ~length:Sodium.Sign.seed_size
+        ~to_raw:(fun x -> Bytes.to_string (to_bytes x))
         ~of_raw:(fun x ->
-            try Some (Sodium.Sign.Bytes.to_secret_key (Bytes.of_string x))
+            try Some (of_bytes (Bytes.of_string x))
             with _ -> None)
         ~wrap:(fun x -> Secret_key x)
 
@@ -118,7 +130,6 @@ open Error_monad
       | None -> generic_error "Unexpected hash (ed25519 public key)"
     let to_b58check s = Base58.simple_encode b58check_encoding s
 
-    let of_bytes s = Sodium.Sign.Bytes.to_secret_key s
 
     (* let param ?(name="ed25519-secret") ?(desc="Ed25519 secret key (b58check-encoded)") t =
      *   Cli_entries.(param ~name ~desc (parameter (fun _ str -> Lwt.return (of_b58check str))) t) *)
