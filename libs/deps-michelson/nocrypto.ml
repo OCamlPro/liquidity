@@ -66,18 +66,12 @@ module Uncommon = struct
 
     let (<+>) = append
 
-    let clone ?(off = 0) ?len cs =
-      let len = match len with None -> cs.len - off | Some x -> x in
-      let cs' = create_unsafe len in
-      ( blit cs off cs' 0 len ; cs' )
-
-    let xor_into a b n =
-      Xor.xor_into (Cstruct.to_bytes a) (Cstruct.to_bytes b) n
-
     let xor cs1 cs2 =
       let len = imin (len cs1) (len cs2) in
-      let cs  = clone ~len cs2 in
-      ( xor_into cs1 cs len ; cs )
+      let b2 = Cstruct.to_bytes cs2 in
+      Xor.xor_into (Cstruct.to_bytes cs1) b2 len;
+      Cstruct.of_bytes b2
+
     let (lxor) cs1 cs2 = xor cs1 cs2
 
   end
