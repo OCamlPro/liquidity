@@ -50,7 +50,7 @@ module type S = sig
   val get_storage : from -> string -> LiquidTypes.const t
   val forge_call : from -> string -> string -> string t
   val call : from -> string -> string -> string t
-  val faucet_to : string -> unit t
+  val activate : secret:string -> string t
 end
 
 module Dummy = struct
@@ -76,8 +76,8 @@ module Dummy = struct
   let call _ _ _ =
     failwith "mini version cannot call"
 
-  let faucet_to _ =
-    failwith "mini version cannot faucet"
+  let activate ~secret =
+    failwith "mini version cannot activate"
 end
 
 module Async = struct include Dummy type 'a t = 'a Lwt.t end

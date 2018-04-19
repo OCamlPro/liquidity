@@ -50,7 +50,7 @@ module type S = sig
   val get_storage : from -> string -> LiquidTypes.const t
   val forge_call : from -> string -> string -> string t
   val call : from -> string -> string -> string t
-  val faucet_to : string -> unit t
+  val activate : secret:string -> string t
 end
 
 module Network_sync = struct
@@ -380,12 +380,11 @@ let run_pre ?(debug=false)
     "input", input_json;
     "storage", storage_json;
     "amount", Printf.sprintf "%S" !LiquidOptions.amount;
-    "contract", "\"TZ1tPz6tdaY2XN9ZzpDQu9nFTCX22GivUDR7\"" (* XXX dummy *);
-  ] @ (match source with
-      | None -> []
-      | Some source -> ["contract", Printf.sprintf "%S" source]
-    )
-  in
+    "contract",
+    match source with
+    | None -> "\"TZ1tPz6tdaY2XN9ZzpDQu9nFTCX22GivUDR7\"" (* XXX dummy *)
+    | Some source -> Printf.sprintf "%S" source
+  ] in
   let run_json = mk_json_obj run_fields in
   send_request ~loc_table ~data:run_json
     (Printf.sprintf "/blocks/head/proto/helpers/%s" rpc)
@@ -892,28 +891,22 @@ let reveal ~sk ~source edpk =
   | _ -> raise (ResponseError "reveal public key")
 
 
-let faucet_to dest =
+let activate ~secret =
   let sk = match !LiquidOptions.private_key with
-    | None -> raise (ResponseError "faucet_to: Missing private key")
+    | None -> raise (ResponseError "activate: Missing private key")
     | Some sk -> match Ed25519.Secret_key.of_b58check sk with
       | Ok sk -> sk
-      | Error _ -> raise (ResponseError "faucet_to: Bad private key")
+      | Error _ -> raise (ResponseError "activate: Bad private key")
   in
-  let edpk = get_public_key_from_secret_key sk in
   let source = match !LiquidOptions.source with
     | Some source -> source
     | None -> get_public_key_hash_from_secret_key sk
   in
   get_head () >>= fun head ->
-  let nonce =
-    Sodium.Random.Bytes.generate 32
-    |> Bytes.unsafe_to_string
-    |> Hex.of_string
-  in
   let transaction_json = [
-    "kind", "\"faucet\"";
-    "id", Printf.sprintf "%S" source;
-    "nonce", Printf.sprintf "%S" (Hex.show nonce);
+    "kind", "\"activation\"";
+    "pkh", Printf.sprintf "%S" source;
+    "secret", Printf.sprintf "%S" secret;
   ] |> mk_json_obj
   in
   let data = [
@@ -927,57 +920,19 @@ let faucet_to dest =
   (try
      Ezjsonm.find r ["operation"] |> Ezjsonm.get_string |> Lwt.return
    with Not_found ->
-     raise_response_error "forge faucet" r
+     raise_response_error "forge activation" r
   ) >>= fun op ->
   inject head.head_chain_id (`Hex op) >>= function
-  | _, ([] | _::_::_) -> raise (ResponseError "faucet (inject)")
-  | op_h, [c] ->
-    (* get_counter source >>= fun counter -> *)
-    (* let counter = counter + 1 in *)
-    let reveal_json = [
-      "kind", "\"reveal\"";
-      "public_key", Printf.sprintf "%S" edpk;
-    ] |> mk_json_obj
-    in
-    let transaction_json = [
-      "kind", "\"transaction\"";
-      (* "amount", "\"99999000000\""; *)
-      "amount", "\"100000000000\"";
-      "destination", Printf.sprintf "%S" dest;
-      (* "parameters", {|{"prim":"Unit","args":[]}|}; *)
-    ] |> mk_json_obj
-    in
-    let data = [
-      "branch", Printf.sprintf "%S" head.head_hash;
-      "kind", "\"manager\"";
-      "source", Printf.sprintf "%S" c;
-      (* "fee", "1000000"; *)
-      "fee", "0";
-      "counter", "1"; (* string_of_int counter; *)
-      "operations", mk_json_arr [reveal_json; transaction_json];
-    ] |> mk_json_obj
-    in
-    send_request ~data "/blocks/head/proto/helpers/forge/operations"
-    >>= fun r ->
-    let r = Ezjsonm.from_string r in
-    (try
-       Ezjsonm.find r ["operation"] |> Ezjsonm.get_string |> Lwt.return
-     with Not_found ->
-       raise_response_error "forge transfer from faucet" r
-    ) >>= fun op ->
-    inject ~sk head.head_chain_id (`Hex op) >>= function
-    | op_h, [] ->
-      (* Reveal for small tz1 *)
-      reveal ~sk ~source edpk
-    | _ -> raise (ResponseError "faucet transfer (inject)")
-
+  | _, _::_ -> raise (ResponseError "activation (inject)")
+  | op_h, [] -> return op_h
 
 
 (* Withoud optional argument head *)
 module Async = struct
   type 'a t = 'a Lwt.t
 
-  let forge_deploy ?(delegatable=false) ?(spendable=false) liquid init_params_strings =
+  let forge_deploy ?(delegatable=false) ?(spendable=false)
+      liquid init_params_strings =
     forge_deploy ~delegatable ~spendable liquid init_params_strings
     >>= fun (op, _) -> return op
 
@@ -991,7 +946,8 @@ module Async = struct
   let run_debug liquid input_string storage_string =
     run_debug liquid input_string storage_string
 
-  let deploy ?(delegatable=false) ?(spendable=false) liquid init_params_strings =
+  let deploy ?(delegatable=false) ?(spendable=false)
+      liquid init_params_strings =
     deploy ~delegatable ~spendable liquid init_params_strings
 
   let get_storage liquid address =
@@ -1000,14 +956,15 @@ module Async = struct
   let call liquid address parameter_string =
     call liquid address parameter_string
 
-  let faucet_to dest =
-    faucet_to dest
+  let activate ~secret =
+    activate ~secret
 end
 
 module Sync = struct
   type 'a t = 'a
 
-  let forge_deploy ?(delegatable=false) ?(spendable=false) liquid init_params_strings =
+  let forge_deploy ?(delegatable=false) ?(spendable=false)
+      liquid init_params_strings =
     Lwt_main.run (forge_deploy liquid init_params_strings
                   >>= fun (op, _) -> return op)
 
@@ -1021,7 +978,8 @@ module Sync = struct
   let run_debug liquid input_string storage_string =
     Lwt_main.run (run_debug liquid input_string storage_string)
 
-  let deploy ?(delegatable=false) ?(spendable=false) liquid init_params_strings =
+  let deploy ?(delegatable=false) ?(spendable=false)
+      liquid init_params_strings =
     Lwt_main.run (deploy ~delegatable ~spendable liquid init_params_strings)
 
   let get_storage liquid address =
@@ -1030,7 +988,7 @@ module Sync = struct
   let call liquid address parameter_string =
     Lwt_main.run (call liquid address parameter_string)
 
-  let faucet_to dest =
-    Lwt_main.run (faucet_to dest)
+  let activate ~secret =
+    Lwt_main.run (activate ~secret)
 
 end
