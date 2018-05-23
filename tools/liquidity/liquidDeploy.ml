@@ -684,6 +684,11 @@ let forge_deploy ?head ?source ?public_key
   with Not_found ->
     raise_response_error ~loc_table "forge_deploy" r
 
+let hash msg =
+  Blake2B.(to_bytes (hash_bytes [msg]))
+
+let sign sk op_b =
+  Ed25519.sign sk (hash op_b)
 
 let inject ?loc_table ?sk chain_id op =
   get_predecessor () >>= fun pred ->
@@ -700,7 +705,7 @@ let inject ?loc_table ?sk chain_id op =
       ] |> mk_json_obj
 
     | Some sk ->
-      let signature_b = Ed25519.sign sk op_b in
+      let signature_b = sign sk op_b in
       let signature = Ed25519.Signature.to_b58check signature_b in
       let signed_op_b = MBytes.concat op_b signature_b in
       let signed_op = Hex.of_string (MBytes.to_string signed_op_b) in
