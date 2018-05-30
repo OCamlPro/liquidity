@@ -66,7 +66,7 @@ OCaml.library("michelson-base",
      requires = [
               "michelson-deps";
               "ocplib-json-typed";
-              "ocplib-json-typed.bson"; (* data_encoding *)
+              "ocplib-json-typed-bson"; (* data_encoding *)
               "ocplib-endian";     (* data_encoding *)
               "ocplib-endian.bigstring";
               "calendar";
@@ -84,11 +84,7 @@ OCaml.library("michelson-base",
        "tezos_micheline.ml";
      ];
      requires = [
-              "michelson-deps";
               "michelson-base";
-              "ocplib-json-typed.bson"; (* data_encoding *)
-              "ocplib-endian";     (* data_encoding *)
-              "calendar";
      ];
    });
      
@@ -105,13 +101,7 @@ OCaml.library("michelson", ocaml + {
         pp_proto_client("michelson_v1_macros.ml");
      ];
      requires = [
-              "michelson-deps";
               "micheline";
-              "ocplib-json-typed.bson"; (* data_encoding *)
-              "ocplib-endian";     (* data_encoding *)
-              "ocplib-endian.bigstring";
-              "calendar";
-
      ];
    });
 

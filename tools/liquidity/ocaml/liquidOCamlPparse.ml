@@ -42,7 +42,7 @@ let preprocess sourcefile =
   match !Clflags.preprocessor with
     None -> sourcefile
   | Some pp ->
-      Timings.(time (Dash_pp sourcefile))
+      Profile.record "-pp"
         (call_external_preprocessor sourcefile) pp
 
 
@@ -170,7 +170,6 @@ let parse (type a) (kind : a ast_kind) lexbuf : a =
 let file_aux ppf ~tool_name inputfile (type a) parse_fun invariant_fun
              (kind : a ast_kind) =
   let ast_magic = magic_of_kind kind in
-  let source_file = !Location.input_name in
   let (ic, is_ast_file) = open_and_check_magic inputfile ast_magic in
   let ast =
     try
@@ -183,17 +182,15 @@ let file_aux ppf ~tool_name inputfile (type a) parse_fun invariant_fun
         (input_value ic : a)
       end else begin
         seek_in ic 0;
-        Location.input_name := inputfile;
         let lexbuf = Lexing.from_channel ic in
         Location.init lexbuf inputfile;
-        Timings.(time_call (Parser source_file)) (fun () ->
-          parse_fun lexbuf)
+        Profile.record_call "parser" (fun () -> parse_fun lexbuf)
       end
     with x -> close_in ic; raise x
   in
   close_in ic;
   let ast =
-    Timings.(time_call (Dash_ppx source_file)) (fun () ->
+    Profile.record_call "-ppx" (fun () ->
       apply_rewriters ~restore:false ~tool_name kind ast) in
   if is_ast_file || !Clflags.all_ppx <> [] then invariant_fun ast;
   ast
@@ -237,10 +234,10 @@ module InterfaceHooks = Misc.MakeHooks(struct
   end)
 
 let parse_implementation ppf ~tool_name sourcefile =
-  Timings.(time_call (Parsing sourcefile)) (fun () ->
+  Profile.record_call "parsing" (fun () ->
     parse_file ~tool_name Ast_invariants.structure
       ImplementationHooks.apply_hooks Structure ppf sourcefile)
 let parse_interface ppf ~tool_name sourcefile =
-  Timings.(time_call (Parsing sourcefile)) (fun () ->
+  Profile.record_call "parsing" (fun () ->
     parse_file ~tool_name Ast_invariants.signature
       InterfaceHooks.apply_hooks Signature ppf sourcefile)

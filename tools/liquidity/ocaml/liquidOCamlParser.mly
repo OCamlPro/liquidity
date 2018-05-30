@@ -2111,8 +2111,8 @@ with_constraints:
   | with_constraints AND with_constraint        { $3 :: $1 }
 ;
 with_constraint:
-    TYPE type_parameters label_longident with_type_binder core_type_no_attr
-    constraints
+    TYPE optional_type_parameters label_longident with_type_binder
+    core_type_no_attr constraints
       { Pwith_type
           (mkrhs $3 3,
            (Type.mk (mkrhs (Longident.last $3) 3)
@@ -2123,15 +2123,16 @@ with_constraint:
               ~loc:(symbol_rloc()))) }
     /* used label_longident instead of type_longident to disallow
        functor applications in type path */
-  | TYPE type_parameters label COLONEQUAL core_type_no_attr
+  | TYPE optional_type_parameters label_longident COLONEQUAL core_type_no_attr
       { Pwith_typesubst
-          (Type.mk (mkrhs $3 3)
+         (mkrhs $3 3,
+           (Type.mk (mkrhs (Longident.last $3) 3)
              ~params:$2
              ~manifest:$5
-             ~loc:(symbol_rloc())) }
+             ~loc:(symbol_rloc()))) }
   | MODULE mod_longident EQUAL mod_ext_longident
       { Pwith_module (mkrhs $2 2, mkrhs $4 4) }
-  | MODULE UIDENT COLONEQUAL mod_ext_longident
+  | MODULE mod_longident COLONEQUAL mod_ext_longident
       { Pwith_modsubst (mkrhs $2 2, mkrhs $4 4) }
 ;
 with_type_binder:
@@ -2254,9 +2255,10 @@ row_field:
 ;
 tag_field:
     name_tag OF opt_ampersand amper_type_list attributes
-      { Rtag ($1, add_info_attrs (symbol_info ()) $5, $3, List.rev $4) }
+      { Rtag (mkrhs $1 1, add_info_attrs (symbol_info ()) $5,
+               $3, List.rev $4) }
   | name_tag attributes
-      { Rtag ($1, add_info_attrs (symbol_info ()) $2, true, []) }
+      { Rtag (mkrhs $1 1, add_info_attrs (symbol_info ()) $2, true, []) }
 ;
 opt_ampersand:
     AMPERSAND                                   { true }
@@ -2291,7 +2293,7 @@ meth_list:
 ;
 field:
   label COLON poly_type_no_attr attributes
-    { (mkrhs $1 1, add_info_attrs (symbol_info ()) $4, $3) }
+    { Otag (mkrhs $1 1, add_info_attrs (symbol_info ()) $4, $3) }
 ;
 
 field_semi:
@@ -2301,7 +2303,7 @@ field_semi:
         | Some _ as info_before_semi -> info_before_semi
         | None -> symbol_info ()
       in
-      (mkrhs $1 1, add_info_attrs info ($4 @ $6), $3) }
+      ( Otag (mkrhs $1 1, add_info_attrs info ($4 @ $6), $3)) }
 ;
 
 label:

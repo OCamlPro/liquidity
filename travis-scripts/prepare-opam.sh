@@ -5,12 +5,13 @@
 wget -qq https://raw.github.com/ocaml/opam/master/shell/opam_installer.sh -O - | sh -s /usr/local/bin
 export OPAMYES=1
 
-# currently, we only target OCaml 4.05.0 because we reuse parser of OCaml 4.05.0
-opam init --comp 4.05.0
+# currently, we only target OCaml 4.06.1 because we reuse parser of OCaml
+opam init --comp 4.06.1
 
 eval `opam config env`
 
 opam update
 opam install ocp-build zarith uutf uri uchar stringext sexplib re lwt.3.3.0 ocplib-endian jsonm hex ezjsonm cstruct calendar ocurl nocrypto sodium
 opam pin add ocplib-json-typed --dev
+opam install ocplib-json-typed ocplib-json-typed-bson
 # TODO > other deps are missing ?
