@@ -341,7 +341,6 @@ let rec translate_const env exp =
      let pair_list = List.sort compare pair_list in
      let csts, tys = List.split pair_list in
      let tys = match tys with
-       | [] -> None
        | (Some ty1, Some ty2) :: tail ->
 
           List.iter (function
@@ -356,9 +355,7 @@ let rec translate_const env exp =
             | "BigMap" -> Some (Tbigmap (ty1, ty2))
             | _ -> assert false
           end
-       | _ ->
-          error_loc exp.pexp_loc
-            "underspecified map types"
+       | _ -> None
      in
      begin match map_kind with
        | "Map" -> CMap csts, tys
@@ -380,7 +377,6 @@ let rec translate_const env exp =
      let list = List.sort compare list in
      let csts, tys = List.split list in
      let tys = match tys with
-       | [] -> None
        | Some ty1 :: tail ->
           List.iter (function
                        Some ty1' when ty1' = ty1 -> ()
@@ -389,9 +385,7 @@ let rec translate_const env exp =
                               )
                     tail;
           Some (Tset ty1)
-       | _ ->
-          error_loc exp.pexp_loc
-            "underspecified set types"
+       | _ -> None
      in
      CSet csts, tys
 
@@ -870,8 +864,13 @@ from the head element. We use unit for that type. *)
                               match args with
                               | None -> mk (Const (loc, Tunit, CUnit))
                               | Some arg -> translate_code env arg )
-               with Not_found ->
-                 error_loc exp.pexp_loc ("unknown constructor : " ^ lid)
+               with Not_found -> match lid with
+                 | "Map" | "Set" | "BigMap" ->
+                   error_loc exp.pexp_loc @@ Printf.sprintf
+                     "constructor %s can only be used with a constant argument"
+                     lid
+                 | _ ->
+                   error_loc exp.pexp_loc ("unknown constructor : " ^ lid)
              end
 
           | { pexp_desc =
