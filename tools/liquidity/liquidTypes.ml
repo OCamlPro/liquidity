@@ -81,6 +81,17 @@ let size_of_type = function
   | Trecord (_, l) -> List.length l
   | _ -> raise (Invalid_argument "size_of_type")
 
+let comparable_type = function
+  | Tbool
+  | Tint
+  | Tnat
+  | Ttez
+  | Tstring
+  | Ttimestamp
+  | Tkey_hash -> true
+  | _ -> false
+
+
 type 'exp contract = {
     parameter : datatype;
     storage : datatype;

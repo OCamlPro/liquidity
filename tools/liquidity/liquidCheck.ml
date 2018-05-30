@@ -36,16 +36,7 @@ let error loc msg =
   LiquidLoc.raise_error ~loc ("Type error:  " ^^ msg ^^ "%!")
 
 let comparable_ty ty1 ty2 =
-  match ty1, ty2 with
-  (* | (Tint|Tnat), (Tint|Tnat) *)
-  | Tint, Tint
-  | Tnat, Tnat
-  | Ttez, Ttez
-  | Ttimestamp, Ttimestamp
-  | Tstring, Tstring
-  | Tbool, Tbool
-  | Tkey_hash, Tkey_hash -> true
-  | _ -> false
+  comparable_type ty1 && ty1 = ty2
 
 let error_not_comparable loc prim ty1 ty2 =
   error loc "arguments of %s not comparable: %s\nwith\n%s\n"
@@ -1054,16 +1045,16 @@ let rec type_of_const = function
     Ttuple (List.map type_of_const l)
   | CNone -> Toption Tunit
   | CSome c -> Toption (type_of_const c)
-  | CMap [] -> Tmap (Tunit, Tunit)
+  | CMap [] -> Tmap (Tint, Tunit)
   | CMap ((k,e) :: _) -> Tmap (type_of_const k, type_of_const e)
 
-  | CBigMap [] -> Tbigmap (Tunit, Tunit)
+  | CBigMap [] -> Tbigmap (Tint, Tunit)
   | CBigMap ((k,e) :: _) -> Tbigmap (type_of_const k, type_of_const e)
 
   | CList [] -> Tlist (Tunit)
   | CList (e :: _) -> Tlist (type_of_const e)
 
-  | CSet [] -> Tset (Tunit)
+  | CSet [] -> Tset (Tint)
   | CSet (e :: _) -> Tset (type_of_const e)
 
   | CLeft c -> Tor (type_of_const c, Tunit)

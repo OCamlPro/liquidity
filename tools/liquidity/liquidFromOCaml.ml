@@ -116,7 +116,7 @@ let default_args = [
 
 let error_loc loc msg =
   let loc = loc_of_loc loc in
-  LiquidLoc.raise_error ~loc "Unexpected syntax %s%!" msg
+  LiquidLoc.raise_error ~loc "Unexpected syntax: %s%!" msg
 
 let error_version loc msg =
   let loc = loc_of_loc loc in
@@ -159,12 +159,18 @@ let rec translate_type env ?expected typ =
       | _ -> None
     in
     Tlist (translate_type env ?expected param_type)
-  | { ptyp_desc = Ptyp_constr ({ txt = Lident "set" }, [param_type]) } ->
+  | { ptyp_desc = Ptyp_constr ({ txt = Lident "set" }, [param_type]);
+      ptyp_loc } ->
     let expected = match expected with
       | Some (Tset ty) -> Some ty
       | _ -> None
     in
-    Tset (translate_type env ?expected param_type)
+    let elt_type = translate_type env ?expected param_type in
+    if not @@ comparable_type elt_type then
+      error_loc ptyp_loc @@ Printf.sprintf
+        "type %S is not comparable, it cannot be used as element of a set"
+        (LiquidPrinter.Liquid.string_of_type elt_type);
+    Tset elt_type
 
   | { ptyp_desc = Ptyp_constr ({ txt = Lident "contract" },
                                [parameter_type; return_type]) } ->
@@ -184,22 +190,34 @@ let rec translate_type env ?expected typ =
          translate_type env ?expected:expected2 right_type)
 
   | { ptyp_desc = Ptyp_constr ({ txt = Lident "map" },
-                               [key_type; val_type]) } ->
+                               [key_type; val_type]);
+      ptyp_loc } ->
     let expected1, expected2 = match expected with
       | Some (Tmap (ty1, ty2)) -> Some ty1, Some ty2
       | _ -> None, None
     in
-    Tmap (translate_type env ?expected:expected1 key_type,
-          translate_type env ?expected:expected2 val_type)
+    let key_type = translate_type env ?expected:expected1 key_type in
+    if not @@ comparable_type key_type then
+      error_loc ptyp_loc @@ Printf.sprintf
+        "type %S is not comparable, it cannot be used as key in a map"
+        (LiquidPrinter.Liquid.string_of_type key_type);
+    let val_type = translate_type env ?expected:expected2 val_type in
+    Tmap (key_type, val_type)
 
   | { ptyp_desc = Ptyp_constr ({ txt = Lident "big_map" },
-                               [key_type; val_type]) } ->
+                               [key_type; val_type]);
+      ptyp_loc } ->
     let expected1, expected2 = match expected with
       | Some (Tbigmap (ty1, ty2)) -> Some ty1, Some ty2
       | _ -> None, None
     in
-    Tbigmap (translate_type env ?expected:expected1 key_type,
-             translate_type env ?expected:expected2 val_type)
+    let key_type = translate_type env ?expected:expected1 key_type in
+    if not @@ comparable_type key_type then
+      error_loc ptyp_loc @@ Printf.sprintf
+        "type %S is not comparable, it cannot be used as key in a big map"
+        (LiquidPrinter.Liquid.string_of_type key_type);
+    let val_type = translate_type env ?expected:expected2 val_type in
+    Tbigmap (key_type, val_type)
 
   | { ptyp_desc = Ptyp_arrow (_, parameter_type, return_type) } ->
     let expected1, expected2 = match expected with
