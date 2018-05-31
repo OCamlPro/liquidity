@@ -548,6 +548,9 @@ let interp contract =
     | MANAGER, x :: stack ->
        let x = node ins.loc (N_PRIM "MANAGER") [x] [seq] in
        x :: stack, x
+    | ADDRESS, x :: stack ->
+       let x = node ins.loc (N_PRIM "ADDRESS") [x] [seq] in
+       x :: stack, x
     | H, x :: stack ->
        let x = node ins.loc (N_PRIM "H") [x] [seq] in
        x :: stack, x

@@ -115,6 +115,7 @@ let rec emit_code ~expand code =
   | AMOUNT -> M_INS ("AMOUNT", name)
   | STEPS_TO_QUOTA -> M_INS ("STEPS_TO_QUOTA", name)
   | MANAGER -> M_INS ("MANAGER", name)
+  | ADDRESS -> M_INS ("ADDRESS", name)
   | CREATE_ACCOUNT -> M_INS ("CREATE_ACCOUNT", name)
   | H -> M_INS ("H", name)
   | HASH_KEY -> M_INS ("HASH_KEY", name)

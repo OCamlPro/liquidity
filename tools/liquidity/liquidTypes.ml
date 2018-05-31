@@ -185,6 +185,7 @@ type primitive =
   | Prim_check
   | Prim_default_account
   | Prim_set_delegate
+  | Prim_address
 
   | Prim_Cons
   | Prim_or
@@ -285,6 +286,7 @@ let () =
               "Contract.manager", Prim_manager;
               "Contract.create", Prim_create_contract;
               "Contract.set_delegate", Prim_set_delegate;
+              "Contract.address", Prim_address;
 
               "Account.create", Prim_create_account;
               "Account.default", Prim_default_account;
@@ -568,6 +570,7 @@ type 'a pre_michelson =
   | H
   | HASH_KEY
   | CHECK_SIGNATURE
+  | ADDRESS
 
   | CONS
   | OR

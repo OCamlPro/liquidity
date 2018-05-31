@@ -541,6 +541,9 @@ module Michelson = struct
     | MANAGER ->
       Printf.bprintf b "MANAGER";
       bprint_pre_name b name;
+    | ADDRESS ->
+      Printf.bprintf b "ADDRESS";
+      bprint_pre_name b name;
     | CREATE_ACCOUNT ->
       Printf.bprintf b "CREATE_ACCOUNT";
       bprint_pre_name b name;

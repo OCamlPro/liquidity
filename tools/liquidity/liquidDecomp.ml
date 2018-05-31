@@ -292,6 +292,7 @@ let decompile contract =
                  | "CREATE_ACCOUNT" -> Prim_create_account
                  | "CREATE_CONTRACT" -> Prim_create_contract
                  | "MANAGER" -> Prim_manager
+                 | "ADDRESS" -> Prim_address
                  | "XOR" -> Prim_xor
                  | "NOT" -> Prim_not
                  | "OR" -> Prim_or

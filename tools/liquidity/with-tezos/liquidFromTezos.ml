@@ -447,6 +447,8 @@ let rec convert_code env expr =
     mic_loc env index annot (DEFAULT_ACCOUNT)
   | Prim(index, "SET_DELEGATE", [], annot) ->
     mic_loc env index annot (SET_DELEGATE)
+  | Prim(index, "ADDRESS", [], annot) ->
+    mic_loc env index annot (ADDRESS)
 
   | _ -> unknown_expr env "convert_code" expr
 

@@ -174,6 +174,7 @@ let rec convert_code expand expr =
   | MEM -> prim "MEM" [] name
   | SOME -> prim "SOME" [] name
   | MANAGER -> prim "MANAGER" [] name
+  | ADDRESS -> prim "ADDRESS" [] name
   | SOURCE -> prim "SOURCE" [] name
   | MAP -> prim "MAP" [] name
   | OR -> prim "OR" [] name
