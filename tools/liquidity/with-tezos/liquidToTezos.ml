@@ -70,7 +70,7 @@ let rec convert_const ~loc expr =
                                args, None)
 
   | CNat n -> Micheline.Int (loc, LiquidPrinter.mic_of_integer n)
-  | CTez n -> Micheline.String (loc, LiquidPrinter.mic_of_tez n)
+  | CTez n -> Micheline.Int (loc, LiquidPrinter.mic_mutez_of_tez n)
            (*
   | CTez tez
     |CKey _|
@@ -91,7 +91,7 @@ let rec convert_type ~loc expr =
   match expr with
   | Tunit -> prim_type ~loc "unit" []
   | Ttimestamp -> prim_type ~loc "timestamp" []
-  | Ttez -> prim_type ~loc "tez" []
+  | Ttez -> prim_type ~loc "mutez" []
   | Tint -> prim_type ~loc "int" []
   | Tnat -> prim_type ~loc "nat" []
   | Tbool -> prim_type ~loc "bool" []
@@ -99,6 +99,8 @@ let rec convert_type ~loc expr =
   | Tkey_hash -> prim_type ~loc "key_hash" []
   | Tsignature -> prim_type ~loc "signature" []
   | Tstring -> prim_type ~loc "string" []
+  | Toperation -> prim_type ~loc "operation" []
+  | Taddress -> prim_type ~loc "address" []
   | Ttuple [x] -> assert false
   | Ttuple [] -> assert false
   | Ttuple [x;y] ->
@@ -106,8 +108,7 @@ let rec convert_type ~loc expr =
   | Ttuple (x :: tys) ->
      prim_type ~loc "pair" [convert_type ~loc x; convert_type ~loc (Ttuple tys)]
   | Tor (x,y) -> prim_type ~loc "or" [convert_type ~loc x; convert_type ~loc y]
-  | Tcontract (x,y) -> prim_type ~loc "contract" [convert_type ~loc x;
-                                             convert_type ~loc y]
+  | Tcontract x -> prim_type ~loc "contract" [convert_type ~loc x]
   | Tlambda (x,y) -> prim_type ~loc "lambda" [convert_type ~loc x;
                                          convert_type ~loc y]
   | Tclosure ((x,e),r) ->
@@ -173,8 +174,7 @@ let rec convert_code expand expr =
   | MEM -> prim "MEM" [] name
   | SOME -> prim "SOME" [] name
   | MANAGER -> prim "MANAGER" [] name
-  | SOURCE (ty1,ty2) ->
-     prim "SOURCE" [convert_type ty1; convert_type ty2] name
+  | SOURCE -> prim "SOURCE" [] name
   | MAP -> prim "MAP" [] name
   | OR -> prim "OR" [] name
   | LAMBDA (ty1, ty2, expr) ->
@@ -182,6 +182,7 @@ let rec convert_code expand expr =
   | REDUCE -> prim "REDUCE" [] name
   | COMPARE -> prim "COMPARE" [] name
   | PUSH (Tunit, CUnit) -> prim "UNIT" [] name
+  | PUSH (Tlist ty, CList []) -> prim "NIL" [convert_type ty] name
   | TRANSFER_TOKENS -> prim "TRANSFER_TOKENS" [] name
   | PUSH (ty, cst) -> prim "PUSH" [ convert_type ty;
                                     convert_const cst ] name
@@ -254,20 +255,16 @@ let rec convert_code expand expr =
 
 let convert_contract ~expand c =
   let loc = LiquidLoc.noloc in
-  let ret_type = convert_type ~loc c.return in
   let arg_type = convert_type ~loc c.parameter in
   let storage_type = convert_type ~loc c.storage in
   let code = convert_code expand c.code in
-  let r = Micheline.Prim(loc, "return", [ret_type], None) in
   let p = Micheline.Prim(loc, "parameter", [arg_type], None) in
   let s = Micheline.Prim(loc, "storage", [storage_type], None) in
   let c = Micheline.Prim((loc, None), "code", [code], None) in
 
-  let mr, tr = Micheline.extract_locations r in
   let mp, tp = Micheline.extract_locations p in
   let ms, ts = Micheline.extract_locations s in
-  let code_loc_offset =
-    List.length tr + List.length tp + List.length ts + 1 in
+  let code_loc_offset = List.length tp + List.length ts + 1 in
 
   let mc, loc_table = Micheline.extract_locations c in
   let loc_table = List.map (fun (i, l) ->
@@ -281,7 +278,7 @@ let convert_contract ~expand c =
         | Some s -> Format.eprintf "%d -> %a -> %S@." i LiquidLoc.print_loc l s
       ) loc_table;
 
-  [mr; mp; ms; mc], loc_table
+  [mp; ms; mc], loc_table
 
 let print_program comment_of_loc ppf (c, loc_table) =
   let c = List.map

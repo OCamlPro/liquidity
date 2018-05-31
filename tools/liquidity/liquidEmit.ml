@@ -48,6 +48,8 @@ let rec emit_code ~expand code =
   (* | PUSH (ty, CMap []) -> M_INS_EXP ("EMPTY_MAP", [ty], [], name)
    * | PUSH (ty, CSet []) -> M_INS_EXP ("EMPTY_SET", [ty], [], name) *)
 
+  | PUSH (Tunit, CUnit) -> M_INS ("UNIT", name)
+  | PUSH (Tlist ty, CList []) -> M_INS_EXP ("NIL", [ty], [], name)
   | PUSH (ty, cst) -> M_INS_CST ("PUSH", ty, cst, name)
   | DIP (0, exp) -> assert false
   | DIP (1, exp) -> M_INS_EXP ("DIP", [], [emit_code ~expand exp], name)
@@ -134,7 +136,7 @@ let rec emit_code ~expand code =
   | EDIV -> M_INS ("EDIV", name)
   | LSL -> M_INS ("LSL", name)
   | LSR -> M_INS ("LSR", name)
-  | SOURCE (arg_ty, res_ty) -> M_INS_EXP ("SOURCE", [arg_ty; res_ty], [], name)
+  | SOURCE -> M_INS ("SOURCE", name)
   | MOD -> M_INS ("MOD", name)
   | DIV -> M_INS ("DIV", name)
   | CREATE_CONTRACT -> M_INS ("CREATE_CONTRACT", name)

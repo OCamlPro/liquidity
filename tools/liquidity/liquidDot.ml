@@ -68,19 +68,16 @@ let to_string contract =
           | N_VAR _
           | N_CONST (_, _)
           | N_PRIM _
-          | N_SOURCE _
           | N_LEFT _
           | N_RIGHT _
-          | N_TRANSFER_RESULT _
           | N_ABS
+          | N_TRANSFER
             -> []
 
           | N_LOOP_END (x,y,z)
           | N_FOLD_END (x,y,z)
           | N_IF_CONS (x, y, z)-> [x;y;z]
 
-
-          | N_TRANSFER (x,y)
           | N_LOOP_RESULT (x,y,_)
           | N_FOLD_RESULT (x,y,_)
           | N_IF_SOME (x,y)

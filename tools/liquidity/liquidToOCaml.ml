@@ -89,6 +89,8 @@ let rec convert_type ~abbrev ?name ty =
   | Tkey_hash -> typ_constr "key_hash" []
   | Tsignature -> typ_constr "signature" []
   | Tstring -> typ_constr "string" []
+  | Toperation -> typ_constr "operation" []
+  | Taddress -> typ_constr "address" []
   | Tsum (name, _)
   | Trecord (name, _) -> typ_constr name []
   | Tfail -> assert false
@@ -97,14 +99,14 @@ let rec convert_type ~abbrev ?name ty =
     with Not_found ->
     let caml_ty, t_name = match ty with
     | Ttez | Tunit | Ttimestamp | Tint | Tnat | Tbool
-    | Tkey | Tkey_hash | Tsignature | Tstring
+    | Tkey | Tkey_hash | Tsignature | Tstring | Toperation | Taddress
     | Tfail | Trecord _ | Tsum _ -> assert false
     | Ttuple args ->
       Typ.tuple (List.map (convert_type ~abbrev) args), "pair_t"
     | Tor (x,y) ->
       typ_constr "variant" [convert_type ~abbrev x; convert_type ~abbrev y], "variant_t"
-    | Tcontract (x,y) ->
-      typ_constr "contract" [convert_type ~abbrev x;convert_type ~abbrev y], "contract_t"
+    | Tcontract x ->
+      typ_constr "contract" [convert_type ~abbrev x], "contract_t"
     | Tlambda (x,y) ->
       Typ.arrow Nolabel (convert_type ~abbrev x) (convert_type ~abbrev y), "lambda_t"
     | Tclosure ((x,e),r) ->
@@ -158,6 +160,7 @@ let rec convert_const expr =
   | CKey n -> Exp.constant (Pconst_integer (n, Some '\234'))
   | CSignature n -> Exp.constant (Pconst_integer (n, Some '\235'))
   | CContract n -> Exp.constant (Pconst_integer (n, Some '\236'))
+  | CAddress n -> Exp.constant (Pconst_integer (n, Some '\236'))
 
   | CList [] -> Exp.construct (lid "[]") None
   | CList (head :: tail) ->
@@ -237,6 +240,8 @@ let rec convert_code ~abbrev expr =
       | Ttez
       | Tbool
       | Tsignature
+      | Taddress
+      | Toperation
       | Tkey
       | Tkey_hash -> convert_const cst
       | _ ->
@@ -338,27 +343,13 @@ let rec convert_code ~abbrev expr =
                            (convert_code ~abbrev ifcons);
                 ]
 
-  | LetTransfer ( var_storage, var_result,
-                  loc,
-                  contract_exp,
-                  amount_exp,
-                  storage_exp,
-                  arg_exp,
-                  body_exp) ->
-     Exp.let_ ~loc:(loc_of_loc loc) Nonrecursive [
-                Vb.mk (Pat.tuple [
-                           pat_of_name ~loc var_result;
-                           pat_of_name ~loc var_storage;
-                      ])
-                      (Exp.apply (Exp.ident (lid "Contract.call"))
-                                 [
-                                   Nolabel, convert_code ~abbrev contract_exp;
-                                   Nolabel, convert_code ~abbrev amount_exp;
-                                   Nolabel, convert_code ~abbrev storage_exp;
-                                   Nolabel, convert_code ~abbrev arg_exp;
-                      ])
-              ]
-              (convert_code ~abbrev body_exp)
+  | Transfer (loc, contract_exp, amount_exp, arg_exp) ->
+    Exp.apply ~loc:(loc_of_loc loc) (Exp.ident (lid "Contract.call"))
+      [
+        Nolabel, convert_code ~abbrev contract_exp;
+        Nolabel, convert_code ~abbrev amount_exp;
+        Nolabel, convert_code ~abbrev arg_exp;
+      ]
 
   | Loop (var_arg, loc, body_exp, arg_exp) ->
     Exp.apply ~loc:(loc_of_loc loc)
@@ -442,7 +433,8 @@ let rec convert_code ~abbrev expr =
   | Constructor (loc, Constr id, { desc = Const (_loc', Tunit, CUnit) } ) ->
      Exp.construct ~loc:(loc_of_loc loc) (lid id) None
   | Constructor (loc, Constr id, arg) ->
-     Exp.construct ~loc:(loc_of_loc loc) (lid id) (Some (convert_code ~abbrev arg))
+     Exp.construct ~loc:(loc_of_loc loc) (lid id)
+       (Some (convert_code ~abbrev arg))
   | Constructor (loc, Left right_ty, arg) ->
      Exp.constraint_ ~loc:(loc_of_loc loc)
        (Exp.construct (lid "Left")
@@ -457,18 +449,11 @@ let rec convert_code ~abbrev expr =
                          (convert_code ~abbrev arg)))
        (Typ.constr (lid "variant")
                    [convert_type ~abbrev left_ty; Typ.any ()])
-  | Constructor (loc, Source (from_ty, to_ty), arg) ->
-     Exp.constraint_ ~loc:(loc_of_loc loc)
-       (Exp.construct (lid "Source") None)
-       (Typ.constr (lid "contract")
-                   [convert_type ~abbrev from_ty;
-                    convert_type ~abbrev to_ty])
 
 let structure_of_contract ?(abbrev=true) contract =
   clean_abbrevs ();
   let storage_caml = convert_type ~abbrev ~name:"storage" contract.storage in
   ignore (convert_type ~abbrev ~name:"parameter" contract.parameter);
-  ignore (convert_type ~abbrev ~name:"return" contract.return);
   let code = convert_code ~abbrev contract.code in
   let contract_caml = Str.extension (
       { txt = "entry"; loc = !default_loc },
@@ -486,9 +471,7 @@ let structure_of_contract ?(abbrev=true) contract =
                        (pat_of_name "storage")
                        storage_caml
                     )
-                    (Exp.constraint_
-                       code (Typ.tuple [convert_type ~abbrev contract.return;
-                                        storage_caml]))
+                    code
                  ))
           ]
       ])

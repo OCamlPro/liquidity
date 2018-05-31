@@ -74,18 +74,11 @@ let rec bv code =
                         (StringSet.remove head_pat
                                           (StringSet.remove tail_pat
                                                             (bv ifcons))))
-  | LetTransfer ( var_storage, var_result,
-                  loc,
-                  contract_exp,
-                  amount_exp,
-                  storage_exp,
-                  arg_exp,
-                  body_exp) ->
+  | Transfer (loc, contract_exp, amount_exp, arg_exp) ->
      List.fold_left (fun set exp ->
          StringSet.union set (bv exp)
        ) StringSet.empty [contract_exp;
                           amount_exp;
-                          storage_exp;
                           arg_exp]
 
 
@@ -253,34 +246,18 @@ let rec bound code =
      let desc = MatchList(exp, loc, head_pat, tail_pat, ifcons, ifnil) in
      mk desc code bv
 
-  | LetTransfer ( var_storage, var_result,
-                  loc,
-                  contract_exp,
-                  amount_exp,
-                  storage_exp,
-                  arg_exp,
-                  body_exp) ->
+  | Transfer (loc, contract_exp, amount_exp, arg_exp) ->
      let contract_exp = bound contract_exp in
      let amount_exp = bound amount_exp in
-     let storage_exp = bound storage_exp in
      let arg_exp = bound arg_exp in
-     let body_exp = bound body_exp in
-
      let bv =
        List.fold_left (fun set exp ->
            StringSet.union set (exp.bv)
          ) StringSet.empty [contract_exp;
                             amount_exp;
-                            storage_exp;
                             arg_exp]
      in
-     let desc = LetTransfer(var_storage, var_result,
-                            loc,
-                            contract_exp,
-                            amount_exp,
-                            storage_exp,
-                            arg_exp,
-                            body_exp) in
+     let desc = Transfer (loc, contract_exp, amount_exp, arg_exp) in
      mk desc code bv
 
   | Loop (var_arg, loc, body_exp, arg_exp) ->

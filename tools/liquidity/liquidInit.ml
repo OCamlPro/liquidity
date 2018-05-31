@@ -30,7 +30,7 @@ let rec subst_empty_big_map code =
       LiquidLoc.raise_error ~loc
         "Only use empty big map constants in storage initializer"
     | Const _ -> desc
-    | LetTransfer _ -> assert false
+    | Transfer _ -> assert false
     | Var _
     | Failwith _ -> desc
     | SetVar (s, loc, l, e) ->
@@ -130,7 +130,6 @@ let rec subst_empty_big_map code =
 
 let tmp_contract_of_init ~loc (args, code) storage_ty =
   let storage = storage_ty in
-  let return = Tunit in
   let parameter_var = mk (Var ("parameter", loc, [])) () in
   let parameter, code = match args with
     | [] -> Tunit, code
@@ -157,7 +156,7 @@ let tmp_contract_of_init ~loc (args, code) storage_ty =
   let code = subst_empty_big_map code in
   let code =
     mk(Apply (Prim_tuple, loc, [ c_unit ~loc; code ])) () in
-  { parameter; storage; return; code }
+  { parameter; storage; code }
 
 let compile_liquid_init env contract ((args, sy_init) as init) =
   let loc = LiquidCheck.loc_exp sy_init in

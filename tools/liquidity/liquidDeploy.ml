@@ -40,9 +40,9 @@ type trace = trace_item array
 module type S = sig
   type 'a t
   val run : from -> string -> string ->
-    (LiquidTypes.const * LiquidTypes.const * big_map_diff option) t
+    (LiquidTypes.const * big_map_diff option) t
   val run_debug : from -> string -> string ->
-    (LiquidTypes.const * LiquidTypes.const * big_map_diff option * trace) t
+    (LiquidTypes.const * big_map_diff option * trace) t
   val forge_deploy : ?delegatable:bool -> ?spendable:bool ->
     from -> string list -> string t
   val deploy : ?delegatable:bool -> ?spendable:bool ->
@@ -392,7 +392,7 @@ let run_pre ?(debug=false)
   let r = Ezjsonm.from_string r in
   try
     let storage_r = Ezjsonm.find r ["storage"] in
-    let result_r = Ezjsonm.find r ["output"] in
+    let operations_r = Ezjsonm.find r ["operations"] in
     let big_map_diff_r =
       try Some (Ezjsonm.find r ["big_map_diff"])
       with Not_found -> None
@@ -402,7 +402,6 @@ let run_pre ?(debug=false)
       else Some (Ezjsonm.find r ["trace"])
     in
     let storage_expr = LiquidToTezos.const_of_ezjson storage_r in
-    let result_expr = LiquidToTezos.const_of_ezjson result_r in
     let big_map_diff_expr = match big_map_diff_r with
       | None -> None
       | Some json_diff ->
@@ -437,9 +436,7 @@ let run_pre ?(debug=false)
       LiquidFromTezos.convert_const_type env storage_expr
         syntax_contract.storage
     in
-    let result =
-      LiquidFromTezos.convert_const_type env result_expr syntax_contract.return
-    in
+    (* TODO parse returned operations *)
     let big_map_diff =
       match big_map_diff_expr, get_big_map_type syntax_contract with
       | None, _ -> None
@@ -469,7 +466,7 @@ let run_pre ?(debug=false)
         reset_memo_stack_code ();
         Some (Array.of_list l)
     in
-    return (result, storage, big_map_diff, trace)
+    return (storage, big_map_diff, trace)
   with Not_found ->
     raise_response_error ~loc_table "run" r
 
@@ -490,13 +487,13 @@ let run ~debug liquid input_string storage_string =
 let run_debug liquid input_string storage_string =
   run ~debug:true liquid input_string storage_string
   >>= function
-  | (res, sto, big_diff, Some trace) -> Lwt.return (res, sto, big_diff, trace)
+  | (sto, big_diff, Some trace) -> Lwt.return (sto, big_diff, trace)
   | _ -> assert false
 
 let run liquid input_string storage_string =
   run ~debug:false liquid input_string storage_string
-  >>= fun (res, sto, big_diff, _) ->
-  Lwt.return (res, sto, big_diff)
+  >>= fun (sto, big_diff, _) ->
+  Lwt.return (sto, big_diff)
 
 
 let get_counter source =
@@ -603,7 +600,7 @@ let forge_deploy ?head ?source ?public_key
 
       run_pre env syntax_c c (Some source)
         eval_input_parameter eval_input_storage
-      >>= fun (_, eval_init_storage, big_map_diff, _) ->
+      >>= fun (eval_init_storage, big_map_diff, _) ->
       (* Add elements of big map *)
       let eval_init_storage = match eval_init_storage, big_map_diff with
         | CTuple (CBigMap m :: rtuple), Some l ->

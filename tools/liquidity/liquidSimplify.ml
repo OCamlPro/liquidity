@@ -106,19 +106,11 @@ let compute decompile code to_inline =
        let args = List.map iter args in
        { exp with desc = Apply(prim, loc, args) }
 
-    | LetTransfer (storage, result, loc,
-                   contract_exp, tez_exp,
-                   storage_exp, arg_exp,
-                   body_exp) ->
+    | Transfer (loc, contract_exp, tez_exp, arg_exp) ->
        let contract_exp = iter contract_exp in
        let tez_exp = iter tez_exp in
-       let storage_exp = iter storage_exp in
        let arg_exp = iter arg_exp in
-       let body_exp = iter body_exp in
-       { exp with desc = LetTransfer(storage, result, loc,
-                                     contract_exp, tez_exp,
-                                     storage_exp, arg_exp,
-                                     body_exp) }
+       { exp with desc = Transfer (loc, contract_exp, tez_exp, arg_exp) }
 
     | Lambda (arg_name, arg_type, loc, body_exp, res_type) ->
       let body_exp = iter body_exp in

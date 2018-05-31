@@ -41,6 +41,7 @@ type const =
 
   | CKey_hash of string
   | CContract of string
+  | CAddress of string
 
   | CRecord of (string * const) list
   | CConstr of string * const
@@ -57,6 +58,8 @@ type const =
   | Tkey
   | Tkey_hash
   | Tsignature
+  | Toperation
+  | Taddress
 
   | Ttuple of datatype list
 
@@ -66,7 +69,7 @@ type const =
 
   | Tmap of datatype * datatype
   | Tbigmap of datatype * datatype
-  | Tcontract of datatype * datatype
+  | Tcontract of datatype
   | Tor of datatype * datatype
   | Tlambda of datatype * datatype
 
@@ -88,14 +91,14 @@ let comparable_type = function
   | Ttez
   | Tstring
   | Ttimestamp
-  | Tkey_hash -> true
+  | Tkey_hash
+  | Taddress -> true
   | _ -> false
 
 
 type 'exp contract = {
     parameter : datatype;
     storage : datatype;
-    return : datatype;
     code : 'exp;
   }
 
@@ -136,7 +139,7 @@ type primitive =
   | Prim_gas
   | Prim_Left
   | Prim_Right
-  | Prim_Source
+  | Prim_source
   | Prim_eq
   | Prim_neq
   | Prim_lt
@@ -237,10 +240,10 @@ let () =
               "Current.time", Prim_now;
               "Current.amount", Prim_amount;
               "Current.gas", Prim_gas;
+              "Current.source", Prim_source;
 
               "Left", Prim_Left;
               "Right", Prim_Right;
-              "Source", Prim_Source;
               "=", Prim_eq;
               "<>", Prim_neq;
               "<", Prim_lt;
@@ -379,7 +382,6 @@ type constructor =
   Constr of string
 | Left of datatype
 | Right of datatype
-| Source of datatype * datatype
 
 type pattern =
   | CConstr of string * string list
@@ -402,13 +404,10 @@ and ('ty, 'a) exp_desc =
   | Apply of primitive * location * ('ty, 'a) exp list
   | If of ('ty, 'a) exp * ('ty, 'a) exp * ('ty, 'a) exp
   | Seq of ('ty, 'a) exp * ('ty, 'a) exp
-  | LetTransfer of (* storage *) string * (* result *) string
-                                 * location
-                   * (* contract_ *) ('ty, 'a) exp
-                   * (* tez_ *) ('ty, 'a) exp
-                   * (* storage_ *) ('ty, 'a) exp
-                   * (* arg_ *) ('ty, 'a) exp
-                   * ('ty, 'a) exp (* body *)
+  | Transfer of location
+                * (* contract_ *) ('ty, 'a) exp
+                * (* tez_ *) ('ty, 'a) exp
+                * (* arg_ *) ('ty, 'a) exp
   | MatchOption of ('ty, 'a) exp  (* argument *)
                      * location
                      * ('ty, 'a) exp  (* ifnone *)
@@ -473,8 +472,6 @@ let mk =
 
       | Failwith _ -> true, false
 
-      | LetTransfer _ -> true, true
-
       | SetVar (_, _, _, e)
       | Constructor (_, _, e)
       | Lambda (_, _, _, e, _) -> e.fail, e.transfer
@@ -482,6 +479,10 @@ let mk =
       | Seq (e1, e2)
       | Let (_, _, e1, e2)
       | Loop (_, _, e1, e2) -> e1.fail || e2.fail, e1.transfer || e2.transfer
+
+      | Transfer (_, e1, e2, e3) ->
+        e1.fail || e2.fail || e3.fail,
+        true
 
       | If (e1, e2, e3)
       | MatchOption (e1, _, e2, _, e3)
@@ -585,7 +586,7 @@ type 'a pre_michelson =
   | LSL
   | LSR
 
-  | SOURCE of datatype * datatype
+  | SOURCE
 
   | SIZE
   | DEFAULT_ACCOUNT
@@ -696,8 +697,7 @@ type node = {
    | N_IF_RIGHT of node * node
    | N_IF_PLUS of node * node
    | N_IF_MINUS of node * node
-   | N_TRANSFER of node * node
-   | N_TRANSFER_RESULT of int
+   | N_TRANSFER
    | N_CONST of datatype * const
    | N_PRIM of string
    | N_FAIL of string option
@@ -723,7 +723,6 @@ type node = {
    | N_END
    | N_LEFT of datatype
    | N_RIGHT of datatype
-   | N_SOURCE of datatype * datatype
    | N_ABS
 
 type node_exp = node * node
@@ -746,7 +745,6 @@ let noloc = { loc_file = "<unspecified>"; loc_pos = None }
 let dummy_syntax_contract : syntax_contract = {
     parameter = Tunit;
     storage = Tunit;
-    return = Tunit;
     code = mk (Const (noloc, Tunit, CUnit)) ();
   }
 

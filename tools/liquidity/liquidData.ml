@@ -29,7 +29,8 @@ let rec default_const = function
     CSignature
       "96c724f3eab3da9eb0002caa5456aef9a7c716e6d6d20c07f3b3659369e7dcf5\
        b66a5a8c33dac317fba6174217140b919493acd063c3800b825890a557c39e0a"
-  | Tcontract (_, _) -> CContract "TZ1tPz6tdaY2XN9ZzpDQu9nFTCX22GivUDR7"
+  | Tcontract _ -> CContract "TZ1tPz6tdaY2XN9ZzpDQu9nFTCX22GivUDR7"
+  | Taddress -> CAddress "TZ1tPz6tdaY2XN9ZzpDQu9nFTCX22GivUDR7"
   | Ttuple l ->
     CTuple (List.map default_const l)
   | Toption ty -> CSome (default_const ty)
@@ -51,7 +52,8 @@ let rec default_const = function
   | Tsum (_, [])
   | Tfail
   | Tclosure _
-  | Tlambda _ -> raise Not_found
+  | Tlambda _
+  | Toperation -> raise Not_found
 
 let rec translate_const_exp loc (exp : encoded_exp) =
   match exp.desc with
@@ -80,7 +82,7 @@ let rec translate_const_exp loc (exp : encoded_exp) =
   | SetVar (_, _, _, _)
   | If (_, _, _)
   | Seq (_, _)
-  | LetTransfer (_, _, _, _, _, _, _, _)
+  | Transfer (_, _, _, _)
   | MatchOption (_, _, _, _, _)
   | MatchNat (_, _, _, _, _, _)
   | MatchList (_, _, _, _, _, _)

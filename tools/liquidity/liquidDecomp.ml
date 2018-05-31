@@ -36,6 +36,8 @@ let const_name_of_datatype = function
   | Tor _ -> "or"
   | Tlambda _ | Tclosure _  -> "fun"
   | Tfail -> "fail"
+  | Toperation -> "op"
+  | Taddress -> "addr"
 
 
 let vars_nums = Hashtbl.create 101
@@ -76,11 +78,9 @@ let rec var_of node =
       | N_IF_MINUS _ -> Printf.sprintf "if_minus%d" node.num
       | N_LEFT _ -> Printf.sprintf "left%d" node.num
       | N_RIGHT _ -> Printf.sprintf "right%d" node.num
-      | N_TRANSFER _ -> Printf.sprintf "transfer%d" node.num
-      | N_TRANSFER_RESULT _ -> Printf.sprintf "transfer_res%d" node.num
+      | N_TRANSFER -> Printf.sprintf "transfer%d" node.num
       | N_IF_RESULT _ | N_IF_END_RESULT _ | N_LOOP_RESULT _ ->
         Printf.sprintf "res%d" node.num
-      | N_SOURCE _ -> Printf.sprintf "source%d" node.num
       | N_FAIL _ -> Printf.sprintf "fail%d" node.num
       | N_LOOP _ -> Printf.sprintf "loop%d" node.num
       | N_LAMBDA _ -> Printf.sprintf "fun%d" node.num
@@ -264,6 +264,7 @@ let decompile contract =
             | "BALANCE", [] -> Prim_balance, [unit ~loc]
             | "AMOUNT",[] -> Prim_amount, [unit ~loc]
             | "STEPS_TO_QUOTA",[] -> Prim_gas, [unit ~loc]
+            | "SOURCE",[] -> Prim_source, [unit ~loc]
             | prim, args ->
                let prim =
                  match prim with
@@ -312,8 +313,6 @@ let decompile contract =
           mklet node (Constructor(loc, Left right_ty, arg_of arg))
        | N_RIGHT left_ty, [arg] ->
           mklet node (Constructor(loc, Right left_ty, arg_of arg))
-       | N_SOURCE (from_ty, to_ty), [] ->
-          mklet node (Constructor(loc, Source (from_ty, to_ty), unit ~loc))
 
        | N_END, [ arg ] -> arg_of arg
 
@@ -324,10 +323,11 @@ let decompile contract =
          mk (Failwith (s, loc))
 
        | N_CONST (ty, cst), [] ->
-          let cst = LiquidCheck.check_const_type ~from_mic:true
-                      ~to_tez:LiquidPrinter.tez_of_mic loc ty cst
-          in
-          mklet node (Const (loc, ty, cst))
+         let to_tez s = LiquidPrinter.tez_of_mic_mutez @@ Z.of_string s in
+         let cst = LiquidCheck.check_const_type ~from_mic:true ~to_tez
+             loc ty cst
+         in
+         mklet node (Const (loc, ty, cst))
 
        | N_IF ({ kind = N_IF_END (_, then_node) },
                { kind = N_IF_END (_, else_node) }), [arg] ->
@@ -423,16 +423,9 @@ let decompile contract =
           mklet node desc
        | N_LAMBDA_END _, [arg] -> arg_of arg
 
-       | N_TRANSFER (res_storage, result),
-         [contract; amount; arg_storage; arg] ->
-          mk
-            (LetTransfer (var_of res_storage, var_of result,
-                          loc,
-                          arg_of contract,
-                          arg_of amount,
-                          arg_of arg_storage,
-                          arg_of arg,
-                          decompile_next node))
+       | N_TRANSFER, [contract; amount; arg] ->
+         mklet node
+           (Transfer (loc, arg_of contract, arg_of amount, arg_of arg))
 
        | (
          N_LAMBDA_END _
@@ -444,7 +437,6 @@ let decompile contract =
        | N_CONST _
        | N_END
        | N_UNKNOWN _
-       | N_SOURCE _
        | N_LEFT _
        | N_RIGHT _
        | N_ABS
@@ -463,7 +455,6 @@ let decompile contract =
        | N_IF_RIGHT (_, _)
        | N_IF_PLUS (_, _)
        | N_IF_MINUS (_, _)
-       | N_TRANSFER_RESULT _
        | N_LOOP_BEGIN _
        | N_LOOP_ARG (_, _)
        | N_LOOP_RESULT (_, _, _)

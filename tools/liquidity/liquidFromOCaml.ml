@@ -109,7 +109,6 @@ let loc_of_loc loc =
 let ppf = Format.err_formatter
 
 let default_args = [
-    "return", Tunit;
     "storage", Tunit;
     "parameter", Tunit;
   ]
@@ -146,6 +145,8 @@ let rec translate_type env ?expected typ =
   | { ptyp_desc = Ptyp_constr ({ txt = Lident "key" }, []) } -> Tkey
   | { ptyp_desc = Ptyp_constr ({ txt = Lident "key_hash" }, []) } -> Tkey_hash
   | { ptyp_desc = Ptyp_constr ({ txt = Lident "signature" }, []) } -> Tsignature
+  | { ptyp_desc = Ptyp_constr ({ txt = Lident "operation" }, []) } -> Toperation
+  | { ptyp_desc = Ptyp_constr ({ txt = Lident "address" }, []) } -> Taddress
 
   | { ptyp_desc = Ptyp_constr ({ txt = Lident "option" }, [param_type]) } ->
     let expected = match expected with
@@ -173,13 +174,12 @@ let rec translate_type env ?expected typ =
     Tset elt_type
 
   | { ptyp_desc = Ptyp_constr ({ txt = Lident "contract" },
-                               [parameter_type; return_type]) } ->
-    let expected1, expected2 = match expected with
-      | Some (Tcontract (ty1, ty2)) -> Some ty1, Some ty2
-      | _ -> None, None
+                               [parameter_type]) } ->
+    let expected = match expected with
+      | Some (Tcontract ty) -> Some ty
+      | _ -> None
     in
-    Tcontract (translate_type env ?expected:expected1 parameter_type,
-               translate_type env ?expected:expected2 return_type)
+    Tcontract (translate_type env ?expected:expected parameter_type)
   | { ptyp_desc = Ptyp_constr ({ txt = Lident "variant" },
                                [left_type; right_type]) } ->
     let expected1, expected2 = match expected with
@@ -220,12 +220,12 @@ let rec translate_type env ?expected typ =
     Tbigmap (key_type, val_type)
 
   | { ptyp_desc = Ptyp_arrow (_, parameter_type, return_type) } ->
-    let expected1, expected2 = match expected with
-      | Some (Tcontract (ty1, ty2)) -> Some ty1, Some ty2
-      | _ -> None, None
+    let expected = match expected with
+      | Some (Tcontract ty) -> Some ty
+      | _ -> None
     in
-    Tlambda (translate_type env ?expected:expected1 parameter_type,
-             translate_type env ?expected:expected2 return_type)
+    Tlambda (translate_type env ?expected:expected parameter_type,
+             translate_type env return_type)
 
   | { ptyp_desc = Ptyp_tuple types } ->
     let expecteds = match expected with
@@ -612,50 +612,18 @@ let rec translate_code env exp =
     | { pexp_desc = Pexp_ifthenelse (e1, e2, Some e3) } ->
        If (translate_code env e1, translate_code env e2, translate_code env e3)
     | { pexp_desc =
-          Pexp_let (
-              Nonrecursive,
-              [
-                {
-                  pvb_pat =
-                    {
-                      ppat_desc =
-                        Ppat_tuple [
-                          { ppat_desc = (Ppat_any | Ppat_var _) as res};
-                          { ppat_desc = (Ppat_any | Ppat_var _) as sto};
-                        ]
-                    };
-                  pvb_expr =
-                    { pexp_desc =
-                        Pexp_apply (
-                            { pexp_desc = Pexp_ident
-                                            { txt =
-                                                Ldot(Lident "Contract",
-                                                     "call") } },
-                            [
-                              Nolabel, contract_exp;
-                              Nolabel, tez_exp;
-                              Nolabel, storage_exp;
-                              Nolabel, arg_exp;
-                    ]) }
-                }
-              ], body) } ->
-       let result = match res with
-         | Ppat_any -> "_"
-         | Ppat_var { txt = result } -> result
-         | _ -> assert false
-       in
-       let storage_name = match sto with
-         | Ppat_any -> "_"
-         | Ppat_var { txt = storage_name } -> storage_name
-         | _ -> assert false
-       in
-       LetTransfer (storage_name, result,
-                    loc,
-                    translate_code env contract_exp,
-                    translate_code env tez_exp,
-                    translate_code env storage_exp,
-                    translate_code env arg_exp,
-                    translate_code env body)
+          Pexp_apply (
+            { pexp_desc = Pexp_ident
+                  { txt = Ldot(Lident "Contract", "call") } },
+            [
+              Nolabel, contract_exp;
+              Nolabel, tez_exp;
+              Nolabel, arg_exp;
+            ]) } ->
+      Transfer (loc,
+                translate_code env contract_exp,
+                translate_code env tez_exp,
+                translate_code env arg_exp)
 
     | { pexp_desc = Pexp_let (Nonrecursive, [ {
         pvb_pat = pat;
@@ -921,21 +889,6 @@ from the head element. We use unit for that type. *)
                           | None -> mk (Const (loc, Tunit, CUnit))
                           | Some arg -> translate_code env arg )
 
-
-          | { pexp_desc =
-                Pexp_constraint (
-                    { pexp_desc =
-                        Pexp_construct (
-                            { txt = Lident "Source" }, None) },
-                    { ptyp_desc = Ptyp_constr (
-                                      { txt = Lident "contract" },
-                                      [ from_ty; to_ty ]
-            )}) } ->
-             Constructor( loc,
-                          Source (translate_type env from_ty,
-                                  translate_type env to_ty
-                                 ), mk (Const (loc, Tunit, CUnit)) )
-
           (* TODO *)
           | { pexp_desc = Pexp_tuple exps } ->
             let exps = List.map (translate_code env) exps in
@@ -1035,7 +988,6 @@ let rec translate_head env ext_funs head_exp args =
                         Ppat_var { txt =
                                      ( "parameter"
                                      | "storage"
-                                     (*  | "return" *)
                                      ) as arg} },
                     arg_type)
             },
@@ -1044,28 +996,21 @@ let rec translate_head env ext_funs head_exp args =
        ((arg, translate_type env arg_type) :: args)
 
   | { pexp_desc = Pexp_constraint (head_exp, return_type); pexp_loc } ->
-    let return = match translate_type env return_type with
+    begin match translate_type env return_type with
       | Ttuple [ ret_ty; sto_ty ] ->
         let storage = List.assoc "storage" args in
         if sto_ty <> storage then
           error_loc pexp_loc
             "Second component of return type must be identical to storage type";
-        ret_ty
+        if ret_ty <> Tlist Toperation then
+          error_loc pexp_loc
+            "First component of return type must be an operation list"
       | _ ->
         error_loc pexp_loc
-          "return type must be a product of some type and the storage type"
-    in
-    translate_head env ext_funs head_exp (("return", return) :: args)
-
-  | { pexp_desc =
-        Pexp_fun (
-            Nolabel, None,
-            { ppat_desc =
-                Ppat_extension ({ txt = "return"}, PTyp arg_type)
-            },
-            head_exp) } ->
-     translate_head env ext_funs head_exp
-       (("return", translate_type env arg_type) :: args)
+          "return type must be a product of \"operation list\" \
+           and the storage type"
+    end;
+    translate_head env ext_funs head_exp args
 
   | { pexp_desc =
         Pexp_fun (
@@ -1097,7 +1042,6 @@ let rec translate_head env ext_funs head_exp args =
        code;
        parameter = List.assoc "parameter" args;
        storage = List.assoc "storage" args;
-       return = List.assoc "return" args;
      }
 
 let rec translate_initial_storage env exp args =

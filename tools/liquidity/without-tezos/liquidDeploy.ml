@@ -40,9 +40,9 @@ type trace = trace_item array
 module type S = sig
   type 'a t
   val run : from -> string -> string ->
-    (LiquidTypes.const * LiquidTypes.const * big_map_diff option) t
+    (LiquidTypes.const * big_map_diff option) t
   val run_debug : from -> string -> string ->
-    (LiquidTypes.const * LiquidTypes.const * big_map_diff option * trace) t
+    (LiquidTypes.const * big_map_diff option * trace) t
   val forge_deploy : ?delegatable:bool -> ?spendable:bool ->
     from -> string list -> string t
   val deploy : ?delegatable:bool -> ?spendable:bool ->

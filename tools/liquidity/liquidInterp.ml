@@ -517,16 +517,12 @@ let interp contract =
       let x = node ins.loc i [] [seq] in
       [x], x
 
-    | TRANSFER_TOKENS,
-      arg :: amount :: contract :: arg_storage :: [] ->
-       let res_storage = node ins.loc (N_VAR "storage") [] [] in
-       let result = node ins.loc (N_TRANSFER_RESULT 1) [] [] in
-       let x = node ins.loc (N_TRANSFER (res_storage, result))
-                    [contract; amount; arg_storage; arg ] [seq] in
-       [ result ; res_storage ], x
+    | TRANSFER_TOKENS, arg :: amount :: contract :: stack ->
+       let x = node ins.loc N_TRANSFER [contract; amount; arg] [seq] in
+       x :: stack, x
 
-    | SOURCE (arg_ty, res_ty), stack -> (* TODO : keep types too ! *)
-       let x = node ins.loc (N_SOURCE (arg_ty, res_ty)) [] [seq] in
+    | SOURCE, stack ->
+       let x = node ins.loc (N_PRIM "SOURCE") [] [seq] in
        x :: stack, x
     | NOW, stack ->
        let x = node ins.loc (N_PRIM "NOW") [] [seq] in

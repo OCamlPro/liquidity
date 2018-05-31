@@ -84,8 +84,6 @@ let rec untype (env : env) code =
     | Const (loc, ty, cst) ->  Const (loc, ty, cst)
     | Failwith (s, loc) -> Failwith (s, loc)
 
-    | Apply(Prim_Source, loc, [from_arg; to_arg]) ->
-       Constructor(loc, Source (from_arg.ty, to_arg.ty), untype env from_arg)
     | Apply(Prim_Left, loc, [arg; unused]) ->
        Constructor(loc, Left unused.ty, untype env arg)
     | Apply(Prim_Right, loc, [arg; unused]) ->
@@ -154,24 +152,11 @@ let rec untype (env : env) code =
                   head_pat, tail_pat, untype env'' ifcons,
                   untype env ifnil)
 
-    | LetTransfer ( var_storage, var_result,
-                    loc,
-                    contract_exp,
-                    amount_exp,
-                    storage_exp,
-                    arg_exp,
-                    body_exp) ->
-       let bv =  body_exp.bv in
-       let (var_storage', env') = find_free env var_storage bv in
-       let (var_result', env') = find_free env' var_result bv in
-
-       LetTransfer ( var_storage', var_result',
-                     loc,
-                     untype env contract_exp,
-                     untype env amount_exp,
-                     untype env storage_exp,
-                     untype env arg_exp,
-                     untype env' body_exp)
+    | Transfer (loc, contract_exp, amount_exp, arg_exp) ->
+      Transfer (loc,
+                untype env contract_exp,
+                untype env amount_exp,
+                untype env arg_exp)
 
     | MatchVariant (arg, loc,
                     [

@@ -85,14 +85,6 @@ let find_var ?(count_used=true) env loc name =
   with Not_found ->
     error loc "unbound variable %S" name
 
-let maybe_reset_vars env transfer =
-  if transfer then
-    { env with
-      vars = StringMap.empty;
-      clos_env = None;
-    }
-  else env
-
 let type_error loc msg actual expected =
   error loc "%s.\nExpected type:\n  %s\nActual type:\n  %s"
     msg
@@ -128,7 +120,7 @@ let rec loc_exp e = match e.desc with
   | Var (_, loc, _)
   | SetVar (_, loc, _, _)
   | Apply (_, loc, _)
-  | LetTransfer (_, _, loc, _, _, _, _, _)
+  | Transfer (loc, _, _, _)
   | MatchOption (_, loc, _, _, _)
   | MatchNat (_, loc, _, _, _, _)
   | MatchList (_, loc, _, _, _, _)
@@ -171,7 +163,6 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
          mk (Apply (Prim_fail, loc,
                     [mk (Const (loc, Tunit, CUnit)) Tunit])) Tfail
      else
-       let env = maybe_reset_vars env exp.transfer in
        let (env, count) = new_binding env name ~fail:exp.fail exp.ty in
        let body = typecheck env body in
        let desc = Let (name, loc, exp, body ) in
@@ -258,42 +249,23 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
      let desc = If(cond, ifthen, ifelse) in
      mk ?name:exp.name desc ty
 
-  | LetTransfer (storage_name, result_name,
-                 loc,
-                 contract_exp, tez_exp,
-                 storage_exp, arg_exp, body) ->
+  | Transfer (loc, contract_exp, tez_exp, arg_exp) ->
      let tez_exp = typecheck_expected "call amount" env Ttez tez_exp in
      let contract_exp = typecheck env contract_exp in
      begin
        match contract_exp.ty with
-       | Tcontract (arg_ty, return_ty) ->
-          let arg_exp = typecheck_expected "call-arg" env arg_ty arg_exp in
-          let storage_exp =
-            typecheck_expected "call storage"
-              env env.contract.storage storage_exp in
-          if tez_exp.transfer || contract_exp.transfer
-             || arg_exp.transfer || storage_exp.transfer then
+       | Tcontract arg_ty ->
+          let arg_exp = typecheck_expected "call argument" env arg_ty arg_exp in
+          if tez_exp.transfer || contract_exp.transfer || arg_exp.transfer then
             error loc "transfer within transfer arguments";
-          let (env, storage_count) =
-            new_binding env storage_name env.contract.storage in
-          let (env, result_count) =
-            new_binding env result_name return_ty in
-          let body = typecheck env body in
-          check_used env storage_name loc storage_count;
-          check_used env result_name loc result_count;
-          let desc = LetTransfer(storage_name, result_name,
-                                 loc,
-                                 contract_exp, tez_exp,
-                                 storage_exp, arg_exp, body)
-          in
-          mk ?name:exp.name desc body.ty
+          let desc = Transfer(loc, contract_exp, tez_exp, arg_exp) in
+          mk ?name:exp.name desc Toperation
        | ty ->
          error (loc_exp contract_exp)
-           "Bad contract type.\nExpected type:\n  ('a, 'b) contract\n\
+           "Bad contract type.\nExpected type:\n  'a contract\n\
             Actual type:\n  %s"
            (LiquidPrinter.Liquid.string_of_type ty)
      end
-
 
   | Apply (Prim_unknown, loc,
            ({ desc = Var (name, varloc, [])} as f) :: ((_ :: _) as r))
@@ -344,7 +316,6 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
        | Toption ty -> ty
        | _ -> error loc "not an option type"
      in
-     let env = maybe_reset_vars env arg.transfer in
      let ifnone = typecheck env ifnone in
      let (env, count) = new_binding env name arg_ty in
      let ifsome = typecheck env ifsome in
@@ -362,7 +333,6 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
 
   | MatchNat (arg, loc, plus_name, ifplus, minus_name, ifminus) ->
      let arg = typecheck_expected "match%nat" env Tint arg in
-     let env = maybe_reset_vars env arg.transfer in
      let (env2, count_p) = new_binding env plus_name Tnat in
      let ifplus = typecheck env2 ifplus in
      let (env3, count_m) = new_binding env minus_name Tnat in
@@ -384,7 +354,6 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
   | Loop (name, loc, body, arg) ->
      let arg = typecheck env arg in
      if arg.ty = Tfail then error loc "loop arg is a failure";
-     let env = maybe_reset_vars env (arg.transfer || body.transfer) in
      let (env, count) = new_binding env name arg.ty in
      let body =
        typecheck_expected "loop body" env (Ttuple [Tbool; arg.ty]) body in
@@ -414,7 +383,6 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
           (LiquidTypes.string_of_fold_primitive prim)
           (LiquidPrinter.Liquid.string_of_type arg.ty)
     in
-    let env = maybe_reset_vars env (arg.transfer || body.transfer) in
     let (env, count) = new_binding env name name_ty in
     let body = typecheck_expected
         (LiquidTypes.string_of_fold_primitive prim ^" body") env acc.ty body in
@@ -428,7 +396,6 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
        | Tlist ty -> ty
        | _ -> error loc "not a list type"
      in
-     let env = maybe_reset_vars env arg.transfer in
      let ifnil = typecheck env ifnil in
      let (env, count_head) = new_binding env head_name arg_ty in
      let (env, count_tail) = new_binding env tail_name (Tlist arg_ty) in
@@ -455,7 +422,6 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
     (* allow closures at typechecking, do not reset env *)
     let (env, arg_count) = new_binding env lambda_arg_name lambda_arg_type in
     let body = typecheck env lambda_body in
-    if body.transfer then error loc "no transfer in lambda";
     check_used env lambda_arg_name loc arg_count;
     let desc = Lambda (arg_name, lambda_arg_type, loc, body, body.ty) in
     let ty = Tlambda (lambda_arg_type, body.ty) in
@@ -480,7 +446,6 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
          in
          if ty_name <> ty_name' then error loc "inconsistent list of labels";
          let exp = typecheck_expected ("label "^ label) env ty exp in
-         if exp.transfer then error loc "transfer not allowed in record";
          remaining_labels := StringSet.remove label !remaining_labels;
          (label, exp)
        ) lab_x_exp_list in
@@ -491,29 +456,18 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
   | Constructor(loc, Constr constr, arg) ->
      let ty_name, arg_ty = StringMap.find constr env.env.constrs in
      let arg = typecheck_expected "construtor argument" env arg_ty arg in
-     if arg.transfer then
-       error loc "transfer not allowed in constructor argument";
      let constr_ty = StringMap.find ty_name env.env.types in
      mk ?name:exp.name (Constructor(loc, Constr constr, arg)) constr_ty
 
   | Constructor(loc, Left right_ty, arg) ->
      let arg = typecheck env arg in
-     if arg.transfer then
-       error loc "transfer not allowed in constructor argument";
      let ty = Tor (arg.ty, right_ty) in
      mk ?name:exp.name (Constructor(loc, Left right_ty, arg)) ty
 
   | Constructor(loc, Right left_ty, arg) ->
      let arg = typecheck env arg in
-     if arg.transfer then
-       error loc "transfer not allowed in constructor argument";
      let ty = Tor (left_ty, arg.ty) in
      mk ?name:exp.name (Constructor(loc, Right left_ty, arg)) ty
-
-  | Constructor(loc, Source (from_ty, to_ty), arg) ->
-    let arg = typecheck env arg in
-    let ty = Tcontract(from_ty, to_ty) in
-    mk ?name:exp.name (Constructor(loc, Source (from_ty, to_ty), arg)) ty
 
   | MatchVariant (arg, loc, cases) ->
     let arg = typecheck env arg in
@@ -532,7 +486,6 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
         error loc "not a variant type: %s"
           (LiquidPrinter.Liquid.string_of_type arg.ty)
     in
-    let env = maybe_reset_vars env arg.transfer in
     let expected_type = ref None in
     let cases_extra_constrs =
       List.fold_left (fun acc -> function
@@ -817,11 +770,10 @@ and typecheck_prim2 env prim loc args =
 
   | Prim_Some, [ ty ] -> Toption ty
   | Prim_fail, [ Tunit ] -> Tfail
-  | Prim_self, [ Tunit ] ->
-     Tcontract (env.contract.parameter, env.contract.return)
+  | Prim_self, [ Tunit ] -> Tcontract env.contract.parameter
   | Prim_now, [ Tunit ] -> Ttimestamp
   | Prim_balance, [ Tunit ] -> Ttez
-  (*    | "Current.source", [ Tunit ] -> ... *)
+  | Prim_source, [ Tunit ] -> Taddress
   | Prim_amount, [ Tunit ] -> Ttez
   | Prim_gas, [ Tunit ] -> Tnat
   | Prim_hash, [ _ ] -> Tstring
@@ -831,17 +783,17 @@ and typecheck_prim2 env prim loc args =
   | Prim_check, _ ->
      error_prim loc Prim_check args [Tkey; Ttuple [Tsignature; Tstring]]
 
-  | Prim_manager, [ Tcontract(_,_) ] ->
+  | Prim_manager, [ Tcontract _ ] ->
      Tkey_hash
 
   | Prim_create_account, [ Tkey_hash; Toption Tkey_hash; Tbool; Ttez ] ->
-     Tcontract (Tunit, Tunit)
+     Tcontract Tunit
   | Prim_create_account, _ ->
      error_prim loc Prim_create_account args
                 [ Tkey_hash; Toption Tkey_hash; Tbool; Ttez ]
 
   | Prim_default_account, [ Tkey_hash ] ->
-     Tcontract (Tunit, Tunit)
+     Tcontract Tunit
 
   | Prim_create_contract, [ Tkey_hash; (* manager *)
                             Toption Tkey_hash; (* delegate *)
@@ -851,7 +803,7 @@ and typecheck_prim2 env prim loc args =
                             Tlambda (
                               Ttuple [ arg_type;
                                        storage_arg],
-                              Ttuple [ result_type; storage_res]);
+                              Ttuple [ Tlist Toperation; storage_res]);
                             storage_init
                           ] ->
      if storage_arg <> storage_res then
@@ -859,7 +811,7 @@ and typecheck_prim2 env prim loc args =
      if storage_res <> storage_init then
        error loc "Contract.create: wrong type for storage init";
 
-     Tcontract (arg_type, result_type)
+     Tcontract arg_type
 
   | Prim_create_contract, _ ->
 
@@ -992,12 +944,7 @@ and typecheck_expected info env expected_ty exp =
   exp
 
 and typecheck_apply ?name env prim loc args =
-  let args = List.map (fun arg ->
-                 let arg = typecheck env arg in
-                 if arg.transfer then
-                   error loc "transfer within prim args";
-                 arg
-               ) args in
+  let args = List.map (typecheck env)args in
   let prim, ty = typecheck_prim1 env prim loc args in
   mk ?name (Apply (prim, loc, args)) ty
 
@@ -1018,7 +965,7 @@ let typecheck_contract ~warnings env contract =
 
   let (env, _) = new_binding env  "storage" contract.storage in
   let (env, _) = new_binding env "parameter" contract.parameter in
-  let expected_ty = Ttuple [contract.return; contract.storage] in
+  let expected_ty = Ttuple [Tlist Toperation; contract.storage] in
   let code =
     typecheck_expected "return value" env expected_ty contract.code in
   { contract with code }
@@ -1041,6 +988,7 @@ let rec type_of_const = function
   | CString _ -> Tstring
   | CKey _ -> Tkey
   | CSignature _ -> Tsignature
+  | CAddress _ -> Taddress
   | CTuple l ->
     Ttuple (List.map type_of_const l)
   | CNone -> Toption Tunit
@@ -1061,7 +1009,7 @@ let rec type_of_const = function
   | CRight c -> Tor (Tunit, type_of_const c)
 
   | CKey_hash _ -> Tkey_hash
-  | CContract _ -> Tcontract (Tunit, Tunit)
+  | CContract _ -> Tcontract Tunit
 
   (* XXX just for printing *)
   | CRecord _ -> Trecord ("<record>", [])
@@ -1087,7 +1035,7 @@ let check_const_type ?(from_mic=false) ~to_tez loc ty cst =
 
     | Tkey, CKey s -> CKey s
     | Tkey_hash, CKey_hash s -> CKey_hash s
-    | Tcontract (_, _), CContract s -> CContract s
+    | Tcontract _, CContract s -> CContract s
     | Ttimestamp, CTimestamp s -> CTimestamp s
     | Tsignature, CSignature s -> CSignature s
 
@@ -1165,7 +1113,7 @@ let check_const_type ?(from_mic=false) ~to_tez loc ty cst =
 
          | Ttez, CString s -> CTez (to_tez s)
          | Tkey_hash, CString s -> CKey_hash s
-         | Tcontract (_, _), CString s -> CContract s
+         | Tcontract _, CString s -> CContract s
          | Tkey, CString s -> CKey s
          | Tsignature, CString s -> CSignature s
 

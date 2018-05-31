@@ -44,11 +44,11 @@ module type S = sig
      big map id the contract contains any *)
   val run :
     from -> string -> string ->
-    (LiquidTypes.const * LiquidTypes.const * big_map_diff option) t
+    (LiquidTypes.const * big_map_diff option) t
 
   val run_debug :
     from -> string -> string ->
-    (LiquidTypes.const * LiquidTypes.const * big_map_diff option * trace) t
+    (LiquidTypes.const * big_map_diff option * trace) t
 
   (** Forge a deployment operation contract on the Tezos node specified in
       ![LiquidOptions], returns the hex-encoded operation *)

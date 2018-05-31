@@ -120,17 +120,19 @@ let rec convert_const env ?ty expr =
     begin match ty with
       | Some Tnat -> CNat (LiquidPrinter.integer_of_mic n)
       | Some Tint | None -> CInt (LiquidPrinter.integer_of_mic n)
+      | Some Ttez -> CTez (LiquidPrinter.tez_of_mic_mutez n)
       | Some ty -> wrong_type env expr ty
     end
 
   | String (_loc, s) ->
     begin match ty with
       | Some Ttez ->
-        CTez (LiquidPrinter.tez_of_mic s)
+        CTez (LiquidPrinter.tez_of_mic_mutez (Z.of_string s))
       | Some Ttimestamp -> CTimestamp s
       | Some Tkey -> CKey s
       | Some Tkey_hash -> CKey_hash s
-      | Some Tcontract (_, _) -> CContract s
+      | Some Tcontract _ -> CContract s
+      | Some Taddress -> CAddress s
       | Some Tsignature -> CSignature s
       | Some Tstring | None -> CString s
       | Some ty -> wrong_type env expr ty
@@ -231,7 +233,7 @@ let rec convert_type env expr =
   match expr with
   | Prim(_, "unit", [], _debug) -> Tunit
   | Prim(_, "timestamp", [], _debug) -> Ttimestamp
-  | Prim(_, "tez", [], _debug) -> Ttez
+  | Prim(_, "mutez", [], _debug) -> Ttez
   | Prim(_, "int", [], _debug) -> Tint
   | Prim(_, "nat", [], _debug) -> Tnat
   | Prim(_, "bool", [], _debug) -> Tbool
@@ -239,13 +241,13 @@ let rec convert_type env expr =
   | Prim(_, "key_hash", [], _debug) -> Tkey_hash
   | Prim(_, "signature", [], _debug) -> Tsignature
   | Prim(_, "string", [], _debug) -> Tstring
+  | Prim(_, "operation", [], _debug) -> Toperation
+  | Prim(_, "address", [], _debug) -> Taddress
   | Prim(_, "pair", [x;y], _debug) -> Ttuple [convert_type env x;
                                               convert_type env y]
   | Prim(_, "or", [x;y], _debug) -> Tor (convert_type env x,
                                          convert_type env y)
-  | Prim(_, "contract", [x;y], _debug) -> Tcontract
-                                                (convert_type env x,
-                                                 convert_type env y)
+  | Prim(_, "contract", [x], _debug) -> Tcontract (convert_type env x)
   | Prim(_, "lambda", [x;y], _debug) -> Tlambda
                                                 (convert_type env x,
                                                  convert_type env y)
@@ -347,9 +349,8 @@ let rec convert_code env expr =
     mic_loc env index annot (SOME)
   | Prim(index, "MANAGER", [], annot) ->
     mic_loc env index annot (MANAGER)
-  | Prim(index, "SOURCE", [ty1; ty2], annot) ->
-    mic_loc env index annot
-      (SOURCE (convert_type env ty1, convert_type env ty2))
+  | Prim(index, "SOURCE", [], annot) ->
+    mic_loc env index annot (SOURCE)
   | Prim(index, "MAP", [], annot) ->
     mic_loc env index annot (MAP)
   | Prim(index, "OR", [], annot) ->
@@ -477,11 +478,10 @@ let convert_contract env c =
     List.map (fun c ->
         let c = Micheline.inject_locations (fun i -> i) c in
       expand c) c in
-  let return = convert_type env (find c "return") in
   let parameter = convert_type env (find c "parameter") in
   let storage = convert_type env (find c "storage") in
   let code = convert_code env (find c "code") in
-  { code; storage; return; parameter }, env.annoted
+  { code; storage; parameter }, env.annoted
 
 
 let convert_loc_table f loc_tables =

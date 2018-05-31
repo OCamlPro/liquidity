@@ -66,14 +66,6 @@ let new_binding env name ?(fail=false) ty =
             } in
   (new_name, env, count)
 
-let maybe_reset_vars env transfer =
-  if transfer then
-    { env with
-      vars = StringMap.empty;
-      clos_env = None;
-    }
-  else env
-
 (* Find variable name in either the global environment or the closure
    environment, returns a corresponding expression *)
 let find_var ?(count_used=true) env loc name =
@@ -176,27 +168,27 @@ let rec encode_type ty =
   (* else *)
   match ty with
   | Ttez | Tunit | Ttimestamp | Tint | Tnat | Tbool | Tkey | Tkey_hash
-  | Tsignature | Tstring | Tfail -> ty
+  | Tsignature | Tstring | Toperation | Taddress | Tfail -> ty
   | Ttuple tys ->
     let tys' = List.map encode_type tys in
     if List.for_all2 (==) tys tys' then ty
     else Ttuple tys'
-  | Tset t | Tlist t | Toption t ->
+  | Tset t | Tlist t | Toption t | Tcontract t ->
     let t' = encode_type t in
     if t' == t then ty
     else begin match ty with
       | Tset t -> Tset t'
       | Tlist t -> Tlist t'
       | Toption t -> Toption t'
+      | Tcontract t -> Tcontract t'
       | _ -> assert false
     end
-  | Tor (t1, t2) | Tcontract (t1, t2) | Tlambda (t1, t2)
+  | Tor (t1, t2) | Tlambda (t1, t2)
   | Tbigmap (t1, t2) | Tmap (t1, t2) ->
     let t1', t2' = encode_type t1, encode_type t2 in
     if t1 == t1' && t2 == t2' then ty
     else begin match ty with
       | Tor (t1, t2) -> Tor (t1', t2')
-      | Tcontract (t1, t2) -> Tcontract (t1', t2')
       | Tlambda (t1, t2) -> Tlambda (t1', t2')
       | Tmap (t1, t2) -> Tmap (t1', t2')
       | Tbigmap (t1, t2) -> Tbigmap (t1', t2')
@@ -227,11 +219,11 @@ and encode_sum_type cstys =
 let rec has_big_map = function
   | Tbigmap (_t1, _t2) -> true
   | Ttez | Tunit | Ttimestamp | Tint | Tnat | Tbool | Tkey | Tkey_hash
-  | Tsignature | Tstring | Tfail -> false
+  | Tsignature | Tstring | Toperation | Taddress | Tfail -> false
   | Ttuple tys ->
     List.exists has_big_map tys
-  | Tset t | Tlist t | Toption t -> has_big_map t
-  | Tor (t1, t2) | Tcontract (t1, t2) | Tlambda (t1, t2)
+  | Tset t | Tlist t | Toption t | Tcontract t -> has_big_map t
+  | Tor (t1, t2) | Tlambda (t1, t2)
   | Tmap (t1, t2) ->
     has_big_map t1 || has_big_map t2
   | Tclosure  ((t1, t2), t3) ->
@@ -265,7 +257,7 @@ let encode_return_type env ty =
 
 let rec encode_const env c = match c with
   | CUnit | CBool _ | CInt _ | CNat _ | CTez _ | CTimestamp _ | CString _
-  | CKey _ | CContract _ | CSignature _ | CNone  | CKey_hash _ -> c
+  | CKey _ | CContract _ | CSignature _ | CNone  | CKey_hash _ | CAddress _ -> c
 
   | CSome x -> CSome (encode_const env x)
   | CLeft x -> CLeft (encode_const env x)
@@ -306,7 +298,7 @@ let rec encode_const env c = match c with
       error (noloc env)  "unknown constructor %s" constr
 
 let rec decr_counts_vars env e =
-  if e.fail || e.transfer then () else
+  if e.fail then () else
   match e.desc with
   | Var (v, _, []) ->
     begin try
@@ -331,7 +323,8 @@ let rec decr_counts_vars env e =
   | MatchOption (e1, _, e2, _, e3)
   | MatchNat (e1, _, _, e2, _, e3)
   | MatchList (e1, _, _, _, e2, e3)
-  | Fold (_, _, _, e1, e2, e3) ->
+  | Fold (_, _, _, e1, e2, e3)
+  | Transfer (_, e1, e2, e3) ->
     decr_counts_vars env e1;
     decr_counts_vars env e2;
     decr_counts_vars env e3;
@@ -348,14 +341,7 @@ let rec decr_counts_vars env e =
 
   | MatchVariant (e, _, cases) ->
     decr_counts_vars env e;
-    List.iter (fun (_, e) -> decr_counts_vars env e) cases;
-
-  | LetTransfer (_, _, _, e1, e2, e3, e4, e5) ->
-    decr_counts_vars env e1;
-    decr_counts_vars env e2;
-    decr_counts_vars env e3;
-    decr_counts_vars env e4;
-    decr_counts_vars env e5
+    List.iter (fun (_, e) -> decr_counts_vars env e) cases
 
 
 let rec encode env ( exp : typed_exp ) : encoded_exp =
@@ -371,11 +357,10 @@ let rec encode env ( exp : typed_exp ) : encoded_exp =
        then { e with name = Some name }
        else e
      in
-     let env = maybe_reset_vars env e.transfer in
      let (new_name, env, count) = new_binding env name ~fail:e.fail e.ty in
      let body = encode env body in
      (* check_used env name loc count; *)
-     if (not e.transfer) && (not e.fail) then begin
+     if not e.fail then begin
        match !count with
        | c when c <= 0 ->
          decr_counts_vars env e;
@@ -426,10 +411,7 @@ let rec encode env ( exp : typed_exp ) : encoded_exp =
      in
      let arg =
        match labels with
-       | [] ->
-         let arg = encode env arg in
-         if arg.transfer then error loc "transfer within set-field";
-         arg
+       | [] -> encode env arg
        | _::_ ->
          let get_exp =
            mk (Apply(Prim_tuple_get, loc, [arg1; mk_nat ~loc n])) lty in
@@ -456,34 +438,15 @@ let rec encode env ( exp : typed_exp ) : encoded_exp =
     let ifelse = encode env ifelse in
     mk ?name:exp.name (If (cond, ifthen, ifelse)) exp.ty
 
-  | LetTransfer (storage_name, result_name,
-                 loc,
-                 contract_exp, tez_exp,
-                 storage_exp, arg_exp, body) ->
+  | Transfer (loc, contract_exp, tez_exp, arg_exp) ->
     let tez_exp = encode env tez_exp in
     let contract_exp = encode env contract_exp in
     let arg_exp = encode env arg_exp in
-    let storage_exp = encode env storage_exp in
-    let return_ty = match contract_exp.ty with
-      | Tcontract (_, return_ty) -> return_ty
-      | _ -> assert false
-    in
-    let (new_storage, env, storage_count) =
-      new_binding env storage_name env.contract.storage in
-    let (new_result, env, result_count) =
-      new_binding env result_name return_ty in
-    let body = encode env body in
-    (* check_used env storage_name loc storage_count; *)
-    (* check_used env result_name loc result_count; *)
-    mk ?name:exp.name (LetTransfer(new_storage, new_result,
-                    loc,
-                    contract_exp, tez_exp,
-                    storage_exp, arg_exp, body)) body.ty
+    mk ?name:exp.name (Transfer(loc, contract_exp, tez_exp, arg_exp)) Toperation
 
   | Failwith (s, loc) -> mk (Failwith (s, loc)) Tfail
 
   | Apply (Prim_unknown, _, _) -> assert false
-
 
   (* List.rev -> List.reduce (::) *)
   | Apply (Prim_list_rev, loc, [l]) ->
@@ -622,7 +585,6 @@ let rec encode env ( exp : typed_exp ) : encoded_exp =
        | Toption ty -> ty
        | _ -> assert false
      in
-     let env = maybe_reset_vars env arg.transfer in
      let ifnone = encode env ifnone in
      let (new_name, env, count) = new_binding env name name_ty in
      let ifsome = encode env ifsome in
@@ -630,7 +592,6 @@ let rec encode env ( exp : typed_exp ) : encoded_exp =
 
   | MatchNat (arg, loc, plus_name, ifplus, minus_name, ifminus) ->
      let arg = encode env arg in
-     let env = maybe_reset_vars env arg.transfer in
      let (plus_name, env2, count_p) = new_binding env plus_name Tnat in
      let ifplus = encode env2 ifplus in
      let (minus_name, env3, count_m) = new_binding env minus_name Tnat in
@@ -641,7 +602,6 @@ let rec encode env ( exp : typed_exp ) : encoded_exp =
 
   | Loop (name, loc, body, arg) ->
      let arg = encode env arg in
-     let env = maybe_reset_vars env arg.transfer in
      let (new_name, env, count) = new_binding env name arg.ty in
      let body = encode env body in
      (* check_used env name loc count; *)
@@ -659,7 +619,6 @@ let rec encode env ( exp : typed_exp ) : encoded_exp =
       | Prim_list_fold, Tlist elt_ty -> Ttuple [elt_ty; acc.ty]
       | _ -> assert false
     in
-    let env = maybe_reset_vars env arg.transfer in
     let (new_name, env, count) = new_binding env name name_ty in
     let body = encode env body in
     mk ?name:exp.name (Fold (prim, new_name, loc, body, arg, acc)) exp.ty
@@ -670,7 +629,6 @@ let rec encode env ( exp : typed_exp ) : encoded_exp =
        | Tlist ty -> ty
        | _ -> assert false
      in
-     let env = maybe_reset_vars env arg.transfer in
      let ifnil = encode env ifnil in
      let (new_head_name, env, count) = new_binding env head_name elt_ty in
      let (new_tail_name, env, count) = new_binding env tail_name arg.ty in
@@ -791,12 +749,6 @@ let rec encode env ( exp : typed_exp ) : encoded_exp =
      let desc = Apply(Prim_Right,loc,[arg; unused env ~loc left_ty]) in
      mk ?name:exp.name desc ty
 
-  | Constructor(loc, Source (from_ty, to_ty), _arg) ->
-     let ty = Tcontract(from_ty, to_ty) in
-     let desc = Apply(Prim_Source, loc,
-                      [unused env ~loc from_ty; unused env ~loc to_ty]) in
-     mk ?name:exp.name desc ty
-
   | MatchVariant (arg, loc, cases) ->
     let arg = encode env arg in
     let constrs = match arg.ty with
@@ -851,7 +803,6 @@ let encode_contract ?(annot=false) env contract =
   {
     parameter = encode_parameter_type env contract.parameter;
     storage = encode_storage_type env contract.storage;
-    return = encode_return_type env contract.return;
     code = encode env contract.code
   },
   ! (env.to_inline)

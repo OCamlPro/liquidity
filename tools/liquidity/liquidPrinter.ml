@@ -9,10 +9,15 @@
 
 open LiquidTypes
 
-let mic_of_tez { tezzies ; mutez } =
-  match mutez with
-  | None -> tezzies
-  | Some mutez -> tezzies ^ "." ^ mutez
+let milion = Z.of_int 1_000_000
+
+let mic_mutez_of_tez { tezzies ; mutez } =
+  let extra_mutez = match mutez with
+    | None -> Z.zero
+    | Some mutez -> Z.of_string mutez in
+  Z.of_string tezzies
+  |> Z.mul milion
+  |> Z.add extra_mutez
 
 let mic_of_integer { integer } = integer
 
@@ -21,23 +26,12 @@ let integer_of_int int =
   let integer = Z.of_int int in
   { integer }
 
-let tez_of_mic s =
-  let b = Buffer.create 10 in
-  let parts = ref [] in
-  for i = 0 to String.length s - 1 do
-    match s.[i] with
-    | ',' -> ()
-    | '.' ->
-       parts := (Buffer.contents b) :: !parts;
-       Buffer.clear b
-    | c -> Buffer.add_char b c
-  done;
-  let parts = Buffer.contents b :: !parts in
-  match parts with
-  | [ tezzies ]
-  | [ "" ; tezzies ] -> { tezzies; mutez = None }
-  | [ mutez; tezzies ] -> { tezzies; mutez = Some mutez }
-  | _ -> invalid_arg "tez_of_mic" (* TODO exn *)
+let tez_of_mic_mutez z =
+  let z_tezzies, z_mutez = Z.ediv_rem z milion in
+  let tezzies = Z.to_string z_tezzies in
+  let mutez =
+    if Z.equal z_mutez Z.zero then None else Some (Z.to_string z_mutez) in
+  { tezzies; mutez }
 
 let integer_of_mic integer = { integer }
 
@@ -127,20 +121,20 @@ module Michelson = struct
       | Tbool -> Printf.bprintf b "bool"
       | Tint -> Printf.bprintf b "int"
       | Tnat -> Printf.bprintf b "nat"
-      | Ttez -> Printf.bprintf b "tez"
+      | Ttez -> Printf.bprintf b "mutez"
       | Tstring -> Printf.bprintf b "string"
       | Ttimestamp  -> Printf.bprintf b "timestamp"
       | Tkey  -> Printf.bprintf b "key"
       | Tkey_hash  -> Printf.bprintf b "key_hash"
       | Tsignature  -> Printf.bprintf b "signature"
+      | Toperation  -> Printf.bprintf b "operation"
+      | Taddress  -> Printf.bprintf b "address"
       | Ttuple tys -> bprint_type_pairs fmt b indent tys
       | Trecord _ | Tsum _ -> assert false
-      | Tcontract (ty1, ty2) ->
+      | Tcontract ty ->
          let indent = fmt.increase_indent indent in
          Printf.bprintf b "(contract%c%s" fmt.newline indent;
-         bprint_type fmt b indent ty1;
-         Printf.bprintf b "%c%s" fmt.newline indent;
-         bprint_type fmt b indent ty2;
+         bprint_type fmt b indent ty;
          Printf.bprintf b ")";
       | Tor (ty1, ty2) ->
          let indent = fmt.increase_indent indent in
@@ -217,8 +211,9 @@ module Michelson = struct
     | CKey s -> Printf.bprintf b "%S" s
     | CKey_hash s -> Printf.bprintf b "%S" s
     | CContract s -> Printf.bprintf b "%S" s
+    | CAddress s -> Printf.bprintf b "%S" s
     | CSignature s -> Printf.bprintf b "%S" s
-    | CTez s -> Printf.bprintf b "%S" (mic_of_tez s)
+    | CTez s -> Printf.bprintf b "%s" (Z.to_string (mic_mutez_of_tez s))
     | CInt n -> Printf.bprintf b "%s" (Z.to_string (mic_of_integer n))
     | CNat n -> Printf.bprintf b "%s" (Z.to_string (mic_of_integer n))
     | CTimestamp s -> Printf.bprintf b "%S" s
@@ -373,10 +368,6 @@ module Michelson = struct
 
     Printf.bprintf b "storage%c%s" fmt.newline indent;
     bprint_type fmt b indent contract.storage;
-    Printf.bprintf b ";%c" fmt.newline;
-
-    Printf.bprintf b "return%c%s" fmt.newline indent;
-    bprint_type fmt b indent contract.return;
     Printf.bprintf b ";%c" fmt.newline;
 
     Printf.bprintf b "code%c%s" fmt.newline indent;
@@ -609,11 +600,9 @@ module Michelson = struct
     | LSR ->
       Printf.bprintf b "LSR";
       bprint_pre_name b name;
-    | SOURCE (ty1, ty2) ->
+    | SOURCE ->
       Printf.bprintf b "SOURCE";
       bprint_pre_name b name;
-      bprint_type fmt b "" ty1;
-      bprint_type fmt b "" ty2;
     | SIZE ->
       Printf.bprintf b "SIZE";
       bprint_pre_name b name;
@@ -666,6 +655,8 @@ module Liquid = struct
       | Tkey  -> Printf.bprintf b "key"
       | Tkey_hash  -> Printf.bprintf b "key_hash"
       | Tsignature  -> Printf.bprintf b "signature"
+      | Toperation  -> Printf.bprintf b "operation"
+      | Taddress  -> Printf.bprintf b "address"
       | Ttuple [] -> assert false
       | Ttuple (ty :: tys) ->
         Printf.bprintf b "(";
@@ -695,12 +686,9 @@ module Liquid = struct
           ) rtys;
       | Tsum (name, _) ->
         Printf.bprintf b "%s" name;
-      | Tcontract (ty1, ty2) ->
-        Printf.bprintf b "(";
-        bprint_type b "" ty1;
-        Printf.bprintf b ", ";
-        bprint_type b "" ty2;
-        Printf.bprintf b ") contract";
+      | Tcontract ty ->
+        bprint_type b "" ty;
+        Printf.bprintf b " contract";
       | Tor (ty1, ty2) ->
         Printf.bprintf b "(";
         bprint_type b "" ty1;
@@ -779,6 +767,7 @@ module Liquid = struct
     | CKey s -> Printf.bprintf b "%s" s
     | CKey_hash s -> Printf.bprintf b "%s" s
     | CContract s -> Printf.bprintf b "%s" s
+    | CAddress s -> Printf.bprintf b "%s" s
     | CSignature s -> Printf.bprintf b "`%s" s
     | CTez s -> Printf.bprintf b "%stz" (liq_of_tez s)
     | CInt n -> Printf.bprintf b "%s" (liq_of_integer n)
@@ -914,18 +903,13 @@ module Liquid = struct
        bprint_code_rec ~debug b indent exp1;
        Printf.bprintf b ";";
        bprint_code_rec ~debug b indent exp2
-    | LetTransfer (storage, result, _loc, contract_exp, tez_exp,
-                   storage_exp, arg_exp, body) ->
+    | Transfer (_loc, contract_exp, tez_exp, arg_exp) ->
+      Printf.bprintf b "\n%s(Contract.call" indent;
        let indent2 = indent ^ "  " in
-       let indent4 = indent2 ^ "  " in
-       Printf.bprintf b "\n%slet %s, %s =" indent storage result;
-       Printf.bprintf b "\n%sContract.call" indent2;
-       bprint_code_rec ~debug b indent4 contract_exp;
-       bprint_code_rec ~debug b indent4 tez_exp;
-       bprint_code_rec ~debug b indent4 storage_exp;
-       bprint_code_rec ~debug b indent4 arg_exp;
-       Printf.bprintf b "\n%sin" indent;
-       bprint_code_rec ~debug b indent body
+       bprint_code_rec ~debug b indent2 contract_exp;
+       bprint_code_rec ~debug b indent2 tez_exp;
+       bprint_code_rec ~debug b indent2 arg_exp;
+       Printf.bprintf b ")"
     | MatchOption (arg, _loc, ifnone, var, ifsome) ->
        let indent2 = indent ^ "  " in
        let indent4 = indent2 ^ "  " in
@@ -1023,13 +1007,6 @@ module Liquid = struct
        Printf.bprintf b " : ( ";
        bprint_type b (indent ^ "  ") right_ty;
        Printf.bprintf b ", _) variant)"
-    | Constructor (_loc, Source (from_ty, to_ty), _arg) ->
-       Printf.bprintf b "\n%s(Source " indent;
-       Printf.bprintf b " : ( ";
-       bprint_type b (indent ^ "  ") from_ty;
-       Printf.bprintf b ", ";
-       bprint_type b (indent ^ "  ") to_ty;
-       Printf.bprintf b ",) contract)"
     | MatchVariant (arg, _loc, cases) ->
        let indent2 = indent ^ "  " in
        let indent4 = indent2 ^ "  " in
@@ -1069,10 +1046,7 @@ module Liquid = struct
     Printf.bprintf b ")\n";
     Printf.bprintf b "    (storage/1: ";
     bprint_type b indent2 contract.storage;
-    Printf.bprintf b ")\n";
-    Printf.bprintf b "    : ";
-    bprint_type b indent2 (Ttuple [contract.return; contract.storage]);
-    Printf.bprintf b "= \n";
+    Printf.bprintf b ") = \n";
 
     bprint_code ~debug b indent contract.code
 
@@ -1107,8 +1081,7 @@ let string_of_node node =
   | N_IF_RIGHT _ -> "N_IF_RIGHT"
   | N_IF_PLUS _ -> "N_IF_PLUS"
   | N_IF_MINUS _ -> "N_IF_MINUS"
-  | N_TRANSFER _ -> "N_TRANSFER"
-  | N_TRANSFER_RESULT int -> Printf.sprintf "N_TRANSFER_RESULT %d" int
+  | N_TRANSFER -> "N_TRANSFER"
   | N_CONST (ty, cst) -> "N_CONST " ^ Michelson.string_of_const cst
   | N_PRIM string ->
      Printf.sprintf "N_PRIM %s" string
@@ -1129,7 +1102,6 @@ let string_of_node node =
   | N_LAMBDA_END _ -> "N_LAMBDA_END"
   | N_UNKNOWN s -> Printf.sprintf "N_UNKNOWN %S" s
   | N_END -> "N_END"
-  | N_SOURCE _ -> "N_SOURCE"
   | N_LEFT _ -> "N_LEFT"
   | N_RIGHT _ -> "N_RIGHT"
   | N_ABS -> "N_ABS"
