@@ -645,6 +645,34 @@ the ending NIL is not annotated with a type *)
   let trailer = if transfer then [] else drop_stack ~loc 1 depth in
   seq (header @ exprs @ trailer)
 
+
+let rec finalize_fail_pre ({ ins } as e) =
+  { e with
+    ins =
+      match ins with
+      | SEQ expr -> SEQ (finalize_fail_seq [] expr)
+      | IF (e1, e2) -> IF (finalize_fail_pre e1, finalize_fail_pre e2)
+      | IF_NONE (e1, e2) -> IF_NONE (finalize_fail_pre e1, finalize_fail_pre e2)
+      | IF_LEFT (e1, e2) -> IF_LEFT (finalize_fail_pre e1, finalize_fail_pre e2)
+      | IF_CONS (e1, e2) -> IF_CONS (finalize_fail_pre e1, finalize_fail_pre e2)
+      | DIP (n, e) -> DIP (n, finalize_fail_pre e)
+      | LOOP e -> LOOP (finalize_fail_pre e)
+      | ITER e -> ITER (finalize_fail_pre e)
+      | LAMBDA (arg_type, res_type, e) ->
+        LAMBDA (arg_type, res_type, finalize_fail_pre e)
+      | _ -> ins
+  }
+
+and finalize_fail_seq acc exprs =
+  match exprs with
+  | [] -> List.rev acc
+  | e :: exprs ->
+    let e = finalize_fail_pre e in
+    match e.ins with
+    | FAIL _ -> List.rev (e :: acc)
+    | _ ->
+      finalize_fail_seq (e :: acc) exprs
+
 (*
 let translate filename ~peephole contract =
   let pre_code = translate_code contract.code in
@@ -664,4 +692,4 @@ let translate filename ~peephole contract =
  *)
 let translate contract =
   { contract with
-    code = translate_code contract.code }
+    code = translate_code contract.code |> finalize_fail_pre }
