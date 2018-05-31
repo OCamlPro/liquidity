@@ -35,6 +35,7 @@ let rec simplify_pre ({ ins } as e) =
       | IF_CONS (e1, e2) -> IF_CONS (simplify_pre e1, simplify_pre e2)
       | DIP (n, e) -> DIP (n, simplify_pre e)
       | LOOP e -> LOOP (simplify_pre e)
+      | ITER e -> ITER (simplify_pre e)
       | LAMBDA (arg_type, res_type, e) ->
         LAMBDA (arg_type, res_type, simplify_pre e)
       | _ -> ins
@@ -76,7 +77,7 @@ and simplify_step e exprs =
          exprs when n=n'
          ->
           let min_m = min m m' in
-          simplify_stepi ~loc:e.loc (DIP_DROP(n,min_m))
+          simplify_stepi ~loc:e.loc (DIP_DROP(n+1,min_m))
             (simplify_stepi ~loc:e.loc
                (IF
                   (lii ~loc:i1.loc @@ SEQ (simplify_stepi ~loc:i1.loc (DIP_DROP(n,m-min_m)) e1),
@@ -207,7 +208,6 @@ and simplify_step e exprs =
     simplify_stepi ~loc:e.loc SWAP exprs
 
   | DUP n, {ins=DIP_DROP(m,p); loc} :: exprs ->
-     (* let before = DUP n :: DIP_DROP(m,p) :: exprs in *)
      let after =
        if n<m then
          if m =1 then
@@ -245,11 +245,14 @@ and simplify_step e exprs =
              code
 
      in
-     (*
-     let before_s = string_of_pre before in
-     let after_s = string_of_pre after in
-     Printf.eprintf "BEFORE:\n%s\nAFTER:\n%s\n" before_s after_s;
-      *)
+     (* let diff_before, diff_after =
+      *   let rec aux bef aft = match bef, aft with
+      *     | be :: bef, af :: aft when be.ins = af.ins -> aux bef aft
+      *     | _ -> List.rev bef, List.rev aft in
+      *   aux (List.rev (e :: dd :: exprs)) (List.rev after) in
+      * let before_s = LiquidPrinter.Michelson.string_of_loc_michelson (ii @@ SEQ diff_before) in
+      * let after_s = LiquidPrinter.Michelson.string_of_loc_michelson (ii @@ SEQ diff_after) in
+      * Printf.eprintf "\nBEFORE:\n%s\nAFTER:\n%s\n\n" before_s after_s; *)
      after
   | _ -> e :: exprs
 
