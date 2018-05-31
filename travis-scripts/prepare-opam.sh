@@ -13,5 +13,5 @@ eval `opam config env`
 opam update
 opam install ocp-build zarith uutf uri uchar stringext sexplib re lwt.3.3.0 ocplib-endian jsonm hex ezjsonm cstruct calendar ocurl nocrypto sodium
 opam pin add ocplib-json-typed --dev
-opam install ocplib-json-typed ocplib-json-typed-bson
+opam pin add ocplib-json-typed-bson --dev
 # TODO > other deps are missing ?
