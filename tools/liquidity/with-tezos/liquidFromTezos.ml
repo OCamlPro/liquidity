@@ -93,8 +93,8 @@ let unknown_expr env msg expr =
      | Seq (_loc, _exprs, _debug) -> "unknwon sequence"
      | String (_loc, s) ->
        Printf.sprintf "unknwon string %S" s
-     | Int (_loc, s) ->
-       Printf.sprintf "unknown integer %s" s
+     | Int (_loc, i) ->
+       Printf.sprintf "unknown integer %s" (Z.to_string i)
      | Prim(i, s, args, _debug) ->
        Printf.sprintf "unknown primitive %S with %d arguments"
          s (List.length args)
@@ -107,8 +107,8 @@ let wrong_type env expr ty =
      | Seq (_loc, _exprs, _debug) -> "sequence"
      | String (_loc, s) ->
        Printf.sprintf "string %S" s
-     | Int (_loc, s) ->
-       Printf.sprintf "integer %s" s
+     | Int (_loc, i) ->
+       Printf.sprintf "integer %s" (Z.to_string i)
      | Prim(i, s, args, _debug) ->
        Printf.sprintf "primitive %S" s
     )

@@ -707,7 +707,7 @@ let inject ?loc_table ?sk chain_id op =
     | Some sk ->
       let signature_b = sign sk op_b in
       let signature = Ed25519.Signature.to_b58check signature_b in
-      let signed_op_b = MBytes.concat op_b signature_b in
+      let signed_op_b = MBytes.concat "" [op_b; signature_b] in
       let signed_op = Hex.of_string (MBytes.to_string signed_op_b) in
       let op_hash =
         Operation_hash.to_b58check @@

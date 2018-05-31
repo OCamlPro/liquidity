@@ -16,9 +16,9 @@ let mic_of_tez { tezzies ; mutez } =
 
 let mic_of_integer { integer } = integer
 
-let int_of_integer { integer } = int_of_string integer
+let int_of_integer { integer } = Z.to_int integer
 let integer_of_int int =
-  let integer = string_of_int int in
+  let integer = Z.of_int int in
   { integer }
 
 let tez_of_mic s =
@@ -52,7 +52,7 @@ let remove_underscores s =
   Buffer.contents b
 
 let integer_of_liq s =
-  let integer = remove_underscores s in
+  let integer = remove_underscores s |> Z.of_string in
   { integer }
 
 (* TODO: beware of overflow... *)
@@ -82,7 +82,7 @@ let liq_of_tez { tezzies ; mutez } =
   | None -> tezzies
   | Some mutez -> tezzies ^ "." ^ mutez
 
-let liq_of_integer { integer } = integer
+let liq_of_integer { integer } = Z.to_string integer
 
 
 
@@ -219,8 +219,8 @@ module Michelson = struct
     | CContract s -> Printf.bprintf b "%S" s
     | CSignature s -> Printf.bprintf b "%S" s
     | CTez s -> Printf.bprintf b "%S" (mic_of_tez s)
-    | CInt n -> Printf.bprintf b "%s" (mic_of_integer n)
-    | CNat n -> Printf.bprintf b "%s" (mic_of_integer n)
+    | CInt n -> Printf.bprintf b "%s" (Z.to_string (mic_of_integer n))
+    | CNat n -> Printf.bprintf b "%s" (Z.to_string (mic_of_integer n))
     | CTimestamp s -> Printf.bprintf b "%S" s
     | CBool true -> Printf.bprintf b "True"
     | CBool false -> Printf.bprintf b "False"

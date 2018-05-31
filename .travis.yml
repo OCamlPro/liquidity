@@ -20,7 +20,6 @@ script:
 - export OPAMYES=1
 - opam sw 4.06.1
 - eval `opam config env`
-- make clone-tezos
 - make
 - make tests-mini
 - make tests

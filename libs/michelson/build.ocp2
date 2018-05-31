@@ -53,9 +53,18 @@ OCaml.library("michelson-base",
         from_tezos("lib_stdlib/compare.ml");
         from_tezos("lib_stdlib/option.ml");
         from_tezos("lib_stdlib/mBytes.ml");
-        from_tezos("lib_stdlib/mBytes_buffer.ml");
         from_tezos("lib_stdlib/tzList.ml");
         from_tezos("lib_stdlib/tzString.ml");
+        from_tezos("lib_stdlib/binary_stream.ml");
+        from_tezos("lib_data_encoding/binary_size.ml");
+        from_tezos("lib_data_encoding/encoding.ml");
+        from_tezos("lib_data_encoding/binary_error.ml");
+        from_tezos("lib_data_encoding/binary_length.ml");
+        from_tezos("lib_data_encoding/binary_reader.ml");
+        from_tezos("lib_data_encoding/binary_writer.ml");
+        from_tezos("lib_data_encoding/binary_stream_reader.ml");
+        from_tezos("lib_data_encoding/json.ml");
+        from_tezos("lib_data_encoding/bson.ml");
         from_tezos("lib_data_encoding/data_encoding.ml");
         from_tezos("lib_stdlib/logging.ml");
         from_tezos("lib_stdlib/lwt_utils.ml");
@@ -69,6 +78,7 @@ OCaml.library("michelson-base",
               "ocplib-json-typed-bson"; (* data_encoding *)
               "ocplib-endian";     (* data_encoding *)
               "ocplib-endian.bigstring";
+              "bigstring";
               "calendar";
               "hex";
      ];

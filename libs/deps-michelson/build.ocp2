@@ -35,13 +35,15 @@ OCaml.library("michelson-deps", ocaml + {
      files = [
        "utils.ml";
        "z.ml";
-       "nocrypto.ml";
+       (* "nocrypto.ml"; *)
        pp_js("js/blake2.ml");
+       "hacl.ml";
      ];
      requires = [
        "nums";
        "lwt";
-       "cstruct";
+       (* "cstruct"; *)
+       "bigstring";
        "uutf";
        "ocplib-ezjsonm-js";
        "ocp-libsodium-js";
@@ -70,12 +72,14 @@ OCaml.library("michelson-deps", ocaml + {
         "RPC.ml";
         "tezos_misc.ml";
         "updater.ml";
+        "hacl.ml";
      ];
      requires = [
        "zarith";
-       "cstruct";
+       (* "cstruct"; *)
+       "bigstring";
        "lwt";
-       "nocrypto";
+       "digestif.ocaml";
        "sodium";
        "ezjsonm";
      ];

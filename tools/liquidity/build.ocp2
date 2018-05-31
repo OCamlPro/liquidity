@@ -67,7 +67,8 @@ OCaml.library("ocplib-liquidity",
        "liquidUntype.ml";
      ];
      requires = [
-        "ocplib-dot";
+       "ocplib-dot";
+       "zarith";
      ];
 
    });
@@ -151,7 +152,7 @@ OCaml.program("liquidity",
 } else {
 OCaml.program("liquidity",
    ocaml + {
-     bytelink = ["-cclib"; "-lsodium_stubs -lsodium -lnocrypto_stubs"];
+     bytelink = ["-cclib"; "-lsodium_stubs -lsodium"];
      files = [
        "liquidMain.ml";
      ];

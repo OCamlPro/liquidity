@@ -10,10 +10,10 @@
 open LiquidTypes
 
 val mic_of_tez : tez -> string
-val mic_of_integer : integer -> string
+val mic_of_integer : integer -> Z.t
 
 val tez_of_mic : string -> tez
-val integer_of_mic : string -> integer
+val integer_of_mic : Z.t -> integer
 
 val liq_of_tez : tez -> string
 val liq_of_integer : integer -> string

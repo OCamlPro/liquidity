@@ -2,7 +2,7 @@
 all: build
 
 clone-tezos:
-	git clone -b alphanet https://gitlab.com/tezos/tezos.git # clone with https
+	git clone -b zeronet https://gitlab.com/tezos/tezos.git # clone with https
 
 build: _obuild
 	ocp-build build

@@ -11,7 +11,8 @@ opam init --comp 4.06.1
 eval `opam config env`
 
 opam update
-opam install ocp-build zarith uutf uri uchar stringext sexplib re lwt.3.3.0 ocplib-endian jsonm hex ezjsonm cstruct calendar ocurl nocrypto sodium
-opam pin add ocplib-json-typed --dev
-opam pin add ocplib-json-typed-bson --dev
+opam install ocp-build zarith uutf uri uchar stringext sexplib re lwt.3.3.0 ocplib-endian bigstring jsonm hex ezjsonm cstruct calendar ocurl digestif sodium
+make clone-tezos
+make -C tezos build-deps
+opam install ocplib-json-typed ocplib-json-typed-bson
 # TODO > other deps are missing ?

@@ -14,7 +14,7 @@ module IntMap = Map.Make(struct type t = int let compare = compare end)
 exception InvalidFormat of string * string
 
 type tez = { tezzies : string; mutez : string option }
-type integer = { integer : string }
+type integer = { integer : Z.t }
 
 type const =
   | CUnit

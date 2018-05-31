@@ -218,9 +218,6 @@ open Error_monad
         true
       with _ -> false
 
-    let append key msg =
-      MBytes.concat msg (sign key msg)
-
   end
 
 

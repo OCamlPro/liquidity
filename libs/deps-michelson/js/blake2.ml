@@ -3,19 +3,19 @@
 (* Same interface as Tezos' Blake2 *)
 module Blake2b : sig
   type t
-  type hash = Hash of Cstruct.t
+  type hash = Hash of Bigstring.t
 
-  val init : ?key:Cstruct.t -> int -> t
+  val init : ?key:Bigstring.t -> int -> t
 
-  val update : t -> Cstruct.t -> unit
+  val update : t -> Bigstring.t -> unit
 
   val final : t -> hash
 
-  val direct : ?key:Cstruct.t -> Cstruct.t -> int -> hash
+  val direct : ?key:Bigstring.t -> Bigstring.t -> int -> hash
 end = struct
 
   type t
-  type hash = Hash of Cstruct.t
+  type hash = Hash of Bigstring.t
 
   let bytes_of_typed_array u =
     let l = u##length in
@@ -46,22 +46,22 @@ end = struct
     | Some key ->
       Js.Unsafe.(fun_call blakejs##blake2bInit [|
           inject size;
-          inject (Js.string (Cstruct.to_string key));
+          inject (Js.string (Bigstring.to_string key));
         |])
     | None ->
       Js.Unsafe.(fun_call blakejs##blake2bInit [|
           inject size
         |])
 
-  let update (t : t)  (input : Cstruct.t) : unit =
+  let update (t : t)  (input : Bigstring.t) : unit =
     Js.Unsafe.(fun_call blakejs##blake2bUpdate [|
         inject t;
-        Cstruct.to_string input |> typed_array_of_string |> inject;
+        Bigstring.to_string input |> typed_array_of_string |> inject;
       |])
 
   let final (t : t) : hash = Hash (Js.Unsafe.(fun_call blakejs##blake2bFinal [|
       inject t;
-    |]) |> string_of_typed_array |> Cstruct.of_string)
+    |]) |> string_of_typed_array |> Bigstring.of_string)
 
   let direct ?key input size =
   let t = init ?key size in
@@ -72,8 +72,8 @@ end
 
 (* let () =
  *   let test_BLAKE2b_512 input =
- *     let Blake2b.Hash h = Blake2b.direct (Cstruct.of_string input) 64 in
- *     String.uppercase_ascii (Hex.show (Hex.of_string (Cstruct.to_string h)))
+ *     let Blake2b.Hash h = Blake2b.direct (Bigstring.of_string input) 64 in
+ *     String.uppercase_ascii (Hex.show (Hex.of_string (Bigstring.to_string h)))
  *   in
  *   assert (test_BLAKE2b_512 "" =
  *             "786A02F742015903C6C6FD852552D272912F4740E15847618A86E217F71F5419\

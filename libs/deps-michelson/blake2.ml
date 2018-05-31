@@ -41,30 +41,30 @@ let blake2b ?key input =
 (* Same interface as Tezos' Blake2 *)
 module Blake2b : sig
   type t
-  type hash = Hash of Cstruct.t
+  type hash = Hash of Bigstring.t
 
-  val init : ?key:Cstruct.t -> int -> t
+  val init : ?key:Bigstring.t -> int -> t
 
-  val update : t -> Cstruct.t -> unit
+  val update : t -> Bigstring.t -> unit
 
   val final : t -> hash
 
-  val direct : ?key:Cstruct.t -> Cstruct.t -> int -> hash
+  val direct : ?key:Bigstring.t -> Bigstring.t -> int -> hash
 end = struct
 
   type t = blake2b_ctx * string
-  type hash = Hash of Cstruct.t
+  type hash = Hash of Bigstring.t
 
   let init ?key size =
     let key = match key with
-      | Some k -> Some (Cstruct.to_string k)
+      | Some k -> Some (Bigstring.to_string k)
       | None -> None
     in
     blake2b_init ?key ~size ()
 
-  let update t input = blake2b_update t (Cstruct.to_string input)
+  let update t input = blake2b_update t (Bigstring.to_string input)
 
-  let final t = Hash (Cstruct.of_string (blake2b_final t))
+  let final t = Hash (Bigstring.of_string (blake2b_final t))
 
   let direct ?key input size =
   let t = init ?key size in
