@@ -778,10 +778,10 @@ and typecheck_prim2 env prim loc args =
   | Prim_gas, [ Tunit ] -> Tnat
   | Prim_hash, [ _ ] -> Tstring
   | Prim_hash_key, [ Tkey ] -> Tkey_hash
-  | Prim_check, [ Tkey; Ttuple [Tsignature; Tstring] ] ->
+  | Prim_check, [ Tkey; Tsignature; Tstring ] ->
      Tbool
   | Prim_check, _ ->
-     error_prim loc Prim_check args [Tkey; Ttuple [Tsignature; Tstring]]
+     error_prim loc Prim_check args [Tkey; Tsignature; Tstring]
 
   | Prim_manager, [ Tcontract _ ] ->
      Tkey_hash

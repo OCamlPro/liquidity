@@ -148,14 +148,14 @@ and simplify_step e exprs =
 
   (* takes two items on stack, creates one : 2 -> 1 *)
   | (PAIR | ADD | SUB | COMPARE | GET | CONCAT | MEM
-     | CONS | CHECK_SIGNATURE | EXEC | MAP
+     | CONS | EXEC | MAP
      | OR | AND | XOR | MUL),
     {ins=DIP_DROP (n,m); loc} :: exprs when n > 0 ->
      simplify_stepi ~loc (DIP_DROP (n+1,m))
                    (simplify_step e exprs)
 
   (* takes three items on stack, creates one *)
-  | (UPDATE | REDUCE | TRANSFER_TOKENS),
+  | (UPDATE | REDUCE | TRANSFER_TOKENS | CHECK_SIGNATURE),
     {ins=DIP_DROP (n,m); loc} :: exprs when n > 0 ->
      simplify_stepi ~loc (DIP_DROP (n+2,m))
        (simplify_step e exprs)

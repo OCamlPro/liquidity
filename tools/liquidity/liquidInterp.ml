@@ -620,8 +620,8 @@ let interp contract =
        let x = node ins.loc (N_PRIM "GT") [x] [seq] in
        x :: stack, x
 
-    | CHECK_SIGNATURE, x :: y :: stack ->
-       let x = node ins.loc (N_PRIM "CHECK_SIGNATURE") [x; y] [seq] in
+    | CHECK_SIGNATURE, x :: y :: z :: stack ->
+       let x = node ins.loc (N_PRIM "CHECK_SIGNATURE") [x; y; z] [seq] in
        x :: stack, x
     | MOD, x :: y :: stack ->
        let x = node ins.loc (N_PRIM "MOD") [x; y] [seq] in
