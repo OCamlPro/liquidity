@@ -265,6 +265,7 @@ let decompile contract =
             | "AMOUNT",[] -> Prim_amount, [unit ~loc]
             | "STEPS_TO_QUOTA",[] -> Prim_gas, [unit ~loc]
             | "SOURCE",[] -> Prim_source, [unit ~loc]
+            | "SELF",[] -> Prim_self, [unit ~loc]
             | prim, args ->
                let prim =
                  match prim with
@@ -298,6 +299,7 @@ let decompile contract =
                  | "LSR" -> Prim_lsr
                  | "LSL" -> Prim_lsl
                  | "DEFAULT_ACCOUNT" -> Prim_default_account
+                 | "SET_DELEGATE" -> Prim_set_delegate
                  | "SOME" -> Prim_Some
                  | ins ->
                     LiquidLoc.raise_error
@@ -430,7 +432,7 @@ let decompile contract =
        | (
          N_LAMBDA_END _
        | N_LAMBDA _
-       | N_TRANSFER _
+       | N_TRANSFER
        | N_LOOP _
        | N_FOLD _
        | N_IF _

@@ -609,6 +609,9 @@ module Michelson = struct
     | DEFAULT_ACCOUNT ->
       Printf.bprintf b "DEFAULT_ACCOUNT";
       bprint_pre_name b name;
+    | SET_DELEGATE ->
+      Printf.bprintf b "SET_DELEGATE";
+      bprint_pre_name b name;
     | MOD ->
       Printf.bprintf b "MOD";
       bprint_pre_name b name;

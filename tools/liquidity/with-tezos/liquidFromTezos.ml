@@ -351,6 +351,8 @@ let rec convert_code env expr =
     mic_loc env index annot (MANAGER)
   | Prim(index, "SOURCE", [], annot) ->
     mic_loc env index annot (SOURCE)
+  | Prim(index, "SELF", [], annot) ->
+    mic_loc env index annot (SELF)
   | Prim(index, "MAP", [], annot) ->
     mic_loc env index annot (MAP)
   | Prim(index, "OR", [], annot) ->
@@ -443,6 +445,8 @@ let rec convert_code env expr =
     mic_loc env index annot (CREATE_CONTRACT)
   | Prim(index, "DEFAULT_ACCOUNT", [], annot) ->
     mic_loc env index annot (DEFAULT_ACCOUNT)
+  | Prim(index, "SET_DELEGATE", [], annot) ->
+    mic_loc env index annot (SET_DELEGATE)
 
   | _ -> unknown_expr env "convert_code" expr
 

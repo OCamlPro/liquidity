@@ -121,6 +121,7 @@ let rec emit_code ~expand code =
   | CHECK_SIGNATURE -> M_INS ("CHECK_SIGNATURE", name)
   | SIZE -> M_INS ("SIZE", name)
   | DEFAULT_ACCOUNT -> M_INS ("DEFAULT_ACCOUNT", name)
+  | SET_DELEGATE -> M_INS ("SET_ACCOUNT", name)
   | CONS -> M_INS ("CONS", name)
   | OR -> M_INS ("OR", name)
   | XOR -> M_INS ("XOR", name)

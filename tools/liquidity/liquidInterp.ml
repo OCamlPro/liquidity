@@ -524,6 +524,9 @@ let interp contract =
     | SOURCE, stack ->
        let x = node ins.loc (N_PRIM "SOURCE") [] [seq] in
        x :: stack, x
+    | SELF, stack ->
+       let x = node ins.loc (N_PRIM "SELF") [] [seq] in
+       x :: stack, x
     | NOW, stack ->
        let x = node ins.loc (N_PRIM "NOW") [] [seq] in
        x :: stack, x
@@ -536,6 +539,10 @@ let interp contract =
 
     | DEFAULT_ACCOUNT, key :: stack ->
        let x = node ins.loc (N_PRIM "DEFAULT_ACCOUNT") [key] [seq] in
+       x :: stack, x
+
+    | SET_DELEGATE, key :: stack ->
+       let x = node ins.loc (N_PRIM "SET_DELEGATE") [key] [seq] in
        x :: stack, x
 
     | MANAGER, x :: stack ->

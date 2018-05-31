@@ -795,6 +795,9 @@ and typecheck_prim2 env prim loc args =
   | Prim_default_account, [ Tkey_hash ] ->
      Tcontract Tunit
 
+  | Prim_set_delegate, [ Toption Tkey_hash ] ->
+    Toperation
+
   | Prim_create_contract, [ Tkey_hash; (* manager *)
                             Toption Tkey_hash; (* delegate *)
                             Tbool; (* spendable *)

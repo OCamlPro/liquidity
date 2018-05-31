@@ -251,6 +251,7 @@ let rec convert_code expand expr =
     else prim (Printf.sprintf "C%sDR" (String.make n 'D')) [] name
   | SIZE -> prim "SIZE" [] name
   | DEFAULT_ACCOUNT -> prim "DEFAULT_ACCOUNT" [] name
+  | SET_DELEGATE -> prim "SET_DELEGATE" [] name
 
 
 let convert_contract ~expand c =

@@ -184,7 +184,7 @@ type primitive =
   | Prim_hash_key
   | Prim_check
   | Prim_default_account
-
+  | Prim_set_delegate
 
   | Prim_Cons
   | Prim_or
@@ -284,6 +284,7 @@ let () =
 
               "Contract.manager", Prim_manager;
               "Contract.create", Prim_create_contract;
+              "Contract.set_delegate", Prim_set_delegate;
 
               "Account.create", Prim_create_account;
               "Account.default", Prim_default_account;
@@ -590,6 +591,7 @@ type 'a pre_michelson =
 
   | SIZE
   | DEFAULT_ACCOUNT
+  | SET_DELEGATE
 
   (* obsolete *)
   | MOD

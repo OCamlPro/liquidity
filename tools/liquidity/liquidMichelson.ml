@@ -341,7 +341,7 @@ the ending NIL is not annotated with a type *)
       | Prim_hash|Prim_hash_key|Prim_check|Prim_default_account|Prim_list_size
       | Prim_set_size|Prim_map_size|Prim_or|Prim_and|Prim_xor
       | Prim_not|Prim_abs|Prim_int|Prim_neg|Prim_lsr|Prim_lsl
-      | Prim_exec|Prim_Cons),_ ->
+      | Prim_exec|Prim_Cons|Prim_set_delegate),_ ->
       let _depth, args_code = compile_args depth env args in
        let prim_code = match prim, List.length args with
          | Prim_eq, 2 -> [ ii COMPARE; ii EQ ]
@@ -388,6 +388,7 @@ the ending NIL is not annotated with a type *)
          | Prim_hash_key, 1 -> [ ii HASH_KEY ]
          | Prim_check, 2 -> [ ii CHECK_SIGNATURE ]
          | Prim_default_account, 1 -> [ ii DEFAULT_ACCOUNT ]
+         | Prim_set_delegate, 1 -> [ ii SET_DELEGATE ]
          | Prim_list_size, 1 -> [ ii SIZE ]
          | Prim_set_size, 1 -> [ ii SIZE ]
          | Prim_map_size, 1 -> [ ii SIZE ]
@@ -416,7 +417,7 @@ the ending NIL is not annotated with a type *)
            | Prim_hash|Prim_hash_key|Prim_check|Prim_default_account|Prim_list_size
            | Prim_set_size|Prim_map_size|Prim_or|Prim_and|Prim_xor
            | Prim_not|Prim_abs|Prim_int|Prim_neg|Prim_lsr|Prim_lsl
-           | Prim_exec|Prim_Cons|Prim_set_map),n ->
+           | Prim_exec|Prim_Cons|Prim_set_map|Prim_set_delegate),n ->
            Printf.eprintf "Primitive %S: wrong number of args(%d)\n%!"
              (LiquidTypes.string_of_primitive prim)
              n;
