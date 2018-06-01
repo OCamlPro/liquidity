@@ -1,0 +1,12 @@
+parameter (list bool) ;
+storage (pair bool (pair nat int)) ;
+code { UNPAIR; DIP {UNPAIR; DIP {UNPAIR} } ;
+       # PUSH int 1; PUSH nat 0; PUSH bool True;
+       # DUUUUP; DIIIIP { DROP } ;
+       ITER {
+              AND; DUP;
+              IF { DIIP { PUSH int 1; ADD } }
+                 { DIIP { PUSH int -1; ADD } }
+            } ;
+       DIP { PAIR }; PAIR; NIL operation; PAIR
+       }

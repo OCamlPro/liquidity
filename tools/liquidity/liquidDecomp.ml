@@ -130,13 +130,22 @@ let rec arg_of node =
           mk (Apply (Prim_tuple_get, loc, [ arg_of loop_node; nat_n ~loc pos ]))
      end
   | N_FOLD_ARG ({ kind = N_FOLD_BEGIN ( _); args = acc } as begin_node, pos ) ->
+    let x_acc = arg_of begin_node in
     begin
        match pos, acc with
-       | 0, [] -> arg_of begin_node
-       | 0, [ { kind = N_CONST (_, CUnit)}] -> (* iter *) arg_of begin_node
-       | _ ->
+       | 0, [] -> x_acc
+       | 0, [ { kind = N_CONST (_, CUnit)}] -> (* iter *) x_acc
+       | 0, _ -> (* arg is iterated element *)
          mk ?name:node.node_name
-           (Apply (Prim_tuple_get, loc, [ arg_of begin_node; nat_n ~loc pos ]))
+           (Apply (Prim_tuple_get, loc, [x_acc ; nat_n ~loc 0 ]))
+       | 1, [_] -> (* arg is accumulator *)
+         mk ?name:node.node_name
+           (Apply (Prim_tuple_get, loc, [x_acc ; nat_n ~loc 1]))
+       | _, _ when pos > 0 -> (* arg in accumulator *)
+         let acc_liq = mk (Apply (Prim_tuple_get, loc, [x_acc; nat_n ~loc 1])) in
+         mk ?name:node.node_name
+           (Apply (Prim_tuple_get, loc, [acc_liq ; nat_n ~loc (pos - 1)]))
+       | _ -> assert false
      end
   | N_FOLD_RESULT (fold_node, end_node, pos ) ->
     begin
