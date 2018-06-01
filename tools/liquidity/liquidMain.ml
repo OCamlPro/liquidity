@@ -96,7 +96,7 @@ let compile_liquid_file filename =
 let compile_tezos_file filename =
   let code, env = LiquidToTezos.read_tezos_file filename in
 
-  let c, annoted_tz = LiquidFromTezos.convert_contract env code in
+  let c, annoted_tz, type_annots = LiquidFromTezos.convert_contract env code in
   let c = LiquidClean.clean_contract c in
   let c = LiquidInterp.interp c in
   if !LiquidOptions.parseonly then exit 0;
@@ -124,6 +124,7 @@ let compile_tezos_file filename =
                          (try
                             LiquidToOCaml.string_of_structure
                               (LiquidToOCaml.structure_of_contract
+                                 ~type_annots
                                  untyped_ast)
                           with LiquidError _ ->
                             LiquidPrinter.Liquid.string_of_contract

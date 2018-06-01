@@ -23,7 +23,9 @@ val convert_const_notype :
 val convert_contract :
   LiquidTezosTypes.env ->
   LiquidTezosTypes.contract ->
-  LiquidTypes.loc_michelson LiquidTypes.contract * bool (* true if tz annoted *)
+  LiquidTypes.loc_michelson LiquidTypes.contract
+  * bool (* true if tz annoted *)
+  * (LiquidTypes.datatype, string) Hashtbl.t
 
 val contract_of_string :
   string -> (* maybe filename *)

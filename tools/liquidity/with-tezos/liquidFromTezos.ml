@@ -229,36 +229,49 @@ let rec convert_const env ?ty expr =
 
   | _ -> unknown_expr env "convert_const" expr
 
+let name_of_annot name =
+  Scanf.sscanf name "@%s" (fun s -> s)
+
 let rec convert_type env expr =
-  match expr with
-  | Prim(_, "unit", [], _debug) -> Tunit
-  | Prim(_, "timestamp", [], _debug) -> Ttimestamp
-  | Prim(_, "mutez", [], _debug) -> Ttez
-  | Prim(_, "int", [], _debug) -> Tint
-  | Prim(_, "nat", [], _debug) -> Tnat
-  | Prim(_, "bool", [], _debug) -> Tbool
-  | Prim(_, "key", [], _debug) -> Tkey
-  | Prim(_, "key_hash", [], _debug) -> Tkey_hash
-  | Prim(_, "signature", [], _debug) -> Tsignature
-  | Prim(_, "string", [], _debug) -> Tstring
-  | Prim(_, "operation", [], _debug) -> Toperation
-  | Prim(_, "address", [], _debug) -> Taddress
-  | Prim(_, "pair", [x;y], _debug) -> Ttuple [convert_type env x;
-                                              convert_type env y]
-  | Prim(_, "or", [x;y], _debug) -> Tor (convert_type env x,
-                                         convert_type env y)
-  | Prim(_, "contract", [x], _debug) -> Tcontract (convert_type env x)
-  | Prim(_, "lambda", [x;y], _debug) -> Tlambda
-                                                (convert_type env x,
-                                                 convert_type env y)
-  | Prim(_, "map", [x;y], _debug) ->
-    Tmap (convert_type env x, convert_type env y)
-  | Prim(_, "big_map", [x;y], _debug) ->
-    Tbigmap (convert_type env x, convert_type env y)
-  | Prim(_, "set", [x], _debug) -> Tset (convert_type env x)
-  | Prim(_, "list", [x], _debug) -> Tlist (convert_type env x)
-  | Prim(_, "option", [x], _debug) -> Toption (convert_type env x)
-  | _ -> unknown_expr env "convert_type" expr
+  let name = match expr with
+    | Prim(_, _, _, Some a) -> Some (name_of_annot a)
+    | _ -> None
+  in
+  let ty = match expr with
+    | Prim(_, "unit", [], _debug) -> Tunit
+    | Prim(_, "timestamp", [], _debug) -> Ttimestamp
+    | Prim(_, "mutez", [], _debug) -> Ttez
+    | Prim(_, "int", [], _debug) -> Tint
+    | Prim(_, "nat", [], _debug) -> Tnat
+    | Prim(_, "bool", [], _debug) -> Tbool
+    | Prim(_, "key", [], _debug) -> Tkey
+    | Prim(_, "key_hash", [], _debug) -> Tkey_hash
+    | Prim(_, "signature", [], _debug) -> Tsignature
+    | Prim(_, "string", [], _debug) -> Tstring
+    | Prim(_, "operation", [], _debug) -> Toperation
+    | Prim(_, "address", [], _debug) -> Taddress
+    | Prim(_, "pair", [x;y], _debug) -> Ttuple [convert_type env x;
+                                                convert_type env y]
+    | Prim(_, "or", [x;y], _debug) -> Tor (convert_type env x,
+                                           convert_type env y)
+    | Prim(_, "contract", [x], _debug) -> Tcontract (convert_type env x)
+    | Prim(_, "lambda", [x;y], _debug) -> Tlambda
+                                            (convert_type env x,
+                                             convert_type env y)
+    | Prim(_, "map", [x;y], _debug) ->
+      Tmap (convert_type env x, convert_type env y)
+    | Prim(_, "big_map", [x;y], _debug) ->
+      Tbigmap (convert_type env x, convert_type env y)
+    | Prim(_, "set", [x], _debug) -> Tset (convert_type env x)
+    | Prim(_, "list", [x], _debug) -> Tlist (convert_type env x)
+    | Prim(_, "option", [x], _debug) -> Toption (convert_type env x)
+    | _ -> unknown_expr env "convert_type" expr
+  in
+  begin match name with
+    | None -> ()
+    | Some name -> Hashtbl.add env.type_annots ty name
+  end;
+  ty
 
 (*
 let is_liq_annot name =
@@ -269,9 +282,6 @@ let liq_annot name =
   Scanf.sscanf name "@liq_%s" (fun s -> s)
 *)
 
-
-let name_of_annot name =
-  Scanf.sscanf name "@%s" (fun s -> s)
 
 let mic_loc env index annot ins =
   let loc_name = match annot with
@@ -487,7 +497,7 @@ let convert_contract env c =
   let parameter = convert_type env (find c "parameter") in
   let storage = convert_type env (find c "storage") in
   let code = convert_code env (find c "code") in
-  { code; storage; parameter }, env.annoted
+  { code; storage; parameter }, env.annoted, env.type_annots
 
 
 let convert_loc_table f loc_tables =
@@ -512,6 +522,7 @@ let contract_of_string filename s =
         let (nodes, loc_tables) = List.split nodes in
         let env = { filename;
                     loc_table = convert_loc_table filename loc_tables;
+                    type_annots = Hashtbl.create 17;
                     annoted = false;
                   } in
         Some (nodes, env)
@@ -530,6 +541,7 @@ let const_of_string filename s =
         let node, loc_table = Micheline.extract_locations node in
         let env = { filename;
                     loc_table = convert_loc_table filename [loc_table];
+                    type_annots = Hashtbl.create 17;
                     annoted = false;
                   } in
         Some (node, env)

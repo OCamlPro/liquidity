@@ -126,9 +126,10 @@ let rec convert_type ~abbrev ?name ty =
       | Some name -> name
       | None -> t_name
     in
-    if abbrev then
+    match ty with
+    | Tlambda _ | Tclosure _ | Tor _ | Ttuple _ when abbrev ->
       add_abbrev name ty caml_ty
-    else
+    | _ ->
       caml_ty
 
 
@@ -450,8 +451,18 @@ let rec convert_code ~abbrev expr =
        (Typ.constr (lid "variant")
                    [convert_type ~abbrev left_ty; Typ.any ()])
 
-let structure_of_contract ?(abbrev=true) contract =
+let structure_of_contract ?(abbrev=true) ?type_annots contract =
   clean_abbrevs ();
+  begin match type_annots with
+    | Some type_annots ->
+      Hashtbl.iter (fun ty s ->
+          match ty with
+          | Tlambda _ | Tclosure _ | Tor _ | Ttuple _
+            when abbrev && not @@ Hashtbl.mem abbrevs ty ->
+            ignore (add_abbrev s ty (convert_type ~abbrev:false ty))
+          | _ -> ()
+        ) type_annots
+    | None -> () end;
   let storage_caml = convert_type ~abbrev ~name:"storage" contract.storage in
   ignore (convert_type ~abbrev ~name:"parameter" contract.parameter);
   let code = convert_code ~abbrev contract.code in
