@@ -12,7 +12,43 @@ open LiquidTypes
 let compute decompile code to_inline =
 
   let to_inline = ref (if decompile then StringMap.empty else to_inline) in
-  
+
+  (* Do not inline terms larger than this value when decompiling *)
+  let inline_treshold_low = 100 in
+
+  let rec size exp =
+    match exp.desc with
+    | Const _ | Var _ | SetVar _ | Failwith _ -> 1
+    | Constructor (_, _, e) -> size e
+
+    | Seq (e1, e2) -> size e1 + size e2
+
+    | Let (_, _, e1, e2) -> size e1
+
+    | Loop (_, _, e1, e2) -> 30 + size e1 + size e2
+
+    | If (e1, e2, e3)
+    | MatchNat (e1, _, _, e2, _, e3) -> 40 + size e1 + size e3 + size e3
+
+    | MatchList (e1, _, _, _, e2, e3)
+    | MatchOption (e1, _, e2, _, e3) -> 40 + size e1 + size e3 + size e3
+
+    | Fold (_, _, _, e1, e2, e3) -> 30 + size e1 + size e3 + size e3
+    | Transfer (_, e1, e2, e3) -> 1 + size e1 + size e3 + size e3
+
+    | Apply (prim, _, l) ->
+      List.fold_left (fun acc e -> acc + size e) 1 l
+
+    | Lambda (_, _, _, e, _)
+    | Closure (_, _, _, _, e, _) -> 70 + size e
+
+    | Record (_, labels) ->
+      List.fold_left (fun acc (_, e) -> acc + size e) 1 labels
+
+    | MatchVariant (e, _, cases) ->
+      List.fold_left (fun acc (_, e) -> acc + size e) (size e + 40) cases
+  in
+
   let rec iter exp =
     match exp.desc with
     | Const _ -> exp
@@ -30,8 +66,10 @@ let compute decompile code to_inline =
       when vname = name -> (* special case for let x = e in x *)
       iter v
     | Let (name, loc, v, body) ->
-      if decompile && v.name = None && not v.fail && not v.transfer then
-         to_inline := StringMap.add name v !to_inline;
+      if decompile && v.name = None && not v.fail && not v.transfer
+         && size body <= inline_treshold_low
+      then
+        to_inline := StringMap.add name v !to_inline;
       let body = iter body in
       if StringMap.mem name !to_inline then
         body

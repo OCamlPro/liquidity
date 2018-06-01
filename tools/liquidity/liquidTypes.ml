@@ -497,7 +497,10 @@ let mk =
 
       | Apply (prim, _, l) ->
         prim = Prim_fail || List.exists (fun e -> e.fail) l,
-        List.exists (fun e -> e.transfer) l
+        prim = Prim_set_delegate
+        || prim = Prim_create_account
+        || prim = Prim_create_contract
+        || List.exists (fun e -> e.transfer) l
 
       | Closure (_, _, _, env, e, _) ->
         e.fail || List.exists (fun (_, e) -> e.fail) env,

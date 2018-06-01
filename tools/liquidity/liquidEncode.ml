@@ -360,7 +360,7 @@ let rec encode env ( exp : typed_exp ) : encoded_exp =
      let (new_name, env, count) = new_binding env name ~fail:e.fail e.ty in
      let body = encode env body in
      (* check_used env name loc count; *)
-     if not e.fail then begin
+     if not e.fail && not e.transfer then begin
        match !count with
        | c when c <= 0 ->
          decr_counts_vars env e;
