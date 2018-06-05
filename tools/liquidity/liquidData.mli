@@ -20,6 +20,6 @@ val data_of_liq :
   storage:string -> (string,error) result * (string,error) result
 
 val translate :
-  env -> syntax_contract -> string -> datatype -> const
+  env -> contract_sig -> string -> datatype -> const
 
 val string_of_const : ?ty:datatype -> const -> string

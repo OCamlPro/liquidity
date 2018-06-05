@@ -9,7 +9,7 @@
 
 open LiquidTypes
 
-let compute decompile code to_inline =
+let rec compute decompile code to_inline =
 
   let to_inline = ref (if decompile then StringMap.empty else to_inline) in
 
@@ -47,6 +47,9 @@ let compute decompile code to_inline =
 
     | MatchVariant (e, _, cases) ->
       List.fold_left (fun acc (_, e) -> acc + size e) (size e + 40) cases
+
+    | CreateContract (_, l, _) ->
+      List.fold_left (fun acc e -> acc + size e) 1 l
   in
 
   let rec iter exp =
@@ -168,10 +171,17 @@ let compute decompile code to_inline =
 
     | Failwith (_, _) -> exp
 
+    | CreateContract (loc, args, contract) ->
+      let args = List.map iter args in
+      let contract =
+        simplify_contract ~decompile_annoted:decompile contract !to_inline
+      in
+      { exp with desc = CreateContract(loc, args, contract) }
+
     | Constructor _ -> assert false (* never found in typed_exp *)
   in
 
   iter code
 
-let simplify_contract ?(decompile_annoted=false) contract to_inline =
+and simplify_contract ?(decompile_annoted=false) contract to_inline =
   { contract with code = compute decompile_annoted contract.code to_inline }

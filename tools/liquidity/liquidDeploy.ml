@@ -316,6 +316,7 @@ let compile_liquid liquid =
   in
   let syntax_ast, syntax_init, env =
     LiquidFromOCaml.translate ~filename ocaml_ast in
+  let contract_sig = syntax_ast.contract_sig in
   let typed_ast = LiquidCheck.typecheck_contract
       ~warnings:true env syntax_ast in
   let encoded_ast, to_inline =
@@ -333,15 +334,15 @@ let compile_liquid liquid =
     | Some syntax_init ->
       let inputs_infos = fst syntax_init in
       Some (
-        LiquidInit.compile_liquid_init env syntax_ast syntax_init,
+        LiquidInit.compile_liquid_init env contract_sig syntax_init,
         inputs_infos)
   in
 
   ( env, syntax_ast, pre_michelson, pre_init )
 
 
-let get_big_map_type syntax_contract =
-  match syntax_contract.storage with
+let get_big_map_type contract_sig =
+  match contract_sig.storage with
   | Ttuple (Tbigmap (k, v) :: _)
   | Trecord (_, (_, Tbigmap (k, v)) :: _) -> Some (k, v)
   | _ -> None
@@ -366,7 +367,7 @@ let convert_stack env stack_expr =
     ) stack_expr
 
 let run_pre ?(debug=false)
-    env syntax_contract pre_michelson source input storage =
+    env contract_sig pre_michelson source input storage =
   let rpc = if debug then "trace_code" else "run_code" in
   let c, loc_table =
     LiquidToTezos.convert_contract ~expand:true pre_michelson in
@@ -434,11 +435,11 @@ let run_pre ?(debug=false)
     let env = LiquidTezosTypes.empty_env env.filename in
     let storage =
       LiquidFromTezos.convert_const_type env storage_expr
-        syntax_contract.storage
+        contract_sig.storage
     in
     (* TODO parse returned operations *)
     let big_map_diff =
-      match big_map_diff_expr, get_big_map_type syntax_contract with
+      match big_map_diff_expr, get_big_map_type contract_sig with
       | None, _ -> None
       | Some _, None -> assert false
       | Some d, Some (tk, tv) ->
@@ -472,16 +473,16 @@ let run_pre ?(debug=false)
 
 
 let run ~debug liquid input_string storage_string =
-  let env, syntax_ast, pre_michelson, _ = compile_liquid liquid in
+  let env, { contract_sig }, pre_michelson, _ = compile_liquid liquid in
   let input =
     LiquidData.translate { env with filename = "run_input" }
-      syntax_ast input_string syntax_ast.parameter
+      contract_sig input_string contract_sig.parameter
   in
   let storage =
     LiquidData.translate { env with filename = "run_storage" }
-      syntax_ast storage_string syntax_ast.storage
+      contract_sig storage_string contract_sig.storage
   in
-  run_pre ~debug env syntax_ast
+  run_pre ~debug env contract_sig
     pre_michelson !LiquidOptions.source input storage
 
 let run_debug liquid input_string storage_string =
@@ -563,6 +564,7 @@ let forge_deploy ?head ?source ?public_key
     | None, None -> raise (ResponseError "forge_deploy: Missing source")
   in
   let env, syntax_ast, pre_michelson, pre_init_infos = compile_liquid liquid in
+  let contract_sig = syntax_ast.contract_sig in
   let pre_init, init_infos = match pre_init_infos with
     | None -> raise (ResponseError "forge_deploy: Missing init")
     | Some pre_init_infos -> pre_init_infos
@@ -577,7 +579,7 @@ let forge_deploy ?head ?source ?public_key
         try
           List.map2 (fun input_str (input_name,_, input_ty) ->
             LiquidData.translate { env with filename = input_name }
-              syntax_ast input_str input_ty
+              contract_sig input_str input_ty
             ) init_params_strings init_infos
         with Invalid_argument _ ->
           raise
@@ -589,8 +591,8 @@ let forge_deploy ?head ?source ?public_key
       in
       let eval_input_storage =
         try
-          LiquidData.default_const syntax_ast.storage
-          |> LiquidEncode.encode_const env syntax_ast
+          LiquidData.default_const contract_sig.storage
+          |> LiquidEncode.encode_const env contract_sig
         with Not_found -> failwith "could not construct dummy storage for eval"
       in
       let eval_input_parameter = match init_params with
@@ -598,7 +600,7 @@ let forge_deploy ?head ?source ?public_key
         | [x] -> x
         | _ -> CTuple init_params in
 
-      run_pre env syntax_c c (Some source)
+      run_pre env contract_sig c (Some source)
         eval_input_parameter eval_input_storage
       >>= fun (eval_init_storage, big_map_diff, _) ->
       (* Add elements of big map *)
@@ -621,7 +623,7 @@ let forge_deploy ?head ?source ?public_key
       in
       Printf.eprintf "Evaluated initial storage: %s\n%!"
         (LiquidData.string_of_const eval_init_storage);
-      return (LiquidEncode.encode_const env syntax_ast eval_init_storage)
+      return (LiquidEncode.encode_const env contract_sig eval_init_storage)
   in
   init_storage_lwt >>= fun init_storage ->
 
@@ -777,7 +779,8 @@ let get_storage liquid address =
     let storage_expr = LiquidToTezos.const_of_ezjson r in
     let env = LiquidTezosTypes.empty_env env.filename in
     return
-      (LiquidFromTezos.convert_const_type env storage_expr syntax_ast.storage)
+      (LiquidFromTezos.convert_const_type env storage_expr
+         syntax_ast.contract_sig.storage)
   with Not_found ->
     raise_response_error "get_storage" r
 
@@ -787,10 +790,11 @@ let forge_call ?head ?source ?public_key liquid address parameter_string =
     | Some source, _ | _, Some source -> source
     | None, None -> raise (ResponseError "forge_call: Missing source")
   in
-  let env, syntax_ast, pre_michelson, pre_init_infos = compile_liquid liquid in
+  let env, { contract_sig }, pre_michelson, pre_init_infos =
+    compile_liquid liquid in
   let parameter =
     LiquidData.translate { env with filename = "call_parameter" }
-      syntax_ast parameter_string syntax_ast.parameter
+      contract_sig parameter_string contract_sig.parameter
   in
   let _, loc_table =
     LiquidToTezos.convert_contract ~expand:true pre_michelson in

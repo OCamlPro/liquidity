@@ -81,10 +81,10 @@ let () =
 
 
 (* The minimal version of liquidity files that are accepted by this compiler *)
-let minimal_version = 0.13
+let minimal_version = 0.2
 
 (* The maximal version of liquidity files that are accepted by this compiler *)
-let maximal_version = 0.17
+let maximal_version = 0.2
 
 
 open Asttypes
@@ -624,6 +624,63 @@ let rec translate_code env exp =
                 translate_code env contract_exp,
                 translate_code env tez_exp,
                 translate_code env arg_exp)
+    | { pexp_desc =
+          Pexp_apply (
+            { pexp_desc = Pexp_ident
+                  { txt = Ldot(Lident "Contract", "create") } },
+            [
+              Nolabel, delegate_exp;
+              Nolabel, manager_exp;
+              Nolabel, delegatable_exp;
+              Nolabel, spendable_exp;
+              Nolabel, amout_exp;
+              Nolabel, storage_exp;
+              Nolabel,
+              { pexp_desc =
+                  Pexp_fun
+                    (Nolabel, None,
+                     { ppat_desc =
+                         Ppat_constraint
+                           ({ ppat_desc = Ppat_var { txt = "parameter" }},
+                            param_type) },
+                     { pexp_desc =
+                         Pexp_fun
+                           (Nolabel, None,
+                            { ppat_desc =
+                                Ppat_constraint
+                                  ({ ppat_desc = Ppat_var { txt = "storage" }},
+                                   storage_type) },
+                            contract_body_exp
+                           )}
+                    )};
+            ]) } ->
+      CreateContract
+        (loc,
+         [translate_code env delegate_exp;
+          translate_code env manager_exp;
+          translate_code env delegatable_exp;
+          translate_code env spendable_exp;
+          translate_code env amout_exp;
+          translate_code env storage_exp;
+         ],
+         {
+           contract_sig = {
+             parameter = translate_type env param_type;
+             storage = translate_type env storage_type;
+           };
+           code = translate_code env contract_body_exp;
+         })
+    | { pexp_desc =
+          Pexp_apply (
+            { pexp_desc = Pexp_ident
+                  { txt = Ldot(Lident "Contract", "create") } }, _);
+        pexp_loc } ->
+      error_loc pexp_loc
+        "Wrong number or order of arguements for Contract.create.\n\
+         Expected syntax is : Contract.create <delegate> <manager> \
+         <delegatable> <spendable> <amount> <initial_storage> \
+         (fun (parameter : <parameter_type>) (storage : <storage_type>) -> \
+         <contract code>)"
 
     | { pexp_desc = Pexp_let (Nonrecursive, [ {
         pvb_pat = pat;
@@ -1040,8 +1097,10 @@ let rec translate_head env ext_funs head_exp args =
      let code = translate_code env (inline_funs exp ext_funs) in
      {
        code;
-       parameter = List.assoc "parameter" args;
-       storage = List.assoc "storage" args;
+       contract_sig = {
+         parameter = List.assoc "parameter" args;
+         storage = List.assoc "storage" args;
+       };
      }
 
 let rec translate_initial_storage env exp args =

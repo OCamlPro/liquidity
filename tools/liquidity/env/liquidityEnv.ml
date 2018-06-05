@@ -25,7 +25,9 @@ type key = Key of string
 type key_hash = Key_hash of string
 type signature = Signature of string
 
-type ('arg, 'res) contract
+type 'arg contract
+type operation
+type address
 
 module Signature : sig
   val of_string : string -> signature
@@ -90,8 +92,8 @@ module Current : sig
   val time : unit -> timestamp
   val balance : unit -> tez
   val gas : unit -> tez (* NOT TESTED *)
-  val contract : unit -> ('a,'b) contract (* unsafe, NOT IMPLEMENTED !! *)
-  val source : unit -> ('a,'b) contract (* NOT TESTED *)
+  val contract : unit -> 'a contract (* unsafe, NOT IMPLEMENTED !! *)
+  val source : unit -> address (* NOT TESTED *)
 
 end = struct
 
@@ -501,24 +503,20 @@ end
 
 module Contract : sig
 
-  val call : ('arg, 'res) contract -> tez -> 'storage -> 'arg ->
-             'res * 'storage
+  val call : 'arg contract -> tez -> 'arg -> operation
 
-  val manager : ('a,'b) contract -> key_hash
+  val manager : 'a -> 'b
   val create : key_hash -> key_hash option ->
                bool -> bool -> tez ->
-               ( ('a *'b) -> ('c * 'b) ) -> 'b ->
-               ('a,'c) contract
-  val source : unit -> ('a,'b) contract
-
+              'b -> ( 'a  -> 'b -> (operation list * 'b) ) ->
+               operation * 'a contract
 end = struct
 
-  let call contract amount storage arg = assert false (* TODO *)
+  let call contract amount arg = assert false (* TODO *)
   let manager _contract = assert false (* TODO *)
-  let create _key _manager
-             _spendable _delegatable _amount
-             _f _storage = assert false (* TODO *)
-  let source () = assert false (* TODO *)
+  let create _manager _delegate
+             _delegatable _spendable _amount
+             _storage _f = assert false (* TODO *)
 end
 
 type ('a,'b) variant = Left of 'a | Right of 'b
@@ -551,8 +549,8 @@ end
 
 module Account : sig
   val create : key_hash -> key_hash option ->
-               bool -> tez -> (unit,unit) contract
-  val default : key_hash -> (unit,unit) contract
+               bool -> tez -> operation * unit contract
+  val default : key_hash -> unit contract
 end = struct
   let create key key_opt _spendable _amount = assert false (* TODO NOT TESTED *)
   let default _key = assert false (* TODO *)
@@ -561,11 +559,11 @@ end
 module Crypto : sig
   val hash : 'a -> string
   val hash_key : key -> key_hash
-  val check : key -> signature * string -> bool
+  val check : key -> signature -> string -> bool
 end = struct
   let hash _ = assert false (*TODO *)
   let hash_key _ = assert false (*TODO *)
-  let check _key (_sig, _hash) = assert false (* TODO *)
+  let check _key _sig _hash = assert false (* TODO *)
 end
 
 type int = integer

@@ -8,16 +8,7 @@
 (**************************************************************************)
 
 (* The version that will be required to compile the generated files. *)
-let output_version = "0.17"
-
-(*
-type storage = ...
-let contract
-      (parameter : timestamp)
-      (storage: storage )
-      : unit * storage =
-       ...
- *)
+let output_version = "0.2"
 
 open Asttypes
 open Longident
@@ -451,6 +442,25 @@ let rec convert_code ~abbrev expr =
        (Typ.constr (lid "variant")
                    [convert_type ~abbrev left_ty; Typ.any ()])
 
+  | CreateContract (loc, args, contract) ->
+    Exp.apply ~loc:(loc_of_loc loc)
+      (Exp.ident (lid "Contract.create"))
+      ((List.map (fun arg ->
+           Nolabel,
+           convert_code ~abbrev arg) args) @ [
+         Nolabel,
+         Exp.fun_ ~loc:(loc_of_loc loc) Nolabel None
+           (Pat.constraint_
+              (pat_of_name ~loc "parameter")
+              (convert_type ~abbrev contract.contract_sig.parameter))
+           (Exp.fun_ ~loc:(loc_of_loc loc) Nolabel None
+              (Pat.constraint_
+                 (pat_of_name ~loc "storage")
+                 (convert_type ~abbrev contract.contract_sig.storage))
+              (convert_code ~abbrev contract.code))
+       ])
+
+
 let structure_of_contract ?(abbrev=true) ?type_annots contract =
   clean_abbrevs ();
   begin match type_annots with
@@ -463,8 +473,8 @@ let structure_of_contract ?(abbrev=true) ?type_annots contract =
           | _ -> ()
         ) type_annots
     | None -> () end;
-  let storage_caml = convert_type ~abbrev ~name:"storage" contract.storage in
-  ignore (convert_type ~abbrev ~name:"parameter" contract.parameter);
+  let storage_caml = convert_type ~abbrev ~name:"storage" contract.contract_sig.storage in
+  ignore (convert_type ~abbrev ~name:"parameter" contract.contract_sig.parameter);
   let code = convert_code ~abbrev contract.code in
   let contract_caml = Str.extension (
       { txt = "entry"; loc = !default_loc },
@@ -475,7 +485,7 @@ let structure_of_contract ?(abbrev=true) ?type_annots contract =
               (Exp.fun_ Nolabel None
                  (Pat.constraint_
                     (pat_of_name "parameter")
-                    (convert_type ~abbrev contract.parameter)
+                    (convert_type ~abbrev contract.contract_sig.parameter)
                  )
                  (Exp.fun_ Nolabel None
                     (Pat.constraint_

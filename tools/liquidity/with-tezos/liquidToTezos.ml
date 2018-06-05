@@ -226,7 +226,11 @@ let rec convert_code expand expr =
   | SELF -> prim "SELF" [] name
   | STEPS_TO_QUOTA -> prim "STEPS_TO_QUOTA" [] name
   | CREATE_ACCOUNT -> prim "CREATE_ACCOUNT" [] name
-  | CREATE_CONTRACT -> prim "CREATE_CONTRACT" [] name
+  | CREATE_CONTRACT contract ->
+    let p, s, c = convert_contract_raw expand contract in
+    let p = Micheline.map_node (fun l -> l, None) (fun n -> n) p in
+    let s = Micheline.map_node (fun l -> l, None) (fun n -> n) s in
+    prim "CREATE_CONTRACT" [seq [p; s; c] None] name
 
   | XOR -> prim "XOR" [] name
   | AND -> prim "AND" [] name
@@ -251,19 +255,21 @@ let rec convert_code expand expr =
       SEQ (LiquidMisc.list_init n (fun _ -> ii CDR) @ [{ expr with ins = CDR }])
     else prim (Printf.sprintf "C%sDR" (String.make n 'D')) [] name
   | SIZE -> prim "SIZE" [] name
-  | DEFAULT_ACCOUNT -> prim "DEFAULT_ACCOUNT" [] name
+  | IMPLICIT_ACCOUNT -> prim "IMPLICIT_ACCOUNT" [] name
   | SET_DELEGATE -> prim "SET_DELEGATE" [] name
 
-
-let convert_contract ~expand c =
+and convert_contract_raw expand c =
   let loc = LiquidLoc.noloc in
-  let arg_type = convert_type ~loc c.parameter in
-  let storage_type = convert_type ~loc c.storage in
+  let arg_type = convert_type ~loc c.contract_sig.parameter in
+  let storage_type = convert_type ~loc c.contract_sig.storage in
   let code = convert_code expand c.code in
   let p = Micheline.Prim(loc, "parameter", [arg_type], None) in
   let s = Micheline.Prim(loc, "storage", [storage_type], None) in
   let c = Micheline.Prim((loc, None), "code", [code], None) in
+  (p, s, c)
 
+let convert_contract ~expand c =
+  let p, s, c = convert_contract_raw expand c in
   let mp, tp = Micheline.extract_locations p in
   let ms, ts = Micheline.extract_locations s in
   let code_loc_offset = List.length tp + List.length ts + 1 in

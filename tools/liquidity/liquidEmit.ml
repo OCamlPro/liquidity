@@ -121,7 +121,7 @@ let rec emit_code ~expand code =
   | HASH_KEY -> M_INS ("HASH_KEY", name)
   | CHECK_SIGNATURE -> M_INS ("CHECK_SIGNATURE", name)
   | SIZE -> M_INS ("SIZE", name)
-  | DEFAULT_ACCOUNT -> M_INS ("DEFAULT_ACCOUNT", name)
+  | IMPLICIT_ACCOUNT -> M_INS ("IMPLICIT_ACCOUNT", name)
   | SET_DELEGATE -> M_INS ("SET_ACCOUNT", name)
   | CONS -> M_INS ("CONS", name)
   | OR -> M_INS ("OR", name)
@@ -141,7 +141,14 @@ let rec emit_code ~expand code =
   | SOURCE -> M_INS ("SOURCE", name)
   | MOD -> M_INS ("MOD", name)
   | DIV -> M_INS ("DIV", name)
-  | CREATE_CONTRACT -> M_INS ("CREATE_CONTRACT", name)
+  | CREATE_CONTRACT contract ->
+    M_INS_EXP ("CREATE_CONTRACT", [], [
+        M_INS_EXP ("SEQ", [], [
+            M_INS_EXP ("parameter", [contract.contract_sig.parameter], [], None);
+            M_INS_EXP ("storage", [contract.contract_sig.storage], [], None);
+            M_INS_EXP ("code", [], [emit_code ~expand contract.code], None);
+          ], None)
+      ], name)
 
 let emit_contract ~expand contract =
   { contract with code = emit_code ~expand contract.code }

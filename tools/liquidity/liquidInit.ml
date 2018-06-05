@@ -13,7 +13,7 @@ type init =
   | Init_code of (LiquidTypes.syntax_contract *
                   LiquidTypes.loc_michelson_contract)
 
-let c_unit ~loc = mk (Const (loc, Tunit, CUnit)) ()
+let c_empty_op ~loc = mk (Const (loc, Tlist Toperation, CList [])) ()
 let mk_nat ~loc i =
   mk (Const (loc, Tnat, CNat (LiquidPrinter.integer_of_int i))) ()
 
@@ -119,6 +119,12 @@ let rec subst_empty_big_map code =
       if e == e' && List.for_all2 (fun (_, e) (_, e') -> e == e') l l'
       then desc
       else MatchVariant (e', loc, l')
+
+    | CreateContract (loc, l, contract) ->
+      let l' = List.map subst_empty_big_map l in
+      if List.for_all2 (==) l l' then desc
+      else CreateContract (loc, l', contract)
+
   in
   if desc == code.desc then
     code
@@ -155,8 +161,9 @@ let tmp_contract_of_init ~loc (args, code) storage_ty =
   (* Empty big map is fetched in given storage which is always empty *)
   let code = subst_empty_big_map code in
   let code =
-    mk(Apply (Prim_tuple, loc, [ c_unit ~loc; code ])) () in
-  { parameter; storage; code }
+    mk(Apply (Prim_tuple, loc, [ c_empty_op ~loc; code ])) () in
+  let contract_sig = { parameter; storage } in
+  { contract_sig; code }
 
 let compile_liquid_init env contract ((args, sy_init) as init) =
   let loc = LiquidCheck.loc_exp sy_init in

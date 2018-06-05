@@ -115,6 +115,15 @@ let rec bv code =
            StringSet.union set bv_case
          ) StringSet.empty args)
 
+  | CreateContract (loc, args, contract) ->
+    let bc =
+      bv contract.code
+      |> StringSet.remove "parameter"
+      |> StringSet.remove "storage" in
+     List.fold_left (fun set arg ->
+         StringSet.union set (bv arg)
+       ) bc args
+
 let mk desc exp bv = { exp with desc; bv }
 
 let rec bound code =
@@ -321,7 +330,21 @@ let rec bound code =
      let desc = MatchVariant(exp,loc,args) in
      mk desc code bv
 
-let bound_contract contract =
+  | CreateContract (loc, args, contract) ->
+    let args = List.map bound args in
+    let contract = bound_contract contract in
+    let bv = contract.code.bv
+             |> StringSet.remove "parameter"
+             |> StringSet.remove "storage" in
+    let bv =
+      List.fold_left (fun set arg ->
+          StringSet.union set arg.bv
+        ) bv args
+    in
+    let desc = CreateContract (loc, args, contract) in
+    mk desc code bv
+
+and bound_contract contract =
   let c = bound contract.code in
   assert (StringSet.equal c.bv (bv contract.code));
   { contract with code = c }

@@ -65,7 +65,7 @@ let compile_liquid_file filename =
   begin match syntax_init with
   | None -> ()
   | Some syntax_init ->
-    match LiquidInit.compile_liquid_init env syntax_ast syntax_init with
+    match LiquidInit.compile_liquid_init env syntax_ast.contract_sig syntax_init with
     | LiquidInit.Init_constant c_init ->
       let s = LiquidPrinter.Michelson.line_of_const c_init in
       let output = env.filename ^ ".init.tz" in
@@ -244,7 +244,7 @@ end
 
 let parse_tez_to_string expl amount =
   match LiquidData.translate (LiquidFromOCaml.initial_env expl)
-          dummy_syntax_contract amount Ttez
+          dummy_contract_sig amount Ttez
   with
   | CTez t ->
     let mutez = match t.mutez with

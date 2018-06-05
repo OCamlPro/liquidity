@@ -72,7 +72,7 @@ let rec translate_init env syntax_ast mapper item =
               fst (LiquidTypes.new_binding tenv name
                      (LiquidFromOCaml.translate_type env ty))
             ) (LiquidTypes.empty_typecheck_env ~warnings:true
-                 LiquidTypes.dummy_syntax_contract env) !args
+                 LiquidTypes.dummy_contract_sig env) !args
           in
           let sy_init = LiquidFromOCaml.translate_expression env exp in
           let ty_init = LiquidCheck.typecheck_code tenv sy_init in

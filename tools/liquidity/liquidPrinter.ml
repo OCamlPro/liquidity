@@ -363,11 +363,11 @@ module Michelson = struct
 
   let bprint_contract bprint_code fmt b indent contract =
     Printf.bprintf b "parameter%c%s" fmt.newline indent;
-    bprint_type fmt b indent contract.parameter;
+    bprint_type fmt b indent contract.contract_sig.parameter;
     Printf.bprintf b ";%c" fmt.newline;
 
     Printf.bprintf b "storage%c%s" fmt.newline indent;
-    bprint_type fmt b indent contract.storage;
+    bprint_type fmt b indent contract.contract_sig.storage;
     Printf.bprintf b ";%c" fmt.newline;
 
     Printf.bprintf b "code%c%s" fmt.newline indent;
@@ -547,8 +547,14 @@ module Michelson = struct
     | CREATE_ACCOUNT ->
       Printf.bprintf b "CREATE_ACCOUNT";
       bprint_pre_name b name;
-    | CREATE_CONTRACT ->
-      Printf.bprintf b "CREATE_CONTRACT";
+    | CREATE_CONTRACT contract ->
+      Printf.bprintf b "CREATE_CONTRACT { parameter ";
+      bprint_type fmt b "" contract.contract_sig.parameter;
+      Printf.bprintf b " ; storage ";
+      bprint_type fmt b "" contract.contract_sig.storage;
+      Printf.bprintf b " ; code ";
+      bprint_arg fmt b contract.code;
+      Printf.bprintf b " }";
       bprint_pre_name b name;
     | H ->
       Printf.bprintf b "H";
@@ -609,8 +615,8 @@ module Michelson = struct
     | SIZE ->
       Printf.bprintf b "SIZE";
       bprint_pre_name b name;
-    | DEFAULT_ACCOUNT ->
-      Printf.bprintf b "DEFAULT_ACCOUNT";
+    | IMPLICIT_ACCOUNT ->
+      Printf.bprintf b "IMPLICIT_ACCOUNT";
       bprint_pre_name b name;
     | SET_DELEGATE ->
       Printf.bprintf b "SET_DELEGATE";
@@ -1029,6 +1035,22 @@ module Liquid = struct
              bprint_code_rec ~debug b indent4 e;
          ) cases;
        ()
+    | CreateContract (_loc, args, contract) ->
+       Printf.bprintf b "\n%s(Contract.call" indent;
+       let indent2 = indent ^ "  " in
+       List.iter (fun exp ->
+           bprint_code_rec ~debug b indent2 exp
+         ) args;
+       let indent4 = indent2 ^ "  " in
+       Printf.bprintf b "\n%s(fun " indent;
+       Printf.bprintf b "(parameter : ";
+       bprint_type b indent2 contract.contract_sig.parameter;
+       Printf.bprintf b ") (storage : ";
+       bprint_type b indent2 contract.contract_sig.storage;
+       Printf.bprintf b ") ->\n%s" indent2;
+       bprint_code_rec ~debug b indent4 contract.code;
+       Printf.bprintf b "))"
+
 
   let rec bprint_code_types ~debug b indent code =
     bprint_code_base
@@ -1048,10 +1070,10 @@ module Liquid = struct
     Printf.bprintf b "let%%entry main\n";
     (* Printf.bprintf b "    (amount: tez)\n"; *)
     Printf.bprintf b "    (parameter/2: ";
-    bprint_type b indent2 contract.parameter;
+    bprint_type b indent2 contract.contract_sig.parameter;
     Printf.bprintf b ")\n";
     Printf.bprintf b "    (storage/1: ";
-    bprint_type b indent2 contract.storage;
+    bprint_type b indent2 contract.contract_sig.storage;
     Printf.bprintf b ") = \n";
 
     bprint_code ~debug b indent contract.code
@@ -1111,3 +1133,5 @@ let string_of_node node =
   | N_LEFT _ -> "N_LEFT"
   | N_RIGHT _ -> "N_RIGHT"
   | N_ABS -> "N_ABS"
+  | N_CREATE_CONTRACT _ -> "N_CREATE_CONTRACT"
+  | N_RESULT (_, i) -> Printf.sprintf "N_RESULT %d" i

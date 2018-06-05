@@ -22,7 +22,8 @@ type graph = {
     mutable graph_nodes : node list;
     mutable graph_edges : edge list;
     mutable node_counter : int;
-    graph_attributes : graph_attributes list;
+    mutable graph_attributes : graph_attributes list;
+    mutable graph_subgraphs : graph list;
   }
 
 and node = {
@@ -41,6 +42,7 @@ and edge = {
 and graph_attributes =
   GraphSize of float * float
 | Ratio of graph_ratio
+| Compound of bool
 
 and graph_ratio =
   RatioFill
@@ -96,6 +98,7 @@ let create name graph_attributes = {
     graph_nodes = [];
     graph_edges = [];
     graph_attributes = graph_attributes;
+    graph_subgraphs = [];
   }
 
 let node graph name node_attributes =
@@ -141,15 +144,21 @@ let add_edge_attrs edge attrs =
   edge.edge_attributes <- edge.edge_attributes @ attrs
 let rename_node node name = node.node_name <- name
 
+let add_subgraph graph subgraph =
+  graph.graph_subgraphs <- subgraph :: graph.graph_subgraphs;
+  graph.graph_attributes <- graph.graph_attributes @ [Compound true]
+
 open Printf
 
-let save_in graph oc =
+let rec save_in ~is_sub graph oc =
   let graph_attribute attr =
     match attr with
       GraphSize (f1,f2) -> bprintf oc "  size=\"%f,%f!\";\n" f1 f2
     | Ratio ratio ->
       bprintf oc "  ratio=\"%s\";\n" (match ratio with
-        RatioFill -> "fill")
+            RatioFill -> "fill")
+    | Compound c ->
+      bprintf oc "  compound=%b;\n" c
 
   and edge_attribute attr =
     match attr with
@@ -208,30 +217,35 @@ let save_in graph oc =
         )
 
   in
-  bprintf oc "digraph %S {\n" graph.graph_name;
+  bprintf oc "%s %S {\n"
+    (if is_sub then "subgraph" else "digraph")
+    graph.graph_name;
   List.iter graph_attribute graph.graph_attributes;
   List.iter (fun node ->
       bprintf oc "  node%d [ label=%S" node.node_id node.node_name;
       List.iter node_attribute node.node_attributes;
       bprintf oc " ];\n";
-      ) graph.graph_nodes;
+    ) graph.graph_nodes;
   List.iter (fun edge ->
       bprintf oc "  node%d -> node%d ["
         edge.edge_from.node_id edge.edge_to.node_id;
       (match edge.edge_attributes with
-          [] -> ()
-        | attr :: tail ->
-            edge_attribute attr;
-            List.iter (fun attr ->
-                bprintf oc ", ";
-                edge_attribute attr) tail);
+         [] -> ()
+       | attr :: tail ->
+         edge_attribute attr;
+         List.iter (fun attr ->
+             bprintf oc ", ";
+             edge_attribute attr) tail);
       bprintf oc " ];\n";
-  ) graph.graph_edges;
+    ) graph.graph_edges;
+  List.iter (fun sub_g ->
+      save_in ~is_sub:true sub_g oc
+    ) graph.graph_subgraphs;
   bprintf oc "}\n"
 
 let to_string graph =
   let b = Buffer.create 1000 in
-  save_in graph b;
+  save_in ~is_sub:false graph b;
   Buffer.contents b
 
                   (*

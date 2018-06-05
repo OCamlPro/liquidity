@@ -131,7 +131,8 @@ let rec loc_exp e = match e.desc with
   | Record (loc, _)
   | Constructor (loc, _, _)
   | MatchVariant (_, loc, _)
-  | Failwith (_, loc) -> loc
+  | Failwith (_, loc)
+  | CreateContract (loc, _, _) -> loc
 
   | Let (_, _, _, e) -> loc_exp e
 
@@ -279,14 +280,12 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
   | Apply (Prim_unknown, loc,
            ({ desc = Var ("Contract.call", varloc, [])} :: args)) ->
     let nb_args = List.length args in
-    if nb_args <> 4 then
+    if nb_args <> 3 then
       error loc
-        "Contract.call expects 4 arguments, it was given %d arguments."
+        "Contract.call expects 3 arguments, it was given %d arguments."
         nb_args
     else
-      error loc
-        "The result of Contract.call must be bound under a \
-         \"let (result, storage) =\" directly."
+      error loc "Bad syntax for Contract.call."
 
   | Apply (Prim_unknown, loc,
            ({ desc = Var (name, varloc, [])} ::args)) ->
@@ -554,6 +553,28 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
     in
     mk ?name:exp.name desc ty
 
+  | CreateContract (loc, args, contract) ->
+    let contract = typecheck_contract ~warnings:env.warnings env.env contract in
+    match args with
+    | [manager; delegate; delegatable; spendable; init_balance; init_storage] ->
+      let manager = typecheck_expected "manager" env Tkey_hash manager in
+      let delegate =
+        typecheck_expected "delegate" env (Toption Tkey_hash) delegate in
+      let delegatable =
+        typecheck_expected "delegatable" env Tbool delegatable in
+      let spendable = typecheck_expected "spendable" env Tbool spendable in
+      let init_balance =
+        typecheck_expected "initial balance" env Ttez init_balance in
+      let init_storage = typecheck_expected "initial storage"
+          env contract.contract_sig.storage init_storage in
+      let desc = CreateContract (loc, [manager; delegate; delegatable;
+                                       spendable; init_balance; init_storage],
+                                 contract) in
+      mk ?name:exp.name desc (Ttuple [Toperation; Taddress])
+    | _ ->
+      error loc "Contract.create expects 7 arguments, was given %d"
+        (List.length args)
+
 and find_case loc env constr cases =
   match List.find_all (function
       | CAny, _ -> true
@@ -770,7 +791,7 @@ and typecheck_prim2 env prim loc args =
 
   | Prim_Some, [ ty ] -> Toption ty
   | Prim_fail, [ Tunit ] -> Tfail
-  | Prim_self, [ Tunit ] -> Tcontract env.contract.parameter
+  | Prim_self, [ Tunit ] -> Tcontract env.t_contract_sig.parameter
   | Prim_now, [ Tunit ] -> Ttimestamp
   | Prim_balance, [ Tunit ] -> Ttez
   | Prim_source, [ Tunit ] -> Taddress
@@ -785,11 +806,13 @@ and typecheck_prim2 env prim loc args =
 
   | Prim_manager, [ Tcontract _ ] ->
      Tkey_hash
+  | Prim_manager, [ Taddress ] ->
+     Toption Tkey_hash
   | Prim_address, [ Tcontract _ ] ->
      Taddress
 
   | Prim_create_account, [ Tkey_hash; Toption Tkey_hash; Tbool; Ttez ] ->
-     Tcontract Tunit
+     Ttuple [Toperation; Tcontract Tunit]
   | Prim_create_account, _ ->
      error_prim loc Prim_create_account args
                 [ Tkey_hash; Toption Tkey_hash; Tbool; Ttez ]
@@ -799,52 +822,6 @@ and typecheck_prim2 env prim loc args =
 
   | Prim_set_delegate, [ Toption Tkey_hash ] ->
     Toperation
-
-  | Prim_create_contract, [ Tkey_hash; (* manager *)
-                            Toption Tkey_hash; (* delegate *)
-                            Tbool; (* spendable *)
-                            Tbool; (* delegatable *)
-                            Ttez; (* initial amount *)
-                            Tlambda (
-                              Ttuple [ arg_type;
-                                       storage_arg],
-                              Ttuple [ Tlist Toperation; storage_res]);
-                            storage_init
-                          ] ->
-     if storage_arg <> storage_res then
-       error loc "Contract.create: inconsistent storage in contract";
-     if storage_res <> storage_init then
-       error loc "Contract.create: wrong type for storage init";
-
-     Tcontract arg_type
-
-  | Prim_create_contract, _ ->
-
-     let expected_args = [ Tkey_hash; Toption Tkey_hash;
-                           Tbool; Tbool; Ttez ] in
-     let nexpected = 7 in
-     let prim = LiquidTypes.string_of_primitive Prim_create_contract in
-     let nargs = List.length args in
-     if nargs <> nexpected then
-       error loc "Prim %S: %d args provided, %d args expected"
-             prim nargs nexpected
-     else
-       let args = List.map (fun { ty } -> ty) args in
-       List.iteri (fun i (arg, expected) ->
-           if arg <> expected then
-             error loc
-                   "Primitive %s, argument %d:\nExpected type:%sProvided type:%s"
-                   prim (i+1)
-                   (LiquidPrinter.Liquid.string_of_type expected)
-                   (LiquidPrinter.Liquid.string_of_type arg)
-
-         ) (List.combine args expected_args);
-       error loc
-             "Primitive %s, argument %d:\n\
-              Expected type: (arg * storage) -> (res * storage)\n\
-              Provided type:%s"
-             prim 6
-             (LiquidPrinter.Liquid.string_of_type (List.nth args 5))
 
   | Prim_exec, [ ty;
                  ( Tlambda(from_ty, to_ty)
@@ -954,7 +931,7 @@ and typecheck_apply ?name env prim loc args =
   mk ?name (Apply (prim, loc, args)) ty
 
 
-let typecheck_contract ~warnings env contract =
+and typecheck_contract ~warnings env contract =
   let env =
     {
       warnings;
@@ -965,12 +942,12 @@ let typecheck_contract ~warnings env contract =
       to_inline = ref StringMap.empty;
       env = env;
       clos_env = None;
-      contract;
+      t_contract_sig = contract.contract_sig;
     } in
 
-  let (env, _) = new_binding env  "storage" contract.storage in
-  let (env, _) = new_binding env "parameter" contract.parameter in
-  let expected_ty = Ttuple [Tlist Toperation; contract.storage] in
+  let (env, _) = new_binding env  "storage" contract.contract_sig.storage in
+  let (env, _) = new_binding env "parameter" contract.contract_sig.parameter in
+  let expected_ty = Ttuple [Tlist Toperation; contract.contract_sig.storage] in
   let code =
     typecheck_expected "return value" env expected_ty contract.code in
   { contract with code }

@@ -74,7 +74,7 @@ let drop_stack ~loc n depth =
 
 (* The type of a contract code is usually:
      lambda (pair (pair tez 'arg) 'global) -> (pair 'ret 'global) *)
-let translate_code code =
+let rec translate_code code =
 
   let rec compile_desc depth env desc =
     match desc with
@@ -255,6 +255,12 @@ let translate_code code =
       acc @ arg @
       [ii ~loc @@ ITER (seq (arg_annot @ body_begin @ body @ body_end))]
 
+    | CreateContract (loc, args, contract) ->
+      let _depth, args_code = compile_args depth env args in
+      let contract = translate contract in
+      args_code @
+      [ii ~loc @@ CREATE_CONTRACT contract; ii ~loc PAIR]
+
     (* removed during typechecking, replaced by tuple *)
     | Record _ -> assert false
     | Constructor _ -> assert false
@@ -337,7 +343,7 @@ the ending NIL is not annotated with a type *)
       | Prim_set_update|Prim_set_add|Prim_set_remove
       | Prim_set_mem|Prim_set_reduce|Prim_Some
       | Prim_concat|Prim_list_reduce|Prim_list_map|Prim_manager
-      | Prim_create_account|Prim_create_contract|Prim_set_map
+      | Prim_create_account|Prim_set_map
       | Prim_hash|Prim_hash_key|Prim_check|Prim_default_account|Prim_list_size
       | Prim_set_size|Prim_map_size|Prim_or|Prim_and|Prim_xor
       | Prim_not|Prim_abs|Prim_int|Prim_neg|Prim_lsr|Prim_lsl
@@ -383,12 +389,11 @@ the ending NIL is not annotated with a type *)
 
          | Prim_manager, 1 -> [ ii MANAGER ]
          | Prim_address, 1 -> [ ii ADDRESS ]
-         | Prim_create_account, 4 -> [ ii CREATE_ACCOUNT ]
-         | Prim_create_contract, 7 -> [ ii CREATE_CONTRACT ]
+         | Prim_create_account, 4 -> [ ii CREATE_ACCOUNT; ii PAIR ]
          | Prim_hash, 1 -> [ ii H ]
          | Prim_hash_key, 1 -> [ ii HASH_KEY ]
-         | Prim_check, 2 -> [ ii CHECK_SIGNATURE ]
-         | Prim_default_account, 1 -> [ ii DEFAULT_ACCOUNT ]
+         | Prim_check, 3 -> [ ii CHECK_SIGNATURE ]
+         | Prim_default_account, 1 -> [ ii IMPLICIT_ACCOUNT ]
          | Prim_set_delegate, 1 -> [ ii SET_DELEGATE ]
          | Prim_list_size, 1 -> [ ii SIZE ]
          | Prim_set_size, 1 -> [ ii SIZE ]
@@ -414,7 +419,7 @@ the ending NIL is not annotated with a type *)
            | Prim_set_update|Prim_set_add|Prim_set_remove
            | Prim_set_mem|Prim_set_reduce|Prim_Some
            | Prim_concat|Prim_list_reduce|Prim_list_map|Prim_manager
-           | Prim_create_account|Prim_create_contract
+           | Prim_create_account
            | Prim_hash|Prim_hash_key|Prim_check|Prim_default_account|Prim_list_size
            | Prim_set_size|Prim_map_size|Prim_or|Prim_and|Prim_xor
            | Prim_not|Prim_abs|Prim_int|Prim_neg|Prim_lsr|Prim_lsl
@@ -433,6 +438,9 @@ the ending NIL is not annotated with a type *)
            | Prim_coll_reduce|Prim_coll_map|Prim_coll_size
            | Prim_list_rev), _ ->
            (* already filtered out *)
+           Printf.eprintf "Primitive %S ?\n%!"
+             (LiquidTypes.string_of_primitive prim)
+             ;
            assert false
 
        in
@@ -522,7 +530,7 @@ the ending NIL is not annotated with a type *)
   seq (header @ exprs @ trailer)
 
 
-let rec finalize_fail_pre ({ ins } as e) =
+and finalize_fail_pre ({ ins } as e) =
   { e with
     ins =
       match ins with
@@ -566,6 +574,6 @@ let translate filename ~peephole contract =
   let code = LiquidEmit.emit pre_code in
   { contract with code }
  *)
-let translate contract =
+and translate contract =
   { contract with
     code = translate_code contract.code |> finalize_fail_pre }

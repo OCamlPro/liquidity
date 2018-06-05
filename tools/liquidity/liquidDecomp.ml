@@ -155,10 +155,13 @@ let rec arg_of node =
           mk (Apply (Prim_tuple_get, loc, [ arg_of fold_node; nat_n ~loc pos ]))
      end
 
+  | N_RESULT (node, pos) ->
+    mk (Apply (Prim_tuple_get, loc, [arg_of node; nat_n ~loc pos ]))
+
   | N_CONST (ty, ((
                    CUnit | CBool _ | CInt _ | CNat _ | CTez _
              ) as cst)) ->
-     mk (Const (loc, ty, cst))
+    mk (Const (loc, ty, cst))
 
   | _ ->
        mk (Var (var_of node, loc, []))
@@ -170,8 +173,7 @@ let int_one = int_n 1
 
 let unit ~loc = mk (Const (loc, Tunit, CUnit))
 
-let decompile contract =
-  Hashtbl.reset vars_nums;
+let rec decompile contract =
 
   let rec decompile_next node =
     let loc = node.loc in
@@ -299,7 +301,6 @@ let decompile contract =
                  | "HASH_KEY" -> Prim_hash_key
                  | "CHECK_SIGNATURE" -> Prim_check
                  | "CREATE_ACCOUNT" -> Prim_create_account
-                 | "CREATE_CONTRACT" -> Prim_create_contract
                  | "MANAGER" -> Prim_manager
                  | "ADDRESS" -> Prim_address
                  | "XOR" -> Prim_xor
@@ -308,7 +309,7 @@ let decompile contract =
                  | "AND" -> Prim_and
                  | "LSR" -> Prim_lsr
                  | "LSL" -> Prim_lsl
-                 | "DEFAULT_ACCOUNT" -> Prim_default_account
+                 | "IMPLICIT_ACCOUNT" -> Prim_default_account
                  | "SET_DELEGATE" -> Prim_set_delegate
                  | "SOME" -> Prim_Some
                  | ins ->
@@ -439,6 +440,10 @@ let decompile contract =
          mklet node
            (Transfer (loc, arg_of contract, arg_of amount, arg_of arg))
 
+       | N_CREATE_CONTRACT contract, args ->
+         mklet node
+           (CreateContract (loc, List.map arg_of args, decompile contract))
+
        | (
          N_LAMBDA_END _
        | N_LAMBDA _
@@ -473,6 +478,7 @@ let decompile contract =
        | N_FOLD_BEGIN _
        | N_FOLD_ARG (_, _)
        | N_FOLD_RESULT (_, _, _)
+       | N_RESULT (_, _)
        ), _->
          LiquidLoc.raise_error
            "not implemented at node %s%!"
@@ -507,3 +513,8 @@ let decompile contract =
   in
    *)
   { contract with code }
+
+
+let decompile contract =
+  Hashtbl.reset vars_nums;
+  decompile contract

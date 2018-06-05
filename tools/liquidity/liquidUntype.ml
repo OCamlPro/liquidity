@@ -172,9 +172,12 @@ let rec untype (env : env) code =
                       CConstr ("Right", [right_var]), right_arg;
                     ])
 
+    | CreateContract (loc, args, contract) ->
+      CreateContract (loc, List.map (untype env) args, untype_contract contract)
+
     | Record (_, _)
-      | Constructor (_, _, _)
-      | MatchVariant (_, _, _) ->
+    | Constructor (_, _, _)
+    | MatchVariant (_, _, _) ->
 
        LiquidLoc.raise_error
          "untype: unimplemented code:\n%s%!"
@@ -189,7 +192,7 @@ and untype_case env (var : string) arg =
   let arg' = untype env' arg in
   (var', arg')
 
-let untype_contract contract =
+and untype_contract contract =
   let contract = LiquidBoundVariables.bound_contract contract in
   let env = empty_env () in
   let env = new_binding "storage/1" "storage" env in

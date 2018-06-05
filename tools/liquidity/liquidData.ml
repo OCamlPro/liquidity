@@ -92,18 +92,19 @@ let rec translate_const_exp loc (exp : encoded_exp) =
   | Closure (_, _, _, _, _, _)
   | MatchVariant (_, _, _)
   | Failwith (_, _)
+  | CreateContract (_, _, _)
     ->
     LiquidLoc.raise_error ~loc "non-constant expression"
 
 
-let translate env contract s ty =
+let translate env contract_sig s ty =
   let ml_exp =
     LiquidFromOCaml.expression_of_string ~filename:env.filename s in
   (* hackish: add type annotation for constants *)
   let ml_ty = LiquidToOCaml.convert_type ~abbrev:false ty in
   let ml_exp = Ast_helper.Exp.constraint_ ml_exp ml_ty in
   let sy_exp = LiquidFromOCaml.translate_expression env ml_exp in
-  let tenv = empty_typecheck_env ~warnings:true contract env in
+  let tenv = empty_typecheck_env ~warnings:true contract_sig env in
   let ty_exp = LiquidCheck.typecheck_code tenv ~expected_ty:ty sy_exp in
   let enc_exp = LiquidEncode.encode_code tenv ty_exp in
   let loc = LiquidLoc.loc_in_file env.filename in
@@ -118,14 +119,14 @@ let data_of_liq ~filename ~contract ~parameter ~storage =
       ~warnings:true env contract in
   let translate filename s ty =
     try
-      let c = translate { env with filename } contract s ty in
+      let c = translate { env with filename } contract.contract_sig s ty in
       let s = LiquidPrinter.Michelson.line_of_const c in
       Ok s
     with LiquidError error ->
       Error error
   in
-  (translate "parameter" parameter contract.parameter),
-  (translate "storage" storage contract.storage)
+  (translate "parameter" parameter contract.contract_sig.parameter),
+  (translate "storage" storage contract.contract_sig.storage)
 
 
 let string_of_const ?ty c =

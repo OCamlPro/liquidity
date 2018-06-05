@@ -182,10 +182,7 @@ let add_name_to_ins stack seq ins =
   | Some name, _, x :: _ -> add_name stack seq name
   | _, _, _ -> ()
 
-let interp contract =
-
-  counter := 0;
-  Hashtbl.clear nodes;
+let rec interp contract =
 
   let rec decompile_seq stack (seq : node) code =
     match code, stack with
@@ -537,8 +534,8 @@ let interp contract =
        let x = node ins.loc (N_PRIM "AMOUNT") [] [seq] in
        x :: stack, x
 
-    | DEFAULT_ACCOUNT, key :: stack ->
-       let x = node ins.loc (N_PRIM "DEFAULT_ACCOUNT") [key] [seq] in
+    | IMPLICIT_ACCOUNT, key :: stack ->
+       let x = node ins.loc (N_PRIM "IMPLICIT_ACCOUNT") [key] [seq] in
        x :: stack, x
 
     | SET_DELEGATE, key :: stack ->
@@ -709,17 +706,22 @@ let interp contract =
 
     | CREATE_ACCOUNT, manager :: delegate :: delegatable :: amount :: stack ->
        let x = node ins.loc (N_PRIM "CREATE_ACCOUNT")
-                    [manager; delegate; delegatable; amount] [seq] in
-       x :: stack, x
+           [manager; delegate; delegatable; amount] [seq] in
+       let res_op = node ins.loc (N_RESULT (x, 0)) [] [] in
+       let res_cont = node ins.loc (N_RESULT (x, 1)) [] [] in
+       res_op :: res_cont :: stack, x
 
-    | CREATE_CONTRACT, manager :: delegate ::
-                         spendable :: delegatable ::
-                           amount :: contract :: storage :: stack ->
-       let x = node ins.loc (N_PRIM "CREATE_CONTRACT")
-                    [manager; delegate;
-                     spendable; delegatable;
-                     amount; contract; storage] [seq] in
-       x :: stack, x
+    | CREATE_CONTRACT contract, manager :: delegate ::
+                                delegatable :: spendable ::
+                                amount :: storage :: stack ->
+      let contract = interp contract in
+      let x = node ins.loc (N_CREATE_CONTRACT contract)
+          [manager; delegate;
+           delegatable; spendable;
+           amount; storage] [seq] in
+      let res_op = node ins.loc (N_RESULT (x, 0)) [] [] in
+      let res_addr = node ins.loc (N_RESULT (x, 1)) [] [] in
+      res_op :: res_addr :: stack, x
 
     | _ ->
       (* let ins = LiquidEmit.emit_code ins in *)
@@ -770,3 +772,9 @@ let interp contract =
   in
   let code = (start_node, end_node) in
   { contract with code }
+
+
+let interp contract =
+  counter := 0;
+  Hashtbl.clear nodes;
+  interp contract

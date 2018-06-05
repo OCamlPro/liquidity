@@ -293,6 +293,25 @@ let mic_loc env index annot ins =
   let loc = loc_of_int env index in
   { ins; loc; loc_name }
 
+let rec find nodes name =
+  match nodes with
+  | [] -> raise (Missing_program_field name)
+  | Prim(_, name_maybe, [ v ], _) :: nodes ->
+     if name_maybe = name then v
+     else find nodes name
+  | _ -> raise (Missing_program_field name)
+
+let rec expand expr =
+  match Michelson_v1_macros.expand expr with
+  | Error _ -> invalid_arg "expand"
+  | Ok r -> match r with
+    | Seq (loc, items, annot) ->
+      Seq (loc, List.map expand items, annot)
+    | Prim (loc, name, args, annot) ->
+      Prim (loc, name, List.map expand args, annot)
+    | Int _ | String _ as atom -> atom
+
+
 let rec convert_code env expr =
   match expr with
   | Seq (index, [], Some name) ->
@@ -451,10 +470,11 @@ let rec convert_code env expr =
     mic_loc env index annot (STEPS_TO_QUOTA)
   | Prim(index, "CREATE_ACCOUNT", [], annot) ->
     mic_loc env index annot (CREATE_ACCOUNT)
-  | Prim(index, "CREATE_CONTRACT", [], annot) ->
-    mic_loc env index annot (CREATE_CONTRACT)
-  | Prim(index, "DEFAULT_ACCOUNT", [], annot) ->
-    mic_loc env index annot (DEFAULT_ACCOUNT)
+  | Prim(index, "CREATE_CONTRACT", [Seq (_, contract, _)], annot) ->
+    let contract = convert_raw_contract env contract in
+    mic_loc env index annot (CREATE_CONTRACT contract)
+  | Prim(index, "IMPLICIT_ACCOUNT", [], annot) ->
+    mic_loc env index annot (IMPLICIT_ACCOUNT)
   | Prim(index, "SET_DELEGATE", [], annot) ->
     mic_loc env index annot (SET_DELEGATE)
   | Prim(index, "ADDRESS", [], annot) ->
@@ -462,24 +482,18 @@ let rec convert_code env expr =
 
   | _ -> unknown_expr env "convert_code" expr
 
-let rec find nodes name =
-  match nodes with
-  | [] -> raise (Missing_program_field name)
-  | Prim(_, name_maybe, [ v ], _) :: nodes ->
-     if name_maybe = name then v
-     else find nodes name
-  | _ -> raise (Missing_program_field name)
+and convert_raw_contract env c =
+  let parameter = convert_type env (find c "parameter") in
+  let storage = convert_type env (find c "storage") in
+  let code = convert_code env (find c "code") in
+  { contract_sig = { storage; parameter }; code }
 
-let rec expand expr =
-  match Michelson_v1_macros.expand expr with
-  | Error _ -> invalid_arg "expand"
-  | Ok r -> match r with
-    | Seq (loc, items, annot) ->
-      Seq (loc, List.map expand items, annot)
-    | Prim (loc, name, args, annot) ->
-      Prim (loc, name, List.map expand args, annot)
-    | Int _ | String _ as atom -> atom
-
+let convert_contract env c =
+  let c =
+    List.map (fun c ->
+        let c = Micheline.inject_locations (fun i -> i) c in
+        expand c) c in
+  convert_raw_contract env c, env.annoted, env.type_annots
 
 let convert_const_type env c ty =
   let c = Micheline.inject_locations (fun i -> i) c in
@@ -488,16 +502,6 @@ let convert_const_type env c ty =
 let convert_const_notype env c =
   let c = Micheline.inject_locations (fun i -> i) c in
   convert_const env c
-
-let convert_contract env c =
-  let c =
-    List.map (fun c ->
-        let c = Micheline.inject_locations (fun i -> i) c in
-      expand c) c in
-  let parameter = convert_type env (find c "parameter") in
-  let storage = convert_type env (find c "storage") in
-  let code = convert_code env (find c "code") in
-  { code; storage; parameter }, env.annoted, env.type_annots
 
 
 let convert_loc_table f loc_tables =

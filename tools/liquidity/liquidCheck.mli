@@ -22,7 +22,7 @@ val uniq_ident : string -> string
 val loc_exp : ('a, 'b) exp -> location
 
 val typecheck_code :
-  syntax_exp typecheck_env ->
+  typecheck_env ->
   ?expected_ty:LiquidTypes.datatype ->
   syntax_exp ->
   typed_exp

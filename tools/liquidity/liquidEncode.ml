@@ -297,6 +297,62 @@ let rec encode_const env c = match c with
     with Not_found ->
       error (noloc env)  "unknown constructor %s" constr
 
+let rec deconstify loc ty c =
+  if not @@ type_contains_operation ty then
+    mk (Const (loc, ty, c)) ty
+  else match c, ty with
+    | (CUnit | CBool _ | CInt _ | CNat _ | CTez _ | CTimestamp _ | CString _
+      | CKey _ | CContract _ | CSignature _ | CNone  | CKey_hash _ | CAddress _),
+      _ ->
+      mk (Const (loc, ty, c)) ty
+
+    | CSome c, Toption ty' ->
+      mk (Apply(Prim_Some, loc, [deconstify loc ty' c])) ty
+
+    | CLeft c, Tor (ty', _) ->
+      mk (Apply(Prim_Left, loc, [deconstify loc ty' c])) ty
+    | CRight c, Tor (_, ty') ->
+      mk (Apply(Prim_Right, loc, [deconstify loc ty' c])) ty
+
+    | CTuple cs, Ttuple tys ->
+      mk (Apply(Prim_tuple, loc, List.map2 (deconstify loc) tys cs)) ty
+
+    | CList cs, Tlist ty' ->
+      List.fold_right (fun c acc ->
+          mk (Apply(Prim_Cons, loc, [deconstify loc ty' c; acc])) ty
+        )
+        cs
+        (mk (Const (loc, ty, CList [])) ty)
+
+    | CSet cs, Tset ty' ->
+      List.fold_right (fun c acc ->
+          mk (Apply(Prim_set_add, loc, [deconstify loc ty' c; acc])) ty
+        )
+        cs
+        (mk (Const (loc, ty, CSet [])) ty)
+
+    | CMap cs, Tmap (tk, te) ->
+      List.fold_right (fun (k, e) acc ->
+          mk (Apply(Prim_map_add, loc,
+                    [deconstify loc tk k; deconstify loc te e; acc])) ty
+        )
+        cs
+        (mk (Const (loc, ty, CMap [])) ty)
+
+    | CBigMap cs, Tbigmap (tk, te) ->
+      List.fold_right (fun (k, e) acc ->
+          mk (Apply(Prim_map_add, loc,
+                    [deconstify loc tk k; deconstify loc te e; acc])) ty
+        )
+        cs
+        (mk (Const (loc, ty, CBigMap [])) ty)
+
+    (* Removed by encode const *)
+    | CRecord _, _
+    | CConstr _, _ -> assert false
+
+    | _, _ -> assert false
+
 let rec decr_counts_vars env e =
   if e.fail then () else
   match e.desc with
@@ -329,7 +385,8 @@ let rec decr_counts_vars env e =
     decr_counts_vars env e2;
     decr_counts_vars env e3;
 
-  | Apply (prim, _, l) ->
+  | Apply (_, _, l)
+  | CreateContract (_, l, _) ->
     List.iter (decr_counts_vars env) l
 
   | Closure (_, _, _, cenv, e, _) ->
@@ -348,7 +405,10 @@ let rec encode env ( exp : typed_exp ) : encoded_exp =
   match exp.desc with
 
   | Const (loc, ty, cst) ->
-    mk ?name:exp.name (Const (loc, ty, encode_const env cst)) ty
+    let cst = encode_const env cst in
+    (* use functions instead of constants if contains operations *)
+    let c = deconstify loc ty cst in
+    mk ?name:exp.name c.desc ty
 
   | Let (name, loc, e, body) ->
 
@@ -771,6 +831,11 @@ let rec encode env ( exp : typed_exp ) : encoded_exp =
     in
     mk ?name:exp.name (MatchVariant (arg, loc, cases)) exp.ty
 
+  | CreateContract (loc, args, contract) ->
+    let args = List.map (encode env) args in
+    let contract, _ = encode_contract ~annot:env.annot env.env contract in
+    mk ?name:exp.name (CreateContract (loc, args, contract)) exp.ty
+
 
 and encode_apply name env prim loc args ty =
   let args = List.map (encode env) args in
@@ -781,7 +846,7 @@ and encode_apply name env prim loc args ty =
   | _ -> mk ?name (Apply (prim, loc, args)) ty
 
 
-let encode_contract ?(annot=false) env contract =
+and encode_contract ?(annot=false) env contract =
   let env =
     {
       warnings=false;
@@ -790,19 +855,21 @@ let encode_contract ?(annot=false) env contract =
       vars = StringMap.empty;
       vars_counts = StringMap.empty;
       to_inline = ref StringMap.empty;
-      env = env;
+      env;
       clos_env = None;
-      contract;
+      t_contract_sig = contract.contract_sig;
     } in
 
   (* "storage/1" *)
-  let (_ , env, _) = new_binding env  "storage" contract.storage in
+  let (_ , env, _) = new_binding env  "storage" contract.contract_sig.storage in
   (* "parameter/2" *)
-  let (_, env, _) = new_binding env "parameter" contract.parameter in
+  let (_, env, _) = new_binding env "parameter" contract.contract_sig.parameter in
 
   {
-    parameter = encode_parameter_type env contract.parameter;
-    storage = encode_storage_type env contract.storage;
+    contract_sig = {
+      parameter = encode_parameter_type env contract.contract_sig.parameter;
+      storage = encode_storage_type env contract.contract_sig.storage;
+    };
     code = encode env contract.code
   },
   ! (env.to_inline)
@@ -812,7 +879,7 @@ let encode_code tenv code =
   encode tenv code
 
 
-let encode_const env contract const =
+let encode_const env t_contract_sig const =
   let env =
     {
       warnings=false;
@@ -823,7 +890,7 @@ let encode_const env contract const =
       to_inline = ref StringMap.empty;
       env = env;
       clos_env = None;
-      contract ;
+      t_contract_sig;
     } in
 
   encode_const env const

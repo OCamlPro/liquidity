@@ -95,17 +95,35 @@ let comparable_type = function
   | Taddress -> true
   | _ -> false
 
+let rec type_contains_operation = function
+  | Toperation -> true
+  | Tunit | Tbool | Tint | Tnat | Ttez | Tstring
+  | Ttimestamp | Tkey | Tkey_hash | Tsignature | Taddress | Tfail -> false
+  | Ttuple l -> List.exists type_contains_operation l
+  | Tcontract ty | Toption ty | Tlist ty | Tset ty -> type_contains_operation ty
+  | Tmap (t1, t2) | Tbigmap (t1, t2) | Tor (t1, t2) | Tlambda (t1, t2) ->
+    type_contains_operation t1 || type_contains_operation t2
+  | Trecord (_, l) | Tsum (_, l) ->
+    List.exists (fun (_, t) -> type_contains_operation t) l
+  | Tclosure ((t1, t2), t3) ->
+    type_contains_operation t1 ||
+    type_contains_operation t2 ||
+    type_contains_operation t3
+
+type contract_sig = {
+  parameter : datatype;
+  storage : datatype;
+}
 
 type 'exp contract = {
-    parameter : datatype;
-    storage : datatype;
-    code : 'exp;
-  }
+  contract_sig : contract_sig;
+  code : 'exp;
+}
 
 type location = {
-    loc_file : string;
-    loc_pos : ((int * int) * (int * int)) option;
-  }
+  loc_file : string;
+  loc_pos : ((int * int) * (int * int)) option;
+}
 
 type error = { err_loc: location; err_msg: string }
 
@@ -179,7 +197,6 @@ type primitive =
 
   | Prim_manager
   | Prim_create_account
-  | Prim_create_contract
   | Prim_hash
   | Prim_hash_key
   | Prim_check
@@ -284,7 +301,6 @@ let () =
               "List.size", Prim_list_size;
 
               "Contract.manager", Prim_manager;
-              "Contract.create", Prim_create_contract;
               "Contract.set_delegate", Prim_set_delegate;
               "Contract.address", Prim_address;
 
@@ -458,6 +474,11 @@ and ('ty, 'a) exp_desc =
 
   | Failwith of string * location
 
+  | CreateContract of location
+                      * ('ty, 'a) exp list (* arguments *)
+                      * ('ty, 'a) exp contract (* body *)
+
+
 type typed
 type encoded
 type syntax_exp = (unit, unit) exp
@@ -499,7 +520,6 @@ let mk =
         prim = Prim_fail || List.exists (fun e -> e.fail) l,
         prim = Prim_set_delegate
         || prim = Prim_create_account
-        || prim = Prim_create_contract
         || List.exists (fun e -> e.transfer) l
 
       | Closure (_, _, _, env, e, _) ->
@@ -513,6 +533,10 @@ let mk =
       | MatchVariant (e, _, cases) ->
         e.fail || List.exists (fun (_, e) -> e.fail) cases,
         e.transfer || List.exists (fun (_, e) -> e.transfer) cases
+
+      | CreateContract (_, l, _) ->
+        List.exists (fun e -> e.fail) l,
+        true
 
     in
     { desc; name; ty; bv; fail; transfer }
@@ -569,7 +593,6 @@ type 'a pre_michelson =
   | STEPS_TO_QUOTA
   | MANAGER
   | CREATE_ACCOUNT
-  | CREATE_CONTRACT
   | H
   | HASH_KEY
   | CHECK_SIGNATURE
@@ -596,8 +619,10 @@ type 'a pre_michelson =
   | SOURCE
 
   | SIZE
-  | DEFAULT_ACCOUNT
+  | IMPLICIT_ACCOUNT
   | SET_DELEGATE
+
+  | CREATE_CONTRACT of 'a contract
 
   (* obsolete *)
   | MOD
@@ -640,7 +665,7 @@ type env = {
   }
 
 (* fields updated in LiquidCheck *)
-type 'a typecheck_env = {
+type typecheck_env = {
     warnings : bool;
     annot : bool;
     counter : int ref;
@@ -648,11 +673,11 @@ type 'a typecheck_env = {
     vars_counts : int ref StringMap.t;
     env : env;
     to_inline : encoded_exp StringMap.t ref;
-    contract : 'a contract;
+    t_contract_sig : contract_sig;
     clos_env : closure_env option;
 }
 
-let empty_typecheck_env ~warnings contract env = {
+let empty_typecheck_env ~warnings t_contract_sig env = {
   warnings;
   annot=false;
   counter = ref 0;
@@ -661,7 +686,7 @@ let empty_typecheck_env ~warnings contract env = {
   to_inline = ref StringMap.empty;
   env = env;
   clos_env = None;
-  contract ;
+  t_contract_sig;
 }
 
 
@@ -706,6 +731,7 @@ type node = {
    | N_IF_PLUS of node * node
    | N_IF_MINUS of node * node
    | N_TRANSFER
+   | N_CREATE_CONTRACT of node_exp contract
    | N_CONST of datatype * const
    | N_PRIM of string
    | N_FAIL of string option
@@ -732,8 +758,9 @@ type node = {
    | N_LEFT of datatype
    | N_RIGHT of datatype
    | N_ABS
+   | N_RESULT of node * int
 
-type node_exp = node * node
+and node_exp = node * node
 
 
 type syntax_init = (
@@ -750,11 +777,15 @@ type loc_michelson_contract = loc_michelson contract
 
 let noloc = { loc_file = "<unspecified>"; loc_pos = None }
 
+let dummy_contract_sig = {
+  parameter = Tunit;
+  storage = Tunit;
+}
+
 let dummy_syntax_contract : syntax_contract = {
-    parameter = Tunit;
-    storage = Tunit;
-    code = mk (Const (noloc, Tunit, CUnit)) ();
-  }
+  contract_sig = dummy_contract_sig;
+  code = mk (Const (noloc, Tunit, CUnit)) ();
+}
 
 type warning =
   | Unused of string
