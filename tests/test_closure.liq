@@ -1,13 +1,12 @@
 
-[%%version 0.15]
+[%%version 0.2]
 
 let%entry main
       (parameter : int)
-      (storage : int)
-      : unit * int =
+      (storage : int) =
   let x = parameter + 10 in
   let f = fun ( arg : int * int ) ->
     arg.(1) + x
   in
   let storage = (parameter, storage) |> f in
-  ( (), storage )
+  ( ([] : operation list), storage )

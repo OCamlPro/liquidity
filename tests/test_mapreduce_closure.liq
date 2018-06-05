@@ -1,7 +1,6 @@
 let%entry main
-  (parameter : string)
-  (storage : (string, tez) map)
-  : bool * (string, tez) map =
+  (parameter : (string, tez) map)
+  (storage : bool) =
 
   let amount = Current.amount() in
   let f (arg: (string * tez) * bool) =
@@ -9,5 +8,5 @@ let%entry main
     else arg.(1)
   in
 
-  let b = Map.reduce f storage false in
-  (b, storage)
+  let b = Map.reduce f parameter false in
+  (([] : operation list), b)

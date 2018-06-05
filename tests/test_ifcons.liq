@@ -1,12 +1,11 @@
 
 (* lists *)
 
-[%%version 0.15]
+[%%version 0.2]
 
 let%entry main
       (parameter : string)
-      (storage : string list)
-      : unit * string list =
+      (storage : string list) =
       
       let a = "1" in
       let set = ([] : string list) in
@@ -18,4 +17,4 @@ let%entry main
         | _ :: z -> z
        in
 
-      ( (), storage )
+      ( ([] : operation list), storage )

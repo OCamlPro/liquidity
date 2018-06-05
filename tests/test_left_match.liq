@@ -1,9 +1,10 @@
+type storage = (string, int) variant
 
 let%entry main
       (parameter : (int, string) variant)
-      (storage : int)
-      : string * int =
+      (storage : storage) =
 
-  match parameter with
-  | Left left -> ("", left)
-  | Right right -> (right, storage)
+  let s = match parameter with
+  | Left left -> (Right left : (string, _) variant)
+  | Right right -> (Left right  : (_, int) variant) in
+  ([] : operation list), s

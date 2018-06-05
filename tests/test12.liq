@@ -1,12 +1,11 @@
 
 (* sets *)
 
-[%%version 0.15]
+[%%version 0.2]
 
 let%entry main
       (parameter : string)
-      (storage : string set)
-      : unit * string set =
+      (storage : string set) =
 
       let set = (Set : string set) in
       let set = Set.add "a" set in
@@ -18,4 +17,4 @@ let%entry main
            set
        in
 
-      ( (), storage )
+      ( ([] : operation list), storage )

@@ -1,13 +1,12 @@
-[%%version 0.15]
+[%%version 0.2]
 
 let%entry main
-    (parameter : (nat, bool) contract)
-    (storage : bool * (nat, bool) contract)
-  : bool * (bool * (nat, bool) contract) =
+    (parameter : nat contract)
+    (storage : bool * nat contract) =
 
   let (b, c) = storage in
   if b then
-    false, storage
+    ([]:operation list), set storage 0 false
   else
-    let (b, storage) = Contract.call c 0tz storage 0p in
-    b, storage
+    let op = Contract.call c 0tz 0p in
+    [op], set storage 0 true

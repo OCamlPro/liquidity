@@ -1,11 +1,10 @@
 (* Fold *)
 
-[%%version 0.15]
+[%%version 0.2]
 
 let%entry main
     (parameter : int list)
-    (storage : unit)
-  : int * unit =
+    (storage : int) =
 
   let res =
     List.fold (fun arg (* (x, acc) *) ->
@@ -18,4 +17,4 @@ let%entry main
       (* "c" *)
   in
 
-  ( res, storage )
+  (([]:operation list), res)

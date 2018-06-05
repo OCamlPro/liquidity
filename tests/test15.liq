@@ -1,5 +1,5 @@
 
-[%%version 0.15]
+[%%version 0.2]
 
 type point = { x : string; y : bool; z : int }
 type vector = { orig : point; dest : point }
@@ -11,9 +11,8 @@ type storage = {
 
 let%entry main
       (parameter : int)
-      (storage : storage)
-      : unit * storage =
+      (storage : storage) =
 
 (*      let storage = storage.v.dest.z <- parameter in *)
       let storage = storage.v.orig <- { x="0"; y=true; z = parameter } in
-      ( (), storage )
+      ( ([] : operation list), storage )

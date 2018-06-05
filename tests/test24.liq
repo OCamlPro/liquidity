@@ -1,20 +1,19 @@
-[%%version 0.15]
+[%%version 0.2]
 
 type t = A of int | B | C of (int * nat)
 
 let%entry main
-    (parameter : (unit, unit) contract * t)
-    (storage : int)
-  : int * int =
+    (parameter : unit contract * t)
+    (storage : int)  =
 
   let (c, m) = parameter in
   match m with
   | A _ ->
-    let (_, storage) = Contract.call c 0tz storage () in
-    (0, storage)
+    let op = Contract.call c 0tz () in
+    [op], storage
   | B ->
-    let (_, storage) = Contract.call c 0tz storage () in
-    (0, storage)
+    let op = Contract.call c 0tz () in
+    [op], 0
   | C _ ->
-    let (_, storage) = Contract.call c 1tz storage () in
-    (1, storage)
+    let op = Contract.call c 1tz () in
+    [op], 1

@@ -1,11 +1,11 @@
 
-[%%version 0.15]
+[%%version 0.2]
 
 let%entry main
       (parameter : timestamp)
       (storage : tez * tez  (* 2: P N *)
       )
-      : unit * (tez * tez) =
+      : operation list * (tez * tez) =
       let p =
         if parameter = 2017-10-18 then
           storage.(0)
@@ -13,4 +13,4 @@ let%entry main
           storage.(1)
       in
       let storage  = set storage 1 p in
-      ( (), storage )
+      ( ([] : operation list), storage )

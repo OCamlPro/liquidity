@@ -1,11 +1,10 @@
 (* loops *)
 
-[%%version 0.15]
+[%%version 0.2]
 
 let%entry main
     (parameter : int list)
-    (storage : int)
-    : unit * int =
+    (storage : int) =
 
   let c = 1 in
 
@@ -13,4 +12,4 @@ let%entry main
 
   let storage = List.reduce f parameter 0 in
 
-  ( (), storage )
+  ( ([] : operation list), storage )

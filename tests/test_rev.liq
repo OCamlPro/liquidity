@@ -1,10 +1,9 @@
 (* List.rev *)
 
-[%%version 0.15]
+[%%version 0.2]
 
 let%entry main
       (parameter : int)
-      (storage : int list)
-      : unit * int list =
+      (storage : int list) =
   let l = List.rev storage in
-  ( (), l )
+  ( ([] : operation list), l )

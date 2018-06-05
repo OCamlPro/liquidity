@@ -1,12 +1,11 @@
-[%%version 0.15]
+[%%version 0.2]
 
 let%init storage (myname : string) =
   Map.add myname 0 (Map ["ocaml", 0; "pro", 0])
 
 let%entry main
   (parameter : string)
-  (storage : (string, int) map)
-  : unit * (string, int) map =
+  (storage : (string, int) map) =
 
   let amount = Current.amount() in
 
@@ -17,4 +16,4 @@ let%entry main
     | None -> Current.failwith "Bad vote"
     | Some x ->
        let storage = Map.add parameter (x+1) storage in
-       ( (), storage )
+       ( ([] : operation list), storage )

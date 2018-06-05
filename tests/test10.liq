@@ -1,7 +1,7 @@
 
 (* constructors *)
 
-[%%version 0.15]
+[%%version 0.2]
 
 type s =
         bool *
@@ -11,11 +11,11 @@ type s =
 let%entry main
       (parameter : bool)
       (storage : s)
-      : unit * s =
+      : operation list * s =
 
 (* options *)
       let x = 3 in
       let option = Some x in
       let storage  = Array.set storage 1 option in
 
-      ( (), storage )
+      ( ([] : operation list), storage )

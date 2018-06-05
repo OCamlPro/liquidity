@@ -1,7 +1,7 @@
 
 (* transfers *)
 
-[%%version 0.15]
+[%%version 0.2]
 
 let%entry main
       (parameter : unit contract)

@@ -1,4 +1,4 @@
-[%%version 0.161]
+[%%version 0.2]
 
 type bm = (string, int) big_map
 type bm1 = bm
@@ -12,8 +12,7 @@ let%init storage : storage = { bm = BigMap []; r = None }
 
 let%entry main
       (parameter : string)
-      (storage : storage)
-      : r * storage =
+      (storage : storage) =
   let storage =
     storage.bm <- match Map.find parameter storage.bm with
     | None ->
@@ -30,4 +29,4 @@ let%entry main
   in
   let r = Map.find parameter storage.bm in
   let storage = storage.r <- r in
-  (r, storage)
+  (([] : operation list), storage)

@@ -1,14 +1,13 @@
-[%%version 0.15]
+[%%version 0.2]
 
 let%entry main
     (parameter : unit)
-    (storage : ((int, tez) map * (unit, unit) contract))
-  : unit * ((int, tez) map * (unit, unit) contract) =
+    (storage : ((int, tez) map * unit contract)) =
   let foo = storage.(0) in
-  let storage =
-    Map.fold (fun ((_i, j), storage) ->
-        let _, storage = Contract.call storage.(1) j storage () in
-        storage
-      ) foo storage
+  let acc =
+    Map.fold (fun ((_i, j), acc) ->
+        let op = Contract.call storage.(1) j () in
+        op :: acc
+      ) foo ([] : operation list)
   in
-  (), storage
+  acc, storage

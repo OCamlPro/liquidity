@@ -1,11 +1,10 @@
 
-[%%version 0.15]
+[%%version 0.2]
 
 let f ((x : unit), (_ : int) ) = x
 
 let%entry main
       (parameter : int)
-      (storage : unit)
-      : unit * unit =
+      (storage : unit) =
   let storage = f (storage, parameter) in
-  ( (), storage )
+  ( ([] : operation list), storage )

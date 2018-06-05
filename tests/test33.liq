@@ -1,10 +1,11 @@
-[%%version 0.15]
+[%%version 0.2]
+
+type storage = { q : nat; res : (tez * tez) option * (nat * tez) option }
 
 let%entry main
     (parameter : tez)
-    (storage : nat)
-  : ((tez * tez) option * (nat * tez) option) * nat =
+    (storage : storage)=
 
-  let e1 = parameter / storage in
+  let e1 = parameter / storage.q in
   let e2 = parameter / parameter in
-  (e1, e2), storage
+  ([] : operation list), storage.res <- (e1, e2)

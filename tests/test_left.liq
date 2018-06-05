@@ -1,8 +1,7 @@
 
 let%entry main
       (parameter : int)
-      (storage : int)
-      : unit * int =
+      (storage : int) =
   let a = (Left 3 : (_, string) variant) in
   let b = (Right a : (int, _) variant) in
 
@@ -14,4 +13,4 @@ let%entry main
      | Right _ -> storage
   in
 
-  ( (), storage )
+  ( ([] : operation list), storage )

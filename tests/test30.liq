@@ -1,14 +1,13 @@
-[%%version 0.15]
+[%%version 0.2]
 
 let%entry main
-    (parameter : (int, unit) contract * int list)
-    (storage : int)
-  : unit * int =
+    (parameter : int contract * int list)
+    (storage : int) =
 
   let (c, l) = parameter in
   match l with
   | [] ->
-    let (result, storage) = Contract.call c 0tz storage (-1) in
-    (result, storage)
+    let op = Contract.call c 0tz (-1) in
+    ([op], storage)
   | _ :: _ ->
-    ((), storage)
+    (([] : operation list), storage)

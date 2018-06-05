@@ -1,7 +1,7 @@
 
 (* constants *)
 
-[%%version 0.15]
+[%%version 0.2]
 
 type storage = bool *
                int option *
@@ -12,7 +12,7 @@ type storage = bool *
 let%entry main
       (parameter : bool)
       (storage : storage)
-      : unit * storage =
+      : operation list * storage =
 
 (* booleans *)
       let bool =
@@ -59,4 +59,4 @@ let%entry main
       in
       let storage = Array.set storage 4 list in
 
-      ( (), storage )
+      ( ([] : operation list), storage )

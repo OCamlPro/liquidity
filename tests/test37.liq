@@ -1,14 +1,13 @@
-[%%version 0.15]
+[%%version 0.2]
 
 let%entry main
-    (parameter : (unit, unit) contract)
-    (storage : ((int, tez) map * (unit, unit) contract))
-  : unit * ((int, tez) map * (unit, unit) contract) =
+    (parameter : unit contract)
+    (storage : ((int, tez) map * unit contract)) =
   let foo = storage.(0) in
-  let storage =
-    Loop.loop (fun storage ->
-        let _, storage = Contract.call storage.(1) 1tz storage () in
-        ( false, storage )
-      ) storage
+  let acc =
+    Loop.loop (fun acc ->
+        let op = Contract.call storage.(1) 1tz () in
+        ( false, op :: acc )
+      ) ([] : operation list)
   in
-  (), storage
+  acc, storage

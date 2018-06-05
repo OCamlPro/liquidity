@@ -1,11 +1,10 @@
 (* Iter *)
 
-[%%version 0.15]
+[%%version 0.2]
 
 let%entry main
     (parameter : int list)
-    (storage : unit)
-  : unit * unit =
+    (storage : unit) =
 
   List.iter (fun x ->
       if x < 0 then Current.fail ();
@@ -14,4 +13,4 @@ let%entry main
   let f (x:int) = if x < 0 then Current.fail () in
   List.iter f  parameter;
 
-  ( (), storage )
+  ( ([] : operation list), storage )
