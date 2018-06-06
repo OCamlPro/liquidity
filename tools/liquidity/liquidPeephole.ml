@@ -161,10 +161,11 @@ and simplify_step e exprs =
        (simplify_step e exprs)
 
   (* takes four items on stack, creates one : 4 -> 1 *)
-  | (CREATE_ACCOUNT),
-    {ins=DIP_DROP (n,m); loc} :: exprs when n > 0 ->
-     simplify_stepi ~loc (DIP_DROP (n+3,m))
-       (simplify_step e exprs)
+  (* FIXME takes 4 -> 2 *)
+  (* | (CREATE_ACCOUNT),
+   *   {ins=DIP_DROP (n,m); loc} :: exprs when n > 0 ->
+   *    simplify_stepi ~loc (DIP_DROP (n+3,m))
+   *      (simplify_step e exprs) *)
 
   (* takes two items on stack, creates two : 2 -> 2 *)
   | SWAP,
