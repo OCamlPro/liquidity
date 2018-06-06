@@ -87,6 +87,12 @@ let rec bv code =
       (StringSet.remove var_arg
          (bv body_exp))
 
+  | Map (_, var_arg, loc, body_exp, arg_exp) ->
+    StringSet.union (bv arg_exp)
+      (StringSet.remove var_arg
+         (bv body_exp))
+
+  | MapFold (_, var_arg, loc, body_exp, arg_exp, acc_exp)
   | Fold (_, var_arg, loc, body_exp, arg_exp, acc_exp) ->
     StringSet.union (bv acc_exp)
       (StringSet.union (bv arg_exp)
@@ -280,7 +286,8 @@ let rec bound code =
      let desc = Loop (var_arg, loc, body_exp, arg_exp) in
      mk desc code bv
 
-  | Fold (prim, var_arg, loc, body_exp, arg_exp, acc_exp) ->
+  | Fold (_, var_arg, loc, body_exp, arg_exp, acc_exp)
+  | MapFold (_, var_arg, loc, body_exp, arg_exp, acc_exp) ->
      let acc_exp = bound acc_exp in
      let arg_exp = bound arg_exp in
      let body_exp = bound body_exp in
@@ -290,7 +297,24 @@ let rec bound code =
             (StringSet.remove var_arg
                (body_exp.bv)))
      in
-     let desc = Fold (prim, var_arg, loc, body_exp, arg_exp, acc_exp) in
+     let desc = match code.desc with
+       | Fold (prim, _, _, _, _, _) ->
+         Fold (prim, var_arg, loc, body_exp, arg_exp, acc_exp)
+       | MapFold (prim, _, _, _, _, _) ->
+         MapFold (prim, var_arg, loc, body_exp, arg_exp, acc_exp)
+       | _ -> assert false
+     in
+     mk desc code bv
+
+  | Map (prim, var_arg, loc, body_exp, arg_exp) ->
+     let arg_exp = bound arg_exp in
+     let body_exp = bound body_exp in
+     let bv =
+       StringSet.union (arg_exp.bv)
+         (StringSet.remove var_arg
+            (body_exp.bv))
+     in
+     let desc = Map (prim, var_arg, loc, body_exp, arg_exp) in
      mk desc code bv
 
   | Record (loc, labels) ->

@@ -137,8 +137,6 @@ type primitive =
   | Prim_coll_find
   | Prim_coll_update
   | Prim_coll_mem
-  | Prim_coll_reduce
-  | Prim_coll_map
   | Prim_coll_size
 
   (* generated in LiquidCheck *)
@@ -175,23 +173,17 @@ type primitive =
   | Prim_map_add
   | Prim_map_remove
   | Prim_map_mem
-  | Prim_map_reduce
-  | Prim_map_map
   | Prim_map_size
 
   | Prim_set_update
   | Prim_set_add
   | Prim_set_remove
   | Prim_set_mem
-  | Prim_set_reduce
   | Prim_set_size
-  | Prim_set_map
 
   | Prim_Some
   | Prim_concat
 
-  | Prim_list_reduce
-  | Prim_list_map
   | Prim_list_size
   | Prim_list_rev
 
@@ -228,6 +220,19 @@ type prim_fold =
 
   | Prim_coll_iter
   | Prim_coll_fold
+
+type prim_map =
+  | Prim_map_map
+  | Prim_set_map
+  | Prim_list_map
+  | Prim_coll_map
+
+
+type prim_map_fold =
+  | Prim_map_map_fold
+  | Prim_set_map_fold
+  | Prim_list_map_fold
+  | Prim_coll_map_fold
 
 
 let primitive_of_string = Hashtbl.create 101
@@ -280,23 +285,17 @@ let () =
               "Map.add", Prim_map_add;
               "Map.remove", Prim_map_remove;
               "Map.mem", Prim_map_mem;
-              "Map.reduce", Prim_map_reduce;
-              "Map.map", Prim_map_map;
               "Map.size", Prim_map_size;
 
               "Set.update", Prim_set_update;
               "Set.add", Prim_set_add;
               "Set.remove", Prim_set_remove;
               "Set.mem", Prim_set_mem;
-              "Set.reduce", Prim_set_reduce;
-              "Set.map", Prim_set_map;
               "Set.size", Prim_set_size;
 
               "Some", Prim_Some;
               "@", Prim_concat;
 
-              "List.reduce", Prim_list_reduce;
-              "List.map", Prim_list_map;
               "List.rev", Prim_list_rev;
               "List.size", Prim_list_size;
 
@@ -334,8 +333,6 @@ let () =
               "Coll.update", Prim_coll_update;
               "Coll.mem", Prim_coll_mem;
               "Coll.find", Prim_coll_find;
-              "Coll.map", Prim_coll_map;
-              "Coll.reduce", Prim_coll_reduce;
               "Coll.size",Prim_coll_size;
 
               "<unknown>", Prim_unknown;
@@ -393,6 +390,66 @@ let string_of_fold_primitive prim =
     raise Not_found
 
 
+let map_primitive_of_string = Hashtbl.create 4
+let string_of_map_primitive = Hashtbl.create 4
+let () =
+  List.iter (fun (n,p) ->
+      Hashtbl.add map_primitive_of_string n p;
+      Hashtbl.add string_of_map_primitive p n;
+    )
+            [
+              "Map.map", Prim_map_map;
+              "Set.map", Prim_set_map;
+              "List.map", Prim_list_map;
+              "Coll.map", Prim_coll_map;
+            ]
+
+let map_primitive_of_string s =
+  try
+    Hashtbl.find map_primitive_of_string s
+  with Not_found ->
+    Printf.eprintf "Debug: map_primitive_of_string(%S) raised Not_found\n%!" s;
+    raise Not_found
+
+let string_of_map_primitive prim =
+  try
+    Hashtbl.find string_of_map_primitive prim
+  with Not_found ->
+    Printf.eprintf "Debug: string_of_map_primitive(%d) raised Not_found\n%!"
+                   (Obj.magic prim : int);
+    raise Not_found
+
+
+let map_fold_primitive_of_string = Hashtbl.create 4
+let string_of_map_fold_primitive = Hashtbl.create 4
+let () =
+  List.iter (fun (n,p) ->
+      Hashtbl.add map_fold_primitive_of_string n p;
+      Hashtbl.add string_of_map_fold_primitive p n;
+    )
+            [
+              "Map.map_fold", Prim_map_map_fold;
+              "Set.map_fold", Prim_set_map_fold;
+              "List.map_fold", Prim_list_map_fold;
+              "Coll.map_fold", Prim_coll_map_fold;
+            ]
+
+let map_fold_primitive_of_string s =
+  try
+    Hashtbl.find map_fold_primitive_of_string s
+  with Not_found ->
+    Printf.eprintf "Debug: map_fold_primitive_of_string(%S) raised Not_found\n%!" s;
+    raise Not_found
+
+let string_of_map_fold_primitive prim =
+  try
+    Hashtbl.find string_of_map_fold_primitive prim
+  with Not_found ->
+    Printf.eprintf "Debug: string_of_map_fold_primitive(%d) raised Not_found\n%!"
+                   (Obj.magic prim : int);
+    raise Not_found
+
+
 (* `variant` is the only parameterized type authorized in Liquidity.
    Its constructors, `Left` and `Right` must be constrained with type
    annotations, for the correct types to be propagated in the sources.
@@ -440,10 +497,21 @@ and ('ty, 'a) exp_desc =
               * ('ty, 'a) exp (*  arg *)
 
   | Fold of prim_fold (* iter/fold *)
-              * string * location
-              * ('ty, 'a) exp (* body *)
-              * ('ty, 'a) exp (* arg *)
-              * ('ty, 'a) exp (* acc *)
+            * string * location
+            * ('ty, 'a) exp (* body *)
+            * ('ty, 'a) exp (* arg *)
+            * ('ty, 'a) exp (* acc *)
+
+  | Map of prim_map
+           * string * location
+           * ('ty, 'a) exp (* body *)
+           * ('ty, 'a) exp (* arg *)
+
+  | MapFold of prim_map_fold
+               * string * location
+               * ('ty, 'a) exp (* body *)
+               * ('ty, 'a) exp (* arg *)
+               * ('ty, 'a) exp (* acc *)
 
   | Lambda of string (* argument name *)
               * datatype (* argument type *)
@@ -502,7 +570,9 @@ let mk =
 
       | Seq (e1, e2)
       | Let (_, _, e1, e2)
-      | Loop (_, _, e1, e2) -> e1.fail || e2.fail, e1.transfer || e2.transfer
+      | Loop (_, _, e1, e2)
+      | Map (_, _, _, e1, e2) ->
+        e1.fail || e2.fail, e1.transfer || e2.transfer
 
       | Transfer (_, e1, e2, e3) ->
         e1.fail || e2.fail || e3.fail,
@@ -512,7 +582,8 @@ let mk =
       | MatchOption (e1, _, e2, _, e3)
       | MatchNat (e1, _, _, e2, _, e3)
       | MatchList (e1, _, _, _, e2, e3)
-      | Fold (_, _, _, e1, e2, e3) ->
+      | Fold (_, _, _, e1, e2, e3)
+      | MapFold (_, _, _, e1, e2, e3) ->
         e1.fail || e2.fail || e3.fail,
         e1.transfer || e2.transfer || e3.transfer
 
@@ -558,6 +629,7 @@ type 'a pre_michelson =
   | IF_LEFT of 'a * 'a
   | LOOP of 'a
   | ITER of 'a
+  | MAP of 'a
 
   | LAMBDA of datatype * datatype * 'a
   | EXEC
@@ -585,8 +657,6 @@ type 'a pre_michelson =
   | SOME
   | CONCAT
   | MEM
-  | MAP
-  | REDUCE
 
   | SELF
   | AMOUNT

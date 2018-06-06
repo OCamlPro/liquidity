@@ -382,16 +382,12 @@ let rec convert_code env expr =
     mic_loc env index annot (SOURCE)
   | Prim(index, "SELF", [], annot) ->
     mic_loc env index annot (SELF)
-  | Prim(index, "MAP", [], annot) ->
-    mic_loc env index annot (MAP)
   | Prim(index, "OR", [], annot) ->
     mic_loc env index annot (OR)
   | Prim(index, "LAMBDA", [ty1; ty2; expr], annot) ->
     mic_loc env index annot
       (LAMBDA (convert_type env ty1, convert_type env ty2,
                convert_code env expr))
-  | Prim(index, "REDUCE", [], annot) ->
-    mic_loc env index annot (REDUCE)
   | Prim(index, "COMPARE", [], annot) ->
     mic_loc env index annot (COMPARE)
   | Prim(index, "FAIL", [], annot) ->
@@ -451,6 +447,9 @@ let rec convert_code env expr =
   | Prim(index, "ITER", [body], annot) ->
     mic_loc env index annot
       (ITER (convert_code env body))
+  | Prim(index, "MAP", [body], annot) ->
+    mic_loc env index annot
+      (MAP (convert_code env body))
   | Prim(index, "RIGHT", [ty], annot) ->
     mic_loc env index annot
       (RIGHT (convert_type env ty))

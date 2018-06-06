@@ -37,6 +37,8 @@ let rec emit_code ~expand code =
      M_INS_EXP ("LOOP", [], [emit_code ~expand loop], name)
   | ITER body ->
      M_INS_EXP ("ITER", [], [emit_code ~expand body], name)
+  | MAP body ->
+     M_INS_EXP ("MAP", [], [emit_code ~expand body], name)
   | LAMBDA (arg_type, res_type, body) ->
      M_INS_EXP ("LAMBDA",
                 [arg_type; res_type],
@@ -133,8 +135,6 @@ let rec emit_code ~expand code =
   | NEG -> M_INS ("NEG", name)
   | MUL -> M_INS ("MUL", name)
   | EXEC -> M_INS ("EXEC", name)
-  | REDUCE -> M_INS ("REDUCE", name)
-  | MAP -> M_INS ("MAP", name)
   | EDIV -> M_INS ("EDIV", name)
   | LSL -> M_INS ("LSL", name)
   | LSR -> M_INS ("LSR", name)

@@ -286,8 +286,6 @@ let rec decompile contract =
                  | "CONCAT" -> Prim_concat
                  | "UPDATE" -> Prim_coll_update
                  | "MEM" -> Prim_coll_mem
-                 | "MAP" -> Prim_coll_map
-                 | "REDUCE" -> Prim_coll_reduce
                  | "SIZE" -> Prim_coll_size
                  | "CONS" -> Prim_Cons
                  | "SUB" -> Prim_sub

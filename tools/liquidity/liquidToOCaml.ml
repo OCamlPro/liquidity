@@ -394,6 +394,47 @@ let rec convert_code ~abbrev expr =
         Nolabel, convert_code ~abbrev acc_exp;
       ]
 
+  | Map (prim, var_arg, loc,
+          { desc = Apply(Prim_exec, _, [ { desc = Var (map_arg, _, []) }; f])},
+          arg_exp) when map_arg = var_arg ->
+    Exp.apply ~loc:(loc_of_loc loc)
+      (Exp.ident (lid (LiquidTypes.string_of_map_primitive prim)))
+      [
+        Nolabel, convert_code ~abbrev f;
+        Nolabel, convert_code ~abbrev arg_exp;
+      ]
+  | Map (prim, var_arg, loc, body_exp, arg_exp) ->
+    Exp.apply ~loc:(loc_of_loc loc)
+      (Exp.ident (lid (LiquidTypes.string_of_map_primitive prim)))
+      [
+        Nolabel, Exp.fun_ Nolabel None
+          (pat_of_name ~loc var_arg)
+          (convert_code ~abbrev body_exp);
+        Nolabel, convert_code ~abbrev arg_exp;
+      ]
+
+  | MapFold (prim, var_arg, loc,
+          { desc = Apply(Prim_exec, _, [ { desc = Var (map_arg, _, []) }; f])},
+          arg_exp,
+          acc_exp) when map_arg = var_arg ->
+    Exp.apply ~loc:(loc_of_loc loc)
+      (Exp.ident (lid (LiquidTypes.string_of_map_fold_primitive prim)))
+      [
+        Nolabel, convert_code ~abbrev f;
+        Nolabel, convert_code ~abbrev arg_exp;
+        Nolabel, convert_code ~abbrev acc_exp;
+      ]
+  | MapFold (prim, var_arg, loc, body_exp, arg_exp, acc_exp) ->
+    Exp.apply ~loc:(loc_of_loc loc)
+      (Exp.ident (lid (LiquidTypes.string_of_map_fold_primitive prim)))
+      [
+        Nolabel, Exp.fun_ Nolabel None
+          (pat_of_name ~loc var_arg)
+          (convert_code ~abbrev body_exp);
+        Nolabel, convert_code ~abbrev arg_exp;
+        Nolabel, convert_code ~abbrev acc_exp;
+      ]
+
   | Record (loc, fields) ->
     Exp.record ~loc:(loc_of_loc loc)
       (List.map (fun (name, exp) ->

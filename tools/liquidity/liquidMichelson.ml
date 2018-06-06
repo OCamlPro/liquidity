@@ -255,6 +255,36 @@ let rec translate_code code =
       acc @ arg @
       [ii ~loc @@ ITER (seq (arg_annot @ body_begin @ body @ body_end))]
 
+    | Map (_prim, name, loc, body, arg) ->
+      let arg = compile depth env arg in
+      let env = StringMap.add name depth env in
+      let depth = depth + 1 in
+      let arg_annot = compile_arg_name name in
+      let body = compile depth env body in
+      let body_end = [ ii ~loc @@ DIP_DROP (1,1) ] in
+      arg @
+      [ii ~loc @@ MAP (seq (arg_annot @ body @ body_end))]
+
+    | MapFold (_prim, name, loc, body, arg, acc) ->
+      let acc = compile depth env acc in
+      let depth = depth + 1 in
+      let arg = compile depth env arg in
+      let env = StringMap.add name depth env in
+      let depth = depth + 1 in
+      let arg_annot = compile_arg_name name in
+      let body = compile depth env body in
+      let body_begin = [ dip ~loc 1 [ii ~loc @@ DUP 1]; ii ~loc PAIR ] in
+      let body_end = [
+        ii ~loc @@ DIP_DROP (1,2);
+        dup ~loc 1;
+        dip ~loc 1 [ ii ~loc CDR ];
+        ii ~loc CAR;
+      ] in
+      acc @ arg @
+      [ii ~loc @@ MAP (seq (arg_annot @ body_begin @ body @ body_end));
+       ii ~loc PAIR ]
+      (* TODO check this *)
+
     | CreateContract (loc, args, contract) ->
       let _depth, args_code = compile_args depth env args in
       let contract = translate contract in
@@ -333,17 +363,17 @@ the ending NIL is not annotated with a type *)
 
     (* Should have disappeared *)
     | Prim_unused, _ -> assert false
-    | (Prim_coll_find|Prim_coll_update|Prim_coll_mem|Prim_coll_reduce|
-       Prim_coll_map|Prim_coll_size), _ -> assert false
+    | (Prim_coll_find|Prim_coll_update|Prim_coll_mem|Prim_coll_size), _ ->
+      assert false
 
     | ( Prim_eq|Prim_neq|Prim_lt|Prim_le|Prim_gt|Prim_ge
       | Prim_compare|Prim_add|Prim_sub|Prim_mul|Prim_ediv|Prim_map_find
       | Prim_map_update|Prim_map_add|Prim_map_remove
-      | Prim_map_mem|Prim_map_reduce|Prim_map_map
+      | Prim_map_mem
       | Prim_set_update|Prim_set_add|Prim_set_remove
-      | Prim_set_mem|Prim_set_reduce|Prim_Some
-      | Prim_concat|Prim_list_reduce|Prim_list_map|Prim_manager
-      | Prim_create_account|Prim_set_map
+      | Prim_set_mem|Prim_Some
+      | Prim_concat|Prim_manager
+      | Prim_create_account
       | Prim_hash|Prim_hash_key|Prim_check|Prim_default_account|Prim_list_size
       | Prim_set_size|Prim_map_size|Prim_or|Prim_and|Prim_xor
       | Prim_not|Prim_abs|Prim_int|Prim_neg|Prim_lsr|Prim_lsl
@@ -371,21 +401,14 @@ the ending NIL is not annotated with a type *)
            in
            [dip ~loc 1 [push ~loc (Toption ty) CNone]; ii UPDATE ]
          | Prim_map_mem, 2 -> [ ii MEM ]
-         | Prim_map_reduce, 3 -> [ ii REDUCE ]
-         | Prim_map_map, 2 -> [ ii MAP ]
 
          | Prim_set_update, 3 -> [ ii UPDATE ]
          | Prim_set_add, 2 -> [dip ~loc 1 [push ~loc Tbool (CBool true)]; ii UPDATE ]
          | Prim_set_remove, 2 -> [dip ~loc 1 [push ~loc Tbool (CBool false)]; ii UPDATE ]
          | Prim_set_mem, 2 -> [ ii MEM ]
-         | Prim_set_reduce, 3 -> [ ii REDUCE ]
-         | Prim_set_map, 2 -> [ ii MAP ]
 
          | Prim_Some, 1 -> [ ii SOME ]
          | Prim_concat, 2 -> [ ii CONCAT ]
-
-         | Prim_list_reduce, 3 -> [ ii REDUCE ]
-         | Prim_list_map, 2 -> [ ii MAP ]
 
          | Prim_manager, 1 -> [ ii MANAGER ]
          | Prim_address, 1 -> [ ii ADDRESS ]
@@ -415,15 +438,15 @@ the ending NIL is not annotated with a type *)
          | (Prim_eq|Prim_neq|Prim_lt|Prim_le|Prim_gt|Prim_ge
            | Prim_compare|Prim_add|Prim_sub|Prim_mul|Prim_ediv|Prim_map_find
            | Prim_map_update|Prim_map_add|Prim_map_remove
-           | Prim_map_mem|Prim_map_reduce|Prim_map_map
+           | Prim_map_mem
            | Prim_set_update|Prim_set_add|Prim_set_remove
-           | Prim_set_mem|Prim_set_reduce|Prim_Some
-           | Prim_concat|Prim_list_reduce|Prim_list_map|Prim_manager
+           | Prim_set_mem|Prim_Some
+           | Prim_concat|Prim_manager
            | Prim_create_account
            | Prim_hash|Prim_hash_key|Prim_check|Prim_default_account|Prim_list_size
            | Prim_set_size|Prim_map_size|Prim_or|Prim_and|Prim_xor
            | Prim_not|Prim_abs|Prim_int|Prim_neg|Prim_lsr|Prim_lsl
-           | Prim_exec|Prim_Cons|Prim_set_map|Prim_set_delegate|Prim_address),n ->
+           | Prim_exec|Prim_Cons|Prim_set_delegate|Prim_address),n ->
            Printf.eprintf "Primitive %S: wrong number of args(%d)\n%!"
              (LiquidTypes.string_of_primitive prim)
              n;
@@ -435,8 +458,7 @@ the ending NIL is not annotated with a type *)
            | Prim_self|Prim_balance|Prim_now|Prim_amount|Prim_gas
            | Prim_Left|Prim_Right|Prim_source|Prim_unused
            | Prim_coll_find|Prim_coll_update|Prim_coll_mem
-           | Prim_coll_reduce|Prim_coll_map|Prim_coll_size
-           | Prim_list_rev), _ ->
+           | Prim_coll_size|Prim_list_rev), _ ->
            (* already filtered out *)
            Printf.eprintf "Primitive %S ?\n%!"
              (LiquidTypes.string_of_primitive prim)

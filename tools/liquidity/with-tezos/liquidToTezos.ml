@@ -176,11 +176,9 @@ let rec convert_code expand expr =
   | MANAGER -> prim "MANAGER" [] name
   | ADDRESS -> prim "ADDRESS" [] name
   | SOURCE -> prim "SOURCE" [] name
-  | MAP -> prim "MAP" [] name
   | OR -> prim "OR" [] name
   | LAMBDA (ty1, ty2, expr) ->
      prim "LAMBDA" [convert_type ty1; convert_type ty2; convert_code expand expr] name
-  | REDUCE -> prim "REDUCE" [] name
   | COMPARE -> prim "COMPARE" [] name
   | PUSH (Tunit, CUnit) -> prim "UNIT" [] name
   | PUSH (Tlist ty, CList []) -> prim "NIL" [convert_type ty] name
@@ -207,6 +205,7 @@ let rec convert_code expand expr =
   | CONS -> prim "CONS" [] name
   | LOOP loop -> prim "LOOP" [convert_code expand loop] name
   | ITER body -> prim "ITER" [convert_code expand body] name
+  | MAP body -> prim "MAP" [convert_code expand body] name
   | RIGHT ty ->
      prim "RIGHT" [convert_type ty] name
   | INT -> prim "INT" [] name

@@ -754,6 +754,34 @@ let rec translate_code env exp =
 
     | { pexp_desc =
           Pexp_apply (
+              { pexp_desc = Pexp_ident ( { txt = Ldot(Lident map_coll,
+                                                      "map") } ) },
+              [ Nolabel, { pexp_desc = Pexp_fun (Nolabel,None, pat, body) };
+                Nolabel, arg;
+              ]) } ->
+       let arg = translate_code env arg in
+       let body = translate_code env body in
+       let var_name, _, body = deconstruct_pat env pat body in
+       let prim = LiquidTypes.map_primitive_of_string (map_coll^".map") in
+       Map (prim, var_name, loc, body, arg)
+
+    | { pexp_desc =
+          Pexp_apply (
+              { pexp_desc = Pexp_ident ( { txt = Ldot(Lident map_fold_coll,
+                                                      "map_fold") } ) },
+              [ Nolabel, { pexp_desc = Pexp_fun (Nolabel,None, pat, body) };
+                Nolabel, arg;
+                Nolabel, acc;
+              ]) } ->
+       let arg = translate_code env arg in
+       let acc = translate_code env acc in
+       let body = translate_code env body in
+       let var_name, _, body = deconstruct_pat env pat body in
+       let prim = LiquidTypes.map_fold_primitive_of_string (map_fold_coll^".map_fold") in
+       MapFold (prim, var_name, loc, body, arg, acc)
+
+    | { pexp_desc =
+          Pexp_apply (
             { pexp_desc = Pexp_ident ( { txt = Ldot(Lident iter_coll,
                                                     "iter");
                                          loc = vloc } ) },
@@ -768,7 +796,7 @@ let rec translate_code env exp =
         mk (Apply(Prim_exec, loc, [name_var; f])) in
       let arg = translate_code env arg in
       let prim = LiquidTypes.fold_primitive_of_string (iter_coll^".iter") in
-       let acc = mk (Const (loc, Tunit, CUnit)) in
+      let acc = mk (Const (loc, Tunit, CUnit)) in
       Fold (prim, name, loc, body, arg, acc)
 
     | { pexp_desc =
@@ -790,6 +818,46 @@ let rec translate_code env exp =
       let acc = translate_code env acc in
       let prim = LiquidTypes.fold_primitive_of_string (iter_coll^".fold") in
       Fold (prim, name, loc, body, arg, acc)
+
+    | { pexp_desc =
+          Pexp_apply (
+            { pexp_desc = Pexp_ident ( { txt = Ldot(Lident map_coll,
+                                                    "map");
+                                         loc = vloc } ) },
+            [
+              Nolabel, f_exp;
+              Nolabel, arg;
+            ]) } ->
+      let f = translate_code env f_exp in
+      let name = "_map_arg" in
+      let name_var = mk (Var(name, loc_of_loc vloc, [])) in
+      let body =
+        mk (Apply(Prim_exec, loc, [name_var; f])) in
+      let arg = translate_code env arg in
+      let prim = LiquidTypes.map_primitive_of_string (map_coll^".map") in
+      Map (prim, name, loc, body, arg)
+
+    | { pexp_desc =
+          Pexp_apply (
+            { pexp_desc = Pexp_ident ( { txt = Ldot(Lident map_fold_coll,
+                                                    "map_fold");
+                                         loc = vloc } ) },
+            [
+              Nolabel, f_exp;
+              Nolabel, arg;
+              Nolabel, acc;
+            ]) } ->
+      let f = translate_code env f_exp in
+      let name = "_map_fold_arg" in
+      let name_var = mk (Var(name, loc_of_loc vloc, [])) in
+      let body =
+        mk (Apply(Prim_exec, loc, [name_var; f])) in
+      let arg = translate_code env arg in
+      let acc = translate_code env acc in
+      let prim =
+        LiquidTypes.map_fold_primitive_of_string (map_fold_coll^".map_fold") in
+      MapFold (prim, name, loc, body, arg, acc)
+
 
     | { pexp_desc = Pexp_apply (exp, args) } ->
        let exp = translate_code env exp in

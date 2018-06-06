@@ -10,6 +10,6 @@ let%entry main
 
   let f (x: (int * int)) = x.(1) + c + x.(0) in
 
-  let storage = List.reduce f parameter 0 in
+  let storage = List.fold f parameter 0 in
 
   ( ([] : operation list), storage )

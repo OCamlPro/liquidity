@@ -126,6 +126,8 @@ let rec loc_exp e = match e.desc with
   | MatchList (_, loc, _, _, _, _)
   | Loop (_, loc, _, _)
   | Fold (_, _, loc, _, _, _)
+  | Map (_, _, loc, _, _)
+  | MapFold (_, _, loc, _, _, _)
   | Lambda (_, _, loc, _, _)
   | Closure (_, _, loc, _, _, _)
   | Record (loc, _)
@@ -388,6 +390,67 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
     check_used env name loc count;
     mk ?name:exp.name (Fold (prim, name, loc, body, arg, acc)) acc.ty
 
+  | Map (prim, name, loc, body, arg) ->
+    let arg = typecheck env arg in
+    let prim, name_ty = match prim, arg.ty with
+      | (Prim_map_map|Prim_coll_map), Tmap (k_ty, v_ty) ->
+        Prim_map_map, Ttuple [k_ty; v_ty]
+      | (Prim_set_map|Prim_coll_map), Tset elt_ty ->
+        Prim_set_map, elt_ty
+      | (Prim_list_map|Prim_coll_map), Tlist elt_ty ->
+        Prim_list_map, elt_ty
+      | _ ->
+        error (loc_exp arg) "%s expects a collection, got %s"
+          (LiquidTypes.string_of_map_primitive prim)
+          (LiquidPrinter.Liquid.string_of_type arg.ty)
+    in
+    let (env, count) = new_binding env name name_ty in
+    let body = typecheck env body in
+    let ret_ty = match arg.ty with
+      | Tmap (k_ty, _) -> Tmap (k_ty, body.ty)
+      | Tset _ -> Tset body.ty
+      | Tlist _ -> Tlist body.ty
+      | _ -> assert false
+    in
+    check_used env name loc count;
+    mk ?name:exp.name (Map (prim, name, loc, body, arg)) ret_ty
+
+  | MapFold (prim, name, loc, body, arg, acc) ->
+    let arg = typecheck env arg in
+    let acc = typecheck env acc in
+    let prim, name_ty = match prim, arg.ty, acc.ty with
+      | (Prim_map_map_fold|Prim_coll_map_fold), Tmap (k_ty, v_ty), acc_ty ->
+        Prim_map_map_fold, Ttuple[Ttuple [k_ty; v_ty]; acc_ty]
+      | (Prim_set_map_fold|Prim_coll_map_fold), Tset elt_ty, acc_ty ->
+        Prim_set_map_fold, Ttuple[elt_ty; acc_ty]
+      | (Prim_list_map_fold|Prim_coll_map_fold), Tlist elt_ty, acc_ty ->
+        Prim_list_map_fold, Ttuple[elt_ty; acc_ty]
+      | _ ->
+        error (loc_exp arg) "%s expects a collection, got %s"
+          (LiquidTypes.string_of_map_fold_primitive prim)
+          (LiquidPrinter.Liquid.string_of_type arg.ty)
+    in
+    let (env, count) = new_binding env name name_ty in
+    let body = typecheck env body in
+    let body_r = match body.ty with
+      | Ttuple [r; baccty] when baccty = acc.ty -> r
+      | _ ->
+        error (loc_exp body)
+          "body of %s must be of type 'a * %s, but has type %s"
+          (LiquidTypes.string_of_map_fold_primitive prim)
+          (LiquidPrinter.Liquid.string_of_type acc.ty)
+          (LiquidPrinter.Liquid.string_of_type body.ty)
+    in
+    let ret_ty = match arg.ty with
+      | Tmap (k_ty, _) -> Tmap (k_ty, body_r)
+      | Tset _ -> Tset body_r
+      | Tlist _ -> Tlist body_r
+      | _ -> assert false
+    in
+    check_used env name loc count;
+    mk ?name:exp.name (MapFold (prim, name, loc, body, arg, acc))
+      (Ttuple [ret_ty; acc.ty])
+
   | MatchList (arg, loc, head_name, tail_name, ifcons, ifnil) ->
      let arg  = typecheck env arg in
      let arg_ty = match arg.ty with
@@ -637,12 +700,6 @@ and typecheck_prim1 env prim loc args =
        | Prim_coll_mem, [ _; { ty = Tset _ } ] -> Prim_set_mem
        | Prim_coll_mem, [ _; { ty = (Tmap _ | Tbigmap _) } ] -> Prim_map_mem
        | Prim_coll_find, [ _; { ty = (Tmap _ | Tbigmap _) } ] -> Prim_map_find
-       | Prim_coll_map, [ _; { ty = Tlist _ } ] -> Prim_list_map
-       | Prim_coll_map, [_; { ty = Tmap _ } ] -> Prim_map_map
-       | Prim_coll_map, [_; { ty = Tset _ } ] -> Prim_set_map
-       | Prim_coll_reduce, [_; { ty = Tlist _ }; _ ] -> Prim_list_reduce
-       | Prim_coll_reduce, [_; { ty = Tset _ }; _ ] -> Prim_set_reduce
-       | Prim_coll_reduce, [_; { ty = Tmap _ }; _ ] -> Prim_map_reduce
        | Prim_coll_size, [{ ty = Tlist _ } ] -> Prim_list_size
        | Prim_coll_size, [{ ty = Tset _ } ] -> Prim_set_size
        | Prim_coll_size, [{ ty = Tmap _ } ] -> Prim_map_size
@@ -830,76 +887,7 @@ and typecheck_prim2 env prim loc args =
        type_error loc "Bad argument type in function application" ty from_ty;
      to_ty
 
-  | ( Prim_list_map
-    | Prim_list_reduce
-    | Prim_set_reduce
-    | Prim_map_reduce
-    | Prim_map_map
-    | Prim_coll_map
-    | Prim_coll_reduce
-    ), Tclosure _ :: _ ->
-    error loc "Cannot use closures in %s" (LiquidTypes.string_of_primitive prim)
-
   | Prim_list_rev, [ Tlist ty ] -> Tlist ty
-
-  | Prim_list_map, [
-      Tlambda (from_ty, to_ty);
-      Tlist ty ] ->
-     if ty <> from_ty then
-       type_error loc "Bad argument type in List.map" ty from_ty;
-     Tlist to_ty
-
-  | Prim_list_reduce, [
-      Tlambda (Ttuple [src_ty; dst_ty], dst_ty');
-      Tlist src_ty';
-      acc_ty;
-    ] ->
-     if src_ty <> src_ty' then
-       type_error loc "Bad argument source type in List.reduce" src_ty' src_ty;
-     if dst_ty <> dst_ty' then
-       type_error loc "Bad function type in List.reduce" dst_ty' dst_ty;
-     if acc_ty <> dst_ty' then
-       type_error loc "Bad accumulator type in List.reduce" acc_ty dst_ty';
-     acc_ty
-
-  | Prim_set_reduce, [
-      Tlambda (Ttuple [src_ty; dst_ty], dst_ty');
-      Tset src_ty';
-      acc_ty;
-    ] ->
-     if src_ty <> src_ty' then
-       type_error loc "Bad argument source type in Set.reduce" src_ty' src_ty;
-     if dst_ty <> dst_ty' then
-       type_error loc "Bad function type in Set.reduce" dst_ty' dst_ty;
-     if acc_ty <> dst_ty' then
-       type_error loc "Bad accumulator type in Set.reduce" acc_ty dst_ty';
-     acc_ty
-
-  | Prim_map_reduce, [
-      Tlambda (Ttuple [Ttuple [key_ty; src_ty]; dst_ty], dst_ty');
-      Tmap (key_ty', src_ty');
-      acc_ty;
-    ] ->
-     if src_ty <> src_ty' then
-       type_error loc "Bad argument source type in Map.reduce" src_ty' src_ty;
-     if dst_ty <> dst_ty' then
-       type_error loc "Bad function type in Map.reduce" dst_ty' dst_ty;
-     if acc_ty <> dst_ty' then
-       type_error loc "Bad accumulator type in Map.reduce" acc_ty dst_ty';
-     if key_ty <> key_ty' then
-       type_error loc "Bad function key type in Map.reduce" key_ty' key_ty;
-     acc_ty
-
-  | Prim_map_map, [
-      Tlambda (Ttuple [from_key_ty; from_value_ty], to_value_ty);
-      Tmap (key_ty, value_ty) ] ->
-     if from_key_ty <> key_ty then
-       type_error loc "Bad function key type in Map.map" key_ty from_key_ty;
-     if from_value_ty <> value_ty then
-       type_error loc "Bad function value type in Map.map"
-                  value_ty from_value_ty;
-     Tmap (key_ty, to_value_ty)
-
 
   | Prim_concat, [ Tstring; Tstring] -> Tstring
   | Prim_Cons, [ head_ty; Tunit ] ->

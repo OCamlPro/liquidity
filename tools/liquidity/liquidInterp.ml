@@ -468,6 +468,10 @@ let rec interp contract =
              stack, fold_node
        end
 
+    | MAP code, x :: prev_stack ->
+      (* TODO *)
+      failwith "decompile MAP not implemented yet"
+
 
     | LAMBDA (arg_ty, res_ty, code), stack ->
 
@@ -674,14 +678,6 @@ let rec interp contract =
 
     | UPDATE, x :: y :: z :: stack ->
        let x = node ins.loc (N_PRIM "UPDATE") [x;y;z] [seq] in
-       x :: stack, x
-
-    | REDUCE, x :: y :: z :: stack ->
-       let x = node ins.loc (N_PRIM "REDUCE") [x;y;z] [seq] in
-       x :: stack, x
-
-    | MAP, x :: y :: stack ->
-       let x = node ins.loc (N_PRIM "MAP") [x;y] [seq] in
        x :: stack, x
 
     | SIZE, x :: stack ->

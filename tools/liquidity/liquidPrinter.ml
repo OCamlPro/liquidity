@@ -420,6 +420,10 @@ module Michelson = struct
       Printf.bprintf b "ITER ";
       bprint_pre_name b name;
       bprint_arg fmt b a;
+    | MAP a ->
+      Printf.bprintf b "MAP ";
+      bprint_pre_name b name;
+      bprint_arg fmt b a;
     | LAMBDA (ty1, ty2, a) ->
       Printf.bprintf b "LAMBDA ";
       bprint_pre_name b name;
@@ -522,12 +526,6 @@ module Michelson = struct
       bprint_pre_name b name;
     | MEM ->
       Printf.bprintf b "MEM";
-      bprint_pre_name b name;
-    | MAP ->
-      Printf.bprintf b "MAP";
-      bprint_pre_name b name;
-    | REDUCE ->
-      Printf.bprintf b "REDUCE";
       bprint_pre_name b name;
     | SELF ->
       Printf.bprintf b "SELF";
@@ -978,6 +976,25 @@ module Liquid = struct
        let indent4 = indent2 ^ "  " in
        Printf.bprintf b "\n%s%s (fun %s -> "
          indent (LiquidTypes.string_of_fold_primitive prim) name;
+       bprint_code_rec ~debug b indent4 body;
+       Printf.bprintf b ")\n%s" indent2;
+       bprint_code_rec ~debug b indent2 arg;
+       bprint_code_rec ~debug b indent2 acc;
+       ()
+    | Map (prim, name, _loc, body, arg) ->
+       let indent2 = indent ^ "  " in
+       let indent4 = indent2 ^ "  " in
+       Printf.bprintf b "\n%s%s (fun %s -> "
+         indent (LiquidTypes.string_of_map_primitive prim) name;
+       bprint_code_rec ~debug b indent4 body;
+       Printf.bprintf b ")\n%s" indent2;
+       bprint_code_rec ~debug b indent2 arg;
+       ()
+    | MapFold (prim, name, _loc, body, arg, acc) ->
+       let indent2 = indent ^ "  " in
+       let indent4 = indent2 ^ "  " in
+       Printf.bprintf b "\n%s%s (fun %s -> "
+         indent (LiquidTypes.string_of_map_fold_primitive prim) name;
        bprint_code_rec ~debug b indent4 body;
        Printf.bprintf b ")\n%s" indent2;
        bprint_code_rec ~debug b indent2 arg;

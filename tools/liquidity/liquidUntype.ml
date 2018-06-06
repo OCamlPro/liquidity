@@ -124,6 +124,19 @@ let rec untype (env : env) code =
        let (var_arg', env') = find_free env var_arg bv in
        Fold (prim, var_arg', loc, untype env' body_exp, arg_exp, acc_exp)
 
+    | Map (prim, var_arg, loc, body_exp, arg_exp) ->
+       let arg_exp = untype env arg_exp in
+       let bv = body_exp.bv in
+       let (var_arg', env') = find_free env var_arg bv in
+       Map (prim, var_arg', loc, untype env' body_exp, arg_exp)
+
+    | MapFold (prim, var_arg, loc, body_exp, arg_exp, acc_exp) ->
+       let arg_exp = untype env arg_exp in
+       let acc_exp = untype env acc_exp in
+       let bv = body_exp.bv in
+       let (var_arg', env') = find_free env var_arg bv in
+       MapFold (prim, var_arg', loc, untype env' body_exp, arg_exp, acc_exp)
+
     | Let (var_arg, loc, arg_exp, body_exp) ->
        let arg_exp = untype env arg_exp in
        let bv = body_exp.bv in

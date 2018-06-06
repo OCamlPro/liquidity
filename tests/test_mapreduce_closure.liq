@@ -8,5 +8,5 @@ let%entry main
     else arg.(1)
   in
 
-  let b = Map.reduce f parameter false in
+  let b = Map.fold f parameter false in
   (([] : operation list), b)

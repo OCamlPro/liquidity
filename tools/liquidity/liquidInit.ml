@@ -94,6 +94,19 @@ let rec subst_empty_big_map code =
       if e1 == e1' && e2 == e2' && e3 == e3' then desc
       else Fold (c, loc, s, e1', e2', e3')
 
+    | Map (c, loc, s, e1, e2) ->
+      let e1' = subst_empty_big_map e1 in
+      let e2' = subst_empty_big_map e2 in
+      if e1 == e1' && e2 == e2' then desc
+      else Map (c, loc, s, e1', e2')
+
+    | MapFold (c, loc, s, e1, e2, e3) ->
+      let e1' = subst_empty_big_map e1 in
+      let e2' = subst_empty_big_map e2 in
+      let e3' = subst_empty_big_map e3 in
+      if e1 == e1' && e2 == e2' && e3 == e3' then desc
+      else MapFold (c, loc, s, e1', e2', e3')
+
     | Apply (p, loc, l) ->
       let l' = List.map subst_empty_big_map l in
       if List.for_all2 (==) l l' then desc

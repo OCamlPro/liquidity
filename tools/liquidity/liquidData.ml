@@ -88,6 +88,8 @@ let rec translate_const_exp loc (exp : encoded_exp) =
   | MatchList (_, _, _, _, _, _)
   | Loop (_, _, _, _)
   | Fold (_, _, _, _, _, _)
+  | Map (_, _, _, _, _)
+  | MapFold (_, _, _, _, _, _)
   | Lambda (_, _, _, _, _)
   | Closure (_, _, _, _, _, _)
   | MatchVariant (_, _, _)

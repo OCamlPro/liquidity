@@ -28,13 +28,15 @@ let rec compute decompile code to_inline =
     | Loop (_, _, e1, e2) -> 30 + size e1 + size e2
 
     | If (e1, e2, e3)
-    | MatchNat (e1, _, _, e2, _, e3) -> 40 + size e1 + size e3 + size e3
+    | MatchNat (e1, _, _, e2, _, e3) -> 40 + size e1 + size e2 + size e3
 
     | MatchList (e1, _, _, _, e2, e3)
-    | MatchOption (e1, _, e2, _, e3) -> 40 + size e1 + size e3 + size e3
+    | MatchOption (e1, _, e2, _, e3) -> 40 + size e1 + size e2 + size e3
 
-    | Fold (_, _, _, e1, e2, e3) -> 30 + size e1 + size e3 + size e3
-    | Transfer (_, e1, e2, e3) -> 1 + size e1 + size e3 + size e3
+    | Map (_, _, _, e1, e2) -> 30 + size e1 + size e2
+    | Fold (_, _, _, e1, e2, e3)
+    | MapFold (_, _, _, e1, e2, e3) -> 30 + size e1 + size e2 + size e3
+    | Transfer (_, e1, e2, e3) -> 1 + size e1 + size e2 + size e3
 
     | Apply (prim, _, l) ->
       List.fold_left (fun acc e -> acc + size e) 1 l
@@ -127,6 +129,17 @@ let rec compute decompile code to_inline =
        let arg = iter arg in
        let acc = iter acc in
        { exp with desc = Fold(prim, name, loc, body, arg, acc) }
+
+    | Map(prim, name, loc, body, arg) ->
+       let body = iter body in
+       let arg = iter arg in
+       { exp with desc = Map(prim, name, loc, body, arg) }
+
+    | MapFold(prim, name, loc, body, arg, acc) ->
+       let body = iter body in
+       let arg = iter arg in
+       let acc = iter acc in
+       { exp with desc = MapFold(prim, name, loc, body, arg, acc) }
 
     | Seq(e1, e2) ->
        let e1 = iter e1 in

@@ -371,7 +371,8 @@ let rec decr_counts_vars env e =
 
   | Seq (e1, e2)
   | Let (_, _, e1, e2)
-  | Loop (_, _, e1, e2) ->
+  | Loop (_, _, e1, e2)
+  | Map (_, _, _, e1, e2) ->
     decr_counts_vars env e1;
     decr_counts_vars env e2;
 
@@ -380,6 +381,7 @@ let rec decr_counts_vars env e =
   | MatchNat (e1, _, _, e2, _, e3)
   | MatchList (e1, _, _, _, e2, e3)
   | Fold (_, _, _, e1, e2, e3)
+  | MapFold (_, _, _, e1, e2, e3)
   | Transfer (_, e1, e2, e3) ->
     decr_counts_vars env e1;
     decr_counts_vars env e2;
@@ -523,118 +525,116 @@ let rec encode env ( exp : typed_exp ) : encoded_exp =
     let acc =
       mk (Apply(Prim_tuple_get, loc, [arg; mk_nat ~loc 1])) list_ty in
     let f_body = mk (Apply (Prim_Cons, loc, [e; acc])) list_ty in
-    let f_desc = Lambda (arg_name, arg_ty, loc, f_body, list_ty) in
-    let f = mk f_desc (Tlambda (arg_ty, list_ty)) in
     let empty_acc = mk_nil ~loc list_ty in
-    let desc = Apply (Prim_list_reduce, loc, [f; l; empty_acc]) in
+    let desc = Fold (Prim_list_fold, arg_name, loc, f_body, l, empty_acc) in
     mk ?name:exp.name desc list_ty
 
-  (* List.reduce (closure) -> List.fold
-     Set.reduce (closure) -> Set.fold
-     Map.reduce (closure) -> Map.fold *)
-  | Apply (( Prim_list_reduce
-           | Prim_set_reduce
-           | Prim_map_reduce) as prim, loc, [f; col; acc]) ->
-    let f' = encode env f in
-    begin match f'.ty with
-      | Tlambda _ ->
-        let col' = encode env col in
-        let acc' = encode env acc in
-        let args = [f'; col'; acc'] in
-        mk ?name:exp.name (Apply (prim, loc, args)) acc.ty
-      | Tclosure ((arg_ty, env_ty), acc_ty) ->
-        let arg_name = uniq_ident env "_arg" in
-        let arg = mk_typed (Var (arg_name, loc, [])) arg_ty in
-        let prim_fold = match prim with
-          | Prim_list_reduce -> Prim_list_fold
-          | Prim_set_reduce -> Prim_set_fold
-          | Prim_map_reduce -> Prim_map_fold
-          | _ -> assert false
-        in
-        let desc =
-          Fold (prim_fold, arg_name, loc,
-                mk_typed (Apply (Prim_exec, loc, [arg; f])) acc_ty,
-                col, acc) in
-        encode env (mk_typed ?name:exp.name desc exp.ty)
-      | _ -> assert false
-    end
-
-  (* List.map (closure) -> {List.rev(List.reduce (closure)} *)
-  | Apply (Prim_list_map, loc, [f; l]) ->
-    let f' = encode env f in
-    begin match f'.ty with
-      | Tlambda _ ->
-        let l = encode env l in
-        mk ?name:exp.name (Apply (Prim_list_map, loc, [f'; l])) exp.ty
-      | Tclosure ((arg_ty, _), ty_ret) ->
-        let arg_name = uniq_ident env "arg" in
-        let acc_ty = Tlist ty_ret in
-        let rarg_ty = Ttuple [arg_ty; Tlist ty_ret] in
-        let arg = mk_typed (Var (arg_name, loc, [])) rarg_ty in
-        let x =
-          mk_typed (Apply(Prim_tuple_get, loc,
-                          [arg; mk_typed_nat ~loc 0])) arg_ty in
-        let acc =
-          mk_typed (Apply(Prim_tuple_get, loc,
-                          [arg; mk_typed_nat ~loc 1])) acc_ty in
-        let f_body = mk_typed (Apply(Prim_Cons, loc, [
-            mk_typed (Apply(Prim_exec, loc, [x; f])) ty_ret;
-            acc
-          ])) acc_ty in
-        let f_red =
-          mk_typed (Lambda (arg_name, rarg_ty, loc, f_body, acc_ty))
-            (Tlambda (rarg_ty, acc_ty)) in
-        let red =
-          mk_typed (Apply (Prim_list_reduce, loc,
-                     [f_red; l; mk_typed_nil ~loc acc_ty])) acc_ty in
-        let rev_red = mk_typed ?name:exp.name
-            (Apply (Prim_list_rev, loc, [red])) acc_ty in
-        encode env rev_red
-      | _ -> assert false
-    end
-
-  (* Map.map (closure) -> {Map.reduce (Map.update)} *)
-  | Apply (Prim_map_map, loc, [f; m]) ->
-    let f' = encode env f in
-    begin match f'.ty with
-      | Tlambda _ ->
-        let m = encode env m in
-        mk ?name:exp.name (Apply (Prim_map_map, loc, [f'; m])) exp.ty
-      | Tclosure ((Ttuple [k_ty; v_ty] as kv_ty, _), ty_ret) ->
-        let arg_name = uniq_ident env "arg" in
-        let acc_ty = Tmap (k_ty, ty_ret) in
-        let arg_ty = Ttuple [kv_ty; acc_ty] in
-        let arg = mk_typed (Var (arg_name, loc, [])) arg_ty in
-        let kv =
-          mk_typed (Apply(Prim_tuple_get, loc,
-                          [arg; mk_typed_nat ~loc 0])) kv_ty in
-        let acc =
-          mk_typed (Apply(Prim_tuple_get, loc,
-                          [arg; mk_typed_nat ~loc 1])) acc_ty in
-        let k =
-          mk_typed (Apply(Prim_tuple_get, loc,
-                          [kv; mk_typed_nat ~loc 0])) k_ty in
-        let acc_ty = Tmap (k_ty, ty_ret) in
-        let update_body =
-          mk_typed (Apply(Prim_map_update, loc, [
-              k;
-              mk_typed (Apply(Prim_Some, loc, [
-                  mk_typed (Apply(Prim_exec, loc, [kv; f])) ty_ret
-                ])) (Toption ty_ret);
-              acc
-            ])) acc_ty in
-        let update_fun =
-          mk_typed (Lambda (arg_name, arg_ty, loc, update_body, acc_ty))
-            (Tlambda (arg_ty, acc_ty))
-        in
-        let red =
-          mk_typed ?name:exp.name (Apply (Prim_map_reduce, loc, [
-              update_fun; m;
-              mk_typed (Const (loc, acc_ty, CMap [])) acc_ty
-            ])) acc_ty in
-        encode env red
-      | _ -> assert false
-    end
+  (* (\* List.reduce (closure) -> List.fold
+   *    Set.reduce (closure) -> Set.fold
+   *    Map.reduce (closure) -> Map.fold *\)
+   * | Apply (( Prim_list_reduce
+   *          | Prim_set_reduce
+   *          | Prim_map_reduce) as prim, loc, [f; col; acc]) ->
+   *   let f' = encode env f in
+   *   begin match f'.ty with
+   *     | Tlambda _ ->
+   *       let col' = encode env col in
+   *       let acc' = encode env acc in
+   *       let args = [f'; col'; acc'] in
+   *       mk ?name:exp.name (Apply (prim, loc, args)) acc.ty
+   *     | Tclosure ((arg_ty, env_ty), acc_ty) ->
+   *       let arg_name = uniq_ident env "_arg" in
+   *       let arg = mk_typed (Var (arg_name, loc, [])) arg_ty in
+   *       let prim_fold = match prim with
+   *         | Prim_list_reduce -> Prim_list_fold
+   *         | Prim_set_reduce -> Prim_set_fold
+   *         | Prim_map_reduce -> Prim_map_fold
+   *         | _ -> assert false
+   *       in
+   *       let desc =
+   *         Fold (prim_fold, arg_name, loc,
+   *               mk_typed (Apply (Prim_exec, loc, [arg; f])) acc_ty,
+   *               col, acc) in
+   *       encode env (mk_typed ?name:exp.name desc exp.ty)
+   *     | _ -> assert false
+   *   end
+   *
+   * (\* List.map (closure) -> {List.rev(List.reduce (closure)} *\)
+   * | Apply (Prim_list_map, loc, [f; l]) ->
+   *   let f' = encode env f in
+   *   begin match f'.ty with
+   *     | Tlambda _ ->
+   *       let l = encode env l in
+   *       mk ?name:exp.name (Apply (Prim_list_map, loc, [f'; l])) exp.ty
+   *     | Tclosure ((arg_ty, _), ty_ret) ->
+   *       let arg_name = uniq_ident env "arg" in
+   *       let acc_ty = Tlist ty_ret in
+   *       let rarg_ty = Ttuple [arg_ty; Tlist ty_ret] in
+   *       let arg = mk_typed (Var (arg_name, loc, [])) rarg_ty in
+   *       let x =
+   *         mk_typed (Apply(Prim_tuple_get, loc,
+   *                         [arg; mk_typed_nat ~loc 0])) arg_ty in
+   *       let acc =
+   *         mk_typed (Apply(Prim_tuple_get, loc,
+   *                         [arg; mk_typed_nat ~loc 1])) acc_ty in
+   *       let f_body = mk_typed (Apply(Prim_Cons, loc, [
+   *           mk_typed (Apply(Prim_exec, loc, [x; f])) ty_ret;
+   *           acc
+   *         ])) acc_ty in
+   *       let f_red =
+   *         mk_typed (Lambda (arg_name, rarg_ty, loc, f_body, acc_ty))
+   *           (Tlambda (rarg_ty, acc_ty)) in
+   *       let red =
+   *         mk_typed (Apply (Prim_list_reduce, loc,
+   *                    [f_red; l; mk_typed_nil ~loc acc_ty])) acc_ty in
+   *       let rev_red = mk_typed ?name:exp.name
+   *           (Apply (Prim_list_rev, loc, [red])) acc_ty in
+   *       encode env rev_red
+   *     | _ -> assert false
+   *   end
+   *
+   * (\* Map.map (closure) -> {Map.reduce (Map.update)} *\)
+   * | Apply (Prim_map_map, loc, [f; m]) ->
+   *   let f' = encode env f in
+   *   begin match f'.ty with
+   *     | Tlambda _ ->
+   *       let m = encode env m in
+   *       mk ?name:exp.name (Apply (Prim_map_map, loc, [f'; m])) exp.ty
+   *     | Tclosure ((Ttuple [k_ty; v_ty] as kv_ty, _), ty_ret) ->
+   *       let arg_name = uniq_ident env "arg" in
+   *       let acc_ty = Tmap (k_ty, ty_ret) in
+   *       let arg_ty = Ttuple [kv_ty; acc_ty] in
+   *       let arg = mk_typed (Var (arg_name, loc, [])) arg_ty in
+   *       let kv =
+   *         mk_typed (Apply(Prim_tuple_get, loc,
+   *                         [arg; mk_typed_nat ~loc 0])) kv_ty in
+   *       let acc =
+   *         mk_typed (Apply(Prim_tuple_get, loc,
+   *                         [arg; mk_typed_nat ~loc 1])) acc_ty in
+   *       let k =
+   *         mk_typed (Apply(Prim_tuple_get, loc,
+   *                         [kv; mk_typed_nat ~loc 0])) k_ty in
+   *       let acc_ty = Tmap (k_ty, ty_ret) in
+   *       let update_body =
+   *         mk_typed (Apply(Prim_map_update, loc, [
+   *             k;
+   *             mk_typed (Apply(Prim_Some, loc, [
+   *                 mk_typed (Apply(Prim_exec, loc, [kv; f])) ty_ret
+   *               ])) (Toption ty_ret);
+   *             acc
+   *           ])) acc_ty in
+   *       let update_fun =
+   *         mk_typed (Lambda (arg_name, arg_ty, loc, update_body, acc_ty))
+   *           (Tlambda (arg_ty, acc_ty))
+   *       in
+   *       let red =
+   *         mk_typed ?name:exp.name (Apply (Prim_map_reduce, loc, [
+   *             update_fun; m;
+   *             mk_typed (Const (loc, acc_ty, CMap [])) acc_ty
+   *           ])) acc_ty in
+   *       encode env red
+   *     | _ -> assert false
+   *   end *)
 
   | Apply (prim, loc, args) ->
     encode_apply exp.name env prim loc args exp.ty
@@ -682,6 +682,34 @@ let rec encode env ( exp : typed_exp ) : encoded_exp =
     let (new_name, env, count) = new_binding env name name_ty in
     let body = encode env body in
     mk ?name:exp.name (Fold (prim, new_name, loc, body, arg, acc)) exp.ty
+
+  | Map (prim, name, loc, body, arg) ->
+    let arg = encode env arg in
+    let name_ty = match prim, arg.ty with
+      | Prim_map_map, Tmap (k_ty, v_ty) -> Ttuple [k_ty; v_ty]
+      | Prim_set_map, Tset elt_ty -> elt_ty
+      | Prim_list_map, Tlist elt_ty -> elt_ty
+      | _ -> assert false
+    in
+    let (new_name, env, count) = new_binding env name name_ty in
+    let body = encode env body in
+    mk ?name:exp.name (Map (prim, new_name, loc, body, arg)) exp.ty
+
+  | MapFold (prim, name, loc, body, arg, acc) ->
+    let arg = encode env arg in
+    let acc = encode env acc in
+    let name_ty = match prim, arg.ty with
+      | Prim_map_map_fold, Tmap (k_ty, v_ty) ->
+        Ttuple [Ttuple [k_ty; v_ty]; acc.ty]
+      | Prim_set_map_fold, Tset elt_ty ->
+        Ttuple [elt_ty; acc.ty]
+      | Prim_list_map_fold, Tlist elt_ty ->
+        Ttuple [elt_ty; acc.ty]
+      | _ -> assert false
+    in
+    let (new_name, env, count) = new_binding env name name_ty in
+    let body = encode env body in
+    mk ?name:exp.name (MapFold (prim, new_name, loc, body, arg, acc)) exp.ty
 
   | MatchList (arg, loc, head_name, tail_name, ifcons, ifnil) ->
      let arg = encode env arg in
