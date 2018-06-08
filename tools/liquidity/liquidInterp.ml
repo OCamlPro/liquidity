@@ -229,8 +229,12 @@ let rec interp contract =
        let stack, seq = decompile stack seq ins in
        decompile_seq stack seq code
 
-  and decompile stack (seq : node) ins =
+  and decompile stack seq ins =
+    let stack, seq = decompile_aux stack seq ins in
     add_name_to_ins stack seq ins;
+    stack, seq
+
+  and decompile_aux stack (seq : node) ins =
     match ins.ins, stack with
     | ANNOT name, _ ->
       add_name stack seq name;

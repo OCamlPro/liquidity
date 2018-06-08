@@ -893,14 +893,14 @@ and encode_contract ?(annot=false) env contract =
   (* "parameter/2" *)
   let (_, env, _) = new_binding env "parameter" contract.contract_sig.parameter in
 
-  {
+  let contract = {
     contract_sig = {
       parameter = encode_parameter_type env contract.contract_sig.parameter;
       storage = encode_storage_type env contract.contract_sig.storage;
     };
     code = encode env contract.code
-  },
-  ! (env.to_inline)
+  } in
+  contract, !(env.to_inline)
 
 
 let encode_code tenv code =

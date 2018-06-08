@@ -98,6 +98,7 @@ let compile_tezos_file filename =
 
   let c, annoted_tz, type_annots = LiquidFromTezos.convert_contract env code in
   let c = LiquidClean.clean_contract c in
+  (* let c = if !LiquidOptions.peephole then LiquidPeephole.simplify c else c in *)
   let c = LiquidInterp.interp c in
   if !LiquidOptions.parseonly then exit 0;
   if !LiquidOptions.verbosity>0 then begin
@@ -108,6 +109,7 @@ let compile_tezos_file filename =
       Printf.eprintf "Warning: could not generate pdf from .dot file\n%!";
   end;
   if !LiquidOptions.typeonly then exit 0;
+
   let c = LiquidDecomp.decompile c in
   if !LiquidOptions.verbosity>0 then
   FileString.write_file  (filename ^ ".liq.pre")

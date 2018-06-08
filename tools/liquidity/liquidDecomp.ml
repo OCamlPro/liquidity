@@ -67,7 +67,7 @@ let rec var_of node =
           | _ -> assert false
         end
       | N_PRIM p -> Printf.sprintf "%s%d" (String.lowercase_ascii p) node.num
-      | N_IF _ -> Printf.sprintf "branch%d" node.num
+      | N_IF _ -> Printf.sprintf "res%d" node.num
       | N_IF_THEN _ -> Printf.sprintf "then%d" node.num
       | N_IF_ELSE _ -> Printf.sprintf "else%d" node.num
       | N_IF_NIL _ -> Printf.sprintf "if_nil%d" node.num
@@ -80,7 +80,7 @@ let rec var_of node =
       | N_RIGHT _ -> Printf.sprintf "right%d" node.num
       | N_TRANSFER -> Printf.sprintf "transfer%d" node.num
       | N_IF_RESULT _ | N_IF_END_RESULT _ | N_LOOP_RESULT _ ->
-        Printf.sprintf "res%d" node.num
+        Printf.sprintf "var%d" node.num
       | N_FAIL _ -> Printf.sprintf "fail%d" node.num
       | N_LOOP _ -> Printf.sprintf "loop%d" node.num
       | N_LAMBDA _ -> Printf.sprintf "fun%d" node.num

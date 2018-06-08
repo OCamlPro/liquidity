@@ -54,6 +54,118 @@ let rec compute decompile code to_inline =
       List.fold_left (fun acc e -> acc + size e) 1 l
   in
 
+  let rec recompute_fail exp =
+    match exp.desc with
+      | Const (_, _, _)
+      | Var (_, _, _) -> { exp with fail = false }
+
+      | Failwith _ -> exp
+
+      | SetVar (v, loc, l, e) ->
+        let e' = recompute_fail e in
+        if e == e' then exp
+        else { exp with desc = SetVar (v, loc, l, e'); fail = e'.fail }
+
+      | Constructor (loc, c, e) ->
+        let e' = recompute_fail e in
+        if e == e' then exp
+        else { exp with desc = Constructor (loc, c, e'); fail = e'.fail }
+
+      | Lambda (a, t, loc, e, r) ->
+        let e' = recompute_fail e in
+        if e == e' then exp
+        else { exp with desc = Lambda (a, t, loc, e', r); fail = e'.fail }
+
+      | Seq (e1, e2)
+      | Let (_, _, e1, e2)
+      | Loop (_, _, e1, e2)
+      | Map (_, _, _, e1, e2) ->
+        let e1' = recompute_fail e1 in
+        let e2' = recompute_fail e2 in
+        if e1 == e1' && e2 == e2' then exp
+        else { exp with
+               fail = e1.fail || e2.fail;
+               desc = match exp.desc with
+                 | Seq (_, _) -> Seq (e1', e2')
+                 | Let (x, loc, _, _) -> Let (x, loc, e1', e2')
+                 | Loop (x, loc, _, _) -> Loop (x, loc, e1', e2')
+                 | Map (p, loc, x, _, _) -> Map (p, loc, x, e1', e2')
+                 | _ -> assert false }
+
+      | Transfer (_, e1, e2, e3)
+      | If (e1, e2, e3)
+      | MatchOption (e1, _, e2, _, e3)
+      | MatchNat (e1, _, _, e2, _, e3)
+      | MatchList (e1, _, _, _, e2, e3)
+      | Fold (_, _, _, e1, e2, e3)
+      | MapFold (_, _, _, e1, e2, e3) ->
+        let e1' = recompute_fail e1 in
+        let e2' = recompute_fail e2 in
+        let e3' = recompute_fail e3 in
+        if e1 == e1' && e2 == e2' && e3 == e3' then exp
+        else
+          { exp with
+            fail = e1.fail || e2.fail || e3.fail;
+            desc = match exp.desc with
+              | Transfer (loc, _, _, _) -> Transfer (loc, e1', e2', e3')
+              | If (_, _, _) -> If (e1', e2', e3')
+              | MatchOption (_, a, _, b, _) -> MatchOption (e1', a, e2', b, e3')
+              | MatchNat (_, a, b, _, c, _) -> MatchNat (e1, a, b, e2', c, e3')
+              | MatchList (_, a, b, c, _, _) ->
+                MatchList (e1', a, b, c, e2', e3')
+              | Fold (a, b, c, _, _, _) -> Fold (a, b, c, e1', e2', e3')
+              | MapFold (a, b, c, _, _, _) -> MapFold (a, b, c, e1', e2', e3')
+              | _ -> assert false }
+
+      | Apply (prim, loc, l) ->
+        let l' = List.map recompute_fail l in
+        if List.for_all2 (==) l l' then exp
+        else
+          { exp with
+            fail = prim = Prim_fail || List.exists (fun e -> e.fail) l';
+            desc = Apply (prim, loc, l') }
+
+      | Closure (a, t, loc, env, e, r) ->
+        let e' = recompute_fail e in
+        let env' = List.map (fun (v, e) -> v, recompute_fail e) env in
+        if e == e' && List.for_all2 (fun (_, e) (_, e') -> e == e') env env'
+        then exp
+        else
+          { exp with
+            fail = e'.fail || List.exists (fun (_, e) -> e.fail) env';
+            desc = Closure (a, t, loc, env', e', r) }
+
+      | Record (loc, labels) ->
+        let labels' = List.map (fun (l, e) -> l, recompute_fail e) labels in
+        if List.for_all2 (fun (_, e) (_, e') -> e == e') labels labels'
+        then exp
+        else
+          { exp with
+            fail = List.exists (fun (_, e) -> e.fail) labels';
+            desc = Record (loc, labels') }
+
+      | MatchVariant (e, loc, cases) ->
+        let e' = recompute_fail e in
+        let cases' = List.map (fun (v, e) -> v, recompute_fail e) cases in
+        if e == e' && List.for_all2 (fun (_, e) (_, e') -> e == e') cases cases'
+        then exp
+        else
+          { exp with
+            fail = e'.fail || List.exists (fun (_, e) -> e.fail) cases';
+            desc = MatchVariant (e', loc, cases') }
+
+      | CreateContract (loc, l, c) ->
+        let l' = List.map recompute_fail l in
+        if List.for_all2 (==) l l' then exp
+        else
+          { exp with
+            fail = List.exists (fun e -> e.fail) l';
+            desc = CreateContract (loc, l', c);
+          }
+  in
+
+  let code = if decompile then recompute_fail code else code in
+
   let rec iter exp =
     match exp.desc with
     | Const _ -> exp
@@ -70,12 +182,31 @@ let rec compute decompile code to_inline =
     | Let (name, loc, v, { desc = Var (vname, _loc, []) })
       when vname = name -> (* special case for let x = e in x *)
       iter v
+    | Let (name, loc, ({ ty = Ttuple tys} as v),
+           { desc = Apply (Prim_tuple, _, tuple) })
+      when
+        let len, ok =
+          List.fold_left (fun (i, ok) t -> match t.desc with
+            | Apply (Prim_tuple_get, _, [
+                { desc = Var (vname, _, []) };
+                { desc = Const (_, _, (CInt n | CNat n)) }]) ->
+              let ok = ok && vname = name &&
+                       LiquidPrinter.int_of_integer n = i in
+              (i + 1, ok)
+            | _ -> (i + 1, false)
+            ) (0, true) tuple in
+        ok && List.length tys = len
+      ->
+      (* special case for let x = v in (x.(0), x.(1)) *)
+      iter v
     | Let (name, loc, v, body) ->
       if decompile && v.name = None && not v.fail && not v.transfer
          && size body <= inline_treshold_low
       then
         to_inline := StringMap.add name v !to_inline;
+      (* let obody = body in *)
       let body = iter body in
+      (* if body <> obody then iter { exp with desc = Let (name, loc, v, body) } else *)
       if StringMap.mem name !to_inline then
         body
       else
@@ -194,7 +325,14 @@ let rec compute decompile code to_inline =
     | Constructor _ -> assert false (* never found in typed_exp *)
   in
 
-  iter code
+  let rec fixpoint code =
+    let c = iter code in
+    if c <> code then fixpoint c else c
+  in
+
+  fixpoint code
+
+  (* iter code *)
 
 and simplify_contract ?(decompile_annoted=false) contract to_inline =
   { contract with code = compute decompile_annoted contract.code to_inline }

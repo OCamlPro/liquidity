@@ -566,13 +566,13 @@ let mk =
 
       | SetVar (_, _, _, e)
       | Constructor (_, _, e)
-      | Lambda (_, _, _, e, _) -> e.fail, e.transfer
+      | Lambda (_, _, _, e, _) -> e.fail, false (* e.transfer *)
 
       | Seq (e1, e2)
       | Let (_, _, e1, e2)
       | Loop (_, _, e1, e2)
       | Map (_, _, _, e1, e2) ->
-        e1.fail || e2.fail, e1.transfer || e2.transfer
+        e1.fail || e2.fail, false (* e1.transfer || e2.transfer *)
 
       | Transfer (_, e1, e2, e3) ->
         e1.fail || e2.fail || e3.fail,
@@ -585,25 +585,25 @@ let mk =
       | Fold (_, _, _, e1, e2, e3)
       | MapFold (_, _, _, e1, e2, e3) ->
         e1.fail || e2.fail || e3.fail,
-        e1.transfer || e2.transfer || e3.transfer
+        false (* e1.transfer || e2.transfer || e3.transfer *)
 
       | Apply (prim, _, l) ->
         prim = Prim_fail || List.exists (fun e -> e.fail) l,
         prim = Prim_set_delegate
         || prim = Prim_create_account
-        || List.exists (fun e -> e.transfer) l
+        (* || List.exists (fun e -> e.transfer) l *)
 
       | Closure (_, _, _, env, e, _) ->
         e.fail || List.exists (fun (_, e) -> e.fail) env,
-        e.transfer || List.exists (fun (_, e) -> e.transfer) env
+        false (* e.transfer || List.exists (fun (_, e) -> e.transfer) env *)
 
       | Record (_, labels) ->
         List.exists (fun (_, e) -> e.fail) labels,
-        List.exists (fun (_, e) -> e.transfer) labels
+        false (* List.exists (fun (_, e) -> e.transfer) labels *)
 
       | MatchVariant (e, _, cases) ->
         e.fail || List.exists (fun (_, e) -> e.fail) cases,
-        e.transfer || List.exists (fun (_, e) -> e.transfer) cases
+        false (* e.transfer || List.exists (fun (_, e) -> e.transfer) cases *)
 
       | CreateContract (_, l, _) ->
         List.exists (fun e -> e.fail) l,

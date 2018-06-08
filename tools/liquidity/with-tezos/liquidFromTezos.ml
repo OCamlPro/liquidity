@@ -250,8 +250,31 @@ let rec convert_type env expr =
     | Prim(_, "string", [], _debug) -> Tstring
     | Prim(_, "operation", [], _debug) -> Toperation
     | Prim(_, "address", [], _debug) -> Taddress
+    (* | Prim(_, "pair", [
+     *     Prim(_, _, _, Some x_field) as x;
+     *     Prim(_, _, _, Some y_field) as y;
+     *   ], _debug) ->
+     *   let x_field = (name_of_annot x_field) in
+     *   let y_field = (name_of_annot y_field) in
+     *   let rname = match name with
+     *     | Some n -> n
+     *     | None -> String.concat "_" [x_field; y_field] in
+     *   Trecord (rname, [(x_field, convert_type env x);
+     *                    (y_field, convert_type env y)]) *)
     | Prim(_, "pair", [x;y], _debug) -> Ttuple [convert_type env x;
                                                 convert_type env y]
+
+    (* | Prim(_, "or", [
+     *     Prim(_, _, _, Some x_constr) as x;
+     *     Prim(_, _, _, Some y_constr) as y;
+     *   ], _debug) ->
+     *   let x_constr = String.capitalize_ascii @@ name_of_annot x_constr in
+     *   let y_constr = String.capitalize_ascii @@ name_of_annot y_constr in
+     *   let sname = match name with
+     *     | Some n -> n
+     *     | None -> String.concat "_" [x_constr; y_constr] in
+     *   Tsum (sname, [(x_constr, convert_type env x);
+     *                 (y_constr, convert_type env y)]) *)
     | Prim(_, "or", [x;y], _debug) -> Tor (convert_type env x,
                                            convert_type env y)
     | Prim(_, "contract", [x], _debug) -> Tcontract (convert_type env x)
@@ -315,7 +338,6 @@ let rec expand expr =
 let rec convert_code env expr =
   match expr with
   | Seq (index, [], Some name) ->
-    env.annoted <- true;
     mic_loc env index (Some name) (ANNOT (name_of_annot name)) (* TODO remove *)
   | Seq (index, exprs, annot) ->
     mic_loc env index annot
@@ -492,7 +514,8 @@ let convert_contract env c =
     List.map (fun c ->
         let c = Micheline.inject_locations (fun i -> i) c in
         expand c) c in
-  convert_raw_contract env c, env.annoted, env.type_annots
+  let contract = convert_raw_contract env c in
+  contract, env.annoted, env.type_annots
 
 let convert_const_type env c ty =
   let c = Micheline.inject_locations (fun i -> i) c in
