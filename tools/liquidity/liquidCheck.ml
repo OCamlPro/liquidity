@@ -134,7 +134,8 @@ let rec loc_exp e = match e.desc with
   | Constructor (loc, _, _)
   | MatchVariant (_, loc, _)
   | Failwith (_, loc)
-  | CreateContract (loc, _, _) -> loc
+  | CreateContract (loc, _, _)
+  | ContractAt (loc, _, _) -> loc
 
   | Let (_, _, _, e) -> loc_exp e
 
@@ -616,6 +617,11 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
     in
     mk ?name:exp.name desc ty
 
+  | ContractAt (loc, addr, ty) ->
+    let addr = typecheck_expected "Contract.at argument" env Taddress addr in
+    let desc = ContractAt (loc, addr, ty) in
+    mk ?name:exp.name desc (Toption (Tcontract ty))
+
   | CreateContract (loc, args, contract) ->
     let contract = typecheck_contract ~warnings:env.warnings env.env contract in
     match args with
@@ -869,7 +875,7 @@ and typecheck_prim2 env prim loc args =
      Taddress
 
   | Prim_create_account, [ Tkey_hash; Toption Tkey_hash; Tbool; Ttez ] ->
-     Ttuple [Toperation; Tcontract Tunit]
+     Ttuple [Toperation; Taddress]
   | Prim_create_account, _ ->
      error_prim loc Prim_create_account args
                 [ Tkey_hash; Toption Tkey_hash; Tbool; Ttez ]

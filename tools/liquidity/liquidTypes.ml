@@ -546,6 +546,10 @@ and ('ty, 'a) exp_desc =
                       * ('ty, 'a) exp list (* arguments *)
                       * ('ty, 'a) exp contract (* body *)
 
+  | ContractAt of location
+                  * ('ty, 'a) exp
+                  * datatype
+
 
 type typed
 type encoded
@@ -566,6 +570,7 @@ let mk =
 
       | SetVar (_, _, _, e)
       | Constructor (_, _, e)
+      | ContractAt(_, e, _)
       | Lambda (_, _, _, e, _) -> e.fail, false (* e.transfer *)
 
       | Seq (e1, e2)
@@ -681,6 +686,7 @@ type 'a pre_michelson =
 
   | LEFT of datatype
   | RIGHT of datatype
+  | CONTRACT of datatype
 
   | EDIV
   | LSL
@@ -833,6 +839,7 @@ type node = {
    | N_END
    | N_LEFT of datatype
    | N_RIGHT of datatype
+   | N_CONTRACT of datatype
    | N_ABS
    | N_RESULT of node * int
 

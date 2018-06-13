@@ -138,6 +138,11 @@ let rec subst_empty_big_map code =
       if List.for_all2 (==) l l' then desc
       else CreateContract (loc, l', contract)
 
+    | ContractAt (loc, addr, ty) ->
+      let addr' = subst_empty_big_map addr in
+      if addr == addr' then desc
+      else ContractAt (loc, addr', ty)
+
   in
   if desc == code.desc then
     code

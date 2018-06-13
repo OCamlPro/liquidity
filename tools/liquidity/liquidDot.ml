@@ -87,6 +87,7 @@ let rec to_dot ~sub_contract_of contract =
         | N_RIGHT _
         | N_ABS
         | N_TRANSFER
+        | N_CONTRACT _
           -> ()
 
         | N_LOOP_END (x,y,z)

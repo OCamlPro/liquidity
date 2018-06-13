@@ -647,6 +647,9 @@ let rec interp contract =
     | RIGHT left_ty, x :: stack -> (* TODO : keep types too ! *)
        let x = node ins.loc (N_RIGHT left_ty) [x] [seq] in
        x :: stack, x
+    | CONTRACT ty, x :: stack -> (* TODO : keep types too ! *)
+       let x = node ins.loc (N_CONTRACT ty) [x] [seq] in
+       x :: stack, x
     | INT, x :: stack ->
        let x = node ins.loc (N_PRIM "INT") [x] [seq] in
        x :: stack, x

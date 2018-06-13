@@ -682,6 +682,35 @@ let rec translate_code env exp =
          (fun (parameter : <parameter_type>) (storage : <storage_type>) -> \
          <contract code>)"
 
+    | { pexp_desc =
+          Pexp_constraint (
+            { pexp_desc =
+                Pexp_apply (
+                  { pexp_desc = Pexp_ident
+                        { txt = Ldot(Lident "Contract", "at") } },
+                  [
+                    Nolabel, addr_exp;
+                  ]) },
+            pty) } ->
+
+      let ty = match translate_type env pty with
+        | Toption (Tcontract p) -> p
+        | _ -> error_loc pty.ptyp_loc
+                 "Contract.at type must be 'a contract option for some 'a"
+      in
+      ContractAt (loc, translate_code env addr_exp, ty)
+
+    | { pexp_desc =
+          Pexp_apply (
+            { pexp_desc = Pexp_ident
+                  { txt = Ldot(Lident "Contract", "at") } },
+            [
+              Nolabel, addr_exp;
+            ]);
+          pexp_loc } ->
+      error_loc pexp_loc
+        "Contract.at must be annotated by the resulting contract type (option)"
+
     | { pexp_desc = Pexp_let (Nonrecursive, [ {
         pvb_pat = pat;
         pvb_expr = var_exp;
@@ -988,31 +1017,47 @@ from the head element. We use unit for that type. *)
                 Pexp_constraint (
                     { pexp_desc =
                         Pexp_construct (
-                            { txt = Lident "Left" }, args) },
-                    { ptyp_desc = Ptyp_constr (
-                                      { txt = Lident "variant" },
-                                      [ left_ty; right_ty ]
-            )}) } ->
-             Constructor( loc,
-                          Left (translate_type env right_ty),
-                          match args with
-                          | None -> mk (Const (loc, Tunit, CUnit))
-                          | Some arg -> translate_code env arg )
+                          { txt = Lident "Left" }, args) },
+                    pty
+                  ) } ->
+            let right_ty = match pty with
+              | { ptyp_desc = Ptyp_constr (
+                  { txt = Lident "variant" },
+                  [ left_ty; right_ty ])} ->
+                translate_type env right_ty
+              | _ -> match translate_type env pty with
+                | Tor (_, right_ty) -> right_ty
+                | _ -> error_loc pty.ptyp_loc
+                         "Type of Left must be a variant"
+            in
+            Constructor( loc,
+                         Left right_ty,
+                         match args with
+                         | None -> mk (Const (loc, Tunit, CUnit))
+                         | Some arg -> translate_code env arg )
 
           | { pexp_desc =
                 Pexp_constraint (
-                    { pexp_desc =
-                        Pexp_construct (
-                            { txt = Lident "Right" }, args) },
-                    { ptyp_desc = Ptyp_constr (
-                                      { txt = Lident "variant" },
-                                      [ left_ty; right_ty ]
-            )}) } ->
-             Constructor( loc,
-                          Right (translate_type env left_ty),
-                          match args with
-                          | None -> mk (Const (loc, Tunit, CUnit))
-                          | Some arg -> translate_code env arg )
+                  { pexp_desc =
+                      Pexp_construct (
+                        { txt = Lident "Right" }, args) },
+                  pty
+                ) } ->
+            let left_ty = match pty with
+              | { ptyp_desc = Ptyp_constr (
+                  { txt = Lident "variant" },
+                  [ left_ty; right_ty ])} ->
+                translate_type env left_ty
+              | _ -> match translate_type env pty with
+                | Tor (left_ty, _) -> left_ty
+                | _ -> error_loc pty.ptyp_loc
+                         "Type of Right must be a variant"
+            in
+            Constructor( loc,
+                         Right left_ty,
+                         match args with
+                         | None -> mk (Const (loc, Tunit, CUnit))
+                         | Some arg -> translate_code env arg )
 
           (* TODO *)
           | { pexp_desc = Pexp_tuple exps } ->

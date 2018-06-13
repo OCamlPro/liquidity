@@ -130,6 +130,10 @@ let rec bv code =
          StringSet.union set (bv arg)
        ) bc args
 
+  | ContractAt (loc, addr, ty) -> bv addr
+
+
+
 let mk desc exp bv = { exp with desc; bv }
 
 let rec bound code =
@@ -367,6 +371,11 @@ let rec bound code =
     in
     let desc = CreateContract (loc, args, contract) in
     mk desc code bv
+
+  | ContractAt (loc, addr, ty) ->
+     let addr = bound addr in
+     let desc = ContractAt (loc, addr, ty) in
+     mk desc code addr.bv
 
 and bound_contract contract =
   let c = bound contract.code in

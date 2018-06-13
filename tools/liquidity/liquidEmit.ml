@@ -45,6 +45,7 @@ let rec emit_code ~expand code =
                 [emit_code ~expand body], name)
   | LEFT ty -> M_INS_EXP ("LEFT", [ty], [], name)
   | RIGHT ty -> M_INS_EXP ("RIGHT", [ty], [], name)
+  | CONTRACT ty -> M_INS_EXP ("CONTRACT", [ty], [], name)
 
   (* Special case for empty map/set  TODO check if necessary *)
   (* | PUSH (ty, CMap []) -> M_INS_EXP ("EMPTY_MAP", [ty], [], name)

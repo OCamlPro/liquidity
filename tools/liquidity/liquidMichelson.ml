@@ -291,6 +291,11 @@ let rec translate_code code =
       args_code @
       [ii ~loc @@ CREATE_CONTRACT contract; ii ~loc PAIR]
 
+    | ContractAt (loc, addr, ty) ->
+      let ty = LiquidEncode.encode_type ty in
+      compile depth env addr @
+      [ ii ~loc (CONTRACT ty) ]
+
     (* removed during typechecking, replaced by tuple *)
     | Record _ -> assert false
     | Constructor _ -> assert false

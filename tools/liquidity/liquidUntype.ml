@@ -188,6 +188,9 @@ let rec untype (env : env) code =
     | CreateContract (loc, args, contract) ->
       CreateContract (loc, List.map (untype env) args, untype_contract contract)
 
+    | ContractAt (loc, addr, ty) ->
+      ContractAt (loc, untype env addr, ty)
+
     | Record (_, _)
     | Constructor (_, _, _)
     | MatchVariant (_, _, _) ->

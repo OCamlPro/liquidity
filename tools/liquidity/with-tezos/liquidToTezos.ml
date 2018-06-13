@@ -208,6 +208,8 @@ let rec convert_code expand expr =
   | MAP body -> prim "MAP" [convert_code expand body] name
   | RIGHT ty ->
      prim "RIGHT" [convert_type ty] name
+  | CONTRACT ty ->
+     prim "CONTRACT" [convert_type ty] name
   | INT -> prim "INT" [] name
   | ABS -> prim "ABS" [] name
   | DUP 1 -> prim "DUP" [] name

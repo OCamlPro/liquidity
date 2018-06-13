@@ -367,6 +367,7 @@ let rec decr_counts_vars env e =
 
   | SetVar (_, _, _, e)
   | Constructor (_, _, e)
+  | ContractAt (_, e, _)
   | Lambda (_, _, _, e, _) -> decr_counts_vars env e
 
   | Seq (e1, e2)
@@ -858,6 +859,10 @@ let rec encode env ( exp : typed_exp ) : encoded_exp =
       ) cases
     in
     mk ?name:exp.name (MatchVariant (arg, loc, cases)) exp.ty
+
+  | ContractAt (loc, addr, ty) ->
+    let addr = encode env addr in
+    mk ?name:exp.name (ContractAt (loc, addr, ty)) exp.ty
 
   | CreateContract (loc, args, contract) ->
     let args = List.map (encode env) args in

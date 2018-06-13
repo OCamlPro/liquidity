@@ -501,6 +501,13 @@ let rec convert_code ~abbrev expr =
               (convert_code ~abbrev contract.code))
        ])
 
+  | ContractAt (loc, addr, ty) ->
+    Exp.constraint_ ~loc:(loc_of_loc loc)
+      (Exp.apply ~loc:(loc_of_loc loc)
+         (Exp.ident (lid "Contract.at"))
+         [ Nolabel, convert_code ~abbrev addr ])
+      (convert_type ~abbrev (Toption (Tcontract ty)))
+
 
 let structure_of_contract ?(abbrev=true) ?type_annots contract =
   clean_abbrevs ();

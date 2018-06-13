@@ -20,6 +20,7 @@ let rec compute decompile code to_inline =
   let rec size exp =
     match exp.desc with
     | Const _ | Var _ | SetVar _ | Failwith _ -> 1
+    | ContractAt (_, e, _) -> size e
     | Constructor (_, _, e) -> size e
 
     | Seq (e1, e2) -> size e1 + size e2
@@ -71,6 +72,11 @@ let rec compute decompile code to_inline =
         let e' = recompute_fail e in
         if e == e' then exp
         else { exp with desc = Constructor (loc, c, e'); fail = e'.fail }
+
+      | ContractAt (loc, e, ty) ->
+        let e' = recompute_fail e in
+        if e == e' then exp
+        else { exp with desc = ContractAt (loc, e', ty); fail = e'.fail }
 
       | Lambda (a, t, loc, e, r) ->
         let e' = recompute_fail e in
@@ -322,6 +328,10 @@ let rec compute decompile code to_inline =
         simplify_contract ~decompile_annoted:decompile contract !to_inline
       in
       { exp with desc = CreateContract(loc, args, contract) }
+
+    | ContractAt (loc, addr, ty) ->
+      let addr = iter addr in
+      { exp with desc = ContractAt (loc, addr, ty) }
 
     | Constructor _ -> assert false (* never found in typed_exp *)
   in
