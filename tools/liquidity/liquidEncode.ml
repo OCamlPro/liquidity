@@ -77,7 +77,9 @@ let find_var ?(count_used=true) env loc name =
     let aname =
       if env.annot then Some vname
       else None in
-    { (mk ?name:aname (Var (name, loc, [])) ty) with fail }
+    let exp = mk ?name:aname (Var (name, loc, [])) ty in
+    (* ignore fail status when decompiling (for inlining) *)
+    if env.decompiling then exp else { exp with fail }
   with Not_found ->
   match env.clos_env with
   | None -> error loc "unbound variable %S" name
@@ -879,11 +881,12 @@ and encode_apply name env prim loc args ty =
   | _ -> mk ?name (Apply (prim, loc, args)) ty
 
 
-and encode_contract ?(annot=false) env contract =
+and encode_contract ?(annot=false) ?(decompiling=false) env contract =
   let env =
     {
       warnings=false;
       annot;
+      decompiling;
       counter = ref 0;
       vars = StringMap.empty;
       vars_counts = StringMap.empty;
@@ -915,8 +918,9 @@ let encode_code tenv code =
 let encode_const env t_contract_sig const =
   let env =
     {
-      warnings=false;
-      annot=false;
+      warnings = false;
+      annot = false;
+      decompiling = false;
       counter = ref 0;
       vars = StringMap.empty;
       vars_counts = StringMap.empty;

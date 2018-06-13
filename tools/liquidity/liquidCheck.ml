@@ -929,7 +929,8 @@ and typecheck_contract ~warnings env contract =
   let env =
     {
       warnings;
-      annot=false;
+      annot = false;
+      decompiling = false;
       counter = ref 0;
       vars = StringMap.empty;
       vars_counts = StringMap.empty;

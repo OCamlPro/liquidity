@@ -116,7 +116,8 @@ let compile_tezos_file filename =
                          (LiquidPrinter.Liquid.string_of_contract c);
   let env = LiquidFromOCaml.initial_env filename in
   let typed_ast = LiquidCheck.typecheck_contract ~warnings:false env c in
-  let encode_ast, to_inline = LiquidEncode.encode_contract env typed_ast in
+  let encode_ast, to_inline =
+    LiquidEncode.encode_contract ~decompiling:true env typed_ast in
   let live_ast = LiquidSimplify.simplify_contract
       ~decompile_annoted:annoted_tz encode_ast to_inline in
   let untyped_ast = LiquidUntype.untype_contract live_ast in

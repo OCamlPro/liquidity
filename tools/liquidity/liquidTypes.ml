@@ -744,6 +744,7 @@ type env = {
 type typecheck_env = {
     warnings : bool;
     annot : bool;
+    decompiling : bool;
     counter : int ref;
     vars : (string * datatype * bool (* fails *) ) StringMap.t;
     vars_counts : int ref StringMap.t;
@@ -755,7 +756,8 @@ type typecheck_env = {
 
 let empty_typecheck_env ~warnings t_contract_sig env = {
   warnings;
-  annot=false;
+  decompiling = false;
+  annot = false;
   counter = ref 0;
   vars = StringMap.empty;
   vars_counts = StringMap.empty;
