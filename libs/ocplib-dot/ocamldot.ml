@@ -21,7 +21,7 @@ type graph = {
     graph_name : string;
     mutable graph_nodes : node list;
     mutable graph_edges : edge list;
-    mutable node_counter : int;
+    mutable node_counter : int ref;
     mutable graph_attributes : graph_attributes list;
     mutable graph_subgraphs : graph list;
   }
@@ -94,28 +94,42 @@ open TYPES
 
 let create name graph_attributes = {
     graph_name = name;
-    node_counter = 0;
+    node_counter = ref 0;
     graph_nodes = [];
     graph_edges = [];
     graph_attributes = graph_attributes;
     graph_subgraphs = [];
   }
 
+let cluster graph name graph_attributes =
+  let subgraph = {
+    graph_name = "cluster_" ^ name;
+    node_counter = graph.node_counter;
+    graph_nodes = [];
+    graph_edges = [];
+    graph_attributes = graph_attributes;
+    graph_subgraphs = [];
+  } in
+  graph.graph_subgraphs <- subgraph :: graph.graph_subgraphs;
+  graph.graph_attributes <- graph.graph_attributes @ [Compound true];
+  subgraph
+
+
 let node graph name node_attributes =
   let node = {
       node_name = name;
-      node_id = graph.node_counter;
+      node_id = !(graph.node_counter);
       node_graph = graph;
       node_attributes = node_attributes;
     } in
-  graph.node_counter <- graph.node_counter + 1;
+  incr graph.node_counter;
   graph.graph_nodes <- node :: graph.graph_nodes;
   node
 
 let edge node1 node2 edge_attributes =
   let graph = node1.node_graph in
-  if not (graph == node2.node_graph) then
-    failwith "Ocamldot.edge: nodes in different graphs";
+  (* if not (graph == node2.node_graph) then
+   *   failwith "Ocamldot.edge: nodes in different graphs"; *)
   let edge = {
       edge_from = node1;
       edge_to = node2;
@@ -143,10 +157,6 @@ let add_node_attrs node attrs =
 let add_edge_attrs edge attrs =
   edge.edge_attributes <- edge.edge_attributes @ attrs
 let rename_node node name = node.node_name <- name
-
-let add_subgraph graph subgraph =
-  graph.graph_subgraphs <- subgraph :: graph.graph_subgraphs;
-  graph.graph_attributes <- graph.graph_attributes @ [Compound true]
 
 open Printf
 

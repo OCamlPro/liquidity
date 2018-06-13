@@ -12,19 +12,21 @@ open Ocamldot.TYPES
 
 let subgraph_counter = ref 0
 
-let rec to_dot ~is_sub_contract contract =
+let rec to_dot ~sub_contract_of contract =
 
   incr subgraph_counter;
 
-  let g =
-    if is_sub_contract
-    then
-      Ocamldot.create ("Contract_sub_" ^ (string_of_int !subgraph_counter)) []
-    else Ocamldot.create "Contract" []
+  let g, nodes = match sub_contract_of with
+    | None ->
+      Ocamldot.create "Contract" [],
+      Hashtbl.create 1000
+    | Some (g, nodes) ->
+      Ocamldot.cluster g
+        ("Contract_sub_" ^ (string_of_int !subgraph_counter)) [],
+      nodes
   in
 
   let (begin_node, end_node) = contract.code in
-  let nodes = Hashtbl.create 1000 in
 
   let node_of node =
     try
@@ -122,10 +124,9 @@ let rec to_dot ~is_sub_contract contract =
           add_edge_deps [x]
 
         | N_CREATE_CONTRACT c ->
-          let cg = to_dot ~is_sub_contract:true c in
-          Ocamldot.add_subgraph g cg;
+          let _cg = to_dot ~sub_contract_of:(Some (g, nodes)) c in
           let (begin_c, _) = c.code in
-          add_edge_deps [begin_c]
+          add_edge_deps [begin_c];
       end;
       List.iter (fun arg ->
           add_edge node arg [  EdgeStyle Dotted; EdgeLabel "\"; constraint=\"false" ]
@@ -139,4 +140,4 @@ let rec to_dot ~is_sub_contract contract =
 
 let to_string contract =
   subgraph_counter := 0;
-  Ocamldot.to_string (to_dot ~is_sub_contract:false contract)
+  Ocamldot.to_string (to_dot ~sub_contract_of:None contract)
