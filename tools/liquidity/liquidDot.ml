@@ -91,11 +91,13 @@ let rec to_dot ~sub_contract_of contract =
 
         | N_LOOP_END (x,y,z)
         | N_FOLD_END (x,y,z)
+        | N_MAP_END (x,y,z)
         | N_IF_CONS (x, y, z) ->
           add_edge_deps [x;y;z]
 
         | N_LOOP_RESULT (x,y,_)
         | N_FOLD_RESULT (x,y,_)
+        | N_MAP_RESULT (x,y,_)
         | N_IF_SOME (x,y)
         | N_IF_LEFT (x,y)
         | N_IF_RIGHT (x,y)
@@ -106,6 +108,7 @@ let rec to_dot ~sub_contract_of contract =
         | N_IF (x,y)
         | N_LOOP (x,y)
         | N_FOLD (x,y)
+        | N_MAP (x,y)
         | N_LAMBDA (x,y,_,_) ->
           add_edge_deps [x;y]
 
@@ -116,9 +119,9 @@ let rec to_dot ~sub_contract_of contract =
         | N_IF_NONE x
         | N_IF_NIL x
         | N_LOOP_BEGIN x
-        | N_LOOP_ARG (x,_)
+        | N_ARG (x,_)
         | N_FOLD_BEGIN x
-        | N_FOLD_ARG (x,_)
+        | N_MAP_BEGIN x
         | N_LAMBDA_END x
         | N_RESULT (x, _) ->
           add_edge_deps [x]

@@ -115,7 +115,7 @@ let rec arg_of node =
          mk (Apply (Prim_tuple_get, loc,
                     [ arg_of if_node; nat_n ~loc pos ]))
      end
-  | N_LOOP_ARG ({ kind = N_LOOP_BEGIN ( _); args } as begin_node, pos ) ->
+  | N_ARG ({ kind = N_LOOP_BEGIN ( _); args } as begin_node, pos ) ->
      begin
        match pos, List.length args with
        | 0, 1 -> arg_of begin_node
@@ -129,7 +129,7 @@ let rec arg_of node =
        | _ ->
           mk (Apply (Prim_tuple_get, loc, [ arg_of loop_node; nat_n ~loc pos ]))
      end
-  | N_FOLD_ARG ({ kind = N_FOLD_BEGIN ( _); args = acc } as begin_node, pos ) ->
+  | N_ARG ({ kind = N_FOLD_BEGIN ( _); args = acc } as begin_node, pos ) ->
     let x_acc = arg_of begin_node in
     begin
        match pos, acc with
@@ -153,6 +153,37 @@ let rec arg_of node =
        | 0, 1 -> arg_of fold_node
        | _ ->
           mk (Apply (Prim_tuple_get, loc, [ arg_of fold_node; nat_n ~loc pos ]))
+     end
+
+  | N_ARG ({ kind = N_MAP_BEGIN ( _); args = [] } as begin_node, 0 ) ->
+    (* .map *)
+    arg_of begin_node
+
+  | N_ARG ({ kind = N_MAP_BEGIN ( _); args = acc } as begin_node, pos ) ->
+    (* .map_fold *)
+    let x_acc = arg_of begin_node in
+    begin
+       match pos, acc with
+       | _, [] -> assert false
+       | 0, _ -> (* arg is map element *)
+         mk ?name:node.node_name
+           (Apply (Prim_tuple_get, loc, [x_acc ; nat_n ~loc 0 ]))
+       | 1, [_] -> (* arg is accumulator *)
+         mk ?name:node.node_name
+           (Apply (Prim_tuple_get, loc, [x_acc ; nat_n ~loc 1]))
+       | _, _ when pos > 0 -> (* arg in accumulator *)
+         let acc_liq = mk (Apply (Prim_tuple_get, loc, [x_acc; nat_n ~loc 1])) in
+         mk ?name:node.node_name
+           (Apply (Prim_tuple_get, loc, [acc_liq ; nat_n ~loc (pos - 1)]))
+       | _ -> assert false
+     end
+
+  | N_MAP_RESULT (map_node, end_node, pos ) ->
+    begin
+       match pos, end_node.args with
+       | 0, [] -> arg_of map_node
+       | _ ->
+          mk (Apply (Prim_tuple_get, loc, [ arg_of map_node; nat_n ~loc pos ]))
      end
 
   | N_RESULT (node, pos) ->
@@ -424,6 +455,37 @@ let rec decompile contract =
 
        | N_FOLD_END (_,_,_), args -> value_of_args ~loc args
 
+       | N_MAP ({args = []} as begin_node, end_node), [arg] ->
+         let desc =
+           Map (Prim_coll_map,
+                var_of begin_node, loc,
+                decompile_next begin_node,
+                arg_of arg
+               )
+         in
+         mklet node desc
+
+       | N_MAP ({args = rargs} as begin_node, end_node), [arg] ->
+         let acc = value_of_args ~loc rargs in
+         let desc =
+           MapFold (Prim_coll_map_fold,
+                    var_of begin_node, loc,
+                    decompile_next begin_node,
+                    arg_of arg,
+                    acc
+                   )
+         in
+         mklet node desc
+
+       | N_MAP_END (_,_, res), [] ->
+         (* result of .map body *)
+         arg_of res
+
+       | N_MAP_END (_,_, res), args ->
+         (* result of .map_fold body *)
+         mk (Apply(Prim_tuple, loc,
+                   [arg_of res; value_of_args ~loc args]))
+
        | N_LAMBDA (begin_node, end_node, arg_ty, res_ty), [] ->
           let desc = Lambda (var_of begin_node,
                              arg_ty,
@@ -448,6 +510,7 @@ let rec decompile contract =
        | N_TRANSFER
        | N_LOOP _
        | N_FOLD _
+       | N_MAP _
        | N_IF _
        | N_CONST _
        | N_END
@@ -471,11 +534,12 @@ let rec decompile contract =
        | N_IF_PLUS (_, _)
        | N_IF_MINUS (_, _)
        | N_LOOP_BEGIN _
-       | N_LOOP_ARG (_, _)
+       | N_ARG (_, _)
        | N_LOOP_RESULT (_, _, _)
        | N_FOLD_BEGIN _
-       | N_FOLD_ARG (_, _)
        | N_FOLD_RESULT (_, _, _)
+       | N_MAP_BEGIN _
+       | N_MAP_RESULT (_, _, _)
        | N_RESULT (_, _)
        ), _->
          LiquidLoc.raise_error

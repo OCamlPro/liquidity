@@ -805,9 +805,9 @@ type node = {
    | N_CONST of datatype * const
    | N_PRIM of string
    | N_FAIL of string option
+   | N_ARG of node * int
    | N_LOOP of node * node
    | N_LOOP_BEGIN of node
-   | N_LOOP_ARG of node * int
    | N_LOOP_RESULT of (* N_LOOP *) node
                                    * (* N_LOOP_BEGIN *) node * int
    | N_LOOP_END of (* N_LOOP *) node
@@ -815,11 +815,17 @@ type node = {
                                 * (* final_cond *) node
    | N_FOLD of node * node
    | N_FOLD_BEGIN of node
-   | N_FOLD_ARG of node * int
    | N_FOLD_RESULT of node (* N_FOLD *)
                       * node * int (* N_FOLD_BEGIN *)
    | N_FOLD_END of node (* N_FOLD *)
                    * node (* N_FOLD_BEGIN *)
+                   * node (* accumulator *)
+   | N_MAP of node * node
+   | N_MAP_BEGIN of node
+   | N_MAP_RESULT of node (* N_MAP *)
+                      * node * int (* N_MAP_BEGIN *)
+   | N_MAP_END of node (* N_MAP *)
+                   * node (* N_MAP_BEGIN *)
                    * node (* accumulator *)
    | N_LAMBDA of node * node * datatype * datatype
    | N_LAMBDA_BEGIN

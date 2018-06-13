@@ -161,6 +161,11 @@ module Map : sig
   val mem : 'key -> ('key, 'value) map -> bool (* NOT TESTED *)
   val size : ('key, 'value) map -> nat
 
+  val map_fold :
+    ( ('key * 'value) * 'acc -> 'res * 'acc) ->
+    ('key,'value) map -> 'acc ->
+    ('key,'res) map * 'acc
+
 end = struct
 
   module ObjMap = Map.Make(struct
@@ -242,6 +247,12 @@ end = struct
 
   let size map = Int (Z.of_int (ObjMap.cardinal (Obj.magic map)))
 
+  let map_fold f map acc =
+    fold (fun ((k, v), (map, acc)) ->
+        let v', acc = f ((k, v), acc) in
+        add k v' map, acc
+      ) map (empty, acc)
+
 end
 
 module BigMap = Map
@@ -266,6 +277,10 @@ module Set : sig
   val iter : ( 'key -> unit) -> 'key set -> unit
   val map : ('key -> 'res) -> 'key set -> 'res set
   val size : 'key set -> nat
+  val map_fold :
+    ( 'key * 'acc -> 'res * 'acc) ->
+    'key set -> 'acc ->
+    'res set * 'acc
 
 end = struct
 
@@ -334,6 +349,12 @@ end = struct
     ObjSet.iter (fun x -> f x) set
 
   let size set = Int (Z.of_int (ObjSet.cardinal (Obj.magic set)))
+
+  let map_fold f set acc =
+    fold (fun (v, (set, acc)) ->
+        let v', acc = f (v, acc) in
+        add v' set, acc
+      ) set (empty, acc)
 
 end
 
@@ -529,6 +550,10 @@ module List : sig
   val map : ('a -> 'b) -> 'a list -> 'b list
   val rev : 'a list -> 'a list
   val size : 'a list -> nat
+  val map_fold :
+    ( 'key * 'acc -> 'res * 'acc) ->
+    'key list -> 'acc ->
+    'res list * 'acc
 
 end = struct
 
@@ -544,6 +569,14 @@ end = struct
   let map = List.map
   let rev = List.rev
   let size list = Int (Z.of_int (List.length list))
+
+  let map_fold f list acc =
+    let list, acc =
+      fold (fun (v, (list, acc)) ->
+        let v', acc = f (v, acc) in
+        v' :: list, acc
+        ) list ([], acc) in
+    rev list, acc
 
 end
 

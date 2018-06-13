@@ -1,6 +1,5 @@
-return int;
 parameter (list int);
-storage unit;
+storage int;
 code { DUP ;
        DIP { CDR } ;
        CAR ;
@@ -13,5 +12,6 @@ code { DUP ;
               GT ;
               IF { DROP; } { DIP { DROP } };
             } ;
-       DIIP { DROP ; DROP } ;
+       DIP { DROP ; DROP ; DROP} ;
+       NIL operation;
        PAIR };

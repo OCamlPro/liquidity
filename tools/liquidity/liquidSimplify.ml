@@ -11,6 +11,7 @@ open LiquidTypes
 
 let rec compute decompile code to_inline =
 
+  let old_to_inline = to_inline in
   let to_inline = ref (if decompile then StringMap.empty else to_inline) in
 
   (* Do not inline terms larger than this value when decompiling *)
@@ -201,7 +202,7 @@ let rec compute decompile code to_inline =
       iter v
     | Let (name, loc, v, body) ->
       if decompile && v.name = None && not v.fail && not v.transfer
-         && size body <= inline_treshold_low
+         && size body <= inline_treshold_low && (StringMap.mem name old_to_inline)
       then
         to_inline := StringMap.add name v !to_inline;
       (* let obody = body in *)
