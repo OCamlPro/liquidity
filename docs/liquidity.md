@@ -9,6 +9,7 @@ The [Liquidity Project](http://github.com/OCamlPro/liquidity)
 ---------------------
 
 The Liquidity project contains:
+
 * A compiler from Liquidity files (.liq extension) to Michelson
 * A de-compiler from Michelson files (.tz extension) to Liquidity
 * An evaluator of Michelson contracts
@@ -88,6 +89,7 @@ Types in Liquidity are monomorphic. The built-in base types are:
 - `address`: abstract type of contract addresses
 
 The other types are:
+
 - tuples: noted `(t1 * t2 * t3)`
 - option type: `'a option = None | Some of 'a`
 - variant type: `('a, 'b) variant = Left of 'a | Right of 'b`
@@ -119,6 +121,7 @@ BODY
 ( op :: OTHER_OPERATIONS, STORAGE)
 ```
 where:
+
 - `CONTRACT` is the value of the contract being called;
 - `AMOUNT` is the value of the amount of Tez sent to the contract;
 - `ARG` is the argument sent to the contract.
@@ -168,6 +171,7 @@ Comparison operators
 --------------------
 
 These operators take two values of the same type, and return a Boolean value:
+
 * `COMPARE; EQ` : `x = y`
 * `COMPARE; NEQ` : `x <> y`
 * `COMPARE; LE` : `x <= y`
@@ -176,6 +180,7 @@ These operators take two values of the same type, and return a Boolean value:
 * `COMPARE; GT` : `x > y`
 
 The last one returns an integer:
+
 * `COMPARE` : `compare x y`
 
 
@@ -196,6 +201,7 @@ but not in a polymorphic way, i.e. `Coll.` is immediately replaced by the
 type-specific version for the type of its argument.)
 
 Liquidity also provides additional operations:
+
 * `List.rev : 'a list -> 'a list` : List reversal
 * `Map.add : 'a -> 'b -> ('a, 'b) map -> ('a, 'b) map` : add (or
   replace) a binding to a map
@@ -244,10 +250,12 @@ Constants
 The unique constructor of type `unit` is `()`.
 
 The two Booleans constants are:
+
 * `true`
 * `false`
 
 As in Michelson, there are different types of integers:
+
 * int : an unbounded integer, positive or negative, simply
     written `0`,`1`,`2`,`-1`,`-2`,...
 * nat : an unbounded positive integer, written either with a `p` suffix
@@ -259,9 +267,11 @@ As in Michelson, there are different types of integers:
 Strings are delimited by the characters `"` and `"`.
 
 Timestamps are written in ISO 8601 format, like in Michelson:
+
 * `2015-12-01T10:01:00+01:00`
 
 Keys and hashes are base58-check encoded, the same as in Michelson:
+
 * `tz1YLtLqD1fWHthSVHPD116oYvsd4PTAHUoc` is a key hash
 * `edpkuit3FiCUhd6pmqf9ztUTdUs1isMTbF9RBGfwKk1ZrdTmeP9ypN` is a public key
 
@@ -272,6 +282,7 @@ Signatures are 64 bytes long hex encoded, prefixed with a backtick:
 
 There are also three types of collections: lists, sets and
 maps. Constants collections can be created directly:
+
 * Lists: `["x"; "y"]`;
 * Sets: `Set [1; 2; 3; 4]`;
 * Maps: `Map [1, "x"; 2, "y"; 3, "z"]`;
@@ -279,6 +290,7 @@ maps. Constants collections can be created directly:
 
 In the case of an empty collection, whose type cannot be inferred, the
   type must be specified:
+
 * Lists: `([] : int list)`
 * Sets: `(Set : int set)`
 * Maps: `(Map : (int, string) map)`
