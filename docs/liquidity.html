@@ -5,7 +5,7 @@
 <p>See <a href="http://github.com/OCamlPro/liquidity/tree/master/tests">examples</a> in the <a href="http://github.com/OCamlPro/liquidity">Github</a> project.</p>
 <h2 id="contract-format">Contract Format</h2>
 <p>All the contracts have the following form:</p>
-<div class="sourceCode"><pre class="sourceCode ocaml"><code class="sourceCode ocaml">[%%version <span class="fl">0.14</span>]
+<div class="sourceCode"><pre class="sourceCode ocaml"><code class="sourceCode ocaml">[%%version <span class="fl">0.2</span>]
 
 &lt;... local declarations ...&gt;
 
@@ -17,12 +17,11 @@
 
 <span class="kw">let</span>%entry main
       (parameter : TYPE)
-      (storage : TYPE)
-      : TYPE =
+      (storage : TYPE) =
       BODY</code></pre></div>
 <p>The <code>version</code> statement tells the compiler in which version of Liquidity the contract is written. The compiler will reject any contract that has a version that it does not understand (too old, more recent). We expect to reach version 1.0 at the launch of the Tezos network.</p>
 <p>The <code>main</code> function is the default entry point for the contract. <code>let%entry</code> is the construct used to declare entry points (there is currently only one entry point, but there will be probably more in the future). The declaration takes two parameters with names <code>parameter</code>, <code>storage</code>, the arguments to the function. Their types must always be specified. The return type of the function must also be specified by a type annotation.</p>
-<p>A contract always returns a pair <code>(return, storage)</code>, where <code>return</code> is the return value to the caller, and <code>storage</code> is the final state of the contract after the call. The type of the pair must match the type of a pair where the first component is the return type of the function specified in its signature and the second is the type of the argument <code>storage</code> of <code>main</code>.</p>
+<p>A contract always returns a pair <code>(operations, storage)</code>, where <code>operations</code> is a list of internal operations to perform after exectution of the contract, and <code>storage</code> is the final state of the contract after the call. The type of the pair must match the type of a pair where the first component is a list of opertations and the second is the type of the argument <code>storage</code> of <code>main</code>.</p>
 <p><code>&lt;... local declarations ...&gt;</code> is an optional set of optional type and function declarations. Type declarations can be used to define records and variants (sum-types), described later in this documentation.</p>
 <p>An optional initial storage or storage initializer can be given with <code>let%init storage</code>. When deploying a Liquidity contract, if the storage is not constant it is evaluated in the prevalidation context.</p>
 <h2 id="types">Types</h2>
@@ -38,50 +37,53 @@
 <li><code>key</code>: cryptographic keys</li>
 <li><code>key_hash</code>: hashes of cryptographic keys</li>
 <li><code>signature</code>: cryptographic signatures</li>
+<li><code>operation</code>: type of operations, can only be constructed</li>
+<li><code>address</code>: abstract type of contract addresses</li>
 </ul>
-<p>The other types are: - tuples: noted <code>(t1 * t2 * t3)</code> - option type: <code>'a option = None | Some of 'a</code> - variant type: <code>('a, 'b) variant = Left of 'a | Right of 'b</code> - lists: <code>'a list</code> is the type of lists of elements in <code>'a</code> - sets: <code>'a set</code> is the type of sets of elements in <code>'a</code> - maps: <code>('a, 'b) map</code> is the type of maps whose keys are of type <code>'a</code> and values of type <code>'b</code> - big maps: <code>('a, 'b) big_map</code> is the type of lazily deserialized maps whose keys are of type <code>'a</code> and values of type <code>'b</code> - contracts: <code>('a, 'b) contract</code> for contracts whose parameter is of type <code>'a</code> and return value if of type <code>'b</code> - functions: <code>'a -&gt; 'b</code> is the type of functions from <code>'a</code> to <code>'b</code></p>
+<p>The other types are: - tuples: noted <code>(t1 * t2 * t3)</code> - option type: <code>'a option = None | Some of 'a</code> - variant type: <code>('a, 'b) variant = Left of 'a | Right of 'b</code> - lists: <code>'a list</code> is the type of lists of elements in <code>'a</code> - sets: <code>'a set</code> is the type of sets of elements in <code>'a</code> - maps: <code>('a, 'b) map</code> is the type of maps whose keys are of type <code>'a</code> and values of type <code>'b</code> - big maps: <code>('a, 'b) big_map</code> is the type of lazily deserialized maps whose keys are of type <code>'a</code> and values of type <code>'b</code> - contracts: <code>'a contract</code> for contracts whose parameter is of type <code>'a</code> - functions: <code>'a -&gt; 'b</code> is the type of functions from <code>'a</code> to <code>'b</code></p>
 <p>Record and variant types must be declared beforehand and are referred to by their names.</p>
 <h2 id="calling-another-contract">Calling another contract</h2>
-<p>Calling another contract is done by using the following form:</p>
-<div class="sourceCode"><pre class="sourceCode ocaml"><code class="sourceCode ocaml"><span class="kw">let</span> (RESULT, storage) = Contract.call CONTRACT AMOUNT STORAGE ARG
-<span class="kw">in</span>
-BODY</code></pre></div>
-<p>where: - <code>RESULT</code> is the identifier of the variable that will receive the value returned by the contract; - <code>CONTRACT</code> is the value of the contract being called; - <code>AMOUNT</code> is the value of the amount of Tez sent to the contract; - <code>STORAGE</code> is the value of the storage saved before the call; - <code>ARG</code> is the argument sent to the contract. - <code>BODY</code> is some code to be executed after the contract, using the result of the call.</p>
-<p>All variables are destroyed during the call, so any state that should survive the call should be stored in the storage of the calling contract. It is not a limitation, but a design choice: always specifying the state at the call forces the programmer to think about what would happen in the case of a recursive call.</p>
+<p>Calling another contract is done by constructing an operation with the built-in <code>Contract.call</code> function, and <strong>returning</strong> this value at the end of the contract. Internal contract calls are performed after execution of the contract is over, in the order in which the resulting operations are returned.</p>
+<div class="sourceCode"><pre class="sourceCode ocaml"><code class="sourceCode ocaml"><span class="kw">let</span> op = Contract.call CONTRACT AMOUNT ARG <span class="kw">in</span>
+BODY
+( op :: OTHER_OPERATIONS, STORAGE)</code></pre></div>
+<p>where: - <code>CONTRACT</code> is the value of the contract being called; - <code>AMOUNT</code> is the value of the amount of Tez sent to the contract; - <code>ARG</code> is the argument sent to the contract. - <code>BODY</code> is some code to be executed after the contract.</p>
+<p>For the call to be actually performed by the blockchain, it <em>has</em> to be returned as part of the list of operations.</p>
 <h2 id="operators-and-functions">Operators and functions</h2>
 <p>Here is a list of equivalences between MICHELSON instructions and Liquidity functions:</p>
 <ul>
-<li><code>FAIL</code> : <code>Current.fail ()</code>. Makes the contract abort.</li>
+<li><code>FAIL</code> : <code>Current.fail ()</code> or <code>Current.failwith &quot;Message&quot;</code>. Makes the contract abort.</li>
 <li><code>SELF</code> : <code>Current.contract ()</code>. Returns the current contract being executed.</li>
 <li><code>BALANCE</code> : <code>Current.balance ()</code>. Returns the current balance of the current contract.</li>
 <li><code>NOW</code> : <code>Current.time ()</code>. Returns the timestamp of the block containing the transaction in the blockchain.</li>
 <li><code>AMOUNT</code> : <code>Current.amount ()</code>. Returns the amount of tezzies that were transfered when the contract was called.</li>
 <li><code>STEPS_TO_QUOTA</code> : <code>Current.gas ()</code>. Returns the current gas available to execute the end of the contract.</li>
-<li><code>SOURCE arg_type res_type</code> : <code>(Source : (arg_type, res_type) contract)</code>. Returns the contract that called the current contract.</li>
+<li><code>SOURCE</code> : <code>Contract.source</code>. Returns the address of the contract that called the current contract.</li>
 <li><code>CONS</code> : <code>x :: y</code></li>
 <li><code>NIL ele_type</code> : <code>( [] : ele_type list )</code></li>
 <li><code>H</code> : <code>Crypto.hash x</code>. Returns the hash of its argument, whatever it is.</li>
 <li><code>HASH_KEY</code> : <code>Crypto.hash_key k</code>. Compute the b58check of the key <code>k</code>.</li>
-<li><code>CHECK_SIGNATURE</code> : <code>Crypto.check key (signature,data)</code>. Returns <code>true</code> if the public key has been used to generate the signature of the data.</li>
-<li><code>CREATE_ACCOUNT</code> : <code>Account.create</code>: creates a new account</li>
-<li><code>CREATE_CONTRACT</code> : <code>Contract.create</code>: creates a new contract</li>
-<li><code>MANAGER</code> : <code>Contract.manager ct</code>: returns the key of the manager of the contract in argument</li>
+<li><code>CHECK_SIGNATURE</code> : <code>Crypto.check key signature data</code>. Returns <code>true</code> if the public key has been used to generate the signature of the data.</li>
+<li><code>CREATE_ACCOUNT</code> : <code>Account.create</code>. Creates a new account.</li>
+<li><code>CREATE_CONTRACT</code> : <code>Contract.create</code>. Creates a new contract.</li>
+<li><code>SET_DELEGATE</code> : <code>Contract.set_delegate</code>. Sets the delegate (or unset, if argument is <code>None</code>) of the current contract.</li>
+<li><code>MANAGER</code> : <code>Contract.manager ct</code>: returns the key hash of the manager of the contract in argument</li>
+<li><code>CONTRACT param_type</code> : <code>(Contract.at addr : param_type contract  option)</code>: returns the contract stored at this address, if it exists</li>
 <li><code>EXEC</code> : <code>Lambda.pipe x f</code> or <code>x |&gt; f</code> or <code>f x</code>, is the application of the lambda <code>f</code> on the argument <code>x</code>.</li>
-<li><code>DEFAULT_ACCOUNT</code> : <code>Account.default key_hash</code>. Returns the default contract (of type <code>(unit,unit) contract</code>) associated with a key hash.</li>
+<li><code>IMPLICIT_ACCOUNT</code> : <code>Account.default key_hash</code>. Returns the default contract (of type <code>unit contract</code>) associated with a key hash.</li>
 </ul>
 <h2 id="comparison-operators">Comparison operators</h2>
 <p>These operators take two values of the same type, and return a Boolean value: * <code>COMPARE; EQ</code> : <code>x = y</code> * <code>COMPARE; NEQ</code> : <code>x &lt;&gt; y</code> * <code>COMPARE; LE</code> : <code>x &lt;= y</code> * <code>COMPARE; LT</code> : <code>x &lt; y</code> * <code>COMPARE; GE</code> : <code>x &gt;= y</code> * <code>COMPARE; GT</code> : <code>x &gt; y</code></p>
 <p>The last one returns an integer: * <code>COMPARE</code> : <code>compare x y</code></p>
 <h2 id="operations-on-data-structures">Operations on data structures</h2>
 <ul>
-<li><code>MAP</code> : <code>Map.map</code> or <code>List.map</code></li>
 <li><code>GET</code> : <code>Map.find</code></li>
 <li><code>UPDATE</code>: <code>Map.update</code> or <code>Set.update</code></li>
 <li><code>MEM</code>: <code>Map.mem</code> or <code>Set.mem</code></li>
 <li><code>CONCAT</code> : <code>@</code></li>
-<li><code>REDUCE</code> : <code>Map.reduce</code> or <code>Set.reduce</code> or <code>List.reduce</code></li>
 <li><code>SIZE</code> : <code>List.size</code> or <code>Set.size</code> or <code>Map.size</code></li>
 <li><code>ITER</code> : <code>List.iter</code> or <code>Set.iter</code> or <code>Map.iter</code> or <code>List.fold</code> or <code>Set.fold</code> or <code>Map.fold</code></li>
+<li><code>MAP</code> : <code>List.map</code> or <code>Set.map</code> or <code>Map.map</code> or <code>List.map_fold</code> or <code>Set.map_fold</code> or <code>Map.map_fold</code></li>
 </ul>
 <p>(it is possible to use the generic <code>Coll.</code> prefix for all collections, but not in a polymorphic way, i.e. <code>Coll.</code> is immediately replaced by the type-specific version for the type of its argument.)</p>
 <p>Liquidity also provides additional operations: * <code>List.rev : 'a list -&gt; 'a list</code> : List reversal * <code>Map.add : 'a -&gt; 'b -&gt; ('a, 'b) map -&gt; ('a, 'b) map</code> : add (or replace) a binding to a map * <code>Map.remove : 'a -&gt; ('a, 'b) map -&gt; ('a, 'b) map</code> : remove a binding, if it exists, in a map * <code>Set.add : 'a -&gt; 'a set -&gt; 'a set</code> : add an element to a set * <code>Set.remove : 'a -&gt; 'a set -&gt; 'a set</code> : remove an element, if it exists, in a set</p>
@@ -198,7 +200,7 @@ r.x</code></pre></div>
   <span class="kw">let</span> one = <span class="dt">succ</span> <span class="dv">0</span> <span class="kw">in</span>
 ...</code></pre></div>
 <p>A toplevel function can also be defined before the main entry point:</p>
-<div class="sourceCode"><pre class="sourceCode ocaml"><code class="sourceCode ocaml">[%%version <span class="fl">0.14</span>]
+<div class="sourceCode"><pre class="sourceCode ocaml"><code class="sourceCode ocaml">[%%version <span class="fl">0.2</span>]
 
 <span class="kw">let</span> <span class="dt">succ</span> (x : <span class="dt">int</span>) = x + <span class="dv">1</span>
 

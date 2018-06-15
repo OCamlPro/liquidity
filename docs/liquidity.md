@@ -23,7 +23,7 @@ Contract Format
 All the contracts have the following form:
 
 ```ocaml
-[%%version 0.14]
+[%%version 0.2]
 
 <... local declarations ...>
 
@@ -35,8 +35,7 @@ let%init storage
 
 let%entry main
       (parameter : TYPE)
-      (storage : TYPE)
-      : TYPE =
+      (storage : TYPE) =
       BODY
 ```
 
@@ -54,12 +53,12 @@ future).  The declaration takes two parameters with names
 always be specified. The return type of the function must also be
 specified by a type annotation.
 
-A contract always returns a pair `(return, storage)`, where `return`
-is the return value to the caller, and `storage` is the final state of
-the contract after the call. The type of the pair must match the type
-of a pair where the first component is the return type of the function
-specified in its signature and the second is the type of the argument
-`storage` of `main`.
+A contract always returns a pair `(operations, storage)`, where
+`operations` is a list of internal operations to perform after
+exectution of the contract, and `storage` is the final state of the
+contract after the call. The type of the pair must match the type of a
+pair where the first component is a list of opertations and the second
+is the type of the argument `storage` of `main`.
 
 `<... local declarations ...>` is an optional set of optional type and
 function declarations. Type declarations can be used to define records
@@ -85,6 +84,8 @@ Types in Liquidity are monomorphic. The built-in base types are:
 - `key`: cryptographic keys
 - `key_hash`: hashes of cryptographic keys
 - `signature`: cryptographic signatures
+- `operation`: type of operations, can only be constructed
+- `address`: abstract type of contract addresses
 
 The other types are:
 - tuples: noted `(t1 * t2 * t3)`
@@ -96,8 +97,7 @@ The other types are:
   `'a` and values of type `'b`
 - big maps: `('a, 'b) big_map` is the type of lazily deserialized maps whose
   keys are of type `'a` and values of type `'b`
-- contracts: `('a, 'b) contract` for contracts whose parameter is of
-  type `'a` and return value if of type `'b`
+- contracts: `'a contract` for contracts whose parameter is of type `'a`
 - functions: `'a -> 'b` is the type of functions from `'a` to `'b`
 
 Record and variant types must be declared beforehand and are referred
@@ -107,36 +107,33 @@ to by their names.
 Calling another contract
 ------------------------
 
-Calling another contract is done by using the following form:
+Calling another contract is done by constructing an operation with the
+built-in `Contract.call` function, and **returning** this value at the
+end of the contract. Internal contract calls are performed after
+execution of the contract is over, in the order in which the resulting
+operations are returned.
 
 ```ocaml
-let (RESULT, storage) = Contract.call CONTRACT AMOUNT STORAGE ARG
-in
+let op = Contract.call CONTRACT AMOUNT ARG in
 BODY
+( op :: OTHER_OPERATIONS, STORAGE)
 ```
 where:
-- `RESULT` is the identifier of the variable that will receive the value
-  returned by the contract;
 - `CONTRACT` is the value of the contract being called;
 - `AMOUNT` is the value of the amount of Tez sent to the contract;
-- `STORAGE` is the value of the storage saved before the call;
 - `ARG` is the argument sent to the contract.
-- `BODY` is some code to be executed after the contract, using the
-  result of the call.
+- `BODY` is some code to be executed after the contract.
 
-All variables are destroyed during the call, so any state that should
-survive the call should be stored in the storage of the calling
-contract. It is not a limitation, but a design choice: always
-specifying the state at the call forces the programmer to think about
-what would happen in the case of a recursive call.
-
+For the call to be actually performed by the blockchain, it _has_ to be
+returned as part of the list of operations.
+ 
 Operators and functions
 -----------------------
 
 Here is a list of equivalences between MICHELSON instructions and
 Liquidity functions:
 
-* `FAIL` : `Current.fail ()`. Makes the contract abort.
+* `FAIL` : `Current.fail ()` or `Current.failwith "Message"`. Makes the contract abort.
 * `SELF` : `Current.contract ()`. Returns the current contract being executed.
 * `BALANCE` : `Current.balance ()`. Returns the current balance of the
        current contract.
@@ -146,22 +143,26 @@ Liquidity functions:
        transfered when the contract was called.
 * `STEPS_TO_QUOTA` : `Current.gas ()`. Returns the current gas available
        to execute the end of the contract.
-* `SOURCE arg_type res_type` : `(Source : (arg_type, res_type) contract)`.
-       Returns the contract that called the current contract.
+* `SOURCE` : `Contract.source`.
+       Returns the address of the contract that called the current contract.
 * `CONS` : `x :: y`
 * `NIL ele_type` : `( [] : ele_type list )`
 * `H` : `Crypto.hash x`. Returns the hash of its argument, whatever it is.
 * `HASH_KEY` : `Crypto.hash_key k`. Compute the b58check of the key `k`.
-* `CHECK_SIGNATURE` : `Crypto.check key (signature,data)`. Returns `true` if
+* `CHECK_SIGNATURE` : `Crypto.check key signature data`. Returns `true` if
      the public key has been used to generate the signature of the data.
-* `CREATE_ACCOUNT` : `Account.create`: creates a new account
-* `CREATE_CONTRACT` : `Contract.create`: creates a new contract
-* `MANAGER` : `Contract.manager ct`: returns the key of the manager of the
-     contract in argument
+* `CREATE_ACCOUNT` : `Account.create`. Creates a new account.
+* `CREATE_CONTRACT` : `Contract.create`. Creates a new contract.
+* `SET_DELEGATE` : `Contract.set_delegate`. Sets the delegate (or unset,
+  if argument is `None`) of the current contract.
+* `MANAGER` : `Contract.manager ct`: returns the key hash of the manager
+     of the contract in argument
+* `CONTRACT param_type` : `(Contract.at addr : param_type contract
+     option)`: returns the contract stored at this address, if it exists
 * `EXEC` : `Lambda.pipe x f` or `x |> f` or `f x`, is the application of the
      lambda `f` on the argument `x`.
-* `DEFAULT_ACCOUNT` : `Account.default key_hash`. Returns the default contract
-    (of type `(unit,unit) contract`) associated with a key hash.
+* `IMPLICIT_ACCOUNT` : `Account.default key_hash`. Returns the default contract
+    (of type `unit contract`) associated with a key hash.
 
 Comparison operators
 --------------------
@@ -180,15 +181,15 @@ The last one returns an integer:
 
 Operations on data structures
 -----------------------------
-* `MAP` : `Map.map` or `List.map`
 * `GET` : `Map.find`
 * `UPDATE`: `Map.update` or `Set.update`
 * `MEM`: `Map.mem` or `Set.mem`
 * `CONCAT` : `@`
-* `REDUCE` : `Map.reduce` or `Set.reduce` or `List.reduce`
 * `SIZE` : `List.size` or `Set.size` or `Map.size`
 * `ITER` : `List.iter` or `Set.iter` or `Map.iter` or `List.fold` or
   `Set.fold` or `Map.fold`
+* `MAP` : `List.map` or `Set.map` or `Map.map` or `List.map_fold` or
+  `Set.map_fold` or `Map.map_fold`
 
 (it is possible to use the generic `Coll.` prefix for all collections,
 but not in a polymorphic way, i.e. `Coll.` is immediately replaced by the
@@ -444,7 +445,7 @@ but they can also be done directly:
 
 A toplevel function can also be defined before the main entry point:
 ```ocaml
-[%%version 0.14]
+[%%version 0.2]
 
 let succ (x : int) = x + 1
 

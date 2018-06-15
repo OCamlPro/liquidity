@@ -258,7 +258,6 @@ let () =
               "Array.set", Prim_tuple_set;
 
               "Current.fail", Prim_fail;
-              "Current.contract", Prim_self;
               "Current.balance", Prim_balance;
               "Current.time", Prim_now;
               "Current.amount", Prim_amount;
@@ -302,6 +301,7 @@ let () =
               "Contract.manager", Prim_manager;
               "Contract.set_delegate", Prim_set_delegate;
               "Contract.address", Prim_address;
+              "Current.self", Prim_self;
 
               "Account.create", Prim_create_account;
               "Account.default", Prim_default_account;
