@@ -31,16 +31,24 @@ if( with_tezos ) {
 
 if( for_javascript ) {
 
+OCaml.library("zarith", ocaml + {
+     files = [
+       "z.ml";
+     ];
+     requires = [
+       "nums";
+   ];
+});
+
 OCaml.library("michelson-deps", ocaml + {
      files = [
        "utils.ml";
-       "z.ml";
-       (* "nocrypto.ml"; *)
+       "nocrypto.ml";
        pp_js("js/blake2.ml");
        "hacl.ml";
      ];
      requires = [
-       "nums";
+       "zarith";
        "lwt";
        (* "cstruct"; *)
        "bigstring";

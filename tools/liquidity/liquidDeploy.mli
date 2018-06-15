@@ -34,7 +34,8 @@ type trace_item = {
 
 type trace = trace_item array
 
-val request : (?data:string -> string -> string Lwt.t) ref
+val post : (data:string -> string -> string Lwt.t) ref
+val get : (string -> string Lwt.t) ref
 
 module type S = sig
   type 'a t
@@ -44,11 +45,11 @@ module type S = sig
      big map id the contract contains any *)
   val run :
     from -> string -> string ->
-    (LiquidTypes.const * big_map_diff option) t
+    (int * LiquidTypes.const * big_map_diff option) t
 
   val run_debug :
     from -> string -> string ->
-    (LiquidTypes.const * big_map_diff option * trace) t
+    (int * LiquidTypes.const * big_map_diff option * trace) t
 
   (** Forge a deployment operation contract on the Tezos node specified in
       ![LiquidOptions], returns the hex-encoded operation *)

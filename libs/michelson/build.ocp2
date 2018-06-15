@@ -45,11 +45,11 @@ function from_tezos(file){
 }
 
 
-OCaml.library("michelson-base",
+OCaml.library("michelson",
   ocaml + {
      bytelink = [ "-custom" ];
      pp = [ "ocp-pp" ];
-     files = [
+     files = OCaml.pack("Michelson_Tezos", [
         from_tezos("lib_stdlib/compare.ml");
         from_tezos("lib_stdlib/option.ml");
         from_tezos("lib_stdlib/mBytes.ml");
@@ -71,7 +71,18 @@ OCaml.library("michelson-base",
         from_tezos("lib_stdlib/lwt_canceler.ml");
         from_tezos("lib_error_monad/error_monad_sig.ml");
         from_tezos("lib_error_monad/error_monad.ml");
-     ];
+        from_tezos("lib_micheline/micheline.ml");
+        from_tezos("lib_micheline/micheline_parser.ml");
+        from_tezos("lib_micheline/micheline_printer.ml");
+        "tezos_micheline.ml";
+        "data_encoding_ezjsonm.ml";
+        from_tezos("lib_crypto/base58.ml");
+        pp_crypto("blake2B.ml");
+        "ed25519.ml";
+        "tezos_crypto.ml";
+        pp_crypto("operation_hash.ml");
+        pp_proto_client("michelson_v1_macros.ml");
+     ]);
      requires = [
               "michelson-deps";
               "ocplib-json-typed";
@@ -81,37 +92,6 @@ OCaml.library("michelson-base",
               "bigstring";
               "calendar";
               "hex";
-     ];
-   });
-
-  OCaml.library("micheline", ocaml + {
-     bytelink = [ "-custom" ];
-     pp = [ "ocp-pp" ];
-     files = [
-        from_tezos("lib_micheline/micheline.ml");
-        from_tezos("lib_micheline/micheline_parser.ml");
-        from_tezos("lib_micheline/micheline_printer.ml");
-       "tezos_micheline.ml";
-     ];
-     requires = [
-              "michelson-base";
-     ];
-   });
-     
-OCaml.library("michelson", ocaml + {
-     bytelink = [ "-custom" ];
-     pp = [ "ocp-pp" ];
-     files = [
-        "data_encoding_ezjsonm.ml";
-        from_tezos("lib_crypto/base58.ml");
-        pp_crypto("blake2B.ml");
-        "ed25519.ml";
-        "tezos_crypto.ml";
-        pp_crypto("operation_hash.ml");
-        pp_proto_client("michelson_v1_macros.ml");
-     ];
-     requires = [
-              "micheline";
      ];
    });
 

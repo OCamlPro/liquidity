@@ -8,6 +8,7 @@
 (**************************************************************************)
 
 open LiquidTypes
+open Michelson_Tezos
 open Micheline
 
 type loc_table = (int * (LiquidTypes.location * string option)) list

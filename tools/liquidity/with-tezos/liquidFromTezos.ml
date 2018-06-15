@@ -9,8 +9,8 @@
 
 open LiquidTypes
 open LiquidTezosTypes
-
-open Micheline;;
+open Michelson_Tezos
+open Micheline
 
 exception Missing_program_field of string
 

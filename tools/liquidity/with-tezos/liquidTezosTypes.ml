@@ -7,6 +7,7 @@
 (*                                                                        *)
 (**************************************************************************)
 open LiquidTypes
+open Michelson_Tezos
 
 type expr = string Micheline.canonical
 type contract = expr list

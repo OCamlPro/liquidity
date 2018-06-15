@@ -30,5 +30,7 @@ let amount = ref "0"
 let fee = ref "50000"
 let delegatable = ref false
 let spendable = ref false
+let gas_limit = ref "400000"
+let storage_limit = ref "400000"
 
 let private_key = ref (None : string option)

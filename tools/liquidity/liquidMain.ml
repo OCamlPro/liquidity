@@ -178,12 +178,13 @@ module Data = struct
               [ "parameter", p; "storage", s ]
 
   let run () =
-    let r_storage, big_map_diff =
+    let nb_ops, r_storage, big_map_diff =
       LiquidDeploy.Sync.run
         (LiquidDeploy.From_file !contract) !parameter !storage
     in
-    Printf.printf "%s\n%!"
-      (LiquidData.string_of_const r_storage);
+    Printf.printf "%s\n# Internal operations: %d%!"
+      (LiquidData.string_of_const r_storage)
+      nb_ops;
     match big_map_diff with
     | None -> ()
     | Some diff ->

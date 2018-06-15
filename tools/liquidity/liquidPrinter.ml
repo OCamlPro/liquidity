@@ -27,7 +27,7 @@ let integer_of_int int =
   { integer }
 
 let tez_of_mic_mutez z =
-  let z_tezzies, z_mutez = Z.ediv_rem z milion in
+  let z_tezzies, z_mutez = Z.div_rem z milion in
   let tezzies = Z.to_string z_tezzies in
   let mutez =
     if Z.equal z_mutez Z.zero then None else Some (Z.to_string z_mutez) in

@@ -16,8 +16,11 @@ type from =
   | From_string of string
   | From_file of string
 
-let request = ref (fun ?data _ ->
-  failwith "mini version cannot request")
+let post = ref (fun ~data _ ->
+  failwith "mini version cannot do post request")
+
+let get = ref (fun _ ->
+  failwith "mini version cannot do get request")
 
 type big_map_diff_item =
   | Big_map_add of LiquidTypes.const * LiquidTypes.const
@@ -40,9 +43,9 @@ type trace = trace_item array
 module type S = sig
   type 'a t
   val run : from -> string -> string ->
-    (LiquidTypes.const * big_map_diff option) t
+    (int * LiquidTypes.const * big_map_diff option) t
   val run_debug : from -> string -> string ->
-    (LiquidTypes.const * big_map_diff option * trace) t
+    (int * LiquidTypes.const * big_map_diff option * trace) t
   val forge_deploy : ?delegatable:bool -> ?spendable:bool ->
     from -> string list -> string t
   val deploy : ?delegatable:bool -> ?spendable:bool ->
