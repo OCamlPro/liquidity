@@ -90,7 +90,7 @@ let compile_liquid_file filename =
   FileString.write_file output s;
   Printf.eprintf "File %S generated\n%!" output;
   Printf.eprintf "If tezos is compiled, you may want to typecheck with:\n";
-  Printf.eprintf "  tezos-client typecheck program %s\n" output
+  Printf.eprintf "  tezos-client typecheck script %s\n" output
 
 
 let compile_tezos_file filename =

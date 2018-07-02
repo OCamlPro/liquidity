@@ -15,7 +15,7 @@ echo "\n[check-rev.sh] test = $test, TESTDIR = $TESTDIR"
 
 if [ -f ${TEZOS_FULL_PATH} ] ; then
     echo "Testing $test.tz ---------------------------------------------"
-    ${TEZOS_FULL_PATH} ${TEZOS_ARGS} typecheck program $TESTDIR/$test.tz
+    ${TEZOS_FULL_PATH} ${TEZOS_ARGS} typecheck script $TESTDIR/$test.tz
 else
     echo "\n${RED}${TEZOS_FULL_PATH} not present ! typechecking of $TESTDIR/$test.tz skipped${DEFAULT}\n"
 fi
@@ -28,7 +28,7 @@ echo "Compiling $test.tz.liq ---------------------------------------"
 
 if [ -f ${TEZOS_FULL_PATH} ] ; then
     echo "Testing $test.tz.liq.tz --------------------------------------"
-    ${TEZOS_FULL_PATH} ${TEZOS_ARGS} typecheck program $TESTDIR/$test.tz.liq.tz || exit 2
+    ${TEZOS_FULL_PATH} ${TEZOS_ARGS} typecheck script $TESTDIR/$test.tz.liq.tz || exit 2
 else
     echo "\n${RED}${TEZOS_FULL_PATH} not present ! typechecking of $TESTDIR/$test.tz.liq.tz skipped${DEFAULT}\n"
 fi

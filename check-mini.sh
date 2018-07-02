@@ -13,7 +13,7 @@ LIQUIDITY=liquidity
 ./_obuild/${LIQUIDITY}-mini/${LIQUIDITY}-mini.asm tests/$test.liq || exit 2
 
 if [ -f ${TEZOS_FULL_PATH} ] ; then
-    ${TEZOS_FULL_PATH} ${TEZOS_ARGS} typecheck program tests/$test.liq.tz
+    ${TEZOS_FULL_PATH} ${TEZOS_ARGS} typecheck script tests/$test.liq.tz
 else
     echo "\n${RED}${TEZOS_FULL_PATH} not present ! typechecking of tests/$test.liq.tz skipped${DEFAULT}\n"
 fi
@@ -23,7 +23,7 @@ fi
 ./_obuild/${LIQUIDITY}-mini/${LIQUIDITY}-mini.asm tests/$test.liq.tz.liq || exit 2
 
 if [ -f ${TEZOS_FULL_PATH} ] ; then
-    ${TEZOS_FULL_PATH} ${TEZOS_ARGS} typecheck program tests/$test.liq.tz.liq.tz
+    ${TEZOS_FULL_PATH} ${TEZOS_ARGS} typecheck script tests/$test.liq.tz.liq.tz
 else
     echo "\n${RED}${TEZOS_FULL_PATH} not present ! typechecking of tests/$test.liq.tz.liq.tz skipped${DEFAULT}\n"
 fi
