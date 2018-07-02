@@ -531,9 +531,6 @@ module Michelson = struct
     | STEPS_TO_QUOTA ->
       Printf.bprintf b "STEPS_TO_QUOTA";
       bprint_pre_name b name;
-    | MANAGER ->
-      Printf.bprintf b "MANAGER";
-      bprint_pre_name b name;
     | ADDRESS ->
       Printf.bprintf b "ADDRESS";
       bprint_pre_name b name;
@@ -608,6 +605,9 @@ module Michelson = struct
       bprint_pre_name b name;
     | SOURCE ->
       Printf.bprintf b "SOURCE";
+      bprint_pre_name b name;
+    | SENDER ->
+      Printf.bprintf b "SENDER";
       bprint_pre_name b name;
     | SIZE ->
       Printf.bprintf b "SIZE";

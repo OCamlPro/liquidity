@@ -155,6 +155,7 @@ type primitive =
   | Prim_Left
   | Prim_Right
   | Prim_source
+  | Prim_sender
   | Prim_eq
   | Prim_neq
   | Prim_lt
@@ -186,7 +187,6 @@ type primitive =
   | Prim_list_size
   | Prim_list_rev
 
-  | Prim_manager
   | Prim_create_account
   | Prim_hash
   | Prim_hash_key
@@ -261,6 +261,7 @@ let () =
               "Current.amount", Prim_amount;
               "Current.gas", Prim_gas;
               "Current.source", Prim_source;
+              "Current.sender", Prim_sender;
 
               "Left", Prim_Left;
               "Right", Prim_Right;
@@ -296,7 +297,6 @@ let () =
               "List.rev", Prim_list_rev;
               "List.size", Prim_list_size;
 
-              "Contract.manager", Prim_manager;
               "Contract.set_delegate", Prim_set_delegate;
               "Contract.address", Prim_address;
               "Current.self", Prim_self;
@@ -663,7 +663,6 @@ type 'a pre_michelson =
   | SELF
   | AMOUNT
   | STEPS_TO_QUOTA
-  | MANAGER
   | CREATE_ACCOUNT
   | H
   | HASH_KEY
@@ -690,6 +689,7 @@ type 'a pre_michelson =
   | LSR
 
   | SOURCE
+  | SENDER
 
   | SIZE
   | IMPLICIT_ACCOUNT

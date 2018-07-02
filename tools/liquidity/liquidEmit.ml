@@ -117,7 +117,6 @@ let rec emit_code ~expand code =
   (*  | SOURCE -> M_INS "SOURCE" *)
   | AMOUNT -> M_INS ("AMOUNT", name)
   | STEPS_TO_QUOTA -> M_INS ("STEPS_TO_QUOTA", name)
-  | MANAGER -> M_INS ("MANAGER", name)
   | ADDRESS -> M_INS ("ADDRESS", name)
   | CREATE_ACCOUNT -> M_INS ("CREATE_ACCOUNT", name)
   | H -> M_INS ("H", name)
@@ -140,6 +139,7 @@ let rec emit_code ~expand code =
   | LSL -> M_INS ("LSL", name)
   | LSR -> M_INS ("LSR", name)
   | SOURCE -> M_INS ("SOURCE", name)
+  | SENDER -> M_INS ("SENDER", name)
   | MOD -> M_INS ("MOD", name)
   | DIV -> M_INS ("DIV", name)
   | CREATE_CONTRACT contract ->

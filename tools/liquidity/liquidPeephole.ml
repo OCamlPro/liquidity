@@ -98,7 +98,7 @@ and simplify_step e exprs =
        else
          lii ~loc (DIP_DROP (n,m-1)) :: exprs
 
-  | (PUSH _ | NOW | BALANCE | SELF | SOURCE | AMOUNT | STEPS_TO_QUOTA
+  | (PUSH _ | NOW | BALANCE | SELF | SOURCE | SENDER | AMOUNT | STEPS_TO_QUOTA
      | LAMBDA _
     ), {ins=DROP} :: exprs -> exprs
 
@@ -106,7 +106,7 @@ and simplify_step e exprs =
   (* takes one item on stack, creates one :  1 -> 1 *)
   | (CAR | CDR | CDAR _ | CDDR _
      | LE | LT | GE | GT | NEQ | EQ | SOME
-     | MANAGER | ADDRESS | H | NOT | ABS | INT | NEG | LEFT _ | RIGHT _
+     | ADDRESS | H | NOT | ABS | INT | NEG | LEFT _ | RIGHT _
      | EDIV | LSL | LSR | SET_DELEGATE
     ),
     {ins=DIP_DROP (n,m); loc} :: exprs when n > 0 ->
@@ -115,7 +115,7 @@ and simplify_step e exprs =
 
   | (CAR | CDR | CDAR _ | CDDR _
      | LE | LT | GE | GT | NEQ | EQ | SOME
-     | MANAGER | ADDRESS | H | NOT | ABS | INT | NEG | LEFT _ | RIGHT _
+     | ADDRESS | H | NOT | ABS | INT | NEG | LEFT _ | RIGHT _
      | EDIV | LSL | LSR | SET_DELEGATE
     ),
     {ins=DROP; loc} :: exprs -> lii ~loc DROP :: exprs

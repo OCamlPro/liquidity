@@ -578,6 +578,9 @@ let rec interp contract =
     | SOURCE, stack ->
        let x = node ins.loc (N_PRIM "SOURCE") [] [seq] in
        x :: stack, x
+    | SENDER, stack ->
+       let x = node ins.loc (N_PRIM "SENDER") [] [seq] in
+       x :: stack, x
     | SELF, stack ->
        let x = node ins.loc (N_PRIM "SELF") [] [seq] in
        x :: stack, x
@@ -599,9 +602,6 @@ let rec interp contract =
        let x = node ins.loc (N_PRIM "SET_DELEGATE") [key] [seq] in
        x :: stack, x
 
-    | MANAGER, x :: stack ->
-       let x = node ins.loc (N_PRIM "MANAGER") [x] [seq] in
-       x :: stack, x
     | ADDRESS, x :: stack ->
        let x = node ins.loc (N_PRIM "ADDRESS") [x] [seq] in
        x :: stack, x

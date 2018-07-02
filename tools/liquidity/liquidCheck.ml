@@ -856,6 +856,7 @@ and typecheck_prim2 env prim loc args =
   | Prim_now, [ Tunit ] -> Ttimestamp
   | Prim_balance, [ Tunit ] -> Ttez
   | Prim_source, [ Tunit ] -> Taddress
+  | Prim_sender, [ Tunit ] -> Taddress
   | Prim_amount, [ Tunit ] -> Ttez
   | Prim_gas, [ Tunit ] -> Tnat
   | Prim_hash, [ _ ] -> Tstring
@@ -865,10 +866,6 @@ and typecheck_prim2 env prim loc args =
   | Prim_check, _ ->
      error_prim loc Prim_check args [Tkey; Tsignature; Tstring]
 
-  | Prim_manager, [ Tcontract _ ] ->
-     Tkey_hash
-  | Prim_manager, [ Taddress ] ->
-     Toption Tkey_hash
   | Prim_address, [ Tcontract _ ] ->
      Taddress
 

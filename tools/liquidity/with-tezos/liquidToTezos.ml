@@ -169,9 +169,9 @@ let rec convert_code expand expr =
   | UPDATE -> prim "UPDATE" [] name
   | MEM -> prim "MEM" [] name
   | SOME -> prim "SOME" [] name
-  | MANAGER -> prim "MANAGER" [] name
   | ADDRESS -> prim "ADDRESS" [] name
   | SOURCE -> prim "SOURCE" [] name
+  | SENDER -> prim "SENDER" [] name
   | OR -> prim "OR" [] name
   | LAMBDA (ty1, ty2, expr) ->
      prim "LAMBDA" [convert_type ty1; convert_type ty2; convert_code expand expr] name

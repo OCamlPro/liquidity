@@ -421,10 +421,10 @@ let rec convert_code env expr =
     mic_loc env index annot (MEM)
   | Prim(index, "SOME", [], annot) ->
     mic_loc env index annot (SOME)
-  | Prim(index, "MANAGER", [], annot) ->
-    mic_loc env index annot (MANAGER)
   | Prim(index, "SOURCE", [], annot) ->
     mic_loc env index annot (SOURCE)
+  | Prim(index, "SENDER", [], annot) ->
+    mic_loc env index annot (SENDER)
   | Prim(index, "SELF", [], annot) ->
     mic_loc env index annot (SELF)
   | Prim(index, "OR", [], annot) ->

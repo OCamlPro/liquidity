@@ -308,6 +308,7 @@ let rec decompile contract =
             | "AMOUNT",[] -> Prim_amount, [unit ~loc]
             | "STEPS_TO_QUOTA",[] -> Prim_gas, [unit ~loc]
             | "SOURCE",[] -> Prim_source, [unit ~loc]
+            | "SENDER",[] -> Prim_sender, [unit ~loc]
             | "SELF",[] -> Prim_self, [unit ~loc]
             | prim, args ->
                let prim =
@@ -331,7 +332,6 @@ let rec decompile contract =
                  | "HASH_KEY" -> Prim_hash_key
                  | "CHECK_SIGNATURE" -> Prim_check
                  | "CREATE_ACCOUNT" -> Prim_create_account
-                 | "MANAGER" -> Prim_manager
                  | "ADDRESS" -> Prim_address
                  | "XOR" -> Prim_xor
                  | "NOT" -> Prim_not

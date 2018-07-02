@@ -339,6 +339,7 @@ set x n y = x + [ DUP; CAR; SWAP; CDR ]*n +
     | Prim_amount, _ -> [ ii AMOUNT ]
     | Prim_gas, _ -> [ ii STEPS_TO_QUOTA ]
     | Prim_source, _ -> [ ii SOURCE ]
+    | Prim_sender, _ -> [ ii SENDER ]
 
     | Prim_Left, [ arg; { ty = right_ty }] ->
       let right_ty = LiquidEncode.encode_type right_ty in
@@ -374,7 +375,7 @@ the ending NIL is not annotated with a type *)
       | Prim_map_mem
       | Prim_set_update|Prim_set_add|Prim_set_remove
       | Prim_set_mem|Prim_Some
-      | Prim_concat|Prim_manager
+      | Prim_concat
       | Prim_create_account
       | Prim_hash|Prim_hash_key|Prim_check|Prim_default_account|Prim_list_size
       | Prim_set_size|Prim_map_size|Prim_or|Prim_and|Prim_xor
@@ -412,7 +413,6 @@ the ending NIL is not annotated with a type *)
          | Prim_Some, 1 -> [ ii SOME ]
          | Prim_concat, 2 -> [ ii CONCAT ]
 
-         | Prim_manager, 1 -> [ ii MANAGER ]
          | Prim_address, 1 -> [ ii ADDRESS ]
          | Prim_create_account, 4 -> [ ii CREATE_ACCOUNT; ii PAIR ]
          | Prim_hash, 1 -> [ ii H ]
@@ -443,7 +443,7 @@ the ending NIL is not annotated with a type *)
            | Prim_map_mem
            | Prim_set_update|Prim_set_add|Prim_set_remove
            | Prim_set_mem|Prim_Some
-           | Prim_concat|Prim_manager
+           | Prim_concat
            | Prim_create_account
            | Prim_hash|Prim_hash_key|Prim_check|Prim_default_account|Prim_list_size
            | Prim_set_size|Prim_map_size|Prim_or|Prim_and|Prim_xor
@@ -458,7 +458,7 @@ the ending NIL is not annotated with a type *)
          | (Prim_unknown|Prim_tuple_get
            | Prim_tuple_set|Prim_tuple
            | Prim_self|Prim_balance|Prim_now|Prim_amount|Prim_gas
-           | Prim_Left|Prim_Right|Prim_source|Prim_unused
+           | Prim_Left|Prim_Right|Prim_source|Prim_sender|Prim_unused
            | Prim_coll_find|Prim_coll_update|Prim_coll_mem
            | Prim_coll_size|Prim_list_rev), _ ->
            (* already filtered out *)
@@ -511,12 +511,18 @@ the ending NIL is not annotated with a type *)
 
   and compile depth env e =
     let code = compile_desc depth env e.desc in
-    compile_name e.name code
+    match e.desc with
+    | If _ | MatchVariant _ | MatchNat _
+    | MatchOption _ | MatchList _ | Loop _ | Fold _
+    | Map _ | MapFold _ ->
+      compile_name ~annotafter:true e.name code
+    | _ ->
+      compile_name ~annotafter:false e.name code
 
-  and compile_name name code =
+  and compile_name ~annotafter name code =
     if not !LiquidOptions.annotmic then code
     else
-    if !LiquidOptions.annotafter then
+    if annotafter || !LiquidOptions.annotafter then
       match name with
       | Some name ->
         code @ [ii ~loc:LiquidLoc.noloc (RENAME (Some (sanitize_name name)))]
