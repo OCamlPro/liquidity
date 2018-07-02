@@ -122,7 +122,6 @@ let rec convert_code expand expr =
   let name = expr.loc_name in
   let ii = ii ~loc:expr.loc in
   let seq = seq ~loc:(expr.loc, None) in
-  let gprim = prim in
   let prim = prim ~loc:(expr.loc, None) in
   let convert_type = convert_type ~loc:(expr.loc, None) in
   let convert_const = convert_const ~loc:(expr.loc, None) in
@@ -130,7 +129,7 @@ let rec convert_code expand expr =
   | RENAME a -> prim "RENAME" [] a
   | SEQ exprs -> seq (List.map (convert_code expand) exprs)
 
-  | FAIL s -> gprim ~loc:(expr.loc, s) "FAIL" [] name
+  | FAILWITH -> prim "FAILWITH" [] name
 
   | DROP -> prim "DROP" [] name
   | DIP (0, arg) -> assert false

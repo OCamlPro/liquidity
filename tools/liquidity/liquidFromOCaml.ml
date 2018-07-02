@@ -728,11 +728,12 @@ let rec translate_code env exp =
                   ( { txt = (Lident "failwith"
                             | Ldot(Lident "Current", "failwith")) })},
             [
-              Nolabel, { pexp_desc = Pexp_constant (Pconst_string (s, None)) }
+              Nolabel, err
             ]);
         pexp_loc
       } ->
-      Failwith (s, loc_of_loc pexp_loc)
+      let err = translate_code env err in
+      Failwith (err, loc_of_loc pexp_loc)
 
     | { pexp_desc =
           Pexp_apply (

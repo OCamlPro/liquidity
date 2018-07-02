@@ -147,7 +147,6 @@ type primitive =
   | Prim_tuple_set
   | Prim_tuple
 
-  | Prim_fail
   | Prim_self
   | Prim_balance
   | Prim_now
@@ -257,7 +256,6 @@ let () =
               "Array.get", Prim_tuple_get;
               "Array.set", Prim_tuple_set;
 
-              "Current.fail", Prim_fail;
               "Current.balance", Prim_balance;
               "Current.time", Prim_now;
               "Current.amount", Prim_amount;
@@ -540,7 +538,7 @@ and ('ty, 'a) exp_desc =
                 * string * ('ty, 'a) exp (* ifplus *)
                 * string * ('ty, 'a) exp (* ifminus *)
 
-  | Failwith of string * location
+  | Failwith of ('ty, 'a) exp * location
 
   | CreateContract of location
                       * ('ty, 'a) exp list (* arguments *)
@@ -566,7 +564,7 @@ let mk =
       | Const (_, _, _)
       | Var (_, _, _) -> false, false
 
-      | Failwith _ -> true, false
+      | Failwith (_, _) -> true, false
 
       | SetVar (_, _, _, e)
       | Constructor (_, _, e)
@@ -593,7 +591,7 @@ let mk =
         false (* e1.transfer || e2.transfer || e3.transfer *)
 
       | Apply (prim, _, l) ->
-        prim = Prim_fail || List.exists (fun e -> e.fail) l,
+        List.exists (fun e -> e.fail) l,
         prim = Prim_set_delegate
         || prim = Prim_create_account
         (* || List.exists (fun e -> e.transfer) l *)
@@ -649,7 +647,7 @@ type 'a pre_michelson =
   | PAIR
   | COMPARE
   | LE | LT | GE | GT | NEQ | EQ
-  | FAIL of string option
+  | FAILWITH
   | NOW
   | TRANSFER_TOKENS
   | ADD
@@ -811,7 +809,7 @@ type node = {
    | N_CREATE_CONTRACT of node_exp contract
    | N_CONST of datatype * const
    | N_PRIM of string
-   | N_FAIL of string option
+   | N_FAILWITH
    | N_ARG of node * int
    | N_LOOP of node * node
    | N_LOOP_BEGIN of node

@@ -13,12 +13,12 @@ let%entry main
     (storage : storage) =
 
   (* Check if auction has ended *)
-  if Current.time () > storage.auction_end then Current.fail ();
+  if Current.time () > storage.auction_end then Current.failwith ();
   
   let new_bid = Current.amount () in
   let new_bidder = parameter in
   (* Check if new bid is higher that the last *)
-  if new_bid <= storage.highest_bid then Current.fail ();
+  if new_bid <= storage.highest_bid then Current.failwith ();
 
   let previous_bidder = storage.bidder in
   let previous_bid = storage.highest_bid in

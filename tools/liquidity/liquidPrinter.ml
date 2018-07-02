@@ -487,12 +487,8 @@ module Michelson = struct
     | EQ ->
       Printf.bprintf b "EQ";
       bprint_pre_name b name;
-    | FAIL None ->
-      Printf.bprintf b "FAIL";
-      bprint_pre_name b name;
-    | FAIL (Some s) ->
-      Printf.bprintf b "FAIL /* %S */" s;
-      bprint_pre_name b name;
+    | FAILWITH ->
+      Printf.bprintf b "FAILWITH";
     | NOW ->
       Printf.bprintf b "NOW";
       bprint_pre_name b name;
@@ -894,8 +890,10 @@ module Liquid = struct
        Printf.bprintf b ")";
     | Var (name, _loc, labels) ->
        Printf.bprintf b "\n%s%s" indent (String.concat "." (name :: labels))
-    | Failwith (s, _loc) ->
-       Printf.bprintf b "\n%sCurrent.failwith %S" indent s
+    | Failwith (err, _loc) ->
+       Printf.bprintf b "\n%sCurrent.failwith" indent;
+       let indent2 = indent ^ "  " in
+       bprint_code_rec ~debug b indent2 err;
     | Apply (prim, _loc, args) ->
        Printf.bprintf b "\n%s(%s" indent
                       (LiquidTypes.string_of_primitive prim);
@@ -1140,8 +1138,7 @@ let string_of_node node =
   | N_CONST (ty, cst) -> "N_CONST " ^ Michelson.string_of_const cst
   | N_PRIM string ->
      Printf.sprintf "N_PRIM %s" string
-  | N_FAIL None -> "N_FAIL"
-  | N_FAIL (Some s) -> Printf.sprintf "N_FAIL %S" s
+  | N_FAILWITH -> "N_FAILWITH"
   | N_LOOP _ -> "N_LOOP"
   | N_LOOP_BEGIN _ -> "N_LOOP_BEGIN"
   | N_LOOP_END _ -> "N_LOOP_END"

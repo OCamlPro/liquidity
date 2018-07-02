@@ -19,7 +19,8 @@ let rec compute decompile code to_inline =
 
   let rec size exp =
     match exp.desc with
-    | Const _ | Var _ | SetVar _ | Failwith _ -> 1
+    | Const _ | Var _ | SetVar _ -> 1
+    | Failwith (e, _) -> size e
     | ContractAt (_, e, _) -> size e
     | Constructor (_, _, e) -> size e
 
@@ -208,7 +209,8 @@ let rec compute decompile code to_inline =
                                      lab_x_exp_list in
        { exp with desc = Record(loc, lab_x_exp_list) }
 
-    | Failwith (_, _) -> exp
+    | Failwith (err, loc) ->
+      { exp with desc = Failwith (iter err, loc) }
 
     | CreateContract (loc, args, contract) ->
       let args = List.map iter args in

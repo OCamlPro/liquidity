@@ -19,8 +19,8 @@ let contract
   let x = parameter.x in
   let y = parameter.y in
 
-  if x < 0 or x > 2 then Current.fail ();
-  if y < 0 or y > 2 then Current.fail ();
+  if x < 0 or x > 2 then Current.failwith ();
+  if y < 0 or y > 2 then Current.failwith ();
 
   (*
        DUP ; CADR                 (*  play : global *)

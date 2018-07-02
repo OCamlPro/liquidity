@@ -77,7 +77,7 @@ let rec to_dot ~sub_contract_of contract =
       begin match node.kind with
         | N_UNKNOWN _
         | N_START
-        | N_FAIL _
+        | N_FAILWITH
         | N_LAMBDA_BEGIN
         | N_END
         | N_VAR _

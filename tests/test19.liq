@@ -10,15 +10,15 @@ let%entry main
   (*  let c = Contract.self () in *)
   let key_hash = Crypto.hash_key storage.key in
   if key_hash = tz1KqTpEZ7Yob7QbPE4Hy4Wo8fHG8LhKxZSx then
-    Current.fail ();
+    Current.failwith ();
   if key_hash =
     Crypto.hash_key edpkuTXkJDGcFd5nh6VvMz8phXxU3Bi7h6hqgywNFi1vZTfQNnS1RV then
-    Current.fail ();
+    Current.faiwithl ();
   let delegate = Contract.manager (Current.source ()) in
   let spendable = Crypto.check storage.key parameter storage.hash in
   let amount = Current.amount () in
   let amount = match amount / 2p with
-      None -> Current.fail () (* not possible *)
+      None -> Current.failwith () (* not possible *)
     | Some qr -> qr
   in
   let account_op, _account =

@@ -142,10 +142,9 @@ let rec translate_code code =
        let arg = compile (depth+2) env arg_exp in
        contract @ amount @ arg @ [ ii ~loc TRANSFER_TOKENS ]
 
-    | Failwith (s, loc) ->
-      let ins = ii ~loc (FAIL (Some s)) in
-      let s = encode_failwith_param s in
-      [ ii ~loc (RENAME (Some s)); ins ] (* FAIL must be in tail position *)
+    | Failwith (err, loc) ->
+      let err = compile depth env err in
+      err @ [ ii ~loc FAILWITH ]
 
     | Apply (Prim_unknown, _loc, args) -> assert false
 
@@ -334,8 +333,6 @@ set x n y = x + [ DUP; CAR; SWAP; CDR ]*n +
        x_code @ set_code
     | Prim_tuple_set, _ -> assert false
 
-    | Prim_fail,_ -> [ ii @@ FAIL None ]
-
     | Prim_self, _ -> [ ii SELF ]
     | Prim_balance, _ -> [ ii BALANCE ]
     | Prim_now, _ -> [ ii NOW ]
@@ -459,7 +456,7 @@ the ending NIL is not annotated with a type *)
          (*                           | prim, args -> *)
 
          | (Prim_unknown|Prim_tuple_get
-           | Prim_tuple_set|Prim_tuple|Prim_fail
+           | Prim_tuple_set|Prim_tuple
            | Prim_self|Prim_balance|Prim_now|Prim_amount|Prim_gas
            | Prim_Left|Prim_Right|Prim_source|Prim_unused
            | Prim_coll_find|Prim_coll_update|Prim_coll_mem
@@ -580,7 +577,7 @@ and finalize_fail_seq acc exprs =
   | e :: exprs ->
     let e = finalize_fail_pre e in
     match e.ins with
-    | FAIL _ -> List.rev (e :: acc)
+    | FAILWITH -> List.rev (e :: acc)
     | _ ->
       finalize_fail_seq (e :: acc) exprs
 

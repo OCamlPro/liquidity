@@ -52,7 +52,7 @@ let is_owner ((addr : key_hash), (storage:storage)) =
 let onlyowner (storage:storage) =
   if Set.mem (Contract.manager (Source : (unit, unit) contract)) storage.m_owners
   then ()
-  else Current.fail ()
+  else Current.failwith ()
 *)
 
 let clearPending (storage : storage) =
@@ -94,7 +94,7 @@ let confirmAndCheck ((op : operation), (storage: storage)) =
   else
     let new_yetNeeded = match%nat int pending.yetNeeded - 1 with
       | Plus n -> n
-      | Minus _ -> Current.fail ()
+      | Minus _ -> Current.failwith ()
     in
     let pending = pending.yetNeeded <- new_yetNeeded in
     let pending = pending.ownersDone <- Set.add owner pending.ownersDone in
@@ -104,7 +104,7 @@ let confirmAndCheck ((op : operation), (storage: storage)) =
 (*
 let only_enough_owners ((op : operation), (storage: storage)) =
   match confirmAndCheck (op, storage) with
-  | Confirmations_Needed _ -> Current.fail ()
+  | Confirmations_Needed _ -> Current.failwith ()
   | Execute storage -> storage
 *)
 
@@ -208,7 +208,7 @@ let%entry main
     (* let owner = Contract.manager (Source : (unit, unit) contract) in *)
     (* let oph = Crypto.hash op in *)
     (* begin match Map.find oph storage.m_pending with *)
-    (* | None -> Current.fail () *)
+    (* | None -> Current.failwith () *)
     (* | Some pending -> *)
     (*   let storage = *)
     (*     if Set.mem owner pending.ownersDone then *)
@@ -227,7 +227,7 @@ let%entry main
       (*   | Confirmations_Needed storage -> (), storage *)
       (*   | Execute storage -> *)
       (*     if is_owner (_to, storage) || not (is_owner (from, storage)) *)
-      (*     then Current.fail () *)
+      (*     then Current.failwith () *)
       (*     else *)
       (*       let storage = clearPending storage in *)
       (*       let storage = storage.m_owners <- Set.remove from storage.m_owners in *)
@@ -239,7 +239,7 @@ let%entry main
         match confirmAndCheck (AddOwner owner, storage) with
         | Confirmations_Needed storage -> (), storage
         | Execute storage ->
-          (* if is_owner (owner, storage) then Current.fail (); *)
+          (* if is_owner (owner, storage) then Current.failwith (); *)
           if Set.mem owner storage.m_owners then
             Current.failwith "The owner you are trying to add already exists";
           let storage = clearPending storage in
@@ -252,14 +252,14 @@ let%entry main
         match confirmAndCheck (RemoveOwner owner, storage) with
         | Confirmations_Needed storage -> (), storage
         | Execute storage ->
-          (* if not (is_owner (owner,storage)) then Current.fail (); *)
+          (* if not (is_owner (owner,storage)) then Current.failwith (); *)
           if not (Set.mem owner storage.m_owners) then
             Current.failwith
               "The owner you are trying to remove does not exist";
-          if storage.m_required >= storage.m_num_owners then Current.fail ();
+          if storage.m_required >= storage.m_num_owners then Current.failwith ();
           let new_num_owners = match%nat int storage.m_num_owners - 1 with
             | Plus n -> n
-            | Minus _ -> Current.fail ()
+            | Minus _ -> Current.failwith ()
           in
           let storage = storage.m_num_owners <- new_num_owners in
           let storage = storage.m_owners <- Set.remove owner storage.m_owners in

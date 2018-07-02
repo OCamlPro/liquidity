@@ -156,7 +156,7 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
   match exp.desc with
 
   | Const (loc, ty, cst) ->
-    mk ?name:exp.name (Const (loc, ty, cst)) ty
+    mk ?name:exp.name (Const (loc, ty, cst)) (ty:datatype)
 
   | Let (name, loc, exp, body) ->
      let exp = typecheck env exp in
@@ -164,8 +164,7 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
        match exp.desc with
        | Failwith _ -> exp
        | _ ->
-         mk (Apply (Prim_fail, loc,
-                    [mk (Const (loc, Tunit, CUnit)) Tunit])) Tfail
+         mk (Failwith (mk (Const (loc, Tunit, CUnit)) Tunit, loc)) Tfail
      else
        let (env, count) = new_binding env name ~fail:exp.fail exp.ty in
        let body = typecheck env body in
@@ -305,11 +304,11 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
      typecheck env { exp with
                      desc = Apply(Prim_exec, loc, [x; f]) }
 
-
-
   | Apply (prim, loc, args) -> typecheck_apply ?name:exp.name env prim loc args
 
-  | Failwith (s, loc) -> mk (Failwith (s, loc)) Tfail (* no name *)
+  | Failwith (err, loc) ->
+    let err = typecheck env err in
+    mk (Failwith (err, loc)) Tfail (* no name *)
 
   | MatchOption (arg, loc, ifnone, name, ifsome) ->
      let arg = typecheck env arg in
@@ -853,7 +852,6 @@ and typecheck_prim2 env prim loc args =
      Tset key_ty
 
   | Prim_Some, [ ty ] -> Toption ty
-  | Prim_fail, [ Tunit ] -> Tfail
   | Prim_self, [ Tunit ] -> Tcontract env.t_contract_sig.parameter
   | Prim_now, [ Tunit ] -> Ttimestamp
   | Prim_balance, [ Tunit ] -> Ttez

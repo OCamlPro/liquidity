@@ -61,27 +61,6 @@ let unsanitize_name s =
   in
   aux s 0
 
-let char_code_of_hex_half_byte c = match c with
-  | '0' .. '9' -> Char.code c - 48
-  | 'A' .. 'F' -> Char.code c - 55
-  | 'a' .. 'f' -> Char.code c - 87
-  | _ -> raise (Invalid_argument "Hex out of range")
-
-let decode_failwith_param s =
-  let l = String.length s in
-  let b = Bytes.make (l / 2) '\000' in
-  if (s.[0] <> 'x') then
-    raise (Invalid_argument "bad encoding for failwith");
-  let i = ref 1 in
-  while !i < l do
-    let hb_1, hb_0 = s.[!i], s.[!i + 1] in
-    let code = 16 * char_code_of_hex_half_byte hb_1 +
-               char_code_of_hex_half_byte hb_0 in
-    Bytes.set b (!i / 2) (Char.chr code);
-    i := !i + 2;
-  done;
-  Bytes.to_string b
-
 let fprint_stack msg fmt stack =
   Format.fprintf fmt "Stack %s:\n" msg;
   List.iter (fun node ->
@@ -115,8 +94,8 @@ let rec uniformize_stack if_stack stack =
 let rec merge_stacks if_stack end_node1 end_node2 stack1 stack2 =
   match stack1, stack2 with
   | [], [] -> []
-  | { kind = N_FAIL _ } :: _, { kind = N_FAIL _ } :: _ -> stack1
-  | { kind = N_FAIL _ } :: _, _ ->
+  | { kind = N_FAILWITH } :: _, { kind = N_FAILWITH } :: _ -> stack1
+  | { kind = N_FAILWITH } :: _, _ ->
      begin
        match end_node2 with
        | None -> assert false
@@ -124,7 +103,7 @@ let rec merge_stacks if_stack end_node1 end_node2 stack1 stack2 =
           merge_stacks if_stack end_node2 None
                        stack2 (uniformize_stack if_stack stack2)
      end
-  | _, { kind = N_FAIL _ } :: _ ->
+  | _, { kind = N_FAILWITH } :: _ ->
      merge_stacks if_stack end_node1 None
                   stack1 (uniformize_stack if_stack stack1)
   | _ ->
@@ -178,7 +157,7 @@ let add_name stack seq name =
 
 let add_name_to_ins stack seq ins =
   match ins.loc_name, ins.ins, stack with
-  | Some _, FAIL _, _ -> ()
+  | Some _, FAILWITH, _ -> ()
   | Some name, _, x :: _ -> add_name stack seq name
   | _, _, _ -> ()
 
@@ -195,7 +174,7 @@ let rec interp contract =
       decompile_seq stack seq code
 
     (* Special case for failwith, annot is before *)
-    | {ins=RENAME name} :: ({ins=FAIL _} as fail) :: code, _ ->
+    | {ins=RENAME name} :: ({ins=FAILWITH} as fail) :: code, _ ->
       fail.loc_name <- name;
       let stack, seq = decompile stack seq fail in
       decompile_seq stack seq code
@@ -250,7 +229,7 @@ let rec interp contract =
    avoid infinite loops here...
 *)
 
-    | IF ({ins=SEQ [{ins=FAIL _}]} as seq_fail,
+    | IF ({ins=SEQ [{ins=FAILWITH}]} as seq_fail,
           {ins=SEQ ( (_ :: _) as ifelse )}),_ ->
       decompile stack seq
         (mic_loc ins.loc
@@ -258,20 +237,20 @@ let rec interp contract =
                    (IF (seq_fail,
                         mic_loc ins.loc (SEQ []))) :: ifelse)))
     | IF ({ins=SEQ ( (_ :: _) as ifthen )},
-          ({ins=SEQ [{ins=FAIL _}]} as seq_fail)),_ ->
+          ({ins=SEQ [{ins=FAILWITH}]} as seq_fail)),_ ->
       decompile stack seq
         (mic_loc ins.loc
            (SEQ (mic_loc ins.loc
                    (IF (mic_loc ins.loc (SEQ []),
                         seq_fail)) :: ifthen)))
     | IF_NONE ({ins=SEQ ( (_::_) as ifthen)},
-               ({ins=SEQ [{ins=FAIL _}]} as seq_fail)),_ ->
+               ({ins=SEQ [{ins=FAILWITH}]} as seq_fail)),_ ->
       decompile stack seq
         (mic_loc ins.loc
            (SEQ (mic_loc ins.loc
                    (IF_NONE (mic_loc ins.loc (SEQ []),
                              seq_fail)) :: ifthen)))
-    | IF_CONS ({ins=SEQ [{ins=FAIL _}]} as seq_fail,
+    | IF_CONS ({ins=SEQ [{ins=FAILWITH}]} as seq_fail,
                {ins=SEQ ( (_::_) as ifelse )} ),_ ->
       decompile stack seq
         (mic_loc ins.loc
@@ -353,8 +332,8 @@ let rec interp contract =
             else
               match stack1, stack2 with
               | [], [] -> []
-              | { kind = N_FAIL _ } :: _, _ -> stack2
-              | _, { kind = N_FAIL _ } :: _ -> stack1
+              | { kind = N_FAILWITH } :: _, _ -> stack2
+              | _, { kind = N_FAILWITH } :: _ -> stack1
               | s1 :: stack1, s2 :: stack2 ->
                  if s1 == s2 then
                    s1 :: (merge i stack1 stack2)
@@ -381,8 +360,8 @@ let rec interp contract =
                else
                  match stack1, stack2 with
                  | [], [] -> []
-                 | { kind = N_FAIL _ } :: _, _ -> stack2
-                 | _, { kind = N_FAIL _ } :: _ -> stack1
+                 | { kind = N_FAILWITH } :: _, _ -> stack2
+                 | _, { kind = N_FAILWITH } :: _ -> stack1
                  | { kind = N_ARG (n, i); node_name }:: stack1, s2 :: stack2
                       when n == begin_node
                    ->
@@ -418,8 +397,8 @@ let rec interp contract =
             else
               match stack1, stack2 with
               | [], [] -> []
-              | { kind = N_FAIL _ } :: _, _ -> stack2
-              | _, { kind = N_FAIL _ } :: _ -> stack1
+              | { kind = N_FAILWITH } :: _, _ -> stack2
+              | _, { kind = N_FAILWITH } :: _ -> stack1
               | s1 :: stack1, s2 :: stack2 ->
                  if s1 == s2 then
                    s1 :: (merge i stack1 stack2)
@@ -445,8 +424,8 @@ let rec interp contract =
                else
                  match stack1, stack2 with
                  | [], [] -> []
-                 | { kind = N_FAIL _ } :: _, _ -> stack2
-                 | _, { kind = N_FAIL _ } :: _ -> stack1
+                 | { kind = N_FAILWITH } :: _, _ -> stack2
+                 | _, { kind = N_FAILWITH } :: _ -> stack1
                  | { kind = N_ARG (n, _) }:: stack1, s2 :: stack2
                       when n == begin_node
                       ->
@@ -489,8 +468,8 @@ let rec interp contract =
             else
               match stack1, stack2 with
               | [], [] -> []
-              | { kind = N_FAIL _ } :: _, _ -> stack2
-              | _, { kind = N_FAIL _ } :: _ -> stack1
+              | { kind = N_FAILWITH } :: _, _ -> stack2
+              | _, { kind = N_FAILWITH } :: _ -> stack1
               | s1 :: stack1, s2 :: stack2 ->
                 if s1 == s2 then
                   s1 :: (merge i stack1 stack2)
@@ -524,8 +503,8 @@ let rec interp contract =
               else
                 match stack1, stack2 with
                 | [], [] -> []
-                | { kind = N_FAIL _ } :: _, _ -> stack2
-                | _, { kind = N_FAIL _ } :: _ -> stack1
+                | { kind = N_FAILWITH } :: _, _ -> stack2
+                | _, { kind = N_FAILWITH } :: _ -> stack1
                 | { kind = N_ARG (n, _) }:: stack1, s2 :: stack2
                   when n == begin_node
                   ->
@@ -588,14 +567,8 @@ let rec interp contract =
        let x = node ins.loc (N_CONST (ty, cst)) [] [seq] in
        x :: stack, x
 
-    | FAIL _, _ ->
-      let i = match ins.loc_name with
-        | None -> N_FAIL None
-        | Some enc_s ->
-          try N_FAIL (Some (decode_failwith_param enc_s))
-          with Invalid_argument _ -> N_FAIL None
-      in
-      let x = node ins.loc i [] [seq] in
+    | FAILWITH, arg :: _ ->
+      let x = node ins.loc N_FAILWITH [arg] [seq] in
       [x], x
 
     | TRANSFER_TOKENS, arg :: amount :: contract :: stack ->

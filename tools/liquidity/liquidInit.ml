@@ -31,8 +31,11 @@ let rec subst_empty_big_map code =
         "Only use empty big map constants in storage initializer"
     | Const _ -> desc
     | Transfer _ -> assert false
-    | Var _
-    | Failwith _ -> desc
+    | Var _ -> desc
+
+    | Failwith (e, loc) ->
+      let e' = subst_empty_big_map e in
+      if e == e' then desc else Failwith (e', loc)
     | SetVar (s, loc, l, e) ->
       let e' = subst_empty_big_map e in
       if e == e' then desc else SetVar (s, loc, l, e')

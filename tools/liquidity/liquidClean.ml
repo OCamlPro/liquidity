@@ -26,9 +26,9 @@ let rec clean_code code =
     | ins -> ins
   in
   match ins with
-  | DIP (_, {ins=SEQ [{ins=FAIL s}]}) | DIP (_, {ins=FAIL s})
-  | LOOP ({ins=SEQ [{ins=FAIL s}]}) | LOOP {ins=FAIL s}
-    -> { code with ins = FAIL s}
+  | DIP (_, {ins=SEQ [{ins=FAILWITH}]}) | DIP (_, {ins=FAILWITH})
+  | LOOP ({ins=SEQ [{ins=FAILWITH}]}) | LOOP {ins=FAILWITH}
+    -> { code with ins = FAILWITH}
   | _ -> code
 
 and clean_seq exprs =
@@ -37,11 +37,11 @@ and clean_seq exprs =
   | e :: exprs ->
      let e = clean_code e in
      match e.ins with
-     | FAIL _ -> [e]
+     | FAILWITH -> [e]
      | _ ->
        let exprs =  clean_seq exprs in
        match e, exprs with
-       | _, ({ins=FAIL _} as fail) :: _ -> [fail]
+       | _, ({ins=FAILWITH} as fail) :: _ -> [fail]
        | _ -> e :: exprs
 
 let clean_contract contract =

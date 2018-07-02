@@ -70,7 +70,7 @@ let%entry main
       (* Owner wants to perform an action *)
       let owner = Current.source () in
       (* the caller must be an owner*)
-      if not (Set.mem owner storage.owners) then Current.fail ();
+      if not (Set.mem owner storage.owners) then Current.failwith ();
       (* Don't send money while managing multisig *)
       if Current.amount () <> 0tz then
         Current.failwith "Don't send money while managing multisig";

@@ -19,7 +19,8 @@ let rec bv code =
                      (StringSet.union (bv ifthen) (bv ifelse))
   | Seq (x, y) -> StringSet.union (bv x) (bv y)
   | Const (loc, ty, cst) ->  StringSet.empty
-  | Failwith _ -> StringSet.empty
+
+  | Failwith (err, loc) -> bv err
 
   | Apply (Prim_unknown, _,
            ({ desc = Var (name, _, [])} :: args)) ->
@@ -158,8 +159,11 @@ let rec bound code =
   | Const (loc, ty, cst) ->
      mk code.desc code StringSet.empty
 
-  | Failwith _ ->
-     mk code.desc code StringSet.empty
+  | Failwith (err, loc) ->
+    let err = bound err in
+    let bv = err.bv in
+    let desc = Failwith (err, loc) in
+    mk desc code bv
 
   | Apply (Prim_unknown, loc,
            ({ desc = Var (name, varloc, [])} :: args)) ->

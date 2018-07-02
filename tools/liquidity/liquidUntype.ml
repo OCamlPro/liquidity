@@ -82,7 +82,7 @@ let rec untype (env : env) code =
        If (untype env cond, untype env ifthen, untype env ifelse)
     | Seq (x, y) -> Seq (untype env x, untype env y)
     | Const (loc, ty, cst) ->  Const (loc, ty, cst)
-    | Failwith (s, loc) -> Failwith (s, loc)
+    | Failwith (err, loc) -> Failwith (untype env err, loc)
 
     | Apply(Prim_Left, loc, [arg; unused]) ->
        Constructor(loc, Left unused.ty, untype env arg)

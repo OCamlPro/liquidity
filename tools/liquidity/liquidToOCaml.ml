@@ -279,10 +279,10 @@ let rec convert_code ~abbrev expr =
             Nolabel,
             convert_code ~abbrev arg) args)
 
-  | Failwith (s, loc) ->
+  | Failwith (err, loc) ->
     Exp.apply ~loc:(loc_of_loc loc)
       (Exp.ident (lid "Current.failwith"))
-      [Nolabel, Exp.constant (Const.string s)]
+      [Nolabel, convert_code ~abbrev err]
 
   | SetVar (name, loc, fields, exp) -> begin
       match List.rev fields with

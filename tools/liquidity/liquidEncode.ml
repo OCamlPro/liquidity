@@ -365,8 +365,9 @@ let rec decr_counts_vars env e =
       with Not_found -> ()
     end
 
-  | Const (_, _, _) | Var (_, _, _) | Failwith (_, _) -> ()
+  | Const (_, _, _) | Var (_, _, _) -> ()
 
+  | Failwith (e, _)
   | SetVar (_, _, _, e)
   | Constructor (_, _, e)
   | ContractAt (_, e, _)
@@ -509,7 +510,9 @@ let rec encode env ( exp : typed_exp ) : encoded_exp =
     let arg_exp = encode env arg_exp in
     mk ?name:exp.name (Transfer(loc, contract_exp, tez_exp, arg_exp)) Toperation
 
-  | Failwith (s, loc) -> mk (Failwith (s, loc)) Tfail
+  | Failwith (err, loc) ->
+    let err = encode env err in
+    mk (Failwith (err, loc)) Tfail
 
   | Apply (Prim_unknown, _, _) -> assert false
 

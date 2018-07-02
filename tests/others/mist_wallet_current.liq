@@ -51,7 +51,7 @@ let is_owner ((addr : key_hash), (storage:storage)) =
 let onlyowner (storage:storage) =
   if is_owner (Contract.manager (Source : (unit, unit) contract), storage)
   then ()
-  else Current.fail ()
+  else Current.failwith ()
 
 let clearPending (storage : storage) =
   let m_pending =
@@ -67,7 +67,7 @@ type check_result =
 
 let confirmAndCheck ((op : operation), (storage: storage)) =
   let owner = Contract.manager (Source : (unit, unit) contract) in
-  if not (is_owner (owner, storage)) then Current.fail ();
+  if not (is_owner (owner, storage)) then Current.failwith ();
   let oph = Crypto.hash op in
   let pending = match Map.find oph storage.m_pending with
     | None ->
@@ -81,7 +81,7 @@ let confirmAndCheck ((op : operation), (storage: storage)) =
   in
   (* make sure we (the message sender) haven't confirmed this operation
      previously *)
-  if Set.mem owner pending.ownersDone then Current.fail ();
+  if Set.mem owner pending.ownersDone then Current.failwith ();
   (* check if count is enough to go ahead *)
   if pending.yetNeeded <= 1p then
     let storage =
@@ -90,7 +90,7 @@ let confirmAndCheck ((op : operation), (storage: storage)) =
   else
     let new_yetNeeded = match%nat int pending.yetNeeded - 1 with
       | Plus n -> n
-      | Minus _ -> Current.fail ()
+      | Minus _ -> Current.failwith ()
     in
     let pending = pending.yetNeeded <- new_yetNeeded in
     let pending = pending.ownersDone <- Set.add owner pending.ownersDone in
@@ -99,7 +99,7 @@ let confirmAndCheck ((op : operation), (storage: storage)) =
 
 let only_enough_owners ((op : operation), (storage: storage)) =
   match confirmAndCheck (op, storage) with
-  | Confirmations_Needed _ -> Current.fail ()
+  | Confirmations_Needed _ -> Current.failwith ()
   | Execute storage -> storage
 
 let has_confirmed ((op: operation), (owner: key_hash), (storage:storage)) =
@@ -117,7 +117,7 @@ let revoke
   let owner = Contract.manager (Source : (unit, unit) contract) in
   let oph = Crypto.hash op in
   match Map.find oph storage.m_pending with
-  | None -> Current.fail ()
+  | None -> Current.failwith ()
   | Some pending ->
     let storage =
       if Set.mem owner pending.ownersDone then
@@ -139,7 +139,7 @@ let changeOwner
   | Execute storage ->
     let from, _to = parameter in
     if is_owner (_to, storage) || not (is_owner (from, storage))
-    then Current.fail ()
+    then Current.failwith ()
     else
       let storage = clearPending storage in
       let storage = storage.m_owners <- Set.remove from storage.m_owners in
@@ -154,7 +154,7 @@ let addOwner
   match confirmAndCheck (AddOwner owner, storage) with
   | Confirmations_Needed storage -> (), storage
   | Execute storage ->
-    if is_owner (owner, storage) then Current.fail ();
+    if is_owner (owner, storage) then Current.failwith ();
     let storage = clearPending storage in
     let storage = storage.m_num_owners <- storage.m_num_owners + 1p in
     let storage = storage.m_owners <- Set.add owner storage.m_owners in
@@ -168,11 +168,11 @@ let removeOwner
   match confirmAndCheck (RemoveOwner owner, storage) with
   | Confirmations_Needed storage -> (), storage
   | Execute storage ->
-    if not (is_owner (owner,storage)) then Current.fail ();
-    if storage.m_required >= storage.m_num_owners then Current.fail ();
+    if not (is_owner (owner,storage)) then Current.failwith ();
+    if storage.m_required >= storage.m_num_owners then Current.failwith ();
     let new_num_owners = match%nat int storage.m_num_owners - 1 with
       | Plus n -> n
-      | Minus _ -> Current.fail ()
+      | Minus _ -> Current.failwith ()
     in
     let storage = storage.m_num_owners <- new_num_owners in
     let storage = storage.m_owners <- Set.remove owner storage.m_owners in
@@ -187,7 +187,7 @@ let changeRequirement
   match confirmAndCheck (ChangeRequirement required, storage) with
   | Confirmations_Needed storage -> (), storage
   | Execute storage ->
-    if required > storage.m_num_owners then Current.fail ();
+    if required > storage.m_num_owners then Current.failwith ();
     let storage = clearPending storage in
     let storage = storage.m_required <- required in
     ((), storage)
@@ -209,7 +209,7 @@ let underLimit ((value: tez), (storage: storage)) =
 let%init storage (owners : key_hash set) (required : nat) (limit : tez) =
   let m_owners = Set.add (Contract.manager (Source : (unit, unit) contract)) owners in
   let m_num_owners = Set.size m_owners in
-  if required > m_num_owners then Current.fail ();
+  if required > m_num_owners then Current.failwith ();
   {
     m_num_owners;
     m_owners;
@@ -255,7 +255,7 @@ let resetSpentToday (storage : storage) =
   | Execute storage -> (), storage.m_spent_today <- 0tz
 
 let deposit (storage : storage) =
-  if Current.amount () = 0tz then Current.fail ()
+  if Current.amount () = 0tz then Current.failwith ()
   else ((), storage)
 
 (*

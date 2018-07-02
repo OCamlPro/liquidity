@@ -82,7 +82,7 @@ let rec var_of node =
       | N_TRANSFER -> Printf.sprintf "transfer%d" node.num
       | N_IF_RESULT _ | N_IF_END_RESULT _ | N_LOOP_RESULT _ ->
         Printf.sprintf "var%d" node.num
-      | N_FAIL _ -> Printf.sprintf "fail%d" node.num
+      | N_FAILWITH -> Printf.sprintf "fail%d" node.num
       | N_LOOP _ -> Printf.sprintf "loop%d" node.num
       | N_LAMBDA _ -> Printf.sprintf "fun%d" node.num
       | N_LAMBDA_BEGIN | N_LOOP_BEGIN _ | N_FOLD_BEGIN _ ->
@@ -217,7 +217,7 @@ let rec decompile contract =
           mklet node (MatchOption(
                           mk(Apply(Prim_ediv,loc,[arg_of arg1;arg_of arg2])),
                           noloc,
-                          mk(Apply(Prim_fail,loc, [unit ~loc])),
+                          mk(Failwith (unit ~loc, loc)),
                           var_of node,
                           mk(Apply(Prim_tuple_get,loc,[
                                        mk(Var(var_of node,loc,[]));
@@ -226,7 +226,7 @@ let rec decompile contract =
           mklet node (MatchOption(
                           mk(Apply(Prim_ediv,loc,[arg_of arg1;arg_of arg2])),
                           noloc,
-                          mk(Apply(Prim_fail,loc, [unit ~loc])),
+                          mk(Failwith (unit ~loc, loc)),
                           var_of node,
                           mk(Apply(Prim_tuple_get,noloc,[
                                        mk(Var(var_of node,loc,[]));
@@ -362,11 +362,8 @@ let rec decompile contract =
 
        | N_END, [ arg ] -> arg_of arg
 
-       | N_FAIL None, _ ->
-         mk (Apply (Prim_fail, loc, [unit ~loc]))
-
-       | N_FAIL (Some s), _ ->
-         mk (Failwith (s, loc))
+       | N_FAILWITH, [ arg ] ->
+         mk (Failwith (arg_of arg, loc))
 
        | N_CONST (ty, cst), [] ->
          let to_tez s = LiquidPrinter.tez_of_mic_mutez @@ Z.of_string s in
@@ -526,6 +523,7 @@ let rec decompile contract =
        | N_START
        | N_LAMBDA_BEGIN
        | N_VAR _
+       | N_FAILWITH
        | N_IF_RESULT (_, _)
        | N_IF_THEN _
        | N_IF_ELSE _

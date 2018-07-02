@@ -102,7 +102,7 @@ let%entry main (parameter : parameter_t) (storage : parameter_t): return_t * par
     | Some x -> (source, odd_decimal, token) :: x
   in  
   let counter_margin = List.reduce orders_reduce bet_lst 0p in  *)       
-  Current.fail ()
+  Current.failwith ()
   (* if all_margin >= counter_margin then
     let source = Contract.manager (Source : (unit, unit) contract) in
     let arg = (source, parameter.(0), bet_storage, parameter.(2)) in
