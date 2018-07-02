@@ -145,7 +145,7 @@ let rec translate_code code =
     | Failwith (s, loc) ->
       let ins = ii ~loc (FAIL (Some s)) in
       let s = encode_failwith_param s in
-      [ ii ~loc (ANNOT s); ins ] (* FAIL must be in tail position *)
+      [ ii ~loc (RENAME (Some s)); ins ] (* FAIL must be in tail position *)
 
     | Apply (Prim_unknown, _loc, args) -> assert false
 
@@ -522,7 +522,7 @@ the ending NIL is not annotated with a type *)
     if !LiquidOptions.annotafter then
       match name with
       | Some name ->
-        code @ [ii ~loc:LiquidLoc.noloc (ANNOT (sanitize_name name))]
+        code @ [ii ~loc:LiquidLoc.noloc (RENAME (Some (sanitize_name name)))]
       | None -> code
     else
       match List.rev code with
@@ -533,7 +533,7 @@ the ending NIL is not annotated with a type *)
 
   and compile_arg_name arg_name =
     if !LiquidOptions.annotmic
-    then [ii ~loc:LiquidLoc.noloc (ANNOT (sanitize_name arg_name))]
+    then [ii ~loc:LiquidLoc.noloc (RENAME (Some (sanitize_name arg_name)))]
     else []
 
   in

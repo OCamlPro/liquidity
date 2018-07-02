@@ -55,6 +55,7 @@ OCaml.library("michelson",
         from_tezos("lib_stdlib/mBytes.ml");
         from_tezos("lib_stdlib/tzList.ml");
         from_tezos("lib_stdlib/tzString.ml");
+        from_tezos("lib_stdlib/utils.ml");
         from_tezos("lib_stdlib/binary_stream.ml");
         from_tezos("lib_data_encoding/binary_size.ml");
         from_tezos("lib_data_encoding/encoding.ml");
@@ -65,7 +66,10 @@ OCaml.library("michelson",
         from_tezos("lib_data_encoding/binary_stream_reader.ml");
         from_tezos("lib_data_encoding/json.ml");
         from_tezos("lib_data_encoding/bson.ml");
+        from_tezos("lib_data_encoding/binary_schema.ml");
+        from_tezos("lib_data_encoding/binary_description.ml");
         from_tezos("lib_data_encoding/data_encoding.ml");
+        from_tezos("lib_stdlib/tag.ml");
         from_tezos("lib_stdlib/logging.ml");
         from_tezos("lib_stdlib/lwt_utils.ml");
         from_tezos("lib_stdlib/lwt_canceler.ml");

@@ -47,6 +47,7 @@ let string_of_token = function
   | Micheline_parser.Open_brace
   | Micheline_parser.Close_brace -> "curly brace"
   | Micheline_parser.String _ -> "string constant"
+  | Micheline_parser.Bytes _ -> "bytes constant"
   | Micheline_parser.Int _ -> "integer constant"
   | Micheline_parser.Ident _ -> "identifier"
   | Micheline_parser.Annot _ -> "annotation"
@@ -90,9 +91,11 @@ let unknown_expr env msg expr =
   let loc = loc_of_int env (Micheline.location expr) in
   LiquidLoc.raise_error ~loc "in %s, %s" msg
     (match expr with
-     | Seq (_loc, _exprs, _debug) -> "unknwon sequence"
+     | Seq (_loc, _exprs) -> "unknwon sequence"
      | String (_loc, s) ->
        Printf.sprintf "unknwon string %S" s
+     | Bytes (_loc, s) ->
+       Printf.sprintf "unknwon bytes %S" (Hex.to_string (MBytes.to_hex s))
      | Int (_loc, i) ->
        Printf.sprintf "unknown integer %s" (Z.to_string i)
      | Prim(i, s, args, _debug) ->
@@ -104,9 +107,11 @@ let wrong_type env expr ty =
   let loc = loc_of_int env (Micheline.location expr) in
   LiquidLoc.raise_error ~loc "type of %s is not convertible with %s"
     (match expr with
-     | Seq (_loc, _exprs, _debug) -> "sequence"
+     | Seq (_loc, _exprs) -> "sequence"
      | String (_loc, s) ->
        Printf.sprintf "string %S" s
+     | Bytes (_loc, s) ->
+       Printf.sprintf "bytes %S" (Hex.to_string (MBytes.to_hex s))
      | Int (_loc, i) ->
        Printf.sprintf "integer %s" (Z.to_string i)
      | Prim(i, s, args, _debug) ->
@@ -192,7 +197,7 @@ let rec convert_const env ?ty expr =
       | Some ty -> wrong_type env expr ty
     end
 
-  | Seq(_, elems, _debug) ->
+  | Seq(_, elems) ->
     begin match ty with
       | Some (Tlist ty) ->
         CList (List.map (convert_const ~ty env) elems)
@@ -229,12 +234,31 @@ let rec convert_const env ?ty expr =
 
   | _ -> unknown_expr env "convert_const" expr
 
-let name_of_annot name =
-  Scanf.sscanf name "@%s" (fun s -> s)
+let name_of_annots annots =
+  let exception Found of string in
+  try
+    List.iter (fun a ->
+      try raise (Found (Scanf.sscanf a "@%s" (fun s -> s)))
+      with Scanf.Scan_failure _ | End_of_file -> ()
+    ) annots;
+    None
+  with Found s -> Some s
+
+let type_name_of_annots annots =
+  let exception Found of string in
+  try
+    List.iter (fun a ->
+      try raise (Found (Scanf.sscanf a ":%s" (fun s -> s)))
+      with Scanf.Scan_failure _ | End_of_file ->
+      try raise (Found (Scanf.sscanf a "%%%s" (fun s -> s)))
+      with Scanf.Scan_failure _ | End_of_file -> ()
+    ) annots;
+    None
+  with Found s -> Some s
 
 let rec convert_type env expr =
   let name = match expr with
-    | Prim(_, _, _, Some a) -> Some (name_of_annot a)
+    | Prim(_, _, _, a) -> type_name_of_annots a
     | _ -> None
   in
   let ty = match expr with
@@ -306,13 +330,12 @@ let liq_annot name =
 *)
 
 
-let mic_loc env index annot ins =
-  let loc_name = match annot with
-    | Some annot ->
-      env.annoted <- true;
-      Some (name_of_annot annot)
-    | _ -> None
-  in
+let mic_loc env index annots ins =
+  let loc_name = name_of_annots annots in
+  begin match loc_name with
+    | Some _ -> env.annoted <- true;
+    | None -> ()
+  end;
   let loc = loc_of_int env index in
   { ins; loc; loc_name }
 
@@ -328,20 +351,20 @@ let rec expand expr =
   match Michelson_v1_macros.expand expr with
   | Error _ -> invalid_arg "expand"
   | Ok r -> match r with
-    | Seq (loc, items, annot) ->
-      Seq (loc, List.map expand items, annot)
+    | Seq (loc, items) ->
+      Seq (loc, List.map expand items)
     | Prim (loc, name, args, annot) ->
       Prim (loc, name, List.map expand args, annot)
-    | Int _ | String _ as atom -> atom
+    | Int _ | String _ | Bytes _ as atom -> atom
 
 
 let rec convert_code env expr =
   match expr with
-  | Seq (index, [], Some name) ->
-    mic_loc env index (Some name) (ANNOT (name_of_annot name)) (* TODO remove *)
-  | Seq (index, exprs, annot) ->
-    mic_loc env index annot
+  | Seq (index, exprs) ->
+    mic_loc env index []
       (SEQ (List.map (convert_code env) exprs))
+  | Prim (index, "RENAME", [], annots) ->
+    mic_loc env index annots (RENAME (name_of_annots annots)) (* TODO remove *)
   | Prim(index, "DUP", [], annot) ->
     mic_loc env index annot (DUP 1)
   | Prim(index, "DROP", [], annot) ->
@@ -494,7 +517,7 @@ let rec convert_code env expr =
     mic_loc env index annot (STEPS_TO_QUOTA)
   | Prim(index, "CREATE_ACCOUNT", [], annot) ->
     mic_loc env index annot (CREATE_ACCOUNT)
-  | Prim(index, "CREATE_CONTRACT", [Seq (_, contract, _)], annot) ->
+  | Prim(index, "CREATE_CONTRACT", [Seq (_, contract)], annot) ->
     let contract = convert_raw_contract env contract in
     mic_loc env index annot (CREATE_CONTRACT contract)
   | Prim(index, "IMPLICIT_ACCOUNT", [], annot) ->

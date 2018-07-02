@@ -620,12 +620,11 @@ let mk =
 
 type michelson_exp =
   | M_INS of string * string option
-  | M_INS_ANNOT of string
   | M_INS_CST of string * datatype * const * string option
   | M_INS_EXP of string * datatype list * michelson_exp list * string option
 
 type 'a pre_michelson =
-  | ANNOT of string
+  | RENAME of string option
   | SEQ of 'a list
   | DIP of int * 'a
   | IF of 'a * 'a

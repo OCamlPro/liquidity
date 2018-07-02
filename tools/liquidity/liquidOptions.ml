@@ -21,7 +21,7 @@ let typeonly = ref false
 let parseonly = ref false
 let singleline = ref false
 let annotmic = ref true
-let annotafter = ref true (* XXX: Disable when Tezos is fixed *)
+let annotafter = ref false (* XXX: Disable when Tezos is fixed *)
 
 let tezos_node = ref "127.0.0.1:8732"
 

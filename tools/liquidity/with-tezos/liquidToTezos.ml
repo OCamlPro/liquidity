@@ -21,54 +21,50 @@ let loc_of_many (l : loc_michelson list) = match l, List.rev l with
   | [], _ | _, [] -> LiquidLoc.noloc
   | first :: _, last :: _ -> LiquidLoc.merge first.loc last.loc
 
-let prim ~loc name args annot =
-  let annot = match annot with
-    | Some s -> Some ("@" ^ s)
-    | None -> None
+let prim ~loc name args var_name =
+  let annots = match var_name with
+    | Some s -> ["@" ^ s]
+    | None -> []
   in
-  Micheline.Prim(loc, name, args, annot)
+  Micheline.Prim(loc, name, args, annots)
 
-let seq ~loc exprs annot =
-  let annot = match annot with
-    | Some s -> Some ("@" ^ s)
-    | None -> None
-  in
-  Micheline.Seq(loc, exprs, annot)
+let seq ~loc exprs =
+  Micheline.Seq(loc, exprs)
 
-let prim_type ~loc name args = Micheline.Prim(loc, name, args, None)
+let prim_type ~loc name args = Micheline.Prim(loc, name, args, [])
 
 let rec convert_const ~loc expr =
   match expr with
   | CInt n -> Micheline.Int (loc, LiquidPrinter.mic_of_integer n)
   | CString s -> Micheline.String (loc, s)
-  | CUnit -> Micheline.Prim(loc, "Unit", [], None)
-  | CBool true -> Micheline.Prim(loc, "True", [], None)
-  | CBool false -> Micheline.Prim(loc, "False", [], None)
-  | CNone -> Micheline.Prim(loc, "None", [], None)
+  | CUnit -> Micheline.Prim(loc, "Unit", [], [])
+  | CBool true -> Micheline.Prim(loc, "True", [], [])
+  | CBool false -> Micheline.Prim(loc, "False", [], [])
+  | CNone -> Micheline.Prim(loc, "None", [], [])
 
-  | CSome x -> Micheline.Prim(loc, "Some", [convert_const ~loc x], None)
-  | CLeft x -> Micheline.Prim(loc, "Left", [convert_const ~loc x], None)
-  | CRight x -> Micheline.Prim(loc, "Right", [convert_const ~loc x], None)
+  | CSome x -> Micheline.Prim(loc, "Some", [convert_const ~loc x], [])
+  | CLeft x -> Micheline.Prim(loc, "Left", [convert_const ~loc x], [])
+  | CRight x -> Micheline.Prim(loc, "Right", [convert_const ~loc x], [])
 
   | CTuple [] -> assert false
   | CTuple [_] -> assert false
   | CTuple [x;y] ->
      Micheline.Prim(loc, "Pair", [convert_const ~loc x;
-                                  convert_const ~loc y], None)
+                                  convert_const ~loc y], [])
   | CTuple (x :: y) ->
      Micheline.Prim(loc, "Pair", [convert_const ~loc x;
-                                  convert_const ~loc (CTuple y)], None)
+                                  convert_const ~loc (CTuple y)], [])
 
   | CList args | CSet args ->
-    Micheline.Seq(loc, List.map (convert_const ~loc) args, None)
+    Micheline.Seq(loc, List.map (convert_const ~loc) args)
 
   | CMap args | CBigMap args ->
      Micheline.Seq(loc,
                       List.map (fun (x,y) ->
                           Micheline.Prim(loc, "Elt", [convert_const ~loc x;
-                                                       convert_const ~loc y], None
+                                                       convert_const ~loc y], []
                                           ))
-                               args, None)
+                               args)
 
   | CNat n -> Micheline.Int (loc, LiquidPrinter.mic_of_integer n)
   | CTez n -> Micheline.Int (loc, LiquidPrinter.mic_mutez_of_tez n)
@@ -131,8 +127,8 @@ let rec convert_code expand expr =
   let convert_type = convert_type ~loc:(expr.loc, None) in
   let convert_const = convert_const ~loc:(expr.loc, None) in
   match expr.ins with
-  | ANNOT a -> seq [] (Some a)
-  | SEQ exprs -> seq (List.map (convert_code expand) exprs) name
+  | RENAME a -> prim "RENAME" [] a
+  | SEQ exprs -> seq (List.map (convert_code expand) exprs)
 
   | FAIL s -> gprim ~loc:(expr.loc, s) "FAIL" [] name
 
@@ -232,7 +228,7 @@ let rec convert_code expand expr =
     let p, s, c = convert_contract_raw expand contract in
     let p = Micheline.map_node (fun l -> l, None) (fun n -> n) p in
     let s = Micheline.map_node (fun l -> l, None) (fun n -> n) s in
-    prim "CREATE_CONTRACT" [seq [p; s; c] None] name
+    prim "CREATE_CONTRACT" [seq [p; s; c]] name
 
   | XOR -> prim "XOR" [] name
   | AND -> prim "AND" [] name
@@ -265,9 +261,9 @@ and convert_contract_raw expand c =
   let arg_type = convert_type ~loc c.contract_sig.parameter in
   let storage_type = convert_type ~loc c.contract_sig.storage in
   let code = convert_code expand c.code in
-  let p = Micheline.Prim(loc, "parameter", [arg_type], None) in
-  let s = Micheline.Prim(loc, "storage", [storage_type], None) in
-  let c = Micheline.Prim((loc, None), "code", [code], None) in
+  let p = Micheline.Prim(loc, "parameter", [arg_type], []) in
+  let s = Micheline.Prim(loc, "storage", [storage_type], []) in
+  let c = Micheline.Prim((loc, None), "code", [code], []) in
   (p, s, c)
 
 let convert_contract ~expand c =

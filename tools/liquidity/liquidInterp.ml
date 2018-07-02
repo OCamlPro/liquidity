@@ -195,8 +195,8 @@ let rec interp contract =
       decompile_seq stack seq code
 
     (* Special case for failwith, annot is before *)
-    | {ins=ANNOT name} :: ({ins=FAIL _} as fail) :: code, _ ->
-      fail.loc_name <- Some name;
+    | {ins=RENAME name} :: ({ins=FAIL _} as fail) :: code, _ ->
+      fail.loc_name <- name;
       let stack, seq = decompile stack seq fail in
       decompile_seq stack seq code
 
@@ -236,7 +236,7 @@ let rec interp contract =
 
   and decompile_aux stack (seq : node) ins =
     match ins.ins, stack with
-    | ANNOT name, _ ->
+    | RENAME (Some name), _ ->
       add_name stack seq name;
       stack, seq
 

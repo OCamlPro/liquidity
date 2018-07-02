@@ -68,9 +68,7 @@ open Error_monad
       let open Data_encoding in
       splitted
         ~json:
-          (describe
-             ~title: "An Ed25519 public key (Base58Check encoded)" @@
-           conv
+           (conv
              (fun s -> Base58.simple_encode b58check_encoding s)
              (fun s ->
                 match Base58.simple_decode b58check_encoding s with
@@ -141,9 +139,7 @@ open Error_monad
       let open Data_encoding in
       splitted
         ~json:
-          (describe
-             ~title: "An Ed25519 secret key (Base58Check encoded)" @@
-           conv
+          (conv
              (fun s -> Base58.simple_encode b58check_encoding s)
              (fun s ->
                 match Base58.simple_decode b58check_encoding s with
@@ -200,9 +196,7 @@ open Error_monad
       let open Data_encoding in
       splitted
         ~json:
-          (describe
-             ~title: "An Ed25519 signature (Base58Check encoded)" @@
-           conv
+          (conv
              (fun s -> Base58.simple_encode b58check_encoding s)
              (fun s ->
                 match Base58.simple_decode b58check_encoding s with

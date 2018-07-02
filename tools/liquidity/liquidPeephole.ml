@@ -44,7 +44,7 @@ let rec simplify_pre ({ ins } as e) =
 and simplify_seq exprs =
   match exprs with
   | [] -> []
-  | ({ins=ANNOT _} as a) :: ({ins=FAIL _} as f):: exprs -> [a; f]
+  | ({ins=RENAME _} as a) :: ({ins=FAIL _} as f):: exprs -> [a; f]
   | e :: exprs ->
     let e = simplify_pre e in
     match e.ins with

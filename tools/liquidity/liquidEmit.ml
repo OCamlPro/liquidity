@@ -19,8 +19,8 @@ let rec emit_code ~expand code =
   let name = code.loc_name in
   let i = i ~loc:code.loc in
   match code.ins with
-  | ANNOT s -> M_INS_ANNOT s
-  | SEQ exprs -> M_INS_EXP ("SEQ", [], List.map (emit_code ~expand) exprs, name)
+  | RENAME name -> M_INS_EXP ("RENAME", [], [], name)
+  | SEQ exprs -> M_INS_EXP ("SEQ", [], List.map (emit_code ~expand) exprs, None)
   | IF (ifthen, ifelse) ->
     M_INS_EXP ("IF", [],
                [emit_code ~expand ifthen; emit_code ~expand ifelse], name)

@@ -285,7 +285,6 @@ module Michelson = struct
 
   let rec bprint_code fmt b indent code =
     match code with
-    | M_INS_ANNOT s -> Printf.bprintf b "{ @%s }" s
     | M_INS (ins, name) -> Printf.bprintf b "%s%s ;" ins (annot name)
     | M_INS_CST (ins,ty,cst,name) ->
        let indent = fmt.increase_indent indent in
@@ -380,11 +379,11 @@ module Michelson = struct
     | None -> ()
 
   let bprint_pre_michelson fmt bprint_arg b name = function
-    | ANNOT a ->
-      Printf.bprintf b "{ @%s }" a;
+    | RENAME name ->
+      Printf.bprintf b "RENAME";
+      bprint_pre_name b name;
     | SEQ args ->
       Printf.bprintf b "{ ";
-      bprint_pre_name b name;
       List.iter (fun a -> bprint_arg fmt b a; Printf.bprintf b " ; ") args;
       Printf.bprintf b " }";
     | DIP (i, a) ->
