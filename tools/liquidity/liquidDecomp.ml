@@ -329,7 +329,9 @@ let rec decompile contract =
                  | "NEG" -> Prim_neg
                  | "EXEC" -> Prim_exec
                  | "INT" -> Prim_int
-                 | "H" -> Prim_hash
+                 | "BLAKE2B" -> Prim_blake2b
+                 | "SHA256" -> Prim_sha256
+                 | "SHA512" -> Prim_sha512
                  | "HASH_KEY" -> Prim_hash_key
                  | "CHECK_SIGNATURE" -> Prim_check
                  | "CREATE_ACCOUNT" -> Prim_create_account

@@ -859,7 +859,9 @@ and typecheck_prim2 env prim loc args =
   | Prim_sender, [ Tunit ] -> Taddress
   | Prim_amount, [ Tunit ] -> Ttez
   | Prim_gas, [ Tunit ] -> Tnat
-  | Prim_hash, [ _ ] -> Tstring
+  | Prim_blake2b, [ Tbytes ] -> Tbytes
+  | Prim_sha256, [ Tbytes ] -> Tbytes
+  | Prim_sha512, [ Tbytes ] -> Tbytes
   | Prim_hash_key, [ Tkey ] -> Tkey_hash
   | Prim_check, [ Tkey; Tsignature; Tbytes ] ->
      Tbool

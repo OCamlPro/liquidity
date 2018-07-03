@@ -548,8 +548,14 @@ module Michelson = struct
       bprint_arg fmt b contract.code;
       Printf.bprintf b " }";
       bprint_pre_name b name;
-    | H ->
-      Printf.bprintf b "H";
+    | BLAKE2B ->
+      Printf.bprintf b "BLAKE2B";
+      bprint_pre_name b name;
+    | SHA256 ->
+      Printf.bprintf b "SHA256";
+      bprint_pre_name b name;
+    | SHA512 ->
+      Printf.bprintf b "SHA512";
       bprint_pre_name b name;
     | HASH_KEY ->
       Printf.bprintf b "HASH_KEY";

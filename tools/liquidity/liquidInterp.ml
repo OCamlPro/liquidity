@@ -605,8 +605,14 @@ let rec interp contract =
     | ADDRESS, x :: stack ->
        let x = node ins.loc (N_PRIM "ADDRESS") [x] [seq] in
        x :: stack, x
-    | H, x :: stack ->
-       let x = node ins.loc (N_PRIM "H") [x] [seq] in
+    | BLAKE2B, x :: stack ->
+       let x = node ins.loc (N_PRIM "BLAKE2B") [x] [seq] in
+       x :: stack, x
+    | SHA256, x :: stack ->
+       let x = node ins.loc (N_PRIM "SHA256") [x] [seq] in
+       x :: stack, x
+    | SHA512, x :: stack ->
+       let x = node ins.loc (N_PRIM "SHA512") [x] [seq] in
        x :: stack, x
     | HASH_KEY, x :: stack ->
        let x = node ins.loc (N_PRIM "HASH_KEY") [x] [seq] in

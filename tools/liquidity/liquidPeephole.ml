@@ -106,9 +106,10 @@ and simplify_step e exprs =
   (* takes one item on stack, creates one :  1 -> 1 *)
   | (CAR | CDR | CDAR _ | CDDR _
     | LE | LT | GE | GT | NEQ | EQ | SOME
-    | ADDRESS | H | NOT | ABS | INT | NEG | LEFT _ | RIGHT _
+    | ADDRESS | NOT | ABS | INT | NEG | LEFT _ | RIGHT _
     | SET_DELEGATE | SIZE | CONTRACT _
     | IMPLICIT_ACCOUNT | HASH_KEY
+    | BLAKE2B | SHA256 | SHA512
     ),
     {ins=DIP_DROP (n,m); loc} :: exprs when n > 0 ->
      simplify_stepi ~loc (DIP_DROP (n,m))
@@ -116,9 +117,10 @@ and simplify_step e exprs =
 
   | (CAR | CDR | CDAR _ | CDDR _
     | LE | LT | GE | GT | NEQ | EQ | SOME
-    | ADDRESS | H | NOT | ABS | INT | NEG | LEFT _ | RIGHT _
+    | ADDRESS | NOT | ABS | INT | NEG | LEFT _ | RIGHT _
     | SET_DELEGATE | SIZE | CONTRACT _
     | IMPLICIT_ACCOUNT | HASH_KEY
+    | BLAKE2B | SHA256 | SHA512
     ),
     {ins=DROP; loc} :: exprs -> lii ~loc DROP :: exprs
 

@@ -450,8 +450,12 @@ let rec convert_code env expr =
       | ty, cst ->
         mic_loc env index annot (PUSH (ty, cst))
     end
-  | Prim(index, "H", [], annot) ->
-    mic_loc env index annot (H)
+  | Prim(index, "BLAKE2B", [], annot) ->
+    mic_loc env index annot (BLAKE2B)
+  | Prim(index, "SHA256", [], annot) ->
+    mic_loc env index annot (SHA256)
+  | Prim(index, "SHA512", [], annot) ->
+    mic_loc env index annot (SHA512)
   | Prim(index, "HASH_KEY", [], annot) ->
     mic_loc env index annot (HASH_KEY)
   | Prim(index, "CHECK_SIGNATURE", [], annot) ->

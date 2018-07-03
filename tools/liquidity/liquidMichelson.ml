@@ -377,7 +377,8 @@ the ending NIL is not annotated with a type *)
       | Prim_set_mem|Prim_Some
       | Prim_concat
       | Prim_create_account
-      | Prim_hash|Prim_hash_key|Prim_check|Prim_default_account|Prim_list_size
+      | Prim_blake2b|Prim_sha256|Prim_sha512
+      | Prim_hash_key|Prim_check|Prim_default_account|Prim_list_size
       | Prim_set_size|Prim_map_size|Prim_or|Prim_and|Prim_xor
       | Prim_not|Prim_abs|Prim_int|Prim_neg|Prim_lsr|Prim_lsl
       | Prim_exec|Prim_Cons|Prim_set_delegate|Prim_address),_ ->
@@ -415,7 +416,9 @@ the ending NIL is not annotated with a type *)
 
          | Prim_address, 1 -> [ ii ADDRESS ]
          | Prim_create_account, 4 -> [ ii CREATE_ACCOUNT; ii PAIR ]
-         | Prim_hash, 1 -> [ ii H ]
+         | Prim_blake2b, 1 -> [ ii BLAKE2B ]
+         | Prim_sha256, 1 -> [ ii SHA256 ]
+         | Prim_sha512, 1 -> [ ii SHA512 ]
          | Prim_hash_key, 1 -> [ ii HASH_KEY ]
          | Prim_check, 3 -> [ ii CHECK_SIGNATURE ]
          | Prim_default_account, 1 -> [ ii IMPLICIT_ACCOUNT ]
@@ -445,7 +448,8 @@ the ending NIL is not annotated with a type *)
            | Prim_set_mem|Prim_Some
            | Prim_concat
            | Prim_create_account
-           | Prim_hash|Prim_hash_key|Prim_check|Prim_default_account|Prim_list_size
+           | Prim_blake2b|Prim_sha256|Prim_sha512
+           | Prim_hash_key|Prim_check|Prim_default_account|Prim_list_size
            | Prim_set_size|Prim_map_size|Prim_or|Prim_and|Prim_xor
            | Prim_not|Prim_abs|Prim_int|Prim_neg|Prim_lsr|Prim_lsl
            | Prim_exec|Prim_Cons|Prim_set_delegate|Prim_address),n ->

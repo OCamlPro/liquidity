@@ -191,7 +191,9 @@ type primitive =
   | Prim_list_rev
 
   | Prim_create_account
-  | Prim_hash
+  | Prim_blake2b
+  | Prim_sha256
+  | Prim_sha512
   | Prim_hash_key
   | Prim_check
   | Prim_default_account
@@ -307,7 +309,9 @@ let () =
               "Account.create", Prim_create_account;
               "Account.default", Prim_default_account;
 
-              "Crypto.hash", Prim_hash;
+              "Crypto.blake2b", Prim_blake2b;
+              "Crypto.sha256", Prim_sha256;
+              "Crypto.sha512", Prim_sha512;
               "Crypto.hash_key", Prim_hash_key;
               "Crypto.check", Prim_check;
 
@@ -667,7 +671,9 @@ type 'a pre_michelson =
   | AMOUNT
   | STEPS_TO_QUOTA
   | CREATE_ACCOUNT
-  | H
+  | BLAKE2B
+  | SHA256
+  | SHA512
   | HASH_KEY
   | CHECK_SIGNATURE
   | ADDRESS
