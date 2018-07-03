@@ -86,7 +86,7 @@ and simplify_step e exprs =
      end
 
   (* takes nothing, add one item on stack : 0 -> 1 *)
-  | (PUSH _ | NOW | BALANCE | SELF | SOURCE | AMOUNT | STEPS_TO_QUOTA
+  | (PUSH _ | NOW | BALANCE | SELF | SOURCE | SENDER | AMOUNT | STEPS_TO_QUOTA
      | LAMBDA _
     ),
     {ins=DIP_DROP (n,m); loc} :: exprs ->
@@ -105,18 +105,20 @@ and simplify_step e exprs =
 
   (* takes one item on stack, creates one :  1 -> 1 *)
   | (CAR | CDR | CDAR _ | CDDR _
-     | LE | LT | GE | GT | NEQ | EQ | SOME
-     | ADDRESS | H | NOT | ABS | INT | NEG | LEFT _ | RIGHT _
-     | EDIV | LSL | LSR | SET_DELEGATE
+    | LE | LT | GE | GT | NEQ | EQ | SOME
+    | ADDRESS | H | NOT | ABS | INT | NEG | LEFT _ | RIGHT _
+    | SET_DELEGATE | SIZE | CONTRACT _
+    | IMPLICIT_ACCOUNT | HASH_KEY
     ),
     {ins=DIP_DROP (n,m); loc} :: exprs when n > 0 ->
      simplify_stepi ~loc (DIP_DROP (n,m))
                    (simplify_step e exprs)
 
   | (CAR | CDR | CDAR _ | CDDR _
-     | LE | LT | GE | GT | NEQ | EQ | SOME
-     | ADDRESS | H | NOT | ABS | INT | NEG | LEFT _ | RIGHT _
-     | EDIV | LSL | LSR | SET_DELEGATE
+    | LE | LT | GE | GT | NEQ | EQ | SOME
+    | ADDRESS | H | NOT | ABS | INT | NEG | LEFT _ | RIGHT _
+    | SET_DELEGATE | SIZE | CONTRACT _
+    | IMPLICIT_ACCOUNT | HASH_KEY
     ),
     {ins=DROP; loc} :: exprs -> lii ~loc DROP :: exprs
 
@@ -124,7 +126,7 @@ and simplify_step e exprs =
   (* takes two items on stack, creates one : 2 -> 1 *)
   | (PAIR | ADD | SUB | COMPARE | GET | CONCAT | MEM
      | CONS | EXEC
-     | OR | AND | XOR | MUL),
+     | OR | AND | XOR | MUL | EDIV | LSL | LSR ),
     {ins=DIP_DROP (n,m); loc} :: exprs when n > 0 ->
      simplify_stepi ~loc (DIP_DROP (n+1,m))
                    (simplify_step e exprs)
