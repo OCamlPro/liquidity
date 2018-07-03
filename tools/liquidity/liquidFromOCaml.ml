@@ -141,6 +141,7 @@ let rec translate_type env ?expected typ =
   | { ptyp_desc = Ptyp_constr ({ txt = Lident "nat" }, []) } -> Tnat
   | { ptyp_desc = Ptyp_constr ({ txt = Lident "tez" }, []) } -> Ttez
   | { ptyp_desc = Ptyp_constr ({ txt = Lident "string" }, []) } -> Tstring
+  | { ptyp_desc = Ptyp_constr ({ txt = Lident "bytes" }, []) } -> Tbytes
   | { ptyp_desc = Ptyp_constr ({ txt = Lident "timestamp" }, []) } -> Ttimestamp
   | { ptyp_desc = Ptyp_constr ({ txt = Lident "key" }, []) } -> Tkey
   | { ptyp_desc = Ptyp_constr ({ txt = Lident "key_hash" }, []) } -> Tkey_hash
@@ -285,9 +286,9 @@ let rec translate_const env exp =
   | { pexp_desc = Pexp_constant (Pconst_integer (s, Some '\233')) } ->
      CKey_hash s, Some Tkey_hash
 
-  (* Contract *)
+  (* Address *)
   | { pexp_desc = Pexp_constant (Pconst_integer (s, Some '\236')) } ->
-     CContract s, None
+     CAddress s, Some Taddress
 
   (* Key *)
   | { pexp_desc = Pexp_constant (Pconst_integer (s, Some '\234')) } ->
@@ -296,6 +297,10 @@ let rec translate_const env exp =
   (* Signature *)
   | { pexp_desc = Pexp_constant (Pconst_integer (s, Some '\235')) } ->
      CSignature s, Some Tsignature
+
+  (* Bytes *)
+  | { pexp_desc = Pexp_constant (Pconst_integer (s, Some '\237')) } ->
+     CBytes s, Some Tbytes
 
   | { pexp_desc = Pexp_constant (Pconst_string (s, None)) } ->
      CString s, Some Tstring
@@ -1421,6 +1426,7 @@ let predefined_types =
                    "nat", Tunit;
                    "tez", Tunit;
                    "string", Tunit;
+                   "bytes", Tunit;
                    "key", Tunit;
                    "signature", Tunit;
                    "option", Tunit;

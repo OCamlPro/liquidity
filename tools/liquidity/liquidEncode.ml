@@ -170,7 +170,7 @@ let rec encode_type ty =
   (* else *)
   match ty with
   | Ttez | Tunit | Ttimestamp | Tint | Tnat | Tbool | Tkey | Tkey_hash
-  | Tsignature | Tstring | Toperation | Taddress | Tfail -> ty
+  | Tsignature | Tstring | Tbytes | Toperation | Taddress | Tfail -> ty
   | Ttuple tys ->
     let tys' = List.map encode_type tys in
     if List.for_all2 (==) tys tys' then ty
@@ -221,7 +221,7 @@ and encode_sum_type cstys =
 let rec has_big_map = function
   | Tbigmap (_t1, _t2) -> true
   | Ttez | Tunit | Ttimestamp | Tint | Tnat | Tbool | Tkey | Tkey_hash
-  | Tsignature | Tstring | Toperation | Taddress | Tfail -> false
+  | Tsignature | Tstring | Tbytes | Toperation | Taddress | Tfail -> false
   | Ttuple tys ->
     List.exists has_big_map tys
   | Tset t | Tlist t | Toption t | Tcontract t -> has_big_map t
@@ -259,7 +259,8 @@ let encode_return_type env ty =
 
 let rec encode_const env c = match c with
   | CUnit | CBool _ | CInt _ | CNat _ | CTez _ | CTimestamp _ | CString _
-  | CKey _ | CContract _ | CSignature _ | CNone  | CKey_hash _ | CAddress _ -> c
+  | CBytes _ | CKey _ | CContract _ | CSignature _ | CNone  | CKey_hash _
+  | CAddress _ -> c
 
   | CSome x -> CSome (encode_const env x)
   | CLeft x -> CLeft (encode_const env x)

@@ -104,7 +104,7 @@ let error_prim loc prim args expected_args =
     List.iteri (fun i (arg, expected) ->
         if arg <> expected then
           error loc
-                "Primitive %s, argument %d:\nExpected type:%sProvided type:%s"
+                "Primitive %s, argument %d:\nExpected type:%s\nProvided type:%s"
                 prim (i+1)
                 (LiquidPrinter.Liquid.string_of_type expected)
                 (LiquidPrinter.Liquid.string_of_type arg)
@@ -861,10 +861,10 @@ and typecheck_prim2 env prim loc args =
   | Prim_gas, [ Tunit ] -> Tnat
   | Prim_hash, [ _ ] -> Tstring
   | Prim_hash_key, [ Tkey ] -> Tkey_hash
-  | Prim_check, [ Tkey; Tsignature; Tstring ] ->
+  | Prim_check, [ Tkey; Tsignature; Tbytes ] ->
      Tbool
   | Prim_check, _ ->
-     error_prim loc Prim_check args [Tkey; Tsignature; Tstring]
+     error_prim loc Prim_check args [Tkey; Tsignature; Tbytes]
 
   | Prim_address, [ Tcontract _ ] ->
      Taddress
@@ -958,6 +958,7 @@ let rec type_of_const = function
   | CTez _ -> Ttez
   | CTimestamp _ -> Ttimestamp
   | CString _ -> Tstring
+  | CBytes _ -> Tbytes
   | CKey _ -> Tkey
   | CSignature _ -> Tsignature
   | CAddress _ -> Taddress
@@ -1006,8 +1007,17 @@ let check_const_type ?(from_mic=false) ~to_tez loc ty cst =
     | Ttez, CTez s -> CTez s
 
     | Tkey, CKey s -> CKey s
+
     | Tkey_hash, CKey_hash s -> CKey_hash s
+
     | Tcontract _, CContract s -> CContract s
+    | Tcontract _, CAddress s -> CAddress s
+    | Tcontract Tunit, CKey_hash s -> CKey_hash s
+
+    | Taddress, CAddress s -> CAddress s
+    | Taddress, CContract s -> CContract s
+    | Taddress, CKey_hash s -> CKey_hash s
+
     | Ttimestamp, CTimestamp s -> CTimestamp s
     | Tsignature, CSignature s -> CSignature s
 

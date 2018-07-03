@@ -123,6 +123,7 @@ module Michelson = struct
       | Tnat -> Printf.bprintf b "nat"
       | Ttez -> Printf.bprintf b "mutez"
       | Tstring -> Printf.bprintf b "string"
+      | Tbytes -> Printf.bprintf b "bytes"
       | Ttimestamp  -> Printf.bprintf b "timestamp"
       | Tkey  -> Printf.bprintf b "key"
       | Tkey_hash  -> Printf.bprintf b "key_hash"
@@ -208,6 +209,7 @@ module Michelson = struct
   let rec bprint_const fmt b indent cst =
     match cst with
     | CString s -> Printf.bprintf b "%S" s
+    | CBytes s -> Printf.bprintf b "%s" s
     | CKey s -> Printf.bprintf b "%S" s
     | CKey_hash s -> Printf.bprintf b "%S" s
     | CContract s -> Printf.bprintf b "%S" s
@@ -660,6 +662,7 @@ module Liquid = struct
       | Tnat -> Printf.bprintf b "nat"
       | Ttez -> Printf.bprintf b "tez"
       | Tstring -> Printf.bprintf b "string"
+      | Tbytes -> Printf.bprintf b "bytes"
       | Ttimestamp  -> Printf.bprintf b "timestamp"
       | Tkey  -> Printf.bprintf b "key"
       | Tkey_hash  -> Printf.bprintf b "key_hash"
@@ -773,6 +776,7 @@ module Liquid = struct
   let rec bprint_const b indent cst =
     match cst with
     | CString s -> Printf.bprintf b "%S" s
+    | CBytes s -> Printf.bprintf b "%s" s
     | CKey s -> Printf.bprintf b "%s" s
     | CKey_hash s -> Printf.bprintf b "%s" s
     | CContract s -> Printf.bprintf b "%s" s

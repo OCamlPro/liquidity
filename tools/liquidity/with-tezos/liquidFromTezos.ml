@@ -272,6 +272,7 @@ let rec convert_type env expr =
     | Prim(_, "key_hash", [], _debug) -> Tkey_hash
     | Prim(_, "signature", [], _debug) -> Tsignature
     | Prim(_, "string", [], _debug) -> Tstring
+    | Prim(_, "bytes", [], _debug) -> Tbytes
     | Prim(_, "operation", [], _debug) -> Toperation
     | Prim(_, "address", [], _debug) -> Taddress
     (* | Prim(_, "pair", [

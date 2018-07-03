@@ -1,7 +1,8 @@
 
 type storage = {
   key : key;
-  hash : string;
+  hash : bytes;
+  c : unit contract;
   }
 
 let%entry main
@@ -14,7 +15,9 @@ let%entry main
   if key_hash =
     Crypto.hash_key edpkuTXkJDGcFd5nh6VvMz8phXxU3Bi7h6hqgywNFi1vZTfQNnS1RV then
     Current.failwith ();
-  let delegate = Contract.sender () in
+  let kc = (tz1KqTpEZ7Yob7QbPE4Hy4Wo8fHG8LhKxZSx : unit contract) in
+  let storage = storage.c <- kc in
+  let delegate = Some key_hash in
   let spendable = Crypto.check storage.key parameter storage.hash in
   let amount = Current.amount () in
   let amount = match amount / 2p with

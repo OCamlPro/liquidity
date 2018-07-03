@@ -157,6 +157,10 @@ let clean_ast env syntax_ast =
          Exp.apply ~loc (exp_ident ~loc "Signature.of_string")
                    [Nolabel, exp_string ~loc s]
 
+      | Pexp_constant (Pconst_integer (s, Some '\237'))
+        ->
+         exp_string ~loc s
+
       | Pexp_constant (
                   Pconst_float (s, Some '\231')
               )

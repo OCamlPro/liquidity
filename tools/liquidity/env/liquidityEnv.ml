@@ -11,7 +11,8 @@
 file that has been correctly typechecked by the `liquidity`
 typechecker.  *)
 
-exception Fail
+type failure = Failure : 'a -> failure
+exception Fail of failure
 
 type integer =
   Int of Z.t
@@ -20,6 +21,7 @@ type integer =
 type timestamp = integer
 type tez = integer
 type nat = integer
+type bytes = string
 
 type key = Key of string
 type key_hash = Key_hash of string
@@ -88,7 +90,7 @@ module Current : sig
 
   val amount : unit -> tez
   val fail : unit -> 'a
-  val failwith : string -> 'a
+  val failwith : 'a -> 'b
   val time : unit -> timestamp
   val balance : unit -> tez
   val gas : unit -> tez (* NOT TESTED *)
@@ -98,8 +100,8 @@ module Current : sig
 end = struct
 
   let amount () = Tez (Z.of_int 100)
-  let fail () = raise Fail
-  let failwith s = failwith s
+  let failwith (type a) (x:a) = raise (Fail (Failure x))
+  let fail () = failwith ()
   let time () = Timestamp (Z.of_float (Unix.gettimeofday ()))
   let balance () = assert false (* TODO *)
   let gas () = assert false

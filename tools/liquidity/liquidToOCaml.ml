@@ -80,6 +80,7 @@ let rec convert_type ~abbrev ?name ty =
   | Tkey_hash -> typ_constr "key_hash" []
   | Tsignature -> typ_constr "signature" []
   | Tstring -> typ_constr "string" []
+  | Tbytes -> typ_constr "bytes" []
   | Toperation -> typ_constr "operation" []
   | Taddress -> typ_constr "address" []
   | Tsum (name, _)
@@ -90,7 +91,7 @@ let rec convert_type ~abbrev ?name ty =
     with Not_found ->
     let caml_ty, t_name = match ty with
     | Ttez | Tunit | Ttimestamp | Tint | Tnat | Tbool
-    | Tkey | Tkey_hash | Tsignature | Tstring | Toperation | Taddress
+    | Tkey | Tkey_hash | Tsignature | Tstring | Tbytes | Toperation | Taddress
     | Tfail | Trecord _ | Tsum _ -> assert false
     | Ttuple args ->
       Typ.tuple (List.map (convert_type ~abbrev) args), "pair_t"
@@ -153,6 +154,7 @@ let rec convert_const expr =
   | CSignature n -> Exp.constant (Pconst_integer (n, Some '\235'))
   | CContract n -> Exp.constant (Pconst_integer (n, Some '\236'))
   | CAddress n -> Exp.constant (Pconst_integer (n, Some '\236'))
+  | CBytes n -> Exp.constant (Pconst_integer (n, Some '\237'))
 
   | CList [] -> Exp.construct (lid "[]") None
   | CList (head :: tail) ->
@@ -232,7 +234,6 @@ let rec convert_code ~abbrev expr =
       | Ttez
       | Tbool
       | Tsignature
-      | Taddress
       | Toperation
       | Tkey
       | Tkey_hash -> convert_const cst

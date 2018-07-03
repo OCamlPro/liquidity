@@ -25,6 +25,7 @@ let keyhash_char = '\233'
 let key_char = '\234'
 let signature_char = '\235'
 let contract_char = '\236'
+let bytes_char = '\237'
 
 open Lexing
 open Misc
@@ -323,25 +324,28 @@ let symbolchar =
   ['!' '$' '%' '&' '*' '+' '-' '.' '/' ':' '<' '=' '>' '?' '@' '^' '|' '~']
 let decimal_literal =
   ['0'-'9'] ['0'-'9' '_']*
-let hex_literal =
-  '0' ['x' 'X'] ['0'-'9' 'A'-'F' 'a'-'f']['0'-'9' 'A'-'F' 'a'-'f' '_']*
+(* let hex_literal =
+ *   '0' ['x' 'X'] ['0'-'9' 'A'-'F' 'a'-'f']['0'-'9' 'A'-'F' 'a'-'f' '_']* *)
 let oct_literal =
   '0' ['o' 'O'] ['0'-'7'] ['0'-'7' '_']*
 let bin_literal =
   '0' ['b' 'B'] ['0'-'1'] ['0'-'1' '_']*
 let int_literal =
-  decimal_literal | hex_literal | oct_literal | bin_literal
+  decimal_literal (* | hex_literal *) | oct_literal | bin_literal
 let base58_char =
   ['1'-'9' 'A'-'H' 'J'-'N' 'P'-'Z' 'a'-'k' 'm'-'z' ]
 let keyhash_literal =
-  "tz1" base58_char* (* 36 *)
+  ("tz1" | "tz2" | "tz3") base58_char* (* 36 *)
 let contract_literal =
-  "TZ1" base58_char* (* 36 *)
+  "KT1" base58_char* (* 36 *)
 let key_literal =
-  "edpk" base58_char* (* 54 *)
+  ("edpk" | "sppk" | "p2pk")  base58_char* (* 54 *)
 let signature_literal =
-  "edsig" base58_char* (* 99 *)
+  ("edsig" | "spsig1") base58_char* (* 99 *)
+let p2_signature_literal =
+  "p2sig" base58_char* (* 98 *)
 let hex_byte_literal = ['0'-'9' 'A'-'F' 'a'-'f'] ['0'-'9' 'A'-'F' 'a'-'f']
+let bytes_literal = "0x" hex_byte_literal*
 let hex_signature_literal = '`' hex_byte_literal+
 let digit = [ '0'-'9']
 let day_literal =
@@ -416,8 +420,7 @@ rule token = parse
             LIDENT s
           end
       }
-  (* Disabled, tezos does not support edsig *)
-  (* | signature_literal
+  | signature_literal
       {
         let s = Lexing.lexeme lexbuf in
         if String.length s = 99 then
@@ -426,17 +429,21 @@ rule token = parse
             (* TODO warning *)
             LIDENT s
           end
-      } *)
-  | hex_signature_literal
+      }
+  | p2_signature_literal
       {
         let s = Lexing.lexeme lexbuf in
-        let l = String.length s - 1 in
-        if l = 128 then
-          INT (String.sub s 1 l, Some signature_char)
+        if String.length s = 98 then
+          INT (s, Some signature_char)
         else begin
             (* TODO warning *)
-          INT ("0x"^String.sub s 1 l, None)
+            LIDENT s
           end
+      }
+  | bytes_literal
+      {
+        let s = Lexing.lexeme lexbuf in
+        INT (s, Some bytes_char)
       }
   | date_literal
       { let date = Lexing.lexeme lexbuf in

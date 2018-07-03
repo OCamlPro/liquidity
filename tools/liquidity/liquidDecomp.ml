@@ -20,6 +20,7 @@ let const_name_of_datatype = function
   | Tnat -> "n"
   | Ttez -> "amount"
   | Tstring -> "s"
+  | Tbytes -> "by"
   | Ttimestamp -> "time"
   | Tkey -> "key"
   | Tkey_hash -> "key_hash"

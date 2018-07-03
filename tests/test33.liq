@@ -8,4 +8,5 @@ let%entry main
 
   let e1 = parameter / storage.q in
   let e2 = parameter / parameter in
-  ([] : operation list), storage.res <- (e1, e2)
+  let storage = storage.res <- (e1, e2) in
+  ([] : operation list), storage

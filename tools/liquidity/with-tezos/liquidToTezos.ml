@@ -96,6 +96,7 @@ let rec convert_type ~loc expr =
   | Tkey_hash -> prim_type ~loc "key_hash" []
   | Tsignature -> prim_type ~loc "signature" []
   | Tstring -> prim_type ~loc "string" []
+  | Tbytes -> prim_type ~loc "bytes" []
   | Toperation -> prim_type ~loc "operation" []
   | Taddress -> prim_type ~loc "address" []
   | Ttuple [x] -> assert false

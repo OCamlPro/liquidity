@@ -24,6 +24,7 @@ type const =
   | CTez of tez
   | CTimestamp of string
   | CString of string
+  | CBytes of string
   | CKey of string
   | CSignature of string
   | CTuple of const list
@@ -54,6 +55,7 @@ type const =
   | Tnat
   | Ttez
   | Tstring
+  | Tbytes
   | Ttimestamp
   | Tkey
   | Tkey_hash
@@ -90,6 +92,7 @@ let comparable_type = function
   | Tnat
   | Ttez
   | Tstring
+  | Tbytes
   | Ttimestamp
   | Tkey_hash
   | Taddress -> true
@@ -97,7 +100,7 @@ let comparable_type = function
 
 let rec type_contains_operation = function
   | Toperation -> true
-  | Tunit | Tbool | Tint | Tnat | Ttez | Tstring
+  | Tunit | Tbool | Tint | Tnat | Ttez | Tstring | Tbytes
   | Ttimestamp | Tkey | Tkey_hash | Tsignature | Taddress | Tfail -> false
   | Ttuple l -> List.exists type_contains_operation l
   | Tcontract ty | Toption ty | Tlist ty | Tset ty -> type_contains_operation ty

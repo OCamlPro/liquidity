@@ -22,15 +22,16 @@ let rec default_const = function
   | Tnat -> CNat (LiquidPrinter.integer_of_int 0)
   | Ttez -> CTez (LiquidPrinter.tez_of_liq "0")
   | Tstring -> CString ""
+  | Tbytes -> CBytes "0x"
   | Ttimestamp -> CTimestamp "1970-01-01T00:00:00Z"
   | Tkey -> CKey "edpkuit3FiCUhd6pmqf9ztUTdUs1isMTbF9RBGfwKk1ZrdTmeP9ypN"
   | Tkey_hash -> CKey_hash "tz1YLtLqD1fWHthSVHPD116oYvsd4PTAHUoc"
   | Tsignature ->
     CSignature
-      "96c724f3eab3da9eb0002caa5456aef9a7c716e6d6d20c07f3b3659369e7dcf5\
-       b66a5a8c33dac317fba6174217140b919493acd063c3800b825890a557c39e0a"
-  | Tcontract _ -> CContract "TZ1tPz6tdaY2XN9ZzpDQu9nFTCX22GivUDR7"
-  | Taddress -> CAddress "TZ1tPz6tdaY2XN9ZzpDQu9nFTCX22GivUDR7"
+      "edsigthTzJ8X7MPmNeEwybRAvdxS1pupqcM5Mk4uCuyZAe7uEk\
+       68YpuGDeViW8wSXMr Ci5CwoNgqs8V2w8ayB5dMJzrYCHhD8C7"
+  | Tcontract _ -> CContract "KT1GE2AZhazRxGsAjRVkQccHcB2pvANXQWd7"
+  | Taddress -> CAddress "KT1GE2AZhazRxGsAjRVkQccHcB2pvANXQWd7"
   | Ttuple l ->
     CTuple (List.map default_const l)
   | Toption ty -> CSome (default_const ty)
