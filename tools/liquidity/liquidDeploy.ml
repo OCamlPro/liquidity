@@ -33,7 +33,7 @@ type stack_item =
 type trace_item = {
   loc : location option;
   gas : int;
-  stack : stack_item list;
+  stack : (stack_item * string option) list;
 }
 
 type trace = trace_item array
@@ -412,10 +412,20 @@ let memo_stack_code e =
     Hashtbl.add memo_stack_code_tbl e cpt;
     cpt
 
+let name_of_var_annot = function
+  | None -> None
+  | Some annot ->
+    try Scanf.sscanf annot "@%s" (function
+        | "" -> None
+        | s -> Some s
+      )
+    with Scanf.Scan_failure _ | End_of_file -> None
+
 let convert_stack env stack_expr =
-  List.map (fun e ->
-      try StackConst (LiquidFromTezos.convert_const_notype env e)
-      with _ -> StackCode (memo_stack_code e)
+  List.map (fun (e, annot) ->
+      let name = name_of_var_annot annot in
+      try StackConst (LiquidFromTezos.convert_const_notype env e), name
+      with _ -> StackCode (memo_stack_code e), name
     ) stack_expr
 
 let run_pre ?(debug=false)
@@ -433,10 +443,6 @@ let run_pre ?(debug=false)
     "input", input_json;
     "storage", storage_json;
     "amount", Printf.sprintf "%S" !LiquidOptions.amount;
-    "contract",
-    match source with
-    | None -> "\"TZ1tPz6tdaY2XN9ZzpDQu9nFTCX22GivUDR7\"" (* XXX dummy *)
-    | Some source -> Printf.sprintf "%S" source
   ] in
   let run_json = mk_json_obj run_fields in
   send_post ~loc_table ~data:run_json
@@ -482,7 +488,11 @@ let run_pre ?(debug=false)
                       |> Ezjsonm.get_string |> int_of_string in
             let stack =
               Ezjsonm.find step ["stack"]
-              |> Ezjsonm.get_list LiquidToTezos.const_of_ezjson
+              |> Ezjsonm.get_list (fun s ->
+                  Ezjsonm.find s ["item"] |> LiquidToTezos.const_of_ezjson,
+                  try Some (Ezjsonm.find s ["annot"] |> Ezjsonm.get_string)
+                  with Not_found -> None
+                )
             in
             (loc, gas, stack)
           ) trace_r)
@@ -558,6 +568,8 @@ let get_json_string s =
 
 let get_json_int s =
   try Scanf.sscanf s "%d" (fun x -> x)
+  with _ ->
+  try Scanf.sscanf s "\"%d\"" (fun x -> x)
   with _ -> raise Not_found
 
 let get_counter source =
@@ -741,7 +753,7 @@ let forge_deploy ?head ?source ?public_key
     "kind", "\"origination\"";
     "source", Printf.sprintf "%S" source;
     "fee", Printf.sprintf "%S" !LiquidOptions.fee;
-    "counter", string_of_int counter;
+    "counter", Printf.sprintf "\"%d\"" counter;
     "gas_limit", Printf.sprintf "%S" !LiquidOptions.gas_limit;
     "storage_limit", Printf.sprintf "%S" !LiquidOptions.storage_limit;
     "managerPubkey", Printf.sprintf "%S" source;
@@ -758,7 +770,7 @@ let forge_deploy ?head ?source ?public_key
         "kind", "\"reveal\"";
         "source", Printf.sprintf "%S" source;
         "fee", "\"0\"";
-        "counter", string_of_int counter;
+        "counter", Printf.sprintf "\"%d\"" counter;
         "gas_limit", "\"20\"";
         "storage_limit", "\"0\"";
         "public_key", Printf.sprintf "%S" edpk;
@@ -898,7 +910,7 @@ let forge_call ?head ?source ?public_key liquid address parameter_string =
     "kind", "\"transaction\"";
     "source", Printf.sprintf "%S" source;
     "fee", Printf.sprintf "%S" !LiquidOptions.fee;
-    "counter", string_of_int counter;
+    "counter", Printf.sprintf "\"%d\"" counter;
     "gas_limit", Printf.sprintf "%S" !LiquidOptions.gas_limit;
     "storage_limit", Printf.sprintf "%S" !LiquidOptions.storage_limit;
     "amount", Printf.sprintf "%S" !LiquidOptions.amount;
@@ -913,7 +925,7 @@ let forge_call ?head ?source ?public_key liquid address parameter_string =
         "kind", "\"reveal\"";
         "source", Printf.sprintf "%S" source;
         "fee", "\"0\"";
-        "counter", string_of_int counter;
+        "counter", Printf.sprintf "\"%d\"" counter;
         "gas_limit", "\"20\"";
         "storage_limit", "\"0\"";
         "public_key", Printf.sprintf "%S" edpk;
@@ -968,7 +980,7 @@ let reveal sk =
     "kind", "\"reveal\"";
     "source", Printf.sprintf "%S" source;
     "fee", "\"0\"";
-    "counter", string_of_int counter;
+    "counter", Printf.sprintf "\"%d\"" counter;
     "gas_limit", "\"20\"";
     "storage_limit", "\"0\"";
     "public_key", Printf.sprintf "%S" public_key;

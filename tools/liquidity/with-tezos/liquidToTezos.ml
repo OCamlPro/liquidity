@@ -221,8 +221,8 @@ let rec convert_code expand expr =
     if expand then
       convert_code expand @@ ii @@
       SEQ [
-        ii @@ DIP(1, ii @@ SEQ [ii @@ DUP(n-1)]);
-        { expr with ins = SWAP }
+        ii @@ DIP(1, ii @@ SEQ [{ expr with ins = DUP(n-1) }]);
+        ii SWAP
       ]
     else
       prim (Printf.sprintf "D%sP" (String.make n 'U')) [] name

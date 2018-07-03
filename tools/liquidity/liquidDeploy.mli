@@ -29,7 +29,7 @@ type stack_item =
 type trace_item = {
   loc : LiquidTypes.location option;
   gas : int;
-  stack : stack_item list;
+  stack : (stack_item * string option) list;
 }
 
 type trace = trace_item array
