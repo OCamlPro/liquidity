@@ -55,13 +55,6 @@ let sanitize_opt = function
   | Some s -> Some (sanitize_name s)
   | None -> None
 
-let encode_failwith_param s =
-  let codes = Array.make (String.length s) "" in
-  String.iteri (fun i c ->
-      codes.(i) <- Printf.sprintf "%02x" (Char.code c)
-    ) s;
-  String.concat "" ("x" :: Array.to_list codes)
-
 (* n = size of preserved head of stack *)
 let drop_stack ~loc n depth =
   if depth = 0 then [] else

@@ -242,7 +242,18 @@ let name_of_annots annots =
       with Scanf.Scan_failure _ | End_of_file -> ()
     ) annots;
     None
-  with Found s -> Some s
+  with
+  | Found "" -> None
+  | Found s -> Some s
+
+let sanitize_name s =
+  if List.mem s reserved_keywords || has_reserved_prefix s then
+    s ^ "_"
+  else if String.length s > 0 then
+    match s.[0] with
+    | 'A' .. 'Z' -> "_" ^ s
+    | _ -> s
+  else s
 
 let type_name_of_annots annots =
   let exception Found of string in
@@ -254,7 +265,9 @@ let type_name_of_annots annots =
       with Scanf.Scan_failure _ | End_of_file -> ()
     ) annots;
     None
-  with Found s -> Some s
+  with
+  | Found "" -> None
+  | Found s -> Some (sanitize_name s)
 
 let rec convert_type env expr =
   let name = match expr with

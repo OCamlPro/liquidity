@@ -26,10 +26,9 @@ type bytes = string
 type key = Key of string
 type key_hash = Key_hash of string
 type signature = Signature of string
-
-type 'arg contract
+type 'a contract = Contract of string
+type address = Address of string
 type operation
-type address
 
 module Signature : sig
   val of_string : string -> signature
@@ -47,6 +46,12 @@ module Key_hash : sig
   val of_string : string -> key_hash
   end = struct
   let of_string s = Key_hash s
+end
+
+module Address : sig
+  val of_string : string -> address
+  end = struct
+  let of_string s = Address s
 end
 
 module Tez : sig
@@ -526,6 +531,8 @@ end
 
 module Contract : sig
 
+  val of_string : string -> 'a contract
+
   val call : 'arg contract -> tez -> 'arg -> operation
 
   val manager : 'a -> 'b
@@ -535,6 +542,7 @@ module Contract : sig
                operation * 'a contract
 end = struct
 
+  let of_string s = Contract s
   let call contract amount arg = assert false (* TODO *)
   let manager _contract = assert false (* TODO *)
   let create _manager _delegate

@@ -25,7 +25,7 @@ let node loc kind args prevs =
 
 let mic_loc loc ins = { loc; ins; loc_name = None }
 
-let unsanitize_name s =
+let unsanitize_gen_name s =
   let len = String.length s in
   let b = Buffer.create len in
   let rec aux s i =
@@ -35,6 +35,11 @@ let unsanitize_name s =
         Buffer.add_char b s.[i];
         aux s (i+1)
       in
+      if s.[i] = '.' then begin
+        Buffer.add_char b '_';
+        aux s (i+1)
+      end
+      else
       if s.[i] = '_' && len - i >= 6 then
         if s.[i+1] = 'p' && s.[i+2] = 'r' && s.[i+3] = 'i'
            && s.[i+4] = 'm' && s.[i+5] = '_' then begin
@@ -51,7 +56,7 @@ let unsanitize_name s =
             end
             else *)
             if s.[i+2] = 'l' && s.[i+3] = 'a' && s.[i+4] = 's'
-                    && s.[i+5] = 'h'  && s.[i+6] = '_' then begin
+               && s.[i+5] = 'h'  && s.[i+6] = '_' then begin
               Buffer.add_char b '/';
               aux s (i+7)
             end else next ()
@@ -60,6 +65,16 @@ let unsanitize_name s =
       else next ()
   in
   aux s 0
+
+let unsanitize_name s =
+  let s = unsanitize_gen_name s in
+  if List.mem s reserved_keywords || has_reserved_prefix s then
+    s ^ "_"
+  else if String.length s > 0 then
+    match s.[0] with
+    | 'A' .. 'Z' -> "_" ^ s
+    | _ -> s
+  else s
 
 let fprint_stack msg fmt stack =
   Format.fprintf fmt "Stack %s:\n" msg;

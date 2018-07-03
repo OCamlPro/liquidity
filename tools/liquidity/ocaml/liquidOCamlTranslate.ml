@@ -142,6 +142,22 @@ let clean_ast env syntax_ast =
          Exp.apply ~loc (exp_ident ~loc "Timestamp.of_string")
                    [Nolabel, exp_string ~loc s]
 
+      | Pexp_constraint (
+          { pexp_desc = Pexp_constant (Pconst_integer (s, Some '\233')) },
+          { ptyp_desc = Ptyp_constr ({ txt = Lident "address" }, [])}
+        )
+        ->
+         Exp.apply ~loc (exp_ident ~loc "Address.of_string")
+                   [Nolabel, exp_string ~loc s]
+
+      | Pexp_constraint (
+          { pexp_desc = Pexp_constant (Pconst_integer (s, Some '\233')) },
+          { ptyp_desc = Ptyp_constr ({ txt = Lident "contract" }, [_])}
+        )
+        ->
+         Exp.apply ~loc (exp_ident ~loc "Contract.of_string")
+                   [Nolabel, exp_string ~loc s]
+
       | Pexp_constant (Pconst_integer (s, Some '\233'))
         ->
          Exp.apply ~loc (exp_ident ~loc "Key_hash.of_string")

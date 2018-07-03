@@ -15,8 +15,8 @@ let%entry main
   if key_hash =
     Crypto.hash_key edpkuTXkJDGcFd5nh6VvMz8phXxU3Bi7h6hqgywNFi1vZTfQNnS1RV then
     Current.failwith ();
-  let kc = (tz1KqTpEZ7Yob7QbPE4Hy4Wo8fHG8LhKxZSx : unit contract) in
-  let storage = storage.c <- kc in
+  let option = (tz1KqTpEZ7Yob7QbPE4Hy4Wo8fHG8LhKxZSx : unit contract) in
+  let storage = storage.c <- option in
   let delegate = Some key_hash in
   let spendable = Crypto.check storage.key parameter storage.hash in
   let amount = Current.amount () in

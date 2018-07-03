@@ -893,3 +893,27 @@ let dummy_syntax_contract : syntax_contract = {
 type warning =
   | Unused of string
   | UnusedMatched of string
+
+let reserved_keywords = [
+  "let"; "in"; "match" ; "int"; "bool"; "string"; "bytes";
+  "get"; "set"; "tuple"; "with"; "fun"; "or"; "and"; "land";
+  "lor"; "xor"; "not"; "lsl"; "lsr"; "lxor"; "abs"; "type";
+]
+
+let has_reserved_prefix s =
+  (* [
+  "tz1"; "tz2"; "tz3" ;
+  "edpk"; "sppk"; "p2pk";
+  "edsig"; "spsig1"; "p2sig";
+     ] *)
+  let len = String.length s in
+  len >= 3 &&
+  match s.[0], s.[1], s.[2] with
+  | 't', 'z', ('1' | '2' | '3') -> true
+  | 'e', 'd', 'p'
+  | 's', 'p', 'p'
+  | 'p', '2', 'p' -> len >= 4 && s.[3] = 'k'
+  | 'e', 'd', 's'
+  | 'p', '2', 's' -> len >= 5 && s.[3] = 'i' && s.[4] = 'g'
+  | 's', 'p', 's' -> len >= 6 && s.[3] = 'i' && s.[4] = 'g' && s.[4] = '1'
+  | _ -> false
