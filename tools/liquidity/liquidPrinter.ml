@@ -548,6 +548,13 @@ module Michelson = struct
       bprint_arg fmt b contract.code;
       Printf.bprintf b " }";
       bprint_pre_name b name;
+    | PACK ->
+      Printf.bprintf b "PACK";
+      bprint_pre_name b name;
+    | UNPACK ty ->
+      Printf.bprintf b "UNPACK";
+      bprint_pre_name b name;
+      bprint_type fmt b "" ty;
     | BLAKE2B ->
       Printf.bprintf b "BLAKE2B";
       bprint_pre_name b name;
@@ -1085,6 +1092,13 @@ module Liquid = struct
        Printf.bprintf b " : ";
        bprint_type b (indent ^ "  ") ty;
        Printf.bprintf b ")"
+    | Unpack (_loc, e, ty) ->
+      Printf.bprintf b "\n%s(Bytes.unpack" indent;
+       let indent2 = indent ^ "  " in
+       bprint_code_rec ~debug b indent2 e;
+       Printf.bprintf b " : ";
+       bprint_type b (indent ^ "  ") ty;
+       Printf.bprintf b ")"
 
 
   let rec bprint_code_types ~debug b indent code =
@@ -1170,6 +1184,7 @@ let string_of_node node =
   | N_LEFT _ -> "N_LEFT"
   | N_RIGHT _ -> "N_RIGHT"
   | N_CONTRACT _ -> "N_CONTRACT"
+  | N_UNPACK _ -> "N_UNPACK"
   | N_ABS -> "N_ABS"
   | N_CREATE_CONTRACT _ -> "N_CREATE_CONTRACT"
   | N_RESULT (_, i) -> Printf.sprintf "N_RESULT %d" i

@@ -295,6 +295,11 @@ let rec translate_code code =
       compile depth env addr @
       [ ii ~loc (CONTRACT ty) ]
 
+    | Unpack (loc, e, ty) ->
+      let ty = LiquidEncode.encode_type ty in
+      compile depth env e @
+      [ ii ~loc (UNPACK ty) ]
+
     (* removed during typechecking, replaced by tuple *)
     | Record _ -> assert false
     | Constructor _ -> assert false
@@ -377,7 +382,7 @@ the ending NIL is not annotated with a type *)
       | Prim_set_mem|Prim_Some
       | Prim_concat
       | Prim_create_account
-      | Prim_blake2b|Prim_sha256|Prim_sha512
+      | Prim_blake2b|Prim_sha256|Prim_sha512|Prim_pack
       | Prim_hash_key|Prim_check|Prim_default_account|Prim_list_size
       | Prim_set_size|Prim_map_size|Prim_or|Prim_and|Prim_xor
       | Prim_not|Prim_abs|Prim_int|Prim_neg|Prim_lsr|Prim_lsl
@@ -419,6 +424,7 @@ the ending NIL is not annotated with a type *)
          | Prim_blake2b, 1 -> [ ii BLAKE2B ]
          | Prim_sha256, 1 -> [ ii SHA256 ]
          | Prim_sha512, 1 -> [ ii SHA512 ]
+         | Prim_pack, 1 -> [ ii PACK ]
          | Prim_hash_key, 1 -> [ ii HASH_KEY ]
          | Prim_check, 3 -> [ ii CHECK_SIGNATURE ]
          | Prim_default_account, 1 -> [ ii IMPLICIT_ACCOUNT ]
@@ -448,7 +454,7 @@ the ending NIL is not annotated with a type *)
            | Prim_set_mem|Prim_Some
            | Prim_concat
            | Prim_create_account
-           | Prim_blake2b|Prim_sha256|Prim_sha512
+           | Prim_blake2b|Prim_sha256|Prim_sha512|Prim_pack
            | Prim_hash_key|Prim_check|Prim_default_account|Prim_list_size
            | Prim_set_size|Prim_map_size|Prim_or|Prim_and|Prim_xor
            | Prim_not|Prim_abs|Prim_int|Prim_neg|Prim_lsr|Prim_lsl

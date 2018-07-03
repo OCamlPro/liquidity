@@ -509,6 +509,13 @@ let rec convert_code ~abbrev expr =
          [ Nolabel, convert_code ~abbrev addr ])
       (convert_type ~abbrev (Toption (Tcontract ty)))
 
+  | Unpack (loc, e, ty) ->
+    Exp.constraint_ ~loc:(loc_of_loc loc)
+      (Exp.apply ~loc:(loc_of_loc loc)
+         (Exp.ident (lid "Bytes.unpack"))
+         [ Nolabel, convert_code ~abbrev e ])
+      (convert_type ~abbrev (Toption ty))
+
 
 let structure_of_contract ?(abbrev=true) ?type_annots contract =
   clean_abbrevs ();

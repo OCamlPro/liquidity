@@ -605,6 +605,9 @@ let rec interp contract =
     | ADDRESS, x :: stack ->
        let x = node ins.loc (N_PRIM "ADDRESS") [x] [seq] in
        x :: stack, x
+    | PACK, x :: stack ->
+       let x = node ins.loc (N_PRIM "PACK") [x] [seq] in
+       x :: stack, x
     | BLAKE2B, x :: stack ->
        let x = node ins.loc (N_PRIM "BLAKE2B") [x] [seq] in
        x :: stack, x
@@ -628,6 +631,9 @@ let rec interp contract =
        x :: stack, x
     | CONTRACT ty, x :: stack -> (* TODO : keep types too ! *)
        let x = node ins.loc (N_CONTRACT ty) [x] [seq] in
+       x :: stack, x
+    | UNPACK ty, x :: stack -> (* TODO : keep types too ! *)
+       let x = node ins.loc (N_UNPACK ty) [x] [seq] in
        x :: stack, x
     | INT, x :: stack ->
        let x = node ins.loc (N_PRIM "INT") [x] [seq] in

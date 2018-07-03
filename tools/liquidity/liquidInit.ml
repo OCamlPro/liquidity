@@ -146,6 +146,11 @@ let rec subst_empty_big_map code =
       if addr == addr' then desc
       else ContractAt (loc, addr', ty)
 
+    | Unpack (loc, e, ty) ->
+      let e' = subst_empty_big_map e in
+      if e == e' then desc
+      else Unpack (loc, e', ty)
+
   in
   if desc == code.desc then
     code

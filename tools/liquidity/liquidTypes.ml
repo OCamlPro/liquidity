@@ -199,6 +199,7 @@ type primitive =
   | Prim_default_account
   | Prim_set_delegate
   | Prim_address
+  | Prim_pack
 
   | Prim_Cons
   | Prim_or
@@ -314,6 +315,8 @@ let () =
               "Crypto.sha512", Prim_sha512;
               "Crypto.hash_key", Prim_hash_key;
               "Crypto.check", Prim_check;
+
+              "Bytes.pack", Prim_pack;
 
               "::", Prim_Cons;
               "lor", Prim_or;
@@ -555,6 +558,10 @@ and ('ty, 'a) exp_desc =
                   * ('ty, 'a) exp
                   * datatype
 
+  | Unpack of location
+              * ('ty, 'a) exp
+              * datatype
+
 
 type typed
 type encoded
@@ -575,7 +582,8 @@ let mk =
 
       | SetVar (_, _, _, e)
       | Constructor (_, _, e)
-      | ContractAt(_, e, _)
+      | ContractAt (_, e, _)
+      | Unpack (_, e, _)
       | Lambda (_, _, _, e, _) -> e.fail, false (* e.transfer *)
 
       | Seq (e1, e2)
@@ -705,6 +713,9 @@ type 'a pre_michelson =
   | SET_DELEGATE
 
   | CREATE_CONTRACT of 'a contract
+
+  | PACK
+  | UNPACK of datatype
 
   (* obsolete *)
   | MOD
@@ -848,6 +859,7 @@ type node = {
    | N_LEFT of datatype
    | N_RIGHT of datatype
    | N_CONTRACT of datatype
+   | N_UNPACK of datatype
    | N_ABS
    | N_RESULT of node * int
 

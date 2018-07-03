@@ -191,6 +191,9 @@ let rec untype (env : env) code =
     | ContractAt (loc, addr, ty) ->
       ContractAt (loc, untype env addr, ty)
 
+    | Unpack (loc, e, ty) ->
+      Unpack (loc, untype env e, ty)
+
     | Record (_, _)
     | Constructor (_, _, _)
     | MatchVariant (_, _, _) ->

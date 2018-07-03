@@ -97,6 +97,7 @@ let rec translate_const_exp loc (exp : encoded_exp) =
   | Failwith (_, _)
   | CreateContract (_, _, _)
   | ContractAt (_, _, _)
+  | Unpack (_, _, _)
     ->
     LiquidLoc.raise_error ~loc "non-constant expression"
 

@@ -47,6 +47,8 @@ let rec emit_code ~expand code =
   | RIGHT ty -> M_INS_EXP ("RIGHT", [ty], [], name)
   | CONTRACT ty -> M_INS_EXP ("CONTRACT", [ty], [], name)
 
+  | UNPACK ty -> M_INS_EXP ("UNPACK", [ty], [], name)
+
   (* Special case for empty map/set  TODO check if necessary *)
   (* | PUSH (ty, CMap []) -> M_INS_EXP ("EMPTY_MAP", [ty], [], name)
    * | PUSH (ty, CSet []) -> M_INS_EXP ("EMPTY_SET", [ty], [], name) *)
@@ -119,6 +121,7 @@ let rec emit_code ~expand code =
   | STEPS_TO_QUOTA -> M_INS ("STEPS_TO_QUOTA", name)
   | ADDRESS -> M_INS ("ADDRESS", name)
   | CREATE_ACCOUNT -> M_INS ("CREATE_ACCOUNT", name)
+  | PACK -> M_INS ("PACK", name)
   | BLAKE2B -> M_INS ("BLAKE2B", name)
   | SHA256 -> M_INS ("SHA256", name)
   | SHA512 -> M_INS ("SHA512", name)

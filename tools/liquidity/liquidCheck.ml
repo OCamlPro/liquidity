@@ -135,7 +135,8 @@ let rec loc_exp e = match e.desc with
   | MatchVariant (_, loc, _)
   | Failwith (_, loc)
   | CreateContract (loc, _, _)
-  | ContractAt (loc, _, _) -> loc
+  | ContractAt (loc, _, _)
+  | Unpack (loc, _, _) -> loc
 
   | Let (_, _, _, e) -> loc_exp e
 
@@ -616,6 +617,11 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
     in
     mk ?name:exp.name desc ty
 
+  | Unpack (loc, e, ty) ->
+    let e = typecheck_expected "Bytes.unpack argument" env Tbytes e in
+    let desc = Unpack (loc, e, ty) in
+    mk ?name:exp.name desc (Toption ty)
+
   | ContractAt (loc, addr, ty) ->
     let addr = typecheck_expected "Contract.at argument" env Taddress addr in
     let desc = ContractAt (loc, addr, ty) in
@@ -859,6 +865,7 @@ and typecheck_prim2 env prim loc args =
   | Prim_sender, [ Tunit ] -> Taddress
   | Prim_amount, [ Tunit ] -> Ttez
   | Prim_gas, [ Tunit ] -> Tnat
+  | Prim_pack, [ _ ] -> Tbytes
   | Prim_blake2b, [ Tbytes ] -> Tbytes
   | Prim_sha256, [ Tbytes ] -> Tbytes
   | Prim_sha512, [ Tbytes ] -> Tbytes

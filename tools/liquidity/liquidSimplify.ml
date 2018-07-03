@@ -20,8 +20,10 @@ let rec compute decompile code to_inline =
   let rec size exp =
     match exp.desc with
     | Const _ | Var _ | SetVar _ -> 1
-    | Failwith (e, _) -> size e
-    | ContractAt (_, e, _) -> size e
+
+    | Failwith (e, _)
+    | ContractAt (_, e, _)
+    | Unpack (_, e, _)
     | Constructor (_, _, e) -> size e
 
     | Seq (e1, e2) -> size e1 + size e2
@@ -222,6 +224,10 @@ let rec compute decompile code to_inline =
     | ContractAt (loc, addr, ty) ->
       let addr = iter addr in
       { exp with desc = ContractAt (loc, addr, ty) }
+
+    | Unpack (loc, e, ty) ->
+      let e = iter e in
+      { exp with desc = Unpack (loc, e, ty) }
 
     | Constructor _ -> assert false (* never found in typed_exp *)
   in

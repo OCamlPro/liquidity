@@ -450,6 +450,8 @@ let rec convert_code env expr =
       | ty, cst ->
         mic_loc env index annot (PUSH (ty, cst))
     end
+  | Prim(index, "PACK", [], annot) ->
+    mic_loc env index annot (PACK)
   | Prim(index, "BLAKE2B", [], annot) ->
     mic_loc env index annot (BLAKE2B)
   | Prim(index, "SHA256", [], annot) ->
@@ -492,6 +494,9 @@ let rec convert_code env expr =
   | Prim(index, "CONTRACT", [ty], annot) ->
     mic_loc env index annot
       (CONTRACT (convert_type env ty))
+  | Prim(index, "UNPACK", [ty], annot) ->
+    mic_loc env index annot
+      (UNPACK (convert_type env ty))
   | Prim(index, "CONS", [], annot) ->
     mic_loc env index annot (CONS)
   | Prim(index, "LOOP", [loop], annot) ->

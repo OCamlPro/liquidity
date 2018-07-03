@@ -716,6 +716,35 @@ let rec translate_code env exp =
       error_loc pexp_loc
         "Contract.at must be annotated by the resulting contract type (option)"
 
+    | { pexp_desc =
+          Pexp_constraint (
+            { pexp_desc =
+                Pexp_apply (
+                  { pexp_desc = Pexp_ident
+                        { txt = Ldot(Lident "Bytes", "unpack") } },
+                  [
+                    Nolabel, exp;
+                  ]) },
+            pty) } ->
+
+      let ty = match translate_type env pty with
+        | Toption p -> p
+        | _ -> error_loc pty.ptyp_loc
+                 "Bytes.unpack type must be 'a option for some 'a"
+      in
+      Unpack (loc, translate_code env exp, ty)
+
+    | { pexp_desc =
+          Pexp_apply (
+            { pexp_desc = Pexp_ident
+                  { txt = Ldot(Lident "Bytes", "unpack") } },
+            [
+              Nolabel, addr_exp;
+            ]);
+          pexp_loc } ->
+      error_loc pexp_loc
+        "Bytes.unpack must be annotated by the resulting type (option)"
+
     | { pexp_desc = Pexp_let (Nonrecursive, [ {
         pvb_pat = pat;
         pvb_expr = var_exp;

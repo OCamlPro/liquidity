@@ -182,6 +182,7 @@ let rec convert_code expand expr =
   | TRANSFER_TOKENS -> prim "TRANSFER_TOKENS" [] name
   | PUSH (ty, cst) -> prim "PUSH" [ convert_type ty;
                                     convert_const cst ] name
+  | PACK -> prim "PACK" [] name
   | BLAKE2B -> prim "BLAKE2B" [] name
   | SHA256 -> prim "SHA256" [] name
   | SHA512 -> prim "SHA512" [] name
@@ -209,6 +210,8 @@ let rec convert_code expand expr =
      prim "RIGHT" [convert_type ty] name
   | CONTRACT ty ->
      prim "CONTRACT" [convert_type ty] name
+  | UNPACK ty ->
+     prim "UNPACK" [convert_type ty] name
   | INT -> prim "INT" [] name
   | ABS -> prim "ABS" [] name
   | DUP 1 -> prim "DUP" [] name

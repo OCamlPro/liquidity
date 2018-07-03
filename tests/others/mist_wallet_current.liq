@@ -68,7 +68,7 @@ type check_result =
 let confirmAndCheck ((op : operation), (storage: storage)) =
   let owner = Contract.manager (Source : (unit, unit) contract) in
   if not (is_owner (owner, storage)) then Current.failwith ();
-  let oph = Crypto.hash op in
+  let oph = Crypto.hash (Bytes.pack op) in
   let pending = match Map.find oph storage.m_pending with
     | None ->
       (* New operation *)
@@ -103,7 +103,7 @@ let only_enough_owners ((op : operation), (storage: storage)) =
   | Execute storage -> storage
 
 let has_confirmed ((op: operation), (owner: key_hash), (storage:storage)) =
-  match Map.find (Crypto.hash op) storage.m_pending with
+  match Map.find (Crypto.hash (Bytes.pack op)) storage.m_pending with
   | None -> false
   | Some pending -> Set.mem owner pending.ownersDone
 
@@ -115,7 +115,7 @@ let revoke
      (storage : storage)) =
   onlyowner storage;
   let owner = Contract.manager (Source : (unit, unit) contract) in
-  let oph = Crypto.hash op in
+  let oph = Crypto.hash (Bytes.pack op) in
   match Map.find oph storage.m_pending with
   | None -> Current.failwith ()
   | Some pending ->

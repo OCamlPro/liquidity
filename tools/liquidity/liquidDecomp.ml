@@ -79,6 +79,7 @@ let rec var_of node =
       | N_IF_MINUS _ -> Printf.sprintf "if_minus%d" node.num
       | N_LEFT _ -> Printf.sprintf "left%d" node.num
       | N_CONTRACT _ -> Printf.sprintf "contract%d" node.num
+      | N_UNPACK _ -> Printf.sprintf "unpacked%d" node.num
       | N_RIGHT _ -> Printf.sprintf "right%d" node.num
       | N_TRANSFER -> Printf.sprintf "transfer%d" node.num
       | N_IF_RESULT _ | N_IF_END_RESULT _ | N_LOOP_RESULT _ ->
@@ -329,6 +330,7 @@ let rec decompile contract =
                  | "NEG" -> Prim_neg
                  | "EXEC" -> Prim_exec
                  | "INT" -> Prim_int
+                 | "PACK" -> Prim_pack
                  | "BLAKE2B" -> Prim_blake2b
                  | "SHA256" -> Prim_sha256
                  | "SHA512" -> Prim_sha512
@@ -362,6 +364,9 @@ let rec decompile contract =
 
        | N_CONTRACT ty, [arg] ->
           mklet node (ContractAt(loc, arg_of arg, ty))
+
+       | N_UNPACK ty, [arg] ->
+          mklet node (Unpack(loc, arg_of arg, ty))
 
        | N_END, [ arg ] -> arg_of arg
 
@@ -522,6 +527,7 @@ let rec decompile contract =
        | N_LEFT _
        | N_RIGHT _
        | N_CONTRACT _
+       | N_UNPACK _
        | N_ABS
        | N_START
        | N_LAMBDA_BEGIN

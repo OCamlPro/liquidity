@@ -133,6 +133,7 @@ let rec bv code =
 
   | ContractAt (loc, addr, ty) -> bv addr
 
+  | Unpack (loc, e, ty) -> bv e
 
 
 let mk desc exp bv = { exp with desc; bv }
@@ -380,6 +381,11 @@ let rec bound code =
      let addr = bound addr in
      let desc = ContractAt (loc, addr, ty) in
      mk desc code addr.bv
+
+  | Unpack (loc, e, ty) ->
+     let e = bound e in
+     let desc = Unpack (loc, e, ty) in
+     mk desc code e.bv
 
 and bound_contract contract =
   let c = bound contract.code in
