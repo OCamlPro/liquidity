@@ -1,5 +1,5 @@
 
-[%%version 0.2]
+[%%version 0.3]
 type storage =  string * (* 0: S *)
                 timestamp * (* 1: T *)
                 (tez * tez) * (* 2: P N *)

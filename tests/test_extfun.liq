@@ -1,5 +1,5 @@
 
-[%%version 0.2]
+[%%version 0.3]
 
 let f ((x : unit), (_ : int) ) = x
 

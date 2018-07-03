@@ -1,6 +1,6 @@
 (* Auction contract from https://www.michelson-lang.com/contract-a-day.html *)
 
-[%%version 0.2]
+[%%version 0.3]
 
 type storage = {
   auction_end : timestamp;

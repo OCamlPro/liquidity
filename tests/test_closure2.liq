@@ -1,5 +1,5 @@
 
-[%%version 0.2]
+[%%version 0.3]
 
 let%entry main
       (parameter : int)

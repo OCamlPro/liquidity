@@ -1,5 +1,5 @@
 
-[%%version 0.2]
+[%%version 0.3]
 
 type point = { x : string; y : bool; z : int }
 type vector = { orig : point; dest : point }
