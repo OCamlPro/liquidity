@@ -213,6 +213,7 @@ let rec convert_code expand expr =
   | UNPACK ty ->
      prim "UNPACK" [convert_type ty] name
   | INT -> prim "INT" [] name
+  | ISNAT -> prim "ISNAT" [] name
   | ABS -> prim "ABS" [] name
   | DUP 1 -> prim "DUP" [] name
   | DUP 0 -> assert false

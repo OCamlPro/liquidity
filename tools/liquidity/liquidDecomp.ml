@@ -330,6 +330,7 @@ let rec decompile contract =
                  | "NEG" -> Prim_neg
                  | "EXEC" -> Prim_exec
                  | "INT" -> Prim_int
+                 | "ISNAT" -> Prim_is_nat
                  | "PACK" -> Prim_pack
                  | "BLAKE2B" -> Prim_blake2b
                  | "SHA256" -> Prim_sha256

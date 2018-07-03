@@ -384,6 +384,7 @@ module Arith : sig
 
   val int : integer -> integer
   val abs : integer -> integer
+  val is_nat : integer -> integer option
 
 end = struct
 
@@ -507,6 +508,12 @@ end = struct
   let abs = function Int x -> Int (Z.abs x)
                    | Tez _
                    | Timestamp _ -> assert false
+
+  let is_nat = function
+    | Int x when Z.geq x Z.zero -> Some (Int x)
+    | Int x -> None
+    | Tez _
+    | Timestamp _ -> assert false
 
 end
 

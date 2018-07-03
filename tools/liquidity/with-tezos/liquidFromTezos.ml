@@ -243,7 +243,7 @@ let name_of_annots annots =
     ) annots;
     None
   with
-  | Found "" -> None
+  | Found ("" | "%" | "%%") -> None
   | Found s -> Some s
 
 let sanitize_name s =
@@ -251,7 +251,7 @@ let sanitize_name s =
     s ^ "_"
   else if String.length s > 0 then
     match s.[0] with
-    | 'A' .. 'Z' -> "_" ^ s
+    | 'A' .. 'Z' | '0' .. '9' -> "_" ^ s
     | _ -> s
   else s
 
@@ -266,7 +266,7 @@ let type_name_of_annots annots =
     ) annots;
     None
   with
-  | Found "" -> None
+  | Found ("" | "%" | "@") -> None
   | Found s -> Some (sanitize_name s)
 
 let rec convert_type env expr =
@@ -534,6 +534,8 @@ let rec convert_code env expr =
     mic_loc env index annot (XOR)
   | Prim(index, "ABS", [], annot) ->
     mic_loc env index annot (ABS)
+  | Prim(index, "ISNAT", [], annot) ->
+    mic_loc env index annot (ISNAT)
   | Prim(index, "NOT", [], annot) ->
     mic_loc env index annot (NOT)
   | Prim(index, "STEPS_TO_QUOTA", [], annot) ->

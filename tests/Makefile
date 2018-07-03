@@ -2,7 +2,7 @@ all:
 	@echo 'Use "make clean" to clean this directory'
 
 clean:
-	for dir in . others reverse; do    \
+	for dir in . others reverse ../tezos/src/bin_client/test/contracts; do    \
 		rm -f $$dir/*~;            \
 		rm -f $$dir/*.cm?;         \
 		rm -f $$dir/*.liq.tz;      \

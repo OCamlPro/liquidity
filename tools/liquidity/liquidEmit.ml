@@ -136,6 +136,7 @@ let rec emit_code ~expand code =
   | AND -> M_INS ("AND", name)
   | NOT -> M_INS ("NOT", name)
   | INT -> M_INS ("INT", name)
+  | ISNAT -> M_INS ("ISNAT", name)
   | ABS -> M_INS ("ABS", name)
   | NEG -> M_INS ("NEG", name)
   | MUL -> M_INS ("MUL", name)

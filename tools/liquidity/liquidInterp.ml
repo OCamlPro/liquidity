@@ -72,7 +72,7 @@ let unsanitize_name s =
     s ^ "_"
   else if String.length s > 0 then
     match s.[0] with
-    | 'A' .. 'Z' -> "_" ^ s
+    | 'A' .. 'Z' | '0' .. '9' -> "_" ^ s
     | _ -> s
   else s
 
@@ -652,6 +652,9 @@ let rec interp contract =
        x :: stack, x
     | INT, x :: stack ->
        let x = node ins.loc (N_PRIM "INT") [x] [seq] in
+       x :: stack, x
+    | ISNAT, x :: stack ->
+       let x = node ins.loc (N_PRIM "ISNAT") [x] [seq] in
        x :: stack, x
     | ABS, x :: stack ->
        let x = node ins.loc (N_PRIM "ABS") [x] [seq] in

@@ -207,6 +207,7 @@ type primitive =
   | Prim_xor
   | Prim_not
   | Prim_abs
+  | Prim_is_nat
   | Prim_int
   | Prim_neg
   | Prim_lsr
@@ -329,6 +330,7 @@ let () =
               "xor", Prim_xor;
               "not", Prim_not;
               "abs", Prim_abs;
+              "is_nat", Prim_is_nat;
               "int", Prim_int;
               ">>", Prim_lsr;
               "lsr", Prim_lsr;
@@ -694,6 +696,7 @@ type 'a pre_michelson =
 
   | INT
   | ABS
+  | ISNAT
   | NEG
   | MUL
 
@@ -898,6 +901,7 @@ let reserved_keywords = [
   "let"; "in"; "match" ; "int"; "bool"; "string"; "bytes";
   "get"; "set"; "tuple"; "with"; "fun"; "or"; "and"; "land";
   "lor"; "xor"; "not"; "lsl"; "lsr"; "lxor"; "abs"; "type";
+  "is_nat";
 ]
 
 let has_reserved_prefix s =

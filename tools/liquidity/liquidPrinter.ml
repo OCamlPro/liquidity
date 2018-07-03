@@ -588,6 +588,9 @@ module Michelson = struct
     | INT ->
       Printf.bprintf b "INT";
       bprint_pre_name b name;
+    | ISNAT ->
+      Printf.bprintf b "ISNAT";
+      bprint_pre_name b name;
     | ABS ->
       Printf.bprintf b "ABS";
       bprint_pre_name b name;

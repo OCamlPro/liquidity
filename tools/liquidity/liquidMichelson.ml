@@ -378,7 +378,7 @@ the ending NIL is not annotated with a type *)
       | Prim_blake2b|Prim_sha256|Prim_sha512|Prim_pack
       | Prim_hash_key|Prim_check|Prim_default_account|Prim_list_size
       | Prim_set_size|Prim_map_size|Prim_or|Prim_and|Prim_xor
-      | Prim_not|Prim_abs|Prim_int|Prim_neg|Prim_lsr|Prim_lsl
+      | Prim_not|Prim_abs|Prim_int|Prim_neg|Prim_lsr|Prim_lsl|Prim_is_nat
       | Prim_exec|Prim_Cons|Prim_set_delegate|Prim_address),_ ->
       let _depth, args_code = compile_args depth env args in
        let prim_code = match prim, List.length args with
@@ -432,6 +432,7 @@ the ending NIL is not annotated with a type *)
          | Prim_xor, 2 -> [ ii XOR ]
          | Prim_not, 1 -> [ ii NOT ]
          | Prim_abs, 1 -> [ ii ABS; ii INT ]
+         | Prim_is_nat, 1 -> [ ii ISNAT ]
          | Prim_int, 1 -> [ ii INT ]
          | Prim_neg, 1 -> [ ii NEG ]
          | Prim_lsr, 2 -> [ ii LSR ]
@@ -450,7 +451,7 @@ the ending NIL is not annotated with a type *)
            | Prim_blake2b|Prim_sha256|Prim_sha512|Prim_pack
            | Prim_hash_key|Prim_check|Prim_default_account|Prim_list_size
            | Prim_set_size|Prim_map_size|Prim_or|Prim_and|Prim_xor
-           | Prim_not|Prim_abs|Prim_int|Prim_neg|Prim_lsr|Prim_lsl
+           | Prim_not|Prim_abs|Prim_int|Prim_neg|Prim_lsr|Prim_lsl|Prim_is_nat
            | Prim_exec|Prim_Cons|Prim_set_delegate|Prim_address),n ->
            Printf.eprintf "Primitive %S: wrong number of args(%d)\n%!"
              (LiquidTypes.string_of_primitive prim)
