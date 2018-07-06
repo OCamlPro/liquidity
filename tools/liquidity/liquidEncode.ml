@@ -238,7 +238,7 @@ let rec has_big_map = function
 let encode_storage_type env ty =
   let ty = encode_type ty in
   match ty with
-  | Ttuple (t1 :: r) when not @@ List.exists has_big_map r -> ty
+  | Ttuple (Tbigmap (t1, t2) :: r) when not @@ List.exists has_big_map (t1 :: t2 :: r) -> ty
   | _ when not (has_big_map ty) -> ty
   | _ ->
     error (noloc env)
