@@ -306,7 +306,7 @@ let () =
 
               "Contract.set_delegate", Prim_set_delegate;
               "Contract.address", Prim_address;
-              "Current.self", Prim_self;
+              "Contract.self", Prim_self;
 
               "Account.create", Prim_create_account;
               "Account.default", Prim_default_account;
