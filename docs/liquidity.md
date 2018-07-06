@@ -24,7 +24,7 @@ Contract Format
 All the contracts have the following form:
 
 ```ocaml
-[%%version 0.2]
+[%%version 0.3]
 
 <... local declarations ...>
 
@@ -81,6 +81,7 @@ Types in Liquidity are monomorphic. The built-in base types are:
 - `nat`: unbounded naturals
 - `tez`: the type of amounts
 - `string`: character strings
+- `bytes`: bytes sequences
 - `timestamp`: dates and timestamps
 - `key`: cryptographic keys
 - `key_hash`: hashes of cryptographic keys
@@ -136,8 +137,8 @@ Operators and functions
 Here is a list of equivalences between MICHELSON instructions and
 Liquidity functions:
 
-* `FAIL` : `Current.fail ()` or `Current.failwith "Message"`. Makes the contract abort.
-* `SELF` : `Current.contract ()`. Returns the current contract being executed.
+* `FAIL`/`FAILWITH` : `Current.failwith <object>`. Makes the contract abort.
+* `SELF` : `Contract.self ()`. Returns the current contract being executed.
 * `BALANCE` : `Current.balance ()`. Returns the current balance of the
        current contract.
 * `NOW` : `Current.time ()`. Returns the timestamp of the block containing
@@ -147,25 +148,28 @@ Liquidity functions:
 * `STEPS_TO_QUOTA` : `Current.gas ()`. Returns the current gas available
        to execute the end of the contract.
 * `SOURCE` : `Contract.source`.
-       Returns the address of the contract that called the current contract.
+       Returns the address of the contract that initiated the current transaction.
+* `SENDER` : `Contract.sender`.
+       Returns the address of the last contract that called the current contract.
 * `CONS` : `x :: y`
 * `NIL ele_type` : `( [] : ele_type list )`
-* `H` : `Crypto.hash x`. Returns the hash of its argument, whatever it is.
-* `HASH_KEY` : `Crypto.hash_key k`. Compute the b58check of the key `k`.
+* `BLAKE2B` : `Crypto.blake2b x`. Returns the Blake2b hash of its
+  argument. (Same for `Crypto.sha256` and `Crypto.sha512`)
+* `HASH_KEY` : `Crypto.hash_key k`. Returns the hash of the key `k`.
 * `CHECK_SIGNATURE` : `Crypto.check key signature data`. Returns `true` if
      the public key has been used to generate the signature of the data.
 * `CREATE_ACCOUNT` : `Account.create`. Creates a new account.
 * `CREATE_CONTRACT` : `Contract.create`. Creates a new contract.
 * `SET_DELEGATE` : `Contract.set_delegate`. Sets the delegate (or unset,
   if argument is `None`) of the current contract.
-* `MANAGER` : `Contract.manager ct`: returns the key hash of the manager
-     of the contract in argument
 * `CONTRACT param_type` : `(Contract.at addr : param_type contract
      option)`: returns the contract stored at this address, if it exists
 * `EXEC` : `Lambda.pipe x f` or `x |> f` or `f x`, is the application of the
      lambda `f` on the argument `x`.
 * `IMPLICIT_ACCOUNT` : `Account.default key_hash`. Returns the default contract
     (of type `unit contract`) associated with a key hash.
+* `ADDRESS` : `Contract.address` to retrieve the address of a contract
+  
 
 Comparison operators
 --------------------
@@ -227,6 +231,8 @@ Arithmetic and logic operators
 * `EDIV` : `x / y`
 * `LSR` : `x >> y` or `x lsr y`
 * `LSL` : `x << y` or `x lsl y`
+* `ISNAT` : `is_nat x` return `(Some y)` iff x is positive, where y is
+  of type `nat` and y = x
 
 For converting `int` to `nat`, Liquidity provides a special
 pattern-matching construct `match%nat`, on two constructors `Plus` and
@@ -266,19 +272,24 @@ As in Michelson, there are different types of integers:
 
 Strings are delimited by the characters `"` and `"`.
 
+Bytes are sequences of hexadecimal pairs preceeded by `0x`, for
+instance:
+
+* `0x`
+* `0xabcdef`
+
 Timestamps are written in ISO 8601 format, like in Michelson:
 
 * `2015-12-01T10:01:00+01:00`
 
-Keys and hashes are base58-check encoded, the same as in Michelson:
+Keys, key hashes and signatures are base58-check encoded, the same as in Michelson:
 
 * `tz1YLtLqD1fWHthSVHPD116oYvsd4PTAHUoc` is a key hash
-* `edpkuit3FiCUhd6pmqf9ztUTdUs1isMTbF9RBGfwKk1ZrdTmeP9ypN` is a public key
-
-Signatures are 64 bytes long hex encoded, prefixed with a backtick:
-```
-`96c724f3eab3da9eb0002caa5456aef9a7c716e6d6d20c07f3b3659369e7dcf5b66a5a8c33dac317fba6174217140b919493acd063c3800b825890a557c39e0a
-```
+* `edpkuit3FiCUhd6pmqf9ztUTdUs1isMTbF9RBGfwKk1ZrdTmeP9ypN` is a public
+  key
+*
+  `edsigedsigthTzJ8X7MPmNeEwybRAvdxS1pupqcM5Mk4uCuyZAe7uEk68YpuGDeViW8wSXMr
+  Ci5CwoNgqs8V2w8ayB5dMJzrYCHhD8C7` is a signature
 
 There are also three types of collections: lists, sets and
 maps. Constants collections can be created directly:
