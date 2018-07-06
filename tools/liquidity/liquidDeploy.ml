@@ -10,8 +10,6 @@ open LiquidTypes
 open Lwt
 open Michelson_Tezos (* for crypto *)
 
-let protocol = "PtCJ7pwoxe8JasnHY8YonnLYjcVHmhiARPJvqcC6VfHT5s8k8sY"
-
 type from =
   | From_string of string
   | From_file of string
@@ -317,7 +315,7 @@ let raise_error_from_l ?loc_table err_msg l =
     try
       List.iter (fun (kind, id, loc, title, descr, err) ->
           match loc, kind, id with
-          | Some loc, "temporary", "scriptRejectedRuntimeError" ->
+          | Some loc, "temporary", "proto.alpha.scriptRejectedRuntimeError" ->
             let err_loc, fail_str = fail_msg_of_err loc ~loc_table err in
             let _, trace = error_trace_of_err loc ~loc_table err in
             raise (RuntimeFailure ({err_msg; err_loc}, fail_str, trace))
@@ -639,7 +637,6 @@ let get_counter source =
   with Not_found ->
     raise_response_error "get_counter" (Ezjsonm.from_string r)
 
-
 let get_head_hash () =
   send_get "/chains/main/blocks/head/header" >>= fun r ->
   let r = Ezjsonm.from_string r in
@@ -671,7 +668,13 @@ let get_predecessor () =
   with Not_found ->
     raise_response_error "get_predecessor" r
 
-
+let get_procotol () =
+  send_get "/chains/main/blocks/head/header" >>= fun r ->
+  let r = Ezjsonm.from_string r in
+  try
+    Ezjsonm.find r ["protocol"] |> Ezjsonm.get_string |> return
+  with Not_found ->
+    raise_response_error "get_protocol" r
 
 let get_storage liquid address =
   let env, syntax_ast, pre_michelson, pre_init_infos = compile_liquid liquid in
@@ -862,6 +865,7 @@ let sign sk op_b =
 
 let inject ?loc_table ?sk ~head ?(is_deploy=false) json_op op =
   let op_b = MBytes.of_string (Hex.to_string op) in
+  get_procotol () >>= fun protocol ->
   let signed_op, op_hash, data = match sk with
     | None ->
       let op_hash =
