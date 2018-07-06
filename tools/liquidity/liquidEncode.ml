@@ -305,6 +305,7 @@ let rec deconstify loc ty c =
     mk (Const (loc, ty, c)) ty
   else match c, ty with
     | (CUnit | CBool _ | CInt _ | CNat _ | CTez _ | CTimestamp _ | CString _
+      | CBytes _
       | CKey _ | CContract _ | CSignature _ | CNone  | CKey_hash _ | CAddress _),
       _ ->
       mk (Const (loc, ty, c)) ty
