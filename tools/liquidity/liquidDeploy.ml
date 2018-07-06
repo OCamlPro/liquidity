@@ -15,6 +15,7 @@ exception ResponseError of string
 exception RuntimeError of error
 exception LocalizedError of error
 exception RuntimeFailure of error * string option
+let protocol = "PtCJ7pwoxe8JasnHY8YonnLYjcVHmhiARPJvqcC6VfHT5s8k8sY"
 
 type from =
   | From_string of string
@@ -807,7 +808,7 @@ let inject ?loc_table ?sk ~head ?(is_deploy=false) json_op op =
         Operation_hash.to_b58check @@
         Operation_hash.hash_bytes [ op_b ] in
       op, op_hash, [[
-        "protocol", "\"ProtoALphaALphaALphaALphaALphaALphaALphaALphaDdp3zK\"";
+        "protocol", Printf.sprintf "%S" protocol;
         "branch", Printf.sprintf "%S" head;
         "contents", json_op;
       ] |> mk_json_obj] |> mk_json_arr
@@ -821,7 +822,7 @@ let inject ?loc_table ?sk ~head ?(is_deploy=false) json_op op =
         Operation_hash.to_b58check @@
         Operation_hash.hash_bytes [ signed_op_b ] in
       signed_op, op_hash, [[
-        "protocol", "\"ProtoALphaALphaALphaALphaALphaALphaALphaALphaDdp3zK\"";
+        "protocol", Printf.sprintf "%S" protocol;
         "branch", Printf.sprintf "%S" head;
         "contents", json_op;
         "signature", Printf.sprintf "%S" signature;
