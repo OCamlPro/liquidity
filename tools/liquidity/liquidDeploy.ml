@@ -10,20 +10,19 @@ open LiquidTypes
 open Lwt
 open Michelson_Tezos (* for crypto *)
 
-exception RequestError of int * string
-exception ResponseError of string
-exception RuntimeError of error
-exception LocalizedError of error
-exception RuntimeFailure of error * string option
 let protocol = "PtCJ7pwoxe8JasnHY8YonnLYjcVHmhiARPJvqcC6VfHT5s8k8sY"
 
 type from =
   | From_string of string
   | From_file of string
 
+type key_diff =
+  | DiffKeyHash of string
+  | DiffKey of const
+
 type big_map_diff_item =
-  | Big_map_add of const * const
-  | Big_map_remove of const
+  | Big_map_add of key_diff * const
+  | Big_map_remove of key_diff
 
 type big_map_diff = big_map_diff_item list
 
@@ -38,6 +37,12 @@ type trace_item = {
 }
 
 type trace = trace_item array
+
+exception RequestError of int * string
+exception ResponseError of string
+exception RuntimeError of error * trace option
+exception LocalizedError of error
+exception RuntimeFailure of error * string option * trace option
 
 module type S = sig
   type 'a t
@@ -196,14 +201,107 @@ let error_schema =
   lazy (!get "/errors" >|= Ezjsonm.from_string)
 
 
+let memo_stack_code_cpt = ref 0
+let memo_stack_code_tbl = Hashtbl.create 19
+let reset_memo_stack_code () =
+  memo_stack_code_cpt := 0;
+  Hashtbl.clear memo_stack_code_tbl
+let memo_stack_code e =
+  try Hashtbl.find memo_stack_code_tbl e
+  with Not_found ->
+    let cpt = !memo_stack_code_cpt in
+    incr memo_stack_code_cpt;
+    Hashtbl.add memo_stack_code_tbl e cpt;
+    cpt
+
+let name_of_var_annot = function
+  | None -> None
+  | Some annot ->
+    try Scanf.sscanf annot "@%s" (function
+        | "" -> None
+        | s -> Some s
+      )
+    with Scanf.Scan_failure _ | End_of_file -> None
+
+let convert_stack env stack_expr =
+  List.map (fun (e, annot) ->
+      let name = name_of_var_annot annot in
+      try StackConst (LiquidFromTezos.convert_const_notype env e), name
+      with _ -> StackCode (memo_stack_code e), name
+    ) stack_expr
+
+let trace_of_json env ~loc_table ?(error=false) trace_r =
+  let trace_expr =
+    Ezjsonm.get_list (fun step ->
+        let loc = Ezjsonm.find step ["location"] |> Ezjsonm.get_int in
+        let gas = Ezjsonm.find step ["gas"]
+                  |> Ezjsonm.get_string |> int_of_string in
+        let stack =
+          Ezjsonm.find step ["stack"]
+          |> Ezjsonm.get_list (fun s ->
+              Ezjsonm.find s ["item"] |> LiquidToTezos.const_of_ezjson,
+              try Some (Ezjsonm.find s ["annot"] |> Ezjsonm.get_string)
+              with Not_found -> None
+            )
+        in
+        (loc, gas, stack)
+      ) trace_r
+  in
+  (* Workaround bud in current betanet *)
+  let trace_expr = match trace_expr with
+    | (loc1, _, _) :: (loc2, _, _) :: _ when loc2 < loc1 -> List.rev trace_expr
+    | _ -> trace_expr in
+  let trace_expr = match List.rev trace_expr with
+    | ((loc, gas, _) :: _) as rtrace_expr when error ->
+      let extra = (loc + 1, gas, []) in
+      List.rev (extra :: rtrace_expr)
+    | _ -> trace_expr in
+  let l =
+    List.map (fun (loc, gas, stack) ->
+        let loc =  match List.assoc_opt loc loc_table with
+          | Some (loc, _) -> Some loc
+          | None -> None
+        in
+        (* we don't know the liquidity type of elements in the stack *)
+        let stack = convert_stack env stack in
+        { loc; gas; stack }
+      ) trace_expr in
+  reset_memo_stack_code ();
+  Array.of_list l
+
+let loc_table_to_map loc_table =
+  List.fold_left (fun m (pos, (loc, _)) ->
+      IntMap.add pos loc m
+    ) IntMap.empty loc_table
+
+let fail_msg_of_err loc ~loc_table err =
+  let json = Ezjsonm.find err ["with"] in
+  let err_loc, _ (* failwith_ty *) = List.assoc loc loc_table in
+  let env = { (LiquidTezosTypes.empty_env err_loc.loc_file)
+              with loc_table = loc_table_to_map loc_table } in
+  let failed_with_expr = LiquidToTezos.const_of_ezjson json in
+  let failed_with =
+    LiquidFromTezos.convert_const_notype env failed_with_expr in
+  err_loc, Some (LiquidData.string_of_const failed_with)
+
+let error_trace_of_err loc ~loc_table err =
+  let err_loc, _ = List.assoc loc loc_table in
+  try
+    let json = Ezjsonm.find err ["trace"] in
+    let env = { (LiquidTezosTypes.empty_env err_loc.loc_file)
+                with loc_table = loc_table_to_map loc_table } in
+    let trace = trace_of_json env ~loc_table ~error:true json in
+    err_loc, Some trace
+  with Not_found -> err_loc, None
+
 let raise_error_from_l ?loc_table err_msg l =
   let default_error () =
     let last_descr = match List.rev l with
-      | (_, _, _, _, Some descr) :: _ -> "\n  " ^ descr
+      | (_, _, _, _, Some descr, _) :: _ -> "\n  " ^ descr
       | _ -> ""
     in
     let err_l =
-      List.map (fun (kind, id, _, title, descr) ->
+      List.map (fun (kind, id, _, title, descr, _) ->
           match title with
           | Some t -> t
           | None -> Printf.sprintf "%s: %s" kind id
@@ -217,16 +315,17 @@ let raise_error_from_l ?loc_table err_msg l =
   | Some loc_table ->
     let err_msg = Printf.sprintf "in %s" err_msg in
     try
-      List.iter (fun (kind, id, loc, title, descr) ->
+      List.iter (fun (kind, id, loc, title, descr, err) ->
           match loc, kind, id with
           | Some loc, "temporary", "scriptRejectedRuntimeError" ->
-            let err_loc, fail_str = List.assoc loc loc_table in
-            raise (RuntimeFailure ({err_msg; err_loc}, fail_str))
+            let err_loc, fail_str = fail_msg_of_err loc ~loc_table err in
+            let _, trace = error_trace_of_err loc ~loc_table err in
+            raise (RuntimeFailure ({err_msg; err_loc}, fail_str, trace))
           | Some loc, "temporary", _ ->
-            let err_loc, _ = List.assoc loc loc_table in
             let title = match title with Some t -> t | None -> id in
             let err_msg = String.concat "\n- " [err_msg; title] in
-            raise (RuntimeError {err_msg; err_loc})
+            let err_loc, trace = error_trace_of_err loc ~loc_table err in
+            raise (RuntimeError ({err_msg; err_loc}, trace))
           | Some loc, _, _ ->
             let err_loc, _ = List.assoc loc loc_table in
             let err_msg = default_error () in
@@ -321,7 +420,7 @@ let raise_response_error ?loc_table msg r =
             try Some (Ezjsonm.find err ["loc"] |> Ezjsonm.get_int)
             with Not_found -> None
           in
-          kind, id, loc, title, descr
+          kind, id, loc, title, descr, err
         ) err
     with Ezjsonm.Parse_error _ -> []
   in
@@ -400,35 +499,6 @@ let get_big_map_type contract_sig =
   | Trecord (_, (_, Tbigmap (k, v)) :: _) -> Some (k, v)
   | _ -> None
 
-let memo_stack_code_cpt = ref 0
-let memo_stack_code_tbl = Hashtbl.create 19
-let reset_memo_stack_code () =
-  memo_stack_code_cpt := 0;
-  Hashtbl.clear memo_stack_code_tbl
-let memo_stack_code e =
-  try Hashtbl.find memo_stack_code_tbl e
-  with Not_found ->
-    let cpt = !memo_stack_code_cpt in
-    incr memo_stack_code_cpt;
-    Hashtbl.add memo_stack_code_tbl e cpt;
-    cpt
-
-let name_of_var_annot = function
-  | None -> None
-  | Some annot ->
-    try Scanf.sscanf annot "@%s" (function
-        | "" -> None
-        | s -> Some s
-      )
-    with Scanf.Scan_failure _ | End_of_file -> None
-
-let convert_stack env stack_expr =
-  List.map (fun (e, annot) ->
-      let name = name_of_var_annot annot in
-      try StackConst (LiquidFromTezos.convert_const_notype env e), name
-      with _ -> StackCode (memo_stack_code e), name
-    ) stack_expr
-
 let run_pre ?(debug=false)
     env contract_sig pre_michelson source input storage =
   let rpc = if debug then "trace_code" else "run_code" in
@@ -464,39 +534,28 @@ let run_pre ?(debug=false)
       else Some (Ezjsonm.find r ["trace"])
     in
     let storage_expr = LiquidToTezos.const_of_ezjson storage_r in
+    let get_value v = match Ezjsonm.get_dict v with
+      | [] -> None
+      | _ :: _ ->
+        Some (LiquidToTezos.const_of_ezjson v)
+      | exception Ezjsonm.Parse_error _ ->
+        Some (LiquidToTezos.const_of_ezjson v) in
     let big_map_diff_expr = match big_map_diff_r with
       | None -> None
       | Some json_diff ->
-        Some (Ezjsonm.get_list (fun pair ->
-            Ezjsonm.get_pair
-              (fun k -> LiquidToTezos.const_of_ezjson k)
-              (fun v ->
-                 match Ezjsonm.get_dict v with
-                 | [] -> None
-                 | _ :: _ ->
-                   Some (LiquidToTezos.const_of_ezjson v)
-                 | exception Ezjsonm.Parse_error _ ->
-                   Some (LiquidToTezos.const_of_ezjson v))
-              pair
+        Some (Ezjsonm.get_list (fun diffi ->
+            try
+              Ok (
+                Ezjsonm.find diffi ["key"] |> LiquidToTezos.const_of_ezjson,
+                try Ezjsonm.find diffi ["value"] |> get_value
+                with Not_found -> None
+              )
+            with Not_found ->
+              Error (Ezjsonm.get_pair
+                       Ezjsonm.get_string
+                       get_value
+                       diffi)
           ) json_diff)
-    in
-    let trace_expr = match trace_r with
-      | None -> None
-      | Some trace_r ->
-        Some (Ezjsonm.get_list (fun step ->
-            let loc = Ezjsonm.find step ["location"] |> Ezjsonm.get_int in
-            let gas = Ezjsonm.find step ["gas"]
-                      |> Ezjsonm.get_string |> int_of_string in
-            let stack =
-              Ezjsonm.find step ["stack"]
-              |> Ezjsonm.get_list (fun s ->
-                  Ezjsonm.find s ["item"] |> LiquidToTezos.const_of_ezjson,
-                  try Some (Ezjsonm.find s ["annot"] |> Ezjsonm.get_string)
-                  with Not_found -> None
-                )
-            in
-            (loc, gas, stack)
-          ) trace_r)
     in
     let env = LiquidTezosTypes.empty_env env.filename in
     let storage =
@@ -510,28 +569,25 @@ let run_pre ?(debug=false)
       | Some _, None -> assert false
       | Some d, Some (tk, tv) ->
         Some (List.map (function
-            | k, Some v ->
-              Big_map_add (LiquidFromTezos.convert_const_type env k tk,
-                           LiquidFromTezos.convert_const_type env v tv)
-            | k, None ->
-              Big_map_remove (LiquidFromTezos.convert_const_type env k tk)
+            | Ok (k, Some v) ->
+              let v = LiquidFromTezos.convert_const_type env v tv in
+              let k = DiffKey (LiquidFromTezos.convert_const_type env k tk) in
+              Big_map_add (k, v)
+            | Error (h, Some v) ->
+              let v = LiquidFromTezos.convert_const_type env v tv in
+              let k = DiffKeyHash h in
+              Big_map_add (k, v)
+            | Ok (k, None) ->
+              let k = DiffKey (LiquidFromTezos.convert_const_type env k tk) in
+              Big_map_remove k
+            | Error (h, None) ->
+              let k = DiffKeyHash h in
+              Big_map_remove k
           ) d)
     in
-    let trace = match trace_expr with
+    let trace = match trace_r with
       | None -> None
-      | Some trace_expr ->
-        let l =
-          List.map (fun (loc, gas, stack) ->
-              let loc =  match List.assoc_opt loc loc_table with
-                | Some (loc, _) -> Some loc
-                | None -> None
-              in
-              (* we don't know the liquidity type of elements in the stack *)
-              let stack = convert_stack env stack in
-              { loc; gas; stack }
-            ) trace_expr in
-        reset_memo_stack_code ();
-        Some (Array.of_list l)
+      | Some trace_r -> Some (trace_of_json env ~loc_table trace_r)
     in
     return (nb_operations, storage, big_map_diff, trace)
   with Not_found ->
@@ -713,14 +769,18 @@ let forge_deploy ?head ?source ?public_key
       let eval_init_storage = match eval_init_storage, big_map_diff with
         | CTuple (CBigMap m :: rtuple), Some l ->
           let m = List.fold_left (fun m -> function
-              | Big_map_add (k, v) -> (k, v) :: m
+              | Big_map_add (DiffKey k, v) -> (k, v) :: m
+              | Big_map_add (DiffKeyHash _, _) ->
+                failwith "Big map must be empty in initial storage with this version of Tezos node"
               | Big_map_remove _ -> m
             ) m l
           in
           CTuple (CBigMap m :: rtuple)
         | CRecord ((bname, CBigMap m) :: rrecord), Some l ->
           let m = List.fold_left (fun m -> function
-              | Big_map_add (k, v) -> (k, v) :: m
+              | Big_map_add (DiffKey k, v) -> (k, v) :: m
+              | Big_map_add (DiffKeyHash _, _) ->
+                failwith "Big map must be empty in initial storage with this version of Tezos node"
               | Big_map_remove _ -> m
             ) m l
           in

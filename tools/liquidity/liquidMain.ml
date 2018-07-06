@@ -178,9 +178,9 @@ module Data = struct
               [ "parameter", p; "storage", s ]
 
   let run () =
+    let open LiquidDeploy in
     let nb_ops, r_storage, big_map_diff =
-      LiquidDeploy.Sync.run
-        (LiquidDeploy.From_file !contract) !parameter !storage
+      Sync.run (From_file !contract) !parameter !storage
     in
     Printf.printf "%s\n# Internal operations: %d%!"
       (LiquidData.string_of_const r_storage)
@@ -190,13 +190,17 @@ module Data = struct
     | Some diff ->
       Printf.printf "\nBig map diff:\n";
       List.iter (function
-          | LiquidDeploy.Big_map_add (k, v) ->
+          | Big_map_add (k, v) ->
             Printf.printf "+  %s --> %s\n"
-              (LiquidData.string_of_const k)
+              (match k with
+               | DiffKeyHash h -> h
+               | DiffKey k -> LiquidData.string_of_const k)
               (LiquidData.string_of_const v)
-          | LiquidDeploy.Big_map_remove k ->
+          | Big_map_remove k ->
             Printf.printf "-  %s\n"
-              (LiquidData.string_of_const k)
+              (match k with
+               | DiffKeyHash h -> h
+               | DiffKey k -> LiquidData.string_of_const k)
         ) diff;
       Printf.printf "%!"
 
@@ -416,16 +420,16 @@ let () =
   | LiquidDeploy.ResponseError msg ->
     Format.eprintf "Response Error:\n%s@." msg;
     exit 1
-  | LiquidDeploy.RuntimeError error ->
+  | LiquidDeploy.RuntimeError (error, _trace) ->
     LiquidLoc.report_error ~kind:"Runtime error" Format.err_formatter error;
     exit 1
   | LiquidDeploy.LocalizedError error ->
     LiquidLoc.report_error ~kind:"Error" Format.err_formatter error;
     exit 1
-  | LiquidDeploy.RuntimeFailure (error, None) ->
+  | LiquidDeploy.RuntimeFailure (error, None, _trace) ->
     LiquidLoc.report_error ~kind:"Failed at runtime" Format.err_formatter error;
     exit 1
-  | LiquidDeploy.RuntimeFailure (error, Some s) ->
+  | LiquidDeploy.RuntimeFailure (error, Some s, _trace) ->
     LiquidLoc.report_error ~kind:"Failed at runtime" Format.err_formatter error;
     Format.eprintf "Failed with %S@." s;
     exit 1

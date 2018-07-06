@@ -6,12 +6,6 @@
 (*                                                                        *)
 (**************************************************************************)
 
-exception RequestError of int * string
-exception ResponseError of string
-exception RuntimeError of LiquidTypes.error
-exception LocalizedError of LiquidTypes.error
-exception RuntimeFailure of LiquidTypes.error * string option
-
 type from =
   | From_string of string
   | From_file of string
@@ -22,9 +16,13 @@ let post = ref (fun ~data _ ->
 let get = ref (fun _ ->
   failwith "mini version cannot do get request")
 
+type key_diff =
+  | DiffKeyHash of string
+  | DiffKey of LiquidTypes.const
+
 type big_map_diff_item =
-  | Big_map_add of LiquidTypes.const * LiquidTypes.const
-  | Big_map_remove of LiquidTypes.const
+  | Big_map_add of key_diff * LiquidTypes.const
+  | Big_map_remove of key_diff
 
 type big_map_diff = big_map_diff_item list
 
@@ -39,6 +37,12 @@ type trace_item = {
 }
 
 type trace = trace_item array
+
+exception RequestError of int * string
+exception ResponseError of string
+exception RuntimeError of LiquidTypes.error * trace option
+exception LocalizedError of LiquidTypes.error
+exception RuntimeFailure of LiquidTypes.error * string option * trace option
 
 module type S = sig
   type 'a t
