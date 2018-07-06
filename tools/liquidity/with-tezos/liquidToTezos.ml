@@ -77,6 +77,7 @@ let rec convert_const ~loc expr =
   | CKey s -> Micheline.String (loc, s)
   | CKey_hash s -> Micheline.String (loc, s)
   | CContract s -> Micheline.String (loc, s)
+  | CAddress s -> Micheline.String (loc, s)
   | CSignature s -> Micheline.String (loc, s)
 
   | _ ->
