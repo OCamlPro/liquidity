@@ -98,20 +98,18 @@ let comparable_type = function
   | Taddress -> true
   | _ -> false
 
-let rec type_contains_operation = function
+let rec type_contains_nonlambda_operation = function
   | Toperation -> true
   | Tunit | Tbool | Tint | Tnat | Ttez | Tstring | Tbytes
   | Ttimestamp | Tkey | Tkey_hash | Tsignature | Taddress | Tfail -> false
-  | Ttuple l -> List.exists type_contains_operation l
-  | Tcontract ty | Toption ty | Tlist ty | Tset ty -> type_contains_operation ty
-  | Tmap (t1, t2) | Tbigmap (t1, t2) | Tor (t1, t2) | Tlambda (t1, t2) ->
-    type_contains_operation t1 || type_contains_operation t2
+  | Ttuple l -> List.exists type_contains_nonlambda_operation l
+  | Tcontract ty | Toption ty | Tlist ty | Tset ty ->
+    type_contains_nonlambda_operation ty
+  | Tmap (t1, t2) | Tbigmap (t1, t2) | Tor (t1, t2) ->
+    type_contains_nonlambda_operation t1 || type_contains_nonlambda_operation t2
   | Trecord (_, l) | Tsum (_, l) ->
-    List.exists (fun (_, t) -> type_contains_operation t) l
-  | Tclosure ((t1, t2), t3) ->
-    type_contains_operation t1 ||
-    type_contains_operation t2 ||
-    type_contains_operation t3
+    List.exists (fun (_, t) -> type_contains_nonlambda_operation t) l
+  | Tlambda _ | Tclosure _ -> false
 
 type contract_sig = {
   parameter : datatype;

@@ -66,8 +66,8 @@ let rec translate_const_exp loc (exp : encoded_exp) =
   | Record (_, _)
   | Constructor (_, _, _) -> assert false
 
-  | Apply (Prim_Left, _, [x; _ty]) -> CLeft (translate_const_exp loc x)
-  | Apply (Prim_Right, _, [x; _ty]) -> CRight (translate_const_exp loc x)
+  | Apply (Prim_Left, _, [x]) -> CLeft (translate_const_exp loc x)
+  | Apply (Prim_Right, _, [x]) -> CRight (translate_const_exp loc x)
   | Apply (Prim_Some, _, [x]) -> CSome (translate_const_exp loc x)
   | Apply (Prim_Cons, _, list) ->
      CList (List.map (translate_const_exp loc) list)
@@ -76,7 +76,7 @@ let rec translate_const_exp loc (exp : encoded_exp) =
 
 
   | Apply (prim, _, args)
-    -> LiquidLoc.raise_error "<apply %s(%d) not yet implemented>"
+    -> LiquidLoc.raise_error ~loc "<apply %s(%d) not yet implemented>"
                              (LiquidTypes.string_of_primitive prim)
                              (List.length args)
   | Var (_, _, _)

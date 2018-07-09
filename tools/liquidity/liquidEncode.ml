@@ -301,9 +301,9 @@ let rec encode_const env c = match c with
       error (noloc env)  "unknown constructor %s" constr
 
 let rec deconstify loc ty c =
-  if not @@ type_contains_operation ty then
+  if not @@ type_contains_nonlambda_operation ty then
     mk (Const (loc, ty, c)) ty
-  else match c, ty with
+  else match c, (encode_type ty) with
     | (CUnit | CBool _ | CInt _ | CNat _ | CTez _ | CTimestamp _ | CString _
       | CBytes _
       | CKey _ | CContract _ | CSignature _ | CNone  | CKey_hash _ | CAddress _),
@@ -355,7 +355,11 @@ let rec deconstify loc ty c =
     | CRecord _, _
     | CConstr _, _ -> assert false
 
-    | _, _ -> assert false
+    | _, _ ->
+      Format.eprintf "%s : %s@."
+        (LiquidPrinter.Liquid.string_of_const c)
+        (LiquidPrinter.Liquid.string_of_type ty);
+      assert false
 
 let rec decr_counts_vars env e =
   if e.fail then () else
