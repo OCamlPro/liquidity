@@ -45,4 +45,7 @@ let const_of_ezjson _ =
 let read_tezos_file (_filename : string) =
   failwith "mini version cannot decompile"
 
+let read_tezos_json (_filename : string) =
+  failwith "mini version cannot decompile"
+
 let arg_list work_done = []

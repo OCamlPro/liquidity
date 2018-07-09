@@ -26,6 +26,7 @@ val const_of_ezjson : LiquidTezosTypes.json -> LiquidTezosTypes.expr
 
 
 val read_tezos_file : string -> LiquidTezosTypes.contract * LiquidTezosTypes.env
+val read_tezos_json : string -> LiquidTezosTypes.contract * LiquidTezosTypes.env
 
 val arg_list : bool ref ->
          (Arg.key * Arg.spec * Arg.doc) list

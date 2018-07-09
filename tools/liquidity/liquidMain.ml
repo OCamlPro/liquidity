@@ -66,6 +66,11 @@ let compile_liquid_file filename =
   | None -> ()
   | Some syntax_init ->
     match LiquidInit.compile_liquid_init env syntax_ast.contract_sig syntax_init with
+    | LiquidInit.Init_constant c_init when !LiquidOptions.json ->
+      let s = LiquidToTezos.(json_of_const @@ convert_const c_init) in
+      let output = env.filename ^ ".init.json" in
+      FileString.write_file output s;
+      Printf.eprintf "Constant initial storage generated in %S\n%!" output
     | LiquidInit.Init_constant c_init ->
       let s = LiquidPrinter.Michelson.line_of_const c_init in
       let output = env.filename ^ ".init.tz" in
@@ -73,28 +78,50 @@ let compile_liquid_file filename =
       Printf.eprintf "Constant initial storage generated in %S\n%!" output
     | LiquidInit.Init_code (_, pre_init) ->
       let mic_init, _ = LiquidToTezos.convert_contract ~expand:true pre_init in
-      let s = LiquidToTezos.line_of_contract mic_init in
-      let output = env.filename ^ ".initializer.tz" in
+      let s, output =
+        if !LiquidOptions.json then
+          LiquidToTezos.json_of_contract mic_init,
+          env.filename ^ ".initializer.tz.json"
+        else
+          LiquidToTezos.line_of_contract mic_init,
+          env.filename ^ ".initializer.tz"
+      in
       FileString.write_file output s;
       Printf.eprintf "Storage initializer generated in %S\n%!" output
   end;
 
-  let output = filename ^ ".tz" in
   let c, loc_table =
     LiquidToTezos.convert_contract ~expand:false pre_michelson in
-  let s =
-    if !LiquidOptions.singleline
-    then LiquidToTezos.line_of_contract c
-    else LiquidToTezos.string_of_contract c
-  in
-  FileString.write_file output s;
-  Printf.eprintf "File %S generated\n%!" output;
-  Printf.eprintf "If tezos is compiled, you may want to typecheck with:\n";
-  Printf.eprintf "  tezos-client typecheck script %s\n" output
+
+  if !LiquidOptions.json then
+    let output = filename ^ ".tz.json" in
+    let s = LiquidToTezos.json_of_contract c in
+    FileString.write_file output s;
+    Printf.eprintf "File %S generated\n%!" output;
+    Printf.eprintf "If you have a node running, \
+                    you may want to typecheck with:\n";
+    Printf.eprintf "  curl http://127.0.0.1:8732/chains/main/blocks/head/\
+                    helpers/scripts/typecheck_code -H \
+                    \"Content-Type:application/json\" \
+                    -d '{\"program\":'$(cat %s)'}'\n" output
+  else
+    let output = filename ^ ".tz" in
+    let s =
+      if !LiquidOptions.singleline
+      then LiquidToTezos.line_of_contract c
+      else LiquidToTezos.string_of_contract c in
+    FileString.write_file output s;
+    Printf.eprintf "File %S generated\n%!" output;
+    Printf.eprintf "If tezos is compiled, you may want to typecheck with:\n";
+    Printf.eprintf "  tezos-client typecheck script %s\n" output
 
 
 let compile_tezos_file filename =
-  let code, env = LiquidToTezos.read_tezos_file filename in
+  let code, env =
+    if Filename.check_suffix filename ".json" || !LiquidOptions.json then
+      LiquidToTezos.read_tezos_json filename
+    else LiquidToTezos.read_tezos_file filename
+  in
 
   let c, annoted_tz, type_annots = LiquidFromTezos.convert_contract env code in
   let c = LiquidClean.clean_contract c in
@@ -140,12 +167,14 @@ let handle_file filename =
   if Filename.check_suffix filename ".liq" then
     compile_liquid_file filename
   else
-    if Filename.check_suffix filename ".tz" then
-      compile_tezos_file filename
-    else begin
-        Printf.eprintf "Error: unknown extension for %S\n%!" filename;
-        exit 2
-      end
+  if Filename.check_suffix filename ".tz" ||
+     Filename.check_suffix filename ".json"
+  then
+    compile_tezos_file filename
+  else begin
+    Printf.eprintf "Error: unknown extension for %S\n%!" filename;
+    exit 2
+  end
 
 let handle_file filename =
   try
@@ -299,6 +328,9 @@ let main () =
           LiquidOptions.annotmic := false;
           LiquidOptions.singleline := true),
       " Produce compact Michelson";
+
+      "--json", Arg.Set LiquidOptions.json,
+      " Output Michelson in JSON representation";
 
       "--amount", Arg.String (fun amount ->
           LiquidOptions.amount := parse_tez_to_string "--amount" amount

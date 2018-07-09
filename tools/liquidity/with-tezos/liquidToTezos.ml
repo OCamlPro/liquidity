@@ -383,6 +383,15 @@ let read_tezos_file filename =
      Printf.eprintf "Errors parsing in %S\n%!" filename;
      exit 2
 
+let read_tezos_json filename =
+  let s = read_file filename in
+  let nodes = contract_of_json s in
+  let env = LiquidTezosTypes.{ filename;
+                               loc_table = IntMap.empty;
+                               type_annots = Hashtbl.create 17;
+                               annoted = false;
+                             } in
+  nodes, env
 
 
 let convert_const c =
