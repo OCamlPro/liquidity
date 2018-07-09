@@ -43,6 +43,11 @@ branch is for experimentation, and features may be modified before the
 next release.
 
 
+Installation and Usage
+----------------------
+
+See [USAGE.md](USAGE.md).
+
 Documentation
 -------------
 

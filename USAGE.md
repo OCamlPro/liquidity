@@ -4,24 +4,34 @@ Usage
 Dependencies
 ------------
 
-You need the following dependencies to be installed to compile `liquidity`:
+You need the following OCaml dependencies to be installed (with
+[opam](https://opam.ocaml.org/)) to compile `liquidity`:
+
 * `ocp-build`
 * `zarith`
 * `ocplib-json-typed`
 * `ocplib-endian`
 * `calendar`
+* `ocurl`
+* `lwt`
+* `bigstring`
+* `digestif`
+* `ezjsonm`
+* `sodium`
 
 Compilation and installation
 ----------------------------
 
 In the top-directory, use:
+
 * `make clone-tezos`
+* `make -C tezos build-deps`
 * `make`
 * `make install`
 
-If you want limited features, you can pass the first step, you will
-only get a program `liquidity-mini` with only compilation features,
-no decompilation.
+If you want limited features, you can pass the first and second steps,
+you will only get a program `liquidity-mini` which can compile
+liquidity programs, but cannot decompile Michelson ones.
 
 You can also use `make clean` to clean the directories,
 and `make tests` to run the compiler on examples in the
@@ -56,16 +66,13 @@ will generate `tests/test13.liq.tz.liq`
 Running a Contract
 ------------------
 
-For example:
+If you have a Tezos node running on port 8732:
 ```
-./_obuild/liquidity/liquidity.asm --load-arg tests/others/demo.arg  --load-storage tests/others/demo.tzp --exec tests/others/demo.tzs
+./_obuild/liquidity/liquidity.asm --amount 5tz --run tests/others/demo.liq '""' 'Map ["", 0]'
 ```
 
 will output:
 ```
-Program "tests/others/demo.tzs" parsed
-Result:
-Unit
-Storage:
-(Map (Item "Heineken" 0) (Item "Guinness" 0) (Item "Corona" 1))
+Map [("", 1)]
+# Internal operations: 0
 ```
