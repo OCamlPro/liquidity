@@ -91,7 +91,8 @@ let compile_liquid_file filename =
   end;
 
   let c, loc_table =
-    LiquidToTezos.convert_contract ~expand:false pre_michelson in
+    LiquidToTezos.convert_contract ~expand:(!LiquidOptions.json) pre_michelson
+  in
 
   if !LiquidOptions.json then
     let output = filename ^ ".tz.json" in
