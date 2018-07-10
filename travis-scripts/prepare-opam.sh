@@ -2,13 +2,14 @@
 # BTW, it also show some needed system packages to build liquidity
 # Travis CI is done on Ubuntu trusty
 
-wget -qq https://raw.github.com/ocaml/opam/master/shell/opam_installer.sh -O - | sh -s /usr/local/bin
 export OPAMYES=1
+yes | sh <(curl -sL https://raw.githubusercontent.com/ocaml/opam/master/shell/install.sh)
+chmod +ax /usr/local/bin/opam
 
 # currently, we only target OCaml 4.06.1 because we reuse parser of OCaml
-opam init --comp 4.06.1
+opam init -a --switch=ocaml-base-compiler.4.06.1
 
-eval `opam config env`
+eval $(opam config env)
 
 opam update
 opam install ocp-build zarith uutf uri uchar stringext sexplib re lwt.3.3.0 ocplib-endian bigstring jsonm hex ezjsonm cstruct calendar ocurl digestif sodium
