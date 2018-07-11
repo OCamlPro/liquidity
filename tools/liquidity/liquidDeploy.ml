@@ -7,7 +7,6 @@
 (**************************************************************************)
 
 open LiquidTypes
-open Lwt
 open Michelson_Tezos (* for crypto *)
 
 type from =
@@ -51,12 +50,14 @@ module type S = sig
   val forge_deploy : ?delegatable:bool -> ?spendable:bool ->
     from -> string list -> string t
   val deploy : ?delegatable:bool -> ?spendable:bool ->
-    from -> string list -> (string * string) t
+    from -> string list -> (string * (string, exn) result) t
   val get_storage : from -> string -> LiquidTypes.const t
   val forge_call : from -> string -> string -> string t
-  val call : from -> string -> string -> string t
+  val call : from -> string -> string -> (string * (unit, exn) result) t
   val activate : secret:string -> string t
 end
+
+open Lwt
 
 module Network_sync = struct
   let writer_callback a d =
@@ -863,7 +864,7 @@ let hash msg =
 let sign sk op_b =
   Ed25519.sign sk (hash op_b)
 
-let inject ?loc_table ?sk ~head ?(is_deploy=false) json_op op =
+let inject ?loc_table ?sk ~head json_op op =
   let op_b = MBytes.of_string (Hex.to_string op) in
   get_procotol () >>= fun protocol ->
   let signed_op, op_hash, data = match sk with
@@ -900,21 +901,37 @@ let inject ?loc_table ?sk ~head ?(is_deploy=false) json_op op =
      let r =
        match Ezjsonm.get_list (fun x -> x) r with
        | r :: _ -> r | [] -> assert false in
-     Ezjsonm.find r ["contents"] |> Ezjsonm.get_list (fun o ->
-         if is_deploy &&
-            Ezjsonm.find o ["kind"] |> Ezjsonm.get_string = "origination"
-         then try
-             Ezjsonm.find o
-               ["metadata"; "operation_result"; "originated_contracts"]
-             |> Ezjsonm.get_list Ezjsonm.get_string
-           with Not_found -> []
-         else []
-       )
-     |> List.flatten
-     |> return
+     let contents =
+       Ezjsonm.find r ["contents"] |> Ezjsonm.get_list (fun o -> o) in
+     Lwt_list.map_p (fun o ->
+         try
+           let result = Ezjsonm.find o ["metadata"; "operation_result" ] in
+           let status = Ezjsonm.find result ["status"] |> Ezjsonm.get_string in
+           match status with
+           | "failed" | "backtracked" | "skipped" ->
+             let errors =
+               try Ezjsonm.find result ["errors"]
+               with Not_found -> `A [] in
+             begin try
+               raise_response_error ?loc_table status errors
+               with exn -> return_error exn
+             end
+           | "applied" ->
+             let contracts =
+               try
+                 Ezjsonm.find result ["originated_contracts"]
+                 |> Ezjsonm.get_list Ezjsonm.get_string
+               with Not_found -> [] in
+             return_ok contracts
+           | _ -> return_error (Failure status)
+         with Not_found -> return_error (Failure "operation_result")
+       ) contents
+     >>= function
+     | x :: _ -> return x
+     | [] -> return_error (Failure "no contents")
    with Not_found ->
      raise_response_error ?loc_table "inject (preapply/operations)" r
-  ) >>= fun contracts ->
+  ) >>= fun result ->
   let data = Printf.sprintf "%S" (Hex.show signed_op) in
   send_post ?loc_table ~data "/injection/operation" >>= fun r ->
   (try
@@ -925,7 +942,7 @@ let inject ?loc_table ?sk ~head ?(is_deploy=false) json_op op =
   ) >>= fun injected_op_hash ->
   assert (injected_op_hash = op_hash);
 
-  return (injected_op_hash, contracts)
+  return (injected_op_hash, result)
 
 
 let deploy ?(delegatable=false) ?(spendable=false) liquid init_params_strings =
@@ -944,8 +961,9 @@ let deploy ?(delegatable=false) ?(spendable=false) liquid init_params_strings =
   forge_deploy ~head ~source ~public_key ~delegatable ~spendable
     liquid init_params_strings
   >>= fun (op, op_json, loc_table) ->
-  inject ~loc_table ~sk ~head ~is_deploy:true op_json (`Hex op) >>= function
-  | op_h, [c] -> return (op_h, c)
+  inject ~loc_table ~sk ~head op_json (`Hex op) >>= function
+  | op_h, Ok [c] -> return (op_h, Ok c)
+  | op_h, Error e -> return (op_h, Error e)
   | _ -> raise (ResponseError "deploy (inject)")
 
 
@@ -1031,7 +1049,8 @@ let call liquid address parameter_string =
     liquid address parameter_string
   >>= fun (op, op_json, loc_table) ->
   inject ~loc_table ~sk ~head op_json (`Hex op) >>= function
-  | op_h, [] -> return op_h
+  | op_h, Ok [] -> return (op_h, Ok ())
+  | op_h, Error e -> return (op_h, Error e)
   | _ -> raise (ResponseError "call (inject)")
 
 
@@ -1103,8 +1122,8 @@ let activate ~secret =
      raise_response_error "forge activation" (Ezjsonm.from_string r)
   ) >>= fun op ->
   inject ~sk ~head operations_json (`Hex op) >>= function
-  | _, _::_ -> raise (ResponseError "activation (inject)")
-  | op_h, [] -> return op_h
+  | op_h, Ok [] -> return op_h
+  | _, _ -> raise (ResponseError "activation (inject)")
 
 
 (* Withoud optional argument head *)

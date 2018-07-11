@@ -53,10 +53,10 @@ module type S = sig
   val forge_deploy : ?delegatable:bool -> ?spendable:bool ->
     from -> string list -> string t
   val deploy : ?delegatable:bool -> ?spendable:bool ->
-    from -> string list -> (string * string) t
+    from -> string list -> (string * (string, exn) result) t
   val get_storage : from -> string -> LiquidTypes.const t
   val forge_call : from -> string -> string -> string t
-  val call : from -> string -> string -> string t
+  val call : from -> string -> string -> (string * (unit, exn) result) t
   val activate : secret:string -> string t
 end
 

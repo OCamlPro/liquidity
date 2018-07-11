@@ -64,7 +64,7 @@ module type S = sig
       ![LiquidOptions], returns the operation hash and the contract address *)
   val deploy :
     ?delegatable:bool -> ?spendable:bool -> from -> string list ->
-    (string * string) t
+    (string * (string, exn) result) t
 
   val get_storage : from -> string -> LiquidTypes.const t
 
@@ -74,7 +74,7 @@ module type S = sig
 
   (** Calls a deployed Liquidity contract on the Tezos node specified in
       ![LiquidOptions], returns the operation hash *)
-  val call : from -> string -> string -> string t
+  val call : from -> string -> string -> (string * (unit, exn) result) t
 
   val activate : secret:string -> string t
 

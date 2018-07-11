@@ -251,14 +251,18 @@ module Data = struct
     Printf.printf "%s\n%!" op
 
   let deploy () =
-    let op_h, contract_id =
+    match
       LiquidDeploy.Sync.deploy
         ~delegatable:!LiquidOptions.delegatable
         ~spendable:!LiquidOptions.spendable
         (LiquidDeploy.From_file !contract) (List.rev !init_inputs)
-    in
-    Printf.printf "New contract %s deployed in operation %s\n%!"
-      contract_id op_h
+    with
+    | op_h, Ok contract_id ->
+      Printf.printf "New contract %s deployed in operation %s\n%!"
+        contract_id op_h
+    | op_h, Error e ->
+      Printf.printf "Failed deployment in operation %s\n%!" op_h;
+      raise e
 
   let get_storage () =
     let r_storage =
@@ -269,14 +273,20 @@ module Data = struct
       (LiquidData.string_of_const r_storage)
 
   let call () =
-    let op_h =
+    match
       LiquidDeploy.Sync.call
         (LiquidDeploy.From_file !contract)
         !contract_address
         !parameter
-    in
-    Printf.printf "Successful call to contract %s (at %s) in operation %s\n%!"
-      !contract !contract_address op_h
+    with
+    | op_h, Ok () ->
+      Printf.printf "Successful call to contract %s (at %s) in operation %s\n%!"
+        !contract !contract_address op_h
+    | op_h, Error e ->
+      Printf.printf "Failed call to contract %s (at %s) in operation %s\n%!"
+        !contract !contract_address op_h;
+      raise e
+
 
 end
 
