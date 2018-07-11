@@ -1,3 +1,38 @@
+0.32  2018-07-11
+    NEW FEATURES
+    * Compatibility with Tezos's Betanet
+    * New calling convention, Contract.transfer returns an operations
+      which has to be returned
+    * Current.failwith : 'a -> 'b, instead of fail
+    * Type bytes, and 0xab... bytes constants
+    * Bytes.pack, Bytes.unpack
+    * Type address
+    * Contract and address constants (KT1..., tz...)
+    * Type big_map, and constants BigMap [...], and BigMap.find,
+      BigMap.add, BigMap.remove, BigMap.update
+    * New compilation of Map/Set/List.map
+    * New instruction Map/Set/List.map_fold
+    * Current.self renamed to Contract.self
+    * New functions Crypto.blake2b/sha256/sha512 instead of Crypto.hash
+    * Current.sender
+    * Remove Contract.manager
+    * (Contract.at <addr> : p contract option)
+
+    IMPROVEMENTS
+    * Better locations reporting
+    * Show runtime failures source locations
+    * Light type inferrence in specific places
+    * Unary negation on int and tez
+    * Somewhat better error messages
+    * Compile with OCaml 4.06.1
+    * Better decompilation naming heuristic
+
+    BUG FIXES
+    * Fix issue with decompiling multiple nested failing branches
+    * Fix issue with decompilation of ITER
+    * Fix some incorrect peephole optimizations
+    * Reject maps and sets with non comparable keys
+
 0.14  2018-01-23
     NEW FEATURES
     * Support for decompilation of ITER

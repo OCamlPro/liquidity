@@ -3,8 +3,7 @@
 # Travis CI is done on Ubuntu trusty
 
 export OPAMYES=1
-yes | sh <(curl -sL https://raw.githubusercontent.com/ocaml/opam/master/shell/install.sh)
-chmod +ax /usr/local/bin/opam
+sh <(curl -sL https://raw.githubusercontent.com/ocaml/opam/master/shell/install.sh)
 
 # currently, we only target OCaml 4.06.1 because we reuse parser of OCaml
 opam init -a --switch=ocaml-base-compiler.4.06.1
