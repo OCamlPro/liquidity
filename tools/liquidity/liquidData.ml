@@ -29,7 +29,7 @@ let rec default_const = function
   | Tsignature ->
     CSignature
       "edsigthTzJ8X7MPmNeEwybRAvdxS1pupqcM5Mk4uCuyZAe7uEk\
-       68YpuGDeViW8wSXMr Ci5CwoNgqs8V2w8ayB5dMJzrYCHhD8C7"
+       68YpuGDeViW8wSXMrCi5CwoNgqs8V2w8ayB5dMJzrYCHhD8C7"
   | Tcontract _ -> CContract "KT1GE2AZhazRxGsAjRVkQccHcB2pvANXQWd7"
   | Taddress -> CAddress "KT1GE2AZhazRxGsAjRVkQccHcB2pvANXQWd7"
   | Ttuple l ->
