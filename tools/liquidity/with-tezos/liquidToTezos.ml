@@ -37,6 +37,10 @@ let rec convert_const ~loc expr =
   match expr with
   | CInt n -> Micheline.Int (loc, LiquidPrinter.mic_of_integer n)
   | CString s -> Micheline.String (loc, s)
+  | CBytes s ->
+    let b = `Hex (String.sub s 2 (String.length s - 2))
+            |> MBytes.of_hex in
+    Micheline.Bytes (loc, b)
   | CUnit -> Micheline.Prim(loc, "Unit", [], [])
   | CBool true -> Micheline.Prim(loc, "True", [], [])
   | CBool false -> Micheline.Prim(loc, "False", [], [])

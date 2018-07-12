@@ -216,6 +216,7 @@ let constant f = function
   | Pconst_integer (s, Some '\234') -> pp f "%s" s
   | Pconst_integer (s, Some '\235') -> pp f "%s" s
   | Pconst_integer (s, Some '\236') -> pp f "%s" s
+  | Pconst_integer (s, Some '\237') -> pp f "%s" s
   | Pconst_integer (i, Some m) ->
      paren (i.[0]='-') (fun f (i, m) ->
              if m = '\231' then

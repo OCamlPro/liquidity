@@ -95,7 +95,7 @@ let unknown_expr env msg expr =
      | String (_loc, s) ->
        Printf.sprintf "unknwon string %S" s
      | Bytes (_loc, s) ->
-       Printf.sprintf "unknwon bytes %S" (Hex.to_string (MBytes.to_hex s))
+       Printf.sprintf "unknwon bytes %S" (Hex.show (MBytes.to_hex s))
      | Int (_loc, i) ->
        Printf.sprintf "unknown integer %s" (Z.to_string i)
      | Prim(i, s, args, _debug) ->
@@ -111,7 +111,7 @@ let wrong_type env expr ty =
      | String (_loc, s) ->
        Printf.sprintf "string %S" s
      | Bytes (_loc, s) ->
-       Printf.sprintf "bytes %S" (Hex.to_string (MBytes.to_hex s))
+       Printf.sprintf "bytes %S" (Hex.show (MBytes.to_hex s))
      | Int (_loc, i) ->
        Printf.sprintf "integer %s" (Z.to_string i)
      | Prim(i, s, args, _debug) ->
@@ -142,6 +142,10 @@ let rec convert_const env ?ty expr =
       | Some Tstring | None -> CString s
       | Some ty -> wrong_type env expr ty
     end
+
+  | Bytes (_loc, s) ->
+    let s = "0x" ^ Hex.show (MBytes.to_hex s) in
+    CBytes s
 
   | Prim(_, "Unit", [], _debug) -> CUnit
   | Prim(_, "True", [], _debug) -> CBool true

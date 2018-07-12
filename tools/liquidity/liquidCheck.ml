@@ -1014,6 +1014,8 @@ let check_const_type ?(from_mic=false) ~to_tez loc ty cst =
 
     | Tstring, CString s -> CString s
 
+    | Tbytes, CBytes s -> CBytes s
+
     | Ttez, CTez s -> CTez s
 
     | Tkey, CKey s -> CKey s
