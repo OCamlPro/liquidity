@@ -35,6 +35,29 @@ type trace_item = {
 
 type trace = trace_item array
 
+type internal_operation =
+  | Reveal of string
+  | Transaction of {
+      amount : string;
+      destination : string;
+      parameters : LiquidTypes.const option;
+    }
+  | Origination of {
+      manager: string ;
+      delegate: string option ;
+      script: (LiquidTypes.typed_contract * LiquidTypes.const) option ;
+      spendable: bool ;
+      delegatable: bool ;
+      balance: string ;
+    }
+  | Delegation of string option
+
+type operation = {
+  source : string;
+  nonce : int;
+  op : internal_operation;
+}
+
 exception RequestError of int * string
 exception ResponseError of string
 exception RuntimeError of error * trace option
@@ -44,9 +67,9 @@ exception RuntimeFailure of error * string option * trace option
 module type S = sig
   type 'a t
   val run : from -> string -> string ->
-    (int * LiquidTypes.const * big_map_diff option) t
+    (operation list * LiquidTypes.const * big_map_diff option) t
   val run_debug : from -> string -> string ->
-    (int * LiquidTypes.const * big_map_diff option * trace) t
+    (operation list * LiquidTypes.const * big_map_diff option * trace) t
   val forge_deploy : ?delegatable:bool -> ?spendable:bool ->
     from -> string list -> string t
   val deploy : ?delegatable:bool -> ?spendable:bool ->
@@ -488,8 +511,77 @@ let compile_liquid liquid =
         LiquidInit.compile_liquid_init env contract_sig syntax_init,
         inputs_infos)
   in
-
   ( env, syntax_ast, pre_michelson, pre_init )
+
+let decompile_michelson code =
+  let env = LiquidTezosTypes.empty_env "mic_code" in
+  let c, annoted_tz, type_annots = LiquidFromTezos.convert_contract env code in
+  let c = LiquidClean.clean_contract c in
+  let c = LiquidInterp.interp c in
+  let c = LiquidDecomp.decompile c in
+  let env = LiquidFromOCaml.initial_env "mic_code" in
+  let typed_ast = LiquidCheck.typecheck_contract ~warnings:false env c in
+  let encode_ast, to_inline =
+    LiquidEncode.encode_contract ~decompiling:true env typed_ast in
+  let live_ast = LiquidSimplify.simplify_contract
+      ~decompile_annoted:annoted_tz encode_ast to_inline in
+  let untyped_ast = LiquidUntype.untype_contract live_ast in
+  untyped_ast
+
+
+let operation_of_json r =
+  let env = LiquidTezosTypes.empty_env "operation" in
+  let source = Ezjsonm.(find r ["source"] |> get_string) in
+  let nonce = Ezjsonm.(find r ["nonce"] |> get_int) in
+  let kind = Ezjsonm.(find r ["kind"] |> get_string) in
+  let op = match kind with
+    | "reveal" -> Reveal Ezjsonm.(find r ["public_key"] |> get_string)
+    | "transaction" ->
+      let open Ezjsonm in
+      Transaction {
+          amount = find r ["amount"] |> get_string;
+          destination = find r ["destination"] |> get_string;
+          parameters =
+            try find r ["parameters"]
+                |> LiquidToTezos.const_of_ezjson
+                |> LiquidFromTezos.convert_const_notype env
+                |> Option.some
+            with Not_found -> None;
+        }
+    | "origination" ->
+      let open Ezjsonm in
+      let script =
+        try
+          let code =
+            find r ["script"; "code"]
+            |> LiquidToTezos.contract_of_ezjson
+            |> decompile_michelson in
+          let storage =
+            find r ["script"; "storage"]
+            |> LiquidToTezos.const_of_ezjson
+            |> (fun e -> LiquidFromTezos.convert_const_type
+                   env e code.contract_sig.storage)
+          in
+          Some (code, storage)
+        with Not_found -> None in
+      Origination {
+          manager = find r ["managerPubkey"] |> get_string;
+          script;
+          spendable =
+            (try find r ["spendable"] |> get_bool with Not_found -> true);
+          delegatable =
+            (try find r ["delegatable"] |> get_bool with Not_found -> true);
+          balance = find r ["balance"] |> get_string;
+          delegate =
+            Option.try_with (fun () -> find r ["delegate"] |> get_string);
+        }
+    | "delegation" ->
+      Delegation Ezjsonm.(
+          Option.try_with (fun () -> find r ["delegate"] |> get_string);
+        )
+    | _ -> failwith kind in
+  { source; nonce; op }
+
 
 
 let get_big_map_type contract_sig =
@@ -522,8 +614,7 @@ let run_pre ?(debug=false)
   try
     let storage_r = Ezjsonm.find r ["storage"] in
     let operations_r = Ezjsonm.find r ["operations"] in
-    let nb_operations = Ezjsonm.get_list (fun x -> x) operations_r
-                        |> List.length in
+    let operations = Ezjsonm.get_list operation_of_json operations_r in
     let big_map_diff_r =
       try Some (Ezjsonm.find r ["big_map_diff"])
       with Not_found -> None
@@ -588,7 +679,7 @@ let run_pre ?(debug=false)
       | None -> None
       | Some trace_r -> Some (trace_of_json env ~loc_table trace_r)
     in
-    return (nb_operations, storage, big_map_diff, trace)
+    return (operations, storage, big_map_diff, trace)
   with Not_found ->
     raise_response_error ~loc_table "run" r
 

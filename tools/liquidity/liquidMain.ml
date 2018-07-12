@@ -209,12 +209,12 @@ module Data = struct
 
   let run () =
     let open LiquidDeploy in
-    let nb_ops, r_storage, big_map_diff =
+    let ops, r_storage, big_map_diff =
       Sync.run (From_file !contract) !parameter !storage
     in
     Printf.printf "%s\n# Internal operations: %d\n%!"
       (LiquidData.string_of_const r_storage)
-      nb_ops;
+      (List.length ops);
     match big_map_diff with
     | None -> ()
     | Some diff ->

@@ -32,6 +32,29 @@ type trace_item = {
 
 type trace = trace_item array
 
+type internal_operation =
+  | Reveal of string
+  | Transaction of {
+      amount : string;
+      destination : string;
+      parameters : LiquidTypes.const option;
+    }
+  | Origination of {
+      manager: string ;
+      delegate: string option ;
+      script: (LiquidTypes.typed_contract * LiquidTypes.const) option ;
+      spendable: bool ;
+      delegatable: bool ;
+      balance: string ;
+    }
+  | Delegation of string option
+
+type operation = {
+  source : string;
+  nonce : int;
+  op : internal_operation;
+}
+
 exception RequestError of int * string
 exception ResponseError of string
 exception RuntimeError of LiquidTypes.error * trace option
@@ -49,11 +72,11 @@ module type S = sig
      big map id the contract contains any *)
   val run :
     from -> string -> string ->
-    (int * LiquidTypes.const * big_map_diff option) t
+    (operation list * LiquidTypes.const * big_map_diff option) t
 
   val run_debug :
     from -> string -> string ->
-    (int * LiquidTypes.const * big_map_diff option * trace) t
+    (operation list * LiquidTypes.const * big_map_diff option * trace) t
 
   (** Forge a deployment operation contract on the Tezos node specified in
       ![LiquidOptions], returns the hex-encoded operation *)
