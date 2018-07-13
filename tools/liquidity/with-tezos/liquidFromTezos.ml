@@ -144,8 +144,25 @@ let rec convert_const env ?ty expr =
     end
 
   | Bytes (_loc, s) ->
-    let s = "0x" ^ Hex.show (MBytes.to_hex s) in
-    CBytes s
+    let to_hex s = "0x" ^ Hex.show (MBytes.to_hex s) in
+    begin match ty with
+      | None | Some Tbytes ->
+        CBytes (to_hex s)
+      | Some Tkey ->
+        (* CKey Ed25519.Public_key.(MBytes.to_string s |> of_bytes |> to_b58check) *)
+        CKey (to_hex s)
+      | Some Tkey_hash ->
+        (* CKey_hash Ed25519.Public_key_hash.(of_bytes_exn s |> to_b58check) *)
+        CKey_hash (to_hex s)
+      | Some Tsignature ->
+        (* CSignature Ed25519.Signature.(to_b58check s) *)
+        CSignature (to_hex s)
+      | Some Taddress ->
+        CAddress (to_hex s)
+      | Some (Tcontract _) ->
+        CContract (to_hex s)
+      | Some ty -> wrong_type env expr ty
+    end
 
   | Prim(_, "Unit", [], _debug) -> CUnit
   | Prim(_, "True", [], _debug) -> CBool true

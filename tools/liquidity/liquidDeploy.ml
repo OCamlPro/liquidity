@@ -999,7 +999,7 @@ let inject ?loc_table ?sk ~head json_op op =
            let result = Ezjsonm.find o ["metadata"; "operation_result" ] in
            let status = Ezjsonm.find result ["status"] |> Ezjsonm.get_string in
            match status with
-           | "failed" | "backtracked" | "skipped" ->
+           | "failed" ->
              let errors =
                try Ezjsonm.find result ["errors"]
                with Not_found -> `A [] in
@@ -1007,6 +1007,8 @@ let inject ?loc_table ?sk ~head json_op op =
                raise_response_error ?loc_table status errors
                with exn -> return_error exn
              end
+           | "backtracked" | "skipped" ->
+             return_error (Failure status)
            | "applied" ->
              let contracts =
                try

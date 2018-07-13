@@ -1019,19 +1019,25 @@ let check_const_type ?(from_mic=false) ~to_tez loc ty cst =
     | Ttez, CTez s -> CTez s
 
     | Tkey, CKey s -> CKey s
+    | Tkey, CBytes s -> CKey s
 
     | Tkey_hash, CKey_hash s -> CKey_hash s
+    | Tkey_hash, CBytes s -> CKey_hash s
 
     | Tcontract _, CContract s -> CContract s
     | Tcontract _, CAddress s -> CAddress s
     | Tcontract Tunit, CKey_hash s -> CKey_hash s
+    | Tcontract _, CBytes s -> CContract s
 
     | Taddress, CAddress s -> CAddress s
     | Taddress, CContract s -> CContract s
     | Taddress, CKey_hash s -> CKey_hash s
+    | Taddress, CBytes s -> CContract s
 
     | Ttimestamp, CTimestamp s -> CTimestamp s
+
     | Tsignature, CSignature s -> CSignature s
+    | Tsignature, CBytes s -> CSignature s
 
     | Ttuple tys, CTuple csts ->
        begin

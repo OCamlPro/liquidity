@@ -8,7 +8,7 @@
 (**************************************************************************)
 
 (* The version that will be required to compile the generated files. *)
-let output_version = "0.32"
+let output_version = "0.33"
 
 open Asttypes
 open Longident
@@ -225,18 +225,18 @@ let rec convert_code ~abbrev expr =
      Exp.sequence (convert_code ~abbrev x) (convert_code ~abbrev y)
 
   | Const (loc, ty, cst) -> begin
-      match ty with
-      | Tint
-      | Tnat
-      | Tstring
-      | Tunit
-      | Ttimestamp
-      | Ttez
-      | Tbool
-      | Tsignature
-      | Toperation
-      | Tkey
-      | Tkey_hash -> convert_const cst
+      match ty, cst with
+      | (Tint
+        | Tnat
+        | Tstring
+        | Tunit
+        | Ttimestamp
+        | Ttez
+        | Tbool
+        | Toperation), _ -> convert_const cst
+      | (Tsignature, CSignature s
+        | Tkey, CKey s
+        | Tkey_hash, CKey_hash s) when s.[0] <> '0' -> convert_const cst
       | _ ->
         Exp.constraint_
           ~loc:(loc_of_loc loc) (convert_const cst) (convert_type ~abbrev ty)

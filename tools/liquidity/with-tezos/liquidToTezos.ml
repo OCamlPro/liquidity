@@ -34,13 +34,13 @@ let seq ~loc exprs =
 let prim_type ~loc name args = Micheline.Prim(loc, name, args, [])
 
 let rec convert_const ~loc expr =
+  let bytes_of_hex s =
+    `Hex (String.sub s 2 (String.length s - 2))
+    |> MBytes.of_hex in
   match expr with
   | CInt n -> Micheline.Int (loc, LiquidPrinter.mic_of_integer n)
   | CString s -> Micheline.String (loc, s)
-  | CBytes s ->
-    let b = `Hex (String.sub s 2 (String.length s - 2))
-            |> MBytes.of_hex in
-    Micheline.Bytes (loc, b)
+  | CBytes s -> Micheline.Bytes (loc, bytes_of_hex s)
   | CUnit -> Micheline.Prim(loc, "Unit", [], [])
   | CBool true -> Micheline.Prim(loc, "True", [], [])
   | CBool false -> Micheline.Prim(loc, "False", [], [])
@@ -78,10 +78,15 @@ let rec convert_const ~loc expr =
    | CSignature _|CLeft _|CRight _)
             *)
   | CTimestamp s -> Micheline.String (loc, s)
+  | CKey s when s.[0] = '0' -> Micheline.Bytes (loc, bytes_of_hex s)
   | CKey s -> Micheline.String (loc, s)
+  | CKey_hash s when s.[0] = '0' -> Micheline.Bytes (loc, bytes_of_hex s)
   | CKey_hash s -> Micheline.String (loc, s)
+  | CContract s when s.[0] = '0' -> Micheline.Bytes (loc, bytes_of_hex s)
   | CContract s -> Micheline.String (loc, s)
+  | CAddress s when s.[0] = '0' -> Micheline.Bytes (loc, bytes_of_hex s)
   | CAddress s -> Micheline.String (loc, s)
+  | CSignature s when s.[0] = '0' -> Micheline.Bytes (loc, bytes_of_hex s)
   | CSignature s -> Micheline.String (loc, s)
 
   | _ ->
