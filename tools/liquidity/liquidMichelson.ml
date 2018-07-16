@@ -520,6 +520,9 @@ the ending NIL is not annotated with a type *)
     | MatchOption _ | MatchList _ | Loop _ | Fold _
     | Map _ | MapFold _ ->
       compile_name ~annotafter:true e.name code
+    | (Lambda _ | Closure _) when e.name = None ->
+      (* Workaround for https://gitlab.com/tezos/tezos/issues/262 *)
+      compile_name ~annotafter:false (Some "") code
     | _ ->
       compile_name ~annotafter:false e.name code
 
