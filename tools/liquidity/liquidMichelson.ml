@@ -278,6 +278,13 @@ let rec translate_code code =
       (* TODO check this *)
 
     | CreateContract (loc, args, contract) ->
+      begin match args with
+        | [ _; _; _; _; { desc = Const (_, _, CTez amount) }; _]
+          when Z.equal Z.zero (LiquidPrinter.mic_mutez_of_tez amount) -> ()
+        | _ ->
+          failwith "Contract.create (with an initial amount <> 0tz) is \
+                    disabled for the moment because of a bug in Tezos"
+      end;
       let _depth, args_code = compile_args depth env args in
       let contract = translate contract in
       args_code @
