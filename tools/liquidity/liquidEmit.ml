@@ -129,7 +129,7 @@ let rec emit_code ~expand code =
   | CHECK_SIGNATURE -> M_INS ("CHECK_SIGNATURE", name)
   | SIZE -> M_INS ("SIZE", name)
   | IMPLICIT_ACCOUNT -> M_INS ("IMPLICIT_ACCOUNT", name)
-  | SET_DELEGATE -> M_INS ("SET_ACCOUNT", name)
+  | SET_DELEGATE -> M_INS ("SET_DELEGATE", name)
   | CONS -> M_INS ("CONS", name)
   | OR -> M_INS ("OR", name)
   | XOR -> M_INS ("XOR", name)
