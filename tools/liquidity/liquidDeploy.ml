@@ -760,7 +760,7 @@ let get_predecessor () =
   with Not_found ->
     raise_response_error "get_predecessor" r
 
-let get_procotol () =
+let get_protocol () =
   send_get "/chains/main/blocks/head/header" >>= fun r ->
   let r = Ezjsonm.from_string r in
   try
@@ -957,7 +957,7 @@ let sign sk op_b =
 
 let inject ?loc_table ?sk ~head json_op op =
   let op_b = MBytes.of_string (Hex.to_string op) in
-  get_procotol () >>= fun protocol ->
+  get_protocol () >>= fun protocol ->
   let signed_op, op_hash, data = match sk with
     | None ->
       let op_hash =
@@ -996,27 +996,31 @@ let inject ?loc_table ?sk ~head json_op op =
        Ezjsonm.find r ["contents"] |> Ezjsonm.get_list (fun o -> o) in
      Lwt_list.map_p (fun o ->
          try
-           let result = Ezjsonm.find o ["metadata"; "operation_result" ] in
-           let status = Ezjsonm.find result ["status"] |> Ezjsonm.get_string in
-           match status with
-           | "failed" ->
-             let errors =
-               try Ezjsonm.find result ["errors"]
-               with Not_found -> `A [] in
-             begin try
-               raise_response_error ?loc_table status errors
-               with exn -> return_error exn
-             end
-           | "backtracked" | "skipped" ->
-             return_error (Failure status)
-           | "applied" ->
-             let contracts =
-               try
-                 Ezjsonm.find result ["originated_contracts"]
-                 |> Ezjsonm.get_list Ezjsonm.get_string
-               with Not_found -> [] in
-             return_ok contracts
-           | _ -> return_error (Failure status)
+           match Ezjsonm.(find o ["kind"] |> get_string) with
+           | "activate_account" -> return_ok []
+           | _ ->
+             let result = Ezjsonm.find o ["metadata"; "operation_result" ] in
+             let status =
+               Ezjsonm.find result ["status"] |> Ezjsonm.get_string in
+             match status with
+             | "failed" ->
+               let errors =
+                 try Ezjsonm.find result ["errors"]
+                 with Not_found -> `A [] in
+               begin try
+                   raise_response_error ?loc_table status errors
+                 with exn -> return_error exn
+               end
+             | "backtracked" | "skipped" ->
+               return_error (Failure status)
+             | "applied" ->
+               let contracts =
+                 try
+                   Ezjsonm.find result ["originated_contracts"]
+                   |> Ezjsonm.get_list Ezjsonm.get_string
+                 with Not_found -> [] in
+               return_ok contracts
+             | _ -> return_error (Failure status)
          with Not_found -> return_error (Failure "operation_result")
        ) contents
      >>= function
