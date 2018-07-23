@@ -319,6 +319,7 @@ let rec decompile contract =
                  | "PAIR" -> Prim_tuple
                  | "COMPARE" -> Prim_compare
                  | "CONCAT" -> Prim_concat
+                 | "SLICE" -> Prim_slice
                  | "UPDATE" -> Prim_coll_update
                  | "MEM" -> Prim_coll_mem
                  | "SIZE" -> Prim_coll_size

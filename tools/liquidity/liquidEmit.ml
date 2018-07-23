@@ -114,6 +114,7 @@ let rec emit_code ~expand code =
   | GET -> M_INS ("GET", name)
   | UPDATE -> M_INS ("UPDATE", name)
   | CONCAT -> M_INS ("CONCAT", name)
+  | SLICE -> M_INS ("SLICE", name)
   | MEM -> M_INS ("MEM", name)
   | SELF -> M_INS ("SELF", name)
   (*  | SOURCE -> M_INS "SOURCE" *)

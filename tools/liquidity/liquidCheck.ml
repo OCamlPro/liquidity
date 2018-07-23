@@ -714,6 +714,12 @@ and typecheck_prim1 env prim loc args =
        | Prim_coll_size, [{ ty = Tlist _ } ] -> Prim_list_size
        | Prim_coll_size, [{ ty = Tset _ } ] -> Prim_set_size
        | Prim_coll_size, [{ ty = Tmap _ } ] -> Prim_map_size
+       | Prim_coll_size, [{ ty = Tstring } ] -> Prim_string_size
+       | Prim_coll_size, [{ ty = Tbytes } ] -> Prim_bytes_size
+       | Prim_slice, [ _; _; { ty = Tstring } ] -> Prim_string_sub
+       | Prim_slice, [ _; _; { ty = Tbytes } ] -> Prim_bytes_sub
+       | Prim_concat, [{ ty = Tlist Tstring } ] -> Prim_string_concat
+       | Prim_concat, [{ ty = Tlist Tbytes } ] -> Prim_bytes_concat
        | _ -> prim
      in
      prim, typecheck_prim2 env prim loc args
@@ -900,13 +906,24 @@ and typecheck_prim2 env prim loc args =
 
   | Prim_list_rev, [ Tlist ty ] -> Tlist ty
 
-  | Prim_concat, [ Tstring; Tstring] -> Tstring
+  | Prim_concat_two, [ Tstring; Tstring ] -> Tstring
+  | Prim_concat_two, [ Tbytes; Tbytes ] -> Tbytes
+  | Prim_string_concat, [ Tlist Tstring ] -> Tstring
+  | Prim_bytes_concat, [ Tlist Tbytes ] -> Tbytes
+
   | Prim_Cons, [ head_ty; Tunit ] ->
      Tlist head_ty
   | Prim_Cons, [ head_ty; Tlist tail_ty ] ->
      if head_ty <> tail_ty then
        type_error loc "Bad types for list" head_ty tail_ty;
      Tlist tail_ty
+
+  | Prim_string_size, [ Tstring ] -> Tnat
+  | Prim_bytes_size, [ Tbytes ] -> Tnat
+
+  | Prim_string_sub, [ Tnat; Tnat; Tstring ] -> Toption Tstring
+  | Prim_bytes_sub, [ Tnat; Tnat; Tbytes ] -> Toption Tbytes
+
   | prim, _ ->
      error loc "Bad %d args for primitive %S:\n    %s\n" (List.length args)
            (LiquidTypes.string_of_primitive prim)

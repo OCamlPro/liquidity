@@ -649,6 +649,21 @@ let rec encode env ( exp : typed_exp ) : encoded_exp =
    *     | _ -> assert false
    *   end *)
 
+  (* concat x y => concat [x; y] *)
+  | Apply (Prim_concat_two, loc, [x; y]) ->
+    let prim = match x.ty with
+      | Tstring -> Prim_string_concat
+      | Tbytes -> Prim_bytes_concat
+      | _ -> assert false in
+    let ty = Tlist x.ty in
+    let l =
+      mk_typed
+        (Apply (Prim_Cons, loc,
+                [x; mk_typed
+                   (Apply (Prim_Cons, loc,
+                           [y; mk_typed_nil ~loc ty])) ty])) ty in
+    encode env { exp with desc = Apply(prim, loc, [l]) }
+
   | Apply (prim, loc, args) ->
     encode_apply exp.name env prim loc args exp.ty
 

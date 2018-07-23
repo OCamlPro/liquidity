@@ -498,6 +498,8 @@ let rec convert_code env expr =
     mic_loc env index annot (CHECK_SIGNATURE)
   | Prim(index, "CONCAT", [], annot) ->
     mic_loc env index annot (CONCAT)
+  | Prim(index, "SLICE", [], annot) ->
+    mic_loc env index annot (SLICE)
   | Prim(index, "EDIV", [], annot) ->
     mic_loc env index annot (EDIV)
   | Prim(index, "EXEC", [], annot) ->

@@ -25,7 +25,7 @@ function pp_tezos(file){
 }
 
 function pp_proto_client(file){
-  return file, { more_deps = [ tezos_dir + "proto_alpha/lib_client/" + file ] };
+  return file, { more_deps = [ tezos_dir + "proto_002_PsYLVpVv/lib_client/" + file ] };
 }
 
 function pp_stdlib(file){

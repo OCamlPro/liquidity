@@ -8,7 +8,7 @@
 (**************************************************************************)
 
 (* The version that will be required to compile the generated files. *)
-let output_version = "0.33"
+let output_version = "0.34"
 
 open Asttypes
 open Longident
@@ -234,6 +234,8 @@ let rec convert_code ~abbrev expr =
         | Ttez
         | Tbool
         | Toperation), _ -> convert_const cst
+      | _, (CList (_ :: _) | CMap (_ :: _) | CBigMap (_ :: _)) ->
+        convert_const cst
       | (Tsignature, CSignature s
         | Tkey, CKey s
         | Tkey_hash, CKey_hash s) when s.[0] <> '0' -> convert_const cst
@@ -256,8 +258,15 @@ let rec convert_code ~abbrev expr =
   | Closure _ -> assert false
 
   | Apply (Prim_Cons, loc, args) ->
-    Exp.construct ~loc:(loc_of_loc loc)
-      (lid "::") (Some (Exp.tuple (List.map (convert_code ~abbrev) args)))
+    let args = match List.rev args with
+      | { desc = Const (_, _, (CList [] as cst)) } :: r_args ->
+        List.fold_left (fun l a -> convert_code ~abbrev a :: l)
+          [convert_const cst]
+          r_args
+      | _ ->
+        List.map (convert_code ~abbrev) args
+    in
+    Exp.construct ~loc:(loc_of_loc loc) (lid "::") (Some (Exp.tuple args))
 
   | Apply (Prim_Some, loc, [arg]) ->
     Exp.construct ~loc:(loc_of_loc loc)

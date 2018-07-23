@@ -183,7 +183,6 @@ type primitive =
   | Prim_set_size
 
   | Prim_Some
-  | Prim_concat
 
   | Prim_list_size
   | Prim_list_rev
@@ -213,6 +212,17 @@ type primitive =
 
   | Prim_exec
 
+  | Prim_bytes_size
+  | Prim_string_size
+
+  | Prim_slice
+  | Prim_bytes_sub
+  | Prim_string_sub
+
+  | Prim_concat
+  | Prim_concat_two
+  | Prim_string_concat
+  | Prim_bytes_concat
 
 type prim_fold =
   | Prim_map_iter
@@ -288,18 +298,20 @@ let () =
               "Map.add", Prim_map_add;
               "Map.remove", Prim_map_remove;
               "Map.mem", Prim_map_mem;
+              "Map.cardinal", Prim_map_size;
               "Map.size", Prim_map_size;
 
               "Set.update", Prim_set_update;
               "Set.add", Prim_set_add;
               "Set.remove", Prim_set_remove;
               "Set.mem", Prim_set_mem;
+              "Set.cardinal", Prim_set_size;
               "Set.size", Prim_set_size;
 
               "Some", Prim_Some;
-              "@", Prim_concat;
 
               "List.rev", Prim_list_rev;
+              "List.length", Prim_list_size;
               "List.size", Prim_list_size;
 
               "Contract.set_delegate", Prim_set_delegate;
@@ -316,6 +328,19 @@ let () =
               "Crypto.check", Prim_check;
 
               "Bytes.pack", Prim_pack;
+              "Bytes.length", Prim_bytes_size;
+              "Bytes.size", Prim_bytes_size;
+              "Bytes.concat", Prim_bytes_concat;
+              "Bytes.slice", Prim_bytes_sub;
+              "Bytes.sub", Prim_bytes_sub;
+
+              "String.length", Prim_string_size;
+              "String.size", Prim_string_size;
+              "String.concat", Prim_string_concat;
+              "String.slice", Prim_string_sub;
+              "String.sub", Prim_string_sub;
+
+              "@", Prim_concat_two;
 
               "::", Prim_Cons;
               "lor", Prim_or;
@@ -342,6 +367,8 @@ let () =
               "Coll.mem", Prim_coll_mem;
               "Coll.find", Prim_coll_find;
               "Coll.size",Prim_coll_size;
+              "Coll.concat",Prim_concat;
+              "Coll.slice",Prim_slice;
 
               "<unknown>", Prim_unknown;
               "<unused>", Prim_unused;
@@ -674,6 +701,7 @@ type 'a pre_michelson =
   | SOME
   | CONCAT
   | MEM
+  | SLICE
 
   | SELF
   | AMOUNT

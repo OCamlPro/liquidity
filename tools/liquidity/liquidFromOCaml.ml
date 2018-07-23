@@ -84,7 +84,7 @@ let () =
 let minimal_version = 0.3
 
 (* The maximal version of liquidity files that are accepted by this compiler *)
-let maximal_version = 0.33
+let maximal_version = 0.34
 
 
 open Asttypes

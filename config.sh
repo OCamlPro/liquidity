@@ -1,4 +1,4 @@
 #!/bin/sh
 
 TEZOS_FULL_PATH=./tezos/tezos-client
-# TEZOS_ARGS="--addr node.tzscan.io --port 80"
+# TEZOS_ARGS="--addr next.tzscan.io --port 18732"

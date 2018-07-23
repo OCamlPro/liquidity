@@ -521,6 +521,9 @@ module Michelson = struct
     | CONCAT ->
       Printf.bprintf b "CONCAT";
       bprint_pre_name b name;
+    | SLICE ->
+      Printf.bprintf b "SLICE";
+      bprint_pre_name b name;
     | MEM ->
       Printf.bprintf b "MEM";
       bprint_pre_name b name;

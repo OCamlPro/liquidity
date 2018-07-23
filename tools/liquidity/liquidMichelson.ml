@@ -373,7 +373,9 @@ the ending NIL is not annotated with a type *)
       | Prim_map_mem
       | Prim_set_update|Prim_set_add|Prim_set_remove
       | Prim_set_mem|Prim_Some
-      | Prim_concat
+      | Prim_string_concat|Prim_bytes_concat|Prim_concat|Prim_concat_two
+      | Prim_string_size|Prim_bytes_size
+      | Prim_string_sub|Prim_bytes_sub|Prim_slice
       | Prim_create_account
       | Prim_blake2b|Prim_sha256|Prim_sha512|Prim_pack
       | Prim_hash_key|Prim_check|Prim_default_account|Prim_list_size
@@ -410,7 +412,8 @@ the ending NIL is not annotated with a type *)
          | Prim_set_mem, 2 -> [ ii MEM ]
 
          | Prim_Some, 1 -> [ ii SOME ]
-         | Prim_concat, 2 -> [ ii CONCAT ]
+         | Prim_string_concat, 1 -> [ ii CONCAT ]
+         | Prim_bytes_concat, 1 -> [ ii CONCAT ]
 
          | Prim_address, 1 -> [ ii ADDRESS ]
          | Prim_create_account, 4 -> [ ii CREATE_ACCOUNT; ii PAIR ]
@@ -440,13 +443,21 @@ the ending NIL is not annotated with a type *)
 
          | Prim_exec, 2 -> [ ii EXEC ]
 
+         | Prim_string_size, 1 -> [ ii SIZE ]
+         | Prim_bytes_size, 1 -> [ ii SIZE ]
+
+         | Prim_string_sub, 3 -> [ ii SLICE ]
+         | Prim_bytes_sub, 3 -> [ ii SLICE ]
+
          | (Prim_eq|Prim_neq|Prim_lt|Prim_le|Prim_gt|Prim_ge
            | Prim_compare|Prim_add|Prim_sub|Prim_mul|Prim_ediv|Prim_map_find
            | Prim_map_update|Prim_map_add|Prim_map_remove
            | Prim_map_mem
            | Prim_set_update|Prim_set_add|Prim_set_remove
            | Prim_set_mem|Prim_Some
-           | Prim_concat
+           | Prim_string_size|Prim_bytes_size
+           | Prim_string_sub|Prim_bytes_sub
+           | Prim_string_concat|Prim_bytes_concat
            | Prim_create_account
            | Prim_blake2b|Prim_sha256|Prim_sha512|Prim_pack
            | Prim_hash_key|Prim_check|Prim_default_account|Prim_list_size
@@ -464,7 +475,8 @@ the ending NIL is not annotated with a type *)
            | Prim_self|Prim_balance|Prim_now|Prim_amount|Prim_gas
            | Prim_Left|Prim_Right|Prim_source|Prim_sender|Prim_unused
            | Prim_coll_find|Prim_coll_update|Prim_coll_mem
-           | Prim_coll_size|Prim_list_rev), _ ->
+           | Prim_coll_size|Prim_list_rev|Prim_slice
+           | Prim_concat|Prim_concat_two), _ ->
            (* already filtered out *)
            Printf.eprintf "Primitive %S ?\n%!"
              (LiquidTypes.string_of_primitive prim)

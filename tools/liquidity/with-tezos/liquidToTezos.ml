@@ -199,6 +199,7 @@ let rec convert_code expand expr =
   | HASH_KEY -> prim "HASH_KEY" [] name
   | CHECK_SIGNATURE -> prim "CHECK_SIGNATURE" [] name
   | CONCAT -> prim "CONCAT" [] name
+  | SLICE -> prim "SLICE" [] name
   | EDIV -> prim "EDIV" [] name
   | EXEC -> prim "EXEC" [] name
   | MOD -> prim "MOD" [] name

@@ -110,6 +110,7 @@ and simplify_step e exprs =
     | SET_DELEGATE | SIZE | CONTRACT _
     | IMPLICIT_ACCOUNT | HASH_KEY
     | BLAKE2B | SHA256 | SHA512
+    | CONCAT
     ),
     {ins=DIP_DROP (n,m); loc} :: exprs when n > 0 ->
      simplify_stepi ~loc (DIP_DROP (n,m))
@@ -121,12 +122,13 @@ and simplify_step e exprs =
     | SET_DELEGATE | SIZE | CONTRACT _
     | IMPLICIT_ACCOUNT | HASH_KEY
     | BLAKE2B | SHA256 | SHA512
+    | CONCAT
     ),
     {ins=DROP; loc} :: exprs -> lii ~loc DROP :: exprs
 
 
   (* takes two items on stack, creates one : 2 -> 1 *)
-  | (PAIR | ADD | SUB | COMPARE | GET | CONCAT | MEM
+  | (PAIR | ADD | SUB | COMPARE | GET | MEM
      | CONS | EXEC
      | OR | AND | XOR | MUL | EDIV | LSL | LSR ),
     {ins=DIP_DROP (n,m); loc} :: exprs when n > 0 ->
@@ -134,7 +136,7 @@ and simplify_step e exprs =
                    (simplify_step e exprs)
 
   (* takes three items on stack, creates one *)
-  | (UPDATE | TRANSFER_TOKENS | CHECK_SIGNATURE),
+  | (UPDATE | TRANSFER_TOKENS | CHECK_SIGNATURE | SLICE),
     {ins=DIP_DROP (n,m); loc} :: exprs when n > 0 ->
      simplify_stepi ~loc (DIP_DROP (n+2,m))
        (simplify_step e exprs)

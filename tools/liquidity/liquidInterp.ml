@@ -722,8 +722,11 @@ let rec interp contract =
     | MEM, x :: y :: stack ->
        let x = node ins.loc (N_PRIM "MEM") [x;y] [seq] in
        x :: stack, x
-    | CONCAT, x :: y :: stack ->
-       let x = node ins.loc (N_PRIM "CONCAT") [x;y] [seq] in
+    | CONCAT, x :: stack ->
+       let x = node ins.loc (N_PRIM "CONCAT") [x] [seq] in
+       x :: stack, x
+    | SLICE, x :: y :: z :: stack ->
+       let x = node ins.loc (N_PRIM "SLICE") [x;y;z] [seq] in
        x :: stack, x
     | OR, x :: y :: stack ->
        let x = node ins.loc (N_PRIM "OR") [x;y] [seq] in
