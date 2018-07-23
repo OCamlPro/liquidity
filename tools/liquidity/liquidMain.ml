@@ -474,7 +474,7 @@ let () =
     exit 1
   | LiquidDeploy.RuntimeFailure (error, Some s, _trace) ->
     LiquidLoc.report_error ~kind:"Failed at runtime" Format.err_formatter error;
-    Format.eprintf "Failed with %S@." s;
+    Format.eprintf "Failed with %s@." s;
     exit 1
   | Failure f ->
     Format.eprintf "Failure: %s@." f;

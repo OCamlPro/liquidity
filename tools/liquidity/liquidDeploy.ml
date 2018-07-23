@@ -220,7 +220,13 @@ let get = ref curl_get
  *   Format.flush_str_formatter () *)
 
 let error_schema =
-  lazy (!get "/errors" >|= Ezjsonm.from_string)
+  lazy (
+      Lwt.catch
+        (fun () -> !get "/errors" >|= Ezjsonm.from_string)
+        (function
+          | RequestError _ | Not_found -> return @@ `O []
+          | exn -> Lwt.fail exn)
+  )
 
 
 let memo_stack_code_cpt = ref 0
@@ -338,8 +344,13 @@ let raise_error_from_l ?loc_table err_msg l =
     let err_msg = Printf.sprintf "in %s" err_msg in
     try
       List.iter (fun (kind, id, loc, title, descr, err) ->
-          match loc, kind, id with
-          | Some loc, "temporary", "proto.alpha.scriptRejectedRuntimeError" ->
+          let is_rejected =
+            try
+              Scanf.sscanf id "proto.%_s@.scriptRejectedRuntimeError" ();
+              true
+            with _ -> false in
+          match loc, kind, is_rejected with
+          | Some loc, "temporary", true ->
             let err_loc, fail_str = fail_msg_of_err loc ~loc_table err in
             let _, trace = error_trace_of_err loc ~loc_table err in
             raise (RuntimeFailure ({err_msg; err_loc}, fail_str, trace))
@@ -358,40 +369,41 @@ let raise_error_from_l ?loc_table err_msg l =
     with Not_found -> raise (ResponseError (default_error ()))
 
 let extract_errors_from_json r schema =
-  let schema_l = Ezjsonm.find schema ["oneOf"] in
   try
-    Ezjsonm.find r ["error"], schema_l
-  with Not_found ->
-  match Ezjsonm.get_list (fun x -> x) r with
-  | err :: _ ->
-    begin try
-        let r = Ezjsonm.find err ["ecoproto"] in
-        let id = Ezjsonm.find err ["id"] |> Ezjsonm.get_string in
-        let schema_l =
-          schema_l
-          |> Ezjsonm.get_list (fun s ->
-              try
-                let s_id =
-                  Ezjsonm.find s ["properties"; "id"; "enum"]
-                  |> Ezjsonm.get_list Ezjsonm.get_string
-                  |> function [s] -> s | _ -> assert false
-                in
-                if s_id <> id then
-                  None
-                else
-                  Some (Ezjsonm.find s
-                          ["properties"; "ecoproto"; "items"; "oneOf"])
-              with Not_found -> None
-            )
-          |> List.find (function None -> false | Some _ -> true)
-          |> function None -> assert false | Some s -> s
-        in
-        r, schema_l
-      with Not_found  -> r, schema_l
-    end
-  | [] -> raise (ResponseError ("Could not parse error"))
-  | exception Ezjsonm.Parse_error _ -> r, schema_l
-
+    let schema_l = Ezjsonm.find schema ["oneOf"] in
+    try
+      Ezjsonm.find r ["error"], schema_l
+    with Not_found ->
+    match Ezjsonm.get_list (fun x -> x) r with
+    | err :: _ ->
+      begin try
+          let r = Ezjsonm.find err ["ecoproto"] in
+          let id = Ezjsonm.find err ["id"] |> Ezjsonm.get_string in
+          let schema_l =
+            schema_l
+            |> Ezjsonm.get_list (fun s ->
+                try
+                  let s_id =
+                    Ezjsonm.find s ["properties"; "id"; "enum"]
+                    |> Ezjsonm.get_list Ezjsonm.get_string
+                    |> function [s] -> s | _ -> assert false
+                  in
+                  if s_id <> id then
+                    None
+                  else
+                    Some (Ezjsonm.find s
+                            ["properties"; "ecoproto"; "items"; "oneOf"])
+                with Not_found -> None
+              )
+            |> List.find (function None -> false | Some _ -> true)
+            |> function None -> assert false | Some s -> s
+          in
+          r, schema_l
+        with Not_found  -> r, schema_l
+      end
+    | [] -> raise (ResponseError ("Could not parse error"))
+    | exception Ezjsonm.Parse_error _ -> r, schema_l
+  with Not_found -> r, schema
 
 let rec descr_of_id id schema =
   try
@@ -424,7 +436,7 @@ let rec descr_of_id id schema =
           None, None
       )
     |> List.find (function Some _, _ | _, Some _ -> true | _ -> false)
-  with Not_found ->
+  with Not_found | Ezjsonm.Parse_error _ ->
     None, None
 
 let raise_response_error ?loc_table msg r =
