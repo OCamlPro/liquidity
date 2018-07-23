@@ -92,7 +92,7 @@ let comparable_type = function
   | Tnat
   | Ttez
   | Tstring
-  (* | Tbytes TODO removed because of a bug in Michelson/Tezos *)
+  | Tbytes
   | Ttimestamp
   | Tkey_hash
   | Taddress -> true
