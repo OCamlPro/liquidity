@@ -183,6 +183,17 @@ let rec compute decompile code to_inline =
        let ifelse = iter ifelse in
        { exp with desc = If(cond, ifthen, ifelse) }
 
+    | Apply(Prim_exec, loc, [x; f]) ->
+       (* inline body of lambda *)
+       let x = iter x in
+       let f = iter f in
+       begin match f.desc with
+         | Lambda (arg, _, _, body, _) ->
+           iter { exp with desc = Let (arg, loc, x, body) }
+         | _ ->
+           { exp with desc = Apply(Prim_exec, loc, [x; f]) }
+       end
+
     | Apply(prim, loc, args) ->
        let args = List.map iter args in
        { exp with desc = Apply(prim, loc, args) }
