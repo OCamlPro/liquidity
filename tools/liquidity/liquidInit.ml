@@ -52,10 +52,10 @@ let rec subst_empty_big_map code =
       let e2' = subst_empty_big_map e2 in
       if e1 == e1' && e2 == e2' then desc else Seq (e1', e2')
 
-    | Let (s, loc, e1, e2) ->
+    | Let (s, inlined, loc, e1, e2) ->
       let e1' = subst_empty_big_map e1 in
       let e2' = subst_empty_big_map e2 in
-      if e1 == e1' && e2 == e2' then desc else Let (s, loc, e1', e2')
+      if e1 == e1' && e2 == e2' then desc else Let (s, inlined, loc, e1', e2')
 
     | Loop (s, loc, e1, e2) ->
       let e1' = subst_empty_big_map e1 in
@@ -166,14 +166,14 @@ let tmp_contract_of_init ~loc (args, code) storage_ty =
   let parameter, code = match args with
     | [] -> Tunit, code
     | [arg, loc, ty] ->
-      let code = mk (Let (arg, loc, parameter_var, code)) () in
+      let code = mk (Let (arg, false, loc, parameter_var, code)) () in
       ty, code
     | _ ->
       let parameter = Ttuple (List.map (fun (_,_,ty) -> ty) args) in
       let code, _ = List.fold_right (fun (arg, loc, ty) (code, i) ->
           let i = i - 1 in
           let code = mk (
-              Let (arg, loc,
+              Let (arg, false, loc,
                    mk (Apply
                          (Prim_tuple_get, loc, [parameter_var; mk_nat ~loc i]))
                      (),

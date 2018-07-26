@@ -508,7 +508,7 @@ type ('ty, 'a) exp = {
 }
 
 and ('ty, 'a) exp_desc =
-  | Let of string * location * ('ty, 'a) exp * ('ty, 'a) exp
+  | Let of string * bool * location * ('ty, 'a) exp * ('ty, 'a) exp
   | Var of string * location * string list
   | SetVar of string * location * string list * ('ty, 'a) exp
   | Const of location * datatype * const
@@ -614,7 +614,7 @@ let mk =
       | Lambda (_, _, _, e, _) -> e.fail, false (* e.transfer *)
 
       | Seq (e1, e2)
-      | Let (_, _, e1, e2)
+      | Let (_, _, _, e1, e2)
       | Loop (_, _, e1, e2)
       | Map (_, _, _, e1, e2) ->
         e1.fail || e2.fail, false (* e1.transfer || e2.transfer *)
@@ -796,6 +796,7 @@ type typecheck_env = {
     vars_counts : int ref StringMap.t;
     env : env;
     to_inline : encoded_exp StringMap.t ref;
+    force_inline : encoded_exp StringMap.t ref;
     t_contract_sig : contract_sig;
     clos_env : closure_env option;
 }
@@ -808,6 +809,7 @@ let empty_typecheck_env ~warnings t_contract_sig env = {
   vars = StringMap.empty;
   vars_counts = StringMap.empty;
   to_inline = ref StringMap.empty;
+  force_inline = ref StringMap.empty;
   env = env;
   clos_env = None;
   t_contract_sig;

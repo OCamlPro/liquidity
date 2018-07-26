@@ -570,7 +570,7 @@ let rec decompile contract =
 
   and mklet node desc =
     let node_liq = mk ?name:node.node_name desc in
-    mk (Let (var_of node, node.loc, node_liq, decompile_next node))
+    mk (Let (var_of node, false, node.loc, node_liq, decompile_next node))
 
   in
   let (begin_node, end_node) = contract.code in

@@ -84,7 +84,7 @@ let () =
 let minimal_version = 0.3
 
 (* The maximal version of liquidity files that are accepted by this compiler *)
-let maximal_version = 0.34
+let maximal_version = 0.35
 
 
 open Asttypes
@@ -575,7 +575,7 @@ let deconstruct_pat env pat e =
     let e =
       List.fold_left (fun e (v, loc, indexes) ->
           let access = access_of_deconstruct var_name loc indexes in
-          mk (Let (v, loc, access, e))
+          mk (Let (v, false, loc, access, e))
         ) e vars_infos
     in
     var_name, ty, e
@@ -748,10 +748,14 @@ let rec translate_code env exp =
     | { pexp_desc = Pexp_let (Nonrecursive, [ {
         pvb_pat = pat;
         pvb_expr = var_exp;
+        pvb_attributes = attrs;
       } ], body) } ->
       let exp, body = translate_code env var_exp, translate_code env body in
       let var_name, _, body = deconstruct_pat env pat body in
-      Let (var_name, loc_of_loc pat.ppat_loc, exp, body)
+      let inline = match attrs with
+        | [ { txt = "inline"} , PStr [] ] -> true
+        | _ -> false in
+      Let (var_name, inline, loc_of_loc pat.ppat_loc, exp, body)
 
     | { pexp_desc = Pexp_sequence (exp1, exp2) } ->
        Seq (translate_code env exp1, translate_code env exp2)
@@ -1364,14 +1368,13 @@ let rec translate_structure funs env init ast =
     let contract = translate_head env funs head_exp default_args in
     contract, init
 
-  | { pstr_desc =
-         Pstr_value (
-             Nonrecursive,
-             [ {
-                 pvb_pat = { ppat_desc = Ppat_var _ };
-                 pvb_expr = { pexp_desc = Pexp_fun _ };
-               } as f_pvb
-    ]); pstr_loc = f_loc } :: ast ->
+  | { pstr_desc = (
+      Pstr_value (
+        Nonrecursive,
+        [ {
+          pvb_pat = { ppat_desc = Ppat_var _ };
+        } as f_pvb
+        ])); pstr_loc = f_loc } :: ast ->
     translate_structure ((f_pvb, f_loc) :: funs) env init ast
 
   | { pstr_desc = Pstr_type (Recursive,

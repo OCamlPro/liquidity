@@ -39,7 +39,7 @@ let rec bv code =
          StringSet.union set (bv arg)
        ) StringSet.empty args
 
-  | Let (var, loc, exp, body) ->
+  | Let (var, inline, loc, exp, body) ->
      StringSet.union (bv exp)
                      (StringSet.remove var (bv body))
 
@@ -193,12 +193,12 @@ let rec bound code =
      let desc = Apply(prim,loc,args) in
      mk desc code bv
 
-  | Let (var, loc, exp, body) ->
+  | Let (var, inline, loc, exp, body) ->
      let exp = bound exp in
      let body = bound body in
      let bv = StringSet.union exp.bv
                               (StringSet.remove var body.bv) in
-     let desc = Let(var, loc, exp, body) in
+     let desc = Let(var, inline, loc, exp, body) in
      mk desc code bv
 
   | Lambda (arg_name, arg_type, loc, body, res_type) ->

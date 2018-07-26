@@ -43,11 +43,13 @@ let check_proposition (p:proposition) =
   if p.amount > Current.balance () then
     Current.failwith "Balance to low for withdrawal"
   else ()
+[@@inline]
 
 (* returns true if two proositions are identical *)
 let equal_props ((p1:proposition), (p2:proposition)) =
   p1.destination = p2.destination &&
   p1.amount = p2.amount
+[@@inline]
 
 (* returns true if a proposition p should be executed immediately *)
 let should_execute ((p : proposition), (storage : storage)) =

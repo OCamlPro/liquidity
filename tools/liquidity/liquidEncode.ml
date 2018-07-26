@@ -380,7 +380,7 @@ let rec decr_counts_vars env e =
   | Lambda (_, _, _, e, _) -> decr_counts_vars env e
 
   | Seq (e1, e2)
-  | Let (_, _, e1, e2)
+  | Let (_, _, _, e1, e2)
   | Loop (_, _, e1, e2)
   | Map (_, _, _, e1, e2) ->
     decr_counts_vars env e1;
@@ -422,26 +422,33 @@ let rec encode env ( exp : typed_exp ) : encoded_exp =
     let c = deconstify loc ty cst in
     mk ?name:exp.name c.desc ty
 
-  | Let (name, loc, e, body) ->
+  | Let (name, inline, loc, e, body) ->
      let e = encode env e in
      let e = if env.annot && e.name = None
        then { e with name = Some name }
        else e
      in
      let (new_name, env, count) = new_binding env name ~fail:e.fail e.ty in
+     if inline then (* indication for closure encoding *)
+       env.force_inline := StringMap.add name e !(env.force_inline);
      let body = encode env body in
      (* check_used env name loc count; *)
-     begin
+     if not e.transfer (* no inlining of values with transfer *) then begin
        match !count with
-       | c when c <= 0 && not e.fail && not e.transfer ->
-         decr_counts_vars env e;
-         env.to_inline :=
-           StringMap.add new_name (const_unit ~loc) !(env.to_inline)
-       | 1 ->
+       | c when c <= 0 ->
+         if e.fail then
+           () (* No inling of values with side effects which don't
+                 appear later on *)
+         else begin
+           decr_counts_vars env e;
+           env.to_inline :=
+             StringMap.add new_name (const_unit ~loc) !(env.to_inline)
+         end
+       | c when c = 1 || inline ->
          env.to_inline := StringMap.add new_name e !(env.to_inline)
        | _ -> ()
      end;
-     mk ?name:exp.name (Let (new_name, loc, e, body)) body.ty
+     mk ?name:exp.name (Let (new_name, inline, loc, e, body)) body.ty
 
   | Var (name, loc, labels) ->
     let e = find_var env loc name in
@@ -492,7 +499,7 @@ let rec encode env ( exp : typed_exp ) : encoded_exp =
            encode env
              (mk_typed (SetVar (tmp_name, loc, labels, arg)) exp.ty)
          in
-         mk (Let (new_name, loc, get_exp, body)) body.ty
+         mk (Let (new_name, false, loc, get_exp, body)) body.ty
      in
      mk ?name:exp.name (Apply(Prim_tuple_set, loc,
                               [arg1; mk_nat ~loc n; arg])) arg1.ty
@@ -759,9 +766,16 @@ let rec encode env ( exp : typed_exp ) : encoded_exp =
      let lambda_arg_name = arg_name in
      let lambda_body = body in
      let bvs = LiquidBoundVariables.bv exp in
-     if StringSet.is_empty bvs then
-       (* not a closure, create a real lambda *)
-       let env = { env_at_lambda with vars = StringMap.empty } in
+     if StringSet.is_empty bvs ||
+        StringSet.for_all (fun bv -> StringMap.mem bv !(env.force_inline)) bvs
+     then
+       (* not a closure (or will be pure after inlining),
+          create a real lambda *)
+       let env = { env_at_lambda with
+                   vars = StringSet.fold (fun bv ->
+                       StringMap.add bv (StringMap.find bv env.vars)
+                     ) bvs StringMap.empty
+                 } in
        let (new_arg_name, env, arg_count) =
          new_binding env lambda_arg_name lambda_arg_type in
        let body = encode env lambda_body in
@@ -918,6 +932,7 @@ and encode_contract ?(annot=false) ?(decompiling=false) env contract =
       vars = StringMap.empty;
       vars_counts = StringMap.empty;
       to_inline = ref StringMap.empty;
+      force_inline = ref StringMap.empty;
       env;
       clos_env = None;
       t_contract_sig = contract.contract_sig;
@@ -952,6 +967,7 @@ let encode_const env t_contract_sig const =
       vars = StringMap.empty;
       vars_counts = StringMap.empty;
       to_inline = ref StringMap.empty;
+      force_inline = ref StringMap.empty;
       env = env;
       clos_env = None;
       t_contract_sig;

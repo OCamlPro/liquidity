@@ -138,7 +138,7 @@ let rec loc_exp e = match e.desc with
   | ContractAt (loc, _, _)
   | Unpack (loc, _, _) -> loc
 
-  | Let (_, _, _, e) -> loc_exp e
+  | Let (_, _, _, _, e) -> loc_exp e
 
   | If (e1, _, e2)
   | Seq (e1, e2) ->
@@ -159,7 +159,7 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
   | Const (loc, ty, cst) ->
     mk ?name:exp.name (Const (loc, ty, cst)) (ty:datatype)
 
-  | Let (name, loc, exp, body) ->
+  | Let (name, inline, loc, exp, body) ->
      let exp = typecheck env exp in
      if exp.ty = Tfail then
        match exp.desc with
@@ -169,7 +169,7 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
      else
        let (env, count) = new_binding env name ~fail:exp.fail exp.ty in
        let body = typecheck env body in
-       let desc = Let (name, loc, exp, body ) in
+       let desc = Let (name, inline, loc, exp, body ) in
        check_used env name loc count;
        mk ?name:exp.name desc body.ty
 
@@ -957,6 +957,7 @@ and typecheck_contract ~warnings env contract =
       vars = StringMap.empty;
       vars_counts = StringMap.empty;
       to_inline = ref StringMap.empty;
+      force_inline = ref StringMap.empty;
       env = env;
       clos_env = None;
       t_contract_sig = contract.contract_sig;

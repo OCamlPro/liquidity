@@ -89,7 +89,7 @@ let rec translate_code code =
        let e2 = compile depth env e2 in
        e1 @ [ ii ~loc:LiquidLoc.noloc DROP ] @ e2
 
-    | Let (name, loc, e1, e2) ->
+    | Let (name, _inline, loc, e1, e2) ->
        let e1 = compile depth env e1 in
        let env = StringMap.add name depth env in
        let depth = depth + 1 in

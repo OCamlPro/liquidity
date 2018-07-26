@@ -897,11 +897,11 @@ module Liquid = struct
       end;
 
     match code.desc with
-    | Let (name, _loc, exp, body) ->
+    | Let (name, inline, _loc, exp, body) ->
        let indent2 = indent ^ "  " in
        Printf.bprintf b "\n%slet %s =" indent name;
        bprint_code_rec ~debug b indent2 exp;
-       Printf.bprintf b "\n%sin" indent;
+       Printf.bprintf b "\n%s%sin" indent (if inline then "[@@inline] " else "");
        bprint_code_rec ~debug b indent body
     | Const (_loc, ty, cst) ->
        Printf.bprintf b "\n%s" indent;

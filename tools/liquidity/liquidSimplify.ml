@@ -28,7 +28,7 @@ let rec compute decompile code to_inline =
 
     | Seq (e1, e2) -> size e1 + size e2
 
-    | Let (_, _, e1, e2) -> size e1
+    | Let (_, _, _, e1, e2) -> size e1
 
     | Loop (_, _, e1, e2) -> 30 + size e1 + size e2
 
@@ -72,10 +72,10 @@ let rec compute decompile code to_inline =
        end
     | Var (name, _loc, _::_) -> assert false
     | SetVar (name, _loc, _, _) -> assert false
-    | Let (name, loc, v, { desc = Var (vname, _loc, []) })
+    | Let (name, _inline, loc, v, { desc = Var (vname, _loc, []) })
       when vname = name -> (* special case for let x = e in x *)
       iter v
-    | Let (name, loc, ({ ty = Ttuple tys} as v),
+    | Let (name, _inline, loc, ({ ty = Ttuple tys} as v),
            { desc = Apply (Prim_tuple, _, tuple) })
       when
         let len, ok =
@@ -92,7 +92,7 @@ let rec compute decompile code to_inline =
       ->
       (* special case for let x = v in (x.(0), x.(1)) *)
       iter v
-    | Let (name, loc, v, body) ->
+    | Let (name, inline, loc, v, body) ->
       if decompile && v.name = None && size v <= inline_treshold_low &&
          (StringMap.mem name old_to_inline ||
           match v.desc with
@@ -118,7 +118,7 @@ let rec compute decompile code to_inline =
             else
               { exp with desc = Seq(v, body); name = None }
           with Exit ->
-            { exp with desc = Let(name, loc, v, body) }
+            { exp with desc = Let(name, inline, loc, v, body) }
         end
 
     | MatchOption(arg, loc, ifnone, name, ifsome) ->
@@ -189,7 +189,7 @@ let rec compute decompile code to_inline =
        let f = iter f in
        begin match f.desc with
          | Lambda (arg, _, _, body, _) ->
-           iter { exp with desc = Let (arg, loc, x, body) }
+           iter { exp with desc = Let (arg, false, loc, x, body) }
          | _ ->
            { exp with desc = Apply(Prim_exec, loc, [x; f]) }
        end

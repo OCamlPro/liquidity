@@ -8,7 +8,7 @@
 (**************************************************************************)
 
 (* The version that will be required to compile the generated files. *)
-let output_version = "0.34"
+let output_version = "0.35"
 
 open Asttypes
 open Longident
@@ -243,11 +243,13 @@ let rec convert_code ~abbrev expr =
         Exp.constraint_
           ~loc:(loc_of_loc loc) (convert_const cst) (convert_type ~abbrev ty)
     end
-  | Let (var, loc, exp, body) ->
+
+  | Let (var, _inline, loc, exp, body) ->
      Exp.let_ ~loc:(loc_of_loc loc) Nonrecursive
        [ Vb.mk (pat_of_name ~loc var)
            (convert_code ~abbrev exp)]
        (convert_code ~abbrev body)
+
   | Lambda (arg_name, arg_type, loc, body, _res_type) ->
      Exp.fun_ ~loc:(loc_of_loc loc) Nolabel None
        (Pat.constraint_
