@@ -785,6 +785,14 @@ let rec interp contract =
        let x = node ins.loc (N_PRIM "NOT") [x] [seq] in
        x :: stack, x
 
+    | LSL, x :: y :: stack ->
+       let x = node ins.loc (N_PRIM "LSL") [x; y] [seq] in
+       x :: stack, x
+
+    | LSR, x :: y :: stack ->
+       let x = node ins.loc (N_PRIM "LSR") [x; y] [seq] in
+       x :: stack, x
+
     | STEPS_TO_QUOTA, stack ->
        let x = node ins.loc (N_PRIM "STEPS_TO_QUOTA") [] [seq] in
        x :: stack, x

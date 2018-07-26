@@ -561,6 +561,10 @@ let rec convert_code env expr =
     mic_loc env index annot (ISNAT)
   | Prim(index, "NOT", [], annot) ->
     mic_loc env index annot (NOT)
+  | Prim(index, "LSL", [], annot) ->
+    mic_loc env index annot (LSL)
+  | Prim(index, "LSR", [], annot) ->
+    mic_loc env index annot (LSR)
   | Prim(index, "STEPS_TO_QUOTA", [], annot) ->
     mic_loc env index annot (STEPS_TO_QUOTA)
   | Prim(index, "CREATE_ACCOUNT", [], annot) ->
