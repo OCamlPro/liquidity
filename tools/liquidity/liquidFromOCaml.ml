@@ -1456,12 +1456,17 @@ let predefined_types =
                    "tez", Tunit;
                    "string", Tunit;
                    "bytes", Tunit;
+                   "timestamp", Tunit;
                    "key", Tunit;
+                   "key_hash", Tunit;
                    "signature", Tunit;
+                   "operation", Tunit;
+                   "address", Tunit;
                    "option", Tunit;
                    "list", Tunit;
                    "map", Tunit;
                    "set", Tunit;
+                   "big_map", Tunit;
                    "variant", Tunit;
                    "contract", Tunit;
                  ]
