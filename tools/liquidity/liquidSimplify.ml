@@ -67,7 +67,6 @@ let rec compute decompile code to_inline =
        begin
          try
            let v = StringMap.find name !to_inline in
-           if not decompile then assert (not v.fail);
            iter v
          with Not_found -> exp
        end
@@ -94,8 +93,7 @@ let rec compute decompile code to_inline =
       (* special case for let x = v in (x.(0), x.(1)) *)
       iter v
     | Let (name, loc, v, body) ->
-      if decompile && v.name = None && not v.fail && not v.transfer
-         && size v <= inline_treshold_low &&
+      if decompile && v.name = None && size v <= inline_treshold_low &&
          (StringMap.mem name old_to_inline ||
           match v.desc with
           | Var _ | Apply (Prim_tuple_get, _, _) -> true

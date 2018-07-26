@@ -78,8 +78,7 @@ let find_var ?(count_used=true) env loc name =
       if env.annot then Some vname
       else None in
     let exp = mk ?name:aname (Var (name, loc, [])) ty in
-    (* ignore fail status when decompiling (for inlining) *)
-    if env.decompiling then exp else { exp with fail }
+    { exp with fail }
   with Not_found ->
   match env.clos_env with
   | None -> error loc "unbound variable %S" name
@@ -424,7 +423,6 @@ let rec encode env ( exp : typed_exp ) : encoded_exp =
     mk ?name:exp.name c.desc ty
 
   | Let (name, loc, e, body) ->
-
      let e = encode env e in
      let e = if env.annot && e.name = None
        then { e with name = Some name }
@@ -433,9 +431,9 @@ let rec encode env ( exp : typed_exp ) : encoded_exp =
      let (new_name, env, count) = new_binding env name ~fail:e.fail e.ty in
      let body = encode env body in
      (* check_used env name loc count; *)
-     if not e.fail && not e.transfer then begin
+     begin
        match !count with
-       | c when c <= 0 ->
+       | c when c <= 0 && not e.fail && not e.transfer ->
          decr_counts_vars env e;
          env.to_inline :=
            StringMap.add new_name (const_unit ~loc) !(env.to_inline)
