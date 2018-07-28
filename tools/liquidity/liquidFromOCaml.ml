@@ -78,7 +78,7 @@ let () =
     "asr", INFIXOP4("asr")
 ]
 
-
+let ident_counter = ref 0
 
 (* The minimal version of liquidity files that are accepted by this compiler *)
 let minimal_version = 0.3
@@ -781,14 +781,34 @@ let rec translate_code env exp =
               [
                 Nolabel, { pexp_desc =
                              Pexp_fun (Nolabel,None,
-                                       { ppat_desc = Ppat_var { txt = name } },
+                                       pat,
                                        body
                          ) };
                 Nolabel, arg
       ]) } ->
-       let body = translate_code env body in
-       let arg = translate_code env arg in
-       Loop (name, loc_of_loc exp.pexp_loc, body, arg)
+      let name, body =
+        match pat.ppat_desc with
+        | Ppat_var { txt = name } -> name, body
+        | _ ->
+          incr ident_counter;
+          let name = Printf.sprintf "tmp#%d" !ident_counter in
+          let body =
+            { exp with
+              pexp_desc =
+                Pexp_let(Nonrecursive,
+                         [{ pvb_pat = pat;
+                            pvb_expr = { exp with
+                                         pexp_desc = Pexp_ident(
+                                             { txt = Lident name; loc })};
+                            pvb_attributes = [];
+                            pvb_loc = exp.pexp_loc;
+                          }],
+                         body) } in
+          name, body
+      in
+      let body = translate_code env body in
+      let arg = translate_code env arg in
+      Loop (name, loc_of_loc exp.pexp_loc, body, arg)
 
     | { pexp_desc =
           Pexp_apply (
