@@ -909,7 +909,12 @@ let rec encode env ( exp : typed_exp ) : encoded_exp =
 
   | CreateContract (loc, args, contract) ->
     let args = List.map (encode env) args in
-    let contract, _ = encode_contract ~annot:env.annot env.env contract in
+    let contract, c_to_inline =
+      encode_contract ~annot:env.annot env.env contract in
+    (* Performed inlining and simplifications on subcontract at encoding time *)
+    let contract =
+      LiquidSimplify.simplify_contract ~decompile_annoted:env.decompiling
+        contract c_to_inline in
     mk ?name:exp.name (CreateContract (loc, args, contract)) exp.ty
 
 

@@ -1077,7 +1077,7 @@ module Liquid = struct
          ) cases;
        ()
     | CreateContract (_loc, args, contract) ->
-       Printf.bprintf b "\n%s(Contract.call" indent;
+       Printf.bprintf b "\n%s(Contract.create" indent;
        let indent2 = indent ^ "  " in
        List.iter (fun exp ->
            bprint_code_rec ~debug b indent2 exp

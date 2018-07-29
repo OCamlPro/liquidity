@@ -36,8 +36,11 @@ let rec simplify_pre ({ ins } as e) =
       | DIP (n, e) -> DIP (n, simplify_pre e)
       | LOOP e -> LOOP (simplify_pre e)
       | ITER e -> ITER (simplify_pre e)
+      | MAP e -> MAP (simplify_pre e)
       | LAMBDA (arg_type, res_type, e) ->
         LAMBDA (arg_type, res_type, simplify_pre e)
+      | CREATE_CONTRACT c -> CREATE_CONTRACT (simplify c)
+
       | _ -> ins
   }
 
@@ -110,7 +113,7 @@ and simplify_step e exprs =
     | SET_DELEGATE | SIZE | CONTRACT _
     | IMPLICIT_ACCOUNT | HASH_KEY
     | BLAKE2B | SHA256 | SHA512
-    | CONCAT
+    | CONCAT | RENAME _ | PACK | UNPACK _
     ),
     {ins=DIP_DROP (n,m); loc} :: exprs when n > 0 ->
      simplify_stepi ~loc (DIP_DROP (n,m))
@@ -122,7 +125,7 @@ and simplify_step e exprs =
     | SET_DELEGATE | SIZE | CONTRACT _
     | IMPLICIT_ACCOUNT | HASH_KEY
     | BLAKE2B | SHA256 | SHA512
-    | CONCAT
+    | CONCAT | RENAME _ | PACK | UNPACK _
     ),
     {ins=DROP; loc} :: exprs -> lii ~loc DROP :: exprs
 
@@ -249,5 +252,5 @@ and simplify_steps list tail =
   in
   iter (List.rev list) tail
 
-let simplify contract =
+and simplify contract =
   { contract with code = simplify_pre contract.code }

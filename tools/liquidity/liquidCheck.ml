@@ -44,10 +44,6 @@ let error_not_comparable loc prim ty1 ty2 =
     (LiquidPrinter.Liquid.string_of_type ty1)
     (LiquidPrinter.Liquid.string_of_type ty2)
 
-let uniq_ident env name =
-  env.counter := !(env.counter) + 1;
-  Printf.sprintf "%s/%d" name !(env.counter)
-
 let new_binding env name ?(fail=false) ty =
   let count = ref 0 in
   let env = { env with

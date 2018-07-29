@@ -225,9 +225,7 @@ let rec compute decompile code to_inline =
 
     | CreateContract (loc, args, contract) ->
       let args = List.map iter args in
-      let contract =
-        simplify_contract ~decompile_annoted:decompile contract !to_inline
-      in
+      (* contract is already simplified *)
       { exp with desc = CreateContract(loc, args, contract) }
 
     | ContractAt (loc, addr, ty) ->
