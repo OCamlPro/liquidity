@@ -588,20 +588,30 @@ and finalize_fail_pre ({ ins } as e) =
       | DIP (n, e) -> DIP (n, finalize_fail_pre e)
       | LOOP e -> LOOP (finalize_fail_pre e)
       | ITER e -> ITER (finalize_fail_pre e)
+      | MAP e -> MAP (finalize_fail_pre e)
       | LAMBDA (arg_type, res_type, e) ->
         LAMBDA (arg_type, res_type, finalize_fail_pre e)
       | _ -> ins
   }
+
+and end_fails = function
+  | FAILWITH -> true
+  | SEQ exprs ->
+    (match List.rev exprs with
+     | e :: _ -> end_fails e.ins
+     | [] -> false)
+  | IF (e1, e2) | IF_NONE (e1, e2) | IF_LEFT (e1, e2) | IF_CONS (e1, e2) ->
+    end_fails e1.ins && end_fails e2.ins
+  | DIP (_, e) -> end_fails e.ins
+  | _ -> false
 
 and finalize_fail_seq acc exprs =
   match exprs with
   | [] -> List.rev acc
   | e :: exprs ->
     let e = finalize_fail_pre e in
-    match e.ins with
-    | FAILWITH -> List.rev (e :: acc)
-    | _ ->
-      finalize_fail_seq (e :: acc) exprs
+    if end_fails e.ins then List.rev (e :: acc)
+    else finalize_fail_seq (e :: acc) exprs
 
 (*
 let translate filename ~peephole contract =

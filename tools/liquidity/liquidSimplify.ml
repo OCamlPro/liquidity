@@ -72,6 +72,8 @@ let rec compute decompile code to_inline =
        end
     | Var (name, _loc, _::_) -> assert false
     | SetVar (name, _loc, _, _) -> assert false
+    | Let (name, _inline, loc, v, _body) when v.ty = Tfail ->
+      iter v
     | Let (name, _inline, loc, v, { desc = Var (vname, _loc, []) })
       when vname = name -> (* special case for let x = e in x *)
       iter v
