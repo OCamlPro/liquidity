@@ -141,6 +141,38 @@ end = struct (* Arrays are for tuples, not typable in OCaml *)
 
 end
 
+module String = struct
+  include String
+  let length s = Int (Z.of_int (length s))
+  let size = length
+  let sub start len s =
+    try
+      let start, len =
+        match start, len with
+        | Int start, Int len -> Z.to_int start, Z.to_int len
+        | _ -> assert false in
+      Some (sub s start len)
+    with _ -> None
+  let slice = sub
+  let concat = concat ""
+end
+
+module Bytes = struct
+  include Bytes
+  let length s = Int (Z.of_int (length s))
+  let size = length
+  let sub start len s =
+    try
+      let start, len =
+        match start, len with
+        | Int start, Int len -> Z.to_int start, Z.to_int len
+        | _ -> assert false in
+      Some (sub s start len)
+    with _ -> None
+  let slice = sub
+  let concat = concat empty
+end
+
 module Map : sig
 
   type ('key, 'value) map
@@ -539,7 +571,7 @@ end
 module Contract : sig
 
   val of_string : string -> 'a contract
-
+  val self : unit -> 'a contract
   val call : 'arg contract -> tez -> 'arg -> operation
 
   val manager : 'a -> 'b
@@ -549,6 +581,7 @@ module Contract : sig
                operation * 'a contract
 end = struct
 
+  let self () = Contract ""
   let of_string s = Contract s
   let call contract amount arg = assert false (* TODO *)
   let manager _contract = assert false (* TODO *)

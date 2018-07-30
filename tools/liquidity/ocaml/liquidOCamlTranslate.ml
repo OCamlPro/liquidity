@@ -278,8 +278,14 @@ let clean_ast env syntax_ast =
                     Some { ppat_desc = Ppat_var { txt = var } }) }
                   when name = c ->
                   raise (Found (var, default_mapper.expr mapper case.pc_rhs))
+                | { ppat_desc = Ppat_construct (
+                    { txt = Lident name } ,
+                    Some { ppat_desc = Ppat_any }) }
+                  when name = c ->
+                  raise (Found ("_", default_mapper.expr mapper case.pc_rhs))
                 | _ -> ()
               ) cases;
+            Format.eprintf "No constructor %s known@." c;
             assert false
           with Found v_e -> v_e
         in
