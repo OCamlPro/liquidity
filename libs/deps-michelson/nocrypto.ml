@@ -6,7 +6,7 @@ module Xor = struct (* from digestif *)
     let ( lxor ) = Nativeint.logxor
   end
 
-  module B = Digestif_bytes
+  module B = Digestif_by
 
   let imin (a : int) (b : int) = if a < b then a else b
   let size_of_long = Sys.word_size / 8
@@ -81,7 +81,7 @@ end
 
 module Hash = struct
   
-  type hash = Digestif.hash
+  type hash = Digestif.kind
 
   module type S = sig
     type buffer = Cstruct.t
@@ -91,7 +91,7 @@ module Hash = struct
     val digest_size    : int
 
     val init           : unit -> ctx
-    val feed           : ctx -> buffer -> unit
+    val feed           : ctx -> buffer -> ctx
     val get            : ctx -> t
 
     val digest         : buffer -> t
@@ -103,33 +103,37 @@ module Hash = struct
     val eq             : t -> t -> bool
     val neq            : t -> t -> bool
 
-    val pp             : Format.formatter -> t -> unit
-    val of_hex         : buffer -> t
-    val to_hex         : t -> buffer
+    (* val pp             : Format.formatter -> t -> unit
+     * val of_hex         : buffer -> t
+     * val to_hex         : t -> buffer *)
   end
 
   module MakeCstruct (H : Digestif.S) : S = struct
-    open H.Bytes
     type buffer = Cstruct.t
-    type ctx = H.Bytes.ctx
+    type ctx = H.ctx
     type t = Cstruct.t
     let digest_size = H.digest_size
-    let init = init
-    let feed ctx b = feed ctx (Cstruct.to_bytes b)
-    let get c = Cstruct.of_bytes (get c)
-    let digest b = digest (Cstruct.to_bytes b) |> Cstruct.of_bytes
-    let digestv bs = digestv (List.map Cstruct.to_bytes bs) |> Cstruct.of_bytes
-    let hmac ~key b = hmac ~key:(Cstruct.to_bytes key) (Cstruct.to_bytes b)
-                      |> Cstruct.of_bytes
+    let init = H.init
+    let feed ctx b = H.feed_bytes ctx (Cstruct.to_bytes b)
+    let get c = Cstruct.of_string ((H.get c) :> string)
+    let digest b =
+      (H.digest_bytes (Cstruct.to_bytes b) :> string)
+      |> Cstruct.of_string
+    let digestv bs =
+      (H.digestv_bytes (List.map Cstruct.to_bytes bs) :> string)
+      |> Cstruct.of_string
+    let hmac ~key b =
+      (H.hmac_bytes ~key:(Cstruct.to_bytes key) (Cstruct.to_bytes b) :> string)
+      |> Cstruct.of_string
     let hmacv ~key bs =
-      hmacv ~key:(Cstruct.to_bytes key) (List.map Cstruct.to_bytes bs)
-      |> Cstruct.of_bytes
+      (H.hmacv_bytes ~key:(Cstruct.to_bytes key) (List.map Cstruct.to_bytes bs) :> string)
+      |> Cstruct.of_string
     let compare = Cstruct.compare
     let eq = Cstruct.equal
     let neq x y = not (eq x y)
-    let pp fmt x = pp fmt (Cstruct.to_bytes x)
-    let of_hex b = of_hex (Cstruct.to_bytes b) |> Cstruct.of_bytes
-    let to_hex h = Cstruct.of_bytes (to_hex (Cstruct.to_bytes h))
+    (* let pp fmt x = H.pp fmt (Cstruct.to_bytes x)
+     * let of_hex b = H.of_hex (Cstruct.to_bytes b) |> Cstruct.of_bytes
+     * let to_hex h = Cstruct.of_bytes (H.to_hex (Cstruct.to_bytes h)) *)
   end
 
   module BLAKE2B : S = MakeCstruct(Digestif.BLAKE2B)
