@@ -74,7 +74,14 @@ let tez_of_liq s =
 let liq_of_tez { tezzies ; mutez } =
   match mutez with
   | None -> tezzies
-  | Some mutez -> tezzies ^ "." ^ mutez
+  | Some mutez ->
+    let mutez = Printf.sprintf "%06d" (int_of_string mutez) in
+    let len = ref 0 in
+    for i = String.length mutez - 1 downto 0 do
+      if !len = 0 && mutez.[i] <> '0' then len := i + 1
+    done;
+    let mutez = String.sub mutez 0 !len in
+    String.concat "." [tezzies; mutez]
 
 let liq_of_integer { integer } = Z.to_string integer
 

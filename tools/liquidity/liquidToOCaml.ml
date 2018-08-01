@@ -146,8 +146,13 @@ let rec convert_const expr =
   | CConstr (c, x) -> Exp.construct (lid c)
                         (Some (convert_const x))
   | CTuple args -> Exp.tuple (List.map convert_const args)
-  | CTez n -> Exp.constant (Const.float ~suffix:'\231'
-                                        (LiquidPrinter.liq_of_tez n))
+  | CTez n ->
+    begin match n.mutez with
+      | None ->
+        Exp.constant (Const.integer ~suffix:'\231' (LiquidPrinter.liq_of_tez n))
+      | Some _ ->
+        Exp.constant (Const.float ~suffix:'\231' (LiquidPrinter.liq_of_tez n))
+    end
   | CTimestamp s -> Exp.constant (Pconst_integer (s, Some '\232'))
   | CKey_hash n -> Exp.constant (Pconst_integer (n, Some '\233'))
   | CKey n -> Exp.constant (Pconst_integer (n, Some '\234'))
