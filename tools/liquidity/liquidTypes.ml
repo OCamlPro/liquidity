@@ -71,7 +71,7 @@ type const =
 
   | Tmap of datatype * datatype
   | Tbigmap of datatype * datatype
-  | Tcontract of datatype
+  | Tcontract of contract_sig
   | Tor of datatype * datatype
   | Tlambda of datatype * datatype
 
@@ -80,6 +80,32 @@ type const =
   | Tsum of string * (string * datatype) list
   | Tclosure of (datatype * datatype) * datatype
   | Tfail
+
+and entry_sig = {
+  entry_name : string;
+  parameter : datatype;
+  parameter_name : string;
+  storage_name : string;
+}
+
+and 'exp entry = {
+  entry_sig : entry_sig;
+  code : 'exp;
+}
+
+and 'exp contract = {
+  contract_name : string;
+  storage : datatype;
+  values : (string * bool (* inline *) * 'exp) list;
+  entries : 'exp entry list;
+}
+
+and entries_sig = entry_sig list
+
+and contract_sig = {
+  sig_name : string option;
+  entries_sig : entries_sig;
+}
 
 let size_of_type = function
   | Ttuple l -> List.length l
@@ -103,22 +129,20 @@ let rec type_contains_nonlambda_operation = function
   | Tunit | Tbool | Tint | Tnat | Ttez | Tstring | Tbytes
   | Ttimestamp | Tkey | Tkey_hash | Tsignature | Taddress | Tfail -> false
   | Ttuple l -> List.exists type_contains_nonlambda_operation l
-  | Tcontract ty | Toption ty | Tlist ty | Tset ty ->
+  | Toption ty | Tlist ty | Tset ty ->
     type_contains_nonlambda_operation ty
   | Tmap (t1, t2) | Tbigmap (t1, t2) | Tor (t1, t2) ->
     type_contains_nonlambda_operation t1 || type_contains_nonlambda_operation t2
   | Trecord (_, l) | Tsum (_, l) ->
     List.exists (fun (_, t) -> type_contains_nonlambda_operation t) l
+  | Tcontract s ->
+    List.exists (fun e -> type_contains_nonlambda_operation e.parameter)
+      s.entries_sig
   | Tlambda _ | Tclosure _ -> false
 
-type contract_sig = {
-  parameter : datatype;
-  storage : datatype;
-}
-
-type 'exp contract = {
-  contract_sig : contract_sig;
-  code : 'exp;
+let sig_of_contract c = {
+  sig_name = None;
+  entries_sig = List.map (fun e -> e.entry_sig) c.entries;
 }
 
 type location = {
@@ -130,7 +154,11 @@ type error = { err_loc: location; err_msg: string }
 
 exception LiquidError of error
 
-
+type 'a mic_contract = {
+  mic_parameter : datatype;
+  mic_storage : datatype;
+  mic_code : 'a;
+}
 
 type primitive =
    (* resolved in LiquidCheck *)
@@ -518,6 +546,7 @@ and ('ty, 'a) exp_desc =
   | Transfer of location
                 * (* contract_ *) ('ty, 'a) exp
                 * (* tez_ *) ('ty, 'a) exp
+                * (* entry_ *) string option
                 * (* arg_ *) ('ty, 'a) exp
   | MatchOption of ('ty, 'a) exp  (* argument *)
                      * location
@@ -619,7 +648,7 @@ let mk =
       | Map (_, _, _, e1, e2) ->
         e1.fail || e2.fail, false (* e1.transfer || e2.transfer *)
 
-      | Transfer (_, e1, e2, e3) ->
+      | Transfer (_, e1, e2, _, e3) ->
         e1.fail || e2.fail || e3.fail,
         true
 
@@ -741,7 +770,7 @@ type 'a pre_michelson =
   | IMPLICIT_ACCOUNT
   | SET_DELEGATE
 
-  | CREATE_CONTRACT of 'a contract
+  | CREATE_CONTRACT of 'a mic_contract
 
   | PACK
   | UNPACK of datatype
@@ -780,6 +809,8 @@ type env = {
     (* fields modified in LiquidFromOCaml *)
     (* type definitions *)
     mutable types : datatype StringMap.t;
+    (* type definitions *)
+    mutable contract_types : contract_sig StringMap.t;
     (* labels of records in type definitions *)
     mutable labels : (string * int * datatype) StringMap.t;
     (* constructors of sum-types in type definitions *)
@@ -798,10 +829,11 @@ type typecheck_env = {
     to_inline : encoded_exp StringMap.t ref;
     force_inline : encoded_exp StringMap.t ref;
     t_contract_sig : contract_sig;
+    t_contract_storage : datatype;
     clos_env : closure_env option;
 }
 
-let empty_typecheck_env ~warnings t_contract_sig env = {
+let empty_typecheck_env ~warnings t_contract_sig t_contract_storage env = {
   warnings;
   decompiling = false;
   annot = false;
@@ -813,6 +845,7 @@ let empty_typecheck_env ~warnings t_contract_sig env = {
   env = env;
   clos_env = None;
   t_contract_sig;
+  t_contract_storage;
 }
 
 
@@ -905,20 +938,33 @@ type syntax_init = (
 type syntax_contract = syntax_exp contract
 type typed_contract = typed_exp contract
 type encoded_contract = encoded_exp contract
-type michelson_contract = michelson_exp contract
-type node_contract = node_exp contract
-type loc_michelson_contract = loc_michelson contract
+type michelson_contract = michelson_exp list
+type node_contract = node_exp mic_contract
+type loc_michelson_contract = loc_michelson mic_contract
 
 let noloc = { loc_file = "<unspecified>"; loc_pos = None }
 
+
+let unit_contract_sig = {
+  sig_name = None;
+  entries_sig = [ {
+      entry_name = "main";
+      parameter = Tunit;
+      parameter_name = "parameter";
+      storage_name = "storage";
+    }];
+}
+
 let dummy_contract_sig = {
-  parameter = Tunit;
-  storage = Tunit;
+  sig_name = None;
+  entries_sig = [];
 }
 
 let dummy_syntax_contract : syntax_contract = {
-  contract_sig = dummy_contract_sig;
-  code = mk (Const (noloc, Tunit, CUnit)) ();
+  contract_name = "_DUMMY";
+  values = [];
+  storage = Tunit;
+  entries = [];
 }
 
 type warning =

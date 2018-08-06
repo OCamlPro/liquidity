@@ -9,6 +9,8 @@
 
 open LiquidTypes
 
+let prefix_entry = "_Liq_entry_"
+
 let noloc env = LiquidLoc.loc_in_file env.env.filename
 
 let error loc msg =
@@ -174,14 +176,13 @@ let rec encode_type ty =
     let tys' = List.map encode_type tys in
     if List.for_all2 (==) tys tys' then ty
     else Ttuple tys'
-  | Tset t | Tlist t | Toption t | Tcontract t ->
+  | Tset t | Tlist t | Toption t ->
     let t' = encode_type t in
     if t' == t then ty
     else begin match ty with
       | Tset t -> Tset t'
       | Tlist t -> Tlist t'
       | Toption t -> Toption t'
-      | Tcontract t -> Tcontract t'
       | _ -> assert false
     end
   | Tor (t1, t2) | Tlambda (t1, t2)
@@ -203,6 +204,14 @@ let rec encode_type ty =
     else Tclosure ((t1', t2'), t3')
   | Trecord (_, labels) -> encode_record_type labels
   | Tsum (_, cstys) -> encode_sum_type cstys
+  | Tcontract contract_sig ->
+    let parameter = encode_type (encode_contract_sig contract_sig) in
+    Tcontract { contract_sig with entries_sig = [{
+        entry_name = "main";
+        parameter_name = "parameter";
+        storage_name = "storage";
+        parameter;
+      }] }
 
 and encode_record_type labels =
   Ttuple (List.map (fun (_, ty) -> encode_type ty) labels)
@@ -216,6 +225,15 @@ and encode_sum_type cstys =
   in
   rassoc cstys
 
+and encode_contract_sig csig =
+  match csig.entries_sig with
+  | [] -> assert false (* ? *)
+  | [{ entry_name = "main"; parameter }] -> parameter
+  | entries ->
+      Tsum ("entries",
+            List.map (fun { entry_name; parameter = t } ->
+              (prefix_entry ^ entry_name, t)
+              ) entries)
 
 let rec has_big_map = function
   | Tbigmap (_t1, _t2) -> true
@@ -223,7 +241,7 @@ let rec has_big_map = function
   | Tsignature | Tstring | Tbytes | Toperation | Taddress | Tfail -> false
   | Ttuple tys ->
     List.exists has_big_map tys
-  | Tset t | Tlist t | Toption t | Tcontract t -> has_big_map t
+  | Tset t | Tlist t | Toption t -> has_big_map t
   | Tor (t1, t2) | Tlambda (t1, t2)
   | Tmap (t1, t2) ->
     has_big_map t1 || has_big_map t2
@@ -233,6 +251,8 @@ let rec has_big_map = function
     List.exists (fun (_, ty) -> has_big_map ty) labels
   | Tsum (_, cstys) ->
     List.exists (fun (_, ty) -> has_big_map ty) cstys
+  | Tcontract { entries_sig } ->
+    List.exists (fun { parameter } -> has_big_map parameter) entries_sig
 
 let encode_storage_type env ty =
   let ty = encode_type ty in
@@ -392,7 +412,7 @@ let rec decr_counts_vars env e =
   | MatchList (e1, _, _, _, e2, e3)
   | Fold (_, _, _, e1, e2, e3)
   | MapFold (_, _, _, e1, e2, e3)
-  | Transfer (_, e1, e2, e3) ->
+  | Transfer (_, e1, e2, _, e3) ->
     decr_counts_vars env e1;
     decr_counts_vars env e2;
     decr_counts_vars env e3;
@@ -516,11 +536,22 @@ let rec encode env ( exp : typed_exp ) : encoded_exp =
     let ifelse = encode env ifelse in
     mk ?name:exp.name (If (cond, ifthen, ifelse)) exp.ty
 
-  | Transfer (loc, contract_exp, tez_exp, arg_exp) ->
+  | Transfer (loc, contract_exp, tez_exp, entry, arg_exp) ->
     let tez_exp = encode env tez_exp in
     let contract_exp = encode env contract_exp in
-    let arg_exp = encode env arg_exp in
-    mk ?name:exp.name (Transfer(loc, contract_exp, tez_exp, arg_exp)) Toperation
+    begin match entry with
+      | None ->
+        let arg_exp = encode env arg_exp in
+        mk ?name:exp.name
+          (Transfer(loc, contract_exp, tez_exp, None, arg_exp)) Toperation
+      | Some entry ->
+        let arg_ty = encode_type contract_exp.ty in (* constant type not yet encoded *)
+        let arg_exp = mk_typed ?name:arg_exp.name
+            (Constructor (loc, (Constr (prefix_entry ^ entry)), arg_exp)) arg_ty in
+        let arg_exp = encode env arg_exp in
+        mk ?name:exp.name
+          (Transfer(loc, contract_exp, tez_exp, None, arg_exp)) Toperation
+    end
 
   | Failwith (err, loc) ->
     let err = encode env err in
@@ -891,6 +922,7 @@ let rec encode env ( exp : typed_exp ) : encoded_exp =
         | CConstr (c, [var]), e -> c, var, e
         | CAny, _ | CConstr _, _ -> assert false
        in
+       Format.eprintf "%s@." c;
        let var_ty = List.assoc c constrs in
        let (var, env, _) = new_binding env var var_ty in
        let e = encode env e in
@@ -927,6 +959,22 @@ and encode_apply name env prim loc args ty =
   | _ -> mk ?name (Apply (prim, loc, args)) ty
 
 
+and encode_entry env entry =
+  (* "storage/1" *)
+  let (_ , env, _) =
+    new_binding env entry.entry_sig.storage_name env.t_contract_storage in
+  (* "parameter/2" *)
+  let (_, env, _) =
+    new_binding env entry.entry_sig.parameter_name entry.entry_sig.parameter in
+  {
+    entry_sig = {
+      entry.entry_sig with
+      parameter = encode_parameter_type env entry.entry_sig.parameter
+    };
+    code = encode env entry.code;
+  }
+
+
 and encode_contract ?(annot=false) ?(decompiling=false) env contract =
   let env =
     {
@@ -940,20 +988,52 @@ and encode_contract ?(annot=false) ?(decompiling=false) env contract =
       force_inline = ref StringMap.empty;
       env;
       clos_env = None;
-      t_contract_sig = contract.contract_sig;
+      t_contract_sig = sig_of_contract contract;
+      t_contract_storage = contract.storage;
     } in
 
+  let parameter = encode_contract_sig env.t_contract_sig  in
   (* "storage/1" *)
-  let (_ , env, _) = new_binding env  "storage" contract.contract_sig.storage in
+  let (_, env, _) = new_binding env "storage" env.t_contract_storage in
   (* "parameter/2" *)
-  let (_, env, _) = new_binding env "parameter" contract.contract_sig.parameter in
-
+  let (pname, env, _) = new_binding env "parameter" parameter in
+  let loc = LiquidLoc.loc_in_file env.env.filename in
+  let rec values_on_top l exp = match l with
+    | [] -> exp
+    | (v, inline, e) :: rest ->
+      mk_typed (Let (v, inline, loc, e, values_on_top rest exp)) exp.ty in
+  let code_desc = match contract.entries with
+    | [e] -> e.code.desc
+    | _ ->
+      Format.eprintf "ps : %s @." (LiquidPrinter.Liquid.string_of_type parameter);
+      let parameter = mk_typed (Var ("parameter", loc, [])) parameter in
+      MatchVariant (parameter, loc,
+                    List.map (fun e ->
+                        let constr = prefix_entry ^ e.entry_sig.entry_name in
+                        env.env.constrs <-
+                          StringMap.add constr ("_entries", e.entry_sig.parameter)
+                            env.env.constrs;
+                        let pat =
+                          CConstr (constr, [e.entry_sig.parameter_name]) in
+                        pat, e.code
+                      ) contract.entries)
+  in
+  let code = encode env @@
+    values_on_top contract.values @@
+    mk_typed code_desc (Ttuple [Tlist Toperation; contract.storage]) in
   let contract = {
-    contract_sig = {
-      parameter = encode_parameter_type env contract.contract_sig.parameter;
-      storage = encode_storage_type env contract.contract_sig.storage;
-    };
-    code = encode env contract.code
+    contract_name = contract.contract_name;
+    values = [];
+    storage = encode_storage_type env contract.storage;
+    entries = [{
+        entry_sig = {
+          entry_name = "main";
+          parameter_name = "parameter";
+          storage_name = "storage";
+          parameter = encode_parameter_type env parameter;
+        };
+        code;
+      }];
   } in
   contract, !(env.to_inline)
 
@@ -962,7 +1042,7 @@ let encode_code tenv code =
   encode tenv code
 
 
-let encode_const env t_contract_sig const =
+let encode_const env t_contract_sig t_contract_storage const =
   let env =
     {
       warnings = false;
@@ -976,6 +1056,7 @@ let encode_const env t_contract_sig const =
       env = env;
       clos_env = None;
       t_contract_sig;
+      t_contract_storage;
     } in
 
   encode_const env const

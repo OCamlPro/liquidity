@@ -38,13 +38,14 @@ let translate_entry env syntax_ast mapper ast =
       } ]) } ->
     let typed_ast = LiquidCheck.typecheck_contract
         ~warnings:true env syntax_ast in
-    let ast = LiquidToOCaml.convert_code ~abbrev:false typed_ast.code in
-    Str.value Nonrecursive
-      [Vb.mk patmain
-         (Exp.fun_ Nolabel None cparam
-            (Exp.fun_ Nolabel None cstor
-               (mapper.expr mapper ast)
-                  ))]
+    assert false (* TODO *)
+    (* let ast = LiquidToOCaml.convert_code ~abbrev:false typed_ast.code in
+     * Str.value Nonrecursive
+     *   [Vb.mk patmain
+     *      (Exp.fun_ Nolabel None cparam
+     *         (Exp.fun_ Nolabel None cstor
+     *            (mapper.expr mapper ast)
+     *               ))] *)
   | _ -> assert false
 
 let rec translate_init env syntax_ast mapper item =
@@ -68,16 +69,17 @@ let rec translate_init env syntax_ast mapper item =
           args := (arg, txt, ty) :: !args;
           Exp.fun_ Nolabel None arg (imapper.expr imapper exp)
         | _ ->
-          let tenv = List.fold_left (fun tenv (_, name, ty) ->
-              fst (LiquidTypes.new_binding tenv name
-                     (LiquidFromOCaml.translate_type env ty))
-            ) (LiquidTypes.empty_typecheck_env ~warnings:true
-                 LiquidTypes.dummy_contract_sig env) !args
-          in
-          let sy_init = LiquidFromOCaml.translate_expression env exp in
-          let ty_init = LiquidCheck.typecheck_code tenv sy_init in
-          let init_ast = LiquidToOCaml.convert_code ~abbrev:false ty_init in
-          mapper.expr mapper init_ast
+          assert false (* TODO *)
+          (* let tenv = List.fold_left (fun tenv (_, name, ty) ->
+           *     fst (LiquidTypes.new_binding tenv name
+           *            (LiquidFromOCaml.translate_type env ty))
+           *   ) (LiquidTypes.empty_typecheck_env ~warnings:true
+           *        LiquidTypes.dummy_contract_sig env) !args
+           * in
+           * let sy_init = LiquidFromOCaml.translate_expression env exp in
+           * let ty_init = LiquidCheck.typecheck_code tenv sy_init in
+           * let init_ast = LiquidToOCaml.convert_code ~abbrev:false ty_init in
+           * mapper.expr mapper init_ast *)
       )
   } in
   init_mapper.structure_item init_mapper item

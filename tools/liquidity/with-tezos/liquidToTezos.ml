@@ -116,7 +116,9 @@ let rec convert_type ~loc expr =
   | Ttuple (x :: tys) ->
      prim_type ~loc "pair" [convert_type ~loc x; convert_type ~loc (Ttuple tys)]
   | Tor (x,y) -> prim_type ~loc "or" [convert_type ~loc x; convert_type ~loc y]
-  | Tcontract x -> prim_type ~loc "contract" [convert_type ~loc x]
+  | Tcontract x ->
+    assert false (* TODO *)
+    (* prim_type ~loc "contract" [convert_type ~loc x] *)
   | Tlambda (x,y) -> prim_type ~loc "lambda" [convert_type ~loc x;
                                          convert_type ~loc y]
   | Tclosure ((x,e),r) ->
@@ -275,9 +277,9 @@ let rec convert_code expand expr =
 
 and convert_contract_raw expand c =
   let loc = LiquidLoc.noloc in
-  let arg_type = convert_type ~loc c.contract_sig.parameter in
-  let storage_type = convert_type ~loc c.contract_sig.storage in
-  let code = convert_code expand c.code in
+  let arg_type = convert_type ~loc c.mic_parameter in
+  let storage_type = convert_type ~loc c.mic_storage in
+  let code = convert_code expand c.mic_code in
   let p = Micheline.Prim(loc, "parameter", [arg_type], []) in
   let s = Micheline.Prim(loc, "storage", [storage_type], []) in
   let c = Micheline.Prim((loc, None), "code", [code], []) in

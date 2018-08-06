@@ -139,11 +139,12 @@ module Michelson = struct
       | Taddress  -> Printf.bprintf b "address"
       | Ttuple tys -> bprint_type_pairs fmt b indent tys
       | Trecord _ | Tsum _ -> assert false
-      | Tcontract ty ->
+      | Tcontract { entries_sig = [{ parameter = ty }] } ->
          let indent = fmt.increase_indent indent in
          Printf.bprintf b "(contract%c%s" fmt.newline indent;
          bprint_type fmt b indent ty;
          Printf.bprintf b ")";
+      | Tcontract _ -> assert false
       | Tor (ty1, ty2) ->
          let indent = fmt.increase_indent indent in
          Printf.bprintf b "(or%c%s" fmt.newline indent;
@@ -370,18 +371,10 @@ module Michelson = struct
 *)
 
   let bprint_contract bprint_code fmt b indent contract =
-    Printf.bprintf b "parameter%c%s" fmt.newline indent;
-    bprint_type fmt b indent contract.contract_sig.parameter;
-    Printf.bprintf b ";%c" fmt.newline;
-
-    Printf.bprintf b "storage%c%s" fmt.newline indent;
-    bprint_type fmt b indent contract.contract_sig.storage;
-    Printf.bprintf b ";%c" fmt.newline;
-
-    Printf.bprintf b "code%c%s" fmt.newline indent;
-    bprint_code fmt b indent contract.code;
-    Printf.bprintf b "%c" fmt.newline;
-    ()
+    List.iter (fun exp ->
+        bprint_code fmt b indent exp ;
+        Printf.bprintf b ";%c" fmt.newline;
+      ) contract
 
   let bprint_pre_name b name = match name with
     | Some name -> Printf.bprintf b " @%s " name
@@ -551,11 +544,11 @@ module Michelson = struct
       bprint_pre_name b name;
     | CREATE_CONTRACT contract ->
       Printf.bprintf b "CREATE_CONTRACT { parameter ";
-      bprint_type fmt b "" contract.contract_sig.parameter;
+      bprint_type fmt b "" contract.mic_parameter;
       Printf.bprintf b " ; storage ";
-      bprint_type fmt b "" contract.contract_sig.storage;
+      bprint_type fmt b "" contract.mic_storage;
       Printf.bprintf b " ; code ";
-      bprint_arg fmt b contract.code;
+      bprint_arg fmt b contract.mic_code;
       Printf.bprintf b " }";
       bprint_pre_name b name;
     | PACK ->
@@ -677,8 +670,21 @@ end
 
 module Liquid = struct
 
+  let rec bprint_contract_sig expand b indent { sig_name; entries_sig } =
+    match sig_name with
+    | Some s -> Printf.bprintf b "%s" s
+    | None ->
+      let indent2 = indent ^ "      " in
+      Printf.bprintf b "%s(sig\n" indent;
+      Printf.bprintf b "%stype storage\n" indent2;
+      List.iter (fun e ->
+          Printf.bprintf b "%sentry %s: (" indent2 e.entry_name;
+          bprint_type_base expand b indent2 e.parameter;
+          Printf.bprintf b " * storage) -> (operation list * storage)\n";
+        ) entries_sig;
+      Printf.bprintf b "%send)" indent
 
-  let bprint_type_base expand b indent ty =
+  and bprint_type_base expand b indent ty =
     let rec bprint_type b indent ty =
       match ty with
       | Tfail -> Printf.bprintf b "failure"
@@ -724,9 +730,10 @@ module Liquid = struct
           ) rtys;
       | Tsum (name, _) ->
         Printf.bprintf b "%s" name;
-      | Tcontract ty ->
-        bprint_type b "" ty;
-        Printf.bprintf b " contract";
+      | Tcontract { sig_name = Some s } ->
+        Printf.bprintf b "%s" s;
+      | Tcontract contract_sig ->
+        bprint_contract_sig expand b indent contract_sig
       | Tor (ty1, ty2) ->
         Printf.bprintf b "(";
         bprint_type b "" ty1;
@@ -944,12 +951,20 @@ module Liquid = struct
        bprint_code_rec ~debug b indent exp1;
        Printf.bprintf b ";";
        bprint_code_rec ~debug b indent exp2
-    | Transfer (_loc, contract_exp, tez_exp, arg_exp) ->
+    | Transfer (_loc, contract_exp, tez_exp, None, arg_exp) ->
       Printf.bprintf b "\n%s(Contract.call" indent;
        let indent2 = indent ^ "  " in
        bprint_code_rec ~debug b indent2 contract_exp;
        bprint_code_rec ~debug b indent2 tez_exp;
        bprint_code_rec ~debug b indent2 arg_exp;
+       Printf.bprintf b ")"
+    | Transfer (_loc, contract_exp, tez_exp, Some entry, arg_exp) ->
+       Printf.bprintf b "\n%s(" indent;
+       bprint_code_rec ~debug b indent contract_exp;
+       Printf.bprintf b ".%s" entry;
+       let indent2 = indent ^ "  " in
+       bprint_code_rec ~debug b indent2 arg_exp;
+       bprint_code_rec ~debug b indent2 tez_exp;
        Printf.bprintf b ")"
     | MatchOption (arg, _loc, ifnone, var, ifsome) ->
        let indent2 = indent ^ "  " in
@@ -1089,17 +1104,18 @@ module Liquid = struct
        List.iter (fun exp ->
            bprint_code_rec ~debug b indent2 exp
          ) args;
-       let indent4 = indent2 ^ "  " in
-       Printf.bprintf b "\n%s(fun " indent;
-       Printf.bprintf b "(parameter : ";
-       bprint_type b indent2 contract.contract_sig.parameter;
-       Printf.bprintf b ") (storage : ";
-       bprint_type b indent2 contract.contract_sig.storage;
-       Printf.bprintf b ") ->\n%s" indent2;
-       bprint_code_rec ~debug b indent4 contract.code;
-       Printf.bprintf b "))"
+       (* let indent4 = indent2 ^ "  " in *)
+       Printf.bprintf b "\n%s(contract %s)" indent contract.contract_name;
+       (* Printf.bprintf b "\n%s(fun " indent;
+        * Printf.bprintf b "(parameter : ";
+        * bprint_type b indent2 contract.contract_sig.parameter;
+        * Printf.bprintf b ") (storage : ";
+        * bprint_type b indent2 contract.contract_sig.storage;
+        * Printf.bprintf b ") ->\n%s" indent2;
+        * bprint_code_rec ~debug b indent4 contract.code;
+        * Printf.bprintf b "))" *)
     | ContractAt (_loc, addr, ty) ->
-      Printf.bprintf b "\n%s(Contract.at" indent;
+       Printf.bprintf b "\n%s(Contract.at" indent;
        let indent2 = indent ^ "  " in
        bprint_code_rec ~debug b indent2 addr;
        Printf.bprintf b " : ";
@@ -1127,18 +1143,24 @@ module Liquid = struct
   let rec bprint_code ~debug b indent code =
     bprint_code_base bprint_code ~debug b indent code
 
-  let bprint_contract bprint_code ~debug b indent contract =
+  let bprint_entry bprint_code ~debug b indent storage_ty entry =
     let indent2 = indent ^ "    " in
-    Printf.bprintf b "let%%entry main\n";
+    Printf.bprintf b "let%%entry %s\n" entry.entry_sig.entry_name;
     (* Printf.bprintf b "    (amount: tez)\n"; *)
-    Printf.bprintf b "    (parameter/2: ";
-    bprint_type b indent2 contract.contract_sig.parameter;
+    Printf.bprintf b "    (%s/2: " entry.entry_sig.parameter_name;
+    bprint_type b indent2 entry.entry_sig.parameter;
     Printf.bprintf b ")\n";
-    Printf.bprintf b "    (storage/1: ";
-    bprint_type b indent2 contract.contract_sig.storage;
+    Printf.bprintf b "    (%s/1: " entry.entry_sig.storage_name;
+    bprint_type b indent2 storage_ty;
     Printf.bprintf b ") = \n";
+    bprint_code ~debug b indent entry.code
 
-    bprint_code ~debug b indent contract.code
+  let bprint_contract bprint_code ~debug b indent contract =
+    let storage_ty = contract.storage in
+    List.iter (fun entry ->
+        bprint_entry bprint_code ~debug b indent storage_ty entry;
+        Printf.bprintf b "\n";
+      ) contract.entries
 
   let string_of_type = to_string bprint_type
   let string_of_const = to_string bprint_const

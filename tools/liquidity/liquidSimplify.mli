@@ -11,4 +11,4 @@ open LiquidTypes
 
 val simplify_contract :
   ?decompile_annoted:bool ->
-  encoded_exp contract -> encoded_exp StringMap.t -> encoded_exp contract
+  encoded_contract -> encoded_exp StringMap.t -> encoded_contract

@@ -13,4 +13,4 @@ type init =
   | Init_code of (LiquidTypes.syntax_contract *
                   LiquidTypes.loc_michelson_contract)
 
-val compile_liquid_init : env -> contract_sig -> syntax_init -> init
+val compile_liquid_init : env -> contract_sig -> datatype -> syntax_init -> init

@@ -41,7 +41,7 @@ let rec compute decompile code to_inline =
     | Map (_, _, _, e1, e2) -> 30 + size e1 + size e2
     | Fold (_, _, _, e1, e2, e3)
     | MapFold (_, _, _, e1, e2, e3) -> 30 + size e1 + size e2 + size e3
-    | Transfer (_, e1, e2, e3) -> 1 + size e1 + size e2 + size e3
+    | Transfer (_, e1, e2, _, e3) -> 1 + size e1 + size e2 + size e3
 
     | Apply (prim, _, l) ->
       List.fold_left (fun acc e -> acc + size e) 1 l
@@ -200,11 +200,11 @@ let rec compute decompile code to_inline =
        let args = List.map iter args in
        { exp with desc = Apply(prim, loc, args) }
 
-    | Transfer (loc, contract_exp, tez_exp, arg_exp) ->
+    | Transfer (loc, contract_exp, tez_exp, entry, arg_exp) ->
        let contract_exp = iter contract_exp in
        let tez_exp = iter tez_exp in
        let arg_exp = iter arg_exp in
-       { exp with desc = Transfer (loc, contract_exp, tez_exp, arg_exp) }
+       { exp with desc = Transfer (loc, contract_exp, tez_exp, entry, arg_exp) }
 
     | Lambda (arg_name, arg_type, loc, body_exp, res_type) ->
       let body_exp = iter body_exp in
@@ -251,4 +251,10 @@ let rec compute decompile code to_inline =
   (* iter code *)
 
 and simplify_contract ?(decompile_annoted=false) contract to_inline =
-  { contract with code = compute decompile_annoted contract.code to_inline }
+  match contract.entries with
+  | [{ entry_sig = { entry_name = "main" };
+       code } as entry ] ->
+    { contract with
+      entries = [{ entry with code = compute decompile_annoted code to_inline }]
+    }
+  | _ -> assert false

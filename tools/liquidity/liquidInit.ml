@@ -185,21 +185,22 @@ let tmp_contract_of_init ~loc (args, code) storage_ty =
       parameter, code
   in
   (* Empty big map is fetched in given storage which is always empty *)
-  let code = subst_empty_big_map code in
-  let code =
-    mk(Apply (Prim_tuple, loc, [ c_empty_op ~loc; code ])) () in
-  let contract_sig = { parameter; storage } in
-  { contract_sig; code }
+  assert false (* TODO *)
+  (* let code = subst_empty_big_map code in
+   * let code =
+   *   mk(Apply (Prim_tuple, loc, [ c_empty_op ~loc; code ])) () in
+   * let contract_sig = { parameter; storage } in
+   * { contract_sig; code } *)
 
-let compile_liquid_init env contract ((args, sy_init) as init) =
+let compile_liquid_init env contract storage_ty ((args, sy_init) as init) =
   let loc = LiquidCheck.loc_exp sy_init in
   if sy_init.transfer then
     LiquidLoc.raise_error ~loc
       "No transfer allowed in storage initializer";
   try (* Maybe it is constant *)
-    let tenv = empty_typecheck_env ~warnings:true contract env in
+    let tenv = empty_typecheck_env ~warnings:true contract storage_ty env in
     let ty_init = LiquidCheck.typecheck_code tenv
-        ~expected_ty:contract.storage sy_init in
+        ~expected_ty:storage_ty sy_init in
     let enc_init = LiquidEncode.encode_code tenv ty_init in
     let c_init = LiquidData.translate_const_exp loc enc_init in
     Init_constant c_init
@@ -209,7 +210,7 @@ let compile_liquid_init env contract ((args, sy_init) as init) =
    * Printf.eprintf "Constant initial storage generated in %S\n%!" output *)
   with LiquidError _ ->
     (* non constant initial value *)
-    let init_contract = tmp_contract_of_init ~loc init contract.storage in
+    let init_contract = tmp_contract_of_init ~loc init storage_ty in
     let typed_init = LiquidCheck.typecheck_contract
         ~warnings:true env init_contract in
     let encoded_init, _ = LiquidEncode.encode_contract env typed_init in

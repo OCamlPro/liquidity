@@ -98,7 +98,8 @@ let rec convert_type ~abbrev ?name ty =
     | Tor (x,y) ->
       typ_constr "variant" [convert_type ~abbrev x; convert_type ~abbrev y], "variant_t"
     | Tcontract x ->
-      typ_constr "contract" [convert_type ~abbrev x], "contract_t"
+      assert false (* TODO *)
+      (* typ_constr "contract" [convert_type ~abbrev x], "contract_t" *)
     | Tlambda (x,y) ->
       Typ.arrow Nolabel (convert_type ~abbrev x) (convert_type ~abbrev y), "lambda_t"
     | Tclosure ((x,e),r) ->
@@ -352,12 +353,21 @@ let rec convert_code ~abbrev expr =
                            (convert_code ~abbrev ifcons);
                 ]
 
-  | Transfer (loc, contract_exp, amount_exp, arg_exp) ->
+  | Transfer (loc, contract_exp, amount_exp, None, arg_exp) ->
     Exp.apply ~loc:(loc_of_loc loc) (Exp.ident (lid "Contract.call"))
       [
         Nolabel, convert_code ~abbrev contract_exp;
         Nolabel, convert_code ~abbrev amount_exp;
         Nolabel, convert_code ~abbrev arg_exp;
+      ]
+
+  | Transfer (loc, contract_exp, amount_exp, Some entry, arg_exp) ->
+    let contract_exp = convert_code ~abbrev contract_exp in
+    Exp.apply ~loc:(loc_of_loc loc)
+      (Exp.field contract_exp (lid entry))
+      [
+        Nolabel, convert_code ~abbrev arg_exp;
+        Nolabel, convert_code ~abbrev amount_exp;
       ]
 
   | Loop (var_arg, loc, body_exp, arg_exp) ->
@@ -501,29 +511,31 @@ let rec convert_code ~abbrev expr =
                    [convert_type ~abbrev left_ty; Typ.any ()])
 
   | CreateContract (loc, args, contract) ->
-    Exp.apply ~loc:(loc_of_loc loc)
-      (Exp.ident (lid "Contract.create"))
-      ((List.map (fun arg ->
-           Nolabel,
-           convert_code ~abbrev arg) args) @ [
-         Nolabel,
-         Exp.fun_ ~loc:(loc_of_loc loc) Nolabel None
-           (Pat.constraint_
-              (pat_of_name ~loc "parameter")
-              (convert_type ~abbrev contract.contract_sig.parameter))
-           (Exp.fun_ ~loc:(loc_of_loc loc) Nolabel None
-              (Pat.constraint_
-                 (pat_of_name ~loc "storage")
-                 (convert_type ~abbrev contract.contract_sig.storage))
-              (convert_code ~abbrev contract.code))
-       ])
+    assert false (* TODO *)
+    (* Exp.apply ~loc:(loc_of_loc loc)
+     *   (Exp.ident (lid "Contract.create"))
+     *   ((List.map (fun arg ->
+     *        Nolabel,
+     *        convert_code ~abbrev arg) args) @ [
+     *      Nolabel,
+     *      Exp.fun_ ~loc:(loc_of_loc loc) Nolabel None
+     *        (Pat.constraint_
+     *           (pat_of_name ~loc "parameter")
+     *           (convert_type ~abbrev contract.contract_sig.parameter))
+     *        (Exp.fun_ ~loc:(loc_of_loc loc) Nolabel None
+     *           (Pat.constraint_
+     *              (pat_of_name ~loc "storage")
+     *              (convert_type ~abbrev contract.contract_sig.storage))
+     *           (convert_code ~abbrev contract.code))
+     *    ]) *)
 
   | ContractAt (loc, addr, ty) ->
-    Exp.constraint_ ~loc:(loc_of_loc loc)
-      (Exp.apply ~loc:(loc_of_loc loc)
-         (Exp.ident (lid "Contract.at"))
-         [ Nolabel, convert_code ~abbrev addr ])
-      (convert_type ~abbrev (Toption (Tcontract ty)))
+    assert false (* TODO *)
+    (* Exp.constraint_ ~loc:(loc_of_loc loc)
+     *   (Exp.apply ~loc:(loc_of_loc loc)
+     *      (Exp.ident (lid "Contract.at"))
+     *      [ Nolabel, convert_code ~abbrev addr ])
+     *   (convert_type ~abbrev (Toption (Tcontract ty))) *)
 
   | Unpack (loc, e, ty) ->
     Exp.constraint_ ~loc:(loc_of_loc loc)
@@ -545,6 +557,8 @@ let structure_of_contract ?(abbrev=true) ?type_annots contract =
           | _ -> ()
         ) type_annots
     | None -> () end;
+  assert false (* TODO *)
+    (*
   let storage_caml = convert_type ~abbrev ~name:"storage" contract.contract_sig.storage in
   ignore (convert_type ~abbrev ~name:"parameter" contract.contract_sig.parameter);
   let code = convert_code ~abbrev contract.code in
@@ -585,6 +599,7 @@ let structure_of_contract ?(abbrev=true) ?type_annots contract =
   in
 
   [ version_caml ] @ types_caml @ [ contract_caml ]
+*)
 
 let string_of_structure = LiquidOCamlPrinter.string_of_structure
 

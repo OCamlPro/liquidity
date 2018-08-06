@@ -509,11 +509,13 @@ let rec decompile contract =
 
        | N_TRANSFER, [contract; amount; arg] ->
          mklet node
-           (Transfer (loc, arg_of contract, arg_of amount, arg_of arg))
+           (Transfer (loc, arg_of contract, arg_of amount, None, arg_of arg))
+       (* TODO *)
 
        | N_CREATE_CONTRACT contract, args ->
-         mklet node
-           (CreateContract (loc, List.map arg_of args, decompile contract))
+         assert false (* TODO *)
+         (* mklet node
+          *   (CreateContract (loc, List.map arg_of args, decompile contract)) *)
 
        | (
          N_LAMBDA_END _
@@ -573,22 +575,24 @@ let rec decompile contract =
     mk (Let (var_of node, false, node.loc, node_liq, decompile_next node))
 
   in
-  let (begin_node, end_node) = contract.code in
-  let code = decompile_next begin_node in
-  (*  let code =
-    mk (Let ("exp1", noloc,
-             mk (Apply(Prim_tuple, noloc,
-                       [
-                         mk (Apply(Prim_tuple, noloc,
-                                   [
-                                     mk (Var ("amount", noloc, []));
-                                     mk (Var ("parameter", noloc, []));
-                            ]));
-                         mk (Var ("storage", noloc, []))
-                ])), code))
-  in
-   *)
-  { contract with code }
+  assert false
+  (* TODO *)
+  (* let (begin_node, end_node) = contract.code in
+   * let code = decompile_next begin_node in
+   * (\*  let code =
+   *   mk (Let ("exp1", noloc,
+   *            mk (Apply(Prim_tuple, noloc,
+   *                      [
+   *                        mk (Apply(Prim_tuple, noloc,
+   *                                  [
+   *                                    mk (Var ("amount", noloc, []));
+   *                                    mk (Var ("parameter", noloc, []));
+   *                           ]));
+   *                        mk (Var ("storage", noloc, []))
+   *               ])), code))
+   * in
+   *  *\)
+   * { contract with code } *)
 
 
 let decompile contract =

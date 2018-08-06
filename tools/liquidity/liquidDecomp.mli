@@ -9,5 +9,5 @@
 
 open LiquidTypes
 
-val decompile : node_exp LiquidTypes.contract ->
+val decompile : node_contract ->
                 syntax_exp LiquidTypes.contract

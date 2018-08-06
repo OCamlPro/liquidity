@@ -17,4 +17,4 @@ val encode_contract :
 
 val encode_code : typecheck_env -> typed_exp -> encoded_exp
 
-val encode_const : env -> contract_sig -> const -> const
+val encode_const : env -> contract_sig -> datatype -> const -> const

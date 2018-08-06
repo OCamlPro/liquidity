@@ -75,7 +75,7 @@ let rec bv code =
                         (StringSet.remove head_pat
                                           (StringSet.remove tail_pat
                                                             (bv ifcons))))
-  | Transfer (loc, contract_exp, amount_exp, arg_exp) ->
+  | Transfer (loc, contract_exp, amount_exp, _entry, arg_exp) ->
      List.fold_left (fun set exp ->
          StringSet.union set (bv exp)
        ) StringSet.empty [contract_exp;
@@ -123,13 +123,15 @@ let rec bv code =
          ) StringSet.empty args)
 
   | CreateContract (loc, args, contract) ->
-    let bc =
-      bv contract.code
-      |> StringSet.remove "parameter"
-      |> StringSet.remove "storage" in
-     List.fold_left (fun set arg ->
-         StringSet.union set (bv arg)
-       ) bc args
+    let bv_entry acc e =
+      bv e.code
+      |> StringSet.remove e.entry_sig.parameter_name
+      |> StringSet.remove e.entry_sig.storage_name
+      |> StringSet.union acc in
+    let bc = List.fold_left bv_entry StringSet.empty contract.entries in
+    List.fold_left (fun set arg ->
+        StringSet.union set (bv arg)
+      ) bc args
 
   | ContractAt (loc, addr, ty) -> bv addr
 
@@ -270,7 +272,7 @@ let rec bound code =
      let desc = MatchList(exp, loc, head_pat, tail_pat, ifcons, ifnil) in
      mk desc code bv
 
-  | Transfer (loc, contract_exp, amount_exp, arg_exp) ->
+  | Transfer (loc, contract_exp, amount_exp, entry, arg_exp) ->
      let contract_exp = bound contract_exp in
      let amount_exp = bound amount_exp in
      let arg_exp = bound arg_exp in
@@ -281,7 +283,7 @@ let rec bound code =
                             amount_exp;
                             arg_exp]
      in
-     let desc = Transfer (loc, contract_exp, amount_exp, arg_exp) in
+     let desc = Transfer (loc, contract_exp, amount_exp, entry, arg_exp) in
      mk desc code bv
 
   | Loop (var_arg, loc, body_exp, arg_exp) ->
@@ -366,9 +368,12 @@ let rec bound code =
   | CreateContract (loc, args, contract) ->
     let args = List.map bound args in
     let contract = bound_contract contract in
-    let bv = contract.code.bv
-             |> StringSet.remove "parameter"
-             |> StringSet.remove "storage" in
+    let bv_entry acc e =
+      e.code.bv
+      |> StringSet.remove e.entry_sig.parameter_name
+      |> StringSet.remove e.entry_sig.storage_name
+      |> StringSet.union acc in
+    let bv = List.fold_left bv_entry StringSet.empty contract.entries in
     let bv =
       List.fold_left (fun set arg ->
           StringSet.union set arg.bv
@@ -387,7 +392,11 @@ let rec bound code =
      let desc = Unpack (loc, e, ty) in
      mk desc code e.bv
 
+and bound_entry entry =
+  let c = bound entry.code in
+  assert (StringSet.equal c.bv (bv entry.code));
+  { entry with code = c }
+
 and bound_contract contract =
-  let c = bound contract.code in
-  assert (StringSet.equal c.bv (bv contract.code));
-  { contract with code = c }
+  { contract with
+    entries = List.map bound_entry contract.entries }

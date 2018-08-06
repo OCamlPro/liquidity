@@ -116,7 +116,7 @@ let rec loc_exp e = match e.desc with
   | Var (_, loc, _)
   | SetVar (_, loc, _, _)
   | Apply (_, loc, _)
-  | Transfer (loc, _, _, _)
+  | Transfer (loc, _, _, _, _)
   | MatchOption (_, loc, _, _, _)
   | MatchNat (_, loc, _, _, _, _)
   | MatchList (_, loc, _, _, _, _)
@@ -249,17 +249,25 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
      let desc = If(cond, ifthen, ifelse) in
      mk ?name:exp.name desc ty
 
-  | Transfer (loc, contract_exp, tez_exp, arg_exp) ->
+  | Transfer (loc, contract_exp, tez_exp, entry, arg_exp) ->
      let tez_exp = typecheck_expected "call amount" env Ttez tez_exp in
      let contract_exp = typecheck env contract_exp in
+     let entry' = match entry with None -> "main" | Some e -> e in
      begin
        match contract_exp.ty with
-       | Tcontract arg_ty ->
-          let arg_exp = typecheck_expected "call argument" env arg_ty arg_exp in
-          if tez_exp.transfer || contract_exp.transfer || arg_exp.transfer then
-            error loc "transfer within transfer arguments";
-          let desc = Transfer(loc, contract_exp, tez_exp, arg_exp) in
-          mk ?name:exp.name desc Toperation
+       | Tcontract contract_sig ->
+         begin try
+             let { parameter = arg_ty } =
+               List.find (fun { entry_name } -> entry_name = entry')
+                 contract_sig.entries_sig in
+             let arg_exp = typecheck_expected "call argument" env arg_ty arg_exp in
+             if tez_exp.transfer || contract_exp.transfer || arg_exp.transfer then
+               error loc "transfer within transfer arguments";
+             let desc = Transfer(loc, contract_exp, tez_exp, entry, arg_exp) in
+             mk ?name:exp.name desc Toperation
+           with Not_found ->
+             error loc "contract has no entry point %s" entry';
+         end
        | ty ->
          error (loc_exp contract_exp)
            "Bad contract type.\nExpected type:\n  'a contract\n\
@@ -621,7 +629,7 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
   | ContractAt (loc, addr, ty) ->
     let addr = typecheck_expected "Contract.at argument" env Taddress addr in
     let desc = ContractAt (loc, addr, ty) in
-    mk ?name:exp.name desc (Toption (Tcontract ty))
+    mk ?name:exp.name desc (Toption ty)
 
   | CreateContract (loc, args, contract) ->
     let contract = typecheck_contract ~warnings:env.warnings env.env contract in
@@ -636,7 +644,7 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
       let init_balance =
         typecheck_expected "initial balance" env Ttez init_balance in
       let init_storage = typecheck_expected "initial storage"
-          env contract.contract_sig.storage init_storage in
+          env contract.storage init_storage in
       let desc = CreateContract (loc, [manager; delegate; delegatable;
                                        spendable; init_balance; init_storage],
                                  contract) in
@@ -861,7 +869,7 @@ and typecheck_prim2 env prim loc args =
      Tset key_ty
 
   | Prim_Some, [ ty ] -> Toption ty
-  | Prim_self, [ Tunit ] -> Tcontract env.t_contract_sig.parameter
+  | Prim_self, [ Tunit ] -> Tcontract env.t_contract_sig
   | Prim_now, [ Tunit ] -> Ttimestamp
   | Prim_balance, [ Tunit ] -> Ttez
   | Prim_source, [ Tunit ] -> Taddress
@@ -888,7 +896,7 @@ and typecheck_prim2 env prim loc args =
                 [ Tkey_hash; Toption Tkey_hash; Tbool; Ttez ]
 
   | Prim_default_account, [ Tkey_hash ] ->
-     Tcontract Tunit
+     Tcontract unit_contract_sig
 
   | Prim_set_delegate, [ Toption Tkey_hash ] ->
     Toperation
@@ -943,6 +951,17 @@ and typecheck_apply ?name env prim loc args =
   mk ?name (Apply (prim, loc, args)) ty
 
 
+and typecheck_entry env entry =
+  (* let env = { env with clos_env = None } in *)
+  let (env, _) =
+    new_binding env entry.entry_sig.storage_name env.t_contract_storage in
+  let (env, _) =
+    new_binding env entry.entry_sig.parameter_name entry.entry_sig.parameter in
+  let expected_ty = Ttuple [Tlist Toperation; env.t_contract_storage] in
+  let code =
+    typecheck_expected "return value" env expected_ty entry.code in
+  { entry with code }
+
 and typecheck_contract ~warnings env contract =
   let env =
     {
@@ -956,16 +975,23 @@ and typecheck_contract ~warnings env contract =
       force_inline = ref StringMap.empty;
       env = env;
       clos_env = None;
-      t_contract_sig = contract.contract_sig;
+      t_contract_sig = sig_of_contract contract;
+      t_contract_storage = contract.storage;
     } in
 
-  let (env, _) = new_binding env  "storage" contract.contract_sig.storage in
-  let (env, _) = new_binding env "parameter" contract.contract_sig.parameter in
-  let expected_ty = Ttuple [Tlist Toperation; contract.contract_sig.storage] in
-  let code =
-    typecheck_expected "return value" env expected_ty contract.code in
-  { contract with code }
-
+  let env, values, counts =
+    List.fold_left (fun (env, values, counts) (name, inline, exp) ->
+        let exp = typecheck env exp in
+        let (env, count) = new_binding env name ~fail:exp.fail exp.ty in
+        env, ((name, inline, exp) :: values), ((name, count) :: counts)
+      ) (env, [], []) contract.values in
+  let entries = List.map (typecheck_entry env) contract.entries in
+  List.iter (fun (name, count) ->
+      check_used env name (noloc env) (* TODO *) count
+    ) counts;
+  { contract with
+    values = List.rev values;
+    entries }
 
 let typecheck_code env ?expected_ty code =
   match expected_ty with
@@ -1006,7 +1032,7 @@ let rec type_of_const = function
   | CRight c -> Tor (Tunit, type_of_const c)
 
   | CKey_hash _ -> Tkey_hash
-  | CContract _ -> Tcontract Tunit
+  | CContract _ -> Tcontract unit_contract_sig
 
   (* XXX just for printing *)
   | CRecord _ -> Trecord ("<record>", [])
@@ -1040,7 +1066,8 @@ let check_const_type ?(from_mic=false) ~to_tez loc ty cst =
 
     | Tcontract _, CContract s -> CContract s
     | Tcontract _, CAddress s -> CAddress s
-    | Tcontract Tunit, CKey_hash s -> CKey_hash s
+    | Tcontract { entries_sig = [{ parameter= Tunit }] } , CKey_hash s ->
+      CKey_hash s
     | Tcontract _, CBytes s -> CContract s
 
     | Taddress, CAddress s -> CAddress s

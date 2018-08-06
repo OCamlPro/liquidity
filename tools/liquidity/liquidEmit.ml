@@ -151,12 +151,12 @@ let rec emit_code ~expand code =
   | DIV -> M_INS ("DIV", name)
   | CREATE_CONTRACT contract ->
     M_INS_EXP ("CREATE_CONTRACT", [], [
-        M_INS_EXP ("SEQ", [], [
-            M_INS_EXP ("parameter", [contract.contract_sig.parameter], [], None);
-            M_INS_EXP ("storage", [contract.contract_sig.storage], [], None);
-            M_INS_EXP ("code", [], [emit_code ~expand contract.code], None);
-          ], None)
+        M_INS_EXP ("SEQ", [], emit_contract ~expand contract , None)
       ], name)
 
-let emit_contract ~expand contract =
-  { contract with code = emit_code ~expand contract.code }
+and emit_contract ~expand (contract : loc_michelson_contract) =
+  [
+    M_INS_EXP ("parameter", [contract.mic_parameter], [], None);
+    M_INS_EXP ("storage", [contract.mic_storage], [], None);
+    M_INS_EXP ("code", [], [emit_code ~expand contract.mic_code], None);
+  ]

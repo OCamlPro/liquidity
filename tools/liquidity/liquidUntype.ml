@@ -165,10 +165,11 @@ let rec untype (env : env) code =
                   head_pat, tail_pat, untype env'' ifcons,
                   untype env ifnil)
 
-    | Transfer (loc, contract_exp, amount_exp, arg_exp) ->
+    | Transfer (loc, contract_exp, amount_exp, entry, arg_exp) ->
       Transfer (loc,
                 untype env contract_exp,
                 untype env amount_exp,
+                entry,
                 untype env arg_exp)
 
     | MatchVariant (arg, loc,
@@ -211,11 +212,11 @@ and untype_case env (var : string) arg =
   let arg' = untype env' arg in
   (var', arg')
 
-and untype_contract contract =
-  let contract = LiquidBoundVariables.bound_contract contract in
-  let env = empty_env () in
-  let env = new_binding "storage/1" "storage" env in
-  let env = new_binding "parameter/2" "parameter" env in
-  { contract with code = untype env contract.code }
+and untype_contract contract = assert false (* TODO *)
+  (* let contract = LiquidBoundVariables.bound_contract contract in
+   * let env = empty_env () in
+   * let env = new_binding "storage/1" "storage" env in
+   * let env = new_binding "parameter/2" "parameter" env in
+   * { contract with code = untype env contract.code } *)
 
 let untype_code code = untype (empty_env ()) code

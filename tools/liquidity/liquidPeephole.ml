@@ -254,4 +254,4 @@ and simplify_steps list tail =
   iter (List.rev list) tail
 
 and simplify contract =
-  { contract with code = simplify_pre contract.code }
+  { contract with mic_code = simplify_pre contract.mic_code }

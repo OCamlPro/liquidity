@@ -336,7 +336,9 @@ let rec convert_type env expr =
      *                 (y_constr, convert_type env y)]) *)
     | Prim(_, "or", [x;y], _debug) -> Tor (convert_type env x,
                                            convert_type env y)
-    | Prim(_, "contract", [x], _debug) -> Tcontract (convert_type env x)
+    | Prim(_, "contract", [x], _debug) ->
+      assert false (* TODO *)
+      (* Tcontract (convert_type env x) *)
     | Prim(_, "lambda", [x;y], _debug) -> Tlambda
                                             (convert_type env x,
                                              convert_type env y)
@@ -582,10 +584,10 @@ let rec convert_code env expr =
   | _ -> unknown_expr env "convert_code" expr
 
 and convert_raw_contract env c =
-  let parameter = convert_type env (find c "parameter") in
-  let storage = convert_type env (find c "storage") in
-  let code = convert_code env (find c "code") in
-  { contract_sig = { storage; parameter }; code }
+  let mic_parameter = convert_type env (find c "parameter") in
+  let mic_storage = convert_type env (find c "storage") in
+  let mic_code = convert_code env (find c "code") in
+  { mic_storage; mic_parameter; mic_code }
 
 let convert_contract env c =
   let c =

@@ -16,6 +16,9 @@ val error :
 val typecheck_contract :
   warnings:bool -> env -> syntax_contract -> typed_contract
 
+val typecheck_entry :
+  typecheck_env -> syntax_exp entry -> typed_exp entry
+
                        (*
 val uniq_ident : string -> string
                         *)

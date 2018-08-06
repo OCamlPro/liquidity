@@ -45,7 +45,7 @@ and clean_seq exprs =
        | _ -> e :: exprs
 
 let clean_contract contract =
-  { contract with code = clean_code contract.code }
+  { contract with mic_code = clean_code contract.mic_code }
 
 
 (* let rec remove_loc_code (code : loc_michelson) : noloc_michelson =

@@ -67,7 +67,8 @@ let compile_liquid_file filename =
   begin match syntax_init with
   | None -> ()
   | Some syntax_init ->
-    match LiquidInit.compile_liquid_init env syntax_ast.contract_sig syntax_init with
+    assert false (* TODO *)
+    (* match LiquidInit.compile_liquid_init env syntax_ast.contract_sig syntax_init with
     | LiquidInit.Init_constant c_init when !LiquidOptions.json ->
       let s = LiquidToTezos.(json_of_const @@ convert_const c_init) in
       let output = env.filename ^ ".init.json" in
@@ -90,6 +91,7 @@ let compile_liquid_file filename =
       in
       FileString.write_file output s;
       Printf.eprintf "Storage initializer generated in %S\n%!" output
+    *)
   end;
 
   let c, loc_table =
@@ -125,7 +127,8 @@ let compile_tezos_file filename =
       LiquidToTezos.read_tezos_json filename
     else LiquidToTezos.read_tezos_file filename
   in
-
+  assert false (* TODO *)
+    (*
   let c, annoted_tz, type_annots = LiquidFromTezos.convert_contract env code in
   let c = LiquidClean.clean_contract c in
   (* let c = if !LiquidOptions.peephole then LiquidPeephole.simplify c else c in *)
@@ -164,7 +167,7 @@ let compile_tezos_file filename =
                               untyped_ast);
   Printf.eprintf "File %S generated\n%!" output;
   ()
-
+*)
 
 let handle_file filename =
   if Filename.check_suffix filename ".liq" then
@@ -208,6 +211,7 @@ module Data = struct
     else
       LiquidPrinter.Michelson.line_of_const mic_data
 
+(*
   let translate () =
     let filename = !contract in
     let contract = FileString.read_file filename in
@@ -225,6 +229,7 @@ module Data = struct
       else
         Printf.printf "parameter: %s \nstorage: %s\n%!"
           parameter_str storage_str
+*)
 
   let run () =
     let open LiquidDeploy in
@@ -320,7 +325,7 @@ end
 
 let parse_tez_to_string expl amount =
   match LiquidData.translate (LiquidFromOCaml.initial_env expl)
-          dummy_contract_sig amount Ttez
+          dummy_contract_sig Tunit amount Ttez
   with
   | CTez t ->
     let mutez = match t.mutez with
@@ -454,6 +459,7 @@ let main () =
       ],
       "FILE.liq <TZ1...> PARAMETER Call deployed contract";
 
+(*
       "--data",
       (let data_args = ref [] in
        Arg.Tuple [
@@ -469,6 +475,7 @@ let main () =
              Data.translate ());
        ]),
       "FILE.liq PARAMETER [STORAGE] Translate to Michelson";
+*)
 
     ] @ LiquidToTezos.arg_list work_done
 

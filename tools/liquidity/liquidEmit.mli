@@ -11,4 +11,4 @@ open LiquidTypes
 
 val emit_code : expand:bool -> loc_michelson -> michelson_exp
 val emit_contract :
-  expand:bool -> loc_michelson contract -> michelson_exp contract
+  expand:bool -> loc_michelson_contract -> michelson_contract

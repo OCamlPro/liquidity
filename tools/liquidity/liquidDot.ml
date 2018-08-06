@@ -12,8 +12,8 @@ open Ocamldot.TYPES
 
 let subgraph_counter = ref 0
 
-let rec to_dot ~sub_contract_of contract =
-
+let rec to_dot ~sub_contract_of contract = assert false (* TODO *)
+(*
   incr subgraph_counter;
 
   let g, nodes = match sub_contract_of with
@@ -142,7 +142,7 @@ let rec to_dot ~sub_contract_of contract =
   in
   iter begin_node;
   g
-
+*)
 let to_string contract =
   subgraph_counter := 0;
   Ocamldot.to_string (to_dot ~sub_contract_of:None contract)

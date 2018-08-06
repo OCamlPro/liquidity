@@ -495,7 +495,8 @@ let mk_json_obj fields =
 let mk_json_arr l = "[" ^ String.concat "," l ^ "]"
 
 
-let compile_liquid liquid =
+let compile_liquid liquid = assert false (* TODO *)
+  (*
   let ocaml_ast, filename = match liquid with
     | From_string s ->
       LiquidFromOCaml.structure_of_string ~filename:"liquidity_buffer" s,
@@ -526,8 +527,10 @@ let compile_liquid liquid =
         inputs_infos)
   in
   ( env, syntax_ast, pre_michelson, pre_init )
+  *)
 
-let decompile_michelson code =
+let decompile_michelson code = assert false (* TODO *)
+  (*
   let env = LiquidTezosTypes.empty_env "mic_code" in
   let c, annoted_tz, type_annots = LiquidFromTezos.convert_contract env code in
   let c = LiquidClean.clean_contract c in
@@ -541,7 +544,7 @@ let decompile_michelson code =
       ~decompile_annoted:annoted_tz encode_ast to_inline in
   let untyped_ast = LiquidUntype.untype_contract live_ast in
   untyped_ast
-
+*)
 
 let operation_of_json r =
   let env = LiquidTezosTypes.empty_env "operation" in
@@ -563,6 +566,8 @@ let operation_of_json r =
             with Not_found -> None;
         }
     | "origination" ->
+      assert false (* TODO *)
+        (*
       let open Ezjsonm in
       let script =
         try
@@ -589,6 +594,8 @@ let operation_of_json r =
           delegate =
             Option.try_with (fun () -> find r ["delegate"] |> get_string);
         }
+*)
+
     | "delegation" ->
       Delegation Ezjsonm.(
           Option.try_with (fun () -> find r ["delegate"] |> get_string);
@@ -698,7 +705,8 @@ let run_pre ?(debug=false)
     raise_response_error ~loc_table "run" r
 
 
-let run ~debug liquid input_string storage_string =
+let run ~debug liquid input_string storage_string = assert false (* TODO *)
+  (*
   let env, { contract_sig }, pre_michelson, _ = compile_liquid liquid in
   let input =
     LiquidData.translate { env with filename = "run_input" }
@@ -710,6 +718,7 @@ let run ~debug liquid input_string storage_string =
   in
   run_pre ~debug env contract_sig
     pre_michelson !LiquidOptions.source input storage
+*)
 
 let run_debug liquid input_string storage_string =
   run ~debug:true liquid input_string storage_string
@@ -783,6 +792,8 @@ let get_protocol () =
     raise_response_error "get_protocol" r
 
 let get_storage liquid address =
+  assert false (* TODO *)
+    (*
   let env, syntax_ast, pre_michelson, pre_init_infos = compile_liquid liquid in
   send_get
     (Printf.sprintf
@@ -798,6 +809,7 @@ let get_storage liquid address =
          syntax_ast.contract_sig.storage)
   with Not_found ->
     raise_response_error "get_storage" r
+*)
 
 let is_revealed source =
   send_get
@@ -967,6 +979,7 @@ let forge_deploy ?head ?source ?public_key
     return (op, operations_json, loc_table)
   with Not_found ->
     raise_response_error ~loc_table "forge_deploy" (Ezjsonm.from_string r)
+*)
 
 let hash msg =
   Blake2B.(to_bytes (hash_bytes [MBytes.of_string "\x03"; msg]))
@@ -1084,6 +1097,8 @@ let deploy ?(delegatable=false) ?(spendable=false) liquid init_params_strings =
 
 
 let forge_call ?head ?source ?public_key liquid address parameter_string =
+  assert false (* TODO *)
+    (*
   let source = match source, !LiquidOptions.source with
     | Some source, _ | _, Some source -> source
     | None, None -> raise (ResponseError "forge_call: Missing source")
@@ -1146,7 +1161,7 @@ let forge_call ?head ?source ?public_key liquid address parameter_string =
     return (op, operations_json, loc_table)
   with Not_found ->
     raise_response_error ~loc_table "forge_call" (Ezjsonm.from_string r)
-
+*)
 
 let call liquid address parameter_string =
   let sk = match !LiquidOptions.private_key with

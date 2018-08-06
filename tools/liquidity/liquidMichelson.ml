@@ -129,7 +129,10 @@ let rec translate_code code =
       let loc = loc_of_many cond in
       cond @ [ ii ~loc @@ IF (seq ifthen, seq ifelse)]
 
-    | Transfer(loc, contract_exp, tez_exp, arg_exp) ->
+    | Transfer(loc, contract_exp, tez_exp, Some _, arg_exp) ->
+      assert false (* should have been encoded *)
+
+    | Transfer(loc, contract_exp, tez_exp, None, arg_exp) ->
        let contract = compile depth env contract_exp in
        let amount = compile (depth+1) env tez_exp in
        let arg = compile (depth+2) env arg_exp in
@@ -631,5 +634,10 @@ let translate filename ~peephole contract =
   { contract with code }
  *)
 and translate contract =
-  { contract with
-    code = translate_code contract.code |> finalize_fail_pre }
+  let mic_storage = contract.storage in
+  match contract.entries with
+  | [{ entry_sig = { parameter = mic_parameter }; code }] ->
+    { mic_parameter;
+      mic_storage;
+      mic_code =  translate_code code |> finalize_fail_pre }
+  | _ -> assert false
