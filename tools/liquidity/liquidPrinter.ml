@@ -138,7 +138,8 @@ module Michelson = struct
       | Toperation  -> Printf.bprintf b "operation"
       | Taddress  -> Printf.bprintf b "address"
       | Ttuple tys -> bprint_type_pairs fmt b indent tys
-      | Trecord _ | Tsum _ -> assert false
+      | Trecord (name, labels) -> bprint_type_record name fmt b indent labels
+      | Tsum (name, constrs) -> bprint_type_sum name fmt b indent constrs
       | Tcontract { entries_sig = [{ parameter = ty }] } ->
          let indent = fmt.increase_indent indent in
          Printf.bprintf b "(contract%c%s" fmt.newline indent;
@@ -205,6 +206,34 @@ module Michelson = struct
          bprint_type_pairs fmt b indent tys;
          Printf.bprintf b ")";
          ()
+
+    and bprint_type_composed ty_c name fmt b indent labels =
+      match labels with
+      | [] -> assert false
+      | [label, ty] ->
+        Printf.bprintf b "(";
+        bprint_type fmt b indent ty;
+        Printf.bprintf b " %%%s)" label;
+      | (label, ty) :: labels ->
+         let indent = fmt.increase_indent indent in
+         Printf.bprintf b "(%s%s%c%s"
+           ty_c
+           (if name = "" then "" else " :"^name)
+           fmt.newline indent;
+         Printf.bprintf b "(";
+         bprint_type fmt b indent ty;
+         Printf.bprintf b " %%%s)" label;
+         Printf.bprintf b "%c%s" fmt.newline indent;
+         bprint_type_composed ty_c "" fmt b indent labels;
+         Printf.bprintf b ")";
+         ()
+
+    and bprint_type_record name fmt b indent labels =
+      bprint_type_composed "pair" name fmt b indent labels
+
+    and bprint_type_sum name fmt b indent constrs =
+      bprint_type_composed "or" name fmt b indent constrs
+
     in
     bprint_type fmt b indent ty
 

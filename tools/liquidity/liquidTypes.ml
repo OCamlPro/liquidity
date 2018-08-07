@@ -173,7 +173,9 @@ type primitive =
 
   (* primitives *)
   | Prim_tuple_get
+  (* | Prim_record_get of string *)
   | Prim_tuple_set
+  (* | Prim_record_set of string *)
   | Prim_tuple
 
   | Prim_self

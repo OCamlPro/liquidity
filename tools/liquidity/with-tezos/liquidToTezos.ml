@@ -31,7 +31,8 @@ let prim ~loc name args var_name =
 let seq ~loc exprs =
   Micheline.Seq(loc, exprs)
 
-let prim_type ~loc name args = Micheline.Prim(loc, name, args, [])
+let prim_type ~loc ?(annots=[]) name args =
+  Micheline.Prim(loc, name, args, annots)
 
 let rec convert_const ~loc expr =
   let bytes_of_hex s =
@@ -129,7 +130,33 @@ let rec convert_type ~loc expr =
   | Tset x -> prim_type ~loc "set" [convert_type ~loc x]
   | Tlist x -> prim_type ~loc "list" [convert_type ~loc x]
   | Toption x -> prim_type ~loc "option" [convert_type ~loc x]
-  | Tfail | Trecord _ | Tsum _ -> assert false
+  | Trecord (name, labels) -> convert_record_type ~loc name labels
+  | Tsum (name, constrs) -> convert_sum_type ~loc name constrs
+  | Tfail -> assert false
+
+and convert_record_type ~loc name labels =
+  convert_composed_type "pair" ~loc name labels
+
+and convert_sum_type ~loc name constrs =
+  convert_composed_type "or" ~loc name constrs
+
+and convert_composed_type ty_c ~loc name labels =
+  match labels with
+  | [] -> assert false
+  | [l, ty] ->
+    begin match convert_type ~loc ty with
+      | Micheline.Prim(loc, name, args, annots) ->
+        Micheline.Prim(loc, name, args, annots @ ["%"^l])
+      | _ -> assert false
+    end
+  | (l, ty) :: labels ->
+    let annots = if name = "" then [] else [":"^name] in
+    let ty = match convert_type ~loc ty with
+      | Micheline.Prim(loc, name, args, annots) ->
+        Micheline.Prim(loc, name, args, annots @ ["%"^l])
+      | _ -> assert false in
+    prim_type ~loc ~annots ty_c
+      [ty; convert_composed_type ty_c ~loc "" labels]
 
 let rec convert_code expand expr =
   let name = expr.loc_name in

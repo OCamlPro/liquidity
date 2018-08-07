@@ -281,7 +281,20 @@ let type_name_of_annots annots =
   try
     List.iter (fun a ->
       try raise (Found (Scanf.sscanf a ":%s" (fun s -> s)))
-      with Scanf.Scan_failure _ | End_of_file ->
+      (* with Scanf.Scan_failure _ | End_of_file ->
+       * try raise (Found (Scanf.sscanf a "%%%s" (fun s -> s))) *)
+      with Scanf.Scan_failure _ | End_of_file -> ()
+    ) annots;
+    None
+  with
+  | Found ("" | "%" | "@") -> None
+  | Found s -> Some (sanitize_name s)
+
+
+let type_constr_or_label_of_annots annots =
+  let exception Found of string in
+  try
+    List.iter (fun a ->
       try raise (Found (Scanf.sscanf a "%%%s" (fun s -> s)))
       with Scanf.Scan_failure _ | End_of_file -> ()
     ) annots;
@@ -289,6 +302,7 @@ let type_name_of_annots annots =
   with
   | Found ("" | "%" | "@") -> None
   | Found s -> Some (sanitize_name s)
+
 
 let rec convert_type env expr =
   let name = match expr with
@@ -309,33 +323,23 @@ let rec convert_type env expr =
     | Prim(_, "bytes", [], _debug) -> Tbytes
     | Prim(_, "operation", [], _debug) -> Toperation
     | Prim(_, "address", [], _debug) -> Taddress
-    (* | Prim(_, "pair", [
-     *     Prim(_, _, _, Some x_field) as x;
-     *     Prim(_, _, _, Some y_field) as y;
-     *   ], _debug) ->
-     *   let x_field = (name_of_annot x_field) in
-     *   let y_field = (name_of_annot y_field) in
-     *   let rname = match name with
-     *     | Some n -> n
-     *     | None -> String.concat "_" [x_field; y_field] in
-     *   Trecord (rname, [(x_field, convert_type env x);
-     *                    (y_field, convert_type env y)]) *)
-    | Prim(_, "pair", [x;y], _debug) -> Ttuple [convert_type env x;
-                                                convert_type env y]
 
-    (* | Prim(_, "or", [
-     *     Prim(_, _, _, Some x_constr) as x;
-     *     Prim(_, _, _, Some y_constr) as y;
-     *   ], _debug) ->
-     *   let x_constr = String.capitalize_ascii @@ name_of_annot x_constr in
-     *   let y_constr = String.capitalize_ascii @@ name_of_annot y_constr in
-     *   let sname = match name with
-     *     | Some n -> n
-     *     | None -> String.concat "_" [x_constr; y_constr] in
-     *   Tsum (sname, [(x_constr, convert_type env x);
-     *                 (y_constr, convert_type env y)]) *)
-    | Prim(_, "or", [x;y], _debug) -> Tor (convert_type env x,
-                                           convert_type env y)
+    | Prim(_, "pair", [x;y], _debug) ->
+      begin match name with
+        | None -> Ttuple [convert_type env x; convert_type env y]
+        | Some name ->
+          try Trecord (name, type_components env expr)
+          with Exit -> Ttuple [convert_type env x; convert_type env y]
+      end
+
+    | Prim(_, "or", [x;y], _debug) ->
+      begin match name with
+        | None -> Tor (convert_type env x, convert_type env y)
+        | Some name ->
+          try Tsum (name, type_components env expr)
+          with Exit -> Tor (convert_type env x, convert_type env y)
+      end
+
     | Prim(_, "contract", [x], _debug) ->
       assert false (* TODO *)
       (* Tcontract (convert_type env x) *)
@@ -356,6 +360,27 @@ let rec convert_type env expr =
     | Some name -> Hashtbl.add env.type_annots ty name
   end;
   ty
+
+
+and type_components env t =
+  match t with
+  | Prim(_, _, [x;y], annots) ->
+    begin
+      let x_label = match x with
+        | Prim(_, _, _, a) -> type_constr_or_label_of_annots a
+        | _ -> None in
+      let y_label = match y with
+        | Prim(_, _, _, a) -> type_constr_or_label_of_annots a
+        | _ -> None in
+      match x_label, y_label with
+      | None, _ -> raise Exit
+      | Some x_label, Some y_label ->
+        [x_label, convert_type env x; y_label, convert_type env y]
+      | Some x_label, None ->
+        (x_label, convert_type env x) :: type_components env t
+    end
+  | _ -> raise Exit
+
 
 (*
 let is_liq_annot name =

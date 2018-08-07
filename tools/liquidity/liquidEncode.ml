@@ -202,8 +202,12 @@ let rec encode_type ty =
     let t3' = encode_type t3 in
     if t1 == t1' && t2 == t2' && t3 == t3' then ty
     else Tclosure ((t1', t2'), t3')
-  | Trecord (_, labels) -> encode_record_type labels
-  | Tsum (_, cstys) -> encode_sum_type cstys
+  | Trecord (name, labels) ->
+    (* encode_record_type labels *)
+    Trecord (name, List.map (fun (l, ty) -> l, encode_type ty) labels)
+  | Tsum (name, cstys) ->
+    (* encode_sum_type cstys *)
+    Tsum (name, List.map (fun (c, ty) -> c, encode_type ty) cstys)
   | Tcontract contract_sig ->
     let parameter = encode_type (encode_contract_sig contract_sig) in
     Tcontract { contract_sig with entries_sig = [{
