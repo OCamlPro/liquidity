@@ -34,7 +34,7 @@ let compile_liquid_file filename =
                         (LiquidPrinter.Liquid.string_of_contract
                            syntax_ast);
   let typed_ast = LiquidCheck.typecheck_contract
-      ~warnings:true env syntax_ast in
+      ~warnings:true ~decompiling:false env syntax_ast in
   if !LiquidOptions.verbosity>0 then
     FileString.write_file (filename ^ ".typed")
       (LiquidPrinter.Liquid.string_of_contract_types
@@ -67,8 +67,8 @@ let compile_liquid_file filename =
   begin match syntax_init with
   | None -> ()
   | Some syntax_init ->
-    assert false (* TODO *)
-    (* match LiquidInit.compile_liquid_init env syntax_ast.contract_sig syntax_init with
+    match LiquidInit.compile_liquid_init env
+            (sig_of_contract syntax_ast) syntax_ast.storage syntax_init with
     | LiquidInit.Init_constant c_init when !LiquidOptions.json ->
       let s = LiquidToTezos.(json_of_const @@ convert_const c_init) in
       let output = env.filename ^ ".init.json" in
@@ -91,7 +91,6 @@ let compile_liquid_file filename =
       in
       FileString.write_file output s;
       Printf.eprintf "Storage initializer generated in %S\n%!" output
-    *)
   end;
 
   let c, loc_table =
@@ -127,28 +126,28 @@ let compile_tezos_file filename =
       LiquidToTezos.read_tezos_json filename
     else LiquidToTezos.read_tezos_file filename
   in
-  assert false (* TODO *)
-    (*
-  let c, annoted_tz, type_annots = LiquidFromTezos.convert_contract env code in
+  let c = LiquidFromTezos.convert_contract env code in
+  let annoted_tz, type_annots = LiquidFromTezos.infos_env env in
   let c = LiquidClean.clean_contract c in
   (* let c = if !LiquidOptions.peephole then LiquidPeephole.simplify c else c in *)
   let c = LiquidInterp.interp c in
   if !LiquidOptions.parseonly then exit 0;
-  if !LiquidOptions.verbosity>0 then begin
-    FileString.write_file  (filename ^ ".dot")
-                           (LiquidDot.to_string c);
-    let cmd = Ocamldot.dot2pdf_cmd (filename ^ ".dot") (filename ^ ".pdf") in
-    if Sys.command cmd <> 0 then
-      Printf.eprintf "Warning: could not generate pdf from .dot file\n%!";
-  end;
+  (* if !LiquidOptions.verbosity>0 then begin
+   *   FileString.write_file  (filename ^ ".dot")
+   *                          (LiquidDot.to_string c);
+   *   let cmd = Ocamldot.dot2pdf_cmd (filename ^ ".dot") (filename ^ ".pdf") in
+   *   if Sys.command cmd <> 0 then
+   *     Printf.eprintf "Warning: could not generate pdf from .dot file\n%!";
+   * end; *)
   if !LiquidOptions.typeonly then exit 0;
 
   let c = LiquidDecomp.decompile c in
   if !LiquidOptions.verbosity>0 then
   FileString.write_file  (filename ^ ".liq.pre")
                          (LiquidPrinter.Liquid.string_of_contract c);
-  let env = LiquidFromOCaml.initial_env filename in
-  let typed_ast = LiquidCheck.typecheck_contract ~warnings:false env c in
+  let env = LiquidFromTezos.convert_env env in
+  let typed_ast =
+    LiquidCheck.typecheck_contract ~warnings:false ~decompiling:true env c in
   let encode_ast, to_inline =
     LiquidEncode.encode_contract ~decompiling:true env typed_ast in
   let live_ast = LiquidSimplify.simplify_contract
@@ -167,7 +166,6 @@ let compile_tezos_file filename =
                               untyped_ast);
   Printf.eprintf "File %S generated\n%!" output;
   ()
-*)
 
 let handle_file filename =
   if Filename.check_suffix filename ".liq" then
@@ -194,10 +192,12 @@ module Data = struct
   let contract = ref ""
   let parameter = ref ""
   let storage = ref ""
+  let entry_name = ref "main"
 
   let contract_address = ref ""
   let init_inputs = ref []
     
+(*
   let liquid_to_mic filename contract typ parameter =
     let mic_data = LiquidData.data_of_liq filename contract typ parameter in
     let mic_data = match mic_data with 
@@ -211,7 +211,6 @@ module Data = struct
     else
       LiquidPrinter.Michelson.line_of_const mic_data
 
-(*
   let translate () =
     let filename = !contract in
     let contract = FileString.read_file filename in
@@ -234,7 +233,7 @@ module Data = struct
   let run () =
     let open LiquidDeploy in
     let ops, r_storage, big_map_diff =
-      Sync.run (From_file !contract) !parameter !storage
+      Sync.run (From_file !contract) !entry_name !parameter !storage
     in
     Printf.printf "%s\n# Internal operations: %d\n%!"
       (LiquidData.string_of_const r_storage)
@@ -310,6 +309,7 @@ module Data = struct
       LiquidDeploy.Sync.call
         (LiquidDeploy.From_file !contract)
         !contract_address
+        !entry_name
         !parameter
     with
     | op_h, Ok () ->
@@ -398,6 +398,7 @@ let main () =
 
       "--run", Arg.Tuple [
         Arg.String (fun s -> Data.contract := s);
+        Arg.String (fun s -> Data.entry_name := s);
         Arg.String (fun s -> Data.parameter := s);
         Arg.String (fun s -> Data.storage := s);
         Arg.Unit (fun () ->
@@ -452,6 +453,7 @@ let main () =
       "--call", Arg.Tuple [
         Arg.String (fun s -> Data.contract := s);
         Arg.String (fun s -> Data.contract_address := s);
+        Arg.String (fun s -> Data.entry_name := s);
         Arg.String (fun s -> Data.parameter := s);
         Arg.Unit (fun () ->
             work_done := true;

@@ -807,15 +807,14 @@ let rec interp contract =
     | CREATE_CONTRACT contract, manager :: delegate ::
                                 delegatable :: spendable ::
                                 amount :: storage :: stack ->
-      assert false (* TODO *)
-      (* let contract = interp contract in
-       * let x = node ins.loc (N_CREATE_CONTRACT contract)
-       *     [manager; delegate;
-       *      delegatable; spendable;
-       *      amount; storage] [seq] in
-       * let res_op = node ins.loc (N_RESULT (x, 0)) [] [] in
-       * let res_addr = node ins.loc (N_RESULT (x, 1)) [] [] in
-       * res_op :: res_addr :: stack, x *)
+      let contract = interp contract in
+      let x = node ins.loc (N_CREATE_CONTRACT contract)
+          [manager; delegate;
+           delegatable; spendable;
+           amount; storage] [seq] in
+      let res_op = node ins.loc (N_RESULT (x, 0)) [] [] in
+      let res_addr = node ins.loc (N_RESULT (x, 1)) [] [] in
+      res_op :: res_addr :: stack, x
 
     | _ ->
       (* let ins = LiquidEmit.emit_code ins in *)
@@ -846,28 +845,26 @@ let rec interp contract =
 
   in
 
-  assert false (* TODO *)
+  let initial_code = match contract.mic_code.ins with
+    | SEQ code -> mic_loc contract.mic_code.loc
+                    (SEQ (mic_loc contract.mic_code.loc PAIR :: code))
+    | _ -> assert false
+  in
 
-  (* let initial_code = match contract.code.ins with
-   *   | SEQ code -> mic_loc contract.code.loc
-   *                   (SEQ (mic_loc contract.code.loc PAIR :: code))
-   *   | _ -> assert false
-   * in
-   *
-   * let start_node = node contract.code.loc N_START [] [] in
-   *
-   * let initial_stack = [
-   *   node contract.code.loc (N_VAR "parameter") [] [];
-   *   node contract.code.loc (N_VAR "storage") [] [];
-   *   ] in
-   *
-   * let stack, seq = decompile initial_stack start_node initial_code in
-   * let end_node = match stack with
-   *     [ arg ] -> node arg.loc N_END [arg] [seq]
-   *   | _ -> assert false
-   * in
-   * let code = (start_node, end_node) in
-   * { contract with code } *)
+  let start_node = node contract.mic_code.loc N_START [] [] in
+
+  let initial_stack = [
+    node contract.mic_code.loc (N_VAR "parameter") [] [];
+    node contract.mic_code.loc (N_VAR "storage") [] [];
+    ] in
+
+  let stack, seq = decompile initial_stack start_node initial_code in
+  let end_node = match stack with
+      [ arg ] -> node arg.loc N_END [arg] [seq]
+    | _ -> assert false
+  in
+  let mic_code = (start_node, end_node) in
+  { contract with mic_code }
 
 
 let interp contract =

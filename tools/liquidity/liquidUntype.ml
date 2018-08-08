@@ -75,7 +75,7 @@ let find_free env var_arg bv =
 scopes. Unfortunately, without hash-consing, this can be quite expensive.
  *)
 
-let rec untype (env : env) code =
+let rec untype (env : env) (code : (datatype, 'a) exp) : (datatype, 'b) exp =
   let desc =
     match code.desc with
     | If (cond, ifthen, ifelse) ->
@@ -172,6 +172,19 @@ let rec untype (env : env) code =
                 entry,
                 untype env arg_exp)
 
+    | MatchVariant (arg, loc, cases) ->
+      let arg = untype env arg in
+      let cases = List.map (function
+          | CConstr (c, vars), carg ->
+            let vars, carg = untype_case env vars carg in
+            CConstr (c, vars), carg
+          | _ -> assert false
+        ) cases in
+       MatchVariant (arg, loc, cases)
+
+    | Constructor (loc, c, exp) -> Constructor (loc, c, untype env exp)
+
+(*
     | MatchVariant (arg, loc,
                     [
                       CConstr ("Left", [left_var]), left_arg;
@@ -185,6 +198,7 @@ let rec untype (env : env) code =
                       CConstr ("Left", [left_var]), left_arg;
                       CConstr ("Right", [right_var]), right_arg;
                     ])
+*)
 
     | CreateContract (loc, args, contract) ->
       CreateContract (loc, List.map (untype env) args, untype_contract contract)
@@ -195,9 +209,7 @@ let rec untype (env : env) code =
     | Unpack (loc, e, ty) ->
       Unpack (loc, untype env e, ty)
 
-    | Record (_, _)
-    | Constructor (_, _, _)
-    | MatchVariant (_, _, _) ->
+    | Record (_, _) ->
 
        LiquidLoc.raise_error
          "untype: unimplemented code:\n%s%!"
@@ -206,17 +218,33 @@ let rec untype (env : env) code =
   in
   mk desc code.ty
 
-and untype_case env (var : string) arg =
+and untype_case env vars arg =
   let bv = arg.bv in
-  let (var', env') = find_free env var bv in
+  let vars', env' = List.fold_left (fun (vars', env) var ->
+      let (var', env') = find_free env var bv in
+      var' :: vars', env'
+    ) ([], env) vars in
   let arg' = untype env' arg in
-  (var', arg')
+  (List.rev vars', arg')
 
-and untype_contract contract = assert false (* TODO *)
-  (* let contract = LiquidBoundVariables.bound_contract contract in
-   * let env = empty_env () in
-   * let env = new_binding "storage/1" "storage" env in
-   * let env = new_binding "parameter/2" "parameter" env in
-   * { contract with code = untype env contract.code } *)
+and untype_entry (entry : (datatype, 'a) exp entry) =
+  let env = empty_env () in
+  let base_parameter = base_of_var entry.entry_sig.parameter_name in
+  let base_storage = base_of_var entry.entry_sig.storage_name in
+  let env = new_binding entry.entry_sig.parameter_name base_parameter env in
+  let env = new_binding entry.entry_sig.storage_name base_storage env in
+  { entry_sig = { entry.entry_sig with
+                  parameter_name = base_parameter;
+                  storage_name = base_storage;
+                };
+    code = untype env entry.code }
+
+and untype_contract contract =
+  let contract = LiquidBoundVariables.bound_contract contract in
+  { contract with
+    values =
+      List.map (fun (v, i, e) -> (v, i, untype (empty_env ()) e))
+        contract.values;
+    entries = List.map untype_entry contract.entries }
 
 let untype_code code = untype (empty_env ()) code

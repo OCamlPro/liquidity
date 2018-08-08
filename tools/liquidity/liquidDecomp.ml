@@ -513,9 +513,8 @@ let rec decompile contract =
        (* TODO *)
 
        | N_CREATE_CONTRACT contract, args ->
-         assert false (* TODO *)
-         (* mklet node
-          *   (CreateContract (loc, List.map arg_of args, decompile contract)) *)
+         mklet node
+           (CreateContract (loc, List.map arg_of args, decompile contract))
 
        | (
          N_LAMBDA_END _
@@ -575,24 +574,30 @@ let rec decompile contract =
     mk (Let (var_of node, false, node.loc, node_liq, decompile_next node))
 
   in
-  assert false
-  (* TODO *)
-  (* let (begin_node, end_node) = contract.code in
-   * let code = decompile_next begin_node in
-   * (\*  let code =
-   *   mk (Let ("exp1", noloc,
-   *            mk (Apply(Prim_tuple, noloc,
-   *                      [
-   *                        mk (Apply(Prim_tuple, noloc,
-   *                                  [
-   *                                    mk (Var ("amount", noloc, []));
-   *                                    mk (Var ("parameter", noloc, []));
-   *                           ]));
-   *                        mk (Var ("storage", noloc, []))
-   *               ])), code))
-   * in
-   *  *\)
-   * { contract with code } *)
+  let (begin_node, end_node) = contract.mic_code in
+  let code = decompile_next begin_node in
+  (*  let code =
+    mk (Let ("exp1", noloc,
+             mk (Apply(Prim_tuple, noloc,
+                       [
+                         mk (Apply(Prim_tuple, noloc,
+                                   [
+                                     mk (Var ("amount", noloc, []));
+                                     mk (Var ("parameter", noloc, []));
+                            ]));
+                         mk (Var ("storage", noloc, []))
+                ])), code))
+  in
+  *)
+  { contract_name = "_dummy_";
+    storage = contract.mic_storage;
+    values = [];
+    entries = [{ entry_sig = { entry_name = "main";
+                               parameter = contract.mic_parameter;
+                               parameter_name = "parameter";
+                               storage_name = "storage" };
+                 code }]
+  }
 
 
 let decompile contract =

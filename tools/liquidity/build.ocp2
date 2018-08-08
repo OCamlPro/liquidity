@@ -120,6 +120,7 @@ OCaml.library("ocplib-liquidity-with-tezos",
      ];
      requires = [
         "ocplib-liquidity";
+        "ocplib-liquidity-ocaml";
         "michelson";
      ];
    });

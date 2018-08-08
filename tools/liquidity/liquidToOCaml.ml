@@ -545,6 +545,31 @@ let rec convert_code ~abbrev expr =
       (convert_type ~abbrev (Toption ty))
 
 
+let structure_item_of_entry ~abbrev storage_caml entry =
+  (* ignore (convert_type ~abbrev ~name:entry.entry_sig.parameter_name
+   *           entry.entry_sig.parameter); *)
+  let code = convert_code ~abbrev entry.code in
+  Str.extension (
+      { txt = "entry"; loc = !default_loc },
+      PStr    [
+        Str.value Nonrecursive
+          [
+            Vb.mk (pat_of_name entry.entry_sig.entry_name)
+              (Exp.fun_ Nolabel None
+                 (Pat.constraint_
+                    (pat_of_name entry.entry_sig.parameter_name)
+                    (convert_type ~abbrev entry.entry_sig.parameter)
+                 )
+                 (Exp.fun_ Nolabel None
+                    (Pat.constraint_
+                       (pat_of_name entry.entry_sig.storage_name)
+                       storage_caml
+                    )
+                    code
+                 ))
+          ]
+      ])
+
 let structure_of_contract ?(abbrev=true) ?type_annots contract =
   clean_abbrevs ();
   begin match type_annots with
@@ -557,32 +582,7 @@ let structure_of_contract ?(abbrev=true) ?type_annots contract =
           | _ -> ()
         ) type_annots
     | None -> () end;
-  assert false (* TODO *)
-    (*
-  let storage_caml = convert_type ~abbrev ~name:"storage" contract.contract_sig.storage in
-  ignore (convert_type ~abbrev ~name:"parameter" contract.contract_sig.parameter);
-  let code = convert_code ~abbrev contract.code in
-  let contract_caml = Str.extension (
-      { txt = "entry"; loc = !default_loc },
-      PStr    [
-        Str.value Nonrecursive
-          [
-            Vb.mk (pat_of_name "main")
-              (Exp.fun_ Nolabel None
-                 (Pat.constraint_
-                    (pat_of_name "parameter")
-                    (convert_type ~abbrev contract.contract_sig.parameter)
-                 )
-                 (Exp.fun_ Nolabel None
-                    (Pat.constraint_
-                       (pat_of_name "storage")
-                       storage_caml
-                    )
-                    code
-                 ))
-          ]
-      ])
-  in
+  let storage_caml = convert_type ~abbrev ~name:"storage" contract.storage in
   let version_caml = Str.extension (
       id "version",
       PStr [
@@ -597,9 +597,10 @@ let structure_of_contract ?(abbrev=true) ?type_annots contract =
                   Type.mk ~manifest { txt; loc = !default_loc }
                 ])
   in
+  let entries =
+    List.map (structure_item_of_entry ~abbrev storage_caml) contract.entries in
+  [ version_caml ] @ types_caml @ entries
 
-  [ version_caml ] @ types_caml @ [ contract_caml ]
-*)
 
 let string_of_structure = LiquidOCamlPrinter.string_of_structure
 

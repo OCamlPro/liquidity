@@ -14,7 +14,7 @@ val error :
   ('a, Format.formatter, unit, unit, unit, 'b) format6 -> 'a
 
 val typecheck_contract :
-  warnings:bool -> env -> syntax_contract -> typed_contract
+  warnings:bool -> decompiling:bool -> env -> syntax_contract -> typed_contract
 
 val typecheck_entry :
   typecheck_env -> syntax_exp entry -> typed_exp entry

@@ -328,7 +328,10 @@ let rec convert_type env expr =
       begin match name with
         | None -> Ttuple [convert_type env x; convert_type env y]
         | Some name ->
-          try Trecord (name, type_components env expr)
+          try
+            let ty = Trecord (name, type_components env expr) in
+            Hashtbl.add env.types name ty;
+            ty
           with Exit -> Ttuple [convert_type env x; convert_type env y]
       end
 
@@ -336,13 +339,25 @@ let rec convert_type env expr =
       begin match name with
         | None -> Tor (convert_type env x, convert_type env y)
         | Some name ->
-          try Tsum (name, type_components env expr)
+          try
+            let ty = Tsum (name, type_components env expr) in
+            Hashtbl.add env.types name ty;
+            ty
           with Exit -> Tor (convert_type env x, convert_type env y)
       end
 
     | Prim(_, "contract", [x], _debug) ->
-      assert false (* TODO *)
-      (* Tcontract (convert_type env x) *)
+      let parameter = convert_type env x in
+      let contract_sig = {
+        sig_name = None;
+        entries_sig = [{
+          entry_name = "main";
+          parameter_name = "parameter";
+          storage_name = "storage";
+          parameter;
+        }]
+      } in
+      Tcontract contract_sig
     | Prim(_, "lambda", [x;y], _debug) -> Tlambda
                                             (convert_type env x,
                                              convert_type env y)
@@ -620,7 +635,7 @@ let convert_contract env c =
         let c = Micheline.inject_locations (fun i -> i) c in
         expand c) c in
   let contract = convert_raw_contract env c in
-  contract, env.annoted, env.type_annots
+  contract
 
 let convert_const_type env c ty =
   let c = Micheline.inject_locations (fun i -> i) c in
@@ -654,6 +669,7 @@ let contract_of_string filename s =
         let env = { filename;
                     loc_table = convert_loc_table filename loc_tables;
                     type_annots = Hashtbl.create 17;
+                    types = Hashtbl.create 17;
                     annoted = false;
                   } in
         Some (nodes, env)
@@ -673,6 +689,27 @@ let const_of_string filename s =
         let env = { filename;
                     loc_table = convert_loc_table filename [loc_table];
                     type_annots = Hashtbl.create 17;
+                    types = Hashtbl.create 17;
                     annoted = false;
                   } in
         Some (node, env)
+
+let convert_env env =
+  let ty_env = LiquidFromOCaml.initial_env env.filename in
+  Hashtbl.iter (fun _ -> function
+      | Trecord (name, labels) ->
+        List.iteri (fun i (label, l_ty) ->
+            ty_env.labels <- StringMap.add label (name, i, l_ty) ty_env.labels;
+          ) labels;
+      | Tsum (name, constrs) ->
+        List.iter (fun (constr, c_ty) ->
+            ty_env.constrs <-
+              StringMap.add constr (name, c_ty) ty_env.constrs;
+          ) constrs;
+      | _ -> ()
+    ) env.types;
+  ty_env.types <- Hashtbl.fold StringMap.add env.types ty_env.types;
+  ty_env
+
+
+let infos_env env = env.annoted, env.type_annots

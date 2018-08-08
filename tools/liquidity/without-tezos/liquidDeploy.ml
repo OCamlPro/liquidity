@@ -5,6 +5,7 @@
 (*    All rights reserved. No warranty, explicit or implicit, provided.   *)
 (*                                                                        *)
 (**************************************************************************)
+open LiquidTypes
 
 type from =
   | From_string of string
@@ -18,20 +19,20 @@ let get = ref (fun _ ->
 
 type key_diff =
   | DiffKeyHash of string
-  | DiffKey of LiquidTypes.const
+  | DiffKey of const
 
 type big_map_diff_item =
-  | Big_map_add of key_diff * LiquidTypes.const
+  | Big_map_add of key_diff * const
   | Big_map_remove of key_diff
 
 type big_map_diff = big_map_diff_item list
 
 type stack_item =
-  | StackConst of LiquidTypes.const
+  | StackConst of const
   | StackCode of int
 
 type trace_item = {
-  loc : LiquidTypes.location option;
+  loc : location option;
   gas : int;
   stack : (stack_item * string option) list;
 }
@@ -43,12 +44,12 @@ type internal_operation =
   | Transaction of {
       amount : string;
       destination : string;
-      parameters : LiquidTypes.const option;
+      parameters : const option;
     }
   | Origination of {
       manager: string ;
       delegate: string option ;
-      script: (LiquidTypes.typed_contract * LiquidTypes.const) option ;
+      script: (typed_contract * const) option ;
       spendable: bool ;
       delegatable: bool ;
       balance: string ;
@@ -63,34 +64,35 @@ type operation = {
 
 exception RequestError of int * string
 exception ResponseError of string
-exception RuntimeError of LiquidTypes.error * trace option
-exception LocalizedError of LiquidTypes.error
-exception RuntimeFailure of LiquidTypes.error * string option * trace option
+exception RuntimeError of error * trace option
+exception LocalizedError of error
+exception RuntimeFailure of error * string option * trace option
+
 
 module type S = sig
   type 'a t
-  val run : from -> string -> string ->
-    (operation list * LiquidTypes.const * big_map_diff option) t
-  val run_debug : from -> string -> string ->
-    (operation list * LiquidTypes.const * big_map_diff option * trace) t
-  val init_storage :
-    from -> string list -> LiquidTypes.const t
+  val run : from -> string -> string -> string ->
+    (operation list * const * big_map_diff option) t
+  val run_debug : from -> string -> string -> string ->
+    (operation list * const * big_map_diff option * trace) t
+  val init_storage : from -> string list -> const t
   val forge_deploy : ?delegatable:bool -> ?spendable:bool ->
     from -> string list -> string t
   val deploy : ?delegatable:bool -> ?spendable:bool ->
     from -> string list -> (string * (string, exn) result) t
-  val get_storage : from -> string -> LiquidTypes.const t
-  val forge_call : from -> string -> string -> string t
-  val call : from -> string -> string -> (string * (unit, exn) result) t
+  val get_storage : from -> string -> const t
+  val forge_call : from -> string -> string -> string -> string t
+  val call : from -> string -> string -> string ->
+    (string * (unit, exn) result) t
   val activate : secret:string -> string t
 end
 
 module Dummy = struct
 
-  let run _ _ _ =
+  let run _ _ _ _ =
     failwith "mini version cannot run"
 
-  let run_debug _ _ _ =
+  let run_debug _ _ _ _ =
     failwith "mini version cannot run debug"
 
   let init_storage _ _ =
@@ -105,10 +107,10 @@ module Dummy = struct
   let get_storage _ _ =
     failwith "mini version cannot query node"
 
-  let forge_call _ _ _ =
+  let forge_call _ _ _ _ =
     failwith "mini version cannot call"
 
-  let call _ _ _ =
+  let call _ _ _ _ =
     failwith "mini version cannot call"
 
   let activate ~secret =

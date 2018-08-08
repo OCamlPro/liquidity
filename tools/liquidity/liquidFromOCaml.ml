@@ -1441,7 +1441,7 @@ let rec translate_structure env acc ast =
                           pvb_expr = head_exp;
                         }
              ]) } ]
-           ), []) } :: ast (* _ast TODO *)
+           ), []) } :: ast
     ->
     let entry =
       Syn_entry (translate_entry name env

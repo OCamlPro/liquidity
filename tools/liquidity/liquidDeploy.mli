@@ -71,11 +71,11 @@ module type S = sig
      in ![LiquidOptions], returns the return value, the storage and a diff of a
      big map id the contract contains any *)
   val run :
-    from -> string -> string ->
+    from -> string -> string -> string ->
     (operation list * LiquidTypes.const * big_map_diff option) t
 
   val run_debug :
-    from -> string -> string ->
+    from -> string -> string -> string ->
     (operation list * LiquidTypes.const * big_map_diff option * trace) t
 
   (** Compute the initial storage for a specific script, returns storage data *)
@@ -96,11 +96,12 @@ module type S = sig
 
   (** Forge an operation to call a deploy contract, returns the hex-encoded
       operation *)
-  val forge_call : from -> string -> string -> string t
+  val forge_call : from -> string -> string -> string -> string t
 
   (** Calls a deployed Liquidity contract on the Tezos node specified in
       ![LiquidOptions], returns the operation hash *)
-  val call : from -> string -> string -> (string * (unit, exn) result) t
+  val call : from -> string -> string -> string ->
+    (string * (unit, exn) result) t
 
   val activate : secret:string -> string t
 

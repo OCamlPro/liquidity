@@ -9,4 +9,4 @@
 
 open LiquidTypes
 
-val to_string : node_exp contract -> string
+val to_string : node_contract -> string

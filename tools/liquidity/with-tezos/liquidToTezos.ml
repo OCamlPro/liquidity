@@ -117,9 +117,9 @@ let rec convert_type ~loc expr =
   | Ttuple (x :: tys) ->
      prim_type ~loc "pair" [convert_type ~loc x; convert_type ~loc (Ttuple tys)]
   | Tor (x,y) -> prim_type ~loc "or" [convert_type ~loc x; convert_type ~loc y]
-  | Tcontract x ->
-    assert false (* TODO *)
-    (* prim_type ~loc "contract" [convert_type ~loc x] *)
+  | Tcontract { entries_sig = [{ parameter }]} ->
+    prim_type ~loc "contract" [convert_type ~loc parameter]
+  | Tcontract _ -> assert false
   | Tlambda (x,y) -> prim_type ~loc "lambda" [convert_type ~loc x;
                                          convert_type ~loc y]
   | Tclosure ((x,e),r) ->
@@ -428,6 +428,7 @@ let read_tezos_json filename =
   let env = LiquidTezosTypes.{ filename;
                                loc_table = IntMap.empty;
                                type_annots = Hashtbl.create 17;
+                               types = Hashtbl.create 17;
                                annoted = false;
                              } in
   nodes, env

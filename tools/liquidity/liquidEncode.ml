@@ -9,8 +9,6 @@
 
 open LiquidTypes
 
-let prefix_entry = "_Liq_entry_"
-
 let noloc env = LiquidLoc.loc_in_file env.env.filename
 
 let error loc msg =
@@ -965,15 +963,17 @@ and encode_apply name env prim loc args ty =
 
 and encode_entry env entry =
   (* "storage/1" *)
-  let (_ , env, _) =
+  let (storage_name, env, _) =
     new_binding env entry.entry_sig.storage_name env.t_contract_storage in
   (* "parameter/2" *)
-  let (_, env, _) =
+  let (parameter_name, env, _) =
     new_binding env entry.entry_sig.parameter_name entry.entry_sig.parameter in
   {
     entry_sig = {
       entry.entry_sig with
-      parameter = encode_parameter_type env entry.entry_sig.parameter
+      parameter = encode_parameter_type env entry.entry_sig.parameter;
+      parameter_name;
+      storage_name;
     };
     code = encode env entry.code;
   }
@@ -998,7 +998,7 @@ and encode_contract ?(annot=false) ?(decompiling=false) env contract =
 
   let parameter = encode_contract_sig env.t_contract_sig  in
   (* "storage/1" *)
-  let (_, env, _) = new_binding env "storage" env.t_contract_storage in
+  let (storage_name, env, _) = new_binding env "storage" env.t_contract_storage in
   (* "parameter/2" *)
   let (pname, env, _) = new_binding env "parameter" parameter in
   let loc = LiquidLoc.loc_in_file env.env.filename in
@@ -1010,7 +1010,7 @@ and encode_contract ?(annot=false) ?(decompiling=false) env contract =
     | [e] -> e.code.desc
     | _ ->
       Format.eprintf "ps : %s @." (LiquidPrinter.Liquid.string_of_type parameter);
-      let parameter = mk_typed (Var ("parameter", loc, [])) parameter in
+      let parameter = mk_typed (Var (pname, loc, [])) parameter in
       MatchVariant (parameter, loc,
                     List.map (fun e ->
                         let constr = prefix_entry ^ e.entry_sig.entry_name in
@@ -1032,8 +1032,8 @@ and encode_contract ?(annot=false) ?(decompiling=false) env contract =
     entries = [{
         entry_sig = {
           entry_name = "main";
-          parameter_name = "parameter";
-          storage_name = "storage";
+          parameter_name = pname;
+          storage_name;
           parameter = encode_parameter_type env parameter;
         };
         code;

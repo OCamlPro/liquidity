@@ -892,7 +892,7 @@ type node = {
    | N_IF_PLUS of node * node
    | N_IF_MINUS of node * node
    | N_TRANSFER
-   | N_CREATE_CONTRACT of node_exp contract
+   | N_CREATE_CONTRACT of node_exp mic_contract
    | N_CONST of datatype * const
    | N_PRIM of string
    | N_FAILWITH
@@ -997,3 +997,5 @@ let has_reserved_prefix s =
   | 'p', '2', 's' -> len >= 5 && s.[3] = 'i' && s.[4] = 'g'
   | 's', 'p', 's' -> len >= 6 && s.[3] = 'i' && s.[4] = 'g' && s.[4] = '1'
   | _ -> false
+
+let prefix_entry = "_Liq_entry_"

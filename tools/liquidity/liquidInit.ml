@@ -185,12 +185,18 @@ let tmp_contract_of_init ~loc (args, code) storage_ty =
       parameter, code
   in
   (* Empty big map is fetched in given storage which is always empty *)
-  assert false (* TODO *)
-  (* let code = subst_empty_big_map code in
-   * let code =
-   *   mk(Apply (Prim_tuple, loc, [ c_empty_op ~loc; code ])) () in
-   * let contract_sig = { parameter; storage } in
-   * { contract_sig; code } *)
+  let code = subst_empty_big_map code in
+  let code =
+    mk(Apply (Prim_tuple, loc, [ c_empty_op ~loc; code ])) () in
+  { contract_name = "_dummy_init";
+    storage;
+    values = [];
+    entries = [{ entry_sig = { entry_name = "main";
+                               parameter;
+                               parameter_name = "parameter";
+                               storage_name = "storage" };
+                 code }]
+  }
 
 let compile_liquid_init env contract storage_ty ((args, sy_init) as init) =
   let loc = LiquidCheck.loc_exp sy_init in
@@ -212,7 +218,7 @@ let compile_liquid_init env contract storage_ty ((args, sy_init) as init) =
     (* non constant initial value *)
     let init_contract = tmp_contract_of_init ~loc init storage_ty in
     let typed_init = LiquidCheck.typecheck_contract
-        ~warnings:true env init_contract in
+        ~warnings:true ~decompiling:false env init_contract in
     let encoded_init, _ = LiquidEncode.encode_contract env typed_init in
     let pre_init = LiquidMichelson.translate encoded_init in
     Init_code (init_contract, pre_init)

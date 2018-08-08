@@ -11,13 +11,17 @@ open LiquidTypes
 
 exception Missing_program_field of string
 
-let convert_const_type loc_table string ty =
+let convert_const_type env string ty =
     failwith "mini version cannot decompile"
-let convert_const_notype loc_table string =
+let convert_const_notype env string =
     failwith "mini version cannot decompile"
-let convert_contract loc_table string =
+let convert_contract env string =
     failwith "mini version cannot decompile"
 let contract_of_string filename string =
     failwith "mini version cannot decompile"
 let const_of_string filename string =
+    failwith "mini version cannot decompile"
+let convert_env _ =
+    failwith "mini version cannot decompile"
+let infos_env env =
     failwith "mini version cannot decompile"
