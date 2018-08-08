@@ -1010,17 +1010,24 @@ and encode_contract ?(annot=false) ?(decompiling=false) env contract =
     | [e] -> e.code.desc
     | _ ->
       Format.eprintf "ps : %s @." (LiquidPrinter.Liquid.string_of_type parameter);
-      let parameter = mk_typed (Var (pname, loc, [])) parameter in
-      MatchVariant (parameter, loc,
-                    List.map (fun e ->
-                        let constr = prefix_entry ^ e.entry_sig.entry_name in
-                        env.env.constrs <-
-                          StringMap.add constr ("_entries", e.entry_sig.parameter)
-                            env.env.constrs;
-                        let pat =
-                          CConstr (constr, [e.entry_sig.parameter_name]) in
-                        pat, e.code
-                      ) contract.entries)
+      let parameter = mk_typed (Var ("parameter", loc, [])) parameter in
+      MatchVariant (
+        parameter, loc,
+        List.map (fun e ->
+            let constr = prefix_entry ^ e.entry_sig.entry_name in
+            env.env.constrs <-
+              StringMap.add constr ("_entries", e.entry_sig.parameter)
+                env.env.constrs;
+            let pat =
+              CConstr (constr, [e.entry_sig.parameter_name]) in
+            let body =
+              mk_typed
+                (Let (e.entry_sig.storage_name, false, loc,
+                      mk_typed
+                        (Var ("storage", loc, [])) env.t_contract_storage,
+                      e.code)) e.code.ty in
+            pat, body
+          ) contract.entries)
   in
   let code = encode env @@
     values_on_top contract.values @@
@@ -1064,3 +1071,79 @@ let encode_const env t_contract_sig t_contract_storage const =
     } in
 
   encode_const env const
+
+
+let entry_name_of_case s =
+  Scanf.sscanf s
+    (Scanf.format_from_string prefix_entry "" ^^ "%s%!")
+    (fun x -> x)
+
+let is_entry_case s =
+  try
+    ignore (entry_name_of_case s);
+    true
+  with _ -> false
+
+let entry_of_case param_constrs top_storage (pat, body) =
+  match pat, body.desc with
+  | CConstr (s, [parameter_name]),
+    Let (storage_name, _, _, { desc = Var (var_storage, _, [])}, code)
+    when is_entry_case s && var_storage = top_storage ->
+    let entry_name = entry_name_of_case s in
+    let parameter = List.assoc s param_constrs in
+    {
+      entry_sig = {
+        entry_name;
+        parameter;
+        parameter_name;
+        storage_name;
+      };
+      code;
+    }
+  | CConstr (s, [parameter_name]), _
+    when is_entry_case s ->
+    let entry_name = entry_name_of_case s in
+    let parameter = List.assoc s param_constrs in
+    {
+      entry_sig = {
+        entry_name;
+        parameter;
+        parameter_name;
+        storage_name = "storage/1";
+      };
+      code = body;
+    }
+  | _ -> raise Exit
+
+
+let rec decode_entries param_constrs top_parameter top_storage values exp =
+  match exp.desc with
+  | MatchVariant ({ desc = Var (var_parameter, _, [])} , loc, cases)
+    when var_parameter = top_parameter &&
+         List.for_all (function
+             | CConstr (s, _), _ -> is_entry_case s
+             | _ -> false) cases
+    ->
+    List.rev values, List.map (entry_of_case param_constrs top_storage) cases
+  | Let (v, inline, _loc, exp, body) ->
+    decode_entries param_constrs top_parameter top_storage
+      ((v, inline, exp) :: values) body
+  | _ -> raise Exit
+
+let decode_contract contract =
+  match contract.entries with
+  | [{ entry_sig = { entry_name = "main";
+                     parameter = Tsum (_, param_constrs);
+                     parameter_name;
+                     storage_name;
+                   };
+       code;
+     }] ->
+    begin try
+        (* raise Exit; *)
+        let values, entries =
+          decode_entries param_constrs parameter_name storage_name [] code in
+        { contract with values ; entries }
+      with Exit -> contract
+    end
+  | _ -> contract

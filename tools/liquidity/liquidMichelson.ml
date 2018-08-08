@@ -208,8 +208,8 @@ let rec translate_code code =
          | [] -> assert false
          | (arg_name, left, depth) :: cases ->
             let left_end = [ii ~loc @@ DIP_DROP(1,1)] in
-            (* let arg_annot = compile_arg_name arg_name in *)
-            let left = (* arg_annot @ *) left @ left_end in
+            let arg_annot = compile_arg_name arg_name in
+            let left = arg_annot @ left @ left_end in
             match cases with
             | [] -> left
             | _ ->
