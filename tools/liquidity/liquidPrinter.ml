@@ -412,11 +412,11 @@ module Michelson = struct
       ) contract
 
   let bprint_pre_name b name = match name with
-    | Some name -> Printf.bprintf b " %s " name
+    | Some name -> Printf.bprintf b " @%s " name
     | None -> ()
 
   let bprint_pre_field b = function
-    | Some field -> Printf.bprintf b " %s " field
+    | Some field -> Printf.bprintf b " %%%s " field
     | None -> ()
 
   let bprint_pre_michelson fmt bprint_arg b name = function
@@ -968,13 +968,18 @@ module Liquid = struct
     | Const (_loc, ty, cst) ->
        Printf.bprintf b "\n%s" indent;
        bprint_const b indent cst;
-    | SetVar (name, _loc, labels, e) ->
+    | Var (name, _loc) ->
+       Printf.bprintf b "%s" name;
+    | SetField (arg, _loc, label, e) ->
        let indent2 = indent ^ "  " in
-       Printf.bprintf b "\n%s(%s <-" indent (String.concat "." (name :: labels));
+       Printf.bprintf b "\n%s(" indent;
+       bprint_code_rec ~debug b indent2 arg;
+       Printf.bprintf b ".%s <-" label;
        bprint_code_rec ~debug b indent2 e;
        Printf.bprintf b ")";
-    | Var (name, _loc, labels) ->
-       Printf.bprintf b "\n%s%s" indent (String.concat "." (name :: labels))
+    | Project (_loc, field, exp) ->
+       bprint_code_rec ~debug b indent exp;
+       Printf.bprintf b ".%s" field;
     | Failwith (err, _loc) ->
        Printf.bprintf b "\n%sCurrent.failwith" indent;
        let indent2 = indent ^ "  " in
@@ -984,7 +989,8 @@ module Liquid = struct
                       (LiquidTypes.string_of_primitive prim);
        let indent2 = indent ^ "  " in
        List.iter (fun exp ->
-           bprint_code_rec ~debug b indent2 exp
+           Printf.bprintf b " ";
+           bprint_code_rec ~debug b indent2 exp;
          ) args;
        Printf.bprintf b ")"
     | If (cond, ifthen, ifelse) ->
@@ -1271,8 +1277,5 @@ let string_of_node node =
   | N_ABS -> "N_ABS"
   | N_CREATE_CONTRACT _ -> "N_CREATE_CONTRACT"
   | N_RECORD fields -> "N_RECORD_" ^ (String.concat "_" fields)
-  | N_CAR None -> "N_CAR"
-  | N_CDR None -> "N_CDR"
-  | N_CAR (Some f) -> "N_CAR " ^ f
-  | N_CDR (Some f) -> "N_CDR " ^ f
+  | N_PROJ f -> "N_PROJ " ^ f
   | N_RESULT (_, i) -> Printf.sprintf "N_RESULT %d" i

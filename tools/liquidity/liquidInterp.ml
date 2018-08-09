@@ -18,7 +18,7 @@ let node loc kind args prevs =
   List.iter (fun prev ->
     match prev.next with
     | None -> prev.next <- Some node
-    | Some _ -> assert false
+    | Some s -> assert false
     ) prevs;
   Hashtbl.add nodes num node;
   node
@@ -663,15 +663,31 @@ let rec interp contract =
        x :: stack, seq
     | CDR None, { kind = N_PRIM "PAIR"; args = [_;x] } :: stack ->
        x :: stack, seq
-    | CAR (Some f), { kind = N_RECORD (f' :: _); args = [x;_] } :: stack
+    | CAR None, x :: stack ->
+       let x = node ins.loc (N_PRIM "CAR") [x] [seq] in
+       x :: stack, x
+    | CDR None, x :: stack ->
+       let x = node ins.loc (N_PRIM "CDR") [x] [seq] in
+       x :: stack, x
+
+    | CAR (Some f), { kind = N_RECORD (f' :: _); args = x :: _ } :: stack
       when f = f'->
       x :: stack, seq
-    | CAR field, x :: stack ->
-       let x = node ins.loc (N_CAR field) [x] [seq] in
-       x :: stack, x
-    | CDR field, x :: stack ->
-       let x = node ins.loc (N_CDR field) [x] [seq] in
-       x :: stack, x
+    | CAR (Some field), { kind = N_PRIM "CDR"; args = [x] } :: stack ->
+      let x = node ins.loc (N_PROJ field) [x] [seq] in
+      x :: stack, x
+    | CDR (Some field), { kind = N_PRIM "CDR"; args = [x] } :: stack ->
+      let x = node ins.loc (N_PROJ field) [x] [seq] in
+      x :: stack, x
+    | CAR (Some field), x :: stack ->
+      (* let s = LiquidPrinter.Michelson.string_of_loc_michelson ins in
+       * let sx = LiquidPrinter.string_of_node x in
+       * Format.eprintf ">> %s ::: %s@." s sx; *)
+      let x = node ins.loc (N_PROJ field) [x] [seq] in
+      x :: stack, x
+    | CDR (Some field), x :: stack ->
+      let x = node ins.loc (N_PROJ field) [x] [seq] in
+      x :: stack, x
 
     | NEQ, { kind = N_PRIM "COMPARE"; args = [x;y] } :: stack->
        let x = node ins.loc (N_PRIM "NEQ") [x;y] [seq] in
@@ -752,14 +768,18 @@ let rec interp contract =
     | PAIR, x :: y :: stack ->
        let x = node ins.loc (N_PRIM "PAIR") [x;y] [seq] in
        x :: stack, x
+
     | RECORD (label_x, Some label_y), x :: y :: stack ->
        let x = node ins.loc (N_RECORD [label_x; label_y]) [x;y] [seq] in
        x :: stack, x
 
     | RECORD (label_x, None),
-      x :: { kind = N_RECORD y_labels; args } :: stack ->
-      let x =
-        node ins.loc (N_RECORD (label_x :: y_labels)) (x :: args) [seq] in
+      x :: { kind = N_RECORD y_labels; args; prevs } :: stack ->
+       List.iter (fun n ->
+          n.next <- Some seq;
+        ) prevs;
+       let x =
+         node ins.loc (N_RECORD (label_x :: y_labels)) (x :: args) [seq] in
        x :: stack, x
 
     | COMPARE, x ::  { kind = N_CONST (Tint,CInt n)} :: stack

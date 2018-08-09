@@ -127,18 +127,18 @@ let compile_tezos_file filename =
     else LiquidToTezos.read_tezos_file filename
   in
   let c = LiquidFromTezos.convert_contract env code in
-  let annoted_tz, type_annots = LiquidFromTezos.infos_env env in
+  let annoted_tz, type_annots, types = LiquidFromTezos.infos_env env in
   let c = LiquidClean.clean_contract c in
   (* let c = if !LiquidOptions.peephole then LiquidPeephole.simplify c else c in *)
   let c = LiquidInterp.interp c in
   if !LiquidOptions.parseonly then exit 0;
-  (* if !LiquidOptions.verbosity>0 then begin
-   *   FileString.write_file  (filename ^ ".dot")
-   *                          (LiquidDot.to_string c);
-   *   let cmd = Ocamldot.dot2pdf_cmd (filename ^ ".dot") (filename ^ ".pdf") in
-   *   if Sys.command cmd <> 0 then
-   *     Printf.eprintf "Warning: could not generate pdf from .dot file\n%!";
-   * end; *)
+  if !LiquidOptions.verbosity>0 then begin
+    FileString.write_file  (filename ^ ".dot")
+                           (LiquidDot.to_string c);
+    let cmd = Ocamldot.dot2pdf_cmd (filename ^ ".dot") (filename ^ ".pdf") in
+    if Sys.command cmd <> 0 then
+      Printf.eprintf "Warning: could not generate pdf from .dot file\n%!";
+  end;
   if !LiquidOptions.typeonly then exit 0;
 
   let c = LiquidDecomp.decompile c in
@@ -161,6 +161,7 @@ let compile_tezos_file filename =
                             LiquidToOCaml.string_of_structure
                               (LiquidToOCaml.structure_of_contract
                                  ~type_annots
+                                 ~types
                                  untyped_ast)
                           with LiquidError _ ->
                             LiquidPrinter.Liquid.string_of_contract

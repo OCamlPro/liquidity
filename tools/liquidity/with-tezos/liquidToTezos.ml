@@ -435,7 +435,7 @@ let read_tezos_json filename =
   let env = LiquidTezosTypes.{ filename;
                                loc_table = IntMap.empty;
                                type_annots = Hashtbl.create 17;
-                               types = Hashtbl.create 17;
+                               types = [];
                                annoted = false;
                              } in
   nodes, env

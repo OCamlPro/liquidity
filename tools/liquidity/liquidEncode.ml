@@ -77,7 +77,7 @@ let find_var ?(count_used=true) env loc name =
     let aname =
       if env.annot then Some vname
       else None in
-    let exp = mk ?name:aname (Var (name, loc, [])) ty in
+    let exp = mk ?name:aname (Var (name, loc)) ty in
     { exp with fail }
   with Not_found ->
   match env.clos_env with
@@ -129,7 +129,7 @@ let env_for_clos env loc bvs arg_name arg_type =
     let env_arg_name = uniq_ident env "closure_env" in
     let env_arg_type =
       Ttuple (arg_type :: List.map (fun (_, (_,ty,_,_)) -> ty) free_vars_l) in
-    let env_arg_var = mk (Var (env_arg_name, loc, [])) env_arg_type in
+    let env_arg_var = mk (Var (env_arg_name, loc)) env_arg_type in
     let new_name = uniq_ident env arg_name in
     let env_vars =
       StringMap.add arg_name
@@ -138,7 +138,7 @@ let env_for_clos env loc bvs arg_name arg_type =
     let env_bindings =
       StringMap.map (fun (name, ty, index, count) ->
           let ei = mk_nat ~loc index in
-          let exp = mk ~name (Apply(Prim_tuple_get None, loc, [env_arg_var; ei])) ty in
+          let exp = mk ~name (Apply(Prim_tuple_get, loc, [env_arg_var; ei])) ty in
           exp, count
         ) env_vars
     in
@@ -385,22 +385,23 @@ let rec deconstify loc ty c =
 let rec decr_counts_vars env e =
   if e.fail then () else
   match e.desc with
-  | Var (v, _, []) ->
+  | Var (v, _) ->
     begin try
       let count = StringMap.find v env.vars_counts in
       decr count
       with Not_found -> ()
     end
 
-  | Const (_, _, _) | Var (_, _, _) -> ()
+  | Const (_, _, _) -> ()
 
   | Failwith (e, _)
-  | SetVar (_, _, _, e)
+  | Project (_, _, e)
   | Constructor (_, _, e)
   | ContractAt (_, e, _)
   | Unpack (_, e, _)
   | Lambda (_, _, _, e, _) -> decr_counts_vars env e
 
+  | SetField (e1, _, _, e2)
   | Seq (e1, e2)
   | Let (_, _, _, e1, e2)
   | Loop (_, _, e1, e2)
@@ -472,61 +473,16 @@ let rec encode env ( exp : typed_exp ) : encoded_exp =
      end;
      mk ?name:exp.name (Let (new_name, inline, loc, e, body)) body.ty
 
-  | Var (name, loc, labels) ->
-    let e = find_var env loc name in
-    List.fold_left
-      (fun e label ->
-         (* let ty = match first_alias e.ty with *)
-         (*   | Some (ty_name, (Trecord _ as ty)) -> ty_name, ty *)
-         (*   | _ -> error loc "not a record" *)
-         (* in *)
-         let arg1 = mk e.desc e.ty in
-         let n, label_ty =
-           try
-             let (ty_name', n, label_ty) =
-               StringMap.find label env.env.labels in
-             n, label_ty
-           with Not_found ->
-             error loc "bad label"
-         in
-         mk (Apply(Prim_tuple_get (Some label), loc,
-                   [arg1; mk_nat ~loc n])) label_ty
-      ) e labels
+  | Var (name, loc) -> find_var env loc name
 
-  | SetVar (name, loc, [], e) -> encode env e
+  | Project (loc, field, arg) ->
+    let arg = encode env arg in
+    mk ?name:exp.name (Project (loc, field, arg)) exp.ty
 
-  | SetVar (name, loc, label :: labels, arg) ->
-     let arg1 = find_var env loc name in
-     let label_types = match arg1.ty with
-       | Trecord (_, label_types) -> label_types
-       | _ -> assert false
-     in
-     let exception Return of (int * datatype) in
-     let n, lty =
-       try
-         List.iteri (fun n (l, lty) ->
-             if l = label then raise (Return (n, lty))
-           ) label_types;
-         error loc "bad label"
-       with Return n -> n
-     in
-     let arg =
-       match labels with
-       | [] -> encode env arg
-       | _::_ ->
-         let get_exp =
-           mk (Apply(Prim_tuple_get (Some label), loc,
-                     [arg1; mk_nat ~loc n])) lty in
-         let tmp_name = uniq_ident env "_tmp#" in
-         let (new_name, env, count) = new_binding env tmp_name lty in
-         let body =
-           encode env
-             (mk_typed (SetVar (tmp_name, loc, labels, arg)) exp.ty)
-         in
-         mk (Let (new_name, false, loc, get_exp, body)) body.ty
-     in
-     mk ?name:exp.name (Apply(Prim_tuple_set (Some label), loc,
-                              [arg1; mk_nat ~loc n; arg])) arg1.ty
+  | SetField (arg, loc, field, e) ->
+    let arg = encode env arg in
+    let e = encode env e in
+    mk ?name:exp.name (SetField (arg, loc, field, e)) exp.ty
 
   | Seq (exp1, exp2) ->
     (* TODO: if not exp.fail then remove exp1 *)
@@ -573,10 +529,10 @@ let rec encode env ( exp : typed_exp ) : encoded_exp =
     let list_ty = l.ty in
     let arg_name = uniq_ident env "arg" in
     let arg_ty = Ttuple [elt_ty; list_ty] in
-    let arg = mk (Var (arg_name, loc, [])) arg_ty in
-    let e = mk (Apply(Prim_tuple_get None, loc, [arg; mk_nat ~loc 0])) elt_ty in
+    let arg = mk (Var (arg_name, loc)) arg_ty in
+    let e = mk (Apply(Prim_tuple_get, loc, [arg; mk_nat ~loc 0])) elt_ty in
     let acc =
-      mk (Apply(Prim_tuple_get None, loc, [arg; mk_nat ~loc 1])) list_ty in
+      mk (Apply(Prim_tuple_get, loc, [arg; mk_nat ~loc 1])) list_ty in
     let f_body = mk (Apply (Prim_Cons, loc, [e; acc])) list_ty in
     let empty_acc = mk_nil ~loc list_ty in
     let desc = Fold (Prim_list_fold, arg_name, loc, f_body, l, empty_acc) in
@@ -998,7 +954,7 @@ and encode_contract ?(annot=false) ?(decompiling=false) env contract =
     | [e] -> e.code.desc
     | _ ->
       Format.eprintf "ps : %s @." (LiquidPrinter.Liquid.string_of_type parameter);
-      let parameter = mk_typed (Var ("parameter", loc, [])) parameter in
+      let parameter = mk_typed (Var ("parameter", loc)) parameter in
       MatchVariant (
         parameter, loc,
         List.map (fun e ->
@@ -1012,7 +968,7 @@ and encode_contract ?(annot=false) ?(decompiling=false) env contract =
               mk_typed
                 (Let (e.entry_sig.storage_name, false, loc,
                       mk_typed
-                        (Var ("storage", loc, [])) env.t_contract_storage,
+                        (Var ("storage", loc)) env.t_contract_storage,
                       e.code)) e.code.ty in
             pat, body
           ) contract.entries)
@@ -1060,6 +1016,7 @@ let encode_const env t_contract_sig t_contract_storage const =
 
   encode_const env const
 
+(* ----------------------- decoding ----------------------- *)
 
 let entry_name_of_case s =
   Scanf.sscanf s
@@ -1072,10 +1029,308 @@ let is_entry_case s =
     true
   with _ -> false
 
+let rec decode ( exp : encoded_exp ) : typed_exp =
+  match exp.desc with
+  | Const (loc, ty, cst) ->
+    mk_typed ?name:exp.name (Const (loc, ty, cst)) exp.ty
+
+  | Let (name, inline, loc, e, body) ->
+     let e = decode e in
+     let body = decode body in
+     mk_typed ?name:exp.name (Let (name, inline, loc, e, body)) body.ty
+
+  | Var (name, loc) ->
+    mk_typed ?name:exp.name (Var (name, loc)) exp.ty
+
+  | Project (loc, label, arg) ->
+    let arg = decode arg in
+    mk_typed ?name:exp.name (Project (loc, label, arg)) exp.ty
+
+  | SetField (arg, loc, label, e) ->
+    let arg = decode arg in
+    let e = decode e in
+    mk_typed ?name:exp.name (SetField (arg, loc, label, e)) exp.ty
+
+  | Seq (exp1, exp2) ->
+    let exp1 = decode exp1 in
+    let exp2 = decode exp2 in
+    mk_typed ?name:exp.name (Seq (exp1, exp2)) exp.ty
+
+  | If (cond, ifthen, ifelse) ->
+    let cond = decode cond in
+    let ifthen = decode ifthen in
+    let ifelse = decode ifelse in
+    mk_typed ?name:exp.name (If (cond, ifthen, ifelse)) exp.ty
+
+  | Transfer (loc, contract_exp, tez_exp, entry, arg_exp) ->
+    let tez_exp = decode tez_exp in
+    let contract_exp = decode contract_exp in
+    let desc = match entry, arg_exp.desc with
+      | None, Constructor (loc, Constr c, arg_exp) when is_entry_case c ->
+        let entry = entry_name_of_case c in
+        let arg_exp = decode arg_exp in
+        Transfer (loc, contract_exp, tez_exp, Some entry, arg_exp)
+      | _, _ ->
+        let arg_exp = decode arg_exp in
+        Transfer (loc, contract_exp, tez_exp, entry, arg_exp)
+    in
+    mk_typed ?name:exp.name desc exp.ty
+
+  | Failwith (err, loc) ->
+    let err = decode err in
+    mk_typed (Failwith (err, loc)) Tfail
+
+  | Apply (Prim_unknown, _, _) -> assert false
+
+  (* TODO *)
+  (* List.rev -> List.reduce (::) *)
+  (* concat x y => concat [x; y] *)
+
+  | _ -> assert false   (* TODO *)
+
+
+(*
+  | Apply (prim, loc, args) ->
+    let args = List.map decode args in
+    mk_typed ?name:exp.name (Apply (prim, loc, args)) exp.ty
+
+  | MatchOption (arg, loc, ifnone, name, ifsome) ->
+     let arg = encode env arg in
+     let name_ty = match arg.ty with
+       | Toption ty -> ty
+       | _ -> assert false
+     in
+     let ifnone = encode env ifnone in
+     let (new_name, env, count) = new_binding env name name_ty in
+     let ifsome = encode env ifsome in
+     mk ?name:exp.name (MatchOption (arg, loc, ifnone, new_name, ifsome)) exp.ty
+
+  | MatchNat (arg, loc, plus_name, ifplus, minus_name, ifminus) ->
+     let arg = encode env arg in
+     let (plus_name, env2, count_p) = new_binding env plus_name Tnat in
+     let ifplus = encode env2 ifplus in
+     let (minus_name, env3, count_m) = new_binding env minus_name Tnat in
+     let ifminus = encode env3 ifminus in
+     (* check_used env plus_name loc count_p; *)
+     (* check_used env minus_name loc count_m; *)
+     mk ?name:exp.name (MatchNat (arg, loc, plus_name, ifplus, minus_name, ifminus)) exp.ty
+
+  | Loop (name, loc, body, arg) ->
+     let arg = encode env arg in
+     let (new_name, env, count) = new_binding env name arg.ty in
+     let body = encode env body in
+     (* check_used env name loc count; *)
+     mk ?name:exp.name (Loop (new_name, loc, body, arg)) exp.ty
+
+  | Fold (prim, name, loc, body, arg, acc) ->
+    let arg = encode env arg in
+    let acc = encode env acc in
+    let name_ty = match prim, arg.ty with
+      | Prim_map_iter, Tmap (k_ty, v_ty) -> Ttuple [k_ty; v_ty]
+      | Prim_set_iter, Tset elt_ty -> elt_ty
+      | Prim_list_iter, Tlist elt_ty -> elt_ty
+      | Prim_map_fold, Tmap (k_ty, v_ty) -> Ttuple [Ttuple [k_ty; v_ty]; acc.ty]
+      | Prim_set_fold, Tset elt_ty -> Ttuple [elt_ty; acc.ty]
+      | Prim_list_fold, Tlist elt_ty -> Ttuple [elt_ty; acc.ty]
+      | _ -> assert false
+    in
+    let (new_name, env, count) = new_binding env name name_ty in
+    let body = encode env body in
+    mk ?name:exp.name (Fold (prim, new_name, loc, body, arg, acc)) exp.ty
+
+  | Map (prim, name, loc, body, arg) ->
+    let arg = encode env arg in
+    let name_ty = match prim, arg.ty with
+      | Prim_map_map, Tmap (k_ty, v_ty) -> Ttuple [k_ty; v_ty]
+      | Prim_set_map, Tset elt_ty -> elt_ty
+      | Prim_list_map, Tlist elt_ty -> elt_ty
+      | _ -> assert false
+    in
+    let (new_name, env, count) = new_binding env name name_ty in
+    let body = encode env body in
+    mk ?name:exp.name (Map (prim, new_name, loc, body, arg)) exp.ty
+
+  | MapFold (prim, name, loc, body, arg, acc) ->
+    let arg = encode env arg in
+    let acc = encode env acc in
+    let name_ty = match prim, arg.ty with
+      | Prim_map_map_fold, Tmap (k_ty, v_ty) ->
+        Ttuple [Ttuple [k_ty; v_ty]; acc.ty]
+      | Prim_set_map_fold, Tset elt_ty ->
+        Ttuple [elt_ty; acc.ty]
+      | Prim_list_map_fold, Tlist elt_ty ->
+        Ttuple [elt_ty; acc.ty]
+      | _ -> assert false
+    in
+    let (new_name, env, count) = new_binding env name name_ty in
+    let body = encode env body in
+    mk ?name:exp.name (MapFold (prim, new_name, loc, body, arg, acc)) exp.ty
+
+  | MatchList (arg, loc, head_name, tail_name, ifcons, ifnil) ->
+     let arg = encode env arg in
+     let elt_ty = match arg.ty with
+       | Tlist ty -> ty
+       | _ -> assert false
+     in
+     let ifnil = encode env ifnil in
+     let (new_head_name, env, count) = new_binding env head_name elt_ty in
+     let (new_tail_name, env, count) = new_binding env tail_name arg.ty in
+     let ifcons = encode env ifcons in
+     (* check_used env head_name loc count; *)
+     (* check_used env tail_name loc count; *)
+     mk ?name:exp.name
+       (MatchList (arg, loc, new_head_name, new_tail_name, ifcons, ifnil))
+       exp.ty
+
+  | Lambda (arg_name, arg_type, loc, body, _) ->
+     let env_at_lambda = env in
+     let lambda_arg_type = arg_type in
+     let lambda_arg_name = arg_name in
+     let lambda_body = body in
+     let bvs = LiquidBoundVariables.bv exp in
+     if StringSet.is_empty bvs ||
+        StringSet.for_all (fun bv -> StringMap.mem bv !(env.force_inline)) bvs
+     then
+       (* not a closure (or will be pure after inlining),
+          create a real lambda *)
+       let env = { env_at_lambda with
+                   vars = StringSet.fold (fun bv ->
+                       StringMap.add bv (StringMap.find bv env.vars)
+                     ) bvs StringMap.empty
+                 } in
+       let (new_arg_name, env, arg_count) =
+         new_binding env lambda_arg_name lambda_arg_type in
+       let body = encode env lambda_body in
+       (* check_used env lambda_arg_name loc arg_count; *)
+       let ty = Tlambda (lambda_arg_type, body.ty) in
+       mk ?name:exp.name (Lambda (new_arg_name, lambda_arg_type, loc, body, body.ty)) ty
+     else
+       (* create closure with environment *)
+       let env, arg_name, arg_type, call_env =
+         env_for_clos env loc bvs arg_name arg_type in
+       let body = encode env body in
+       (* begin match env.clos_env with *)
+       (*   | None -> () *)
+       (*   | Some clos_env -> *)
+       (*     Format.eprintf "--- Closure %s ---@." arg_name; *)
+       (*     StringMap.iter (fun name (e, (cpt_in, cpt_out)) -> *)
+       (*         Format.eprintf "%s -> %s , (%d, %d)@." *)
+       (*           name (LiquidPrinter.Liquid.string_of_code e) !cpt_in !cpt_out *)
+       (*       ) clos_env.env_bindings *)
+       (* end; *)
+       let desc =
+         Closure (arg_name, arg_type, loc, call_env, body, body.ty) in
+       let call_env_type = match call_env with
+         | [] -> assert false
+         | [_, t] -> t.ty
+         | _ -> Ttuple (List.map (fun (_, t) -> t.ty) call_env)
+       in
+       let ty = Tclosure ((lambda_arg_type, call_env_type), body.ty) in
+       mk ?name:exp.name desc ty
+
+  (* Closures are created by encoding phase *)
+  | Closure _ -> assert false
+
+  | Record (loc, fields) ->
+    let fields = List.map (fun (label, exp) ->
+        label, encode env exp
+      ) fields in
+    let desc = Record(loc, fields) in
+    mk ?name:exp.name desc exp.ty
+
+  | Constructor(loc, Constr constr, arg) ->
+     let ty_name, arg_ty = StringMap.find constr env.env.constrs in
+     let arg = encode env arg in
+     let constr_ty = StringMap.find ty_name env.env.types in
+     let exp =
+       match constr_ty with
+       | Tsum (_, constrs) ->
+         let rec iter constrs orty =
+           match constrs, orty with
+           | [], _ -> assert false
+           | [c, _], orty ->
+             assert (c = constr);
+             arg
+           (* | (c, ty, left_ty, right_ty) :: constrs -> *)
+           | (c, cty) :: constrs, orty ->
+             let left_ty, right_ty = match orty with
+               | Tor (left_ty, right_ty) -> left_ty, right_ty
+               | _ -> assert false
+             in
+             let desc =
+               if c = constr then
+                 (* We use an unused argument to carry the type to
+                    the code generator *)
+                 Apply(Prim_Left, loc, [arg; unused env ~loc right_ty])
+               else
+                 let arg = iter constrs right_ty in
+                 Apply(Prim_Right, loc, [arg; unused env ~loc left_ty])
+             in
+             mk desc orty
+         in
+         iter constrs (encode_type constr_ty)
+       | _ -> assert false
+     in
+     mk ?name:exp.name exp.desc constr_ty
+
+  | Constructor(loc, Left right_ty, arg) ->
+     let arg = encode env arg in
+     let ty = Tor(arg.ty, right_ty) in
+     let desc = Apply(Prim_Left,loc,[arg; unused env ~loc right_ty]) in
+     mk ?name:exp.name desc ty
+
+  | Constructor(loc, Right left_ty, arg) ->
+     let arg = encode env arg in
+     let ty = Tor(left_ty, arg.ty) in
+     let desc = Apply(Prim_Right,loc,[arg; unused env ~loc left_ty]) in
+     mk ?name:exp.name desc ty
+
+  | MatchVariant (arg, loc, cases) ->
+    let arg = encode env arg in
+    let constrs = match arg.ty with
+      | Tsum (_, constrs) -> constrs
+      | Tor (left_ty, right_ty) ->
+        [ "Left", left_ty; "Right", right_ty]
+      | _ -> assert false
+    in
+    let cases = List.map (fun case ->
+       let c, var, e = match case with
+        | CConstr (c, []), e -> c, "_", e
+        | CConstr (c, [var]), e -> c, var, e
+        | CAny, _ | CConstr _, _ -> assert false
+       in
+       Format.eprintf "%s@." c;
+       let var_ty = List.assoc c constrs in
+       let (var, env, _) = new_binding env var var_ty in
+       let e = encode env e in
+       (CConstr (c, [var]), e)
+      ) cases
+    in
+    mk ?name:exp.name (MatchVariant (arg, loc, cases)) exp.ty
+
+  | ContractAt (loc, addr, ty) ->
+    let addr = encode env addr in
+    mk ?name:exp.name (ContractAt (loc, addr, ty)) exp.ty
+
+  | Unpack (loc, e, ty) ->
+    let e = encode env e in
+    mk ?name:exp.name (Unpack (loc, e, ty)) exp.ty
+
+  | CreateContract (loc, args, contract) ->
+    let args = List.map (encode env) args in
+    let contract, c_to_inline =
+      encode_contract ~annot:env.annot env.env contract in
+    (* Performed inlining and simplifications on subcontract at encoding time *)
+    let contract =
+      LiquidSimplify.simplify_contract ~decompile_annoted:env.decompiling
+        contract c_to_inline in
+    mk ?name:exp.name (CreateContract (loc, args, contract)) exp.ty
+    *)
+
 let entry_of_case param_constrs top_storage (pat, body) =
   match pat, body.desc with
   | CConstr (s, [parameter_name]),
-    Let (storage_name, _, _, { desc = Var (var_storage, _, [])}, code)
+    Let (storage_name, _, _, { desc = Var (var_storage, _)}, code)
     when is_entry_case s && var_storage = top_storage ->
     let entry_name = entry_name_of_case s in
     let parameter = List.assoc s param_constrs in
@@ -1106,7 +1361,7 @@ let entry_of_case param_constrs top_storage (pat, body) =
 
 let rec decode_entries param_constrs top_parameter top_storage values exp =
   match exp.desc with
-  | MatchVariant ({ desc = Var (var_parameter, _, [])} , loc, cases)
+  | MatchVariant ({ desc = Var (var_parameter, _)} , loc, cases)
     when var_parameter = top_parameter &&
          List.for_all (function
              | CConstr (s, _), _ -> is_entry_case s

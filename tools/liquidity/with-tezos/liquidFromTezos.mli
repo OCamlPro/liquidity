@@ -41,3 +41,4 @@ val infos_env :
   LiquidTezosTypes.env ->
   bool (* true if tz annoted *)
   * (LiquidTypes.datatype, string) Hashtbl.t
+  * (string * LiquidTypes.datatype) list

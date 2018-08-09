@@ -16,7 +16,7 @@ type env = {
   filename : string;
   loc_table : location IntMap.t;
   type_annots : (datatype, string) Hashtbl.t;
-  types : (string, datatype) Hashtbl.t;
+  mutable types : (string * datatype) list;
   mutable annoted : bool;
 }
 
@@ -24,7 +24,7 @@ let empty_env filename = {
   filename;
   loc_table = IntMap.empty;
   type_annots = Hashtbl.create 17;
-  types = Hashtbl.create 17;
+  types = [];
   annoted = false;
 }
 

@@ -570,9 +570,9 @@ let vars_info_pat env pat =
   vars_info_pat_aux [] [] pat
 
 let access_of_deconstruct var_name loc indexes =
-  let a = mk (Var (var_name, loc, [])) in
+  let a = mk (Var (var_name, loc)) in
   List.fold_right (fun i a ->
-      mk (Apply (Prim_tuple_get None, loc, [
+      mk (Apply (Prim_tuple_get, loc, [
           a;
           mk (Const (loc, Tnat, CNat (LiquidPrinter.integer_of_int i)))
         ]))
@@ -599,30 +599,24 @@ let rec translate_code contracts env exp =
   let desc =
     match exp with
     | { pexp_desc = Pexp_ident ( { txt = Lident var } ) } ->
-       Var (var, loc, [])
+       Var (var, loc)
     | { pexp_desc = Pexp_ident ( { txt = Ldot(Lident m, var) } ) } ->
-       Var (m ^ "." ^ var, loc, [])
+       Var (m ^ "." ^ var, loc)
 
     | { pexp_desc = Pexp_field (exp, { txt = Lident label }) } ->
-       begin
-         let e = translate_code contracts env exp
-         in
-         match e.desc with
-         | Var (name, loc, labels) ->
-            Var (name, loc, labels @ [label])
-         | _ -> error_loc exp.pexp_loc "variable expected"
-       end
-    | { pexp_desc = Pexp_setfield (exp, { txt = Lident label }, arg) } ->
-       begin
-         let e = translate_code contracts env exp in
-         let arg = translate_code contracts env arg
-         in
-         match e.desc with
-         | Var (name, loc, labels) ->
-            SetVar (name, loc, labels @ [label], arg)
-         | _ -> error_loc exp.pexp_loc "variable expected"
-       end
+      let e = translate_code contracts env exp in
+      Project (loc, label, e)
 
+    | { pexp_desc = Pexp_setfield (exp, { txt = Lident label }, arg) } ->
+      let e = translate_code contracts env exp in
+      let arg = translate_code contracts env arg in
+      let rec set_field e loc label arg =
+        match e.desc with
+        | Project (loc', label', e') ->
+          let arg = mk (SetField (e, loc, label, arg)) in
+          set_field e' loc' label' arg
+        | _ -> SetField (e, loc, label, arg) in
+      set_field e loc label arg
 
     | { pexp_desc = Pexp_ifthenelse (e1, e2, None) } ->
        If (translate_code contracts env e1,
@@ -878,7 +872,7 @@ let rec translate_code contracts env exp =
             ]) } ->
       let f = translate_code contracts env f_exp in
       let name = "_iter_arg" in
-      let name_var = mk (Var(name, loc_of_loc vloc, [])) in
+      let name_var = mk (Var(name, loc_of_loc vloc)) in
       let body =
         mk (Apply(Prim_exec, loc, [name_var; f])) in
       let arg = translate_code contracts env arg in
@@ -898,7 +892,7 @@ let rec translate_code contracts env exp =
             ]) } ->
       let f = translate_code contracts env f_exp in
       let name = "_fold_arg" in
-      let name_var = mk (Var(name, loc_of_loc vloc, [])) in
+      let name_var = mk (Var(name, loc_of_loc vloc)) in
       let body =
         mk (Apply(Prim_exec, loc, [name_var; f])) in
       let arg = translate_code contracts env arg in
@@ -917,7 +911,7 @@ let rec translate_code contracts env exp =
             ]) } ->
       let f = translate_code contracts env f_exp in
       let name = "_map_arg" in
-      let name_var = mk (Var(name, loc_of_loc vloc, [])) in
+      let name_var = mk (Var(name, loc_of_loc vloc)) in
       let body =
         mk (Apply(Prim_exec, loc, [name_var; f])) in
       let arg = translate_code contracts env arg in
@@ -936,7 +930,7 @@ let rec translate_code contracts env exp =
             ]) } ->
       let f = translate_code contracts env f_exp in
       let name = "_map_fold_arg" in
-      let name_var = mk (Var(name, loc_of_loc vloc, [])) in
+      let name_var = mk (Var(name, loc_of_loc vloc)) in
       let body =
         mk (Apply(Prim_exec, loc, [name_var; f])) in
       let arg = translate_code contracts env arg in

@@ -23,7 +23,7 @@ let rec bv code =
   | Failwith (err, loc) -> bv err
 
   | Apply (Prim_unknown, _,
-           ({ desc = Var (name, _, [])} :: args)) ->
+           ({ desc = Var (name, _)} :: args)) ->
     let set =
       try
         LiquidTypes.primitive_of_string name |> ignore;
@@ -52,10 +52,12 @@ let rec bv code =
     |> StringSet.remove arg_name
     |> List.fold_right (fun (_, e) -> StringSet.union (bv e)) call_env
 
-  | Var (name, loc, fields) -> StringSet.add name StringSet.empty
+  | Var (name, loc) -> StringSet.add name StringSet.empty
 
-  | SetVar (name, loc, fields, exp) ->
-     StringSet.add name (bv exp)
+  | SetField (arg, loc, fields, exp) ->
+     StringSet.union (bv arg) (bv exp)
+
+  | Project (loc, field, exp) -> (bv exp)
 
   | MatchOption (exp, loc, ifnone, some_pat, ifsome) ->
      StringSet.union (bv exp)
@@ -169,7 +171,7 @@ let rec bound code =
     mk desc code bv
 
   | Apply (Prim_unknown, loc,
-           ({ desc = Var (name, varloc, [])} :: args)) ->
+           ({ desc = Var (name, varloc)} :: args)) ->
     let args = List.map bound args in
     let bv =
       try
@@ -177,7 +179,7 @@ let rec bound code =
         StringSet.empty
       with Not_found -> StringSet.singleton name
     in
-    let v = mk (Var (name, varloc, [])) code bv in
+    let v = mk (Var (name, varloc)) code bv in
     let bv =
       List.fold_left (fun set arg ->
         StringSet.union set arg.bv
@@ -220,16 +222,22 @@ let rec bound code =
      let desc = Closure(arg_name, arg_type, loc, call_env, body, res_type) in
      mk desc code bv
 
-  | Var (name, loc, fields) ->
+  | Var (name, loc) ->
      let bv = StringSet.add name StringSet.empty in
-     let desc = Var(name, loc, fields) in
+     let desc = Var(name, loc) in
      mk desc code bv
 
-  | SetVar (name, loc, fields, exp) ->
+  | SetField (arg, loc, fields, exp) ->
+     let arg = bound arg in
      let exp = bound exp in
-     let bv = StringSet.add name exp.bv in
-     let desc = SetVar(name, loc, fields,exp) in
+     let bv = StringSet.union arg.bv exp.bv in
+     let desc = SetField(arg, loc, fields, exp) in
      mk desc code bv
+
+  | Project (loc, field, exp) ->
+     let exp = bound exp in
+     let desc = Project (loc, field, exp) in
+     mk desc code exp.bv
 
   | MatchOption (exp, loc, ifnone, some_pat, ifsome) ->
      let exp = bound exp in

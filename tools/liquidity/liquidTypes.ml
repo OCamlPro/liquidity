@@ -172,8 +172,8 @@ type primitive =
   | Prim_unused
 
   (* primitives *)
-  | Prim_tuple_get of string option
-  | Prim_tuple_set of string option
+  | Prim_tuple_get
+  | Prim_tuple_set
   | Prim_tuple
 
   | Prim_self
@@ -292,12 +292,12 @@ let () =
       Hashtbl.add string_of_primitive p n;
     )
             [
-              "get", Prim_tuple_get None;
-              "set", Prim_tuple_set None;
+              "get", Prim_tuple_get;
+              "set", Prim_tuple_set;
               "tuple", Prim_tuple;
 
-              "Array.get", Prim_tuple_get None;
-              "Array.set", Prim_tuple_set None;
+              "Array.get", Prim_tuple_get;
+              "Array.set", Prim_tuple_set;
 
               "Current.balance", Prim_balance;
               "Current.time", Prim_now;
@@ -537,8 +537,9 @@ type ('ty, 'a) exp = {
 
 and ('ty, 'a) exp_desc =
   | Let of string * bool * location * ('ty, 'a) exp * ('ty, 'a) exp
-  | Var of string * location * string list
-  | SetVar of string * location * string list * ('ty, 'a) exp
+  | Var of string * location
+  | SetField of ('ty, 'a) exp * location * string * ('ty, 'a) exp
+  | Project of location * string * ('ty, 'a) exp
   | Const of location * datatype * const
   | Apply of primitive * location * ('ty, 'a) exp list
   | If of ('ty, 'a) exp * ('ty, 'a) exp * ('ty, 'a) exp
@@ -632,16 +633,17 @@ let mk =
   fun ?name desc ty ->
     let fail, transfer = match desc with
       | Const (_, _, _)
-      | Var (_, _, _) -> false, false
+      | Var (_, _) -> false, false
 
       | Failwith (_, _) -> true, false
 
-      | SetVar (_, _, _, e)
+      | Project (_, _, e)
       | Constructor (_, _, e)
       | ContractAt (_, e, _)
       | Unpack (_, e, _)
       | Lambda (_, _, _, e, _) -> e.fail, false (* e.transfer *)
 
+      | SetField (e1, _, _, e2)
       | Seq (e1, e2)
       | Let (_, _, _, e1, e2)
       | Loop (_, _, e1, e2)
@@ -927,8 +929,7 @@ type node = {
    | N_UNPACK of datatype
    | N_ABS
    | N_RECORD of string list
-   | N_CAR of string option
-   | N_CDR of string option
+   | N_PROJ of string
    | N_RESULT of node * int
 
 and node_exp = node * node

@@ -79,8 +79,9 @@ let rec translate_const_exp loc (exp : encoded_exp) =
     -> LiquidLoc.raise_error ~loc "<apply %s(%d) not yet implemented>"
                              (LiquidTypes.string_of_primitive prim)
                              (List.length args)
-  | Var (_, _, _)
-  | SetVar (_, _, _, _)
+  | Var (_, _)
+  | SetField (_, _, _, _)
+  | Project (_, _, _)
   | If (_, _, _)
   | Seq (_, _)
   | Transfer (_, _, _, _, _)

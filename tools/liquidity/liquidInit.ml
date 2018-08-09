@@ -19,8 +19,8 @@ let mk_nat ~loc i =
 
 let rec subst_empty_big_map code =
   let empty_big_map loc =
-    let storage_var = mk (Var ("storage", loc, [])) () in
-    Apply (Prim_tuple_get None, loc, [storage_var; mk_nat ~loc 0])
+    let storage_var = mk (Var ("storage", loc)) () in
+    Apply (Prim_tuple_get, loc, [storage_var; mk_nat ~loc 0])
   in
   let desc = code.desc in
   let desc = match desc with
@@ -36,9 +36,16 @@ let rec subst_empty_big_map code =
     | Failwith (e, loc) ->
       let e' = subst_empty_big_map e in
       if e == e' then desc else Failwith (e', loc)
-    | SetVar (s, loc, l, e) ->
+
+    | Project (loc, l, e) ->
       let e' = subst_empty_big_map e in
-      if e == e' then desc else SetVar (s, loc, l, e')
+      if e == e' then desc else Project (loc, l, e')
+
+    | SetField (e1, loc, l, e2) ->
+      let e1' = subst_empty_big_map e1 in
+      let e2' = subst_empty_big_map e2 in
+      if e1 == e1' && e2 == e2' then desc else SetField (e1', loc, l, e2')
+
     | Constructor (loc, c, e) ->
       let e' = subst_empty_big_map e in
       if e == e' then desc else Constructor (loc, c, e')
@@ -162,7 +169,7 @@ let rec subst_empty_big_map code =
 
 let tmp_contract_of_init ~loc (args, code) storage_ty =
   let storage = storage_ty in
-  let parameter_var = mk (Var ("parameter", loc, [])) () in
+  let parameter_var = mk (Var ("parameter", loc)) () in
   let parameter, code = match args with
     | [] -> Tunit, code
     | [arg, loc, ty] ->
@@ -175,7 +182,7 @@ let tmp_contract_of_init ~loc (args, code) storage_ty =
           let code = mk (
               Let (arg, false, loc,
                    mk (Apply
-                         (Prim_tuple_get None, loc,
+                         (Prim_tuple_get, loc,
                           [parameter_var; mk_nat ~loc i]))
                      (),
                    code)) ()

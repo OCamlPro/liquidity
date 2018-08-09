@@ -9,6 +9,8 @@
 
 open LiquidTypes
 
+val predefined_types : datatype StringMap.t
+
 val initial_env : string -> env
 
 val translate :

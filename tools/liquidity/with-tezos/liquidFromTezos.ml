@@ -328,7 +328,8 @@ let rec convert_type env expr =
         | Some name ->
           try
             let ty = Trecord (name, type_components env expr) in
-            Hashtbl.add env.types name ty;
+            if not @@ List.mem_assoc name env.types then
+              env.types <- (name, ty) :: env.types;
             ty
           with Exit -> Ttuple [convert_type env x; convert_type env y]
       end
@@ -339,7 +340,8 @@ let rec convert_type env expr =
         | Some name ->
           try
             let ty = Tsum (name, type_components env expr) in
-            Hashtbl.add env.types name ty;
+            if not @@ List.mem_assoc name env.types then
+              env.types <- (name, ty) :: env.types;
             ty
           with Exit -> Tor (convert_type env x, convert_type env y)
       end
@@ -679,7 +681,7 @@ let contract_of_string filename s =
         let env = { filename;
                     loc_table = convert_loc_table filename loc_tables;
                     type_annots = Hashtbl.create 17;
-                    types = Hashtbl.create 17;
+                    types = [];
                     annoted = false;
                   } in
         Some (nodes, env)
@@ -699,14 +701,15 @@ let const_of_string filename s =
         let env = { filename;
                     loc_table = convert_loc_table filename [loc_table];
                     type_annots = Hashtbl.create 17;
-                    types = Hashtbl.create 17;
+                    types = [];
                     annoted = false;
                   } in
         Some (node, env)
 
 let convert_env env =
   let ty_env = LiquidFromOCaml.initial_env env.filename in
-  Hashtbl.iter (fun _ -> function
+  let types = List.rev env.types in
+  List.iter (fun (_, ty) -> match ty with
       | Trecord (name, labels) ->
         List.iteri (fun i (label, l_ty) ->
             ty_env.labels <- StringMap.add label (name, i, l_ty) ty_env.labels;
@@ -717,9 +720,11 @@ let convert_env env =
               StringMap.add constr (name, c_ty) ty_env.constrs;
           ) constrs;
       | _ -> ()
-    ) env.types;
-  ty_env.types <- Hashtbl.fold StringMap.add env.types ty_env.types;
+    ) types;
+  ty_env.types <-
+    List.fold_left (fun acc (n, ty) -> StringMap.add n ty acc)
+      ty_env.types types;
   ty_env
 
 
-let infos_env env = env.annoted, env.type_annots
+let infos_env env = env.annoted, env.type_annots, List.rev env.types

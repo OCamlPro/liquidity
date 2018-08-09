@@ -19,7 +19,7 @@ let rec compute decompile code to_inline =
 
   let rec size exp =
     match exp.desc with
-    | Const _ | Var _ | SetVar _ -> 1
+    | Const _ | Var _ | SetField _ | Project _ -> 1
 
     | Failwith (e, _)
     | ContractAt (_, e, _)
@@ -63,18 +63,23 @@ let rec compute decompile code to_inline =
   let rec iter exp =
     match exp.desc with
     | Const _ -> exp
-    | Var (name, _loc, []) ->
+    | Var (name, _loc) ->
        begin
          try
            let v = StringMap.find name !to_inline in
            iter v
          with Not_found -> exp
        end
-    | Var (name, _loc, _::_) -> assert false
-    | SetVar (name, _loc, _, _) -> assert false
+    | SetField (arg, loc, field, exp) ->
+      let arg = iter arg in
+      let exp = iter exp in
+      { exp with desc = SetField (arg, loc, field, exp) }
+    | Project (loc, field, arg) ->
+      let arg = iter arg in
+      { exp with desc = Project (loc, field, arg) }
     | Let (name, _inline, loc, v, _body) when v.ty = Tfail ->
       iter v
-    | Let (name, _inline, loc, v, { desc = Var (vname, _loc, []) })
+    | Let (name, _inline, loc, v, { desc = Var (vname, _loc) })
       when vname = name -> (* special case for let x = e in x *)
       iter v
     | Let (name, _inline, loc, ({ ty = Ttuple tys} as v),
@@ -82,8 +87,8 @@ let rec compute decompile code to_inline =
       when
         let len, ok =
           List.fold_left (fun (i, ok) t -> match t.desc with
-            | Apply (Prim_tuple_get _, _, [
-                { desc = Var (vname, _, []) };
+            | Apply (Prim_tuple_get, _, [
+                { desc = Var (vname, _) };
                 { desc = Const (_, _, (CInt n | CNat n)) }]) ->
               let ok = ok && vname = name &&
                        LiquidPrinter.int_of_integer n = i in
@@ -98,7 +103,7 @@ let rec compute decompile code to_inline =
       if decompile && v.name = None && size v <= inline_treshold_low &&
          (StringMap.mem name old_to_inline ||
           match v.desc with
-          | Var _ | Apply (Prim_tuple_get _, _, _) -> true
+          | Var _ | Apply (Prim_tuple_get, _, _) -> true
           | _ -> false)
       then
         to_inline := StringMap.add name v !to_inline;

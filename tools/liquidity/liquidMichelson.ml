@@ -71,7 +71,7 @@ let rec translate_code code =
 
   let rec compile_desc depth env desc =
     match desc with
-    | Var (name, loc, []) ->
+    | Var (name, loc) ->
        let pos = try
            StringMap.find name env
          with Not_found ->
@@ -80,10 +80,46 @@ let rec translate_code code =
                                  name
        in
        [ dup ~loc (depth - pos) ]
-    | Var (name, loc, _::_) ->  assert false
-    | SetVar (name, loc, _, _) ->  assert false
+
     | Const (loc, ty, cst) ->
-       [ push ~loc ty cst ]
+      [ push ~loc ty cst ]
+
+    | Project (loc, label, arg) ->
+      begin match arg.ty with
+        | Trecord (_, fields) ->
+          let n =
+            let exception Found of int in
+            try
+              List.iteri
+                (fun i (l, _) -> if l = label then raise (Found i))
+                fields;
+              LiquidLoc.raise_error ~loc
+                "Internal Error: field %s not found\n%!" label
+            with Found n -> n
+          in
+          let last_n = List.length fields - 1 in
+          let arg = compile depth env arg in
+          let ins =
+            if n = last_n then
+              ii ~loc @@ CDDR (n-1, Some label)
+            else
+              ii ~loc @@ CDAR (n, Some label)
+          in
+          arg @ [ ins ]
+        | _ -> assert false
+      end
+
+    | SetField (arg, loc, label, exp) ->
+      begin match arg.ty with
+        | Trecord (_, fields) ->
+          let arg = compile depth env arg in
+          let fields = List.map fst fields in
+          let set_code =
+            compile_record_set ~loc (depth+1) env fields label exp in
+          arg @ set_code
+        | _ -> assert false
+      end
+
     | Seq (e1, e2) ->
        let e1 = compile depth env e1 in
        let e2 = compile depth env e2 in
@@ -156,7 +192,7 @@ let rec translate_code code =
       compile_prim ~loc depth env prim args
 
     | Apply (prim, loc, args) ->
-       compile_prim ~loc depth env prim args
+      compile_prim ~loc depth env prim args
 
     | MatchOption(arg, loc, ifnone, name, ifsome) ->
        let arg = compile depth env arg in
@@ -309,35 +345,29 @@ let rec translate_code code =
     | Prim_tuple, args ->
        compile_tuple ~loc depth env (List.rev args)
 
-    | Prim_tuple_get field_name,
+    | Prim_tuple_get,
       [arg; { desc = Const (loc, _, (CInt n | CNat n))} ] ->
        let size = size_of_type arg.ty in
        let arg = compile depth env arg in
        let n = LiquidPrinter.int_of_integer n in
        let ins =
          if size = n + 1 then
-           ii @@ CDDR (n-1, field_name)
+           ii @@ CDDR (n-1, None)
          else
-           ii @@ CDAR (n, field_name)
+           ii @@ CDAR (n, None)
        in
        arg @ [ ins ]
-    | Prim_tuple_get _, _ -> assert false
+    | Prim_tuple_get, _ -> assert false
 
-    | Prim_tuple_set field_name,
+    | Prim_tuple_set,
       [x; { desc = Const (loc, _, (CInt n | CNat n))}; y ] ->
       let x_code = compile depth env x in
-      let set_code = match x.ty, field_name with
-        | Trecord (_, fields), Some field_name ->
-          let fields = List.map fst fields in
-          compile_record_set ~loc (depth+1) env fields field_name y
-        | _, _ ->
-          let n = LiquidPrinter.int_of_integer n in
-          let size = size_of_type x.ty in
-          let is_last = size = n + 1 in
-          compile_tuple_set ~loc is_last (depth+1) env n y
-      in
+      let n = LiquidPrinter.int_of_integer n in
+      let size = size_of_type x.ty in
+      let is_last = size = n + 1 in
+      let set_code = compile_tuple_set ~loc is_last (depth+1) env n y in
       x_code @ set_code
-    | Prim_tuple_set _, _ -> assert false
+    | Prim_tuple_set, _ -> assert false
 
     | Prim_self, _ -> [ ii SELF ]
     | Prim_balance, _ -> [ ii BALANCE ]
@@ -478,8 +508,8 @@ the ending NIL is not annotated with a type *)
            assert false
          (*                           | prim, args -> *)
 
-         | (Prim_unknown|Prim_tuple_get _
-           | Prim_tuple_set _|Prim_tuple
+         | (Prim_unknown|Prim_tuple_get
+           | Prim_tuple_set|Prim_tuple
            | Prim_self|Prim_balance|Prim_now|Prim_amount|Prim_gas
            | Prim_Left|Prim_Right|Prim_source|Prim_sender|Prim_unused
            | Prim_coll_find|Prim_coll_update|Prim_coll_mem
@@ -555,18 +585,21 @@ the ending NIL is not annotated with a type *)
        let args = compile_tuple1 ~loc depth env args in
        arg @ [ ii ~loc PAIR ] @ args
 
-  and compile_record ~loc depth env fields =
+  and compile_record_rev ~loc depth env fields =
     match fields with
     | []  -> assert false
     | [_] -> assert false
     | [label1, exp1; label2, exp2] ->
-      let exp1 = compile depth env exp1 in
-      let exp2 = compile (depth+1) env exp2 in
-      exp1 @ exp2 @ [ ii ~loc (RECORD (label1, Some label2)) ]
+      let exp2 = compile depth env exp2 in
+      let exp1 = compile (depth+1) env exp1 in
+      exp2 @ exp1 @ [ ii ~loc (RECORD (label1, Some label2)) ]
     | (label, exp) :: fields ->
-      let exp = compile depth env exp in
-      let rest = compile_record ~loc (depth+1) env fields in
-      exp @ rest @ [ ii ~loc (RECORD (label, None)) ]
+      let rest = compile_record_rev ~loc depth env fields in
+      let exp = compile (depth+1) env exp in
+      rest @ exp @ [ ii ~loc (RECORD (label, None)) ]
+
+  and compile_record ~loc depth env fields =
+    compile_record_rev ~loc depth env ((* List.rev *) fields)
 
   and compile depth env e =
     let code = compile_desc depth env e.desc in

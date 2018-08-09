@@ -66,7 +66,7 @@ let clean_abbrevs () = cpt_abbrev := 0; Hashtbl.clear abbrevs
 let list_caml_abbrevs_in_order () =
   Hashtbl.fold (fun ty v l -> (ty, v) :: l) abbrevs []
   |> List.fast_sort (fun (_, (_, _, i1)) (_, (_, _, i2)) -> i1 - i2)
-  |> List.map (fun (ty, (s, caml_ty, _)) -> s, caml_ty)
+  |> List.map (fun (ty, (s, caml_ty, _)) -> s, caml_ty, ty)
 
 let rec convert_type ~abbrev ?name ty =
   match ty with
@@ -214,10 +214,18 @@ let convert_primitive prim args =
 
 let rec convert_code ~abbrev expr =
   match expr.desc with
-  | Var (name, loc, fields) ->
-     List.fold_left (fun exp field ->
-         Exp.field exp (lid field)
-       ) (Exp.ident ~loc:(loc_of_loc loc) (lid name)) fields
+  | Var (name, loc) -> Exp.ident ~loc:(loc_of_loc loc) (lid name)
+
+  | Project (loc, field, exp) ->
+    Exp.field ~loc:(loc_of_loc loc)
+      (convert_code ~abbrev exp) (lid field)
+
+  | SetField (exp, loc, field, arg) -> (* TODO pretty print x.y.z <- w *)
+    Exp.setfield ~loc:(loc_of_loc loc)
+      (convert_code ~abbrev exp)
+      (lid field)
+      (convert_code ~abbrev arg)
+
   | If (cond, ifthen, { desc = Const(_loc, Tunit, CUnit) }) ->
      Exp.ifthenelse (convert_code ~abbrev cond)
                     (convert_code ~abbrev ifthen) None
@@ -302,19 +310,6 @@ let rec convert_code ~abbrev expr =
       (Exp.ident (lid "Current.failwith"))
       [Nolabel, convert_code ~abbrev err]
 
-  | SetVar (name, loc, fields, exp) -> begin
-      match List.rev fields with
-        field :: fields ->
-        let fields = List.rev fields in
-        Exp.setfield ~loc:(loc_of_loc loc)
-          (List.fold_left (fun exp field ->
-               Exp.field exp (lid field)
-             ) (Exp.ident (lid name)) fields)
-          (lid field)
-          (convert_code ~abbrev exp)
-      | _ -> assert false
-    end
-
   | MatchOption (exp, loc, ifnone, some_pat, ifsome) ->
      Exp.match_ ~loc:(loc_of_loc loc) (convert_code ~abbrev exp)
                 [
@@ -382,7 +377,7 @@ let rec convert_code ~abbrev expr =
 
   | Fold ((Prim_map_iter|Prim_set_iter|Prim_list_iter as prim),
           var_arg, loc,
-          { desc = Apply(Prim_exec, _, [ { desc = Var (iter_arg, _, []) }; f])},
+          { desc = Apply(Prim_exec, _, [ { desc = Var (iter_arg, _) }; f])},
           arg_exp, _acc_exp) when iter_arg = var_arg ->
     Exp.apply ~loc:(loc_of_loc loc)
       (Exp.ident (lid (LiquidTypes.string_of_fold_primitive prim)))
@@ -400,7 +395,7 @@ let rec convert_code ~abbrev expr =
         Nolabel, convert_code ~abbrev arg_exp;
       ]
   | Fold (prim, var_arg, loc,
-          { desc = Apply(Prim_exec, _, [ { desc = Var (iter_arg, _, []) }; f])},
+          { desc = Apply(Prim_exec, _, [ { desc = Var (iter_arg, _) }; f])},
           arg_exp,
           acc_exp) when iter_arg = var_arg ->
     Exp.apply ~loc:(loc_of_loc loc)
@@ -422,7 +417,7 @@ let rec convert_code ~abbrev expr =
       ]
 
   | Map (prim, var_arg, loc,
-          { desc = Apply(Prim_exec, _, [ { desc = Var (map_arg, _, []) }; f])},
+          { desc = Apply(Prim_exec, _, [ { desc = Var (map_arg, _) }; f])},
           arg_exp) when map_arg = var_arg ->
     Exp.apply ~loc:(loc_of_loc loc)
       (Exp.ident (lid (LiquidTypes.string_of_map_primitive prim)))
@@ -441,7 +436,7 @@ let rec convert_code ~abbrev expr =
       ]
 
   | MapFold (prim, var_arg, loc,
-          { desc = Apply(Prim_exec, _, [ { desc = Var (map_arg, _, []) }; f])},
+          { desc = Apply(Prim_exec, _, [ { desc = Var (map_arg, _) }; f])},
           arg_exp,
           acc_exp) when map_arg = var_arg ->
     Exp.apply ~loc:(loc_of_loc loc)
@@ -570,8 +565,13 @@ let structure_item_of_entry ~abbrev storage_caml entry =
           ]
       ])
 
-let structure_of_contract ?(abbrev=true) ?type_annots contract =
+let structure_of_contract
+    ?(abbrev=true) ?type_annots ?(types=[]) contract =
   clean_abbrevs ();
+  List.iter (fun (s, ty) ->
+      if not (StringMap.mem s LiquidFromOCaml.predefined_types) then
+        ignore (add_abbrev s ty (convert_type ~abbrev:false ty))
+    ) types;
   begin match type_annots with
     | Some type_annots ->
       Hashtbl.iter (fun ty s ->
@@ -592,10 +592,25 @@ let structure_of_contract ?(abbrev=true) ?type_annots contract =
   in
   let types_caml =
     list_caml_abbrevs_in_order ()
-    |> List.map (fun (txt, manifest) ->
-                  Str.type_ Recursive [
-                  Type.mk ~manifest { txt; loc = !default_loc }
-                ])
+    |> List.map (fun (txt, manifest, liq_ty) ->
+        Str.type_ Recursive [
+          match liq_ty with
+          | Trecord (name, fields) ->
+            Type.mk ~kind:(Ptype_record (
+                List.map (fun (label, ty) ->
+                    Type.field (id label) (convert_type ~abbrev:false ty)
+                  ) fields))
+              { txt; loc = !default_loc }
+          | Tsum (name, cstrs) ->
+            Type.mk ~kind:(Ptype_variant (
+                List.map (fun (cstr, ty) ->
+                    Type.constructor (id cstr)
+                      ~args:(Pcstr_tuple [(convert_type ~abbrev:false ty)])
+                  ) cstrs))
+              { txt; loc = !default_loc }
+          | _ ->
+            Type.mk ~manifest { txt; loc = !default_loc }
+        ])
   in
   let entries =
     List.map (structure_item_of_entry ~abbrev storage_caml) contract.entries in

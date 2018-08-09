@@ -77,7 +77,7 @@ let find_var ?(count_used=true) env loc name =
     let (name, ty, fail) = StringMap.find name env.vars in
     let count = StringMap.find name env.vars_counts in
     if count_used then incr count;
-    { (mk (Var (name, loc, [])) ty) with fail }
+    { (mk (Var (name, loc)) ty) with fail }
   with Not_found ->
     error loc "unbound variable %S" name
 
@@ -113,8 +113,9 @@ let error_prim loc prim args expected_args =
   (* approximate location *)
 let rec loc_exp e = match e.desc with
   | Const (loc, _, _)
-  | Var (_, loc, _)
-  | SetVar (_, loc, _, _)
+  | Var (_, loc)
+  | SetField (_, loc, _, _)
+  | Project (loc, _, _)
   | Apply (_, loc, _)
   | Transfer (loc, _, _, _, _)
   | MatchOption (_, loc, _, _, _)
@@ -155,7 +156,7 @@ let rec merge_matches acc loc cases constrs =
   | [ CConstr ("Left", l), case_l; CConstr ("Right", [x]), case_r ],
     (c1, ty1) :: constrs ->
     begin match case_r.desc with
-      | MatchVariant ( { desc = Var (x', _, []) }, loc, cases) when x = x' ->
+      | MatchVariant ( { desc = Var (x', _) }, loc, cases) when x = x' ->
         (* match arg with
            | Left l -> case_l
            | Right x -> match x with
@@ -211,62 +212,38 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
        check_used env name loc count;
        mk ?name:exp.name desc body.ty
 
-  | Var (name, loc, (_::_ as labels)) ->
-    begin match find_var env loc name with
-      | { desc = Var (name, _, []); ty } ->
-        let ty =
-          List.fold_left (fun ty label ->
-              match ty with
-              | Trecord (record_name, ltys) ->
-                begin
-                  try List.assoc label ltys
-                  with Not_found ->
-                    error loc "label %s does not belong to type %s"
-                      label record_name;
-                end
-              | _ -> error loc "not a record type: %s"
-                       (LiquidPrinter.Liquid.string_of_type ty)
-            ) ty labels
-        in
-        mk ?name:exp.name (Var (name, loc, labels)) ty
-      | _ -> assert false
-    end
+  | Var (name, loc) -> find_var env loc name
 
-  | Var (name, loc, labels) -> find_var env loc name
-
-  | SetVar (name, loc, [], e) ->
-    let e = typecheck env e in
-    mk ?name:exp.name (SetVar (name, loc, [], e)) e.ty
-
-  | SetVar (name, loc, ((l :: _) as labels), arg) ->
-    (* let arg = typecheck env arg in *)
-    let { ty } = find_var env loc name in
-    (* let label_types = match get_type ty with *)
-    (*   | Trecord label_types -> label_types *)
-    (*   | _ -> error loc "not a record %s" *)
-    (*            (LiquidPrinter.Liquid.string_of_type_expl ty) *)
-    (* in *)
-    (* let lty = *)
-    (*   try List.assoc l label_types *)
-    (*   with Not_found -> *)
-    (*     error loc "label %s does not belong to type %s" l *)
-    (*       (LiquidPrinter.Liquid.string_of_type_expl ty) *)
-    (* in *)
-    let exp_ty =
-      List.fold_left (fun lty label ->
-          let ty_name, _, ty =
-            try StringMap.find label env.env.labels
-            with Not_found -> error loc "unbound label %S" label
-          in
-          let record_ty = StringMap.find ty_name env.env.types in
-          if lty <> record_ty then
-            error loc "label %s does not belong to type %s" l
-              (LiquidPrinter.Liquid.string_of_type lty);
-          ty
-        ) ty labels
+  | Project (loc, label, arg) ->
+    let arg = typecheck env arg in
+    let ty = match arg.ty with
+      | Trecord (record_name, ltys) ->
+        begin
+          try List.assoc label ltys
+          with Not_found ->
+            error loc "label %s does not belong to type %s"
+              label record_name;
+        end
+      | _ -> error loc "not a record type: %s"
+               (LiquidPrinter.Liquid.string_of_type arg.ty)
     in
-    let arg = typecheck_expected "field update" env exp_ty arg in
-    mk ?name:exp.name (SetVar (name, loc, labels, arg)) ty
+    mk ?name:exp.name (Project (loc, label, arg)) ty
+
+  | SetField (arg, loc, label, e) ->
+    let arg = typecheck env arg in
+    let exp_ty =
+      let ty_name, _, ty =
+        try StringMap.find label env.env.labels
+        with Not_found -> error loc "unbound label %S" label
+      in
+      let record_ty = StringMap.find ty_name env.env.types in
+      if arg.ty <> record_ty then
+        error loc "label %s does not belong to type %s" label
+          (LiquidPrinter.Liquid.string_of_type arg.ty);
+      ty
+    in
+    let e = typecheck_expected "field update" env exp_ty e in
+    mk ?name:exp.name (SetField (arg, loc, label, e)) arg.ty
 
   | Seq (exp1, exp2) ->
     let exp1 = typecheck_expected "sequence" env Tunit exp1 in
@@ -318,7 +295,7 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
      end
 
   | Apply (Prim_unknown, loc,
-           ({ desc = Var (name, varloc, [])} as f) :: ((_ :: _) as r))
+           ({ desc = Var (name, varloc)} as f) :: ((_ :: _) as r))
        when StringMap.mem name env.vars ->
      let exp = List.fold_left (fun f x ->
                    { exp with desc = Apply (Prim_exec, loc, [x; f]) }
@@ -327,7 +304,7 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
      typecheck env exp
 
   | Apply (Prim_unknown, loc,
-           ({ desc = Var ("Contract.call", varloc, [])} :: args)) ->
+           ({ desc = Var ("Contract.call", varloc)} :: args)) ->
     let nb_args = List.length args in
     if nb_args <> 3 then
       error loc
@@ -337,7 +314,7 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
       error loc "Bad syntax for Contract.call."
 
   | Apply (Prim_unknown, loc,
-           ({ desc = Var (name, varloc, [])} ::args)) ->
+           ({ desc = Var (name, varloc)} ::args)) ->
      let prim =
        try
          LiquidTypes.primitive_of_string name
@@ -731,42 +708,31 @@ and find_case loc env constr cases =
 
 and typecheck_prim1 env prim loc args =
   match prim, args with
-  | Prim_tuple_get field_name,
-    [ { ty = tuple_ty }; { desc = Const (loc, _, (CInt n | CNat n)) }] ->
+  | Prim_tuple_get, [ { ty = tuple_ty };
+                      { desc = Const (loc, _, (CInt n | CNat n)) }] ->
     let tuple = match tuple_ty with
-      | Ttuple tuple -> List.map (fun t -> None, t) tuple
-      | Trecord (_, rtys) -> List.map (fun (f, t) -> Some f, t) rtys
+      | Ttuple tuple -> tuple
+      | Trecord (_, rtys) -> List.map snd rtys
       | _ -> error loc "get takes a tuple as first argument, got:\n%s"
                (LiquidPrinter.Liquid.string_of_type tuple_ty)
     in
     let n = LiquidPrinter.int_of_integer n in
     let size = List.length tuple in
     if size <= n then error loc "get outside tuple";
-    let ty = match List.nth tuple n, field_name with
-      | (Some name, ty), Some field_name ->
-        if field_name = name then ty
-        else error loc "get with %s, while expected %s" field_name name
-      | (_, ty), _ -> ty
-    in
+    let ty = List.nth tuple n in
     prim, ty
 
-  | Prim_tuple_set field_name,
-    [ { ty = tuple_ty };
-      { desc = Const (loc, _, (CInt n | CNat n)) };
-      { ty } ] ->
+  | Prim_tuple_set, [ { ty = tuple_ty };
+                      { desc = Const (loc, _, (CInt n | CNat n)) };
+                      { ty } ] ->
     let tuple = match tuple_ty with
-      | Ttuple tuple -> List.map (fun t -> None, t) tuple
-      | Trecord (_, rtys) -> List.map (fun (f, t) -> Some f, t) rtys
+      | Ttuple tuple -> tuple
+      | Trecord (_, rtys) -> List.map snd rtys
       | _ -> error loc "set takes a tuple as first argument, got:\n%s"
                (LiquidPrinter.Liquid.string_of_type tuple_ty)
     in
     let n = LiquidPrinter.int_of_integer n in
-    let expected_ty = match List.nth tuple n, field_name with
-      | (Some name, ty), Some field_name ->
-        if field_name = name then ty
-        else error loc "set with %s, while expected %s" field_name name
-      | (_, ty), _ -> ty
-    in
+    let expected_ty = List.nth tuple n in
     let size = List.length tuple in
     if size <= n then error loc "set outside tuple";
     let ty = if not (ty = expected_ty || ty = Tfail) then

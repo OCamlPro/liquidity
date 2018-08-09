@@ -104,12 +104,15 @@ let rec untype (env : env) (code : (datatype, 'a) exp) : (datatype, 'b) exp =
        let env = new_binding arg_name base env in
        Closure (base, arg_type, loc, call_env, untype env body, Tunit)
 
-    | Var (name, loc, fields) ->
+    | Var (name, loc) ->
        let name = find_name env name in
-       Var (name, loc, fields)
-    | SetVar (name, loc, fields, exp) ->
-       let name = find_name env name in
-       SetVar (name, loc, fields, untype env exp)
+       Var (name, loc)
+
+    | Project (loc, field, arg) ->
+      Project (loc, field, untype env arg)
+
+    | SetField (arg, loc, field, exp) ->
+      SetField (untype env arg, loc, field, untype env exp)
 
     | Loop (var_arg, loc, body_exp, arg_exp) ->
        let arg_exp = untype env arg_exp in
@@ -209,11 +212,14 @@ let rec untype (env : env) (code : (datatype, 'a) exp) : (datatype, 'b) exp =
     | Unpack (loc, e, ty) ->
       Unpack (loc, untype env e, ty)
 
-    | Record (_, _) ->
+    | Record (loc, fields) ->
+      Record (loc, List.map (fun (l, e) -> l, untype env e) fields)
 
-       LiquidLoc.raise_error
-         "untype: unimplemented code:\n%s%!"
-         (LiquidPrinter.Liquid.string_of_code code)
+    (* | _ ->
+     *
+     *    LiquidLoc.raise_error
+     *      "untype: unimplemented code:\n%s%!"
+     *      (LiquidPrinter.Liquid.string_of_code code) *)
 
   in
   mk desc code.ty

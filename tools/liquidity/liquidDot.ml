@@ -12,8 +12,8 @@ open Ocamldot.TYPES
 
 let subgraph_counter = ref 0
 
-let rec to_dot ~sub_contract_of contract = assert false (* TODO *)
-(*
+let rec to_dot ~sub_contract_of contract =
+
   incr subgraph_counter;
 
   let g, nodes = match sub_contract_of with
@@ -26,7 +26,7 @@ let rec to_dot ~sub_contract_of contract = assert false (* TODO *)
       nodes
   in
 
-  let (begin_node, end_node) = contract.code in
+  let (begin_node, end_node) = contract.mic_code in
 
   let node_of node =
     try
@@ -89,6 +89,8 @@ let rec to_dot ~sub_contract_of contract = assert false (* TODO *)
         | N_TRANSFER
         | N_CONTRACT _
         | N_UNPACK _
+        | N_PROJ _
+        | N_RECORD _
           -> ()
 
         | N_LOOP_END (x,y,z)
@@ -130,7 +132,7 @@ let rec to_dot ~sub_contract_of contract = assert false (* TODO *)
 
         | N_CREATE_CONTRACT c ->
           let _cg = to_dot ~sub_contract_of:(Some (g, nodes)) c in
-          let (begin_c, _) = c.code in
+          let (begin_c, _) = c.mic_code in
           add_edge_deps [begin_c];
       end;
       List.iter (fun arg ->
@@ -142,7 +144,6 @@ let rec to_dot ~sub_contract_of contract = assert false (* TODO *)
   in
   iter begin_node;
   g
-*)
 let to_string contract =
   subgraph_counter := 0;
   Ocamldot.to_string (to_dot ~sub_contract_of:None contract)
