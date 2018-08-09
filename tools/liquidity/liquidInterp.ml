@@ -659,15 +659,18 @@ let rec interp contract =
     | ABS, x :: stack ->
        let x = node ins.loc (N_PRIM "ABS") [x] [seq] in
        x :: stack, x
-    | CAR, { kind = N_PRIM "PAIR"; args = [x;_] } :: stack ->
+    | CAR None, { kind = N_PRIM "PAIR"; args = [x;_] } :: stack ->
        x :: stack, seq
-    | CDR, { kind = N_PRIM "PAIR"; args = [_;x] } :: stack ->
+    | CDR None, { kind = N_PRIM "PAIR"; args = [_;x] } :: stack ->
        x :: stack, seq
-    | CAR, x :: stack ->
-       let x = node ins.loc (N_PRIM "CAR") [x] [seq] in
+    | CAR (Some f), { kind = N_RECORD (f' :: _); args = [x;_] } :: stack
+      when f = f'->
+      x :: stack, seq
+    | CAR field, x :: stack ->
+       let x = node ins.loc (N_CAR field) [x] [seq] in
        x :: stack, x
-    | CDR, x :: stack ->
-       let x = node ins.loc (N_PRIM "CDR") [x] [seq] in
+    | CDR field, x :: stack ->
+       let x = node ins.loc (N_CDR field) [x] [seq] in
        x :: stack, x
 
     | NEQ, { kind = N_PRIM "COMPARE"; args = [x;y] } :: stack->
@@ -748,6 +751,15 @@ let rec interp contract =
       x :: stack, x
     | PAIR, x :: y :: stack ->
        let x = node ins.loc (N_PRIM "PAIR") [x;y] [seq] in
+       x :: stack, x
+    | RECORD (label_x, Some label_y), x :: y :: stack ->
+       let x = node ins.loc (N_RECORD [label_x; label_y]) [x;y] [seq] in
+       x :: stack, x
+
+    | RECORD (label_x, None),
+      x :: { kind = N_RECORD y_labels; args } :: stack ->
+      let x =
+        node ins.loc (N_RECORD (label_x :: y_labels)) (x :: args) [seq] in
        x :: stack, x
 
     | COMPARE, x ::  { kind = N_CONST (Tint,CInt n)} :: stack

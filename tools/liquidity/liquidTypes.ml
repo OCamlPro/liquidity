@@ -172,10 +172,8 @@ type primitive =
   | Prim_unused
 
   (* primitives *)
-  | Prim_tuple_get
-  (* | Prim_record_get of string *)
-  | Prim_tuple_set
-  (* | Prim_record_set of string *)
+  | Prim_tuple_get of string option
+  | Prim_tuple_set of string option
   | Prim_tuple
 
   | Prim_self
@@ -294,12 +292,12 @@ let () =
       Hashtbl.add string_of_primitive p n;
     )
             [
-              "get", Prim_tuple_get;
-              "set", Prim_tuple_set;
+              "get", Prim_tuple_get None;
+              "set", Prim_tuple_set None;
               "tuple", Prim_tuple;
 
-              "Array.get", Prim_tuple_get;
-              "Array.set", Prim_tuple_set;
+              "Array.get", Prim_tuple_get None;
+              "Array.set", Prim_tuple_set None;
 
               "Current.balance", Prim_balance;
               "Current.time", Prim_now;
@@ -690,9 +688,9 @@ let mk =
 
 
 type michelson_exp =
-  | M_INS of string * string option
-  | M_INS_CST of string * datatype * const * string option
-  | M_INS_EXP of string * datatype list * michelson_exp list * string option
+  | M_INS of string * string list
+  | M_INS_CST of string * datatype * const * string list
+  | M_INS_EXP of string * datatype list * michelson_exp list * string list
 
 type 'a pre_michelson =
   | RENAME of string option
@@ -712,12 +710,13 @@ type 'a pre_michelson =
   | DUP of int
   | DIP_DROP of int * int
   | DROP
-  | CAR
-  | CDR
-  | CDAR of int
-  | CDDR of int
+  | CAR of string option
+  | CDR of string option
+  | CDAR of int * string option
+  | CDDR of int * string option
   | PUSH of datatype * const
   | PAIR
+  | RECORD of string * string option
   | COMPARE
   | LE | LT | GE | GT | NEQ | EQ
   | FAILWITH
@@ -927,6 +926,9 @@ type node = {
    | N_CONTRACT of datatype
    | N_UNPACK of datatype
    | N_ABS
+   | N_RECORD of string list
+   | N_CAR of string option
+   | N_CDR of string option
    | N_RESULT of node * int
 
 and node_exp = node * node

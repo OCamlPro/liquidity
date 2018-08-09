@@ -166,6 +166,25 @@ let rec merge_matches acc loc cases constrs =
     end
   | _ -> raise Exit
 
+(* (\* Flatten nested records to recover encodings *\)
+ * let flatten_record env exp = match exp.desc with
+ *   | Record (loc, [lx, x; ly, y]) ->
+ *     let ty_rx = StringMap.find lx env.env.labels in
+ *     let ty_ry = StringMap.find ly env.env.labels in
+ *     if ty_rx <> ty_ry then exp
+ *     else
+ *       let nb_fields = match ty_rx with
+ *         | Trecord (_, labels) -> List.length labels
+ *         | _ -> assert false in
+ *       let rec aux nb exp =
+ *         if nb = 0 then exp
+ *         else match exp.desc with
+ *           | Record (loc, [lx, x; ly, y]) ->
+ *             (lx, x) :: aux (nb - 1)
+ *           | _ -> exp
+ *       in
+ *       aux nb_fields exp
+ *   | _ -> exp *)
 
   (* this function returns a triple with
    * the expression annotated with its type
@@ -712,38 +731,49 @@ and find_case loc env constr cases =
 
 and typecheck_prim1 env prim loc args =
   match prim, args with
-  | Prim_tuple_get, [ { ty = tuple_ty };
-                      { desc = Const (loc, _, (CInt n | CNat n)) }] ->
-     let tuple = match tuple_ty with
-       | Ttuple tuple -> tuple
-       | Trecord (_, rtys) -> List.map snd rtys
-       | _ -> error loc "get takes a tuple as first argument, got:\n%s"
-                (LiquidPrinter.Liquid.string_of_type tuple_ty)
-     in
-     let n = LiquidPrinter.int_of_integer n in
-     let size = List.length tuple in
-     if size <= n then error loc "get outside tuple";
-     let ty = List.nth tuple n in
-     prim, ty
+  | Prim_tuple_get field_name,
+    [ { ty = tuple_ty }; { desc = Const (loc, _, (CInt n | CNat n)) }] ->
+    let tuple = match tuple_ty with
+      | Ttuple tuple -> List.map (fun t -> None, t) tuple
+      | Trecord (_, rtys) -> List.map (fun (f, t) -> Some f, t) rtys
+      | _ -> error loc "get takes a tuple as first argument, got:\n%s"
+               (LiquidPrinter.Liquid.string_of_type tuple_ty)
+    in
+    let n = LiquidPrinter.int_of_integer n in
+    let size = List.length tuple in
+    if size <= n then error loc "get outside tuple";
+    let ty = match List.nth tuple n, field_name with
+      | (Some name, ty), Some field_name ->
+        if field_name = name then ty
+        else error loc "get with %s, while expected %s" field_name name
+      | (_, ty), _ -> ty
+    in
+    prim, ty
 
-  | Prim_tuple_set, [ { ty = tuple_ty };
-                      { desc = Const (loc, _, (CInt n | CNat n)) };
-                      { ty } ] ->
-     let tuple = match tuple_ty with
-       | Ttuple tuple -> tuple
-       | Trecord (_, rtys) -> List.map snd rtys
-       | _ -> error loc "set takes a tuple as first argument, got:\n%s"
-                (LiquidPrinter.Liquid.string_of_type tuple_ty)
-     in
-     let n = LiquidPrinter.int_of_integer n in
-     let expected_ty = List.nth tuple n in
-     let size = List.length tuple in
-     if size <= n then error loc "set outside tuple";
-     let ty = if not (ty = expected_ty || ty = Tfail) then
-         error loc "prim set bad type"
-       else tuple_ty
-     in
-     prim, ty
+  | Prim_tuple_set field_name,
+    [ { ty = tuple_ty };
+      { desc = Const (loc, _, (CInt n | CNat n)) };
+      { ty } ] ->
+    let tuple = match tuple_ty with
+      | Ttuple tuple -> List.map (fun t -> None, t) tuple
+      | Trecord (_, rtys) -> List.map (fun (f, t) -> Some f, t) rtys
+      | _ -> error loc "set takes a tuple as first argument, got:\n%s"
+               (LiquidPrinter.Liquid.string_of_type tuple_ty)
+    in
+    let n = LiquidPrinter.int_of_integer n in
+    let expected_ty = match List.nth tuple n, field_name with
+      | (Some name, ty), Some field_name ->
+        if field_name = name then ty
+        else error loc "set with %s, while expected %s" field_name name
+      | (_, ty), _ -> ty
+    in
+    let size = List.length tuple in
+    if size <= n then error loc "set outside tuple";
+    let ty = if not (ty = expected_ty || ty = Tfail) then
+        error loc "prim set bad type"
+      else tuple_ty
+    in
+    prim, ty
 
   | _ ->
      let prim =

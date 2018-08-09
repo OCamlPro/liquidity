@@ -21,10 +21,11 @@ let loc_of_many (l : loc_michelson list) = match l, List.rev l with
   | [], _ | _, [] -> LiquidLoc.noloc
   | first :: _, last :: _ -> LiquidLoc.merge first.loc last.loc
 
-let prim ~loc name args var_name =
+let prim ~loc ?(fields=[]) name args var_name =
+  let annots = List.map (fun f -> "%" ^ f) fields in
   let annots = match var_name with
-    | Some s -> ["@" ^ s]
-    | None -> []
+    | Some s -> ("@" ^ s) :: annots
+    | None -> annots
   in
   Micheline.Prim(loc, name, args, annots)
 
@@ -182,8 +183,10 @@ let rec convert_code expand expr =
     else
       prim (Printf.sprintf "D%sP" (String.make n 'I'))
         [ convert_code expand arg ] name
-  | CAR -> prim "CAR" [] name
-  | CDR -> prim "CDR" [] name
+  | CAR None -> prim "CAR" []  name
+  | CAR (Some field) -> prim "CAR" [] ~fields:[field] name
+  | CDR None -> prim "CDR" []  name
+  | CDR (Some field) -> prim "CDR" [] ~fields:[field] name
   | SWAP -> prim "SWAP" [] name
   | IF (x,y) ->
     prim "IF" [convert_code expand x; convert_code expand y] name
@@ -195,6 +198,8 @@ let rec convert_code expand expr =
     prim "IF_CONS" [convert_code expand x; convert_code expand y] name
   | NOW -> prim "NOW" [] name
   | PAIR -> prim "PAIR" [] name
+  | RECORD (f1, None) -> prim "PAIR" [] ~fields:[f1] name
+  | RECORD (f1, Some f2) -> prim "PAIR" [] ~fields:[f1; f2] name
   | BALANCE -> prim "BALANCE" [] name
   | SUB -> prim "SUB" [] name
   | ADD -> prim "ADD" [] name
@@ -286,17 +291,19 @@ let rec convert_code expand expr =
     convert_code expand @@
     ii @@ DIP (ndip, ii @@ SEQ (LiquidMisc.list_init ndrop (fun _ -> ii DROP)))
 
-  | CDAR 0 -> convert_code expand { expr with ins = CAR }
-  | CDDR 0 -> convert_code expand { expr with ins = CDR }
-  | CDAR n ->
+  | CDAR (0, field) -> convert_code expand { expr with ins = CAR field }
+  | CDDR (0, field) -> convert_code expand { expr with ins = CDR field }
+  | CDAR (n, field) ->
     if expand then
       convert_code expand @@ ii @@
-      SEQ (LiquidMisc.list_init n (fun _ -> ii CDR) @ [{ expr with ins = CAR }])
+      SEQ (LiquidMisc.list_init n (fun _ -> ii @@ CDR None) @
+           [{ expr with ins = CAR field }])
     else prim (Printf.sprintf "C%sAR" (String.make n 'D')) [] name
-  | CDDR n ->
+  | CDDR (n, field) ->
     if expand then
       convert_code expand @@ ii @@
-      SEQ (LiquidMisc.list_init n (fun _ -> ii CDR) @ [{ expr with ins = CDR }])
+      SEQ (LiquidMisc.list_init n (fun _ -> ii @@ CDR None) @
+           [{ expr with ins = CDR field }])
     else prim (Printf.sprintf "C%sDR" (String.make n 'D')) [] name
   | SIZE -> prim "SIZE" [] name
   | IMPLICIT_ACCOUNT -> prim "IMPLICIT_ACCOUNT" [] name

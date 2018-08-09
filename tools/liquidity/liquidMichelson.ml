@@ -148,7 +148,8 @@ let rec translate_code code =
       let f_env = compile depth env f in
       let arg = compile (depth+1) env arg in
       f_env @ arg @
-      [ dip ~loc 1 [ dup ~loc 1; ii ~loc CAR; ii ~loc SWAP; ii ~loc CDR] ] @
+      [ dip ~loc 1 [ dup ~loc 1; ii ~loc @@ CAR None;
+                     ii ~loc SWAP; ii ~loc @@ CDR None] ] @
       [ ii ~loc PAIR ; ii ~loc EXEC ]
 
     | Apply (prim, loc, ([_; { ty = Tlambda _ } ] as args)) ->
@@ -226,8 +227,8 @@ let rec translate_code code =
        let body = compile depth env body in
        let body_end = [ ii ~loc @@ DIP_DROP (1,1);
                         ii ~loc @@ DUP 1;
-                        ii ~loc CAR;
-                        ii ~loc @@ DIP (1, seq [ ii ~loc CDR ]) ] in
+                        ii ~loc @@ CAR None;
+                        ii ~loc @@ DIP (1, seq [ ii ~loc @@ CDR None ]) ] in
        arg
        @ [ ii ~loc @@ PUSH (Tbool, CBool true) ]
        @ [ ii ~loc @@ LOOP (seq (arg_annot @ body @ body_end)) ]
@@ -272,8 +273,8 @@ let rec translate_code code =
       let body_end = [
         ii ~loc @@ DIP_DROP (1,2);
         dup ~loc 1;
-        dip ~loc 1 [ ii ~loc CDR ];
-        ii ~loc CAR;
+        dip ~loc 1 [ ii ~loc @@ CDR None ];
+        ii ~loc @@ CAR None;
       ] in
       acc @ arg @
       [ii ~loc @@ MAP (seq (arg_annot @ body_begin @ body @ body_end));
@@ -296,8 +297,10 @@ let rec translate_code code =
       compile depth env e @
       [ ii ~loc (UNPACK ty) ]
 
+    | Record (loc, fields) ->
+      compile_record ~loc depth env fields
+
     (* removed during typechecking, replaced by tuple *)
-    | Record _ -> assert false
     | Constructor _ -> assert false
 
   and compile_prim ~loc depth env prim args =
@@ -306,33 +309,35 @@ let rec translate_code code =
     | Prim_tuple, args ->
        compile_tuple ~loc depth env (List.rev args)
 
-    | Prim_tuple_get, [arg; { desc = Const (loc, _, (CInt n | CNat n))} ] ->
+    | Prim_tuple_get field_name,
+      [arg; { desc = Const (loc, _, (CInt n | CNat n))} ] ->
        let size = size_of_type arg.ty in
        let arg = compile depth env arg in
        let n = LiquidPrinter.int_of_integer n in
        let ins =
          if size = n + 1 then
-           ii @@ CDDR (n-1)
+           ii @@ CDDR (n-1, field_name)
          else
-           ii @@ CDAR n
+           ii @@ CDAR (n, field_name)
        in
        arg @ [ ins ]
-    | Prim_tuple_get, _ -> assert false
+    | Prim_tuple_get _, _ -> assert false
 
-    (*
-set x n y = x + [ DUP; CAR; SWAP; CDR ]*n +
-                [ CDR ] + y + [ PAIR ] +
-                [ SWAP; PAIR ]*2
-     *)
-
-    | Prim_tuple_set, [x; { desc = Const (loc, _, (CInt n | CNat n))}; y ] ->
-       let x_code = compile depth env x in
-       let n = LiquidPrinter.int_of_integer n in
-       let size = size_of_type x.ty in
-       let is_last = size = n + 1 in
-       let set_code = compile_prim_set ~loc is_last (depth+1) env n y in
-       x_code @ set_code
-    | Prim_tuple_set, _ -> assert false
+    | Prim_tuple_set field_name,
+      [x; { desc = Const (loc, _, (CInt n | CNat n))}; y ] ->
+      let x_code = compile depth env x in
+      let set_code = match x.ty, field_name with
+        | Trecord (_, fields), Some field_name ->
+          let fields = List.map fst fields in
+          compile_record_set ~loc (depth+1) env fields field_name y
+        | _, _ ->
+          let n = LiquidPrinter.int_of_integer n in
+          let size = size_of_type x.ty in
+          let is_last = size = n + 1 in
+          compile_tuple_set ~loc is_last (depth+1) env n y
+      in
+      x_code @ set_code
+    | Prim_tuple_set _, _ -> assert false
 
     | Prim_self, _ -> [ ii SELF ]
     | Prim_balance, _ -> [ ii BALANCE ]
@@ -473,8 +478,8 @@ the ending NIL is not annotated with a type *)
            assert false
          (*                           | prim, args -> *)
 
-         | (Prim_unknown|Prim_tuple_get
-           | Prim_tuple_set|Prim_tuple
+         | (Prim_unknown|Prim_tuple_get _
+           | Prim_tuple_set _|Prim_tuple
            | Prim_self|Prim_balance|Prim_now|Prim_amount|Prim_gas
            | Prim_Left|Prim_Right|Prim_source|Prim_sender|Prim_unused
            | Prim_coll_find|Prim_coll_update|Prim_coll_mem
@@ -490,17 +495,17 @@ the ending NIL is not annotated with a type *)
        args_code @ prim_code
 
 
-  and compile_prim_set ~loc last depth env n y =
+  and compile_tuple_set ~loc last depth env n y =
     let ii = ii ~loc in
     if n = 0 then
       if last then
         [ ii DROP ]
         @ compile (depth-1) env y
       else
-        [ ii CDR ] @ compile depth env y @ [ ii PAIR ]
+        [ ii @@ CDR None ] @ compile depth env y @ [ ii PAIR ]
     else
-      [ ii (DUP 1); ii CAR; ii SWAP; ii CDR ] @
-        compile_prim_set last ~loc (depth+1) env (n-1) y @
+      [ ii (DUP 1); ii @@ CAR None; ii SWAP; ii @@ CDR None ] @
+        compile_tuple_set last ~loc (depth+1) env (n-1) y @
           [ ii SWAP; ii PAIR ]
 
   and compile_args depth env args =
@@ -510,6 +515,28 @@ the ending NIL is not annotated with a type *)
        let (depth, args) = compile_args depth env args in
        let arg = compile depth env arg in
        depth+1, args @ arg
+
+  and compile_record_set ~loc depth env fields field_name y =
+    let ii = ii ~loc in
+    match fields with
+    | [] | [_] -> assert false
+    | [f1; f2] when field_name = f2 ->
+      [ ii @@ CAR (Some f1) ] @
+      compile depth env y @
+      [ ii SWAP; ii @@ RECORD (f1, Some f2) ]
+    | [f1; f2] when field_name = f1 ->
+      [ ii @@ CDR (Some f2) ] @
+      compile depth env y @
+      [ ii @@ RECORD (f1, Some f2) ]
+    | [_; _] -> assert false
+    | f :: fields when field_name = f ->
+      [ ii @@ CDR None ] @
+      compile depth env y @
+      [ ii @@ RECORD (f, None) ]
+    | f :: fields ->
+      [ ii (DUP 1); ii @@ CAR (Some f); ii SWAP; ii @@ CDR None ] @
+      compile_record_set ~loc (depth + 1) env fields field_name y @
+      [ ii SWAP; ii @@ RECORD (f, None) ]
 
   and compile_tuple ~loc depth env args =
     match args with
@@ -527,6 +554,19 @@ the ending NIL is not annotated with a type *)
        let arg = compile (depth+1) env arg in
        let args = compile_tuple1 ~loc depth env args in
        arg @ [ ii ~loc PAIR ] @ args
+
+  and compile_record ~loc depth env fields =
+    match fields with
+    | []  -> assert false
+    | [_] -> assert false
+    | [label1, exp1; label2, exp2] ->
+      let exp1 = compile depth env exp1 in
+      let exp2 = compile (depth+1) env exp2 in
+      exp1 @ exp2 @ [ ii ~loc (RECORD (label1, Some label2)) ]
+    | (label, exp) :: fields ->
+      let exp = compile depth env exp in
+      let rest = compile_record ~loc (depth+1) env fields in
+      exp @ rest @ [ ii ~loc (RECORD (label, None)) ]
 
   and compile depth env e =
     let code = compile_desc depth env e.desc in
@@ -571,8 +611,8 @@ the ending NIL is not annotated with a type *)
   (* replace ( parameter, storage ) *)
   let header = [
       dup ~loc 1;
-      dip ~loc 1 [ ii ~loc CDR ];
-      ii ~loc CAR;
+      dip ~loc 1 [ ii ~loc @@ CDR None ];
+      ii ~loc @@ CAR None;
     ]
   in
   let trailer = drop_stack ~loc 1 depth in

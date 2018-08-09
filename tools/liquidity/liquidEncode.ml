@@ -138,7 +138,7 @@ let env_for_clos env loc bvs arg_name arg_type =
     let env_bindings =
       StringMap.map (fun (name, ty, index, count) ->
           let ei = mk_nat ~loc index in
-          let exp = mk ~name (Apply(Prim_tuple_get, loc, [env_arg_var; ei])) ty in
+          let exp = mk ~name (Apply(Prim_tuple_get None, loc, [env_arg_var; ei])) ty in
           exp, count
         ) env_vars
     in
@@ -489,7 +489,8 @@ let rec encode env ( exp : typed_exp ) : encoded_exp =
            with Not_found ->
              error loc "bad label"
          in
-         mk (Apply(Prim_tuple_get, loc, [arg1; mk_nat ~loc n])) label_ty
+         mk (Apply(Prim_tuple_get (Some label), loc,
+                   [arg1; mk_nat ~loc n])) label_ty
       ) e labels
 
   | SetVar (name, loc, [], e) -> encode env e
@@ -514,7 +515,8 @@ let rec encode env ( exp : typed_exp ) : encoded_exp =
        | [] -> encode env arg
        | _::_ ->
          let get_exp =
-           mk (Apply(Prim_tuple_get, loc, [arg1; mk_nat ~loc n])) lty in
+           mk (Apply(Prim_tuple_get (Some label), loc,
+                     [arg1; mk_nat ~loc n])) lty in
          let tmp_name = uniq_ident env "_tmp#" in
          let (new_name, env, count) = new_binding env tmp_name lty in
          let body =
@@ -523,7 +525,7 @@ let rec encode env ( exp : typed_exp ) : encoded_exp =
          in
          mk (Let (new_name, false, loc, get_exp, body)) body.ty
      in
-     mk ?name:exp.name (Apply(Prim_tuple_set, loc,
+     mk ?name:exp.name (Apply(Prim_tuple_set (Some label), loc,
                               [arg1; mk_nat ~loc n; arg])) arg1.ty
 
   | Seq (exp1, exp2) ->
@@ -572,9 +574,9 @@ let rec encode env ( exp : typed_exp ) : encoded_exp =
     let arg_name = uniq_ident env "arg" in
     let arg_ty = Ttuple [elt_ty; list_ty] in
     let arg = mk (Var (arg_name, loc, [])) arg_ty in
-    let e = mk (Apply(Prim_tuple_get, loc, [arg; mk_nat ~loc 0])) elt_ty in
+    let e = mk (Apply(Prim_tuple_get None, loc, [arg; mk_nat ~loc 0])) elt_ty in
     let acc =
-      mk (Apply(Prim_tuple_get, loc, [arg; mk_nat ~loc 1])) list_ty in
+      mk (Apply(Prim_tuple_get None, loc, [arg; mk_nat ~loc 1])) list_ty in
     let f_body = mk (Apply (Prim_Cons, loc, [e; acc])) list_ty in
     let empty_acc = mk_nil ~loc list_ty in
     let desc = Fold (Prim_list_fold, arg_name, loc, f_body, l, empty_acc) in
@@ -839,29 +841,15 @@ let rec encode env ( exp : typed_exp ) : encoded_exp =
        let ty = Tclosure ((lambda_arg_type, call_env_type), body.ty) in
        mk ?name:exp.name desc ty
 
+  (* Closures are created by encoding phase *)
   | Closure _ -> assert false
 
-  | Record (_loc, []) -> assert false
-  | Record (loc, (( (label, _) :: _ ) as lab_x_exp_list)) ->
-     let ty_name, _, _ =
-       try
-         StringMap.find label env.env.labels
-       with Not_found ->
-         error loc "unbound label %S" label
-     in
-     let record_ty = StringMap.find ty_name env.env.types in
-     let len = List.length (match record_ty with
-         | Trecord (_, rtys) -> rtys
-         | _ -> assert false) in
-     let t = Array.make len (const_unit ~loc) in
-     List.iteri (fun i (label, exp) ->
-         let ty_name', label_pos, ty = StringMap.find label env.env.labels in
-         let exp = encode env exp in
-         t.(label_pos) <- exp;
-       ) lab_x_exp_list;
-     let args = Array.to_list t in
-     let desc = Apply(Prim_tuple, loc, args) in
-     mk ?name:exp.name desc record_ty
+  | Record (loc, fields) ->
+    let fields = List.map (fun (label, exp) ->
+        label, encode env exp
+      ) fields in
+    let desc = Record(loc, fields) in
+    mk ?name:exp.name desc exp.ty
 
   | Constructor(loc, Constr constr, arg) ->
      let ty_name, arg_ty = StringMap.find constr env.env.constrs in

@@ -20,7 +20,7 @@ let mk_nat ~loc i =
 let rec subst_empty_big_map code =
   let empty_big_map loc =
     let storage_var = mk (Var ("storage", loc, [])) () in
-    Apply (Prim_tuple_get, loc, [storage_var; mk_nat ~loc 0])
+    Apply (Prim_tuple_get None, loc, [storage_var; mk_nat ~loc 0])
   in
   let desc = code.desc in
   let desc = match desc with
@@ -175,7 +175,8 @@ let tmp_contract_of_init ~loc (args, code) storage_ty =
           let code = mk (
               Let (arg, false, loc,
                    mk (Apply
-                         (Prim_tuple_get, loc, [parameter_var; mk_nat ~loc i]))
+                         (Prim_tuple_get None, loc,
+                          [parameter_var; mk_nat ~loc i]))
                      (),
                    code)) ()
           in

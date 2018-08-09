@@ -572,7 +572,7 @@ let vars_info_pat env pat =
 let access_of_deconstruct var_name loc indexes =
   let a = mk (Var (var_name, loc, [])) in
   List.fold_right (fun i a ->
-      mk (Apply (Prim_tuple_get, loc, [
+      mk (Apply (Prim_tuple_get None, loc, [
           a;
           mk (Const (loc, Tnat, CNat (LiquidPrinter.integer_of_int i)))
         ]))

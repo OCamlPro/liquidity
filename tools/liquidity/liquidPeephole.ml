@@ -108,7 +108,7 @@ and simplify_step e exprs =
 
 
   (* takes one item on stack, creates one :  1 -> 1 *)
-  | (CAR | CDR | CDAR _ | CDDR _
+  | (CAR _| CDR _ | CDAR (_, _) | CDDR (_, _)
     | LE | LT | GE | GT | NEQ | EQ | SOME
     | ADDRESS | NOT | ABS | INT | NEG | LEFT _ | RIGHT _
     | SET_DELEGATE | SIZE | CONTRACT _
@@ -120,7 +120,7 @@ and simplify_step e exprs =
      simplify_stepi ~loc (DIP_DROP (n,m))
                    (simplify_step e exprs)
 
-  | (CAR | CDR | CDAR _ | CDDR _
+  | (CAR _ | CDR _ | CDAR (_, _) | CDDR (_, _)
     | LE | LT | GE | GT | NEQ | EQ | SOME
     | ADDRESS | NOT | ABS | INT | NEG | LEFT _ | RIGHT _
     | SET_DELEGATE | SIZE | CONTRACT _
@@ -132,9 +132,10 @@ and simplify_step e exprs =
 
 
   (* takes two items on stack, creates one : 2 -> 1 *)
-  | (PAIR | ADD | SUB | COMPARE | GET | MEM
-     | CONS | EXEC
-     | OR | AND | XOR | MUL | EDIV | LSL | LSR ),
+  | (PAIR | RECORD (_, _)
+    | ADD | SUB | COMPARE | GET | MEM
+    | CONS | EXEC
+    | OR | AND | XOR | MUL | EDIV | LSL | LSR ),
     {ins=DIP_DROP (n,m); loc} :: exprs when n > 0 ->
      simplify_stepi ~loc (DIP_DROP (n+1,m))
                    (simplify_step e exprs)

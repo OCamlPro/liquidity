@@ -322,28 +322,34 @@ module Michelson = struct
     | Some s -> " @" ^ s
     | None -> ""
 
+  let annots_to_string = function
+    | [] -> ""
+    | annots -> " " ^ String.concat " " annots
+
   let rec bprint_code fmt b indent code =
     match code with
-    | M_INS (ins, name) -> Printf.bprintf b "%s%s ;" ins (annot name)
-    | M_INS_CST (ins,ty,cst,name) ->
+    | M_INS (ins, annots) ->
+      Printf.bprintf b "%s%s ;" ins (annots_to_string annots)
+    | M_INS_CST (ins, ty, cst, annots) ->
        let indent = fmt.increase_indent indent in
-       Printf.bprintf b "%s%s%c%s" ins (annot name) fmt.newline indent;
+       Printf.bprintf b "%s%s%c%s"
+         ins (annots_to_string annots) fmt.newline indent;
        bprint_type fmt b indent ty;
        Printf.bprintf b "%c%s" fmt.newline indent;
        bprint_const fmt b indent cst;
        Printf.bprintf b " ;";
-    | M_INS_EXP ("SEQ", [], [], name) ->
-       Printf.bprintf b "{%s}" (annot name)
-    | M_INS_EXP ("SEQ", [], exps, name) ->
-       Printf.bprintf b "{%s" (annot name);
+    | M_INS_EXP ("SEQ", [], [], annots) ->
+       Printf.bprintf b "{%s}" (annots_to_string annots)
+    | M_INS_EXP ("SEQ", [], exps, annots) ->
+       Printf.bprintf b "{%s" (annots_to_string annots);
        let indent_in = fmt.increase_indent indent in
        List.iter (fun exp ->
            Printf.bprintf b "%c%s" fmt.newline indent_in;
            bprint_code fmt b indent_in exp) exps;
        Printf.bprintf b "%c%s}" fmt.newline indent
-    | M_INS_EXP (ins,tys, exps, name) ->
+    | M_INS_EXP (ins,tys, exps, annots) ->
        let indent = fmt.increase_indent indent in
-       Printf.bprintf b "%s%s" ins (annot name);
+       Printf.bprintf b "%s%s" ins (annots_to_string annots);
        List.iter (fun ty ->
            Printf.bprintf b "%c%s" fmt.newline indent;
            bprint_type fmt b indent ty) tys;
@@ -406,7 +412,11 @@ module Michelson = struct
       ) contract
 
   let bprint_pre_name b name = match name with
-    | Some name -> Printf.bprintf b " @%s " name
+    | Some name -> Printf.bprintf b " %s " name
+    | None -> ()
+
+  let bprint_pre_field b = function
+    | Some field -> Printf.bprintf b " %s " field
     | None -> ()
 
   let bprint_pre_michelson fmt bprint_arg b name = function
@@ -474,20 +484,24 @@ module Michelson = struct
     | DROP ->
       Printf.bprintf b "DROP";
       bprint_pre_name b name;
-    | CAR ->
+    | CAR field ->
       Printf.bprintf b "CAR";
       bprint_pre_name b name;
-    | CDR ->
+      bprint_pre_field b field;
+    | CDR field ->
       Printf.bprintf b "CDR";
       bprint_pre_name b name;
-    | CDAR i ->
+      bprint_pre_field b field;
+    | CDAR (i, field) ->
       Printf.bprintf b "C%sAR "
         (String.concat "" (LiquidMisc.list_init i (fun _ -> "D")));
       bprint_pre_name b name;
-    | CDDR i ->
+      bprint_pre_field b field;
+    | CDDR (i, field) ->
       Printf.bprintf b "C%sDR "
         (String.concat "" (LiquidMisc.list_init i (fun _ -> "D")));
       bprint_pre_name b name;
+      bprint_pre_field b field;
     | PUSH (ty, c) ->
       Printf.bprintf b "PUSH ";
       bprint_pre_name b name;
@@ -497,6 +511,11 @@ module Michelson = struct
     | PAIR ->
       Printf.bprintf b "PAIR";
       bprint_pre_name b name;
+    | RECORD (f1, f2) ->
+      Printf.bprintf b "PAIR";
+      bprint_pre_name b name;
+      bprint_pre_field b (Some f1);
+      bprint_pre_field b f2;
     | COMPARE ->
       Printf.bprintf b "COMPARE";
       bprint_pre_name b name;
@@ -1251,4 +1270,9 @@ let string_of_node node =
   | N_UNPACK _ -> "N_UNPACK"
   | N_ABS -> "N_ABS"
   | N_CREATE_CONTRACT _ -> "N_CREATE_CONTRACT"
+  | N_RECORD fields -> "N_RECORD_" ^ (String.concat "_" fields)
+  | N_CAR None -> "N_CAR"
+  | N_CDR None -> "N_CDR"
+  | N_CAR (Some f) -> "N_CAR " ^ f
+  | N_CDR (Some f) -> "N_CDR " ^ f
   | N_RESULT (_, i) -> Printf.sprintf "N_RESULT %d" i

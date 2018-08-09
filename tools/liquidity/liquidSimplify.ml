@@ -82,7 +82,7 @@ let rec compute decompile code to_inline =
       when
         let len, ok =
           List.fold_left (fun (i, ok) t -> match t.desc with
-            | Apply (Prim_tuple_get, _, [
+            | Apply (Prim_tuple_get _, _, [
                 { desc = Var (vname, _, []) };
                 { desc = Const (_, _, (CInt n | CNat n)) }]) ->
               let ok = ok && vname = name &&
@@ -98,7 +98,7 @@ let rec compute decompile code to_inline =
       if decompile && v.name = None && size v <= inline_treshold_low &&
          (StringMap.mem name old_to_inline ||
           match v.desc with
-          | Var _ | Apply (Prim_tuple_get, _, _) -> true
+          | Var _ | Apply (Prim_tuple_get _, _, _) -> true
           | _ -> false)
       then
         to_inline := StringMap.add name v !to_inline;

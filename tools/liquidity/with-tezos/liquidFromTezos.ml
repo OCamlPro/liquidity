@@ -293,16 +293,14 @@ let type_name_of_annots annots =
 
 let type_constr_or_label_of_annots annots =
   let exception Found of string in
-  try
-    List.iter (fun a ->
-      try raise (Found (Scanf.sscanf a "%%%s" (fun s -> s)))
-      with Scanf.Scan_failure _ | End_of_file -> ()
-    ) annots;
-    None
-  with
-  | Found ("" | "%" | "@") -> None
-  | Found s -> Some (sanitize_name s)
-
+  List.fold_left (fun acc a ->
+      try Scanf.sscanf a "%%%s"
+            (function
+              | "" | "%" | "@" -> acc
+              | s -> sanitize_name s :: acc)
+      with Scanf.Scan_failure _ | End_of_file -> acc
+    ) [] annots
+  |> List.rev
 
 let rec convert_type env expr =
   let name = match expr with
@@ -380,19 +378,21 @@ let rec convert_type env expr =
 and type_components env t =
   match t with
   | Prim(_, _, [x;y], annots) ->
+    let label_of_annot = function
+      | Prim(_, _, _, a) ->
+        (match type_constr_or_label_of_annots a with
+         | [l] -> Some l
+         | _ -> None)
+      | _ -> None in
     begin
-      let x_label = match x with
-        | Prim(_, _, _, a) -> type_constr_or_label_of_annots a
-        | _ -> None in
-      let y_label = match y with
-        | Prim(_, _, _, a) -> type_constr_or_label_of_annots a
-        | _ -> None in
+      let x_label = label_of_annot x in
+      let y_label = label_of_annot y in
       match x_label, y_label with
       | None, _ -> raise Exit
       | Some x_label, Some y_label ->
         [x_label, convert_type env x; y_label, convert_type env y]
       | Some x_label, None ->
-        (x_label, convert_type env x) :: type_components env t
+        (x_label, convert_type env x) :: type_components env y
     end
   | _ -> raise Exit
 
@@ -449,9 +449,15 @@ let rec convert_code env expr =
   | Prim(index, "DIP", [ arg ], annot) ->
     mic_loc env index annot (DIP (1, convert_code env arg))
   | Prim(index, "CAR", [], annot) ->
-    mic_loc env index annot (CAR)
+    begin match type_constr_or_label_of_annots annot with
+      | [f] -> mic_loc env index annot (CAR (Some f))
+      | _ -> mic_loc env index annot (CAR None)
+    end
   | Prim(index, "CDR", [], annot) ->
-    mic_loc env index annot (CDR)
+    begin match type_constr_or_label_of_annots annot with
+      | [f] -> mic_loc env index annot (CDR (Some f))
+      | _ -> mic_loc env index annot (CDR None)
+    end
   | Prim(index, "SWAP", [], annot) ->
     mic_loc env index annot (SWAP)
   | Prim(index, "IF", [x;y], annot) ->
@@ -469,7 +475,11 @@ let rec convert_code env expr =
   | Prim(index, "NOW", [], annot) ->
     mic_loc env index annot (NOW)
   | Prim(index, "PAIR", [], annot) ->
-    mic_loc env index annot (PAIR)
+    begin match type_constr_or_label_of_annots annot with
+      | [x] -> mic_loc env index annot (RECORD (x, None))
+      | [x; y] -> mic_loc env index annot (RECORD (x, Some y))
+      | _ -> mic_loc env index annot (PAIR)
+    end
   | Prim(index, "BALANCE", [], annot) ->
     mic_loc env index annot (BALANCE)
   | Prim(index, "SUB", [], annot) ->

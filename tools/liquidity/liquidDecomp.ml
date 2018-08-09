@@ -115,7 +115,7 @@ let rec arg_of node =
        match pos, List.length args with
        | 0, 1 -> arg_of if_node
        | _ ->
-         mk (Apply (Prim_tuple_get, loc,
+         mk (Apply (Prim_tuple_get None, loc,
                     [ arg_of if_node; nat_n ~loc pos ]))
      end
   | N_ARG ({ kind = N_LOOP_BEGIN ( _); args } as begin_node, pos ) ->
@@ -123,14 +123,14 @@ let rec arg_of node =
        match pos, List.length args with
        | 0, 1 -> arg_of begin_node
        | _ ->
-         mk (Apply (Prim_tuple_get, loc, [ arg_of begin_node; nat_n ~loc pos ]))
+         mk (Apply (Prim_tuple_get None, loc, [ arg_of begin_node; nat_n ~loc pos ]))
      end
   | N_LOOP_RESULT (loop_node, begin_node, pos ) ->
      begin
        match pos, List.length begin_node.args with
        | 0, 1 -> arg_of loop_node
        | _ ->
-          mk (Apply (Prim_tuple_get, loc, [ arg_of loop_node; nat_n ~loc pos ]))
+          mk (Apply (Prim_tuple_get None, loc, [ arg_of loop_node; nat_n ~loc pos ]))
      end
   | N_ARG ({ kind = N_FOLD_BEGIN ( _); args = acc } as begin_node, pos ) ->
     let x_acc = arg_of begin_node in
@@ -140,14 +140,14 @@ let rec arg_of node =
        | 0, [ { kind = N_CONST (_, CUnit)}] -> (* iter *) x_acc
        | 0, _ -> (* arg is iterated element *)
          mk ?name:node.node_name
-           (Apply (Prim_tuple_get, loc, [x_acc ; nat_n ~loc 0 ]))
+           (Apply (Prim_tuple_get None, loc, [x_acc ; nat_n ~loc 0 ]))
        | 1, [_] -> (* arg is accumulator *)
          mk ?name:node.node_name
-           (Apply (Prim_tuple_get, loc, [x_acc ; nat_n ~loc 1]))
+           (Apply (Prim_tuple_get None, loc, [x_acc ; nat_n ~loc 1]))
        | _, _ when pos > 0 -> (* arg in accumulator *)
-         let acc_liq = mk (Apply (Prim_tuple_get, loc, [x_acc; nat_n ~loc 1])) in
+         let acc_liq = mk (Apply (Prim_tuple_get None, loc, [x_acc; nat_n ~loc 1])) in
          mk ?name:node.node_name
-           (Apply (Prim_tuple_get, loc, [acc_liq ; nat_n ~loc (pos - 1)]))
+           (Apply (Prim_tuple_get None, loc, [acc_liq ; nat_n ~loc (pos - 1)]))
        | _ -> assert false
      end
   | N_FOLD_RESULT (fold_node, end_node, pos ) ->
@@ -155,7 +155,7 @@ let rec arg_of node =
        match pos, List.length end_node.args with
        | 0, 1 -> arg_of fold_node
        | _ ->
-          mk (Apply (Prim_tuple_get, loc, [ arg_of fold_node; nat_n ~loc pos ]))
+          mk (Apply (Prim_tuple_get None, loc, [ arg_of fold_node; nat_n ~loc pos ]))
      end
 
   | N_ARG ({ kind = N_MAP_BEGIN ( _); args = [] } as begin_node, 0 ) ->
@@ -170,14 +170,14 @@ let rec arg_of node =
        | _, [] -> assert false
        | 0, _ -> (* arg is map element *)
          mk ?name:node.node_name
-           (Apply (Prim_tuple_get, loc, [x_acc ; nat_n ~loc 0 ]))
+           (Apply (Prim_tuple_get None, loc, [x_acc ; nat_n ~loc 0 ]))
        | 1, [_] -> (* arg is accumulator *)
          mk ?name:node.node_name
-           (Apply (Prim_tuple_get, loc, [x_acc ; nat_n ~loc 1]))
+           (Apply (Prim_tuple_get None, loc, [x_acc ; nat_n ~loc 1]))
        | _, _ when pos > 0 -> (* arg in accumulator *)
-         let acc_liq = mk (Apply (Prim_tuple_get, loc, [x_acc; nat_n ~loc 1])) in
+         let acc_liq = mk (Apply (Prim_tuple_get None, loc, [x_acc; nat_n ~loc 1])) in
          mk ?name:node.node_name
-           (Apply (Prim_tuple_get, loc, [acc_liq ; nat_n ~loc (pos - 1)]))
+           (Apply (Prim_tuple_get None, loc, [acc_liq ; nat_n ~loc (pos - 1)]))
        | _ -> assert false
      end
 
@@ -186,11 +186,11 @@ let rec arg_of node =
        match pos, end_node.args with
        | 0, [] -> arg_of map_node
        | _ ->
-          mk (Apply (Prim_tuple_get, loc, [ arg_of map_node; nat_n ~loc pos ]))
+          mk (Apply (Prim_tuple_get None, loc, [ arg_of map_node; nat_n ~loc pos ]))
      end
 
   | N_RESULT (node, pos) ->
-    mk (Apply (Prim_tuple_get, loc, [arg_of node; nat_n ~loc pos ]))
+    mk (Apply (Prim_tuple_get None, loc, [arg_of node; nat_n ~loc pos ]))
 
   | N_CONST (ty, ((
                    CUnit | CBool _ | CInt _ | CNat _ | CTez _
@@ -221,7 +221,7 @@ let rec decompile contract =
                           noloc,
                           mk(Failwith (unit ~loc, loc)),
                           var_of node,
-                          mk(Apply(Prim_tuple_get,loc,[
+                          mk(Apply(Prim_tuple_get None,loc,[
                                        mk(Var(var_of node,loc,[]));
                                        int_one ~loc]))))
        | N_PRIM "DIV", [arg1; arg2] ->
@@ -230,7 +230,7 @@ let rec decompile contract =
                           noloc,
                           mk(Failwith (unit ~loc, loc)),
                           var_of node,
-                          mk(Apply(Prim_tuple_get,noloc,[
+                          mk(Apply(Prim_tuple_get None,noloc,[
                                        mk(Var(var_of node,loc,[]));
                                        int_zero ~loc]))))
        (* ABS : int -> int *)
@@ -291,8 +291,6 @@ let rec decompile contract =
        | N_PRIM prim, _ ->
           let prim, args =
             match prim, node.args with
-            | "CDR", [arg] -> Prim_tuple_get, [arg_of arg; nat_one ~loc]
-            | "CAR", [arg] -> Prim_tuple_get, [arg_of arg; nat_zero ~loc]
             | "NEQ", [arg] -> Prim_neq, [arg_of arg; int_zero ~loc]
             | "EQ", [arg] -> Prim_eq, [arg_of arg; int_zero ~loc]
             | "GE", [arg] -> Prim_ge, [arg_of arg; int_zero ~loc]
@@ -358,17 +356,37 @@ let rec decompile contract =
           in
           mklet node (Apply (prim, loc, args))
 
+       | N_CAR field, [arg] ->
+         mklet node
+           (Apply (Prim_tuple_get field, loc, [arg_of arg; nat_zero ~loc]))
+
+       | N_CDR field, [arg] ->
+         mklet node
+           (Apply (Prim_tuple_get field, loc, [arg_of arg; nat_one ~loc]))
+
+       | N_RECORD labels, args ->
+         let fields = try
+             List.map2 (fun label arg ->
+                 label, arg_of arg
+               ) labels args
+           with Invalid_argument _ ->
+             LiquidLoc.raise_error
+               "Error: Annotatated record construct has %d fields, \
+                given %d arguments" (List.length labels) (List.length args)
+         in
+         mklet node (Record(loc, fields))
 
        | N_LEFT right_ty, [arg] ->
-          mklet node (Constructor(loc, Left right_ty, arg_of arg))
+         mklet node (Constructor(loc, Left right_ty, arg_of arg))
+
        | N_RIGHT left_ty, [arg] ->
-          mklet node (Constructor(loc, Right left_ty, arg_of arg))
+         mklet node (Constructor(loc, Right left_ty, arg_of arg))
 
        | N_CONTRACT ty, [arg] ->
-          mklet node (ContractAt(loc, arg_of arg, ty))
+         mklet node (ContractAt(loc, arg_of arg, ty))
 
        | N_UNPACK ty, [arg] ->
-          mklet node (Unpack(loc, arg_of arg, ty))
+         mklet node (Unpack(loc, arg_of arg, ty))
 
        | N_END, [ arg ] -> arg_of arg
 
@@ -556,6 +574,8 @@ let rec decompile contract =
        | N_MAP_BEGIN _
        | N_MAP_RESULT (_, _, _)
        | N_RESULT (_, _)
+       | N_CAR _
+       | N_CDR _
        ), _->
          LiquidLoc.raise_error
            "not implemented at node %s%!"
