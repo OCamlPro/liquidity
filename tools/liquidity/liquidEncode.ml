@@ -502,19 +502,21 @@ let rec encode env ( exp : typed_exp ) : encoded_exp =
   | Transfer (loc, contract_exp, tez_exp, entry, arg_exp) ->
     let tez_exp = encode env tez_exp in
     let contract_exp = encode env contract_exp in
-    begin match entry with
-      | None ->
-        let arg_exp = encode env arg_exp in
-        mk ?name:exp.name
-          (Transfer(loc, contract_exp, tez_exp, None, arg_exp)) Toperation
+    let arg_exp =  match entry with
+      | None -> arg_exp
+      | Some _
+        when match contract_exp.ty with
+          | Tcontract { entries_sig = [_] } -> true
+          | _ -> false
+        -> arg_exp
       | Some entry ->
         let arg_ty = encode_type contract_exp.ty in (* constant type not yet encoded *)
-        let arg_exp = mk_typed ?name:arg_exp.name
-            (Constructor (loc, (Constr (prefix_entry ^ entry)), arg_exp)) arg_ty in
-        let arg_exp = encode env arg_exp in
-        mk ?name:exp.name
-          (Transfer(loc, contract_exp, tez_exp, None, arg_exp)) Toperation
-    end
+        mk_typed ?name:arg_exp.name
+          (Constructor (loc, (Constr (prefix_entry ^ entry)), arg_exp)) arg_ty
+    in
+    let arg_exp = encode env arg_exp in
+    mk ?name:exp.name
+      (Transfer(loc, contract_exp, tez_exp, None, arg_exp)) Toperation
 
   | Failwith (err, loc) ->
     let err = encode env err in

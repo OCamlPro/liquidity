@@ -818,6 +818,8 @@ type env = {
     mutable labels : (string * int * datatype) StringMap.t;
     (* constructors of sum-types in type definitions *)
     mutable constrs : (string * datatype) StringMap.t;
+    (* englobing env *)
+    top_env : env option;
   }
 
 (* fields updated in LiquidCheck *)
