@@ -651,13 +651,15 @@ module Michelson = struct
     | MUL ->
       Printf.bprintf b "MUL";
       bprint_pre_name b name;
-    | LEFT ty ->
+    | LEFT (ty, constr) ->
       Printf.bprintf b "LEFT";
       bprint_pre_name b name;
+      bprint_pre_field b constr;
       bprint_type fmt b "" ty;
-    | RIGHT ty ->
+    | RIGHT (ty, constr) ->
       Printf.bprintf b "RIGHT";
       bprint_pre_name b name;
+      bprint_pre_field b constr;
       bprint_type fmt b "" ty;
     | CONTRACT ty ->
       Printf.bprintf b "CONTRACT";
@@ -969,7 +971,7 @@ module Liquid = struct
        Printf.bprintf b "\n%s" indent;
        bprint_const b indent cst;
     | Var (name, _loc) ->
-       Printf.bprintf b "%s" name;
+       Printf.bprintf b " %s" name;
     | SetField (arg, _loc, label, e) ->
        let indent2 = indent ^ "  " in
        Printf.bprintf b "\n%s(" indent;
@@ -1278,4 +1280,5 @@ let string_of_node node =
   | N_CREATE_CONTRACT _ -> "N_CREATE_CONTRACT"
   | N_RECORD fields -> "N_RECORD_" ^ (String.concat "_" fields)
   | N_PROJ f -> "N_PROJ " ^ f
+  | N_CONSTR c -> "N_CONSTR " ^ c
   | N_RESULT (_, i) -> Printf.sprintf "N_RESULT %d" i

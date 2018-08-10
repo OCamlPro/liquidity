@@ -243,7 +243,9 @@ let rec compute decompile code to_inline =
       let e = iter e in
       { exp with desc = Unpack (loc, e, ty) }
 
-    | Constructor _ -> assert false (* never found in typed_exp *)
+    | Constructor (loc, c, arg) ->
+      let arg = iter arg in
+      { exp with desc = Constructor (loc, c, arg) }
   in
 
   let rec fixpoint code =

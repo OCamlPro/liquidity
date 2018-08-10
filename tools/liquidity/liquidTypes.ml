@@ -169,7 +169,7 @@ type primitive =
   | Prim_coll_size
 
   (* generated in LiquidCheck *)
-  | Prim_unused
+  | Prim_unused of string option
 
   (* primitives *)
   | Prim_tuple_get
@@ -399,7 +399,7 @@ let () =
               "Coll.slice",Prim_slice;
 
               "<unknown>", Prim_unknown;
-              "<unused>", Prim_unused;
+              "<unused>", Prim_unused None;
 
             ]
 
@@ -758,8 +758,8 @@ type 'a pre_michelson =
   | NEG
   | MUL
 
-  | LEFT of datatype
-  | RIGHT of datatype
+  | LEFT of datatype * string option
+  | RIGHT of datatype * string option
   | CONTRACT of datatype
 
   | EDIV
@@ -930,6 +930,7 @@ type node = {
    | N_ABS
    | N_RECORD of string list
    | N_PROJ of string
+   | N_CONSTR of string
    | N_RESULT of node * int
 
 and node_exp = node * node

@@ -153,6 +153,16 @@ let rec merge_matches acc loc cases constrs =
     [ c1, ty1; c2, ty2 ] ->
     List.rev @@ (CConstr (c2, r), case_r) ::
                 (CConstr (c1, l), case_l) :: acc
+
+  | [ CConstr ("Left", l), case_l;
+      CConstr ("Right", [x]), { desc = Let (v, _, _, case_r,
+                                            { desc = Var (v', _) }) } ],
+    _ :: _
+    when v = v'
+    ->
+    merge_matches acc loc [ CConstr ("Left", l), case_l;
+                            CConstr ("Right", [x]), case_r ] constrs
+
   | [ CConstr ("Left", l), case_l; CConstr ("Right", [x]), case_r ],
     (c1, ty1) :: constrs ->
     begin match case_r.desc with
@@ -561,8 +571,6 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
     let decoded = match arg.ty, env.decompiling with
       | Tsum (_, constrs), true ->
         (* allow loose typing when decompiling *)
-        Format.eprintf "T %s@."
-          (LiquidPrinter.Liquid.string_of_type arg.ty);
         begin try
             let cases = merge_matches [] loc cases constrs in
             Some (typecheck env
@@ -571,90 +579,90 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
         end
       | _ -> None in
     begin match decoded with
-    | Some exp -> exp
-    | None ->
-      let constrs, is_left_right =
-        try
-          match arg.ty with
-          | Tfail ->
-            error loc "cannot match failure"
-          | Tsum (_, constrs) ->
-            (List.map fst constrs, None)
-          | Tor (left_ty, right_ty) ->
-            (* Left, Right pattern matching *)
-            (["Left"; "Right"], Some (left_ty, right_ty))
-          | _ -> raise Not_found
-        with Not_found ->
-          error loc "not a variant type: %s"
-            (LiquidPrinter.Liquid.string_of_type arg.ty)
-      in
-      let expected_type = ref None in
-      let cases_extra_constrs =
-        List.fold_left (fun acc -> function
-            | CAny, _ -> acc
-            | CConstr (c, _), _ -> StringSet.add c acc
-          ) StringSet.empty cases
-        |> ref
-      in
-      let cases = List.map (fun constr ->
-          let cve = find_case loc env constr cases in
-          cases_extra_constrs := StringSet.remove constr !cases_extra_constrs;
-          cve
-        ) constrs in
+      | Some exp -> exp
+      | None ->
+        let constrs, is_left_right =
+          try
+            match arg.ty with
+            | Tfail ->
+              error loc "cannot match failure"
+            | Tsum (_, constrs) ->
+              (List.map fst constrs, None)
+            | Tor (left_ty, right_ty) ->
+              (* Left, Right pattern matching *)
+              (["Left"; "Right"], Some (left_ty, right_ty))
+            | _ -> raise Not_found
+          with Not_found ->
+            error loc "not a variant type: %s"
+              (LiquidPrinter.Liquid.string_of_type arg.ty)
+        in
+        let expected_type = ref None in
+        let cases_extra_constrs =
+          List.fold_left (fun acc -> function
+              | CAny, _ -> acc
+              | CConstr (c, _), _ -> StringSet.add c acc
+            ) StringSet.empty cases
+          |> ref
+        in
+        let cases = List.map (fun constr ->
+            let cve = find_case loc env constr cases in
+            cases_extra_constrs := StringSet.remove constr !cases_extra_constrs;
+            cve
+          ) constrs in
 
-      if not (StringSet.is_empty !cases_extra_constrs) then
-        error loc "constructors %s do not belong to type %s"
-          (String.concat ", " (StringSet.elements !cases_extra_constrs))
-          (LiquidPrinter.Liquid.string_of_type arg.ty);
+        if not (StringSet.is_empty !cases_extra_constrs) then
+          error loc "constructors %s do not belong to type %s"
+            (String.concat ", " (StringSet.elements !cases_extra_constrs))
+            (LiquidPrinter.Liquid.string_of_type arg.ty);
 
-      let cases = List.map (fun (constr, vars, e) ->
-          let var_ty = match is_left_right, constr with
-            | Some (left_ty, _), "Left" -> left_ty
-            | Some (_, right_ty), "Right" -> right_ty
-            | Some _, _ -> error loc "unknown constructor %S" constr
-            | None, _ ->
-              let ty_name', var_ty =
-                try StringMap.find constr env.env.constrs
-                with Not_found -> error loc "unknown constructor %S" constr
-              in
-              (* if ty_name <> ty_name' then error loc "inconsistent constructors"; *)
-              var_ty
-          in
-          let env, count_opt =
-            match vars with
-            | [] -> env, None
-            | [ var ] ->
-              let (env, count) = new_binding env var var_ty in
-              env, Some count
-            | _ ->
-              error loc "cannot deconstruct constructor args"
-          in
-          let e =
-            match !expected_type with
-            | Some expected_type ->
-              typecheck_expected "pattern matching branch" env expected_type e
-            | None ->
-              let e = typecheck env e in
-              begin match e.ty with
-                | Tfail -> ()
-                | _ -> expected_type := Some e.ty
-              end;
-              e
-          in
-          begin match vars, count_opt with
-            | [name], Some count -> check_used env name loc count
-            | _ -> ()
-          end;
-          (CConstr (constr, vars), e)
-        ) cases
-      in
+        let cases = List.map (fun (constr, vars, e) ->
+            let var_ty = match is_left_right, constr with
+              | Some (left_ty, _), "Left" -> left_ty
+              | Some (_, right_ty), "Right" -> right_ty
+              | Some _, _ -> error loc "unknown constructor %S" constr
+              | None, _ ->
+                let ty_name', var_ty =
+                  try StringMap.find constr env.env.constrs
+                  with Not_found -> error loc "unknown constructor %S" constr
+                in
+                (* if ty_name <> ty_name' then error loc "inconsistent constructors"; *)
+                var_ty
+            in
+            let env, count_opt =
+              match vars with
+              | [] -> env, None
+              | [ var ] ->
+                let (env, count) = new_binding env var var_ty in
+                env, Some count
+              | _ ->
+                error loc "cannot deconstruct constructor args"
+            in
+            let e =
+              match !expected_type with
+              | Some expected_type ->
+                typecheck_expected "pattern matching branch" env expected_type e
+              | None ->
+                let e = typecheck env e in
+                begin match e.ty with
+                  | Tfail -> ()
+                  | _ -> expected_type := Some e.ty
+                end;
+                e
+            in
+            begin match vars, count_opt with
+              | [name], Some count -> check_used env name loc count
+              | _ -> ()
+            end;
+            (CConstr (constr, vars), e)
+          ) cases
+        in
 
-      let desc = MatchVariant (arg, loc, cases) in
-      let ty = match !expected_type with
-        | None -> Tfail
-        | Some ty -> ty
-      in
-      mk ?name:exp.name desc ty
+        let desc = MatchVariant (arg, loc, cases) in
+        let ty = match !expected_type with
+          | None -> Tfail
+          | Some ty -> ty
+        in
+        mk ?name:exp.name desc ty
     end
 
   | Unpack (loc, e, ty) ->

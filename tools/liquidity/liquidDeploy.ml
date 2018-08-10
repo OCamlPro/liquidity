@@ -193,7 +193,7 @@ let curl_post ~data path =
 let curl_get path =
   let host = !LiquidOptions.tezos_node in
   if !LiquidOptions.verbosity > 0 then
-    Printf.eprintf "\nGET to %s%s:\n--------------\\n%!"
+    Printf.eprintf "\nGET to %s%s:\n--------------\n%!"
       host path;
   try
     Network.get host path >>= fun (status, json) ->

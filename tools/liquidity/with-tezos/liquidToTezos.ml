@@ -245,14 +245,20 @@ let rec convert_code expand expr =
   | prim "NONE" [ty] ->
      PUSH (Toption (convert_type ty), CNone)
                     *)
-  | LEFT ty ->
-     prim "LEFT" [convert_type ty] name
+  | LEFT (ty, None) ->
+    prim "LEFT" [convert_type ty] name
+  | RIGHT (ty, None) ->
+    prim "RIGHT" [convert_type ty] name
+
+  | LEFT (ty, Some c) ->
+    prim "LEFT" [convert_type ty] name ~fields:[c; ""]
+  | RIGHT (ty, Some c) ->
+    prim "RIGHT" [convert_type ty] name ~fields:[""; c]
+
   | CONS -> prim "CONS" [] name
   | LOOP loop -> prim "LOOP" [convert_code expand loop] name
   | ITER body -> prim "ITER" [convert_code expand body] name
   | MAP body -> prim "MAP" [convert_code expand body] name
-  | RIGHT ty ->
-     prim "RIGHT" [convert_type ty] name
   | CONTRACT ty ->
      prim "CONTRACT" [convert_type ty] name
   | UNPACK ty ->

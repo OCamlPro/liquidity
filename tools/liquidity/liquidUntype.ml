@@ -54,7 +54,10 @@ let escape_var arg =
 let find_free env var_arg bv =
   let var_arg' = base_of_var var_arg in
   if not (StringSet.mem var_arg bv) then
-    ("_" ^ var_arg', env)
+    if var_arg' <> "_" then
+      ("_" ^ var_arg', env)
+    else
+      (var_arg', env)
   else
   let rec iter n var_arg =
     match

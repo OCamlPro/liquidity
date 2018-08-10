@@ -582,7 +582,8 @@ let structure_of_contract
           | _ -> ()
         ) type_annots
     | None -> () end;
-  let storage_caml = convert_type ~abbrev ~name:"storage" contract.storage in
+  let storage_caml = add_abbrev "storage" contract.storage
+      (convert_type ~abbrev contract.storage) in
   let version_caml = Str.extension (
       id "version",
       PStr [
@@ -591,17 +592,20 @@ let structure_of_contract
       ])
   in
   let types_caml =
+    let seen = ref StringSet.empty in
     list_caml_abbrevs_in_order ()
     |> List.map (fun (txt, manifest, liq_ty) ->
         Str.type_ Recursive [
           match liq_ty with
-          | Trecord (name, fields) ->
+          | Trecord (name, fields) when not @@ StringSet.mem name !seen ->
+            seen := StringSet.add name !seen;
             Type.mk ~kind:(Ptype_record (
                 List.map (fun (label, ty) ->
                     Type.field (id label) (convert_type ~abbrev:false ty)
                   ) fields))
               { txt; loc = !default_loc }
-          | Tsum (name, cstrs) ->
+          | Tsum (name, cstrs) when not @@ StringSet.mem name !seen ->
+            seen := StringSet.add name !seen;
             Type.mk ~kind:(Ptype_variant (
                 List.map (fun (cstr, ty) ->
                     Type.constructor (id cstr)

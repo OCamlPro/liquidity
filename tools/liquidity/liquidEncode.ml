@@ -44,8 +44,8 @@ let const_true ~loc = mk (Const (loc, Tbool, CBool true)) Tbool
 
 let const_false ~loc = mk (Const (loc, Tbool, CBool false)) Tbool
 
-let unused env ~loc ty =
-  mk (Apply(Prim_unused, noloc env, [const_unit ~loc])) ty
+let unused env ~loc ?constr ty =
+  mk (Apply(Prim_unused constr, noloc env, [const_unit ~loc])) ty
 
 let uniq_ident env name =
   env.counter := !(env.counter) + 1;
@@ -299,6 +299,9 @@ let rec encode_const env c = match c with
 
   | CRecord labels ->
     CTuple (List.map (fun (_, x) -> encode_const env x) labels)
+
+  | CConstr (constr, x) when env.decompiling ->
+    CConstr (constr, encode_const env x)
 
   | CConstr (constr, x) ->
     try
@@ -807,6 +810,11 @@ let rec encode env ( exp : typed_exp ) : encoded_exp =
     let desc = Record(loc, fields) in
     mk ?name:exp.name desc exp.ty
 
+  | Constructor(loc, Constr constr, arg) when env.decompiling ->
+    let arg = encode env arg in
+    let desc = Constructor(loc, Constr constr, arg) in
+    mk ?name:exp.name desc exp.ty
+
   | Constructor(loc, Constr constr, arg) ->
      let ty_name, arg_ty = StringMap.find constr env.env.constrs in
      let arg = encode env arg in
@@ -820,20 +828,28 @@ let rec encode env ( exp : typed_exp ) : encoded_exp =
            | [c, _], orty ->
              assert (c = constr);
              arg
-           (* | (c, ty, left_ty, right_ty) :: constrs -> *)
            | (c, cty) :: constrs, orty ->
              let left_ty, right_ty = match orty with
                | Tor (left_ty, right_ty) -> left_ty, right_ty
+               | Tsum (_, [_, left_ty; _, right_ty]) -> left_ty, right_ty
+               | Tsum (_, (_, left_ty) :: rcstrs) ->
+                 left_ty, Tsum ("#partial", rcstrs)
                | _ -> assert false
              in
              let desc =
                if c = constr then
                  (* We use an unused argument to carry the type to
                     the code generator *)
-                 Apply(Prim_Left, loc, [arg; unused env ~loc right_ty])
+                 Apply(Prim_Left, loc, [arg; unused env ~loc ~constr right_ty])
                else
                  let arg = iter constrs right_ty in
-                 Apply(Prim_Right, loc, [arg; unused env ~loc left_ty])
+                 let u = match constrs with
+                   | [_] -> unused env ~loc ~constr left_ty
+                   | _ ->
+                     (* marker for partially contructed values *)
+                     unused env ~loc ~constr:"_" left_ty
+                 in
+                 Apply(Prim_Right, loc, [arg; u])
              in
              mk desc orty
          in
@@ -868,7 +884,6 @@ let rec encode env ( exp : typed_exp ) : encoded_exp =
         | CConstr (c, [var]), e -> c, var, e
         | CAny, _ | CConstr _, _ -> assert false
        in
-       Format.eprintf "%s@." c;
        let var_ty = List.assoc c constrs in
        let (var, env, _) = new_binding env var var_ty in
        let e = encode env e in
@@ -953,7 +968,6 @@ and encode_contract ?(annot=false) ?(decompiling=false) env contract =
   let code_desc = match contract.entries with
     | [e] -> e.code.desc
     | _ ->
-      Format.eprintf "ps : %s @." (LiquidPrinter.Liquid.string_of_type parameter);
       let parameter = mk_typed (Var ("parameter", loc)) parameter in
       MatchVariant (
         parameter, loc,

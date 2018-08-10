@@ -1544,7 +1544,7 @@ let rec translate_structure env acc ast =
   | [] -> pack_contract env (List.rev acc)
 
   | { pstr_loc = loc } as ast :: _ ->
-    Format.eprintf "\n%a\b@."
+    Format.eprintf "\n%a\n@."
       (Printast.structure 0) [ast];
     error_loc loc "at toplevel"
 
@@ -1690,8 +1690,6 @@ let ocaml_of_file parser file =
     Location.init lexbuf file;
     let ast = parser lexbuf in
     close_in ic;
-    (* Format.eprintf "\n%a\b@."
-     *   Printast.implementation ast; *)
     ast
   with exn ->
     close_in ic;

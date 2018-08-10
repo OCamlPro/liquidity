@@ -638,12 +638,24 @@ let rec interp contract =
     | SOME, x :: stack ->
        let x = node ins.loc (N_PRIM "SOME") [x] [seq] in
        x :: stack, x
-    | LEFT right_ty, x :: stack -> (* TODO : keep types too ! *)
+
+    | LEFT (right_ty, None), x :: stack ->
        let x = node ins.loc (N_LEFT right_ty) [x] [seq] in
        x :: stack, x
-    | RIGHT left_ty, x :: stack -> (* TODO : keep types too ! *)
+    | RIGHT (left_ty, None), x :: stack ->
        let x = node ins.loc (N_RIGHT left_ty) [x] [seq] in
        x :: stack, x
+
+    | RIGHT (right_ty, Some "_"), ({ kind = N_CONSTR c; } as x) :: stack ->
+      (* special case decoding nested (Right .. (Right (Left x))) *)
+      x :: stack, seq
+    | LEFT (_, Some constr), x :: stack ->
+       let x = node ins.loc (N_CONSTR constr) [x] [seq] in
+       x :: stack, x
+    | RIGHT (_, Some constr), x :: stack ->
+       let x = node ins.loc (N_CONSTR constr) [x] [seq] in
+       x :: stack, x
+
     | CONTRACT ty, x :: stack -> (* TODO : keep types too ! *)
        let x = node ins.loc (N_CONTRACT ty) [x] [seq] in
        x :: stack, x

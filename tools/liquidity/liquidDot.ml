@@ -91,6 +91,7 @@ let rec to_dot ~sub_contract_of contract =
         | N_UNPACK _
         | N_PROJ _
         | N_RECORD _
+        | N_CONSTR _
           -> ()
 
         | N_LOOP_END (x,y,z)

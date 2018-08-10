@@ -377,16 +377,18 @@ let rec translate_code code =
     | Prim_source, _ -> [ ii SOURCE ]
     | Prim_sender, _ -> [ ii SENDER ]
 
-    | Prim_Left, [ arg; { ty = right_ty }] ->
+    | Prim_Left, [ arg; { desc = Apply (Prim_unused constr, _, _);
+                          ty = right_ty }] ->
       let right_ty = LiquidEncode.encode_type right_ty in
       compile depth env arg @
-      [ ii (LEFT right_ty) ]
+      [ ii (LEFT (right_ty, constr)) ]
     | Prim_Left, _ -> assert false
 
-    | Prim_Right, [ arg; { ty = left_ty } ] ->
+    | Prim_Right, [ arg; { desc = Apply (Prim_unused constr, _, _);
+                           ty = left_ty } ] ->
       let left_ty = LiquidEncode.encode_type left_ty in
       compile depth env arg @
-      [ ii (RIGHT left_ty) ]
+      [ ii (RIGHT (left_ty, constr)) ]
     | Prim_Right, _ -> assert false
 
     (* catch the special case of [a;b;c] where
@@ -401,7 +403,7 @@ the ending NIL is not annotated with a type *)
     | Prim_list_rev, _ -> assert false
 
     (* Should have disappeared *)
-    | Prim_unused, _ -> assert false
+    | Prim_unused _, _ -> assert false
     | (Prim_coll_find|Prim_coll_update|Prim_coll_mem|Prim_coll_size), _ ->
       assert false
 
@@ -511,7 +513,7 @@ the ending NIL is not annotated with a type *)
          | (Prim_unknown|Prim_tuple_get
            | Prim_tuple_set|Prim_tuple
            | Prim_self|Prim_balance|Prim_now|Prim_amount|Prim_gas
-           | Prim_Left|Prim_Right|Prim_source|Prim_sender|Prim_unused
+           | Prim_Left|Prim_Right|Prim_source|Prim_sender|Prim_unused _
            | Prim_coll_find|Prim_coll_update|Prim_coll_mem
            | Prim_coll_size|Prim_list_rev|Prim_slice
            | Prim_concat|Prim_concat_two), _ ->

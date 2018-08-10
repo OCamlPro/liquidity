@@ -267,12 +267,13 @@ let name_of_annots annots =
   | Found ("" | "%" | "%%") -> None
   | Found s -> Some s
 
-let sanitize_name s =
+let sanitize_name ~allow_capital s =
   if List.mem s reserved_keywords || has_reserved_prefix s then
     s ^ "_"
   else if String.length s > 0 then
     match s.[0] with
-    | 'A' .. 'Z' | '0' .. '9' -> "_" ^ s
+    | 'A' .. 'Z' when not allow_capital -> "_" ^ s
+    | '0' .. '9' -> "_" ^ s
     | _ -> s
   else s
 
@@ -288,19 +289,26 @@ let type_name_of_annots annots =
     None
   with
   | Found ("" | "%" | "@") -> None
-  | Found s -> Some (sanitize_name s)
+  | Found s -> Some (sanitize_name ~allow_capital:false s)
 
 
-let type_constr_or_label_of_annots annots =
+let type_constr_or_label_of_annots ~allow_capital ?(keep_empty=false) annots =
   let exception Found of string in
   List.fold_left (fun acc a ->
       try Scanf.sscanf a "%%%s"
             (function
+              | "" when keep_empty -> "" :: acc
               | "" | "%" | "@" -> acc
-              | s -> sanitize_name s :: acc)
+              | s -> sanitize_name ~allow_capital s :: acc)
       with Scanf.Scan_failure _ | End_of_file -> acc
     ) [] annots
   |> List.rev
+
+let type_constr_of_annots annots =
+  type_constr_or_label_of_annots ~allow_capital:true ~keep_empty:true annots
+
+let type_label_of_annots annots =
+  type_constr_or_label_of_annots ~allow_capital:false annots
 
 let rec convert_type env expr =
   let name = match expr with
@@ -327,7 +335,7 @@ let rec convert_type env expr =
         | None -> Ttuple [convert_type env x; convert_type env y]
         | Some name ->
           try
-            let ty = Trecord (name, type_components env expr) in
+            let ty = Trecord (name, type_labels env expr) in
             if not @@ List.mem_assoc name env.types then
               env.types <- (name, ty) :: env.types;
             ty
@@ -339,7 +347,7 @@ let rec convert_type env expr =
         | None -> Tor (convert_type env x, convert_type env y)
         | Some name ->
           try
-            let ty = Tsum (name, type_components env expr) in
+            let ty = Tsum (name, type_constrs env expr) in
             if not @@ List.mem_assoc name env.types then
               env.types <- (name, ty) :: env.types;
             ty
@@ -377,12 +385,12 @@ let rec convert_type env expr =
   ty
 
 
-and type_components env t =
+and type_components ~allow_capital env t =
   match t with
   | Prim(_, _, [x;y], annots) ->
     let label_of_annot = function
       | Prim(_, _, _, a) ->
-        (match type_constr_or_label_of_annots a with
+        (match type_constr_or_label_of_annots ~allow_capital a with
          | [l] -> Some l
          | _ -> None)
       | _ -> None in
@@ -394,9 +402,12 @@ and type_components env t =
       | Some x_label, Some y_label ->
         [x_label, convert_type env x; y_label, convert_type env y]
       | Some x_label, None ->
-        (x_label, convert_type env x) :: type_components env y
+        (x_label, convert_type env x) :: type_components ~allow_capital env y
     end
   | _ -> raise Exit
+
+and type_constrs env t = type_components ~allow_capital:true env t
+and type_labels env t = type_components ~allow_capital:false env t
 
 
 (*
@@ -451,12 +462,12 @@ let rec convert_code env expr =
   | Prim(index, "DIP", [ arg ], annot) ->
     mic_loc env index annot (DIP (1, convert_code env arg))
   | Prim(index, "CAR", [], annot) ->
-    begin match type_constr_or_label_of_annots annot with
+    begin match type_label_of_annots annot with
       | [f] -> mic_loc env index annot (CAR (Some f))
       | _ -> mic_loc env index annot (CAR None)
     end
   | Prim(index, "CDR", [], annot) ->
-    begin match type_constr_or_label_of_annots annot with
+    begin match type_label_of_annots annot with
       | [f] -> mic_loc env index annot (CDR (Some f))
       | _ -> mic_loc env index annot (CDR None)
     end
@@ -477,7 +488,7 @@ let rec convert_code env expr =
   | Prim(index, "NOW", [], annot) ->
     mic_loc env index annot (NOW)
   | Prim(index, "PAIR", [], annot) ->
-    begin match type_constr_or_label_of_annots annot with
+    begin match type_label_of_annots annot with
       | [x] -> mic_loc env index annot (RECORD (x, None))
       | [x; y] -> mic_loc env index annot (RECORD (x, Some y))
       | _ -> mic_loc env index annot (PAIR)
@@ -579,8 +590,18 @@ let rec convert_code env expr =
     mic_loc env index annot
       (PUSH (Toption (convert_type env ty), CNone))
   | Prim(index, "LEFT", [ty], annot) ->
-    mic_loc env index annot
-      (LEFT (convert_type env ty))
+    let ty = convert_type env ty in
+    begin match type_constr_of_annots annot with
+      | c :: _ -> mic_loc env index annot (LEFT (ty, Some c))
+      | _ -> mic_loc env index annot (LEFT (ty, None))
+    end
+  | Prim(index, "RIGHT", [ty], annot) ->
+    let ty = convert_type env ty in
+    begin match type_constr_of_annots annot with
+      | _ :: c :: _ ->
+        mic_loc env index annot (RIGHT (ty, Some c))
+      | _ -> mic_loc env index annot (RIGHT (ty, None))
+    end
   | Prim(index, "CONTRACT", [ty], annot) ->
     mic_loc env index annot
       (CONTRACT (convert_type env ty))
@@ -598,9 +619,6 @@ let rec convert_code env expr =
   | Prim(index, "MAP", [body], annot) ->
     mic_loc env index annot
       (MAP (convert_code env body))
-  | Prim(index, "RIGHT", [ty], annot) ->
-    mic_loc env index annot
-      (RIGHT (convert_type env ty))
   | Prim(index, "INT", [], annot) ->
     mic_loc env index annot (INT)
   | Prim(index, "SIZE", [], annot) ->

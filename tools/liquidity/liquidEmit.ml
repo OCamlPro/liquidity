@@ -51,8 +51,12 @@ let rec emit_code ~expand code =
      M_INS_EXP ("LAMBDA",
                 [arg_type; res_type],
                 [emit_code ~expand body], var_annot name)
-  | LEFT ty -> M_INS_EXP ("LEFT", [ty], [], var_annot name)
-  | RIGHT ty -> M_INS_EXP ("RIGHT", [ty], [], var_annot name)
+  | LEFT (ty, constr) ->
+    M_INS_EXP ("LEFT", [ty], [],
+               var_annot name @ field_annot constr @ field_annot (Some ""))
+  | RIGHT (ty, constr) ->
+    M_INS_EXP ("RIGHT", [ty], [],
+               var_annot name @ field_annot (Some "") @ field_annot constr)
   | CONTRACT ty -> M_INS_EXP ("CONTRACT", [ty], [], var_annot name)
 
   | UNPACK ty -> M_INS_EXP ("UNPACK", [ty], [], var_annot name)
