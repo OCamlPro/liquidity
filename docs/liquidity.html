@@ -82,8 +82,8 @@ BODY
 <li><code>NOW</code> : <code>Current.time ()</code>. Returns the timestamp of the block containing the transaction in the blockchain.</li>
 <li><code>AMOUNT</code> : <code>Current.amount ()</code>. Returns the amount of tezzies that were transfered when the contract was called.</li>
 <li><code>STEPS_TO_QUOTA</code> : <code>Current.gas ()</code>. Returns the current gas available to execute the end of the contract.</li>
-<li><code>SOURCE</code> : <code>Contract.source</code>. Returns the address of the contract that initiated the current transaction.</li>
-<li><code>SENDER</code> : <code>Contract.sender</code>. Returns the address of the last contract that called the current contract.</li>
+<li><code>SOURCE</code> : <code>Current.source ()</code>. Returns the address of the contract that initiated the current transaction.</li>
+<li><code>SENDER</code> : <code>Current.sender ()</code>. Returns the address of the last contract that called the current contract.</li>
 <li><code>CONS</code> : <code>x :: y</code></li>
 <li><code>NIL ele_type</code> : <code>( [] : ele_type list )</code></li>
 <li><code>BLAKE2B</code> : <code>Crypto.blake2b x</code>. Returns the Blake2b hash of its argument. (Same for <code>Crypto.sha256</code> and <code>Crypto.sha512</code>)</li>
