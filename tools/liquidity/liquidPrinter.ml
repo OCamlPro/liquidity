@@ -140,9 +140,11 @@ module Michelson = struct
       | Ttuple tys -> bprint_type_pairs fmt b indent tys
       | Trecord (name, labels) -> bprint_type_record name fmt b indent labels
       | Tsum (name, constrs) -> bprint_type_sum name fmt b indent constrs
-      | Tcontract { entries_sig = [{ parameter = ty }] } ->
+      | Tcontract { sig_name; entries_sig = [{ parameter = ty }] } ->
          let indent = fmt.increase_indent indent in
-         Printf.bprintf b "(contract%c%s" fmt.newline indent;
+         Printf.bprintf b "(contract%s%c%s"
+           (match sig_name with None -> "" | Some name -> " :" ^ name)
+           fmt.newline indent;
          bprint_type fmt b indent ty;
          Printf.bprintf b ")";
       | Tcontract _ -> assert false

@@ -118,8 +118,11 @@ let rec convert_type ~loc expr =
   | Ttuple (x :: tys) ->
      prim_type ~loc "pair" [convert_type ~loc x; convert_type ~loc (Ttuple tys)]
   | Tor (x,y) -> prim_type ~loc "or" [convert_type ~loc x; convert_type ~loc y]
-  | Tcontract { entries_sig = [{ parameter }]} ->
-    prim_type ~loc "contract" [convert_type ~loc parameter]
+  | Tcontract { sig_name; entries_sig = [{ parameter }]} ->
+    let annots = match sig_name with
+      | None -> []
+      | Some n -> [":" ^ n] in
+    prim_type ~loc "contract" [convert_type ~loc parameter] ~annots
   | Tcontract _ -> assert false
   | Tlambda (x,y) -> prim_type ~loc "lambda" [convert_type ~loc x;
                                          convert_type ~loc y]

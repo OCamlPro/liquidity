@@ -152,7 +152,9 @@ let lift_inner_env inner_name = function
       | Tclosure ((t1, t2), t3) ->
         Tclosure ((lift_type t1, lift_type t2), lift_type t3)
     and lift_contract_sig c_sig =
-      { c_sig with
+      { sig_name = (match c_sig.sig_name with
+          | None -> None
+          | Some s -> Some (lift_name s));
         entries_sig = List.map (fun es ->
             { es with parameter = lift_type es.parameter }
           ) c_sig.entries_sig
@@ -1537,8 +1539,7 @@ let rec translate_signature contract_type_name env acc ast =
       entries_sig = List.rev acc }
 
   | { psig_desc = Psig_type (
-      Recursive,
-      [
+      Recursive, [
         { ptype_name = { txt = ty_name };
           ptype_params = [];
           ptype_cstrs = [];

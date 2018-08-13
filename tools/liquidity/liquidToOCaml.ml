@@ -49,20 +49,33 @@ let pat_of_name ?loc = function
   | "_" -> Pat.any ()
   | name -> Pat.var (id ?loc name)
 
+type abbrev_kind =
+  | TypeName of core_type
+  | ContractType of module_type
+
 let cpt_abbrev = ref 0
 let abbrevs = Hashtbl.create 101
 let rev_abbrevs = Hashtbl.create 101
-let get_abbrev ty = let s, _, _ = Hashtbl.find abbrevs ty in s
-let add_abbrev s ty caml_ty =
+let get_abbrev ty =
+  match Hashtbl.find abbrevs ty with
+  | s, TypeName _, _ -> typ_constr s []
+  | s, ContractType _, _ -> Typ.package (lid s) []
+let add_abbrev s ty kind =
   incr cpt_abbrev;
   let s =
     try Hashtbl.find rev_abbrevs s; s ^ string_of_int !cpt_abbrev
     with Not_found -> s in
-  Hashtbl.add abbrevs ty (s, caml_ty, !cpt_abbrev);
+  Hashtbl.add abbrevs ty (s, kind, !cpt_abbrev);
   Hashtbl.replace rev_abbrevs s ();
-  typ_constr s []
+  match kind with
+  | TypeName _ -> typ_constr s []
+  | ContractType  _ -> Typ.package (lid s) []
 
-let clean_abbrevs () = cpt_abbrev := 0; Hashtbl.clear abbrevs
+let clean_abbrevs () =
+  cpt_abbrev := 0;
+  Hashtbl.clear abbrevs;
+  Hashtbl.clear rev_abbrevs
+
 let list_caml_abbrevs_in_order () =
   Hashtbl.fold (fun ty v l -> (ty, v) :: l) abbrevs []
   |> List.fast_sort (fun (_, (_, _, i1)) (_, (_, _, i2)) -> i1 - i2)
@@ -85,21 +98,19 @@ let rec convert_type ~abbrev ?name ty =
   | Taddress -> typ_constr "address" []
   | Tsum (name, _)
   | Trecord (name, _) -> typ_constr name []
+  | Tcontract contract_sig -> convert_contract_sig ~abbrev contract_sig
   | Tfail -> assert false
   | _ ->
-    try typ_constr (get_abbrev ty) []
+    try get_abbrev ty
     with Not_found ->
     let caml_ty, t_name = match ty with
     | Ttez | Tunit | Ttimestamp | Tint | Tnat | Tbool
     | Tkey | Tkey_hash | Tsignature | Tstring | Tbytes | Toperation | Taddress
-    | Tfail | Trecord _ | Tsum _ -> assert false
+    | Tfail | Trecord _ | Tsum _ | Tcontract _ -> assert false
     | Ttuple args ->
       Typ.tuple (List.map (convert_type ~abbrev) args), "pair_t"
     | Tor (x,y) ->
       typ_constr "variant" [convert_type ~abbrev x; convert_type ~abbrev y], "variant_t"
-    | Tcontract x ->
-      assert false (* TODO *)
-      (* typ_constr "contract" [convert_type ~abbrev x], "contract_t" *)
     | Tlambda (x,y) ->
       Typ.arrow Nolabel (convert_type ~abbrev x) (convert_type ~abbrev y), "lambda_t"
     | Tclosure ((x,e),r) ->
@@ -121,11 +132,32 @@ let rec convert_type ~abbrev ?name ty =
     in
     match ty with
     | Tlambda _ | Tclosure _ | Tor _ | Ttuple _ when abbrev ->
-      add_abbrev name ty caml_ty
+      add_abbrev name ty (TypeName caml_ty)
     | _ ->
       caml_ty
 
-
+and convert_contract_sig ~abbrev csig =
+  let name = match csig.sig_name with
+    | None -> "ContractType" (* ^ (string_of_int !cpt_abbrev) *)
+    | Some name -> name in
+  let val_items = List.map (fun e ->
+      let parameter = convert_type ~abbrev e.parameter in
+      Sig.extension (
+        id "entry",
+        PSig [
+          Sig.value
+            (Val.mk (id e.entry_name)
+               (Typ.arrow (Labelled e.parameter_name) parameter
+                  (Typ.arrow Nolabel (typ_constr "storage" [])
+                     (Typ.tuple [typ_constr "list" [typ_constr "operation" []];
+                                 typ_constr "storage" []]))))
+        ])
+    ) csig.entries_sig in
+  let abstr_storage = Sig.type_ Recursive [
+      Type.mk ~kind:Ptype_abstract (id "storage")
+    ] in
+  let signature = Mty.signature (abstr_storage :: val_items) in
+  add_abbrev name (Tcontract csig) (ContractType signature)
 
 let rec convert_const expr =
   match expr with
@@ -570,7 +602,7 @@ let structure_of_contract
   clean_abbrevs ();
   List.iter (fun (s, ty) ->
       if not (StringMap.mem s LiquidFromOCaml.predefined_types) then
-        ignore (add_abbrev s ty (convert_type ~abbrev:false ty))
+        ignore (add_abbrev s ty (TypeName (convert_type ~abbrev:false ty)))
     ) types;
   begin match type_annots with
     | Some type_annots ->
@@ -578,12 +610,12 @@ let structure_of_contract
           match ty with
           | Tlambda _ | Tclosure _ | Tor _ | Ttuple _
             when abbrev && not @@ Hashtbl.mem abbrevs ty ->
-            ignore (add_abbrev s ty (convert_type ~abbrev:false ty))
+            ignore (add_abbrev s ty (TypeName (convert_type ~abbrev:false ty)))
           | _ -> ()
         ) type_annots
     | None -> () end;
   let storage_caml = add_abbrev "storage" contract.storage
-      (convert_type ~abbrev contract.storage) in
+      (TypeName (convert_type ~abbrev contract.storage)) in
   let version_caml = Str.extension (
       id "version",
       PStr [
@@ -591,33 +623,37 @@ let structure_of_contract
           (Exp.constant (Const.float output_version))
       ])
   in
+  let entries =
+    List.map (structure_item_of_entry ~abbrev storage_caml) contract.entries in
   let types_caml =
     let seen = ref StringSet.empty in
     list_caml_abbrevs_in_order ()
-    |> List.map (fun (txt, manifest, liq_ty) ->
-        Str.type_ Recursive [
-          match liq_ty with
-          | Trecord (name, fields) when not @@ StringSet.mem name !seen ->
-            seen := StringSet.add name !seen;
-            Type.mk ~kind:(Ptype_record (
-                List.map (fun (label, ty) ->
-                    Type.field (id label) (convert_type ~abbrev:false ty)
-                  ) fields))
-              { txt; loc = !default_loc }
-          | Tsum (name, cstrs) when not @@ StringSet.mem name !seen ->
-            seen := StringSet.add name !seen;
-            Type.mk ~kind:(Ptype_variant (
-                List.map (fun (cstr, ty) ->
-                    Type.constructor (id cstr)
-                      ~args:(Pcstr_tuple [(convert_type ~abbrev:false ty)])
-                  ) cstrs))
-              { txt; loc = !default_loc }
-          | _ ->
-            Type.mk ~manifest { txt; loc = !default_loc }
-        ])
+    |> List.map (fun (txt, kind, liq_ty) ->
+        match kind with
+        | TypeName manifest ->
+          Str.type_ Recursive [
+            match liq_ty with
+            | Trecord (name, fields) when not @@ StringSet.mem name !seen ->
+              seen := StringSet.add name !seen;
+              Type.mk (id txt)
+                ~kind:(Ptype_record (
+                  List.map (fun (label, ty) ->
+                      Type.field (id label) (convert_type ~abbrev:false ty)
+                    ) fields))
+            | Tsum (name, cstrs) when not @@ StringSet.mem name !seen ->
+              seen := StringSet.add name !seen;
+              Type.mk (id txt)
+                ~kind:(Ptype_variant (
+                  List.map (fun (cstr, ty) ->
+                      Type.constructor (id cstr)
+                        ~args:(Pcstr_tuple [(convert_type ~abbrev:false ty)])
+                    ) cstrs))
+            | _ ->
+              Type.mk (id txt) ~manifest
+          ]
+        | ContractType typ -> Str.modtype (Mtd.mk (id txt) ~typ)
+      )
   in
-  let entries =
-    List.map (structure_item_of_entry ~abbrev storage_caml) contract.entries in
   [ version_caml ] @ types_caml @ entries
 
 

@@ -1034,17 +1034,6 @@ let encode_const env t_contract_sig t_contract_storage const =
 
 (* ----------------------- decoding ----------------------- *)
 
-let entry_name_of_case s =
-  Scanf.sscanf s
-    (Scanf.format_from_string prefix_entry "" ^^ "%s%!")
-    (fun x -> x)
-
-let is_entry_case s =
-  try
-    ignore (entry_name_of_case s);
-    true
-  with _ -> false
-
 let rec decode ( exp : encoded_exp ) : typed_exp =
   match exp.desc with
   | Const (loc, ty, cst) ->

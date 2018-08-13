@@ -4,14 +4,18 @@ type t = A of int | B | C of (int * nat)
 
 type storage = int
 
-contract type Unit_contract = sig
+contract type UnitContract = sig
   type storage
+contract type U = sig
+  type storage
+  val%entry main : parameter:unit -> storage -> (operation list * storage)
+end
   val%entry main : parameter:unit -> storage -> (operation list * storage)
 end
 
 
 let%entry main
-    (parameter : (contract Unit_contract) * t)
+    (parameter : (contract UnitContract.U) * t)
     (storage : int)  =
 
   let (c, m) = parameter in

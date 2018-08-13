@@ -268,6 +268,7 @@ let name_of_annots annots =
   | Found s -> Some s
 
 let sanitize_name ~allow_capital s =
+  let s = LiquidMisc.string_replace s '.' '_' in
   if List.mem s reserved_keywords || has_reserved_prefix s then
     s ^ "_"
   else if String.length s > 0 then
@@ -277,7 +278,7 @@ let sanitize_name ~allow_capital s =
     | _ -> s
   else s
 
-let type_name_of_annots annots =
+let type_name_of_annots ?(allow_capital=false) annots =
   let exception Found of string in
   try
     List.iter (fun a ->
@@ -289,7 +290,7 @@ let type_name_of_annots annots =
     None
   with
   | Found ("" | "%" | "@") -> None
-  | Found s -> Some (sanitize_name ~allow_capital:false s)
+  | Found s -> Some (sanitize_name ~allow_capital s)
 
 
 let type_constr_or_label_of_annots ~allow_capital ?(keep_empty=false) annots =
@@ -354,18 +355,25 @@ let rec convert_type env expr =
           with Exit -> Tor (convert_type env x, convert_type env y)
       end
 
-    | Prim(_, "contract", [x], _debug) ->
+    | Prim(_, "contract", [x], annots) ->
+      let sig_name = type_name_of_annots ~allow_capital:true annots in
       let parameter = convert_type env x in
-      let contract_sig = {
-        sig_name = None;
-        entries_sig = [{
+      let entries_sig = match parameter with
+        | Tsum (_, constrs)
+          when List.for_all (fun (s, _) -> is_entry_case s) constrs ->
+          List.map (fun (s, ty) ->
+              { entry_name = entry_name_of_case s;
+                parameter = ty;
+                parameter_name = "parameter";
+                storage_name = "storage" }
+            ) constrs
+        | _ -> [{
           entry_name = "main";
           parameter_name = "parameter";
           storage_name = "storage";
           parameter;
-        }]
-      } in
-      Tcontract contract_sig
+        }] in
+      Tcontract { sig_name; entries_sig }
     | Prim(_, "lambda", [x;y], _debug) -> Tlambda
                                             (convert_type env x,
                                              convert_type env y)

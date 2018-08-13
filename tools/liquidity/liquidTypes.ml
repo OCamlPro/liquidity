@@ -1005,3 +1005,14 @@ let has_reserved_prefix s =
   | _ -> false
 
 let prefix_entry = "_Liq_entry_"
+
+let entry_name_of_case s =
+  Scanf.sscanf s
+    (Scanf.format_from_string prefix_entry "" ^^ "%s%!")
+    (fun x -> x)
+
+let is_entry_case s =
+  try
+    ignore (entry_name_of_case s);
+    true
+  with _ -> false
