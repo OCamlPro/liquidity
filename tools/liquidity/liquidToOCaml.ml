@@ -56,25 +56,44 @@ type abbrev_kind =
 let cpt_abbrev = ref 0
 let abbrevs = Hashtbl.create 101
 let rev_abbrevs = Hashtbl.create 101
+let top_level_contracts = ref []
+
 let get_abbrev ty =
   match Hashtbl.find abbrevs ty with
   | s, TypeName _, _ -> typ_constr s []
   | s, ContractType _, _ -> Typ.package (lid s) []
 let add_abbrev s ty kind =
-  incr cpt_abbrev;
-  let s =
-    try Hashtbl.find rev_abbrevs s; s ^ string_of_int !cpt_abbrev
-    with Not_found -> s in
-  Hashtbl.add abbrevs ty (s, kind, !cpt_abbrev);
-  Hashtbl.replace rev_abbrevs s ();
-  match kind with
-  | TypeName _ -> typ_constr s []
-  | ContractType  _ -> Typ.package (lid s) []
+  try get_abbrev ty
+  with Not_found ->
+    incr cpt_abbrev;
+    let s =
+      try Hashtbl.find rev_abbrevs s; s ^ string_of_int !cpt_abbrev
+      with Not_found -> s in
+    Hashtbl.add abbrevs ty (s, kind, !cpt_abbrev);
+    Hashtbl.replace rev_abbrevs s ();
+    match kind with
+    | TypeName _ -> typ_constr s []
+    | ContractType  _ -> Typ.package (lid s) []
 
-let clean_abbrevs () =
+let reset_env () =
   cpt_abbrev := 0;
-  Hashtbl.clear abbrevs;
-  Hashtbl.clear rev_abbrevs
+  Hashtbl.reset abbrevs;
+  Hashtbl.reset rev_abbrevs;
+  top_level_contracts := []
+
+let save_env () =
+  let cpt = !cpt_abbrev in
+  let contracts = !top_level_contracts in
+  let save_abbrevs = Hashtbl.copy abbrevs in
+  let save_rev_abbrevs = Hashtbl.copy rev_abbrevs in
+  (* reset_env (); *)
+  (fun () ->
+     reset_env ();
+     cpt_abbrev := cpt;
+     top_level_contracts := contracts;
+     Hashtbl.iter (Hashtbl.add abbrevs) save_abbrevs;
+     Hashtbl.iter (Hashtbl.add rev_abbrevs) save_rev_abbrevs;
+  )
 
 let list_caml_abbrevs_in_order () =
   Hashtbl.fold (fun ty v l -> (ty, v) :: l) abbrevs []
@@ -537,32 +556,36 @@ let rec convert_code ~abbrev expr =
        (Typ.constr (lid "variant")
                    [convert_type ~abbrev left_ty; Typ.any ()])
 
-  | CreateContract (loc, args, contract) ->
-    assert false (* TODO *)
-    (* Exp.apply ~loc:(loc_of_loc loc)
-     *   (Exp.ident (lid "Contract.create"))
-     *   ((List.map (fun arg ->
-     *        Nolabel,
-     *        convert_code ~abbrev arg) args) @ [
-     *      Nolabel,
-     *      Exp.fun_ ~loc:(loc_of_loc loc) Nolabel None
-     *        (Pat.constraint_
-     *           (pat_of_name ~loc "parameter")
-     *           (convert_type ~abbrev contract.contract_sig.parameter))
-     *        (Exp.fun_ ~loc:(loc_of_loc loc) Nolabel None
-     *           (Pat.constraint_
-     *              (pat_of_name ~loc "storage")
-     *              (convert_type ~abbrev contract.contract_sig.storage))
-     *           (convert_code ~abbrev contract.code))
-     *    ]) *)
+  | CreateContract (loc, [manager; delegate; spendable;
+                          delegatable; init_balance; init_storage], contract) ->
+    let restore_env = save_env () in
+    let structure = structure_of_contract ~abbrev contract in
+    restore_env ();
+    (* let contract_struct_item =
+     *   Str.module_
+     *   (Mb.mk
+     *      (id contract.contract_name)
+     *      (Mod.structure structure)) in *)
+    (* top_level_contracts := contract_struct_item :: !top_level_contracts; *)
+    Exp.apply ~loc:(loc_of_loc loc)
+      (Exp.ident (lid "Contract.create"))
+      [Labelled "manager", convert_code ~abbrev manager;
+       Labelled "delegate", convert_code ~abbrev delegate;
+       Labelled "spendable", convert_code ~abbrev spendable;
+       Labelled "delegatable", convert_code ~abbrev delegatable;
+       Labelled "amount", convert_code ~abbrev init_balance;
+       Labelled "storage", convert_code ~abbrev init_storage;
+       Nolabel, Exp.pack (Mod.structure structure)
+         (* (Mod.ident (lid contract.contract_name)) *)]
+
+  | CreateContract _ -> assert false
 
   | ContractAt (loc, addr, ty) ->
-    assert false (* TODO *)
-    (* Exp.constraint_ ~loc:(loc_of_loc loc)
-     *   (Exp.apply ~loc:(loc_of_loc loc)
-     *      (Exp.ident (lid "Contract.at"))
-     *      [ Nolabel, convert_code ~abbrev addr ])
-     *   (convert_type ~abbrev (Toption (Tcontract ty))) *)
+    Exp.constraint_ ~loc:(loc_of_loc loc)
+      (Exp.apply ~loc:(loc_of_loc loc)
+         (Exp.ident (lid "Contract.at"))
+         [ Nolabel, convert_code ~abbrev addr ])
+      (convert_type ~abbrev (Toption ty))
 
   | Unpack (loc, e, ty) ->
     Exp.constraint_ ~loc:(loc_of_loc loc)
@@ -572,7 +595,7 @@ let rec convert_code ~abbrev expr =
       (convert_type ~abbrev (Toption ty))
 
 
-let structure_item_of_entry ~abbrev storage_caml entry =
+and structure_item_of_entry ~abbrev storage_caml entry =
   (* ignore (convert_type ~abbrev ~name:entry.entry_sig.parameter_name
    *           entry.entry_sig.parameter); *)
   let code = convert_code ~abbrev entry.code in
@@ -597,9 +620,9 @@ let structure_item_of_entry ~abbrev storage_caml entry =
           ]
       ])
 
-let structure_of_contract
+and structure_of_contract
     ?(abbrev=true) ?type_annots ?(types=[]) contract =
-  clean_abbrevs ();
+  reset_env ();
   List.iter (fun (s, ty) ->
       if not (StringMap.mem s LiquidFromOCaml.predefined_types) then
         ignore (add_abbrev s ty (TypeName (convert_type ~abbrev:false ty)))
@@ -654,8 +677,12 @@ let structure_of_contract
         | ContractType typ -> Str.modtype (Mtd.mk (id txt) ~typ)
       )
   in
-  [ version_caml ] @ types_caml @ entries
+  [ version_caml ] @ types_caml @ List.rev !top_level_contracts @ entries
 
+
+let structure_of_contract ?(abbrev=true) ?type_annots ?(types=[]) contract =
+  reset_env ();
+  structure_of_contract ~abbrev ?type_annots ~types contract
 
 let string_of_structure = LiquidOCamlPrinter.string_of_structure
 

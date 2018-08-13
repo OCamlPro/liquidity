@@ -16,6 +16,16 @@ let%init storage : storage = {
 edsigtc766ouxRKCy6dfYMTanSB9NkaqnBk2eit2i1vNAcKAuMtQRZZUFWWcZ7NdhQgLkgXp9kYNKiXfKsBvpk6ebWwQkMbNvgk
 *)
 
+contract PlusOne = struct
+  type storage = int
+
+  let%init init_storage (x : bool) (y : int) = if x = false then 0 else y
+
+  let%entry main (parameter : unit) (storage : storage) =
+    ([] : operation list), storage + 1
+end
+
+
 let%entry main
     (parameter : signature)
     (storage : storage) =
@@ -40,12 +50,18 @@ let%entry main
       (amount.(0) + amount.(1)) in
   let c_op, c_addr =
     Contract.create
-      key_hash delegate
-      spendable true
-      amount.(0) 0
-      (fun (parameter : unit) (storage : int) ->
-         ([] : operation list), storage + 1
-      )
+      ~manager:key_hash
+      ~delegate
+      ~spendable
+      ~delegatable:true
+      ~amount:amount.(0)
+      ~storage:(PlusOne.init_storage true (9 : PlusOne.storage))
+      (contract PlusOne)
+      (* (contract struct
+       *   type storage = int
+       *   let%entry main (parameter : unit) (storage : storage) =
+       *     ([] : operation list), storage + 1
+       * end) *)
   in
   let storage = storage.c <- c_addr in
   ( [account_op; c_op], storage )

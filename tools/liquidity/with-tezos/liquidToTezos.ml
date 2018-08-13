@@ -307,13 +307,21 @@ let rec convert_code expand expr =
       convert_code expand @@ ii @@
       SEQ (LiquidMisc.list_init n (fun _ -> ii @@ CDR None) @
            [{ expr with ins = CAR field }])
-    else prim (Printf.sprintf "C%sAR" (String.make n 'D')) [] name
+    else
+      let fields = match field with
+        | Some f -> [f]
+        | None -> [] in
+      prim (Printf.sprintf "C%sAR" (String.make n 'D')) [] name ~fields
   | CDDR (n, field) ->
     if expand then
       convert_code expand @@ ii @@
       SEQ (LiquidMisc.list_init n (fun _ -> ii @@ CDR None) @
            [{ expr with ins = CDR field }])
-    else prim (Printf.sprintf "C%sDR" (String.make n 'D')) [] name
+    else
+      let fields = match field with
+        | Some f -> [f]
+        | None -> [] in
+      prim (Printf.sprintf "C%sDR" (String.make n 'D')) [] name ~fields
   | SIZE -> prim "SIZE" [] name
   | IMPLICIT_ACCOUNT -> prim "IMPLICIT_ACCOUNT" [] name
   | SET_DELEGATE -> prim "SET_DELEGATE" [] name

@@ -319,9 +319,13 @@ let rec translate_code code =
 
     | CreateContract (loc, args, contract) ->
       let _depth, args_code = compile_args depth env args in
-      let contract = translate contract in
+      let mic_contract = translate contract in
+      let contract_code = ii ~loc @@ CREATE_CONTRACT mic_contract in
+      (* if !LiquidOptions.annotmic then
+       *   (\* Hack: using annotataion to represent contract name *\)
+       *   contract_code.loc_name <- Some (prefix_contract^contract.contract_name); *)
       args_code @
-      [ii ~loc @@ CREATE_CONTRACT contract; ii ~loc PAIR]
+      [contract_code; ii ~loc PAIR]
 
     | ContractAt (loc, addr, ty) ->
       let ty = LiquidEncode.encode_type ty in

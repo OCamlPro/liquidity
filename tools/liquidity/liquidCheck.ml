@@ -679,19 +679,19 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
     let contract = typecheck_contract ~warnings:env.warnings
         ~decompiling:env.decompiling env.env contract in
     match args with
-    | [manager; delegate; delegatable; spendable; init_balance; init_storage] ->
+    | [manager; delegate; spendable; delegatable; init_balance; init_storage] ->
       let manager = typecheck_expected "manager" env Tkey_hash manager in
       let delegate =
         typecheck_expected "delegate" env (Toption Tkey_hash) delegate in
+      let spendable = typecheck_expected "spendable" env Tbool spendable in
       let delegatable =
         typecheck_expected "delegatable" env Tbool delegatable in
-      let spendable = typecheck_expected "spendable" env Tbool spendable in
       let init_balance =
         typecheck_expected "initial balance" env Ttez init_balance in
       let init_storage = typecheck_expected "initial storage"
           env contract.storage init_storage in
-      let desc = CreateContract (loc, [manager; delegate; delegatable;
-                                       spendable; init_balance; init_storage],
+      let desc = CreateContract (loc, [manager; delegate; spendable;
+                                       delegatable; init_balance; init_storage],
                                  contract) in
       mk ?name:exp.name desc (Ttuple [Toperation; Taddress])
     | _ ->

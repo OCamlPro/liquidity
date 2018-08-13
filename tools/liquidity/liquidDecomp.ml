@@ -531,8 +531,16 @@ let rec decompile contract =
        (* TODO *)
 
        | N_CREATE_CONTRACT contract, args ->
+         (* Hack: using annotation to represent contract name *)
+         let contract_name =
+           match node.node_name with
+           | None -> "Contract" ^ string_of_int node.num
+           | Some s ->
+             try contract_name_of_annot s
+             with _ -> "Contract" ^ string_of_int node.num in
+         let contract = { (decompile contract) with contract_name } in
          mklet node
-           (CreateContract (loc, List.map arg_of args, decompile contract))
+           (CreateContract (loc, List.map arg_of args, contract))
 
        | (
          N_LAMBDA_END _

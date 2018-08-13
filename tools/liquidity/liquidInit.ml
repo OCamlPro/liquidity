@@ -167,15 +167,15 @@ let rec subst_empty_big_map code =
 
 
 
-let tmp_contract_of_init ~loc (args, code) storage_ty =
+let tmp_contract_of_init ~loc init storage_ty =
   let storage = storage_ty in
   let parameter_var = mk (Var ("parameter", loc)) () in
-  let parameter, code = match args with
-    | [] -> Tunit, code
+  let parameter, code = match init.init_args with
+    | [] -> Tunit, init.init_body
     | [arg, loc, ty] ->
-      let code = mk (Let (arg, false, loc, parameter_var, code)) () in
+      let code = mk (Let (arg, false, loc, parameter_var, init.init_body)) () in
       ty, code
-    | _ ->
+    | args ->
       let parameter = Ttuple (List.map (fun (_,_,ty) -> ty) args) in
       let code, _ = List.fold_right (fun (arg, loc, ty) (code, i) ->
           let i = i - 1 in
@@ -188,7 +188,7 @@ let tmp_contract_of_init ~loc (args, code) storage_ty =
                    code)) ()
           in
           (code, i)
-        ) args (code, List.length args)
+        ) args (init.init_body, List.length args)
       in
       parameter, code
   in
@@ -206,15 +206,15 @@ let tmp_contract_of_init ~loc (args, code) storage_ty =
                  code }]
   }
 
-let compile_liquid_init env contract storage_ty ((args, sy_init) as init) =
-  let loc = LiquidCheck.loc_exp sy_init in
-  if sy_init.transfer then
+let compile_liquid_init env contract storage_ty init (* ((args, sy_init) as init) *) =
+  let loc = LiquidCheck.loc_exp init.init_body in
+  if init.init_body.transfer then
     LiquidLoc.raise_error ~loc
       "No transfer allowed in storage initializer";
   try (* Maybe it is constant *)
     let tenv = empty_typecheck_env ~warnings:true contract storage_ty env in
     let ty_init = LiquidCheck.typecheck_code tenv
-        ~expected_ty:storage_ty sy_init in
+        ~expected_ty:storage_ty init.init_body in
     let enc_init = LiquidEncode.encode_code tenv ty_init in
     let c_init = LiquidData.translate_const_exp loc enc_init in
     Init_constant c_init

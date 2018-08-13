@@ -809,6 +809,8 @@ type env = {
     (* name of file being compiled *)
     filename : string;
 
+    (* name of contract being compiled *)
+    contractname : string;
     (* fields modified in LiquidFromOCaml *)
     (* type definitions *)
     mutable types : datatype StringMap.t;
@@ -938,10 +940,11 @@ type node = {
 and node_exp = node * node
 
 
-type syntax_init = (
-    (string * location * datatype) list (* arguments *)
-    * syntax_exp (* init code *)
-  )
+type syntax_init = {
+  init_name : string;
+  init_args : (string * location * datatype) list; (* arguments *)
+  init_body : syntax_exp; (* init code *)
+}
 
 type syntax_contract = syntax_exp contract
 type typed_contract = typed_exp contract
@@ -1006,6 +1009,8 @@ let has_reserved_prefix s =
 
 let prefix_entry = "_Liq_entry_"
 
+let prefix_contract = "_Liq_contract_"
+
 let entry_name_of_case s =
   Scanf.sscanf s
     (Scanf.format_from_string prefix_entry "" ^^ "%s%!")
@@ -1016,3 +1021,8 @@ let is_entry_case s =
     ignore (entry_name_of_case s);
     true
   with _ -> false
+
+let contract_name_of_annot s =
+  Scanf.sscanf s
+    (Scanf.format_from_string prefix_contract "" ^^ "%s%!")
+    (fun x -> x)

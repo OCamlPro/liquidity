@@ -521,7 +521,7 @@ let compile_liquid liquid =
   let pre_init = match syntax_init with
     | None -> None
     | Some syntax_init ->
-      let inputs_infos = fst syntax_init in
+      let inputs_infos = syntax_init.init_args in
       Some (
         LiquidInit.compile_liquid_init
           env contract_sig syntax_ast.storage syntax_init,

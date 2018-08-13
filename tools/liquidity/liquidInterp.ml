@@ -786,13 +786,20 @@ let rec interp contract =
        x :: stack, x
 
     | RECORD (label_x, None),
-      x :: { kind = N_RECORD y_labels; args; prevs } :: stack ->
-       List.iter (fun n ->
-          n.next <- Some seq;
-        ) prevs;
-       let x =
+      x :: { kind = N_RECORD y_labels; args; prevs; num } :: stack ->
+      let rec short_circuit node =
+        List.iter (fun n ->
+            begin match n.next with
+              | Some k when k.num = num ->
+                n.next <- node.next
+              | _ -> ()
+            end;
+            short_circuit n;
+          ) node.prevs in
+      let x =
          node ins.loc (N_RECORD (label_x :: y_labels)) (x :: args) [seq] in
-       x :: stack, x
+      short_circuit x;
+      x :: stack, x
 
     | COMPARE, x ::  { kind = N_CONST (Tint,CInt n)} :: stack
          when LiquidPrinter.int_of_integer n = 0
@@ -849,12 +856,12 @@ let rec interp contract =
        res_op :: res_cont :: stack, x
 
     | CREATE_CONTRACT contract, manager :: delegate ::
-                                delegatable :: spendable ::
+                                spendable :: delegatable ::
                                 amount :: storage :: stack ->
       let contract = interp contract in
       let x = node ins.loc (N_CREATE_CONTRACT contract)
           [manager; delegate;
-           delegatable; spendable;
+           spendable; delegatable;
            amount; storage] [seq] in
       let res_op = node ins.loc (N_RESULT (x, 0)) [] [] in
       let res_addr = node ins.loc (N_RESULT (x, 1)) [] [] in
