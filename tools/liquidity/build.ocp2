@@ -59,6 +59,7 @@ OCaml.library("ocplib-liquidity",
        "liquidCheck.ml";
        "liquidSimplify.ml";
        "liquidEncode.ml";
+       "liquidDecode.ml";
        "liquidMichelson.ml";
 
        "liquidClean.ml";

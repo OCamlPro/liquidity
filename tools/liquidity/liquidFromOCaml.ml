@@ -550,8 +550,7 @@ let rec translate_const env exp =
 
   | { pexp_desc = Pexp_record (lab_x_exp_list, None) } ->
     let lab_x_exp_list =
-      List.map (function
-            ({ txt = label; loc }, exp) ->
+      List.map (fun ({ txt = label; loc }, exp) ->
             let label = str_of_id label in
             let loc = loc_of_loc exp.pexp_loc in
             let _, _, ty' = find_label label env in
@@ -567,8 +566,6 @@ let rec translate_const env exp =
                 loc ty' c
             in
             label, c
-          | ( { loc }, _) ->
-            error_loc loc "label expected"
         ) lab_x_exp_list in
     let ty = match lab_x_exp_list with
       | [] -> error_loc exp.pexp_loc "empty record"
@@ -1140,11 +1137,8 @@ let rec translate_code contracts env exp =
 
     | { pexp_desc = Pexp_record (lab_x_exp_list, None) } ->
        let lab_x_exp_list =
-         List.map (function
-                     ({ txt = label }, exp) ->
+         List.map (fun ({ txt = label }, exp) ->
                      str_of_id label, translate_code contracts env exp
-                   | ( { loc }, _) ->
-                      error_loc loc "label expected"
                   ) lab_x_exp_list in
        Record (loc, lab_x_exp_list)
 

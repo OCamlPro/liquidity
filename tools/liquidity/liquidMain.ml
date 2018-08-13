@@ -152,7 +152,7 @@ let compile_tezos_file filename =
     LiquidEncode.encode_contract ~decompiling:true env typed_ast in
   let live_ast = LiquidSimplify.simplify_contract
       ~decompile_annoted:annoted_tz encode_ast to_inline in
-  let multi_ast = LiquidEncode.decode_contract live_ast in
+  let multi_ast = LiquidDecode.decode_contract live_ast in
   let untyped_ast = LiquidUntype.untype_contract multi_ast in
   (* let untyped_ast = c in *)
   let output = filename ^ ".liq" in
