@@ -362,9 +362,9 @@ and core_type1 ctxt f x =
         let aux f (s, ct) =
           pp f "type %a@ =@ %a" longident_loc s (core_type ctxt) ct  in
         (match cstrs with
-         |[] -> pp f "@[<hov2>(module@ %a)@]" longident_loc lid
+         |[] -> pp f "@[<hov2>(%s@ %a)@]" (keyword MODULE) longident_loc lid
          |_ ->
-             pp f "@[<hov2>(module@ %a@ with@ %a)@]" longident_loc lid
+             pp f "@[<hov2>(%s@ %a@ with@ %a)@]" (keyword MODULE) longident_loc lid
                (list aux  ~sep:"@ and@ ")  cstrs)
     | Ptyp_extension e -> extension ctxt f e
     | _ -> paren true (core_type ctxt) f x
@@ -1001,7 +1001,7 @@ and module_type ctxt f x =
                 (list (core_type ctxt) ~sep:"," ~first:"(" ~last:")")
                 ls longident_loc li (type_declaration ctxt) td
           | Pwith_module (li, li2) ->
-              pp f "module %a =@ %a" longident_loc li longident_loc li2;
+              pp f "%s %a =@ %a" (keyword MODULE) longident_loc li longident_loc li2;
           | Pwith_typesubst (li, ({ptype_params=ls;_} as td)) ->
               let ls = List.map fst ls in
               pp f "type@ %a %a :=@ %a"
@@ -1009,7 +1009,7 @@ and module_type ctxt f x =
                 ls longident_loc li
                 (type_declaration ctxt) td
           | Pwith_modsubst (li, li2) ->
-             pp f "module %a :=@ %a" longident_loc li longident_loc li2 in
+             pp f "%s %a :=@ %a" (keyword MODULE) longident_loc li longident_loc li2 in
         pp f "@[<hov2>%a@ with@ %a@]"
           (module_type1 ctxt) mt (list with_constraint ~sep:"@ and@ ") l
     | _ -> module_type1 ctxt f x
@@ -1020,12 +1020,12 @@ and module_type1 ctxt f x =
     | Pmty_ident li ->
         pp f "%a" longident_loc li;
     | Pmty_alias li ->
-        pp f "(module %a)" longident_loc li;
+        pp f "(%s %a)" (keyword MODULE) longident_loc li;
     | Pmty_signature (s) ->
         pp f "@[<hv0>@[<hv2>sig@ %a@]@ end@]" (* "@[<hov>sig@ %a@ end@]" *)
           (list (signature_item ctxt)) s (* FIXME wrong indentation*)
     | Pmty_typeof me ->
-        pp f "@[<hov2>module@ type@ of@ %a@]" (module_expr ctxt) me
+        pp f "@[<hov2>%s@ type@ of@ %a@]" (keyword MODULE) (module_expr ctxt) me
     | Pmty_extension e -> extension ctxt f e
     | _ -> paren true (module_type ctxt) f x
 
@@ -1063,11 +1063,12 @@ and signature_item ctxt f x : unit =
       end
   | Psig_module ({pmd_type={pmty_desc=Pmty_alias alias;
                             pmty_attributes=[]; _};_} as pmd) ->
-      pp f "@[<hov>module@ %s@ =@ %a@]%a" pmd.pmd_name.txt
+      pp f "@[<hov>%s@ %s@ =@ %a@]%a" (keyword MODULE) pmd.pmd_name.txt
         longident_loc alias
         (item_attributes ctxt) pmd.pmd_attributes
   | Psig_module pmd ->
-      pp f "@[<hov>module@ %s@ :@ %a@]%a"
+      pp f "@[<hov>%s@ %s@ :@ %a@]%a"
+        (keyword MODULE)
         pmd.pmd_name.txt
         (module_type ctxt) pmd.pmd_type
         (item_attributes ctxt) pmd.pmd_attributes
@@ -1081,7 +1082,8 @@ and signature_item ctxt f x : unit =
         (module_type ctxt) incl.pincl_mod
         (item_attributes ctxt) incl.pincl_attributes
   | Psig_modtype {pmtd_name=s; pmtd_type=md; pmtd_attributes=attrs} ->
-      pp f "@[<hov2>module@ type@ %s%a@]%a"
+      pp f "@[<hov2>%s@ type@ %s%a@]%a"
+        (keyword MODULE)
         s.txt
         (fun f md -> match md with
            | None -> ()
@@ -1101,7 +1103,7 @@ and signature_item ctxt f x : unit =
                 (module_type1 ctxt) pmd.pmd_type
                 (item_attributes ctxt) pmd.pmd_attributes
             else
-              pp f "@[<hov2>module@ rec@ %s:@ %a@]%a" pmd.pmd_name.txt
+              pp f "@[<hov2>%s@ rec@ %s:@ %a@]%a" (keyword MODULE) pmd.pmd_name.txt
                 (module_type1 ctxt) pmd.pmd_type
                 (item_attributes ctxt) pmd.pmd_attributes;
             string_x_module_type_list f ~first:false tl
