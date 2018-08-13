@@ -1813,6 +1813,10 @@ and translate_structure env acc ast =
     let inner_env = mk_inner_env env contract_name in
     let contract, init, inner_env =
       translate_structure inner_env (filter_non_init acc) structure in
+    begin match !LiquidOptions.main with
+      | Some main when main = contract_name ->
+        contract, init, inner_env
+      | _ ->
         lift_inner_env inner_env;
         let acc = match init with
           | None -> acc
@@ -1826,6 +1830,7 @@ and translate_structure env acc ast =
                                false, f_init) in
             (v :: acc) in
         translate_structure env (Syn_contract contract :: acc) ast
+    end
 
   | [] -> pack_contract env (List.rev acc)
 
@@ -1970,6 +1975,12 @@ let translate ~filename ast =
   let env = initial_env filename in
   try
     let contract, init, env = translate_structure env [] ast in
+    begin match !LiquidOptions.main with
+      | Some main when main <> contract.contract_name ->
+        Format.eprintf "No contract named %s.@." main;
+        exit 2;
+      | _ -> ()
+    end;
     (contract, init, env)
   with exn -> translate_exn exn
 

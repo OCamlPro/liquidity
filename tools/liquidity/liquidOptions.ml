@@ -35,3 +35,6 @@ let gas_limit = ref "400000"
 let storage_limit = ref "60000"
 
 let private_key = ref (None : string option)
+
+let main = ref (None : string option)
+let output = ref (None : string option)
