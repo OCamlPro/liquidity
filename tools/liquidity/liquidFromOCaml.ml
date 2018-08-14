@@ -1870,17 +1870,6 @@ and translate_structure env acc ast =
         contract, init, inner_env
       | _ ->
         lift_inner_env inner_env;
-        let acc = match init with
-          | None -> acc
-          | Some init ->
-            let f_init =
-              List.fold_right (fun (arg_name, loc, arg_ty) body ->
-                mk (Lambda (arg_name, arg_ty, loc, body, Tunit))
-                ) init.init_args init.init_body in
-            let v = Syn_value (String.concat "."
-                                 [contract.contract_name; init.init_name],
-                               false, f_init) in
-            (v :: acc) in
         translate_structure env (Syn_contract contract :: acc) ast
     end
 
@@ -2067,17 +2056,6 @@ let translate_multi l =
                 Format.eprintf "Contract %s@." contract.contract_name;
             end;
             lift_inner_env env;
-            let acc = match init with
-              | None -> acc
-              | Some init ->
-                let f_init =
-                  List.fold_right (fun (arg_name, loc, arg_ty) body ->
-                      mk (Lambda (arg_name, arg_ty, loc, body, Tunit))
-                    ) init.init_args init.init_body in
-                let v = Syn_value (String.concat "."
-                                     [contract.contract_name; init.init_name],
-                                   false, f_init) in
-                (v :: acc) in
             Syn_contract contract :: acc
           ) [] (List.rev r_others)
       in

@@ -57,7 +57,7 @@ let%entry main
       ~spendable
       ~delegatable:true
       ~amount:amount.(0)
-      ~storage:(PlusOne.init_storage true (9 : PlusOne.storage))
+      ~storage:(9 : PlusOne.storage)
       (contract PlusOne)
       (* (contract struct
        *   type storage = int
