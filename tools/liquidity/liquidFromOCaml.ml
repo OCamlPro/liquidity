@@ -1158,15 +1158,41 @@ let rec translate_code contracts env exp =
         LiquidTypes.map_fold_primitive_of_string (map_fold_coll^".map_fold") in
       MapFold (prim, name, loc, body, arg, acc)
 
+    | { pexp_desc = Pexp_apply (
+        { pexp_desc = Pexp_ident { txt = Ldot(Lident "Account", "create") } },
+        args);
+        pexp_loc } ->
+      let manager, delegate, delegatable, amount =
+        match order_labelled_args pexp_loc
+                ["manager"; "delegate"; "delegatable"; "amount"] args
+        with
+        | [m; d; de; a] -> (m, d, de, a)
+        | _ -> error_loc pexp_loc "wrong arguments for Account.create" in
+      Apply(Prim_create_account, loc, [
+          translate_code contracts env manager;
+          translate_code contracts env delegate;
+          translate_code contracts env delegatable;
+          translate_code contracts env amount;
+        ])
+
+    (* special case for contract call with contract.entry param ~amount *)
+    | { pexp_desc = Pexp_apply (
+        { pexp_desc = Pexp_field (contract, { txt = Lident entry }) },
+        ( [Nolabel, param; Labelled "amount", amount]
+        | [Labelled "amount", amount; Nolabel, param] )
+      ) } ->
+      Transfer (loc,
+                translate_code contracts env contract,
+                translate_code contracts env amount,
+                Some entry,
+                translate_code contracts env param)
 
     | { pexp_desc = Pexp_apply (exp, args) } ->
        let exp = translate_code contracts env exp in
-       Apply(Prim_unknown, loc, exp :: List.map (
-                                         function (Nolabel, exp) ->
-                                                  translate_code contracts env exp
-                                                | (_, { pexp_loc }) ->
-                                                   error_loc pexp_loc "in arg"
-                                       ) args)
+       Apply(Prim_unknown, loc, exp :: List.map (function
+           | (Nolabel, exp) -> translate_code contracts env exp
+           | (_, { pexp_loc }) -> error_loc pexp_loc "in arg"
+         ) args)
 
     | { pexp_desc = Pexp_extension (
         { txt = "nat" },

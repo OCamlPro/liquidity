@@ -28,5 +28,5 @@ let%entry main
     let op = Contract.call c 0tz main ~parameter:() in
     [op], 0
   | C _ ->
-    let op = c.main () 1tz in
+    let op = c.main () ~amount:1tz in
     [op], 1
