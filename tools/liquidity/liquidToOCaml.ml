@@ -399,6 +399,14 @@ let rec convert_code ~abbrev expr =
                            (convert_code ~abbrev ifcons);
                 ]
 
+  | Transfer (loc, contract_exp, amount_exp,
+              None, { desc = Const (_, _, CUnit) } ) ->
+    Exp.apply ~loc:(loc_of_loc loc) (Exp.ident (lid "Contract.transfer"))
+      [
+        Nolabel, convert_code ~abbrev contract_exp;
+        Nolabel, convert_code ~abbrev amount_exp;
+      ]
+
   | Transfer (loc, contract_exp, amount_exp, None, arg_exp) ->
     Exp.apply ~loc:(loc_of_loc loc) (Exp.ident (lid "Contract.call"))
       [

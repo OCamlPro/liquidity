@@ -15,7 +15,7 @@ val initial_env : string -> env
 
 val translate :
   filename:string -> Parsetree.structure ->
-  syntax_exp contract * syntax_init option * env
+  syntax_contract * syntax_init option * env
 
 val read_file : string -> Parsetree.structure
 

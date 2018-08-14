@@ -304,14 +304,14 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
            (LiquidPrinter.Liquid.string_of_type ty)
      end
 
+  (* contract.main (param) amount *)
   | Apply (Prim_unknown, loc,
-           ({ desc = Var (name, varloc)} as f) :: ((_ :: _) as r))
-       when StringMap.mem name env.vars ->
-     let exp = List.fold_left (fun f x ->
-                   { exp with desc = Apply (Prim_exec, loc, [x; f]) }
-                 ) f r
-     in
-     typecheck env exp
+           ({ desc = Project (_, entry, c)} :: [param; amount]))
+    when match (typecheck env c).ty with
+      | Tcontract _ -> true
+      | _ -> false
+    ->
+    typecheck env (mk (Transfer (loc, c, amount, Some entry, param)) ())
 
   | Apply (Prim_unknown, loc,
            ({ desc = Var ("Contract.call", varloc)} :: args)) ->
@@ -324,7 +324,8 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
       error loc "Bad syntax for Contract.call."
 
   | Apply (Prim_unknown, loc,
-           ({ desc = Var (name, varloc)} ::args)) ->
+           ({ desc = Var (name, varloc)} ::args))
+    when not (StringMap.mem name env.vars) ->
      let prim =
        try
          LiquidTypes.primitive_of_string name
@@ -334,9 +335,13 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
      typecheck env { exp with
                      desc = Apply(prim, loc, args) }
 
-  | Apply (Prim_unknown, loc, [f ; x ]) ->
-     typecheck env { exp with
-                     desc = Apply(Prim_exec, loc, [x; f]) }
+
+  | Apply (Prim_unknown, loc, f :: ((_ :: _) as r)) ->
+     let exp = List.fold_left (fun f x ->
+        { exp with desc = Apply (Prim_exec, loc, [x; f]) }
+      ) f r
+     in
+     typecheck env exp
 
   | Apply (prim, loc, args) -> typecheck_apply ?name:exp.name env prim loc args
 

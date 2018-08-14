@@ -6,10 +6,10 @@ type storage = int
 
 contract type UnitContract = sig
   type storage
-contract type U = sig
-  type storage
-  val%entry main : parameter:unit -> storage -> (operation list * storage)
-end
+  contract type U = sig
+    type storage
+    val%entry main : parameter:unit -> storage -> (operation list * storage)
+  end
   val%entry main : parameter:unit -> storage -> (operation list * storage)
 end
 
@@ -28,5 +28,5 @@ let%entry main
     let op = Contract.call c 0tz main ~parameter:() in
     [op], 0
   | C _ ->
-    let op = Contract.call c 1tz () in
+    let op = c.main () 1tz in
     [op], 1

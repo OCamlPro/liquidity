@@ -788,7 +788,9 @@ let rec translate_code contracts env exp =
            translate_code contracts env e2,
            mk (Const (loc, Tunit, CUnit)))
     | { pexp_desc = Pexp_ifthenelse (e1, e2, Some e3) } ->
-       If (translate_code contracts env e1, translate_code contracts env e2, translate_code contracts env e3)
+      If (translate_code contracts env e1,
+          translate_code contracts env e2,
+          translate_code contracts env e3)
 
     | { pexp_desc =
           Pexp_apply (
