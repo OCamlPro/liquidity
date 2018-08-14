@@ -255,14 +255,6 @@ let rec translate_type env ?expected typ = match typ with
         (LiquidPrinter.Liquid.string_of_type elt_type);
     Tset elt_type
 
-  | { ptyp_desc = Ptyp_package ({ txt = contract_type_name }, []) } ->
-    let contract_type_name = str_of_id contract_type_name in
-    begin
-      try Tcontract (find_contract_type contract_type_name env)
-      with Not_found ->
-        unbound_contract_type typ.ptyp_loc contract_type_name
-    end
-
   | { ptyp_desc = Ptyp_constr ({ txt = Lident "variant" },
                                [left_type; right_type]) } ->
     let expected1, expected2 = match expected with
@@ -325,6 +317,14 @@ let rec translate_type env ?expected typ = match typ with
     begin
       try find_type ty_name env
       with Not_found -> unbound_type typ.ptyp_loc ty_name
+    end
+
+  | { ptyp_desc = Ptyp_package ({ txt = contract_type_name }, []) } ->
+    let contract_type_name = str_of_id contract_type_name in
+    begin
+      try Tcontract (find_contract_type contract_type_name env)
+      with Not_found ->
+        unbound_contract_type typ.ptyp_loc contract_type_name
     end
 
   | { ptyp_desc = Ptyp_any; ptyp_loc } ->
@@ -1771,7 +1771,7 @@ and translate_structure env acc ast =
     env.types <- StringMap.add ty_name ty env.types;
     translate_structure env acc ast
 
-  (* contracts *)
+  (* contract types *)
 
   | { pstr_desc = Pstr_modtype
           {
@@ -1788,6 +1788,47 @@ and translate_structure env acc ast =
       StringMap.add contract_type_name contract_sig env.contract_types;
     lift_inner_env inner_env;
     translate_structure env acc ast
+
+  | { pstr_desc = Pstr_modtype
+          {
+      pmtd_name = { txt = contract_type_name };
+      pmtd_type = Some {
+          pmty_desc = Pmty_ident { txt = id };
+          pmty_loc;
+      }
+    }
+    } :: ast ->
+    let contract_sig =
+      try find_contract_type (str_of_id id) env
+      with Not_found ->
+        error_loc pmty_loc "No contract type named %s knwon" (str_of_id id)
+    in
+    env.contract_types <-
+      StringMap.add contract_type_name contract_sig env.contract_types;
+    translate_structure env acc ast
+
+  | { pstr_desc = Pstr_modtype
+          {
+      pmtd_name = { txt = contract_type_name };
+      pmtd_type = Some {
+          pmty_desc = Pmty_typeof {
+              pmod_desc = Pmod_ident { txt = c_name };
+              pmod_loc;
+            }
+      }
+    }
+    } :: ast ->
+    let contract =
+      try StringMap.find (str_of_id c_name) (filter_contracts acc)
+      with Not_found ->
+        error_loc pmod_loc "No contract named %s knwon" (str_of_id c_name)
+    in
+    let contract_sig = sig_of_contract contract in
+    env.contract_types <-
+      StringMap.add contract_type_name contract_sig env.contract_types;
+    translate_structure env acc ast
+
+  (* contracts *)
 
   | { pstr_desc = Pstr_module {
       pmb_name = { txt = contract_name };

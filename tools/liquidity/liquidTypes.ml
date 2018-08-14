@@ -814,7 +814,7 @@ type env = {
     (* fields modified in LiquidFromOCaml *)
     (* type definitions *)
     mutable types : datatype StringMap.t;
-    (* type definitions *)
+    (* contract type definitions *)
     mutable contract_types : contract_sig StringMap.t;
     (* labels of records in type definitions *)
     mutable labels : (string * int * datatype) StringMap.t;

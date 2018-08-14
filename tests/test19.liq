@@ -25,6 +25,7 @@ contract PlusOne = struct
     ([] : operation list), storage + 1
 end
 
+contract type PS = contract type of PlusOne
 
 let%entry main
     (parameter : signature)
@@ -44,6 +45,7 @@ let%entry main
     | Some qr -> qr
   in
   let delegatable = false in
+  let cocococ = (Contract.at storage.c : (contract PS) option) in
   let account_op, _account =
     Account.create
       key_hash delegate delegatable
