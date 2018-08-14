@@ -70,10 +70,10 @@ let rec compute decompile code to_inline =
            iter v
          with Not_found -> exp
        end
-    | SetField (arg, loc, field, exp) ->
+    | SetField (arg, loc, field, v) ->
       let arg = iter arg in
-      let exp = iter exp in
-      { exp with desc = SetField (arg, loc, field, exp) }
+      let v = iter v in
+      { exp with desc = SetField (arg, loc, field, v) }
     | Project (loc, field, arg) ->
       let arg = iter arg in
       { exp with desc = Project (loc, field, arg) }

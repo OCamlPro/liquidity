@@ -149,6 +149,8 @@ and convert_composed_type ty_c ~loc name labels =
   | [] -> assert false
   | [l, ty] ->
     begin match convert_type ~loc ty with
+      | Micheline.Prim(loc, "big_map", args, annots) ->
+        Micheline.Prim(loc, "big_map", args, [":"^l])
       | Micheline.Prim(loc, name, args, annots) ->
         Micheline.Prim(loc, name, args, annots @ ["%"^l])
       | _ -> assert false
@@ -156,6 +158,8 @@ and convert_composed_type ty_c ~loc name labels =
   | (l, ty) :: labels ->
     let annots = if name = "" then [] else [":"^name] in
     let ty = match convert_type ~loc ty with
+      | Micheline.Prim(loc, "big_map", args, annots) ->
+        Micheline.Prim(loc, "big_map", args, [":"^l])
       | Micheline.Prim(loc, name, args, annots) ->
         Micheline.Prim(loc, name, args, annots @ ["%"^l])
       | _ -> assert false in

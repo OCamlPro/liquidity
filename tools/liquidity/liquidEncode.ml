@@ -230,7 +230,7 @@ and encode_sum_type cstys =
 and encode_contract_sig csig =
   match csig.entries_sig with
   | [] -> assert false (* ? *)
-  | [{ entry_name = "main"; parameter }] -> parameter
+  | [{ parameter }] -> parameter
   | entries ->
       Tsum ("entries",
             List.map (fun { entry_name; parameter = t } ->
@@ -259,7 +259,10 @@ let rec has_big_map = function
 let encode_storage_type env ty =
   let ty = encode_type ty in
   match ty with
-  | Ttuple (Tbigmap (t1, t2) :: r) when not @@ List.exists has_big_map (t1 :: t2 :: r) -> ty
+  | Ttuple (Tbigmap (t1, t2) :: r)
+    when not @@ List.exists has_big_map (t1 :: t2 :: r) -> ty
+  | Trecord (_, ((_, Tbigmap (t1, t2)) :: r))
+    when not @@ List.exists has_big_map (t1 :: t2 :: List.map snd r) -> ty
   | _ when not (has_big_map ty) -> ty
   | _ ->
     error (noloc env)
@@ -958,17 +961,13 @@ and encode_contract ?(annot=false) ?(decompiling=false) env contract =
     } in
 
   let parameter = encode_contract_sig env.t_contract_sig  in
-  (* "storage/1" *)
-  let (storage_name, env, _) = new_binding env "storage" env.t_contract_storage in
-  (* "parameter/2" *)
-  let (pname, env, _) = new_binding env "parameter" parameter in
   let loc = LiquidLoc.loc_in_file env.env.filename in
   let rec values_on_top l exp = match l with
     | [] -> exp
     | (v, inline, e) :: rest ->
       mk_typed (Let (v, inline, loc, e, values_on_top rest exp)) exp.ty in
-  let code_desc = match contract.entries with
-    | [e] -> e.code.desc
+  let code_desc, parameter_name, storage_name = match contract.entries with
+    | [e] -> e.code.desc, e.entry_sig.parameter_name, e.entry_sig.storage_name
     | _ ->
       let parameter = mk_typed (Var ("parameter", loc)) parameter in
       MatchVariant (
@@ -987,8 +986,17 @@ and encode_contract ?(annot=false) ?(decompiling=false) env contract =
                         (Var ("storage", loc)) env.t_contract_storage,
                       e.code)) e.code.ty in
             pat, body
-          ) contract.entries)
+          ) contract.entries),
+      "parameter",
+      "storage"
   in
+
+  (* "storage/1" *)
+  let (storage_name, env, _) =
+    new_binding env storage_name env.t_contract_storage in
+  (* "parameter/2" *)
+  let (pname, env, _) = new_binding env parameter_name parameter in
+
   let code = encode env @@
     values_on_top contract.values @@
     mk_typed code_desc (Ttuple [Tlist Toperation; contract.storage]) in

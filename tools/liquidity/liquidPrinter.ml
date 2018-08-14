@@ -215,7 +215,9 @@ module Michelson = struct
       | [label, ty] ->
         Printf.bprintf b "(";
         bprint_type fmt b indent ty;
-        Printf.bprintf b " %%%s)" label;
+        (match ty with
+         | Tbigmap _ -> Printf.bprintf b " :%s)" label
+         | _ -> Printf.bprintf b " %%%s)" label);
       | (label, ty) :: labels ->
          let indent = fmt.increase_indent indent in
          Printf.bprintf b "(%s%s%c%s"
@@ -224,7 +226,9 @@ module Michelson = struct
            fmt.newline indent;
          Printf.bprintf b "(";
          bprint_type fmt b indent ty;
-         Printf.bprintf b " %%%s)" label;
+        (match ty with
+         | Tbigmap _ -> Printf.bprintf b " :%s)" label
+         | _ -> Printf.bprintf b " %%%s)" label);
          Printf.bprintf b "%c%s" fmt.newline indent;
          bprint_type_composed ty_c "" fmt b indent labels;
          Printf.bprintf b ")";
@@ -1252,7 +1256,7 @@ let string_of_node node =
   | N_IF_PLUS _ -> "N_IF_PLUS"
   | N_IF_MINUS _ -> "N_IF_MINUS"
   | N_TRANSFER -> "N_TRANSFER"
-  | N_CONST (ty, cst) -> "N_CONST " ^ Michelson.string_of_const cst
+  | N_CONST (ty, cst) -> "N_CONST " ^ Liquid.string_of_const cst
   | N_PRIM string ->
      Printf.sprintf "N_PRIM %s" string
   | N_FAILWITH -> "N_FAILWITH"
@@ -1283,4 +1287,5 @@ let string_of_node node =
   | N_RECORD fields -> "N_RECORD_" ^ (String.concat "_" fields)
   | N_PROJ f -> "N_PROJ " ^ f
   | N_CONSTR c -> "N_CONSTR " ^ c
+  | N_SETFIELD f -> "N_SETFIELD " ^ f
   | N_RESULT (_, i) -> Printf.sprintf "N_RESULT %d" i

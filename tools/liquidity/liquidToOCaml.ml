@@ -63,7 +63,11 @@ let get_abbrev ty =
   | s, TypeName _, _ -> typ_constr s []
   | s, ContractType _, _ -> Typ.package (lid s) []
 let add_abbrev s ty kind =
-  try get_abbrev ty
+  try
+    match Hashtbl.find abbrevs ty with
+    | s', kind', _ when s' <> s || kind' <> kind -> raise Not_found
+    | _, TypeName _, _ -> typ_constr s []
+    | _, ContractType _, _ -> Typ.package (lid s) []
   with Not_found ->
     incr cpt_abbrev;
     let s =
@@ -176,7 +180,10 @@ and convert_contract_sig ~abbrev csig =
       Type.mk ~kind:Ptype_abstract (id "storage")
     ] in
   let signature = Mty.signature (abstr_storage :: val_items) in
-  add_abbrev name (Tcontract csig) (ContractType signature)
+  match StringMap.find_opt name LiquidFromOCaml.predefined_contract_types with
+  | Some csig' when csig' = csig ->
+    Typ.package (lid name) []
+  | _ -> add_abbrev name (Tcontract csig) (ContractType signature)
 
 let rec convert_const expr =
   match expr with

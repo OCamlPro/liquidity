@@ -1924,7 +1924,7 @@ and pack_contract env toplevels =
     | Syn_contract c :: r -> partition (c :: contracts, values, entries, init) r
     | Syn_entry e :: r -> partition (contracts, values, e :: entries, init) r
     | Syn_init i :: r -> partition (contracts, values, entries, Some i) r
-    | [] -> (List.rev contracts, values, List.rev entries, init) in
+    | [] -> (List.rev contracts, List.rev values, List.rev entries, init) in
   let _contracts, values, entries, init =
     partition ([], [], [], None) toplevels in
   { contract_name = env.contractname; storage; values; entries }, init, env
@@ -1973,6 +1973,24 @@ let predefined_types =
                    "variant", Tunit;
                  ]
 
+let unit_contract_sig = {
+  sig_name = Some "UnitContract";
+  entries_sig = [{
+      entry_name = "main";
+      parameter_name = "parameter";
+      storage_name = "storage";
+      parameter = Tunit;
+    }]
+}
+
+let predefined_contract_types =
+  List.fold_left (fun acc (name, cty) ->
+      StringMap.add name cty acc
+    ) StringMap.empty [
+     "UnitContract", unit_contract_sig;
+  ]
+
+
 let filename_to_contract filename =
   String.capitalize_ascii
     (LiquidMisc.string_replace
@@ -1982,7 +2000,7 @@ let filename_to_contract filename =
 let initial_env filename =
   {
     types = predefined_types;
-    contract_types = StringMap.empty;
+    contract_types = predefined_contract_types;
     labels = StringMap.empty;
     constrs = predefined_constructors;
     filename;

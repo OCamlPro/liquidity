@@ -67,7 +67,7 @@ let drop_stack ~loc n depth =
 
 (* The type of a contract code is usually:
      lambda (pair (pair tez 'arg) 'global) -> (pair 'ret 'global) *)
-let rec translate_code code =
+let rec translate_code ~parameter_name ~storage_name code =
 
   let rec compile_desc depth env desc =
     match desc with
@@ -640,8 +640,8 @@ the ending NIL is not annotated with a type *)
   in
 
   let env = StringMap.empty in
-  let env = StringMap.add "storage/1" 0 env in
-  let env = StringMap.add "parameter/2" 1 env in
+  let env = StringMap.add storage_name 0 env in
+  let env = StringMap.add parameter_name 1 env in
   let depth = 2 in
 
   let exprs = compile depth env code in
@@ -715,8 +715,10 @@ let translate filename ~peephole contract =
 and translate contract =
   let mic_storage = contract.storage in
   match contract.entries with
-  | [{ entry_sig = { parameter = mic_parameter }; code }] ->
+  | [{ entry_sig = { parameter = mic_parameter; parameter_name; storage_name };
+       code }] ->
     { mic_parameter;
       mic_storage;
-      mic_code =  translate_code code |> finalize_fail_pre }
+      mic_code =  translate_code ~parameter_name ~storage_name code
+                  |> finalize_fail_pre }
   | _ -> assert false

@@ -397,6 +397,7 @@ and type_components ~allow_capital env t =
   match t with
   | Prim(_, _, [x;y], annots) ->
     let label_of_annot = function
+      | Prim(_, "big_map", _, a) -> type_name_of_annots ~allow_capital a
       | Prim(_, _, _, a) ->
         (match type_constr_or_label_of_annots ~allow_capital a with
          | [l] -> Some l

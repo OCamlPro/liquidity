@@ -412,7 +412,10 @@ let primitive_of_string s =
 
 let string_of_primitive prim =
   try
-    Hashtbl.find string_of_primitive prim
+    match prim with
+    | Prim_unused (Some s) -> Printf.sprintf "<unused:%s>" s
+    | _ ->
+      Hashtbl.find string_of_primitive prim
   with Not_found ->
     Printf.eprintf "Debug: string_of_primitive(%d) raised Not_found\n%!"
                    (Obj.magic prim : int);
@@ -933,6 +936,7 @@ type node = {
    | N_UNPACK of datatype
    | N_ABS
    | N_RECORD of string list
+   | N_SETFIELD of string
    | N_PROJ of string
    | N_CONSTR of string
    | N_RESULT of node * int

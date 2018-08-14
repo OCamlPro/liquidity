@@ -176,6 +176,24 @@ let add_name_to_ins stack seq ins =
   | Some name, _, x :: _ -> add_name stack seq name
   | _, _, _ -> ()
 
+let rec short_circuit node ~from =
+  match node.node_name with
+  | Some n  -> ()
+  | None ->
+    List.iter (fun n ->
+        begin match n.next with
+          | Some k when k.num = node.num ->
+            n.next <- from.next
+          | _ -> ()
+        end;
+        short_circuit node ~from:n;
+      ) from.prevs
+
+let rec undo_cdr acc node =
+  match node with
+  | { kind = N_PRIM "CDR"; args = [x] } -> undo_cdr (node :: acc) x
+  | _ -> acc, node
+
 let rec interp contract =
 
   let rec decompile_seq stack (seq : node) code =
@@ -685,20 +703,10 @@ let rec interp contract =
     | CAR (Some f), { kind = N_RECORD (f' :: _); args = x :: _ } :: stack
       when f = f'->
       x :: stack, seq
-    | CAR (Some field), { kind = N_PRIM "CDR"; args = [x] } :: stack ->
+    | (CAR (Some field) | CDR (Some field)), x :: stack ->
+      let to_remove, x = undo_cdr [] x in
       let x = node ins.loc (N_PROJ field) [x] [seq] in
-      x :: stack, x
-    | CDR (Some field), { kind = N_PRIM "CDR"; args = [x] } :: stack ->
-      let x = node ins.loc (N_PROJ field) [x] [seq] in
-      x :: stack, x
-    | CAR (Some field), x :: stack ->
-      (* let s = LiquidPrinter.Michelson.string_of_loc_michelson ins in
-       * let sx = LiquidPrinter.string_of_node x in
-       * Format.eprintf ">> %s ::: %s@." s sx; *)
-      let x = node ins.loc (N_PROJ field) [x] [seq] in
-      x :: stack, x
-    | CDR (Some field), x :: stack ->
-      let x = node ins.loc (N_PROJ field) [x] [seq] in
+      List.iter (short_circuit ~from:x) to_remove;
       x :: stack, x
 
     | NEQ, { kind = N_PRIM "COMPARE"; args = [x;y] } :: stack->
@@ -777,6 +785,11 @@ let rec interp contract =
     | NEG, x :: stack ->
       let x = node ins.loc (N_PRIM "NEG") [x] [seq] in
       x :: stack, x
+
+    | PAIR, { kind = N_PRIM "CAR"; args = [p] } ::
+            { kind = N_PRIM "CDR"; args = [p'] } :: stack when p.num = p'.num ->
+       p :: stack, seq
+
     | PAIR, x :: y :: stack ->
        let x = node ins.loc (N_PRIM "PAIR") [x;y] [seq] in
        x :: stack, x
@@ -786,19 +799,29 @@ let rec interp contract =
        x :: stack, x
 
     | RECORD (label_x, None),
-      x :: { kind = N_RECORD y_labels; args; prevs; num } :: stack ->
-      let rec short_circuit node =
-        List.iter (fun n ->
-            begin match n.next with
-              | Some k when k.num = num ->
-                n.next <- node.next
-              | _ -> ()
-            end;
-            short_circuit n;
-          ) node.prevs in
+      x :: ({ kind = N_RECORD y_labels; args } as y) :: stack ->
       let x =
          node ins.loc (N_RECORD (label_x :: y_labels)) (x :: args) [seq] in
-      short_circuit x;
+      short_circuit ~from:x y;
+      x :: stack, x
+
+    | RECORD (label_x, None),
+      x :: ({ kind = N_PRIM "CDR"; args = [_] } as y) :: stack ->
+      let to_remove, y = undo_cdr [] y in
+      let x =
+         node ins.loc (N_SETFIELD label_x) [x; y] [seq] in
+      List.iter (short_circuit ~from:x) to_remove;
+      x :: stack, x
+
+    | RECORD (label_x, None),
+      x :: ({ kind = N_SETFIELD _ } as y) :: stack ->
+      let x =
+         node ins.loc (N_SETFIELD label_x) [x; y] [seq] in
+      x :: stack, x
+
+
+    | RECORD (label_x, None), x :: y :: stack ->
+      let x = node ins.loc (N_RECORD [label_x; "_"]) [x;y] [seq] in
       x :: stack, x
 
     | COMPARE, x ::  { kind = N_CONST (Tint,CInt n)} :: stack

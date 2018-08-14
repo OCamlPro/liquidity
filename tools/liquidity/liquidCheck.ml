@@ -163,6 +163,13 @@ let rec merge_matches acc loc cases constrs =
     merge_matches acc loc [ CConstr ("Left", l), case_l;
                             CConstr ("Right", [x]), case_r ] constrs
 
+  | [ CConstr ("Left", l), case_l;
+      CConstr ("Right", [x]), { desc = Let (v, _, _, case_r,
+                                            { desc = Const (_, _, CUnit) }) } ],
+    _ :: _ ->
+    merge_matches acc loc [ CConstr ("Left", l), case_l;
+                            CConstr ("Right", [x]), case_r ] constrs
+
   | [ CConstr ("Left", l), case_l; CConstr ("Right", [x]), case_r ],
     (c1, ty1) :: constrs ->
     begin match case_r.desc with

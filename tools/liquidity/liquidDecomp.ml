@@ -373,6 +373,11 @@ let rec decompile contract =
          in
          mklet node (Record(loc, fields))
 
+       | N_SETFIELD label, [x; y] ->
+         let x = arg_of x in
+         let y = arg_of y in
+         mklet node (SetField(y, loc, label, x))
+
        | N_LEFT right_ty, [arg] ->
          mklet node (Constructor(loc, Left right_ty, arg_of arg))
 
@@ -584,6 +589,7 @@ let rec decompile contract =
        | N_RESULT (_, _)
        | N_PROJ _
        | N_CONSTR _
+       | N_SETFIELD _
        ), _->
          LiquidLoc.raise_error
            "not implemented at node %s%!"
