@@ -1447,6 +1447,15 @@ and translate_entry name env contracts head_exp parameter storage_name =
           head_exp);
       pexp_loc }
     when storage_name = None && parameter <> None ->
+    translate_entry name env contracts head_exp parameter (Some sto_name)
+
+  | { pexp_desc =
+        Pexp_fun (
+          Nolabel, None,
+          { ppat_desc = Ppat_var { txt = sto_name } },
+          head_exp);
+      pexp_loc }
+    when storage_name = None && parameter <> None ->
     begin try find_type "storage" env |> ignore
       with Not_found ->
         error_loc pexp_loc "type storage is required but not provided"
@@ -1947,7 +1956,6 @@ let predefined_types =
                    "set", Tunit;
                    "big_map", Tunit;
                    "variant", Tunit;
-                   "contract", Tunit;
                  ]
 
 let filename_to_contract filename =

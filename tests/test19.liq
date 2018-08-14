@@ -29,7 +29,7 @@ contract type PS = contract type of PlusOne
 
 let%entry main
     (parameter : signature)
-    (storage : storage) =
+    storage =
   (*  let c = Contract.self () in *)
   let key_hash = Crypto.hash_key storage.key in
   if key_hash = tz1KqTpEZ7Yob7QbPE4Hy4Wo8fHG8LhKxZSx then
