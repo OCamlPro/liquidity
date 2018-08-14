@@ -1,5 +1,7 @@
 [%%version 0.3]
 
+type storage = bool
+
 let%init storage (i: int) (j: int) = i <= j
 
 let%entry main (parameter : bool) (storage : bool)  =

@@ -1,3 +1,6 @@
+
+type storage = int
+
 let%entry main
   (parameter : int option)
   (storage : int) =

@@ -1,6 +1,8 @@
 
 [%%version 0.3]
 
+type storage = tez * tez
+
 let%entry main
       (parameter : timestamp)
       (storage : tez * tez  (* 2: P N *)

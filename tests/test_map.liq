@@ -4,6 +4,8 @@
 
 let succ (x : int) = x + 1
 
+type storage = int list
+
 let%entry main
       (parameter : int)
       (storage : int list) =

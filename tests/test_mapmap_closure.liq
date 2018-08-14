@@ -1,7 +1,9 @@
 [%%version 0.3]
+type storage = (string, bool) map
+
 let%entry main
   (parameter : (string, tez) map)
-  (storage : (string, bool) map) =
+  (storage) =
 
   let amount = Current.amount() in
   let f (arg: (string * tez)) =

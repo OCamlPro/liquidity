@@ -2,6 +2,8 @@
 
 [%%version 0.3]
 
+type storage = unit
+
 let%entry main
     (parameter : int list)
     (storage : unit) =

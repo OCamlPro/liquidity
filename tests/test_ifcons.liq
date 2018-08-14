@@ -3,6 +3,8 @@
 
 [%%version 0.3]
 
+type storage = string list
+
 let%entry main
       (parameter : string)
       (storage : string list) =

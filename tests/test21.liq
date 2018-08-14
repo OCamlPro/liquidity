@@ -1,4 +1,5 @@
 [%%version 0.3]
+type storage = nat
 
 let%entry main
     (parameter : int)

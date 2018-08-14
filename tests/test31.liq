@@ -1,7 +1,15 @@
 [%%version 0.3]
 
+type storage = int
+
+contract type I = sig
+  type storage
+  val%entry main : int -> storage -> (operation list * storage)
+end
+
+
 let%entry main
-    (parameter : int contract * int option)
+    (parameter : (contract I) * int option)
     (storage : int) =
 
   let (c, l) = parameter in

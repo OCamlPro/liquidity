@@ -1,9 +1,10 @@
 [%%version 0.3]
 
 type t = A of int | B | C of (int * nat)
+type storage = int
 
 let%entry main
-    (parameter : unit contract * t)
+    (parameter : (contract UnitContract) * t)
     (storage : int) =
 
   let (c, m) = parameter in

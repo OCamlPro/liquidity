@@ -1,7 +1,14 @@
 [%%version 0.3]
 
+type storage = bool
+
+contract type N = sig
+  type storage
+  val%entry main : nat -> storage -> (operation list * storage)
+end
+
 let%entry main
-    (parameter : nat contract)
+    (parameter : (contract N))
     (storage : bool) =
 
   let b =

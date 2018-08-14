@@ -1,3 +1,6 @@
+
+type storage = bool
+
 let%entry main
   (parameter : tez set)
   (storage : bool) =

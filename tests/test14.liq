@@ -3,6 +3,8 @@
 
 [%%version 0.3]
 
+type storage = int set
+
 let%entry main
       (parameter : int)
       (storage : int set) =

@@ -2,11 +2,11 @@
 [%%version 0.3]
 
 type t = tez
-type s = (t * tez)
+type storage = (t * tez)
 
 let%entry main
       (parameter : timestamp)
-      (storage : s)
+      (storage : storage)
       : (operation list * (tez * t)) =
 
       let p = get storage 0 in

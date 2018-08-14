@@ -1,3 +1,4 @@
+type storage = int * nat
 
 let%entry main
       (parameter : int)

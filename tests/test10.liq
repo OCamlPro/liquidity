@@ -3,15 +3,15 @@
 
 [%%version 0.3]
 
-type s =
+type storage =
         bool *
         int option *
         (string,int) map
 
 let%entry main
       (parameter : bool)
-      (storage : s)
-      : operation list * s =
+      (storage : storage)
+      : operation list * storage =
 
 (* options *)
       let x = 3 in
