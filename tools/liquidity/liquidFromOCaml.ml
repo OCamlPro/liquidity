@@ -694,7 +694,7 @@ let translate_record ty_name labels env =
          let label = pld.pld_name.txt in
          try
            find_label label env |> ignore;
-           error_loc pld.pld_loc "label already defined";
+           error_loc pld.pld_loc "label %s already defined" label;
          with Not_found ->
            let ty = translate_type env pld.pld_type in
            env.labels <- StringMap.add label (ty_name, i, ty) env.labels;
@@ -710,7 +710,7 @@ let translate_variant ty_name constrs env =
          let constr = pcd.pcd_name.txt in
          try
            find_constr constr env |> ignore;
-           error_loc pcd.pcd_loc "constructor already defined";
+           error_loc pcd.pcd_loc "constructor %s already defined" constr;
          with Not_found ->
            let ty = match pcd.pcd_args with
              | Pcstr_tuple [ ty ] -> translate_type env ty
@@ -1739,7 +1739,7 @@ and translate_structure env acc ast =
                                }
     ]) } :: ast ->
      if StringMap.mem ty_name env.types then
-       error_loc ptype_loc "type already defined";
+       error_loc ptype_loc "type %s already defined" ty_name;
      begin match ptype_kind with
      | Ptype_record labels ->
         if List.length labels < 2 then begin
@@ -1950,6 +1950,12 @@ let predefined_types =
                    "contract", Tunit;
                  ]
 
+let filename_to_contract filename =
+  String.capitalize_ascii
+    (LiquidMisc.string_replace
+       Filename.(basename filename |> remove_extension)
+       '.' '_')
+
 let initial_env filename =
   {
     types = predefined_types;
@@ -1958,10 +1964,7 @@ let initial_env filename =
     constrs = predefined_constructors;
     filename;
     top_env = None;
-    contractname =
-      LiquidMisc.string_replace
-        Filename.(basename filename |> remove_extension)
-         '.' '_';
+    contractname = filename_to_contract filename;
   }
 
 let translate_exn exn =
@@ -2026,6 +2029,62 @@ let translate ~filename ast =
     end;
     (contract, init, env)
   with exn -> translate_exn exn
+
+let mk_toplevel_env filename top_env =
+  { types = StringMap.empty;
+    contract_types = StringMap.empty;
+    labels = StringMap.empty;
+    constrs = StringMap.empty;
+    filename;
+    top_env = Some top_env;
+    contractname = filename_to_contract filename;
+  }
+
+let translate_multi l =
+  match List.rev l with
+  | [] -> exit 2
+  | (filename, ast) :: r_others ->
+    let top_env = initial_env filename in
+    let exception Stop of syntax_contract * syntax_init option * env in
+    try
+      let acc =
+        List.fold_left (fun acc (filename, ast) ->
+            let env = mk_toplevel_env filename top_env in
+            let contract, init, env = translate_structure env acc ast in
+            begin match !LiquidOptions.main with
+              | Some main when main = contract.contract_name ->
+                Format.eprintf "Main contract %s@." contract.contract_name;
+                raise (Stop (contract, init, env))
+              | _ ->
+                Format.eprintf "Contract %s@." contract.contract_name;
+            end;
+            lift_inner_env env;
+            let acc = match init with
+              | None -> acc
+              | Some init ->
+                let f_init =
+                  List.fold_right (fun (arg_name, loc, arg_ty) body ->
+                      mk (Lambda (arg_name, arg_ty, loc, body, Tunit))
+                    ) init.init_args init.init_body in
+                let v = Syn_value (String.concat "."
+                                     [contract.contract_name; init.init_name],
+                                   false, f_init) in
+                (v :: acc) in
+            Syn_contract contract :: acc
+          ) [] (List.rev r_others)
+      in
+      let contract, init, env = translate_structure top_env acc ast in
+      Format.eprintf "Main contract %s@." contract.contract_name;
+      begin match !LiquidOptions.main with
+        | Some main when main <> contract.contract_name ->
+          Format.eprintf "No contract named %s.@." main;
+          exit 2;
+        | _ -> ()
+      end;
+      (contract, init, env)
+    with
+    | Stop (contract, init, env) -> (contract, init, env)
+    | exn -> translate_exn exn
 
 let ocaml_of_file parser file =
   let ic = open_in file in

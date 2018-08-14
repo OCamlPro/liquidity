@@ -16,7 +16,6 @@ let verbosity =
     )
 
 let peephole = ref true
-let keepon = ref false
 let typeonly = ref false
 let parseonly = ref false
 let singleline = ref false

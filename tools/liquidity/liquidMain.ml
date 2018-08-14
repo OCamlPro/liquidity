@@ -21,18 +21,23 @@ exception Bad_arg
   to Michelson. No type-checking yet.
  *)
 
-let compile_liquid_file filename =
-  let ocaml_ast = LiquidFromOCaml.read_file filename in
-  if !LiquidOptions.verbosity>0 then
-  FileString.write_file (filename ^ ".ocaml")
-    (LiquidOCamlPrinter.contract_ast ocaml_ast);
+let compile_liquid_files files =
+  let ocaml_asts = List.map (fun filename ->
+    let ocaml_ast = LiquidFromOCaml.read_file filename in
+    if !LiquidOptions.verbosity>0 then
+      FileString.write_file (filename ^ ".ocaml")
+        (LiquidOCamlPrinter.contract_ast ocaml_ast);
+    (filename, ocaml_ast)
+    ) files in
   if !LiquidOptions.parseonly then exit 0;
   let syntax_ast, syntax_init, env =
-    LiquidFromOCaml.translate filename ocaml_ast in
-  let outprefix =
-    Filename.(concat (dirname filename) @@
-              String.uncapitalize_ascii (env.contractname))
-    ^ ".liq" in
+    LiquidFromOCaml.translate_multi ocaml_asts in
+  let outprefix = match List.rev ocaml_asts with
+    | [] -> assert false
+    | (filename, _) :: _ ->
+      Filename.(concat (dirname filename) @@
+                String.uncapitalize_ascii (syntax_ast.contract_name))
+      ^ ".liq" in
   if !LiquidOptions.verbosity>0 then
   FileString.write_file (outprefix ^ ".syntax")
                         (LiquidPrinter.Liquid.string_of_contract
@@ -180,24 +185,22 @@ let compile_tezos_file filename =
   Printf.eprintf "File %S generated\n%!" output;
   ()
 
-let handle_file filename =
-  if Filename.check_suffix filename ".liq" then
-    compile_liquid_file filename
-  else
-  if Filename.check_suffix filename ".tz" ||
-     Filename.check_suffix filename ".json"
-  then
-    compile_tezos_file filename
-  else begin
-    Printf.eprintf "Error: unknown extension for %S\n%!" filename;
-    exit 2
-  end
+let compile_tezos_files = List.iter compile_tezos_file
 
-let handle_file filename =
-  try
-    handle_file filename
-  with (LiquidError _) as e ->
-       if not !LiquidOptions.keepon then raise e
+let handle_files files =
+  let compile =
+    if List.for_all
+        (fun filename -> Filename.check_suffix filename ".liq") files then
+      compile_liquid_files
+    else if List.for_all (fun filename ->
+        Filename.check_suffix filename ".tz" ||
+        Filename.check_suffix filename ".json") files then
+      compile_tezos_files
+    else begin
+      Printf.eprintf "Error: unknown extension\n%!";
+      exit 2
+    end in
+  compile files
 
 
 module Data = struct
@@ -351,9 +354,8 @@ let parse_tez_to_string expl amount =
 
 let main () =
   let work_done = ref false in
+  let files = ref [] in
   let arg_list = Arg.align [
-      "-k", Arg.Set LiquidOptions.keepon, " Continue on error";
-
       "--verbose", Arg.Unit (fun () -> incr LiquidOptions.verbosity),
       " Increment verbosity";
 
@@ -498,7 +500,7 @@ let main () =
       "FILE.liq PARAMETER [STORAGE] Translate to Michelson";
 *)
 
-    ] @ LiquidToTezos.arg_list work_done
+    ]
 
   in
   let arg_usage = String.concat "\n" [
@@ -512,8 +514,11 @@ let main () =
     ]
   in
   try
-    Arg.parse arg_list (fun s -> work_done := true; handle_file s) arg_usage;
-    if not !work_done then raise Bad_arg
+    Arg.parse arg_list
+      (fun s -> work_done := true; files := s :: !files)
+      arg_usage;
+    if not !work_done then raise Bad_arg;
+    handle_files (List.rev !files)
   with Bad_arg ->
     Arg.usage arg_list arg_usage
 

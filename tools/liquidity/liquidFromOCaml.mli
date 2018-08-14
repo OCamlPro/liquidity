@@ -17,6 +17,10 @@ val translate :
   filename:string -> Parsetree.structure ->
   syntax_contract * syntax_init option * env
 
+val translate_multi :
+  (string * Parsetree.structure) list ->
+  syntax_contract * syntax_init option * env
+
 val read_file : string -> Parsetree.structure
 
 val translate_expression : env -> Parsetree.expression -> syntax_exp
