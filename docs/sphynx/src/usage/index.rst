@@ -85,9 +85,6 @@ Let's have a look at the generated ``simple.liq.tz`` file::
   code { DUP ;
          DIP { CDR } ;
          CAR ;
-         DUP @parameter ;
-         SWAP ;
-         DROP ;
          SWAP ;
          ADD ;
          NIL operation ;
@@ -156,6 +153,7 @@ Relevant options::
 Interacting with a Tezos node
 -----------------------------
 
+(TODO)
 
 Relevant options::
  --amount <1.99tz>                           Set amount for deploying or running a contract (default: 0tz)
