@@ -63,6 +63,7 @@ and simplify_step e exprs =
   | DIP_DROP(n,0), exprs -> exprs
   | DIP (0, e), exprs -> simplify_step e exprs
   | DUP _, {ins=DROP} :: exprs -> exprs
+  | DUP 1, {ins=SWAP} :: {ins=DROP} :: exprs -> exprs
   | FAILWITH, _ -> [e]
 
   | IF(i1,i2), exprs ->
