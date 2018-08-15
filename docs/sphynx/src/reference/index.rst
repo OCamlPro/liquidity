@@ -4,19 +4,6 @@
 Reference
 =========
 
-`The Liquidity Project
-<http://github.com/OCamlPro/liquidity>`__
-
-The Liquidity project contains:
-
-* A compiler from Liquidity files (.liq extension) to Michelson
-* A de-compiler from Michelson files (.tz extension) to Liquidity
-* An evaluator of Michelson contracts
-* An interface to a Tezos node for manipulating Liquidity contracts
-
-See `Examples <http://github.com/OCamlPro/liquidity/tree/master/tests>`__
-in the `Github <http://github.com/OCamlPro/liquidity>`__ project.
-
 Contract Format
 ---------------
 

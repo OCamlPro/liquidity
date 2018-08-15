@@ -6,9 +6,11 @@
 Welcome to Liquidity's documentation!
 =====================================
 
-Liquidity is a language to program Smart Contracts for Tezos. It uses
-the syntax of OCaml, and strictly complies to Michelson security
-restrictions.
+Liquidity is a high-level statically-typed language to program Smart
+Contracts for Tezos. It uses a subset of the syntax of OCaml, and
+strictly complies to Michelson security restrictions. It comes with a
+decompiler that can translate Michelson contracts to Liquidity, for
+auditing purpose.
 
 .. toctree::
    :maxdepth: 2
@@ -33,6 +35,12 @@ restrictions.
    :caption: Tutorial:
 
    tutorial/index
+
+.. toctree::
+   :maxdepth: 2
+   :caption: The Online Editor:
+
+   liq-edit/index
 
 .. toctree::
    :maxdepth: 2
