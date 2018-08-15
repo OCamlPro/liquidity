@@ -96,6 +96,7 @@ OCaml.library("michelson",
               "bigstring";
               "calendar";
               "hex";
+              "lwt_log";
      ];
    });
 

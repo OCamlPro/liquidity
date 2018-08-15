@@ -12,7 +12,7 @@ opam switch create liquidity 4.06.1
 eval $(opam config env)
 
 opam update
-opam install ocp-build ocplib-endian zarith calendar digestif hex ocurl lwt lwt_log uri sodium bigstring ezjsonm
+make build-deps
 make clone-tezos
 tezos/scripts/install_build_deps.raw.sh
 # make -C tezos build-deps
