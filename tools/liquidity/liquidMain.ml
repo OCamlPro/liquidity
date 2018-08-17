@@ -192,6 +192,14 @@ module Data = struct
 
   let contract_address = ref ""
 
+  let mk_json_obj fields =
+    fields
+    |> List.map (fun (f,v) -> "\"" ^ f ^ "\":" ^ v)
+    |> String.concat ","
+    |> fun fs -> "{" ^ fs ^ "}"
+    
+
+
   let translate () =
     let filename = !contract in
     let contract = FileString.read_file filename in
@@ -199,13 +207,36 @@ module Data = struct
     let storage = !storage in
     let p,s = LiquidData.data_of_liq ~filename
                                      ~contract ~parameter ~storage in
-    List.iter (fun (s,x) ->
-        match x with
-        | Error error ->
-           LiquidLoc.report_error Format.err_formatter error
-        | Ok x ->
-           Printf.printf "%s: %s\n%!" s x)
-              [ "parameter", p; "storage", s ]
+    let input = match p with 
+      | Error error ->
+        LiquidLoc.report_error Format.err_formatter error;
+        raise (Invalid_argument "input");
+      | Ok input ->
+        input in
+
+    let storage = match s with 
+      | Error error ->
+        LiquidLoc.report_error Format.err_formatter error;
+        raise (Invalid_argument "storage");
+      | Ok storage ->
+        storage in
+
+    if !LiquidOptions.json then
+      let input_json = LiquidToTezos.(json_of_const @@ convert_const input) in
+      let storage_json = LiquidToTezos.(json_of_const @@ convert_const storage) in 
+      let input_const = LiquidToTezos.convert_const input in
+      let storage_const = LiquidToTezos.convert_const storage in
+      let run_fields = [
+        "input", input_json;
+        "storage", storage_json;
+      ] in
+      let run_json = mk_json_obj run_fields in
+      Printf.printf "%s\n%!" run_json
+    else
+      List.iter (fun (s,x) ->
+       let x = LiquidPrinter.Michelson.line_of_const x in
+       Printf.printf "%s: %s\n%!" s x)
+         [ "input", input; "storage", storage ]
 
   let run () =
     let open LiquidDeploy in

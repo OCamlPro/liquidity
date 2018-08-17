@@ -17,7 +17,7 @@ val data_of_liq :
   filename:string ->
   contract:string ->
   parameter:string ->
-  storage:string -> (string,error) result * (string,error) result
+  storage:string -> (const,error) result * (const,error) result
 
 val translate :
   env -> contract_sig -> string -> datatype -> const

@@ -125,8 +125,7 @@ let data_of_liq ~filename ~contract ~parameter ~storage =
   let translate filename s ty =
     try
       let c = translate { env with filename } contract.contract_sig s ty in
-      let s = LiquidPrinter.Michelson.line_of_const c in
-      Ok s
+      Ok c
     with LiquidError error ->
       Error error
   in
