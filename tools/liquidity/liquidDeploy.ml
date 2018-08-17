@@ -826,144 +826,7 @@ let get_public_key_from_secret_key sk =
   (* |> Ed25519.Secret_key.to_public_key *)
   |> Ed25519.Public_key.to_b58check
 
-let forge_deploy ?head ?source ?public_key
-    ?(delegatable=false) ?(spendable=false)
-    liquid init_params_strings =
-  let source = match source, !LiquidOptions.source with
-    | Some source, _ | _, Some source -> source
-    | None, None -> raise (ResponseError "forge_deploy: Missing source")
-  in
-  let env, syntax_ast, pre_michelson, pre_init_infos = compile_liquid liquid in
-  let contract_sig = syntax_ast.contract_sig in
-  let pre_init, init_infos = match pre_init_infos with
-    | None -> raise (ResponseError "forge_deploy: Missing init")
-    | Some pre_init_infos -> pre_init_infos
-  in
-  let init_storage_lwt = match pre_init with
-    | LiquidInit.Init_constant c ->
-      if init_params_strings <> [] then
-        raise (ResponseError "forge_deploy: Constant storage, no inputs needed");
-      return c
-    | LiquidInit.Init_code (syntax_c, c) ->
-      let init_params =
-        try
-          List.map2 (fun input_str (input_name,_, input_ty) ->
-            LiquidData.translate { env with filename = input_name }
-              contract_sig input_str input_ty
-            ) init_params_strings init_infos
-        with Invalid_argument _ ->
-          raise
-            (ResponseError
-               (Printf.sprintf
-                  "forge_deploy: init storage needs %d arguments, but was given %d"
-                  (List.length init_infos) (List.length init_params_strings)
-               ))
-      in
-      let eval_input_storage =
-        try
-          LiquidData.default_const contract_sig.storage
-          |> LiquidEncode.encode_const env contract_sig
-        with Not_found -> failwith "could not construct dummy storage for eval"
-      in
-      let eval_input_parameter = match init_params with
-        | [] -> CUnit
-        | [x] -> x
-        | _ -> CTuple init_params in
-
-      run_pre env contract_sig c (Some source)
-        eval_input_parameter eval_input_storage
-      >>= fun (_, eval_init_storage, big_map_diff, _) ->
-      (* Add elements of big map *)
-      let eval_init_storage = match eval_init_storage, big_map_diff with
-        | CTuple (CBigMap m :: rtuple), Some l ->
-          let m = List.fold_left (fun m -> function
-              | Big_map_add (DiffKey k, v) -> (k, v) :: m
-              | Big_map_add (DiffKeyHash _, _) ->
-                failwith "Big map must be empty in initial storage with this version of Tezos node"
-              | Big_map_remove _ -> m
-            ) m l
-          in
-          CTuple (CBigMap m :: rtuple)
-        | CRecord ((bname, CBigMap m) :: rrecord), Some l ->
-          let m = List.fold_left (fun m -> function
-              | Big_map_add (DiffKey k, v) -> (k, v) :: m
-              | Big_map_add (DiffKeyHash _, _) ->
-                failwith "Big map must be empty in initial storage with this version of Tezos node"
-              | Big_map_remove _ -> m
-            ) m l
-          in
-          CRecord ((bname, CBigMap m) :: rrecord)
-        | _ -> eval_init_storage
-      in
-      Printf.eprintf "Evaluated initial storage: %s\n%!"
-        (LiquidData.string_of_const eval_init_storage);
-      return (LiquidEncode.encode_const env contract_sig eval_init_storage)
-  in
-  init_storage_lwt >>= fun init_storage ->
-
-  begin match head with
-    | Some head -> return head
-    | None -> get_head_hash ()
-  end >>= fun head ->
-  get_counter source >>= fun counter ->
-  is_revealed source >>= fun source_revealed ->
-  let counter = counter + 1 in
-  let c, loc_table =
-    LiquidToTezos.convert_contract ~expand:true pre_michelson in
-  let init_storage_m = LiquidToTezos.convert_const init_storage in
-  let contract_json = LiquidToTezos.json_of_contract c in
-  let init_storage_json = LiquidToTezos.json_of_const init_storage_m in
-  let script_json = [
-    "code", contract_json;
-    "storage", init_storage_json
-  ] |> mk_json_obj
-  in
-  let origination_json counter = [
-    "kind", "\"origination\"";
-    "source", Printf.sprintf "%S" source;
-    "fee", Printf.sprintf "%S" !LiquidOptions.fee;
-    "counter", Printf.sprintf "\"%d\"" counter;
-    "gas_limit", Printf.sprintf "%S" !LiquidOptions.gas_limit;
-    "storage_limit", Printf.sprintf "%S" !LiquidOptions.storage_limit;
-    "managerPubkey", Printf.sprintf "%S" source;
-    "balance", Printf.sprintf "%S" !LiquidOptions.amount;
-    "spendable", string_of_bool spendable;
-    "delegatable", string_of_bool delegatable;
-    "script", script_json;
-  ] |> mk_json_obj
-  in
-  let operations = match source_revealed, public_key with
-    | true, _ | _, None -> [origination_json counter]
-    | false, Some edpk ->
-      let reveal_json = [
-        "kind", "\"reveal\"";
-        "source", Printf.sprintf "%S" source;
-        "fee", "\"0\"";
-        "counter", Printf.sprintf "\"%d\"" counter;
-        "gas_limit", "\"20\"";
-        "storage_limit", "\"0\"";
-        "public_key", Printf.sprintf "%S" edpk;
-      ] |> mk_json_obj
-      in
-      [reveal_json; origination_json (counter + 1)]
-  in
-  let operations_json = mk_json_arr operations in
-  let data = [
-    "branch", Printf.sprintf "%S" head;
-    "contents", operations_json;
-  ] |> mk_json_obj
-  in
-  send_post ~loc_table ~data
-    "/chains/main/blocks/head/helpers/forge/operations"
-  >>= fun r ->
-  try
-    let op = get_json_string r in
-    return (op, operations_json, loc_table)
-  with Not_found ->
-    raise_response_error ~loc_table "forge_deploy" (Ezjsonm.from_string r)
-
-
-let init_storage ?head ?source ?public_key
+let init_storage ?source
     liquid init_params_strings =
   let env, syntax_ast, pre_michelson, pre_init_infos = compile_liquid liquid in
   let contract_sig = syntax_ast.contract_sig in
@@ -1031,6 +894,79 @@ let init_storage ?head ?source ?public_key
         (LiquidData.string_of_const eval_init_storage);
       return (LiquidEncode.encode_const env contract_sig eval_init_storage)
 
+
+let forge_deploy ?head ?source ?public_key
+    ?(delegatable=false) ?(spendable=false)
+    liquid init_params_strings =
+  let source = match source, !LiquidOptions.source with
+    | Some source, _ | _, Some source -> source
+    | None, None -> raise (ResponseError "forge_deploy: Missing source")
+  in
+  let env, syntax_ast, pre_michelson, _ = compile_liquid liquid in
+  let contract_sig = syntax_ast.contract_sig in
+  
+  init_storage ~source liquid init_params_strings >>= fun init_storage ->
+
+  begin match head with
+    | Some head -> return head
+    | None -> get_head_hash ()
+  end >>= fun head ->
+  get_counter source >>= fun counter ->
+  is_revealed source >>= fun source_revealed ->
+  let counter = counter + 1 in
+  let c, loc_table =
+    LiquidToTezos.convert_contract ~expand:true pre_michelson in
+  let init_storage_m = LiquidToTezos.convert_const init_storage in
+  let contract_json = LiquidToTezos.json_of_contract c in
+  let init_storage_json = LiquidToTezos.json_of_const init_storage_m in
+  let script_json = [
+    "code", contract_json;
+    "storage", init_storage_json
+  ] |> mk_json_obj
+  in
+  let origination_json counter = [
+    "kind", "\"origination\"";
+    "source", Printf.sprintf "%S" source;
+    "fee", Printf.sprintf "%S" !LiquidOptions.fee;
+    "counter", Printf.sprintf "\"%d\"" counter;
+    "gas_limit", Printf.sprintf "%S" !LiquidOptions.gas_limit;
+    "storage_limit", Printf.sprintf "%S" !LiquidOptions.storage_limit;
+    "managerPubkey", Printf.sprintf "%S" source;
+    "balance", Printf.sprintf "%S" !LiquidOptions.amount;
+    "spendable", string_of_bool spendable;
+    "delegatable", string_of_bool delegatable;
+    "script", script_json;
+  ] |> mk_json_obj
+  in
+  let operations = match source_revealed, public_key with
+    | true, _ | _, None -> [origination_json counter]
+    | false, Some edpk ->
+      let reveal_json = [
+        "kind", "\"reveal\"";
+        "source", Printf.sprintf "%S" source;
+        "fee", "\"0\"";
+        "counter", Printf.sprintf "\"%d\"" counter;
+        "gas_limit", "\"20\"";
+        "storage_limit", "\"0\"";
+        "public_key", Printf.sprintf "%S" edpk;
+      ] |> mk_json_obj
+      in
+      [reveal_json; origination_json (counter + 1)]
+  in
+  let operations_json = mk_json_arr operations in
+  let data = [
+    "branch", Printf.sprintf "%S" head;
+    "contents", operations_json;
+  ] |> mk_json_obj
+  in
+  send_post ~loc_table ~data
+    "/chains/main/blocks/head/helpers/forge/operations"
+  >>= fun r ->
+  try
+    let op = get_json_string r in
+    return (op, operations_json, loc_table)
+  with Not_found ->
+    raise_response_error ~loc_table "forge_deploy" (Ezjsonm.from_string r)
 
 let hash msg =
   Blake2B.(to_bytes (hash_bytes [MBytes.of_string "\x03"; msg]))
