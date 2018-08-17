@@ -828,6 +828,10 @@ let get_public_key_from_secret_key sk =
 
 let init_storage ?source
     liquid init_params_strings =
+  let source = match source, !LiquidOptions.source with
+    | Some source, _ | _, Some source -> source
+    | None, None -> raise (ResponseError "init_storage: Missing source")
+  in
   let env, syntax_ast, pre_michelson, pre_init_infos = compile_liquid liquid in
   let contract_sig = syntax_ast.contract_sig in
   let pre_init, init_infos = match pre_init_infos with
