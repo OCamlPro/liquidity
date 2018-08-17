@@ -250,6 +250,17 @@ module Data = struct
     Printf.eprintf "Raw operation:\n--------------\n%!";
     Printf.printf "%s\n%!" op
 
+  let init_storage () =
+    let storage =
+      LiquidDeploy.Sync.init_storage
+        (LiquidDeploy.From_file !contract) (List.rev !init_inputs)
+    in
+    Printf.eprintf "Initial storage:\n--------------\n%!";
+    if !LiquidOptions.json then
+      Printf.printf "%s\n%!" LiquidToTezos.(json_of_const @@ convert_const storage)
+    else
+      Printf.printf "%s\n%!" (LiquidData.string_of_const storage)
+
   let deploy () =
     match
       LiquidDeploy.Sync.deploy
@@ -378,6 +389,16 @@ let main () =
 
       "--spendable", Arg.Set LiquidOptions.spendable,
       " With --[forge-]deploy, deploy a spendable contract";
+
+      "--init-storage", Arg.Tuple [
+        Arg.String (fun s -> Data.contract := s);
+        Arg.Rest Data.register_deploy_input;
+        Arg.Unit (fun () ->
+            work_done := true;
+            Data.init_storage ());
+      ],
+      "FILE.liq INPUT1 INPUT2 ... Forge deployment operation for contract";
+
 
       "--forge-deploy", Arg.Tuple [
         Arg.String (fun s -> Data.contract := s);

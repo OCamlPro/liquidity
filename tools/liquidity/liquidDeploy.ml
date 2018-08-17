@@ -70,6 +70,7 @@ module type S = sig
     (operation list * LiquidTypes.const * big_map_diff option) t
   val run_debug : from -> string -> string ->
     (operation list * LiquidTypes.const * big_map_diff option * trace) t
+  val init_storage : from -> string list -> LiquidTypes.const t
   val forge_deploy : ?delegatable:bool -> ?spendable:bool ->
     from -> string list -> string t
   val deploy : ?delegatable:bool -> ?spendable:bool ->
@@ -961,6 +962,76 @@ let forge_deploy ?head ?source ?public_key
   with Not_found ->
     raise_response_error ~loc_table "forge_deploy" (Ezjsonm.from_string r)
 
+
+let init_storage ?head ?source ?public_key
+    liquid init_params_strings =
+  let env, syntax_ast, pre_michelson, pre_init_infos = compile_liquid liquid in
+  let contract_sig = syntax_ast.contract_sig in
+  let pre_init, init_infos = match pre_init_infos with
+    | None -> raise (ResponseError "init_storage: Missing init")
+    | Some pre_init_infos -> pre_init_infos
+  in
+  match pre_init with
+    | LiquidInit.Init_constant c ->
+      if init_params_strings <> [] then
+        raise (ResponseError "init_storage: Constant storage, no inputs needed");
+      return c
+    | LiquidInit.Init_code (syntax_c, c) ->
+      let init_params =
+        try
+          List.map2 (fun input_str (input_name,_, input_ty) ->
+            LiquidData.translate { env with filename = input_name }
+              contract_sig input_str input_ty
+            ) init_params_strings init_infos
+        with Invalid_argument _ ->
+          raise
+            (ResponseError
+               (Printf.sprintf
+                  "init_storage: init storage needs %d arguments, but was given %d"
+                  (List.length init_infos) (List.length init_params_strings)
+               ))
+      in
+      let eval_input_storage =
+        try
+          LiquidData.default_const contract_sig.storage
+          |> LiquidEncode.encode_const env contract_sig
+        with Not_found -> failwith "could not construct dummy storage for eval"
+      in
+      let eval_input_parameter = match init_params with
+        | [] -> CUnit
+        | [x] -> x
+        | _ -> CTuple init_params in
+
+      run_pre env contract_sig c (Some source)
+        eval_input_parameter eval_input_storage
+      >>= fun (_, eval_init_storage, big_map_diff, _) ->
+      (* Add elements of big map *)
+      let eval_init_storage = match eval_init_storage, big_map_diff with
+        | CTuple (CBigMap m :: rtuple), Some l ->
+          let m = List.fold_left (fun m -> function
+              | Big_map_add (DiffKey k, v) -> (k, v) :: m
+              | Big_map_add (DiffKeyHash _, _) ->
+                failwith "Big map must be empty in initial storage with this version of Tezos node"
+              | Big_map_remove _ -> m
+            ) m l
+          in
+          CTuple (CBigMap m :: rtuple)
+        | CRecord ((bname, CBigMap m) :: rrecord), Some l ->
+          let m = List.fold_left (fun m -> function
+              | Big_map_add (DiffKey k, v) -> (k, v) :: m
+              | Big_map_add (DiffKeyHash _, _) ->
+                failwith "Big map must be empty in initial storage with this version of Tezos node"
+              | Big_map_remove _ -> m
+            ) m l
+          in
+          CRecord ((bname, CBigMap m) :: rrecord)
+        | _ -> eval_init_storage
+      in
+      Printf.eprintf "Evaluated initial storage: %s\n%!"
+        (LiquidData.string_of_const eval_init_storage);
+      return (LiquidEncode.encode_const env contract_sig eval_init_storage)
+
+
 let hash msg =
   Blake2B.(to_bytes (hash_bytes [MBytes.of_string "\x03"; msg]))
 
@@ -1239,6 +1310,11 @@ let activate ~secret =
 module Async = struct
   type 'a t = 'a Lwt.t
 
+  let init_storage 
+      liquid init_params_strings =
+    init_storage liquid init_params_strings
+    >>= fun storage -> return storage
+
   let forge_deploy ?(delegatable=false) ?(spendable=false)
       liquid init_params_strings =
     forge_deploy ~delegatable ~spendable liquid init_params_strings
@@ -1270,6 +1346,11 @@ end
 
 module Sync = struct
   type 'a t = 'a
+
+  let init_storage
+      liquid init_params_strings =
+    Lwt_main.run (init_storage liquid init_params_strings
+                  >>= fun storage -> return storage)
 
   let forge_deploy ?(delegatable=false) ?(spendable=false)
       liquid init_params_strings =

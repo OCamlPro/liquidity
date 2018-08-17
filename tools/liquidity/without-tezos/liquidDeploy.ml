@@ -73,6 +73,8 @@ module type S = sig
     (operation list * LiquidTypes.const * big_map_diff option) t
   val run_debug : from -> string -> string ->
     (operation list * LiquidTypes.const * big_map_diff option * trace) t
+  val init_storage :
+    from -> string list -> LiquidTypes.const t
   val forge_deploy : ?delegatable:bool -> ?spendable:bool ->
     from -> string list -> string t
   val deploy : ?delegatable:bool -> ?spendable:bool ->
@@ -90,6 +92,9 @@ module Dummy = struct
 
   let run_debug _ _ _ =
     failwith "mini version cannot run debug"
+
+  let init_storage _ _ =
+    failwith "mini version cannot deploy"
 
   let forge_deploy ?(delegatable=false) ?(spendable=false) _ _ =
     failwith "mini version cannot deploy"
