@@ -34,19 +34,20 @@ auditing purpose.
    :maxdepth: 2
    :caption: Tutorial:
 
-   tutorial/index
+   tutorial/tutorial
 
 .. toctree::
    :maxdepth: 2
    :caption: The Online Editor:
 
-   liq-edit/index
+   liq-edit/editor
 
 .. toctree::
    :maxdepth: 2
    :caption: Reference:
 
-   reference/index
+   reference/liquidity
+   reference/michelson
 
 
 Indices and tables

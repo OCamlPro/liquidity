@@ -1,8 +1,6 @@
 
-
-
-Reference
-=========
+Tutorial for Liquidity
+======================
 
 Contract Format
 ---------------
