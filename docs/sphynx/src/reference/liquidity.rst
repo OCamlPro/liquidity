@@ -85,8 +85,9 @@ Composite Types
   
 Types can be composed using the following type operators:
 
-- tuples: noted ``(t1 * t2 * t3)``
-- functions: ``'a -> 'b`` is the type of functions from ``'a`` to ``'b``
+- tuples: noted ``t1 * t2``, ``t1 * t2 * t3``, etc.
+- functions: ``'a -> 'b`` is the type of functions from ``'a`` to
+  ``'b``, equivalent to ``('a, 'b) lambda``.
 
 and the following predefined combinators:
   
@@ -97,7 +98,6 @@ and the following predefined combinators:
 - big maps: ``('a, 'b) big_map`` is the type of lazily deserialized maps whose
   keys are of type ``'a`` and values of type ``'b``;
 - contracts: ``'a contract`` for contracts whose parameter is of type ``'a``;
-- lambdas: ``('a,'b) lambda`` for a function from type ``'a`` to type ``'b``.
   
 and the predefined algebraic data types:
 
@@ -203,11 +203,14 @@ There are two kinds of primitives in the language:
   arguments: ``x prim y``. Infix primitives are always operators
   (``+``, ``-``, etc.).
 
-When the type of a primitive is specified, the notation is:
+When the type of a primitive is specified, we extend the notation for
+functions like this:
 
 * ``TYPE_ARG -> TYPE_RESULT`` for a primitive with one argument
 * ``TYPE_ARG1 -> TYPE_ARG2 -> TYPE_RESULT`` for a primitive with two arguments
-  
+
+Whereas functions can only take one argument in Liquidity/Michelson
+(possibly a tuple), primitives can take multiple arguments.
 
 Comparison between values
 ~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -383,70 +386,81 @@ Operations on bytes
 Operations on strings
 ~~~~~~~~~~~~~~~~~~~~~
               
-* ``String.length`` or ``String.size``. It is translated to ``SIZE`` in Michelson.
-* ``String.slice`` or ``String.sub``. It is translated to ``SLICE`` in Michelson.
-* ``String.concat``. It is translated to ``CONCAT`` in Michelson.
-* ``@``. It is translated to ``CONCAT`` in Michelson.
+* ``String.length`` or ``String.size: string -> nat``. It is translated to ``SIZE`` in Michelson.
+* ``String.slice`` or ``String.sub: nat -> nat -> string -> string``. It is translated to ``SLICE`` in Michelson.
+* ``String.concat: string list -> string``. It is translated to ``CONCAT`` in Michelson.
+* ``@ : string -> string -> string``. It is translated to ``CONCAT`` in Michelson.
 
 
 Operations on lambdas
 ~~~~~~~~~~~~~~~~~~~~~
 
-*  ``Lambda.pipe`` or  ``|>`` of type ``'a -> ('a, 'b) lambda -> 'b`` or ``'a -> ('a,'b) closure -> 'b``
+*  ``Lambda.pipe`` or  ``|>`` of type ``'a -> ('a -> 'b) -> 'b`` or ``'a -> ('a,'b) closure -> 'b``
 
 Operations on lists              
 ~~~~~~~~~~~~~~~~~~~
 
-* ``List.rev``    Prim_list_rev;
-* ``List.length``    Prim_list_size;
-* ``List.size``    Prim_list_size;
-* ``List.iter``    Prim_list_iter;
-* ``List.fold``    Prim_list_fold;
-* ``List.map``    Prim_list_map;
-* ``List.map_fold``    Prim_list_map_fold;
+* ``List.rev : 'a list -> 'a list``
+* ``List.length`` or ``List.size: 'a list -> nat``. It is translated to ``SIZE`` in Michelson.
+* ``List.iter: ('a -> unit) -> 'a list -> unit``. It is translated to ``ITER`` in Michelson.
+* ``List.fold: ('ele * 'acc -> unit) -> 'ele list -> 'acc -> 'acc``. It is translated to ``FOLD`` in Michelson.
+* ``List.map: ('src -> 'dst) -> 'src list -> 'dst list``. It is translated to ``MAP`` in Michelson.
+* ``List.map_fold: ('src * 'acc -> 'dst * 'acc) -> 'src list -> 'acc -> 'dst list * 'acc``.    It is translated to ``MAP_FOLD`` in Michelson.
 
 Operations on sets
 ~~~~~~~~~~~~~~~~~~
               
-* ``Set.update``    Prim_set_update;
-* ``Set.add``    Prim_set_add;
-* ``Set.remove``    Prim_set_remove;
-* ``Set.mem``    Prim_set_mem;
-* ``Set.cardinal``    Prim_set_size;
-* ``Set.size``    Prim_set_size;
-* ``Set.iter``    Prim_set_iter;
-* ``Set.fold``    Prim_set_fold;
-* ``Set.map``    Prim_set_map;
-* ``Set.map_fold``    Prim_set_map_fold;
+* ``Set.update: 'a -> bool -> 'a set -> 'a set``. It is translated to ``UPDATE`` in Michelson.
+* ``Set.add: 'a -> 'a set -> 'a set``   . It is translated to ``ADD`` in Michelson.
+* ``Set.remove: 'a -> 'a set -> 'a set``. It is translated to ``REMOVE`` in Michelson.
+* ``Set.mem: 'a -> 'a set -> bool``   . It is translated to ``MEM`` in Michelson.
+* ``Set.cardinal`` or ``Set.size`` with type ``'a set -> nat``. It is translated to ``SIZE`` in Michelson.
+* ``Set.iter: ('ele -> unit) -> 'ele set -> unit``. It is translated to ``ITER`` in Michelson.
+* ``Set.fold: ('ele * 'acc -> unit) -> 'ele set -> 'acc -> 'acc``. It is translated to ``FOLD`` in Michelson.
+* ``Set.map: ('src -> 'dst) -> 'src set -> 'dst set``. It is translated to ``MAP`` in Michelson.
+* ``Set.map_fold: ('src * 'acc -> 'dst * 'acc) -> 'src set -> 'acc -> 'dst set * 'acc``.    It is translated to ``MAP_FOLD`` in Michelson.
 
 Operations on maps
 ~~~~~~~~~~~~~~~~~~
 
-* ``Map.find``    Prim_map_find;
-* ``Map.update``    Prim_map_update;
-* ``Map.add``    Prim_map_add;
-* ``Map.remove``    Prim_map_remove;
-* ``Map.mem``    Prim_map_mem;
-* ``Map.cardinal``    Prim_map_size;
-* ``Map.size``    Prim_map_size;
-* ``Map.iter``    Prim_map_iter;
-* ``Map.fold``    Prim_map_fold;
-* ``Map.map``    Prim_map_map;
-* ``Map.map_fold``    Prim_map_map_fold;
+* ``Map.find: 'key -> ('key,'val) map -> 'val option``. It is translated to ``GET`` in Michelson.
+* ``Map.add: 'key -> 'val -> ('key,'val) map -> ('key,'val) map``. It is translated to ``ADD`` in Michelson.
+* ``Map.remove: 'key -> ('key,'val) map -> ('key,'val) map``. It is translated to ``REMOVE`` in Michelson.
+* ``Map.mem: 'key -> ('key, 'val) map -> bool``. It is translated to ``MEM`` in Michelson.
+* ``Map.cardinal`` or ``Map.size`` with type ``('key,'val) map -> nat``. It is translated to ``SIZE`` in Michelson.
+* ``Map.update: 'key -> 'val option -> ('key,'val) map -> ('key,'val) map``. It is translated to ``UPDATE`` in Michelson.
+* ``Map.iter: ('key * 'val -> unit) -> ('key,'val) map -> unit``. It is translated to ``ITER`` in Michelson.
+* ``Map.fold: (('key * 'val) * 'acc -> unit) -> ('key,'val) map -> 'acc -> 'acc``. It is translated to ``FOLD`` in Michelson.
+* ``Map.map: ('key * 'src -> 'dst) -> ('key,'src) map -> ('key,'dst) map``. It is translated to ``MAP`` in Michelson.
+* ``Map.map_fold: (('key * 'src) * 'acc -> 'dst * 'acc) -> ('key,'src) map -> 'acc -> ('key,'dst) map * 'acc``.    It is translated to ``MAP_FOLD`` in Michelson.
+
+Operations on Big maps
+~~~~~~~~~~~~~~~~~~~~~~
+
+* ``Map.find: 'key -> ('key,'val) big_map -> 'val option``. It is translated to ``GET`` in Michelson.
+* ``Map.update: 'key -> 'val option -> ('key,'val) big_map -> ('key,'val) big_map``. It is translated to ``UPDATE`` in Michelson.
+* ``Map.mem: 'key -> ('key, 'val) big_map -> bool``. It is translated to ``MEM`` in Michelson.
 
 Operations on generic collections
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-              
-* ``Coll.update``    Prim_coll_update;
-* ``Coll.mem``    Prim_coll_mem;
-* ``Coll.find``    Prim_coll_find;
-* ``Coll.size``   Prim_coll_size;
-* ``Coll.concat``   Prim_concat;
-* ``Coll.slice``   Prim_slice;
-* ``Coll.iter``    Prim_coll_iter;
-* ``Coll.fold``    Prim_coll_fold;
-* ``Coll.map``    Prim_coll_map;
-* ``Coll.map_fold``    Prim_coll_map_fold;
+
+These primitives should not be used directly in Liquidity. They are
+only used by the decompiler. They are automatically replaced during
+typing by the corresponding primitive for the collection of the
+argument (in either ``List``, ``Set``, ``Map``, ``String`` or
+``Bytes``). However, they can be used to write some polymorphic code on
+collections.
+
+* ``Coll.update`` 
+* ``Coll.mem``    
+* ``Coll.find``   
+* ``Coll.size``   
+* ``Coll.concat`` 
+* ``Coll.slice``  
+* ``Coll.iter``   
+* ``Coll.fold``   
+* ``Coll.map``    
+* ``Coll.map_fold``
 
 
 From Michelson to Liquidity
@@ -455,19 +469,19 @@ From Michelson to Liquidity
 Here is a table of how Michelson instructions translate to Liquidity:
 
   
-* ``ADDRESS``
+* ``ADDRESS``: ``Contract.address addr``
 * ``AMOUNT``: ``Current.amount()``
 * ``ABS``: ``abs x``
 * ``ADD``: ``x + y``
 * ``AND``: ``x land y`` or ``x && y``
 * ``BALANCE``: ``Current.balance()``
-* ``BLAKE2B``
+* ``BLAKE2B``: ``Crypto.blake2b bytes``
 * ``CAR``: ``x.(0)``
 * ``CDR``: ``x.(1)``
 * ``CAST``
-* ``CHECK_SIGNATURE``
+* ``CHECK_SIGNATURE``: ``Crypto.check key sig bytes``
 * ``COMPARE``: ``compare x y``
-* ``CONCAT``
+* ``CONCAT``: ``String.concat list`` or ``bytes.concat list``
 * ``CONS``: ``x :: y``
 * ``CONTRACT``
 * ``CREATE_ACCOUNT``
@@ -510,7 +524,7 @@ Here is a table of how Michelson instructions translate to Liquidity:
 * ``NONE``: ``(None : int option)``
 * ``NOT``: ``not x``
 * ``NOW``
-* ``OR``
+* ``OR``: ``x lor y`` or ``x || y``
 * ``PACK``
 * ``PAIR``
 * ``PUSH``
