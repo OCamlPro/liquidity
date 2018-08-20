@@ -247,36 +247,80 @@ an integer, as follows:
 The ``Current`` module
 ~~~~~~~~~~~~~~~~~~~~~~
 
-* ``Current.balance: unit -> tez``: ``Current.balance ()`` returns the
-  balance of the current contract. The balance contains the amount of
-  tez that was sent by the current operation. It is translated to
-  ``BALANCE`` in Michelson.
-* ``Current.time: unit -> timestamp``: ``Current.time ()`` returns the
-  timestamp of the block in which the transaction is included. This
-  value is chosen by the baker that is including the transaction, so
-  it should not be used as a reliable source of alea.  It is translated
-  to ``NOW`` in Michelson.
-* ``Current.amount: unit -> tez``: ``Current.amount ()`` returns the
-  amount of tez transferred by the current operation (standard or
-  internal transaction). It is translated to ``AMOUNT`` in Michelson.
-* ``Current.gas: unit -> nat``: ``Current.gas ()`` returns the amount
-  of gas available to execute the rest of the transaction. It is
-  translated to ``STEPS_TO_QUOTA`` in Michelson.
-* ``Current.source: unit -> address``: ``Current.source ()`` returns
-  the address that initiated the current transaction in the
-  blockchain. It is the same one for all the operations in the
-  transaction, standard and internal. It is the address that paid the
-  fees and storage cost, and signed the operation on the
-  blockchain. It is translated to ``SOURCE`` in Michelson.
-* ``Current.sender: unit -> address``: ``Current.sender ()`` returns
-  the address that initiated the current operation. It is the same as
-  the source for the toplevel operation, but it is the originating
-  contract for internal operations. It is translated to ``SENDER`` in
+* ``Current.balance: unit -> tez``: returns the balance of the current
+  contract. The balance contains the amount of tez that was sent by
+  the current operation. It is translated to ``BALANCE`` in Michelson.
+
+  Example::
+
+    let bal = Current.balance() in
+    ...
+    
+* ``Current.time: unit -> timestamp``: returns the timestamp of the
+  block in which the transaction is included. This value is chosen by
+  the baker that is including the transaction, so it should not be
+  used as a reliable source of alea.  It is translated to ``NOW`` in
   Michelson.
+
+  Example::
+    
+    let now = Current.time () in
+    ...
+    
+* ``Current.amount: unit -> tez``: returns the amount of tez
+  transferred by the current operation (standard or internal
+  transaction). It is translated to ``AMOUNT`` in Michelson.
+
+  Example::
+
+    let received = Current.amount() in
+    ...
+    
+* ``Current.gas: unit -> nat``: returns the amount of gas available to
+  execute the rest of the transaction. It is translated to
+  ``STEPS_TO_QUOTA`` in Michelson.
+
+  Example::
+
+    let remaining_gas = Current.gas () in
+    if remaining_gas < 1000p then
+      Current.failwith ("not enough gas", remaining_gas);
+    ...
+  
+* ``Current.source: unit -> address``: returns the address that
+  initiated the current transaction in the blockchain. It is the same
+  one for all the operations in the transaction, standard and
+  internal. It is the address that paid the fees and storage cost, and
+  signed the operation on the blockchain. It is translated to
+  ``SOURCE`` in Michelson.
+
+  Example::
+
+    let addr = Current.source () in
+    ...
+    
+* ``Current.sender: unit -> address``: returns the address that
+  initiated the current operation. It is the same as the source for
+  the toplevel operation, but it is the originating contract for
+  internal operations. It is translated to ``SENDER`` in Michelson.
+
+  Example::
+
+    let addr = Current.sender () in
+    ...
+    
 * ``failwith`` or ``Current.failwith: 'a -> 'b``: makes the current
   transaction and all its internal transactions fail. No modification
-  is done to the context.
+  is done to the context. The argument can be any value (often a
+  string and some argument), the system will display it to explain why
+  the transaction failed.
 
+  Example::
+
+    let remaining_gas = Current.gas () in
+    if remaining_gas < 1000p then
+      Current.failwith ("not enough gas", remaining_gas);
+    ...
   
 Operations on tuples
 ~~~~~~~~~~~~~~~~~~~~
@@ -286,10 +330,26 @@ Operations on tuples
   tuple ``t``. Tuples are translated to Michelson by pairing on the
   right, i.e. ``(a,b,c,d)`` becomes ``(a, (b, (c,d)))``. In this
   example, ``a`` is the ``0``-th element.
+
+  Example::
+
+    let x = (1,2,3,4) in
+    let car = x.(0) in
+    let cdr = x.(1) in
+    if car <> 1 || car <> 2 then Current.failwith "Error !";
+  
 * ``set t n x``, ``Array.set t n x`` and ``t.(n) <- x`` where ``n`` is
   constant positive-or-nul int: returns the tuple where the ``n``-th element
   has been replaced by ``x``.
 
+  Example::
+
+    let x = (1,2,3,4) in
+    let x0 = x.(0) <- 10 in
+    let x1 = x0.(1) <- 11 in
+    if x1 <> (10,11,3,4) then Current.failwith "Error !";
+
+  
 Operations on numeric values
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -301,6 +361,8 @@ Operations on numeric values
   * ``timestamp -> int|nat -> timestamp``
   * ``int|nat -> timestamp -> timestamp``
     
+    It is translated to ``ADD`` in Michelson.
+    
 * ``-``: Substraction. With the following types:
   
   * ``tez -> tez -> tez``
@@ -309,75 +371,265 @@ Operations on numeric values
   * ``timestamp -> timestamp -> int``
   * ``int|nat -> int`` (negation)
   
+    It is translated to ``SUB`` in Michelson.
+
 * ``*``: Multiplication. With the following types:
 
   * ``nat -> tez -> tez``
   * ``tez -> nat -> tez``
   * ``nat -> nat -> nat``
   * ``nat|int -> nat|int -> int``
-    
+
+    It is translated to ``MUL`` in Michelson.
+
+    Example::
+
+      (* conversion from nat to tez *)
+      let v = 1000p in
+      let amount = v * 1tz in
+      ...
+
 * ``/``: Euclidian division. With the following types:
 
   * ``nat -> nat -> ( nat * nat ) option``
   * ``int|nat -> int|nat -> ( int *  nat ) option``
   * ``tez -> nat -> ( tez * tez ) option``
   * ``tez -> tez -> ( nat * tez ) option``
+  
+    It is translated to ``EDIV`` in Michelson.
+
+    Example::
+
+      (* conversion from tez to nat *)
+      let v = 1000tz in
+      let (nat, rem_tez) = v / 1tz in
+      ...
     
 * ``~-``: Negation. Type: ``int|nat -> int``
+  
+    It is translated to ``NEG`` in Michelson.
+  
 * ``lor``, ``or`` and ``||``: OR with the following types:
 
   * ``bool -> bool -> bool``
   * ``nat -> nat -> nat``
+  
+    It is translated to ``OR`` in Michelson.
     
 * ``&``, ``land`` and ``&&``: AND with the following types:
 
   * ``bool -> bool -> bool``
   * ``nat|int -> nat -> nat``
-    
+  
+    It is translated to ``AND`` in Michelson.
+
 * ``lxor``, ``xor``: Exclusive OR with the following types:
 
   * ``bool -> bool -> bool``
   * ``nat -> nat -> nat``
+  
+    It is translated to ``XOR`` in Michelson.
     
 * ``not``: NOT
 
   * ``bool -> bool``
   * ``nat|int -> int`` (two-complement with sign negation)
 
+    It is translated to ``NOT`` in Michelson.
+
 * ``abs``: Absolute value. Type ``int -> int``
-* ``is_nat``: Maybe positive. Type ``int -> nat option``
+
+    It is translated to ``ABS`` in Michelson.
+
+* ``is_nat``: Maybe positive. Type ``int -> nat option``. It is
+  translated to ``IS_NAT`` in Michelson.
+
+    Instead of using ``is_nat``, it is recommended to use a specific form
+    of pattern matching::
+
+      match%nat x with
+      | Plus x -> ...
+      | Minus x -> ...
+
 * ``int``: To integer. Type ``nat -> int``
+
+    It is translated to ``INT`` in Michelson.
+
 * ``>>`` and ``lsr`` : Logical shift right. Type ``nat -> nat -> nat``
+
+    It is translated to ``LSR`` in Michelson.
+
 * ``<<`` and ``lsl`` : Logical shift left. Type ``nat -> nat -> nat``
+
+    It is translated to ``LSL`` in Michelson.
+
 
 Operations on contracts
 ~~~~~~~~~~~~~~~~~~~~~~~
 
-* ``Contract.set_delegate: key_hash option -> operation``. It is translated to ``SET_DELEGATE`` in Michelson.
-* ``Contract.address: _ contract -> address`` . It is translated to ``ADDRESS`` in Michelson.
-* ``Contract.self: unit -> 'a contract``. It is translated to ``SELF`` in Michelson.
-* ``Account.create: key_hash -> key_hash option -> bool -> tez -> operation * address``.
-  It is translated to ``CREATE_ACCOUNT`` in Michelson.
-* ``Account.default: key_hash -> unit contract``.
-  It is translated to ``DEFAULT_ACCOUNT`` in Michelson.
-* ``Contract.create: ``: ``Contract.create delegate manager delegatable spendable amount storage (fun (p:ptype) (s:stype) -> ...)``
-* ``Contract.at: address -> 'a contract option``. Must be annotated with the type of the contract.
-* ``Contract.call: 'a contract -> tez -> 'a -> operation``
+* ``Contract.call: 'a contract -> tez -> 'a -> operation``. Forge an
+  internal transaction. It is translated to ``TRANSFER_TOKENS`` in
+  Michelson.
+
+  Example::
+
+    let contract =  (tz1... : unit contract) in
+    let op = Contract.call contract 1000tz () in
+    ...
+    ([op], storage)
   
+* ``Account.create: key_hash -> key_hash option -> bool -> tez ->
+  operation * address``. Forge an operation to create a new
+  (originated) account and returns its address. It is translated to
+  ``CREATE_ACCOUNT`` in Michelson.
+
+  Example::
+
+    let not_delegatable = false in
+    let (op, addr) =
+      Account.create manager (Some delegate) not_delegatable 100tz
+    in
+    ...
+    ([op], storage)
+  
+* ``Account.default: key_hash -> unit contract``. Returns the contract
+  associated to the given ``key_hash``. Since this contract is not
+  originated, it cannot contains code, so transfers to it cannot
+  fail. It is translated to ``IMPLICIT_ACCOUNT`` in Michelson.
+
+  Example::
+
+    let key = edpk... in
+    let key_hash = Crypto.hash_key key in
+    let contract = Account.default key_hash in
+    ...
+  
+* ``Contract.set_delegate: key_hash option -> operation``. Forge a
+  delegation operation for the current contract. A ``None`` argument
+  means that the contract should have no delegate (it falls back to
+  its manager). The delegation operation will only be executed in an
+  internal operation if it is returned at the end of the ``%entry``
+  function. It is translated to ``SET_DELEGATE`` in Michelson.
+
+  Example::
+
+    let op1 = Contract.set_delegate (Some tz1...) in
+    let op2 = Contract.set_delegate None in
+    ...
+    ([op1;op2], storage)
+  
+* ``Contract.address: _ contract -> address`` . Returns the address of
+  a contract. It is translated to ``ADDRESS`` in Michelson.
+
+  Example::
+
+    let addr = Contract.address (Contract.self ()) in
+    let map = Map.add addr contract map in
+    ...
+  
+* ``Contract.at: address -> 'a contract option``. Returns the contract
+  associated with the address and type annotation, if any. Must be
+  annotated with the type of the contract. It is translated to
+  ``CREATE_CONTRACT`` in Michelson.
+
+  Example::
+
+    match (Contract.at addr : (bool contract) option) with
+    | None -> failwith ("Cannot recover bool contract from:", addr)
+    | Some contract -> ...
+  
+    
+* ``Contract.self: unit -> 'a contract``. Returns the current
+  executing contract. It is translated to ``SELF`` in Michelson.
+
+  Example::
+
+    let contract = Contract.self () in
+    ...
+  
+* ``Contract.create: key_hash -> key_hash option -> bool -> bool ->
+  tez -> 'storage -> ('param -> 'storage -> operation list * 'storage)
+  -> (operation, address)``. Forge an operation to originate a
+  contract with code. The contract is only created when the operation
+  is executed, so it must be returned by the transaction. Note that
+  the code must be specified as an inline function with two arguments
+  ``parameter`` and ``storage`` with type annotatinons. It is
+  translated to ``CREATE_CONTRACT`` in Michelson.
+
+
+  Example::
+
+    let delegatable = true in
+    let spendable = false in
+    let contract_storage = (10tz,"Hello") in
+    let (op, addr) =
+       Contract.create manager (Some delegate) delegatable spendable
+         10tz contract_storage
+         (fun (parameter:string) (storage: tez * string) ->
+         ...)
+    in
+
+    (* THIS WILL FAIL UNTIL THE OPERATION IS EXECUTED *)
+    let new_contract = (Contract.at addr : string contract option) in
+    ...
+    ( [op], storage )
+    
 Cryptographic operations
 ~~~~~~~~~~~~~~~~~~~~~~~~
               
-* ``Crypto.blake2b: bytes -> bytes`. It is translated to ``BLAKE2B`` in Michelson.
-* ``Crypto.sha256: bytes -> bytes``. It is translated to ``SHA256`` in Michelson.
-* ``Crypto.sha512: bytes -> bytes``. It is translated to ``SHA512`` in Michelson.
-* ``Crypto.hash_key: key -> key_hash``. It is translated to ``HASH_KEY`` in Michelson.
-* ``Crypto.check: key -> signature -> bytes -> bool``. It is translated to ``CHECK_SIGNATURE`` in Michelson.
+* ``Crypto.blake2b: bytes -> bytes``. Computes the cryptographic hash of
+  a bytes with the cryptographic Blake2b function. It is translated to
+  ``BLAKE2B`` in Michelson.
 
+  Example::
+
+    let hash = Crypto.blake2b (Bytes.pack map) in
+    ...
+  
+* ``Crypto.sha256: bytes -> bytes``. Computes the cryptographic hash
+  of a bytes with the cryptographic Sha256 function. It is translated
+  to ``SHA256`` in Michelson.
+
+  Example::
+
+    let hash = Crypto.sha256 (Bytes.pack map) in
+    ...
+  
+* ``Crypto.sha512: bytes -> bytes``. Computes the cryptographic hash of
+  a bytes with the cryptographic Sha512 function. It is translated to ``SHA512`` in Michelson.
+
+  Example::
+
+    let hash = Crypto.sha512 (Bytes.pack map) in
+    ...
+
+  
+* ``Crypto.hash_key: key -> key_hash``. Hash a public key and encode
+  the hash in B58check. It is translated to ``HASH_KEY`` in Michelson.
+
+  Example::
+
+    let key_hash = Crypto.hash_key edpk1234... in
+    let contract = Account.default key_hash in
+    ...
+
+  
+* ``Crypto.check: key -> signature -> bytes -> bool``. Check that the
+  signature corresponds to signing the sequence of bytes with the
+  public key. It is translated to ``CHECK_SIGNATURE`` in Michelson.
+
+  Example::
+
+    let bytes = Crypto.blake2b (Bytes.pack param) in
+    if not (Crypto.check key signature bytes) then
+      failwith "You are not allowed to do that";
+    ...
+  
 Operations on bytes
 ~~~~~~~~~~~~~~~~~~~
               
 * ``Bytes.pack: 'a -> bytes``. It is translated to ``PACK`` in Michelson.
-* ``Bytes.unpack:  bytes -> 'a``.. It is translated to ``UNPACK`` in Michelson.
+* ``Bytes.unpack:  bytes -> 'a``. It is translated to ``UNPACK`` in Michelson.
 * ``Bytes.length`` or ``Bytes.size: bytes -> nat``. It is translated to ``SIZE`` in Michelson.
 * ``Bytes.concat: bytes list -> bytes``. It is translated to ``CONCAT`` in Michelson.
 * ``Bytes.slice`` or ``Bytes.sub: nat -> nat -> bytes ->  bytes``. It is translated to ``SLICE`` in Michelson.
@@ -478,73 +730,95 @@ Here is a table of how Michelson instructions translate to Liquidity:
 * ``BLAKE2B``: ``Crypto.blake2b bytes``
 * ``CAR``: ``x.(0)``
 * ``CDR``: ``x.(1)``
-* ``CAST``
+* ``CAST``: not available
 * ``CHECK_SIGNATURE``: ``Crypto.check key sig bytes``
 * ``COMPARE``: ``compare x y``
 * ``CONCAT``: ``String.concat list`` or ``bytes.concat list``
 * ``CONS``: ``x :: y``
 * ``CONTRACT``
-* ``CREATE_ACCOUNT``
+* ``CREATE_ACCOUNT``: ``Account.create``
 * ``CREATE_CONTRACT``
-* ``DIP``: stack manipulation
-* ``DROP``: stack manipulation
-* ``DUP``: stack manipulation
+* ``DIP``: automatic stack management
+* ``DROP``: automatic stack management
+* ``DUP``: automatic stack management
 * ``EDIV``: ``x / y``
-* ``EMPTY_MAP``
-* ``EMPTY_SET``
+* ``EMPTY_MAP``: ``(Map : (int, string) map)``
+* ``EMPTY_SET``: ``(Set : int set)``
 * ``EQ``: ``x = y``
-* ``EXEC``
-* ``FAILWITH``
+* ``EXEC``: ``x |> f``
+* ``FAILWITH``: ``Current.failwith ("error",x)``
 * ``GE``: ``x >= y``
-* ``GET``
+* ``GET``: ``Map.find key map``
 * ``GT``: ``x > y``
-* ``HASH_KEY``
-* ``IF``: ``if CONDITION then IF_TRUE else IF_FALSE``
-* ``IF_CONS``
-* ``IF_LEFT``
-* ``IF_NONE``
-* ``IMPLICIT_ACCOUNT``
+* ``HASH_KEY``: ``Crypto.hash_key k``
+* ``IF``: ``if COND_EXPR then EXPR_IF_TRUE else EXPR_IF_FALSE``
+* ``IF_CONS``: ``match list with [] -> EXPR | head :: tail -> EXPR``
+* ``IF_LEFT``: ``match variant with Left x -> EXPR | Right x -> EXPR``
+* ``IF_NONE``: ``match option with None -> EXPR | Some x -> EXPR``
+* ``IMPLICIT_ACCOUNT``: ``Account.default keyhash``
 * ``INT``: ``int x``
 * ``ISNAT``:``is_nat x`` or ``match%int x with Plus x -> ... | Minus y -> ...``
-* ``ITER``
-* ``LAMBDA``
+* ``ITER``: ``Loop.loop (fun x -> ...; (cond, x')) x0``
+* ``LAMBDA``: ``fun x -> ...``
 * ``LE``: ``x <= y``
-* ``LEFT``
-* ``LOOP``
-* ``LOOP_LEFT``
+* ``LEFT``: ``Left x``
+* ``LOOP``: ``Loop.loop (fun x -> ...; (cond, x')) x0``
+* ``LOOP_LEFT``:
 * ``LSL``: ``x lsl y`` or ``x << y``
 * ``LSR`` ``x lsr y`` or ``x >> y``
 * ``LT``: ``x < y``
-* ``MAP``
-* ``MEM``
+* ``MAP``: ``List.map``, ``Set.map``, ``Map.map``
+* ``MEM``: ``Set.mem ele set``, ``Map.mem key map``
 * ``MUL``: ``x * y``
 * ``NEG``: ``~- x``
 * ``NEQ``: ``x <> y``
 * ``NIL``: ``( [] : int list)``
 * ``NONE``: ``(None : int option)``
 * ``NOT``: ``not x``
-* ``NOW``
+* ``NOW``: ``Current.time ()``
 * ``OR``: ``x lor y`` or ``x || y``
-* ``PACK``
-* ``PAIR``
-* ``PUSH``
-* ``RENAME``
-* ``RIGHT``
+* ``PACK``: ``Bytes.pack x``
+* ``PAIR``: ``( x, y )``
+* ``PUSH``: automatic stack management
+* ``RENAME``: automatic annotations management
+* ``RIGHT``: ``Right x``
 * ``SENDER``: ``Current.sender()``
-* ``SIZE``
-* ``SELF``
-* ``SET_DELEGATE``
-* ``SHA256``
-* ``SHA512``
-* ``SLICE``
+* ``SIZE``: ``List.size list``, ``String.size``, ``Bytes.size``, ``Set.size``
+* ``SELF``: ``Contract.self ()``
+* ``SET_DELEGATE``: ``Contract.set_delegate (Some keyhash)``
+* ``SHA256``: ``Crypto.sha256 bytes``
+* ``SHA512``: ``Crypto.sha512 bytes``
+* ``SLICE``: ``String.sub pos len string`` or ``Bytes.sub``
 * ``SOME``: ``Some x``
 * ``SOURCE``: ``Current.source()``
 * ``STEPS_TO_QUOTA``: ``Current.gas()``
-* ``SUB``
-* ``SWAP``
-* ``TRANSFER_TOKENS``
-* ``UNIT``
-* ``UNPACK``
-* ``UPDATE``
-* ``XOR``
+* ``SUB``: ``x - y``
+* ``SWAP``: automatic stack management
+* ``TRANSFER_TOKENS``: ``Contract.call contract amount param``
+* ``UNIT``: ``()``
+* ``UNPACK``: ``(unpack bytes : int list option)``
+* ``UPDATE``: ``Set.update key true set`` or ``Map.update key (Some val) map``
+* ``XOR``: ``x lxor y``
 
+Liquidity Grammar
+-----------------
+
+Expression:
+
+*  LIDENT
+* UIDENT ``.`` LIDENT
+* Expression ``.`` LIDENT
+* Expression ``.`` LIDENT ``<-`` Expression
+* ``if`` Expression ``then`` Expression
+* ``if`` Expression ``then`` Expression ``else`` Expression
+* ``Contract.create`` Expression Expression Expression Expression
+  Expression Expression ``(fun ( parameter:`` Type ``) (storage:``
+  Type ``) ->`` Expression ``)``
+* ``(Contract.at`` Expression ``:`` Type ``)``
+* ``(Bytes.unpack`` Expression ``:`` Type ``option )``
+* ``let`` LIDENT ``=`` Expression ``in`` Expression
+* ``let%inline`` LIDENT ``=`` Expression ``in`` Expression
+* Expression ``;`` Expression
+* ``Loop.loop (fun`` LIDENT ``->`` Expression ``)`` Expression
+
+  TODO
