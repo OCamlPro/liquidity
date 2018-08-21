@@ -92,11 +92,13 @@ Types can be composed using the following type operators:
 and the following predefined combinators:
   
 - lists: ``'a list`` is the type of lists of elements in ``'a``
-- sets: ``'a set`` is the type of sets of elements in ``'a``
-- maps: ``('a, 'b) map`` is the type of maps whose keys are of type
-  ``'a`` and values of type ``'b``;
-- big maps: ``('a, 'b) big_map`` is the type of lazily deserialized maps whose
-  keys are of type ``'a`` and values of type ``'b``;
+- sets: ``'a set`` is the type of sets of elements in ``'a`` (``'a`` must
+   be a comparable type)
+- maps: ``('key, 'val) map`` is the type of maps whose keys are of type
+  ``'key``, a comparable type, and values of type ``'val``;
+- big maps: ``('key, 'val) big_map`` is the type of lazily
+  deserialized maps whose keys are of type ``'key`` (a comparable
+  type) and values of type ``'val``;
 - contracts: ``'a contract`` for contracts whose parameter is of type ``'a``;
   
 and the predefined algebraic data types:
@@ -628,70 +630,501 @@ Cryptographic operations
 Operations on bytes
 ~~~~~~~~~~~~~~~~~~~
               
-* ``Bytes.pack: 'a -> bytes``. It is translated to ``PACK`` in Michelson.
-* ``Bytes.unpack:  bytes -> 'a``. It is translated to ``UNPACK`` in Michelson.
-* ``Bytes.length`` or ``Bytes.size: bytes -> nat``. It is translated to ``SIZE`` in Michelson.
-* ``Bytes.concat: bytes list -> bytes``. It is translated to ``CONCAT`` in Michelson.
-* ``Bytes.slice`` or ``Bytes.sub: nat -> nat -> bytes ->  bytes``. It is translated to ``SLICE`` in Michelson.
-* ``@: bytes -> bytes -> bytes``. It is translated to ``CONCAT`` in Michelson.
+* ``Bytes.pack: 'a -> bytes``. Serialize any data to a binary
+  representation in a sequence of bytes. It is translated to ``PACK``
+  in Michelson.
+
+  Example::
+
+    let s = Bytes.pack [1;2;3;4;5] in
+    let hash = Crypto.sha256 s in
+    ...
+  
+* ``Bytes.unpack: bytes -> 'a option``. Deserialize a sequence of
+  bytes to a value from which it was serialized. The expression must
+  be annotated with the (option) type that it should return. It is
+  translated to ``UNPACK`` in Michelson.
+
+  Example::
+
+    let s = Bytes.pack (1,2,3,4) in
+    let t = (Bytes.unpack s : (int * int * int * int) option) in
+    if t.(0) <> 1 then failwith "bad unpack";
+    ...
+  
+* ``Bytes.length`` or ``Bytes.size: bytes -> nat``. Return the size of
+  the sequence of bytes. It is translated to ``SIZE`` in Michelson.
+
+  Example::
+
+    let s = Bytes.pack (1,2,3,4) in
+    let n = Bytes.length s in
+    if n > 10p then failwith "serialization too long";
+    ...
+    
+* ``Bytes.concat: bytes list -> bytes``. Append all the sequences of
+  bytes of a list into a single sequence of bytes. It is translated to
+  ``CONCAT`` in Michelson.
+
+  Example::
+
+    let s = Bytes.concat [ 0x616161; 0x616161 ] in
+    if Bytes.length s <> 6 then failwith "bad concat !";
+    ...
+  
+* ``Bytes.slice`` or ``Bytes.sub" of type ``nat -> nat -> bytes ->
+  bytes option``. Extract a sequence of bytes within another sequence
+  of bytes. ``None`` means that the position or length was invalid. It
+  is translated to ``SLICE`` in Michelson.
+
+  Example::
+
+    let b = 0x616161 in
+    let s = Bytes.concat [ b;b ] in
+    let b' = Bytes.sub 3p 3p in
+    if b <> b' then failwith "Bad concat or sub !";
+    ...
+  
+* ``( @ ) : bytes -> bytes -> bytes``. Append two sequences of bytes into a
+  single sequence of bytes. It is translated to ``CONCAT`` in
+  Michelson.
+
+  Example::
+
+    let b = 0x616161 in
+    let s = b @ b in
+    let b' = Bytes.sub 3p 3p in
+    if b <> b' then failwith "Bad concat or sub !";
+    ...
 
 Operations on strings
 ~~~~~~~~~~~~~~~~~~~~~
-              
-* ``String.length`` or ``String.size: string -> nat``. It is translated to ``SIZE`` in Michelson.
-* ``String.slice`` or ``String.sub: nat -> nat -> string -> string``. It is translated to ``SLICE`` in Michelson.
-* ``String.concat: string list -> string``. It is translated to ``CONCAT`` in Michelson.
-* ``@ : string -> string -> string``. It is translated to ``CONCAT`` in Michelson.
 
+A string is a fixed sequence of characters. They are restricted to the
+printable subset of 7-bit ASCII, plus some escaped characters (``\n``,
+``\t``, ``\b``, ``\r``, ``\\``, ``\"``).
+
+
+* ``String.length`` or ``String.size`` of type ``string ->
+  nat``. Return the size of the string in characters. It is translated
+  to ``SIZE`` in Michelson.
+
+  Example::
+
+    let s = "Hello world" in
+    let len = String.length s in
+    ...
+  
+* ``String.slice`` or ``String.sub`` with type ``nat -> nat -> string
+  -> string option``. Return a substring of a string at the given
+  position with the specified length, or ``None`` if invalid. It is
+  translated to ``SLICE`` in Michelson.
+
+  Example::
+
+    let s = "Hello world" in
+    let world = String.sub 6p 5p s in
+    ...
+
+* ``String.concat: string list -> string``. Append all strings of a
+  list into a single string. It is translated to ``CONCAT`` in
+  Michelson.
+
+  Example::
+
+    let s = String.concat [ "Hello"; " "; "World" ] in
+    ...
+  
+* ``( @ ) : string -> string -> string``. Append two strings into a single
+  string. It is translated to ``CONCAT`` in Michelson.
+
+  Example::
+
+    let s = "Hello " @ "World" in
+    ...
 
 Operations on lambdas
 ~~~~~~~~~~~~~~~~~~~~~
 
-*  ``Lambda.pipe`` or  ``|>`` of type ``'a -> ('a -> 'b) -> 'b`` or ``'a -> ('a,'b) closure -> 'b``
+* ``Lambda.pipe`` or ``( |> )`` of type ``'a -> ('a -> 'b) -> 'b`` or ``'a
+  -> ('a,'b) closure -> 'b``. Applies a function or closure to its
+  argument.
+
+   Example::
+     
+     let square (x : int) = x * x in
+     let x = 23 |> square in
+     ...
 
 Operations on lists              
 ~~~~~~~~~~~~~~~~~~~
 
-* ``List.rev : 'a list -> 'a list``
-* ``List.length`` or ``List.size: 'a list -> nat``. It is translated to ``SIZE`` in Michelson.
-* ``List.iter: ('a -> unit) -> 'a list -> unit``. It is translated to ``ITER`` in Michelson.
-* ``List.fold: ('ele * 'acc -> unit) -> 'ele list -> 'acc -> 'acc``. It is translated to ``FOLD`` in Michelson.
-* ``List.map: ('src -> 'dst) -> 'src list -> 'dst list``. It is translated to ``MAP`` in Michelson.
-* ``List.map_fold: ('src * 'acc -> 'dst * 'acc) -> 'src list -> 'acc -> 'dst list * 'acc``.    It is translated to ``MAP_FOLD`` in Michelson.
+Lists are immutable data structures containing values (of any type)
+that can only be accessed in a sequential order. Since they are
+immutable, all **modification** primitives return a new list, and the
+list given in argument is unmodified.
 
+* ``( :: ) : 'a -> 'a list -> 'a list`` Add a new element at the head
+  of the list. The previous list becomes the tail of the new list.
+
+  Example::
+
+    let new_list = "Hello" :: old_list in
+    ...
+
+* ``List.rev : 'a list -> 'a list`` Return the list in the reverse order.
+
+  Example::
+
+    let list = List.rev [7; 5;10] in
+    (* list = [10; 5; 7] *)
+    ...
+  
+* ``List.length`` or ``List.size: 'a list -> nat``. Return the length
+  of the list. It is translated to ``SIZE`` in Michelson.
+
+  Example::
+
+    let size = List.length [10;20;30;40] in
+    (* size = 4 *)
+    ...
+  
+* ``List.iter: ('a -> unit) -> 'a list -> unit``. Iter the function on
+  all the elements of a list. Since no value can be returned, it can
+  only be used for side effects, i.e. to fail the transaction.  It is
+  translated to ``ITER`` in Michelson.
+
+  Example::
+
+    List.iter (fun x ->
+      if x < 10tz then failwith "error, element two small")
+      list;
+    ...
+  
+* ``List.fold: ('ele * 'acc -> unit) -> 'ele list -> 'acc ->
+  'acc``. Iter on all elements of a list, while modifying an
+  accumulator. It is translated to ``FOLD`` in Michelson.
+
+  Example::
+
+    let sum = List.fold (fun x ->
+       let (ele, acc) = x in
+       ele + acc
+       ) [1;2;3;4;5] 0
+    in
+    ...
+
+* ``List.map: ('src -> 'dst) -> 'src list -> 'dst list``. Return a
+  list with the result of applying the function on each element of the
+  list. It is translated to ``MAP`` in Michelson.
+
+  Example::
+
+    let list = List.map (fun x ->
+      x + 1
+      ) list in
+    ...
+  
+* ``List.map_fold: ('src * 'acc -> 'dst * 'acc) -> 'src list -> 'acc
+  -> 'dst list * 'acc``.  Return a list with the result of applying the
+  function on each element of the list, plus an accumulator. It is
+  translated to ``MAP_FOLD`` in Michelson.
+
+  Example::
+
+    let (list, acc) = List.map_fold (fun x ->
+       let (ele, acc) = x in
+       ( ele+1, ele+acc )
+       ) [1;2;3;4;5] 0 in
+    ...
+  
 Operations on sets
 ~~~~~~~~~~~~~~~~~~
-              
-* ``Set.update: 'a -> bool -> 'a set -> 'a set``. It is translated to ``UPDATE`` in Michelson.
-* ``Set.add: 'a -> 'a set -> 'a set``   . It is translated to ``ADD`` in Michelson.
-* ``Set.remove: 'a -> 'a set -> 'a set``. It is translated to ``REMOVE`` in Michelson.
-* ``Set.mem: 'a -> 'a set -> bool``   . It is translated to ``MEM`` in Michelson.
-* ``Set.cardinal`` or ``Set.size`` with type ``'a set -> nat``. It is translated to ``SIZE`` in Michelson.
-* ``Set.iter: ('ele -> unit) -> 'ele set -> unit``. It is translated to ``ITER`` in Michelson.
-* ``Set.fold: ('ele * 'acc -> unit) -> 'ele set -> 'acc -> 'acc``. It is translated to ``FOLD`` in Michelson.
-* ``Set.map: ('src -> 'dst) -> 'src set -> 'dst set``. It is translated to ``MAP`` in Michelson.
-* ``Set.map_fold: ('src * 'acc -> 'dst * 'acc) -> 'src set -> 'acc -> 'dst set * 'acc``.    It is translated to ``MAP_FOLD`` in Michelson.
 
+Sets are immutable data structures containing uniq values (a
+comparable type). Since they are immutable, all **modification**
+primitives return a new updated set, and the set given in argument is
+unmodified.
+
+* ``Set.update: 'a -> bool -> 'a set -> 'a set``. Update a set for a
+  particular element. If the boolean is ``true``, the element is
+  added. If the boolean is ``false``, the element is removed. It is
+  translated to ``UPDATE`` in Michelson.
+
+  Example::
+
+    let my_set = Set.update 3 true my_set in (* add 3 *)
+    let my_set = Set.update 10 false my_set in (* remove 10 *)
+    ...
+  
+* ``Set.add: 'a -> 'a set -> 'a set`` . Add an element to a set, if
+  not present. It is translated to ``ADD`` in Michelson.
+
+  Example::
+
+    let my_set = Set.add 3 my_set in
+    ...
+  
+* ``Set.remove: 'a -> 'a set -> 'a set``. Remove an element to a
+  set, if present. It is translated to ``REMOVE`` in Michelson.
+
+  Example::
+
+    let my_set = Set.remove 10 my_set in
+    ...
+  
+* ``Set.mem: 'a -> 'a set -> bool``. Return ``true`` if the element is
+  in the set, ``false`` otherwise. It is translated to ``MEM`` in
+  Michelson.
+
+  Example::
+
+    if not ( Set.mem 3 my_set ) then
+      failwith "Missing integer 3 in int set";
+    ...
+  
+* ``Set.cardinal`` or ``Set.size`` with type ``'a set -> nat``. Return
+  the number of elements in the set. It is translated to ``SIZE`` in
+  Michelson.
+
+  Example::
+
+    let cardinal = Set.size my_set in
+    if cardinal < 10p then failwith "too few elements";
+    ...
+  
+* ``Set.iter: ('ele -> unit) -> 'ele set -> unit``. Apply a function
+  on all elements of the set. Since no value can be returned, it can
+  only be used for side effects, i.e. to fail the transaction.  It is
+  translated to ``ITER`` in Michelson.
+  
+  Example::
+
+    Set.iter (fun ele ->
+      if ele < 0 then failwith "negative integer") my_set;
+    ...
+  
+* ``Set.fold: ('ele * 'acc -> unit) -> 'ele set -> 'acc ->
+  'acc``. Apply a function on all elements of the set, updating an
+  accumulator and returning it at the end. It is translated to
+  ``FOLD`` in Michelson.
+
+  Example::
+
+    (* compute the sum of elements *)
+    let sum = Set.fold (fun x ->
+      let (ele, acc) = x in
+      ele + acc
+      ) my_set
+    in
+    ...
+  
+* ``Set.map: ('src -> 'dst) -> 'src set -> 'dst set``. Return a set
+  where all elements are the result of applying the function on the
+  elements of the former set. It is translated to ``MAP`` in
+  Michelson.
+
+  Example::
+    
+    let set_plus_one = Set.map (fun x -> x + 1) my_set in
+    ...
+  
+* ``Set.map_fold: ('src * 'acc -> 'dst * 'acc) -> 'src set -> 'acc ->
+  'dst set * 'acc``.  Apply a function on all the elements of a set,
+  return a new set with the results of the function, and an
+  accumulator updated at each step. It is translated to ``MAP_FOLD``
+  in Michelson.
+
+  Example::
+
+    let (negated_set, min_elt) = Set.map_fold (fun (ele, acc) ->
+       let acc = match acc with
+         | None -> Some ele
+         | Some acc -> Some (if acc > ele then ele else acc)
+       in
+       let negated_ele = -ele in
+       (negated_ele, acc)
+       ) my_set None
+    in
+    ...
+    
 Operations on maps
 ~~~~~~~~~~~~~~~~~~
 
-* ``Map.find: 'key -> ('key,'val) map -> 'val option``. It is translated to ``GET`` in Michelson.
-* ``Map.add: 'key -> 'val -> ('key,'val) map -> ('key,'val) map``. It is translated to ``ADD`` in Michelson.
-* ``Map.remove: 'key -> ('key,'val) map -> ('key,'val) map``. It is translated to ``REMOVE`` in Michelson.
-* ``Map.mem: 'key -> ('key, 'val) map -> bool``. It is translated to ``MEM`` in Michelson.
-* ``Map.cardinal`` or ``Map.size`` with type ``('key,'val) map -> nat``. It is translated to ``SIZE`` in Michelson.
-* ``Map.update: 'key -> 'val option -> ('key,'val) map -> ('key,'val) map``. It is translated to ``UPDATE`` in Michelson.
-* ``Map.iter: ('key * 'val -> unit) -> ('key,'val) map -> unit``. It is translated to ``ITER`` in Michelson.
-* ``Map.fold: (('key * 'val) * 'acc -> unit) -> ('key,'val) map -> 'acc -> 'acc``. It is translated to ``FOLD`` in Michelson.
-* ``Map.map: ('key * 'src -> 'dst) -> ('key,'src) map -> ('key,'dst) map``. It is translated to ``MAP`` in Michelson.
-* ``Map.map_fold: (('key * 'src) * 'acc -> 'dst * 'acc) -> ('key,'src) map -> 'acc -> ('key,'dst) map * 'acc``.    It is translated to ``MAP_FOLD`` in Michelson.
+Maps are immutable data structures containing associations between
+keys (a comparable type) and values (any type). Since they are
+immutable, all **modification** primitives return a new updated map,
+and the map given in argument is unmodified.
+  
+* ``Map.add: 'key -> 'val -> ('key,'val) map -> ('key,'val)
+  map``. Return a map with a new association between a key and a
+  value. If an association previously existed for the same key, it is
+  not present in the new map. It is translated to ``ADD`` in
+  Michelson.
 
+  Example::
+
+    let map = ( Map : (int, string) map ) in
+    let map = Map.add 1 "Hello" map in
+    let map = Map.add 2 "World" map in
+    ...
+
+* ``Map.remove: 'key -> ('key,'val) map -> ('key,'val) map``. Return a
+  map where any associated with the key has been removed. It is
+  translated to ``REMOVE`` in Michelson.
+
+  Example::
+
+    let new_map = Map.remove param old_map in
+    ...
+
+* ``Map.find: 'key -> ('key,'val) map -> 'val option``. Return the
+  value associated with a key in the map. It is translated to ``GET``
+  in Michelson.
+
+  Example::
+
+    let v = match Map.find param my_map with
+      | None -> failwith ("param is not in the map", param)
+      | Some v -> v
+    in
+    ...
+
+* ``Map.update: 'key -> 'val option -> ('key,'val) map -> ('key,'val)
+  map``. Return a new map where the association between the key and
+  the value has been removed (case ``None``) or added/updated (case
+  ``Some v``). It is translated to ``UPDATE`` in Michelson.
+
+  Example::
+
+    let new_map = Map.update key None old_map in (* removed *)
+    let new_map = Map.update key (Some v) new_map in (* added *)
+    ...
+  
+* ``Map.mem: 'key -> ('key, 'val) map -> bool``. Return ``true`` if an
+  association exists in the map for the key, ``false`` otherwise. It
+  is translated to ``MEM`` in Michelson.
+
+  Example::
+
+    let sender = Current.sender () in
+    if not ( Map.mem sender owners_map ) then
+      failwith ("not allowed", sender);
+    ...
+
+* ``Map.cardinal`` or ``Map.size`` with type ``('key,'val) map ->
+  nat``. Return the number of associations (i.e. uniq keys) in the
+  map. It is translated to ``SIZE`` in Michelson.
+
+  Example::
+
+    if Map.size owners = 0 then
+      failwith "you cannot remove all owners";
+    ...
+  
+* ``Map.iter: ('key * 'val -> unit) -> ('key,'val) map ->
+  unit``. Apply a function on all associations in the map. Since no
+  value can be returned, it can only be used for side effects, i.e. to
+  fail the transaction. It is translated to ``ITER`` in Michelson.
+
+  Example::
+
+    Map.iter (fun x ->
+      let (key, val) = x in
+      if val < 0 then
+        failwith "No option should be negative"
+      ) map;
+    ...
+
+* ``Map.fold: (('key * 'val) * 'acc -> unit) -> ('key,'val) map ->
+  'acc -> 'acc``. Apply a function on all associations of the map,
+  updating and returning an accumulator. It is translated to ``FOLD``
+  in Michelson.
+
+  Example::
+
+    let sum_vals = Map.fold (fun x ->
+      let ( (key, val), acc ) = x in
+      acc + key
+      ) map 0p
+    in
+    ...
+
+* ``Map.map: ('key * 'src -> 'dst) -> ('key,'src) map -> ('key,'dst)
+  map``. Apply a function on all associations of a map, and return a
+  new map where keys are now associated with the return values of the
+  function. It is translated to ``MAP`` in Michelson.
+
+  Example::
+
+    let negated_values = Map.map (fun x ->
+      let (key, val) = x in
+      - val
+      ) map
+    in
+    ...
+
+* ``Map.map_fold: (('key * 'src) * 'acc -> 'dst * 'acc) -> ('key,'src)
+  map -> 'acc -> ('key,'dst) map * 'acc``.  Apply a function on all
+  associations of a map, returning both a new map and an updated
+  accumulator. It is translated to ``MAP_FOLD`` in Michelson.
+
+  Example::
+
+    let negated_values, min_key = Map.map_fold (fun x ->
+      let ( (key, val) , acc ) = x in
+      let acc = match acc with
+        | None -> Some key
+        | Some v -> if v < key then Some key else acc
+      in
+      ( - key, acc )
+      ) map None
+    in
+    ...
+
+  
 Operations on Big maps
 ~~~~~~~~~~~~~~~~~~~~~~
 
-* ``Map.find: 'key -> ('key,'val) big_map -> 'val option``. It is translated to ``GET`` in Michelson.
-* ``Map.update: 'key -> 'val option -> ('key,'val) big_map -> ('key,'val) big_map``. It is translated to ``UPDATE`` in Michelson.
-* ``Map.mem: 'key -> ('key, 'val) big_map -> bool``. It is translated to ``MEM`` in Michelson.
+Big maps are a specific kind of maps, optimized for storing. They can
+be updated incrementally and scale to a high number of associations,
+whereas standard maps will have an expensive serialization and
+deserialization cost. You are limited by Michelson to one big map per
+smart contract, that should appear as the first element of the storage.
+
+* ``Map.find: 'key -> ('key,'val) big_map -> 'val option``. Return the
+  value associated with a key in the map. It is translated to ``GET``
+  in Michelson.
+
+  Example::
+
+    let v = match Map.find param my_map with
+      | None -> failwith ("param is not in the map", param)
+      | Some v -> v
+    in
+    ...
+
+* ``Map.update: 'key -> 'val option -> ('key,'val) big_map -> ('key,'val)
+  big_map``. Return a new map where the association between the key and
+  the value has been removed (case ``None``) or added/updated (case
+  ``Some v``). It is translated to ``UPDATE`` in Michelson.
+
+  Example::
+
+    let new_map = Map.update key None old_map in (* removed *)
+    let new_map = Map.update key (Some v) new_map in (* added *)
+    ...
+  
+* ``Map.mem: 'key -> ('key, 'val) big_map -> bool``. Return ``true`` if an
+  association exists in the map for the key, ``false`` otherwise. It
+  is translated to ``MEM`` in Michelson.
+
+  Example::
+
+    let sender = Current.sender () in
+    if not ( Map.mem sender owners_map ) then
+      failwith ("not allowed", sender);
+    ...
 
 Operations on generic collections
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -803,9 +1236,18 @@ Here is a table of how Michelson instructions translate to Liquidity:
 Liquidity Grammar
 -----------------
 
+Toplevel:
+
+* ``[%%version`` FLOAT ``]``
+* ``let%init storage =`` Expression
+* ``let%entry main (parameter:`` Type ``) (storage:`` Type ``) =`` Expression
+* ``type`` LIDENT ``=`` Type
+* ``type`` LIDENT ``= {`` [ LIDENT ``:`` Type ``;``]+ ``}``
+* ``type`` LIDENT ``= [ ``|`` UIDENT ``of`` Type ]+
+
 Expression:
 
-*  LIDENT
+* LIDENT
 * UIDENT ``.`` LIDENT
 * Expression ``.`` LIDENT
 * Expression ``.`` LIDENT ``<-`` Expression
@@ -820,5 +1262,54 @@ Expression:
 * ``let%inline`` LIDENT ``=`` Expression ``in`` Expression
 * Expression ``;`` Expression
 * ``Loop.loop (fun`` LIDENT ``->`` Expression ``)`` Expression
+* Expression Expression
+* ``match%nat`` Expression ``with | Plus`` LIDENT ``->`` Expression ``| Minus`` LIDENT ``->`` Expression
+* ``match`` Expression ``with | Left`` LIDENT ``->`` Expression ``| Right`` LIDENT ``->`` Expression
+* ``match`` Expression ``with | [] ->`` Expression ``|`` LIDENT ``::`` LIDENT ``->`` Expression
+* ``match`` Expression ``with`` [ ``|`` Pattern ``->`` Expression ]*
+* ``Left`` Expression
+* ``Right`` Expression
+* ``Some`` Expression
+* Expression ``::`` Expression
+* Constant
 
-  TODO
+Pattern:
+
+* UIDENT
+* UIDENT LIDENT
+* ``_``
+* ``(`` LIDENT [``,`` LIDENT]* ``)``
+
+Type:
+
+* ``unit``
+* ``bool``
+* ``int``
+* ``nat``
+* ``tez``
+* ``string``
+* ``bytes``
+* ``timestamp``
+* ``key``
+* ``key_hash``
+* ``signature``
+* ``operation``
+* ``address``
+* Type ``option``
+* Type ``list``
+* Type ``contract``
+* Type ``set``
+* ``(`` Type ``,`` Type ``) variant``
+* ``(`` Type ``,`` Type ``) map``
+* ``(`` Type ``,`` Type ``) big_map``
+* ``(`` Type ``,`` Type ``) variant``
+* ``(`` Type ``,`` Type ``) variant``
+* Type [ ``*`` Type]+
+* Type ``->`` Type
+* ``_``
+* LIDENT
+  
+Constant:
+
+* ``tz1...``
+* ...  

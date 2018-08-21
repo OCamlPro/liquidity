@@ -44,7 +44,7 @@ auditing purpose.
 
 .. toctree::
    :maxdepth: 2
-   :caption: Reference:
+   :caption: References:
 
    reference/liquidity
    reference/michelson
