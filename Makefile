@@ -8,7 +8,7 @@ build: _obuild
 	ocp-build build
 
 install: _obuild
-	ocp-build install
+	ocp-build install liquidity
 
 _obuild: Makefile
 	ocp-build init
