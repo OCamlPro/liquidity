@@ -180,10 +180,17 @@ and convert_contract_sig ~abbrev csig =
       Type.mk ~kind:Ptype_abstract (id "storage")
     ] in
   let signature = Mty.signature (abstr_storage :: val_items) in
-  match StringMap.find_opt name LiquidFromOCaml.predefined_contract_types with
-  | Some csig' when csig' = csig ->
-    Typ.package (lid name) []
-  | _ -> add_abbrev name (Tcontract csig) (ContractType signature)
+  let typ = StringMap.fold (fun n csig' -> function
+      | Some _ as acc -> acc
+      | None ->
+        match csig'.sig_name with
+        | Some name when eq_types (Tcontract csig') (Tcontract csig) ->
+          Some (Typ.package (lid name) [])
+        | _ -> None
+    ) LiquidFromOCaml.predefined_contract_types None in
+  match typ with
+  | Some typ -> typ
+  | None -> add_abbrev name (Tcontract csig) (ContractType signature)
 
 let rec convert_const expr =
   match expr with

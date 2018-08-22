@@ -157,6 +157,7 @@ let compile_tezos_file filename =
   FileString.write_file  (filename ^ ".liq.pre")
                          (LiquidPrinter.Liquid.string_of_contract c);
   let env = LiquidFromTezos.convert_env env in
+  let c = { c with contract_name = env.contractname } in
   let outprefix =
     Filename.(concat (dirname filename) @@
               String.uncapitalize_ascii (env.contractname))  ^ ".tz" in

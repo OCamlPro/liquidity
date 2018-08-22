@@ -415,7 +415,7 @@ let rec translate_const env exp =
           let ty =
             match head_ty, tail_ty with
             | Some head_ty, Some (Tlist tail_ty) ->
-               if head_ty <> tail_ty then
+               if not @@ eq_types head_ty tail_ty then
                  error_loc exp.pexp_loc "inconsistent types in list";
                Some (Tlist head_ty)
             | Some head_ty, None ->
@@ -1457,7 +1457,7 @@ and translate_entry name env contracts head_exp parameter storage_name =
     begin
       try
         let s = find_type "storage" env in
-        if s <> storage_ty then
+        if not @@ eq_types s storage_ty then
           LiquidLoc.raise_error ~loc:(loc_of_loc pexp_loc)
             "storage argument %s for entry point %s must be the same type \
              as contract storage" sto_name name;
@@ -1501,7 +1501,7 @@ and translate_entry name env contracts head_exp parameter storage_name =
     begin match translate_type env return_type with
       | Ttuple [ ret_ty; sto_ty ] ->
         let storage = find_type "storage" env in
-        if sto_ty <> storage then
+        if not @@ eq_types sto_ty storage then
           error_loc pexp_loc
             "Second component of return type must be identical to storage type";
         if ret_ty <> Tlist Toperation then

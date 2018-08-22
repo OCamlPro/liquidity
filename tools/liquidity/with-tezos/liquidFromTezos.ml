@@ -368,12 +368,24 @@ let rec convert_type env expr =
                 storage_name = "storage" }
             ) constrs
         | _ -> [{
-          entry_name = "main";
-          parameter_name = "parameter";
-          storage_name = "storage";
-          parameter;
-        }] in
-      Tcontract { sig_name; entries_sig }
+            entry_name = "main";
+            parameter_name = "parameter";
+            storage_name = "storage";
+            parameter;
+          }] in
+      let c_sig = { sig_name; entries_sig } in
+      begin match
+          sig_name,
+          List.find_opt (fun (n, c_sig') -> same_signature c_sig c_sig')
+            env.contract_types
+        with
+        | None, None -> Tcontract c_sig
+        | Some n, None ->
+          env.contract_types <- (n, c_sig) :: env.contract_types;
+          Tcontract c_sig
+        | _, Some (n, c_sig) -> Tcontract c_sig
+      end
+
     | Prim(_, "lambda", [x;y], _debug) -> Tlambda
                                             (convert_type env x,
                                              convert_type env y)
@@ -705,11 +717,8 @@ let contract_of_string filename s =
      | [] ->
         let nodes = List.map Micheline.extract_locations nodes in
         let (nodes, loc_tables) = List.split nodes in
-        let env = { filename;
+        let env = { (LiquidTezosTypes.empty_env filename) with
                     loc_table = convert_loc_table filename loc_tables;
-                    type_annots = Hashtbl.create 17;
-                    types = [];
-                    annoted = false;
                   } in
         Some (nodes, env)
 
@@ -725,11 +734,8 @@ let const_of_string filename s =
        raise (LiquidError (error_to_liqerror filename error))
      | [] ->
         let node, loc_table = Micheline.extract_locations node in
-        let env = { filename;
+        let env = { (LiquidTezosTypes.empty_env filename) with
                     loc_table = convert_loc_table filename [loc_table];
-                    type_annots = Hashtbl.create 17;
-                    types = [];
-                    annoted = false;
                   } in
         Some (node, env)
 
@@ -751,6 +757,9 @@ let convert_env env =
   ty_env.types <-
     List.fold_left (fun acc (n, ty) -> StringMap.add n ty acc)
       ty_env.types types;
+  ty_env.contract_types <-
+    List.fold_right (fun (n, c_sig) -> StringMap.add n c_sig)
+      env.contract_types ty_env.contract_types;
   ty_env
 
 

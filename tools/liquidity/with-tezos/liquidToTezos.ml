@@ -453,12 +453,7 @@ let read_tezos_file filename =
 let read_tezos_json filename =
   let s = read_file filename in
   let nodes = contract_of_json s in
-  let env = LiquidTezosTypes.{ filename;
-                               loc_table = IntMap.empty;
-                               type_annots = Hashtbl.create 17;
-                               types = [];
-                               annoted = false;
-                             } in
+  let env = LiquidTezosTypes.empty_env filename in
   nodes, env
 
 

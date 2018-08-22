@@ -36,7 +36,7 @@ let error loc msg =
   LiquidLoc.raise_error ~loc ("Type error:  " ^^ msg ^^ "%!")
 
 let comparable_ty ty1 ty2 =
-  comparable_type ty1 && ty1 = ty2
+  comparable_type ty1 && eq_types ty1 ty2
 
 let error_not_comparable loc prim ty1 ty2 =
   error loc "arguments of %s not comparable: %s\nwith\n%s\n"
@@ -144,6 +144,23 @@ let rec loc_exp e = match e.desc with
       { loc_pos = Some ( _, loc_end ) } ->
       { loc with loc_pos = Some (loc_begin, loc_end) }
     | loc, _ -> loc
+
+let sig_of_contract env contract =
+  let c_sig = sig_of_contract contract in
+  let sig_name = StringMap.fold (fun name c_sig' -> function
+      | Some _ as acc -> acc
+      | None -> if same_signature c_sig' c_sig then Some name else None
+    ) env.contract_types None in
+  let sig_name = match sig_name with
+    | None -> Some contract.contract_name
+    | Some _ -> sig_name in
+  let c_sig = { c_sig with sig_name } in
+  begin match sig_name with
+    | None -> assert false
+    | Some n ->
+      env.contract_types <- StringMap.add n c_sig env.contract_types
+  end;
+  c_sig
 
 (* Merge nested matches to recover encoding for pattern matching over
    sum type *)
@@ -255,7 +272,7 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
         with Not_found -> error loc "unbound label %S" label
       in
       let record_ty = StringMap.find ty_name env.env.types in
-      if arg.ty <> record_ty then
+      if not @@ eq_types arg.ty record_ty then
         error loc "label %s does not belong to type %s" label
           (LiquidPrinter.Liquid.string_of_type arg.ty);
       ty
@@ -373,7 +390,7 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
        match ifnone.ty, ifsome.ty with
        | ty, Tfail | Tfail, ty -> ty
        | ty1, ty2 ->
-         if ty1 <> ty2 then
+         if not @@ eq_types ty1 ty2 then
            type_error loc "branches of match have different types" ty2 ty1;
          ty1
      in
@@ -392,7 +409,7 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
        match ifplus.ty, ifminus.ty with
        | ty, Tfail | Tfail, ty -> ty
        | ty1, ty2 ->
-         if ty1 <> ty2 then
+         if not @@ eq_types ty1 ty2 then
            type_error loc "branches of match%nat must have the same type"
              ty2 ty1;
          ty1
@@ -480,7 +497,7 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
     let (env, count) = new_binding env name name_ty in
     let body = typecheck env body in
     let body_r = match body.ty with
-      | Ttuple [r; baccty] when baccty = acc.ty -> r
+      | Ttuple [r; baccty] when eq_types baccty acc.ty -> r
       | _ ->
         error (loc_exp body)
           "body of %s must be of type 'a * %s, but has type %s"
@@ -516,7 +533,7 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
        match ifnil.ty, ifcons.ty with
        | ty, Tfail | Tfail, ty -> ty
        | ty1, ty2 ->
-         if ty1 <> ty2 then
+         if not @@ eq_types ty1 ty2 then
            type_error loc "branches of match must have the same type"
              ty2 ty1;
           ty1
@@ -777,7 +794,7 @@ and typecheck_prim1 env prim loc args =
     let expected_ty = List.nth tuple n in
     let size = List.length tuple in
     if size <= n then error loc "set outside tuple";
-    let ty = if not (ty = expected_ty || ty = Tfail) then
+    let ty = if not (eq_types ty expected_ty || ty = Tfail) then
         error loc "prim set bad type"
       else tuple_ty
     in
@@ -867,7 +884,7 @@ and typecheck_prim2 env prim loc args =
     [ key_ty;
       (Tmap (expected_key_ty, value_ty) | Tbigmap (expected_key_ty, value_ty)) ]
     ->
-     if expected_key_ty <> key_ty then
+     if not @@ eq_types expected_key_ty key_ty then
        error loc "bad Map.find key type";
      Toption value_ty
   | Prim_map_update,
@@ -876,9 +893,9 @@ and typecheck_prim2 env prim loc args =
       ( Tmap (expected_key_ty, expected_value_ty)
       | Tbigmap (expected_key_ty, expected_value_ty)) as m]
     ->
-     if expected_key_ty <> key_ty then
+     if not @@ eq_types expected_key_ty key_ty then
        error loc "bad Map.update key type";
-     if expected_value_ty <> value_ty then
+     if not @@ eq_types expected_value_ty value_ty then
        error loc "bad Map.update value type";
      begin match m with
        | Tmap _ -> Tmap (key_ty, value_ty)
@@ -891,9 +908,9 @@ and typecheck_prim2 env prim loc args =
       ( Tmap (expected_key_ty, expected_value_ty)
       | Tbigmap (expected_key_ty, expected_value_ty)) as m]
     ->
-     if expected_key_ty <> key_ty then
+     if not @@ eq_types expected_key_ty key_ty then
        error loc "bad Map.add key type";
-     if expected_value_ty <> value_ty then
+     if not @@ eq_types expected_value_ty value_ty then
        error loc "bad Map.add value type";
      begin match m with
        | Tmap _ -> Tmap (key_ty, value_ty)
@@ -905,7 +922,7 @@ and typecheck_prim2 env prim loc args =
       ( Tmap (expected_key_ty, value_ty)
       | Tbigmap (expected_key_ty, value_ty)) as m]
     ->
-     if expected_key_ty <> key_ty then
+     if not @@ eq_types expected_key_ty key_ty then
        error loc "bad Map.remove key type";
      begin match m with
        | Tmap _ -> Tmap (key_ty, value_ty)
@@ -917,13 +934,13 @@ and typecheck_prim2 env prim loc args =
     [ key_ty;
       (Tmap (expected_key_ty,_) | Tbigmap (expected_key_ty,_)) ]
     ->
-     if expected_key_ty <> key_ty then
+     if not @@ eq_types expected_key_ty key_ty then
        error loc "bad Mem.mem key type";
      Tbool
 
   | Prim_set_mem,[ key_ty; Tset expected_key_ty]
     ->
-     if expected_key_ty <> key_ty then
+     if not @@ eq_types expected_key_ty key_ty then
        error loc "bad Set.mem key type";
      Tbool
 
@@ -933,17 +950,17 @@ and typecheck_prim2 env prim loc args =
 
   | Prim_set_update, [ key_ty; Tbool; Tset expected_key_ty]
     ->
-     if expected_key_ty <> key_ty then
+     if not @@ eq_types expected_key_ty key_ty then
        error loc "bad Set.update key type";
      Tset key_ty
   | Prim_set_add, [ key_ty; Tset expected_key_ty]
     ->
-     if expected_key_ty <> key_ty then
+     if not @@ eq_types expected_key_ty key_ty then
        error loc "bad Set.add key type";
      Tset key_ty
   | Prim_set_remove, [ key_ty; Tset expected_key_ty]
     ->
-     if expected_key_ty <> key_ty then
+     if not @@ eq_types expected_key_ty key_ty then
        error loc "bad Set.remove key type";
      Tset key_ty
 
@@ -983,7 +1000,7 @@ and typecheck_prim2 env prim loc args =
   | Prim_exec, [ ty;
                  ( Tlambda(from_ty, to_ty)
                  | Tclosure((from_ty, _), to_ty))] ->
-     if ty <> from_ty then
+     if not @@ eq_types ty from_ty then
        type_error loc "Bad argument type in function application" ty from_ty;
      to_ty
 
@@ -997,7 +1014,7 @@ and typecheck_prim2 env prim loc args =
   | Prim_Cons, [ head_ty; Tunit ] ->
      Tlist head_ty
   | Prim_Cons, [ head_ty; Tlist tail_ty ] ->
-     if head_ty <> tail_ty then
+     if not @@ eq_types head_ty tail_ty then
        type_error loc "Bad types for list" head_ty tail_ty;
      Tlist tail_ty
 
@@ -1019,7 +1036,7 @@ and typecheck_prim2 env prim loc args =
 
 and typecheck_expected info env expected_ty exp =
   let exp = typecheck env exp in
-  if exp.ty <> expected_ty && exp.ty <> Tfail then
+  if not @@ eq_types exp.ty expected_ty && exp.ty <> Tfail then
     type_error (loc_exp exp)
                ("Unexpected type for "^info) exp.ty expected_ty;
   exp
@@ -1054,7 +1071,7 @@ and typecheck_contract ~warnings ~decompiling env contract =
       force_inline = ref StringMap.empty;
       env = env;
       clos_env = None;
-      t_contract_sig = sig_of_contract contract;
+      t_contract_sig = sig_of_contract env contract;
       t_contract_storage = contract.storage;
     } in
 

@@ -124,6 +124,64 @@ let comparable_type = function
   | Taddress -> true
   | _ -> false
 
+let rec eq_types ty1 ty2 = match ty1, ty2 with
+  | Tunit, Tunit
+  | Tbool, Tbool
+  | Tint, Tint
+  | Tnat, Tnat
+  | Ttez, Ttez
+  | Tstring, Tstring
+  | Tbytes, Tbytes
+  | Ttimestamp, Ttimestamp
+  | Tkey, Tkey
+  | Tkey_hash, Tkey_hash
+  | Tsignature, Tsignature
+  | Toperation, Toperation
+  | Taddress, Taddress
+  | Tfail, Tfail ->
+    true
+
+  | Ttuple l1, Ttuple l2 ->
+    begin
+      try List.for_all2 eq_types l1 l2
+      with Invalid_argument _ -> false
+    end
+
+  | Toption t1, Toption t2
+  | Tlist t1, Tlist t2
+  | Tset t1, Tset t2 ->
+    eq_types t1 t2
+
+  | Tmap (a1, b1), Tmap (a2, b2)
+  | Tbigmap (a1, b1), Tbigmap (a2, b2)
+  | Tor (a1, b1), Tor (a2, b2)
+  | Tlambda (a1, b1), Tlambda (a2, b2) ->
+    eq_types a1 a2 && eq_types b1 b2
+
+  | Tclosure ((a1, b1), c1), Tclosure ((a2, b2), c2) ->
+    eq_types a1 a2 && eq_types b1 b2 && eq_types c1 c2
+
+  | Trecord (n1, l1), Trecord (n2, l2)
+  | Tsum (n1, l1), Tsum (n2, l2) ->
+    n1 = n2 &&
+    begin try
+        List.for_all2 (fun (x1, t1) (x2, t2) -> x1 = x2 && eq_types t1 t2) l1 l2
+      with Invalid_argument _ -> false
+    end
+
+  | Tcontract { entries_sig = s1 }, Tcontract { entries_sig = s2 } ->
+    begin try
+        List.for_all2 (fun e1 e2 ->
+            e1.entry_name = e2.entry_name &&
+            e1.parameter_name = e2.parameter_name &&
+            e1.storage_name = e2.storage_name &&
+            eq_types e1.parameter e2.parameter
+          ) s1 s2
+      with Invalid_argument _ -> false
+    end
+
+  | _, _ -> false
+
 let rec type_contains_nonlambda_operation = function
   | Toperation -> true
   | Tunit | Tbool | Tint | Tnat | Ttez | Tstring | Tbytes
@@ -144,6 +202,8 @@ let sig_of_contract c = {
   sig_name = None;
   entries_sig = List.map (fun e -> e.entry_sig) c.entries;
 }
+
+let same_signature { entries_sig = s1 } { entries_sig = s2 } = s1 = s2
 
 type location = {
   loc_file : string;
@@ -971,7 +1031,10 @@ let contract_sig_of_param parameter = {
 }
 
 
-let unit_contract_sig = contract_sig_of_param Tunit
+let unit_contract_sig = {
+  (contract_sig_of_param Tunit) with
+  sig_name = Some "UnitContract"
+}
 
 let dummy_contract_sig = {
   sig_name = None;
