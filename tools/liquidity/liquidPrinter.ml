@@ -120,8 +120,30 @@ module Michelson = struct
     bprinter fmt b indent x;
     Buffer.contents b
 
-  let bprint_type_base fmt bprint_type_rec b indent ty =
-    let rec bprint_type fmt b indent ty =
+  let bprint_annots b annots =
+    match annots with
+    | [] -> ()
+    | _ -> Printf.bprintf b "%s" (String.concat " " ("" :: annots))
+
+  let bprint_wrap_annots b bprint_type annots =
+    match annots with
+    | [] -> bprint_type ()
+    | _ ->
+      Printf.bprintf b "(";
+      bprint_type ();
+      bprint_annots b annots;
+      Printf.bprintf b ")"
+
+  let is_word_type = function
+    | Tfail | Tunit | Tbool | Tint   | Tnat | Ttez | Tstring | Tbytes
+    | Ttimestamp | Tkey | Tkey_hash | Tsignature | Toperation | Taddress ->
+      true
+    | Ttuple _ | Trecord _ | Tsum _ | Tcontract _ | Tor _ | Toption _ | Tlist _
+    | Tset _ | Tmap _ | Tbigmap _ | Tlambda _ | Tclosure _ ->
+      false
+
+  let bprint_type_base fmt b indent ty annots =
+    let rec bprint_type_rec fmt b indent ty annots =
       match ty with
       | Tfail -> Printf.bprintf b "failure"
       | Tunit -> Printf.bprintf b "unit"
@@ -137,117 +159,140 @@ module Michelson = struct
       | Tsignature  -> Printf.bprintf b "signature"
       | Toperation  -> Printf.bprintf b "operation"
       | Taddress  -> Printf.bprintf b "address"
-      | Ttuple tys -> bprint_type_pairs fmt b indent tys
-      | Trecord (name, labels) -> bprint_type_record name fmt b indent labels
-      | Tsum (name, constrs) -> bprint_type_sum name fmt b indent constrs
+      | Ttuple tys ->
+        bprint_type_pairs fmt b indent tys annots
+      | Trecord (name, labels) ->
+        bprint_type_record name fmt b indent labels annots
+      | Tsum (name, constrs) ->
+        bprint_type_sum name fmt b indent constrs annots
       | Tcontract { sig_name; entries_sig = [{ parameter = ty }] } ->
          let indent = fmt.increase_indent indent in
-         Printf.bprintf b "(contract%s%c%s"
-           (match sig_name with None -> "" | Some name -> " :" ^ name)
-           fmt.newline indent;
-         bprint_type fmt b indent ty;
+         Printf.bprintf b "(contract";
+         bprint_annots b
+           (match sig_name with
+            | None -> annots
+            | Some name -> (":" ^ name) :: annots);
+         Printf.bprintf b "%c%s" fmt.newline indent;
+         bprint_type fmt b indent ty [];
          Printf.bprintf b ")";
       | Tcontract _ -> assert false
       | Tor (ty1, ty2) ->
          let indent = fmt.increase_indent indent in
-         Printf.bprintf b "(or%c%s" fmt.newline indent;
-         bprint_type fmt b indent ty1;
+         Printf.bprintf b "(or";
+         bprint_annots b annots;
          Printf.bprintf b "%c%s" fmt.newline indent;
-         bprint_type fmt b indent ty2;
+         bprint_type fmt b indent ty1 [];
+         Printf.bprintf b "%c%s" fmt.newline indent;
+         bprint_type fmt b indent ty2 [];
          Printf.bprintf b ")";
       | Toption ty ->
          let indent = fmt.increase_indent indent in
-         Printf.bprintf b "(option%c%s" fmt.newline indent;
-         bprint_type fmt b indent ty;
+         Printf.bprintf b "(option";
+         bprint_annots b annots;
+         Printf.bprintf b "%c%s" fmt.newline indent;
+         bprint_type fmt b indent ty [];
          Printf.bprintf b ")";
       | Tlist ty ->
          let indent = fmt.increase_indent indent in
-         Printf.bprintf b "(list%c%s" fmt.newline indent;
-         bprint_type fmt b indent ty;
+         Printf.bprintf b "(list";
+         bprint_annots b annots;
+         Printf.bprintf b "%c%s" fmt.newline indent;
+         bprint_type fmt b indent ty [];
          Printf.bprintf b ")";
       | Tset ty ->
          let indent = fmt.increase_indent indent in
-         Printf.bprintf b "(set%c%s" fmt.newline indent;
-         bprint_type fmt b indent ty;
+         Printf.bprintf b "(set";
+         bprint_annots b annots;
+         Printf.bprintf b "%c%s" fmt.newline indent;
+         bprint_type fmt b indent ty [];
          Printf.bprintf b ")";
       | Tmap (ty1, ty2) ->
          let indent = fmt.increase_indent indent in
-         Printf.bprintf b "(map%c%s" fmt.newline indent;
-         bprint_type fmt b indent ty1;
+         Printf.bprintf b "(map";
+         bprint_annots b annots;
          Printf.bprintf b "%c%s" fmt.newline indent;
-         bprint_type fmt b indent ty2;
+         bprint_type fmt b indent ty1 [];
+         Printf.bprintf b "%c%s" fmt.newline indent;
+         bprint_type fmt b indent ty2 [];
          Printf.bprintf b ")";
       | Tbigmap (ty1, ty2) ->
          let indent = fmt.increase_indent indent in
-         Printf.bprintf b "(big_map%c%s" fmt.newline indent;
-         bprint_type fmt b indent ty1;
+         Printf.bprintf b "(big_map";
+         bprint_annots b annots;
          Printf.bprintf b "%c%s" fmt.newline indent;
-         bprint_type fmt b indent ty2;
+         bprint_type fmt b indent ty1 [];
+         Printf.bprintf b "%c%s" fmt.newline indent;
+         bprint_type fmt b indent ty2 [];
          Printf.bprintf b ")";
       | Tlambda (ty1, ty2) ->
          let indent = fmt.increase_indent indent in
-         Printf.bprintf b "(lambda%c%s" fmt.newline indent;
-         bprint_type fmt b indent ty1;
+         Printf.bprintf b "(lambda";
+         bprint_annots b annots;
          Printf.bprintf b "%c%s" fmt.newline indent;
-         bprint_type fmt b indent ty2;
+         bprint_type fmt b indent ty1 [];
+         Printf.bprintf b "%c%s" fmt.newline indent;
+         bprint_type fmt b indent ty2 [];
          Printf.bprintf b ")";
       | Tclosure ((ty_arg, ty_env), ty_r) ->
          bprint_type fmt b indent
                      (Ttuple [Tlambda (Ttuple [ty_arg; ty_env], ty_r);
-                              ty_env ]);
+                              ty_env ]) annots;
 
-    and bprint_type_pairs fmt b indent tys =
+    and bprint_type_pairs fmt b indent tys annots =
       match tys with
       | [] -> assert false
-      | [ty] -> bprint_type fmt b indent ty
+      | [ty] -> bprint_type fmt b indent ty annots
       | ty :: tys ->
          let indent = fmt.increase_indent indent in
-         Printf.bprintf b "(pair%c%s" fmt.newline indent;
-         bprint_type fmt b indent ty;
+         Printf.bprintf b "(pair";
+         bprint_annots b annots;
          Printf.bprintf b "%c%s" fmt.newline indent;
-         bprint_type_pairs fmt b indent tys;
+         bprint_type fmt b indent ty [];
+         Printf.bprintf b "%c%s" fmt.newline indent;
+         bprint_type_pairs fmt b indent tys [];
          Printf.bprintf b ")";
          ()
 
-    and bprint_type_composed ty_c name fmt b indent labels =
+    and bprint_type_composed ty_c name fmt b indent labels annots =
       match labels with
       | [] -> assert false
       | [label, ty] ->
-        Printf.bprintf b "(";
-        bprint_type fmt b indent ty;
-        (match ty with
-         | Tbigmap _ -> Printf.bprintf b " :%s)" label
-         | _ -> Printf.bprintf b " %%%s)" label);
+        let annots = match ty with
+         | Tbigmap _ -> (":" ^ label) :: annots
+         | _ -> ("%" ^ label) :: annots in
+        bprint_type fmt b indent ty annots;
       | (label, ty) :: labels ->
-         let indent = fmt.increase_indent indent in
-         Printf.bprintf b "(%s%s%c%s"
-           ty_c
-           (if name = "" then "" else " :"^name)
-           fmt.newline indent;
-         Printf.bprintf b "(";
-         bprint_type fmt b indent ty;
-        (match ty with
-         | Tbigmap _ -> Printf.bprintf b " :%s)" label
-         | _ -> Printf.bprintf b " %%%s)" label);
-         Printf.bprintf b "%c%s" fmt.newline indent;
-         bprint_type_composed ty_c "" fmt b indent labels;
-         Printf.bprintf b ")";
-         ()
+        let annots = if name = "" then annots else (":" ^ name) :: annots in
+        let indent = fmt.increase_indent indent in
+        Printf.bprintf b "(%s" ty_c;
+        bprint_annots b annots;
+        Printf.bprintf b "%c%s" fmt.newline indent;
+        let annots = match ty with
+         | Tbigmap _ -> [":" ^ label]
+         | _ -> ["%" ^ label] in
+        bprint_type fmt b indent ty annots;
+        Printf.bprintf b "%c%s" fmt.newline indent;
+        bprint_type_composed ty_c "" fmt b indent labels [];
+        Printf.bprintf b ")"
 
-    and bprint_type_record name fmt b indent labels =
-      bprint_type_composed "pair" name fmt b indent labels
+    and bprint_type_record name fmt b indent labels annots =
+      bprint_type_composed "pair" name fmt b indent labels annots
 
-    and bprint_type_sum name fmt b indent constrs =
-      bprint_type_composed "or" name fmt b indent constrs
+    and bprint_type_sum name fmt b indent constrs annots =
+      bprint_type_composed "or" name fmt b indent constrs annots
+
+    and bprint_type fmt b indent ty annots =
+      if is_word_type ty then
+        bprint_wrap_annots b
+          (fun () -> bprint_type_rec fmt b indent ty []) annots
+      else
+        bprint_type_rec fmt b indent ty annots
 
     in
-    bprint_type fmt b indent ty
+    bprint_type fmt b indent ty annots
 
   let rec bprint_type fmt b indent ty =
-    bprint_type_base fmt
-      (fun fmt b indent ty_name ty ->
-        bprint_type fmt b indent ty)
-      b indent ty
+    bprint_type_base fmt b indent ty []
 
   let rec bprint_const fmt b indent cst =
     match cst with
@@ -414,7 +459,7 @@ module Michelson = struct
   let bprint_contract bprint_code fmt b indent contract =
     List.iter (fun exp ->
         bprint_code fmt b indent exp ;
-        Printf.bprintf b ";%c" fmt.newline;
+        Printf.bprintf b "%c" fmt.newline;
       ) contract
 
   let bprint_pre_name b name = match name with
@@ -835,7 +880,7 @@ module Liquid = struct
 
 
   let bprint_type2 b indent ty =
-    let set = ref StringSet.empty in
+    (* let set = ref StringSet.empty in *)
     let todo = ref [None, ty] in
     let rec iter () =
       match !todo with
@@ -849,14 +894,14 @@ module Liquid = struct
               indent ^ "  "
          in
          Michelson.bprint_type_base Michelson.multi_line
-           (fun _ b indent ty_name ty ->
-             Printf.bprintf b "%s" ty_name;
-             if not ( StringSet.mem ty_name !set ) then begin
-                 set := StringSet.add ty_name !set;
-                 todo := (Some ty_name, ty) :: !todo
-               end
-           )
-           b indent ty;
+           (* (fun _ b indent ty_name ty ->
+            *   Printf.bprintf b "%s" ty_name;
+            *   if not ( StringSet.mem ty_name !set ) then begin
+            *       set := StringSet.add ty_name !set;
+            *       todo := (Some ty_name, ty) :: !todo
+            *     end
+            * ) *)
+           b indent ty [];
          Printf.bprintf b "\n";
          iter ()
     in

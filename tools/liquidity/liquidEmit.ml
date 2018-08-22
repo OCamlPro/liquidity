@@ -96,13 +96,15 @@ let rec emit_code ~expand code =
       emit_code ~expand @@ i @@
       SEQ (LiquidMisc.list_init n
              (fun _ -> i @@ CDR None) @ [{ code with ins = CAR field }])
-    else M_INS (Printf.sprintf "C%sAR" (String.make n 'D'), var_annot name)
+    else M_INS (Printf.sprintf "C%sAR" (String.make n 'D'),
+                var_annot name @ field_annot field)
   | CDDR (n, field) ->
     if expand then
       emit_code ~expand @@ i @@
       SEQ (LiquidMisc.list_init n
              (fun _ -> i @@ CDR None) @ [{ code with ins = CDR field }])
-    else M_INS (Printf.sprintf "C%sDR" (String.make n 'D'), var_annot name)
+    else M_INS (Printf.sprintf "C%sDR" (String.make n 'D'),
+                var_annot name @ field_annot field)
   | DROP -> M_INS ("DROP", var_annot name)
   | CAR field -> M_INS ("CAR", var_annot name @ field_annot field)
   | CDR field -> M_INS ("CDR", var_annot name @ field_annot field)

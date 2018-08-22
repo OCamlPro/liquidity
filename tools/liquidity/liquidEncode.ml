@@ -232,7 +232,7 @@ and encode_contract_sig csig =
   | [] -> assert false (* ? *)
   | [{ parameter }] -> parameter
   | entries ->
-      Tsum ("entries",
+      Tsum ("_entries",
             List.map (fun { entry_name; parameter = t } ->
               (prefix_entry ^ entry_name, t)
               ) entries)
