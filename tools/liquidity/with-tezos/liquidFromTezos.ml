@@ -294,16 +294,18 @@ let type_name_of_annots ?(allow_capital=false) annots =
 
 
 let type_constr_or_label_of_annots ~allow_capital ?(keep_empty=false) annots =
-  let exception Found of string in
-  List.fold_left (fun acc a ->
-      try Scanf.sscanf a "%%%s"
-            (function
-              | "" when keep_empty -> "" :: acc
-              | "" | "%" | "@" -> acc
-              | s -> sanitize_name ~allow_capital s :: acc)
-      with Scanf.Scan_failure _ | End_of_file -> acc
-    ) [] annots
-  |> List.rev
+  if !LiquidOptions.ignore_annots then []
+  else
+    let exception Found of string in
+    List.fold_left (fun acc a ->
+        try Scanf.sscanf a "%%%s"
+              (function
+                | "" when keep_empty -> "" :: acc
+                | "" | "%" | "@" -> acc
+                | s -> sanitize_name ~allow_capital s :: acc)
+        with Scanf.Scan_failure _ | End_of_file -> acc
+      ) [] annots
+    |> List.rev
 
 let type_constr_of_annots annots =
   type_constr_or_label_of_annots ~allow_capital:true ~keep_empty:true annots

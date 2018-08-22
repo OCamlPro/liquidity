@@ -186,6 +186,18 @@ let compile_tezos_file filename =
   Printf.eprintf "File %S generated\n%!" output;
   ()
 
+let compile_tezos_file filename =
+  try compile_tezos_file filename
+  with exn ->
+    (* Rety and ignore annotations if failing *)
+    if !LiquidOptions.ignore_annots then raise exn;
+    Format.printf
+      "Decompilation failed, retrying and ignoring \
+       Michelson type annotataions@.";
+    LiquidOptions.ignore_annots := true;
+    compile_tezos_file filename;
+    LiquidOptions.ignore_annots := false
+
 let compile_tezos_files = List.iter compile_tezos_file
 
 let handle_files files =
