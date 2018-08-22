@@ -838,7 +838,7 @@ let rec encode env ( exp : typed_exp ) : encoded_exp =
                | Tor (left_ty, right_ty) -> left_ty, right_ty
                | Tsum (_, [_, left_ty; _, right_ty]) -> left_ty, right_ty
                | Tsum (_, (_, left_ty) :: rcstrs) ->
-                 left_ty, Tsum ("#partial", rcstrs)
+                 left_ty, Tsum ("", rcstrs)
                | _ -> assert false
              in
              let desc =

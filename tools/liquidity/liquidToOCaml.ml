@@ -711,7 +711,7 @@ and structure_of_contract
   List.rev !top_level_contracts @ values @ entries
 
 
-let structure_of_contract ?(abbrev=true) ?type_annots ?(types=[]) contract =
+let structure_of_contract ?(abbrev=false) ?type_annots ?(types=[]) contract =
   reset_env ();
   structure_of_contract ~abbrev ?type_annots ~types contract
 
@@ -721,6 +721,6 @@ let translate_expression = convert_code ~abbrev:false
 
 let string_of_expression = LiquidOCamlPrinter.string_of_expression
 
-let convert_type ?(abbrev=true) ty = convert_type ~abbrev ty
+let convert_type ?(abbrev=false) ty = convert_type ~abbrev ty
 
-let convert_code ?(abbrev=true) code = convert_code ~abbrev code
+let convert_code ?(abbrev=false) code = convert_code ~abbrev code
