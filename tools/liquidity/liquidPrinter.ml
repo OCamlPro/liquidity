@@ -1221,12 +1221,12 @@ module Liquid = struct
         * Printf.bprintf b ") ->\n%s" indent2;
         * bprint_code_rec ~debug b indent4 contract.code;
         * Printf.bprintf b "))" *)
-    | ContractAt (_loc, addr, ty) ->
+    | ContractAt (_loc, addr, csig) ->
        Printf.bprintf b "\n%s(Contract.at" indent;
        let indent2 = indent ^ "  " in
        bprint_code_rec ~debug b indent2 addr;
        Printf.bprintf b " : ";
-       bprint_type b (indent ^ "  ") ty;
+       bprint_type b (indent ^ "  ") (Toption (Tcontract csig));
        Printf.bprintf b ")"
     | Unpack (_loc, e, ty) ->
       Printf.bprintf b "\n%s(Bytes.unpack" indent;

@@ -910,12 +910,12 @@ let rec translate_code contracts env exp =
                   ]) },
             pty) } ->
 
-      let ty = match translate_type env pty with
-        | Toption ((Tcontract _) as ty) -> ty
+      let csig = match translate_type env pty with
+        | Toption ((Tcontract csig)) -> csig
         | _ -> error_loc pty.ptyp_loc
-                 "Contract.at type must be 'a contract option for some 'a"
+                 "Contract.at type must be (contract C) option for some C"
       in
-      ContractAt (loc, translate_code contracts env addr_exp, ty)
+      ContractAt (loc, translate_code contracts env addr_exp, csig)
 
     | { pexp_desc =
           Pexp_apply (
@@ -1972,16 +1972,6 @@ let predefined_types =
                    "big_map", Tunit;
                    "variant", Tunit;
                  ]
-
-let unit_contract_sig = {
-  sig_name = Some "UnitContract";
-  entries_sig = [{
-      entry_name = "main";
-      parameter_name = "parameter";
-      storage_name = "storage";
-      parameter = Tunit;
-    }]
-}
 
 let predefined_contract_types =
   List.fold_left (fun acc (name, cty) ->

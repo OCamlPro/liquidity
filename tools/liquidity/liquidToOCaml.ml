@@ -595,12 +595,12 @@ let rec convert_code ~abbrev expr =
 
   | CreateContract _ -> assert false
 
-  | ContractAt (loc, addr, ty) ->
+  | ContractAt (loc, addr, csig) ->
     Exp.constraint_ ~loc:(loc_of_loc loc)
       (Exp.apply ~loc:(loc_of_loc loc)
          (Exp.ident (lid "Contract.at"))
          [ Nolabel, convert_code ~abbrev addr ])
-      (convert_type ~abbrev (Toption ty))
+      (convert_type ~abbrev (Toption (Tcontract csig)))
 
   | Unpack (loc, e, ty) ->
     Exp.constraint_ ~loc:(loc_of_loc loc)

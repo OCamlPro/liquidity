@@ -327,10 +327,10 @@ let rec translate_code ~parameter_name ~storage_name code =
       args_code @
       [contract_code; ii ~loc PAIR]
 
-    | ContractAt (loc, addr, ty) ->
-      let ty = LiquidEncode.encode_type ty in
+    | ContractAt (loc, addr, csig) ->
+      let param_ty = LiquidEncode.encode_contract_sig csig in
       compile depth env addr @
-      [ ii ~loc (CONTRACT ty) ]
+      [ ii ~loc (CONTRACT param_ty) ]
 
     | Unpack (loc, e, ty) ->
       let ty = LiquidEncode.encode_type ty in

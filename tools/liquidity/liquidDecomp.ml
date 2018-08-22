@@ -388,7 +388,7 @@ let rec decompile contract =
          mklet node (Constructor(loc, Constr c, arg_of arg))
 
        | N_CONTRACT ty, [arg] ->
-         mklet node (ContractAt(loc, arg_of arg, ty))
+         mklet node (ContractAt(loc, arg_of arg, contract_sig_of_param ty))
 
        | N_UNPACK ty, [arg] ->
          mklet node (Unpack(loc, arg_of arg, ty))

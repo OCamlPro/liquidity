@@ -704,10 +704,10 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
     let desc = Unpack (loc, e, ty) in
     mk ?name:exp.name desc (Toption ty)
 
-  | ContractAt (loc, addr, ty) ->
+  | ContractAt (loc, addr, csig) ->
     let addr = typecheck_expected "Contract.at argument" env Taddress addr in
-    let desc = ContractAt (loc, addr, ty) in
-    mk ?name:exp.name desc (Toption ty)
+    let desc = ContractAt (loc, addr, csig) in
+    mk ?name:exp.name desc (Toption (Tcontract csig))
 
   | CreateContract (loc, args, contract) ->
     let contract = typecheck_contract ~warnings:env.warnings

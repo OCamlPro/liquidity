@@ -616,7 +616,7 @@ and ('ty, 'a) exp_desc =
 
   | ContractAt of location
                   * ('ty, 'a) exp
-                  * datatype
+                  * contract_sig
 
   | Unpack of location
               * ('ty, 'a) exp
@@ -960,15 +960,18 @@ type loc_michelson_contract = loc_michelson mic_contract
 let noloc = { loc_file = "<unspecified>"; loc_pos = None }
 
 
-let unit_contract_sig = {
+let contract_sig_of_param parameter = {
   sig_name = None;
   entries_sig = [ {
       entry_name = "main";
-      parameter = Tunit;
+      parameter;
       parameter_name = "parameter";
       storage_name = "storage";
     }];
 }
+
+
+let unit_contract_sig = contract_sig_of_param Tunit
 
 let dummy_contract_sig = {
   sig_name = None;
