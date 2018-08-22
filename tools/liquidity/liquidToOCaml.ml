@@ -638,8 +638,11 @@ and structure_item_of_entry ~abbrev storage_caml entry =
 and structure_of_contract
     ?(abbrev=true) ?type_annots ?(types=[]) contract =
   reset_env ();
+  let ignore_type s =
+    StringMap.mem s LiquidFromOCaml.predefined_types
+    || s = "_entries" in
   List.iter (fun (s, ty) ->
-      if not (StringMap.mem s LiquidFromOCaml.predefined_types) then
+      if not (ignore_type s) then
         ignore (add_abbrev s ty (TypeName (convert_type ~abbrev:false ty)))
     ) types;
   begin match type_annots with

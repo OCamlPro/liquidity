@@ -191,7 +191,8 @@ let rec short_circuit node ~from =
 
 let rec undo_cdr acc node =
   match node with
-  | { kind = N_PRIM "CDR"; args = [x] } -> undo_cdr (node :: acc) x
+  | { kind = N_PRIM "CDR"; args = [x]; node_name = None } ->
+    undo_cdr (node :: acc) x
   | _ -> acc, node
 
 let rec interp contract =

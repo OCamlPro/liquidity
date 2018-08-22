@@ -241,8 +241,9 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
             error loc "label %s does not belong to type %s"
               label record_name;
         end
-      | _ -> error loc "not a record type: %s"
+      | _ -> error loc "not a record type: %s, has no field %s"
                (LiquidPrinter.Liquid.string_of_type arg.ty)
+               label
     in
     mk ?name:exp.name (Project (loc, label, arg)) ty
 
