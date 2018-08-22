@@ -191,52 +191,40 @@ module Data = struct
   let storage = ref ""
 
   let contract_address = ref ""
-
-  let mk_json_obj fields =
-    fields
-    |> List.map (fun (f,v) -> "\"" ^ f ^ "\":" ^ v)
-    |> String.concat ","
-    |> fun fs -> "{" ^ fs ^ "}"
+  let init_inputs = ref []
     
-
+  let liquid_to_mic filename contract typ parameter =
+    let mic_data = LiquidData.data_of_liq filename contract typ parameter in
+    let mic_data = match mic_data with 
+      | Error error ->
+        LiquidLoc.report_error Format.err_formatter error;
+        (raise (Invalid_argument typ);)
+      | Ok mic_data ->
+        mic_data in
+    if !LiquidOptions.json then
+      LiquidToTezos.(json_of_const @@ convert_const mic_data)
+    else
+      LiquidPrinter.Michelson.line_of_const mic_data
 
   let translate () =
     let filename = !contract in
     let contract = FileString.read_file filename in
     let parameter = !parameter in
     let storage = !storage in
-    let p,s = LiquidData.data_of_liq ~filename
-                                     ~contract ~parameter ~storage in
-    let input = match p with 
-      | Error error ->
-        LiquidLoc.report_error Format.err_formatter error;
-        raise (Invalid_argument "input");
-      | Ok input ->
-        input in
-
-    let storage = match s with 
-      | Error error ->
-        LiquidLoc.report_error Format.err_formatter error;
-        raise (Invalid_argument "storage");
-      | Ok storage ->
-        storage in
-
-    if !LiquidOptions.json then
-      let input_json = LiquidToTezos.(json_of_const @@ convert_const input) in
-      let storage_json = LiquidToTezos.(json_of_const @@ convert_const storage) in 
-      let input_const = LiquidToTezos.convert_const input in
-      let storage_const = LiquidToTezos.convert_const storage in
-      let run_fields = [
-        "input", input_json;
-        "storage", storage_json;
-      ] in
-      let run_json = mk_json_obj run_fields in
-      Printf.printf "%s\n%!" run_json
-    else
-      List.iter (fun (s,x) ->
-       let x = LiquidPrinter.Michelson.line_of_const x in
-       Printf.printf "%s: %s\n%!" s x)
-         [ "input", input; "storage", storage ]
+    let parameters = List.rev !init_inputs in
+    match parameters with 
+    | [] -> raise (Invalid_argument "input")
+    | parameter :: parameters -> 
+      let parameter_str = liquid_to_mic filename contract "parameter" parameter in
+      match parameters with 
+      | [] -> 
+        Printf.printf "%s\n%!" parameter_str
+      | storage :: _ ->
+      let storage_str = liquid_to_mic filename contract "storage" storage in
+      if !LiquidOptions.json then
+        Printf.printf "{\n  \"parameter\": %s; \n  \"storage\": %s\n}\n%!" parameter_str storage_str
+      else
+        Printf.printf "parameter: %s \nstorage: %s\n%!" parameter_str storage_str
 
   let run () =
     let open LiquidDeploy in
@@ -265,8 +253,6 @@ module Data = struct
         ) diff;
       Printf.printf "%!"
 
-
-  let init_inputs = ref []
 
   let register_deploy_input s =
     init_inputs := s :: !init_inputs
@@ -470,8 +456,7 @@ let main () =
 
       "--data", Arg.Tuple [
         Arg.String (fun s -> Data.contract := s);
-        Arg.String (fun s -> Data.parameter := s);
-        Arg.String (fun s -> Data.storage := s);
+        Arg.Rest Data.register_deploy_input;
         Arg.Unit (fun () ->
             work_done := true;
             Data.translate ());

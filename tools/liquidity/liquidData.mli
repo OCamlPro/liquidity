@@ -16,8 +16,8 @@ val translate_const_exp : location -> encoded_exp -> const
 val data_of_liq :
   filename:string ->
   contract:string ->
-  parameter:string ->
-  storage:string -> (const,error) result * (const,error) result
+  typ:string -> 
+  parameter:string -> (const,error) result
 
 val translate :
   env -> contract_sig -> string -> datatype -> const
