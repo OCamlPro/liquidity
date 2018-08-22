@@ -562,11 +562,32 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
        error loc "label %s is not defined" (StringSet.choose !remaining_labels);
      mk ?name:exp.name (Record (loc, lab_exp)) record_ty
 
+  (* TODO
+     | Constructor(loc, Constr constr, arg)
+      when env.decompiling && not @@ StringMap.mem constr env.env.constrs ->
+      (* intermediate unknown constructor, add it *)
+      let ty_name = "unknown_constructors" in
+      let arg = typecheck env arg in
+      let constr_ty = match StringMap.find_opt ty_name env.env.types with
+        | Some (Tsum (n, constrs)) -> Tsum (n, (constr, arg.ty) :: constrs)
+        | Some _ -> assert false
+        | None -> Tsum (ty_name, [constr, arg.ty])
+      in
+      env.env.constrs <-
+        StringMap.add constr (ty_name, arg.ty) env.env.constrs;
+      env.env.types <- StringMap.add ty_name constr_ty env.env.types;
+      mk ?name:exp.name (Constructor(loc, Constr constr, arg)) constr_ty
+  *)
+
   | Constructor(loc, Constr constr, arg) ->
-     let ty_name, arg_ty = StringMap.find constr env.env.constrs in
-     let arg = typecheck_expected "construtor argument" env arg_ty arg in
-     let constr_ty = StringMap.find ty_name env.env.types in
-     mk ?name:exp.name (Constructor(loc, Constr constr, arg)) constr_ty
+    begin try
+        let ty_name, arg_ty = StringMap.find constr env.env.constrs in
+        let arg = typecheck_expected "construtor argument" env arg_ty arg in
+        let constr_ty = StringMap.find ty_name env.env.types in
+        mk ?name:exp.name (Constructor(loc, Constr constr, arg)) constr_ty
+      with Not_found ->
+        error loc "unbound constructor %S" constr
+    end
 
   | Constructor(loc, Left right_ty, arg) ->
      let arg = typecheck env arg in

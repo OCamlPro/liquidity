@@ -195,7 +195,69 @@ let rec undo_cdr acc node =
     undo_cdr (node :: acc) x
   | _ -> acc, node
 
+let rec constrlabel_is_in_type c = function
+  | Tunit | Tbool | Tint | Tnat | Ttez | Tstring | Tbytes | Ttimestamp
+  | Tkey | Tkey_hash | Tsignature | Toperation | Taddress | Tfail ->
+    false
+  | Ttuple tys -> List.exists (constrlabel_is_in_type c) tys
+  | Toption ty | Tlist ty | Tset ty -> constrlabel_is_in_type c ty
+  | Tmap (t1, t2) | Tbigmap (t1, t2) | Tor (t1, t2) | Tlambda (t1, t2) ->
+    constrlabel_is_in_type c t1 || constrlabel_is_in_type c t2
+  | Tclosure ((t1, t2), t3) ->
+    constrlabel_is_in_type c t1 ||
+    constrlabel_is_in_type c t2 ||
+    constrlabel_is_in_type c t3
+  | Trecord (_, l) | Tsum (_, l) ->
+    List.exists (fun (c', _) -> c' = c) l ||
+    List.exists (fun (_, t) -> constrlabel_is_in_type c t) l
+  | Tcontract s ->
+    List.exists (fun e -> constrlabel_is_in_type c e.parameter)
+      s.entries_sig
+
+let rec constrlabel_is_in_code c code =
+  match code.ins with
+  | RENAME _
+  | EXEC | DUP _ | DIP_DROP _ | DROP | CAR _ | CDR _ | CDAR _ | CDDR _
+  | PAIR | RECORD _ | COMPARE | LE | LT | GE | GT | NEQ | EQ | FAILWITH
+  | NOW | TRANSFER_TOKENS | ADD | SUB | BALANCE | SWAP | GET | UPDATE | SOME
+  | CONCAT | MEM | SLICE | SELF | AMOUNT | STEPS_TO_QUOTA | CREATE_ACCOUNT
+  | BLAKE2B | SHA256 | SHA512 | HASH_KEY | CHECK_SIGNATURE | ADDRESS | CONS
+  | OR | XOR | AND | NOT | INT | ABS | ISNAT | NEG | MUL | EDIV | LSL | LSR
+  | SOURCE | SENDER | SIZE | IMPLICIT_ACCOUNT | SET_DELEGATE | PACK | MOD | DIV
+    -> false
+  | UNPACK ty
+  | PUSH (ty, _)
+  | LEFT (ty, _)
+  | RIGHT (ty, _)
+  | CONTRACT ty -> constrlabel_is_in_type c ty
+  | CREATE_CONTRACT contract -> constrlabel_is_in_contract c contract
+  | LAMBDA (ty1, ty2, code) ->
+    constrlabel_is_in_type c ty1 ||
+    constrlabel_is_in_type c ty2 ||
+    constrlabel_is_in_code c code
+  | DIP (_, code)
+  | LOOP code
+  | ITER code
+  | MAP code ->
+    constrlabel_is_in_code c code
+  | IF (code1, code2)
+  | IF_NONE (code1, code2)
+  | IF_CONS (code1, code2)
+  | IF_LEFT (code1, code2) ->
+    constrlabel_is_in_code c code1 ||
+    constrlabel_is_in_code c code2
+  | SEQ seq -> List.exists (constrlabel_is_in_code c) seq
+
+and constrlabel_is_in_contract c contract =
+    constrlabel_is_in_type c contract.mic_parameter ||
+    constrlabel_is_in_type c contract.mic_storage ||
+    constrlabel_is_in_code c contract.mic_code
+
 let rec interp contract =
+
+  let known_constrlabel c =
+    constrlabel_is_in_contract c contract
+  in
 
   let rec decompile_seq stack (seq : node) code =
     match code, stack with
@@ -658,21 +720,21 @@ let rec interp contract =
        let x = node ins.loc (N_PRIM "SOME") [x] [seq] in
        x :: stack, x
 
-    | LEFT (right_ty, None), x :: stack ->
-       let x = node ins.loc (N_LEFT right_ty) [x] [seq] in
-       x :: stack, x
-    | RIGHT (left_ty, None), x :: stack ->
-       let x = node ins.loc (N_RIGHT left_ty) [x] [seq] in
-       x :: stack, x
-
     | RIGHT (right_ty, Some "_"), ({ kind = N_CONSTR c; } as x) :: stack ->
       (* special case decoding nested (Right .. (Right (Left x))) *)
       x :: stack, seq
-    | LEFT (_, Some constr), x :: stack ->
+    | LEFT (_, Some constr), x :: stack when known_constrlabel constr ->
        let x = node ins.loc (N_CONSTR constr) [x] [seq] in
        x :: stack, x
-    | RIGHT (_, Some constr), x :: stack ->
+    | RIGHT (_, Some constr), x :: stack when known_constrlabel constr ->
        let x = node ins.loc (N_CONSTR constr) [x] [seq] in
+       x :: stack, x
+
+    | LEFT (right_ty, _), x :: stack ->
+       let x = node ins.loc (N_LEFT right_ty) [x] [seq] in
+       x :: stack, x
+    | RIGHT (left_ty, _), x :: stack ->
+       let x = node ins.loc (N_RIGHT left_ty) [x] [seq] in
        x :: stack, x
 
     | CONTRACT ty, x :: stack -> (* TODO : keep types too ! *)
@@ -690,25 +752,27 @@ let rec interp contract =
     | ABS, x :: stack ->
        let x = node ins.loc (N_PRIM "ABS") [x] [seq] in
        x :: stack, x
-    | CAR None, { kind = N_PRIM "PAIR"; args = [x;_] } :: stack ->
-       x :: stack, seq
-    | CDR None, { kind = N_PRIM "PAIR"; args = [_;x] } :: stack ->
-       x :: stack, seq
-    | CAR None, x :: stack ->
-       let x = node ins.loc (N_PRIM "CAR") [x] [seq] in
-       x :: stack, x
-    | CDR None, x :: stack ->
-       let x = node ins.loc (N_PRIM "CDR") [x] [seq] in
-       x :: stack, x
 
     | CAR (Some f), { kind = N_RECORD (f' :: _); args = x :: _ } :: stack
       when f = f'->
       x :: stack, seq
-    | (CAR (Some field) | CDR (Some field)), x :: stack ->
+    | (CAR (Some field) | CDR (Some field)), x :: stack
+      when known_constrlabel field ->
       let to_remove, x = undo_cdr [] x in
       let x = node ins.loc (N_PROJ field) [x] [seq] in
       List.iter (short_circuit ~from:x) to_remove;
       x :: stack, x
+
+    | CAR _, { kind = N_PRIM "PAIR"; args = [x;_] } :: stack ->
+       x :: stack, seq
+    | CDR _, { kind = N_PRIM "PAIR"; args = [_;x] } :: stack ->
+       x :: stack, seq
+    | CAR _, x :: stack ->
+       let x = node ins.loc (N_PRIM "CAR") [x] [seq] in
+       x :: stack, x
+    | CDR _, x :: stack ->
+       let x = node ins.loc (N_PRIM "CDR") [x] [seq] in
+       x :: stack, x
 
     | NEQ, { kind = N_PRIM "COMPARE"; args = [x;y] } :: stack->
        let x = node ins.loc (N_PRIM "NEQ") [x;y] [seq] in
@@ -794,6 +858,16 @@ let rec interp contract =
     | PAIR, x :: y :: stack ->
        let x = node ins.loc (N_PRIM "PAIR") [x;y] [seq] in
        x :: stack, x
+
+    | RECORD (label_x, None), x :: y :: stack
+      when not @@ known_constrlabel label_x ->
+      let x = node ins.loc (N_PRIM "PAIR") [x;y] [seq] in
+      x :: stack, x
+
+    | RECORD (label_x, Some label_y), x :: y :: stack
+      when not (known_constrlabel label_x && known_constrlabel label_y) ->
+      let x = node ins.loc (N_PRIM "PAIR") [x;y] [seq] in
+      x :: stack, x
 
     | RECORD (label_x, Some label_y), x :: y :: stack ->
        let x = node ins.loc (N_RECORD [label_x; label_y]) [x;y] [seq] in

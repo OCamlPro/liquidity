@@ -12,7 +12,7 @@ type pending_state = {
 }
 
 type transaction = {
-  destination : unit contract;
+  destination : (contract UnitContract);
   amount : tez;
 }
 
@@ -24,7 +24,7 @@ type wallet_operation =
   | ChangeRequirement of nat
   | SetDailyLimit of tez
   | ResetSpentToday
-  | Kill of unit contract
+  | Kill of (contract UnitContract)
 
 type parameter =
   | Operation of wallet_operation
@@ -259,7 +259,7 @@ let deposit (storage : storage) =
   else storage
 
 let kill
-    ((dest: unit contract),
+    ((dest: (contract UnitContract)),
      (storage: storage)) =
   match confirmAndCheck (Kill dest, storage) with
   | Confirmations_Needed storage -> no_op, storage
