@@ -17,7 +17,7 @@ type transaction = {
 }
 
 type wallet_operation =
-  | Transaction of transaction
+  | Withdraw of transaction
   | ChangeOwner of address * address
   | AddOwner of address
   | RemoveOwner of address
@@ -25,11 +25,6 @@ type wallet_operation =
   | SetDailyLimit of tez
   | ResetSpentToday
   | Kill of (contract UnitContract)
-
-type parameter =
-  | Operation of wallet_operation
-  | Deposit
-  | Revoke of wallet_operation
 
 type operation_hash = bytes
 
@@ -94,7 +89,7 @@ let confirmAndCheck ((op : wallet_operation), (storage: storage)) =
     let pending = pending.ownersDone <- Set.add owner pending.ownersDone in
     let storage = storage.m_pending <- Map.add oph pending storage.m_pending in
     Confirmations_Needed storage
-[@@inline]
+(* [@@inline] *)
 
 (*
 let only_enough_owners ((op : wallet_operation), (storage: storage)) =
@@ -114,9 +109,7 @@ let has_confirmed ((op: wallet_operation), (owner: address), (storage:storage)) 
 
 
 (* Revokes a prior confirmation of the given operation *)
-let revoke
-    ((op : wallet_operation),
-     (storage : storage)) =
+let%entry revoke (op : wallet_operation) storage =
   onlyowner storage;
   let owner = Current.source () in
   let oph = Crypto.blake2b (Bytes.pack op) in
@@ -127,17 +120,15 @@ let revoke
       let pending = pending.yetNeeded <- pending.yetNeeded + 1p in
       let pending =
         pending.ownersDone <- Set.remove owner pending.ownersDone in
-      storage.m_pending <- Map.add oph pending storage.m_pending
-    else storage
+      no_op, storage.m_pending <- Map.add oph pending storage.m_pending
+    else no_op, storage
 
 
 
-let changeOwner
-    ((parameter : address * address),
-     (storage : storage)) =
+let%entry changeOwner (parameter : address * address) storage =
   (* let storage = only_enough_owners (ChangeOwner parameter, storage) in *)
   match confirmAndCheck (ChangeOwner parameter, storage) with
-  | Confirmations_Needed storage -> storage
+  | Confirmations_Needed storage -> no_op, storage
   | Execute storage ->
     let from, _to = parameter in
     if is_owner (_to, storage) || not (is_owner (from, storage))
@@ -145,29 +136,24 @@ let changeOwner
     else
       let storage = clearPending storage in
       let storage = storage.m_owners <- Set.remove from storage.m_owners in
-      storage.m_owners <- Set.add _to storage.m_owners
+      no_op, storage.m_owners <- Set.add _to storage.m_owners
 
 
-let addOwner
-    ((owner : address),
-     (storage : storage)) =
+let%entry addOwner (owner : address) storage =
   (* let storage = only_enough_owners (AddOwner owner, storage) in *)
   match confirmAndCheck (AddOwner owner, storage) with
-  | Confirmations_Needed storage -> storage
+  | Confirmations_Needed storage -> no_op, storage
   | Execute storage ->
     if is_owner (owner, storage) then Current.failwith ();
     let storage = clearPending storage in
     let storage = storage.m_num_owners <- storage.m_num_owners + 1p in
-    storage.m_owners <- Set.add owner storage.m_owners
-[@@inline]
+    no_op, storage.m_owners <- Set.add owner storage.m_owners
 
 
-let removeOwner
-    ((owner : address),
-     (storage : storage)) =
+let%entry removeOwner (owner : address) storage =
   (* let storage = only_enough_owners (RemoveOwner owner, storage) in *)
   match confirmAndCheck (RemoveOwner owner, storage) with
-  | Confirmations_Needed storage -> storage
+  | Confirmations_Needed storage -> no_op, storage
   | Execute storage ->
     if not (is_owner (owner,storage)) then Current.failwith ();
     if storage.m_required >= storage.m_num_owners then Current.failwith ();
@@ -177,20 +163,17 @@ let removeOwner
     in
     let storage = storage.m_num_owners <- new_num_owners in
     let storage = storage.m_owners <- Set.remove owner storage.m_owners in
-    clearPending storage
-[@@inline]
+    no_op, clearPending storage
 
 
-let changeRequirement
-    ((required : nat),
-     (storage : storage)) =
+let%entry changeRequirement (required : nat) storage =
   (* let storage = only_enough_owners (ChangeRequirement required, storage) in *)
   match confirmAndCheck (ChangeRequirement required, storage) with
-  | Confirmations_Needed storage -> storage
+  | Confirmations_Needed storage -> no_op, storage
   | Execute storage ->
     if required > storage.m_num_owners then Current.failwith ();
     let storage = clearPending storage in
-    storage.m_required <- required
+    no_op, storage.m_required <- required
 
 let underLimit ((value: tez), (storage: storage)) =
   onlyowner storage;
@@ -204,7 +187,6 @@ let underLimit ((value: tez), (storage: storage)) =
     true, storage.m_spent_today <- storage.m_spent_today + value
   else
     false, storage
-[@@inline]
 
 let%init storage (owners : address set) (required : nat) (limit : tez) =
   let m_owners = Set.add (Current.source ()) owners in
@@ -235,41 +217,35 @@ let%init storage =
 
 
 
-let setDailyLimit
-    ((limit : tez),
-     (storage : storage)) =
+let%entry setDailyLimit (limit : tez) storage =
   (* let storage = storage.multi <- *)
   (*     MultiOwned.only_enough_owners *)
   (*       (MultiOwned.SetDailyLimit limit, storage.multi) in *)
   match confirmAndCheck (SetDailyLimit limit, storage) with
-  | Confirmations_Needed storage -> storage
-  | Execute storage -> storage.m_daily_limit <- limit
+  | Confirmations_Needed storage -> no_op, storage
+  | Execute storage -> no_op, storage.m_daily_limit <- limit
 
 
-let resetSpentToday (storage : storage) =
+let%entry resetSpentToday (_u : unit) storage =
   (* let storage = storage.multi <- *)
   (*     MultiOwned.only_enough_owners *)
   (*       (MultiOwned.ResetSpentToday, storage.multi) in *)
   match confirmAndCheck (ResetSpentToday, storage) with
-  | Confirmations_Needed storage -> storage
-  | Execute storage -> storage.m_spent_today <- 0tz
+  | Confirmations_Needed storage -> no_op, storage
+  | Execute storage -> no_op, storage.m_spent_today <- 0tz
 
-let deposit (storage : storage) =
+let%entry deposit (_u : unit) (storage : storage) =
   if Current.amount () = 0tz then Current.failwith ()
-  else storage
+  else no_op, storage
 
-let kill
-    ((dest: (contract UnitContract)),
-     (storage: storage)) =
+let%entry kill (dest: (contract UnitContract)) storage =
   match confirmAndCheck (Kill dest, storage) with
   | Confirmations_Needed storage -> no_op, storage
   | Execute storage ->
     let trans_all = Contract.call dest (Current.balance ()) () in
     [trans_all], storage
 
-let transaction
-    ((t: transaction),
-     (storage: storage)) =
+let%entry withdraw (t: transaction) storage =
   onlyowner storage;
   (* execute directly if under limit *)
   let under, storage = underLimit (t.amount, storage) in
@@ -277,25 +253,8 @@ let transaction
     let op = Contract.call t.destination t.amount () in
     [op], storage
   else
-    match confirmAndCheck (Transaction t, storage) with
+    match confirmAndCheck (Withdraw t, storage) with
     | Confirmations_Needed storage -> no_op, storage
     | Execute storage ->
       let op = Contract.call t.destination t.amount () in
       [op], storage
-
-
-let%entry main
-    (parameter : parameter)
-    (storage : storage) =
-  match parameter with
-  | Deposit -> no_op, deposit storage
-  | Revoke op -> no_op, revoke (op, storage)
-  | Operation op -> match op with
-    | ChangeOwner from_to -> no_op, changeOwner (from_to, storage)
-    | AddOwner owner -> no_op, addOwner (owner, storage)
-    | RemoveOwner owner -> no_op, removeOwner (owner, storage)
-    | ChangeRequirement req -> no_op, changeRequirement (req, storage)
-    | SetDailyLimit l -> no_op, setDailyLimit (l, storage)
-    | ResetSpentToday -> no_op, resetSpentToday storage
-    | Kill dest -> kill (dest, storage)
-    | Transaction t -> transaction (t, storage)

@@ -664,6 +664,11 @@ and structure_of_contract
           (Exp.constant (Const.float output_version))
       ])
   in
+  let values = List.map (fun (v, _inline, body) ->
+      Str.value Nonrecursive [
+        Vb.mk (pat_of_name v) (convert_code ~abbrev body)
+      ]
+    ) contract.values in
   let entries =
     List.map (structure_item_of_entry ~abbrev storage_caml) contract.entries in
   let types_caml =
@@ -695,7 +700,8 @@ and structure_of_contract
         | ContractType typ -> Str.modtype (Mtd.mk (id txt) ~typ)
       )
   in
-  [ version_caml ] @ types_caml @ List.rev !top_level_contracts @ entries
+  [ version_caml ] @ types_caml @
+  List.rev !top_level_contracts @ values @ entries
 
 
 let structure_of_contract ?(abbrev=true) ?type_annots ?(types=[]) contract =

@@ -407,4 +407,5 @@ and bound_entry entry =
 
 and bound_contract contract =
   { contract with
+    values = List.map (fun (v, i, body) -> (v, i, bound body)) contract.values;
     entries = List.map bound_entry contract.entries }
