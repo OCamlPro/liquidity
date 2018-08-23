@@ -149,7 +149,7 @@ let sig_of_contract env contract =
   let c_sig = sig_of_contract contract in
   let sig_name = StringMap.fold (fun name c_sig' -> function
       | Some _ as acc -> acc
-      | None -> if same_signature c_sig' c_sig then Some name else None
+      | None -> if eq_signature c_sig' c_sig then Some name else None
     ) env.contract_types None in
   let sig_name = match sig_name with
     | None -> Some contract.contract_name

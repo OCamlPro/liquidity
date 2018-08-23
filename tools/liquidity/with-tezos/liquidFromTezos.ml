@@ -378,7 +378,7 @@ let rec convert_type env expr =
       let c_sig = { sig_name; entries_sig } in
       begin match
           sig_name,
-          List.find_opt (fun (n, c_sig') -> same_signature c_sig c_sig')
+          List.find_opt (fun (n, c_sig') -> eq_signature c_sig c_sig')
             env.contract_types
         with
         | None, None -> Tcontract c_sig

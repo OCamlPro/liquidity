@@ -169,18 +169,20 @@ let rec eq_types ty1 ty2 = match ty1, ty2 with
       with Invalid_argument _ -> false
     end
 
-  | Tcontract { entries_sig = s1 }, Tcontract { entries_sig = s2 } ->
-    begin try
-        List.for_all2 (fun e1 e2 ->
-            e1.entry_name = e2.entry_name &&
-            e1.parameter_name = e2.parameter_name &&
-            e1.storage_name = e2.storage_name &&
-            eq_types e1.parameter e2.parameter
-          ) s1 s2
-      with Invalid_argument _ -> false
-    end
+  | Tcontract csig1, Tcontract csig2 -> eq_signature csig1 csig2
 
   | _, _ -> false
+
+and eq_signature { entries_sig = s1 } { entries_sig = s2 } =
+  try
+    List.for_all2 (fun e1 e2 ->
+        e1.entry_name = e2.entry_name &&
+        e1.parameter_name = e2.parameter_name &&
+        e1.storage_name = e2.storage_name &&
+        eq_types e1.parameter e2.parameter
+      ) s1 s2
+  with Invalid_argument _ -> false
+
 
 let rec type_contains_nonlambda_operation = function
   | Toperation -> true
@@ -202,8 +204,6 @@ let sig_of_contract c = {
   sig_name = None;
   entries_sig = List.map (fun e -> e.entry_sig) c.entries;
 }
-
-let same_signature { entries_sig = s1 } { entries_sig = s2 } = s1 = s2
 
 type location = {
   loc_file : string;
@@ -1020,8 +1020,8 @@ type loc_michelson_contract = loc_michelson mic_contract
 let noloc = { loc_file = "<unspecified>"; loc_pos = None }
 
 
-let contract_sig_of_param parameter = {
-  sig_name = None;
+let contract_sig_of_param ?sig_name parameter = {
+  sig_name;
   entries_sig = [ {
       entry_name = "main";
       parameter;
@@ -1030,11 +1030,7 @@ let contract_sig_of_param parameter = {
     }];
 }
 
-
-let unit_contract_sig = {
-  (contract_sig_of_param Tunit) with
-  sig_name = Some "UnitContract"
-}
+let unit_contract_sig = contract_sig_of_param ~sig_name:"UnitContract" Tunit
 
 let dummy_contract_sig = {
   sig_name = None;
