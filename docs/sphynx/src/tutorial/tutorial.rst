@@ -130,9 +130,9 @@ Liquidity functions:
        transfered when the contract was called.
 * `STEPS_TO_QUOTA` : `Current.gas ()`. Returns the current gas available
        to execute the end of the contract.
-* `SOURCE` : `Contract.source`.
+* `SOURCE` : `Current.source`.
        Returns the address of the contract that initiated the current transaction.
-* `SENDER` : `Contract.sender`.
+* `SENDER` : `Current.sender`.
        Returns the address of the last contract that called the current contract.
 * `CONS` : `x :: y`
 * `NIL ele_type` : `( [] : ele_type list )`
