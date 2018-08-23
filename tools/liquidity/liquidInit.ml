@@ -227,7 +227,8 @@ let compile_liquid_init env contract storage_ty init (* ((args, sy_init) as init
     let init_contract = tmp_contract_of_init ~loc init storage_ty in
     let typed_init = LiquidCheck.typecheck_contract
         ~warnings:true ~decompiling:false env init_contract in
-    let encoded_init, _ = LiquidEncode.encode_contract env typed_init in
+    let encoded_init, _ =
+      LiquidEncode.encode_contract env typed_init in
     let pre_init = LiquidMichelson.translate encoded_init in
     Init_code (init_contract, pre_init)
 (* let mic_init = LiquidToTezos.convert_contract pre_init in

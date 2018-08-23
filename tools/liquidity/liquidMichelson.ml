@@ -618,9 +618,7 @@ the ending NIL is not annotated with a type *)
       compile_name ~annotafter:false e.name code
 
   and compile_name ~annotafter name code =
-    if not !LiquidOptions.annotmic then code
-    else
-    if annotafter || !LiquidOptions.annotafter then
+    if annotafter then
       match name with
       | Some name ->
         code @ [ii ~loc:LiquidLoc.noloc (RENAME (Some (sanitize_name name)))]
@@ -633,9 +631,7 @@ the ending NIL is not annotated with a type *)
       | _ -> code
 
   and compile_arg_name arg_name =
-    if !LiquidOptions.annotmic
-    then [ii ~loc:LiquidLoc.noloc (RENAME (Some (sanitize_name arg_name)))]
-    else []
+    [ii ~loc:LiquidLoc.noloc (RENAME (Some (sanitize_name arg_name)))]
 
   in
 

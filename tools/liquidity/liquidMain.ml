@@ -49,7 +49,7 @@ let compile_liquid_files files =
       (LiquidPrinter.Liquid.string_of_contract_types
          typed_ast);
   let encoded_ast, to_inline =
-    LiquidEncode.encode_contract ~annot:!LiquidOptions.annotmic env typed_ast in
+    LiquidEncode.encode_contract ~annot:true env typed_ast in
   if !LiquidOptions.verbosity>0 then
     FileString.write_file (outprefix ^ ".encoded")
       (LiquidPrinter.Liquid.string_of_contract
@@ -393,18 +393,7 @@ let main () =
       "--parse-only", Arg.Set LiquidOptions.parseonly,
       " Stop after parsing";
 
-      "--single-line", Arg.Set LiquidOptions.singleline,
-      " Output Michelson on a single line";
-
-      "--no-annot", Arg.Clear LiquidOptions.annotmic,
-      " Don't annotate Michelson with variable names";
-
-      "--annot-prim", Arg.Clear LiquidOptions.annotafter,
-      " Annotate Michelson primitives directly";
-
-      "--compact", Arg.Unit (fun () ->
-          LiquidOptions.annotmic := false;
-          LiquidOptions.singleline := true),
+      "--compact", Arg.Set LiquidOptions.singleline,
       " Produce compact Michelson";
 
       "--json", Arg.Set LiquidOptions.json,

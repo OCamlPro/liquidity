@@ -19,8 +19,6 @@ let peephole = ref true
 let typeonly = ref false
 let parseonly = ref false
 let singleline = ref false
-let annotmic = ref true
-let annotafter = ref false (* XXX: Disable when Tezos is fixed *)
 let json = ref false
 let ignore_annots = ref false
 

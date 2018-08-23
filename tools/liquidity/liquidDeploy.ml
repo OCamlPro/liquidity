@@ -509,7 +509,7 @@ let compile_liquid liquid =
   let typed_ast = LiquidCheck.typecheck_contract
       ~warnings:true ~decompiling:false env syntax_ast in
   let encoded_ast, to_inline =
-    LiquidEncode.encode_contract ~annot:!LiquidOptions.annotmic env typed_ast in
+    LiquidEncode.encode_contract ~annot:true env typed_ast in
   let live_ast = LiquidSimplify.simplify_contract encoded_ast to_inline in
   let pre_michelson = LiquidMichelson.translate live_ast in
   let pre_michelson =
