@@ -71,4 +71,4 @@ rev-tests: build
 		./check-rev.sh tezos/src/bin_client/test/contracts/ $$i $(EXIT_ON_ERROR); \
 	done
 
-
+all-tests: tests tests-mini rev-tests
