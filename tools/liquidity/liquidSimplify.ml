@@ -73,7 +73,19 @@ let rec compute decompile code to_inline =
     | SetField (arg, loc, field, v) ->
       let arg = iter arg in
       let v = iter v in
-      { exp with desc = SetField (arg, loc, field, v) }
+      begin match arg.desc, v.desc with
+        | SetField (arg', _, field', _),
+          Project (_, field'', arg'')
+          when field' <> field && field'' = field &&
+               arg'.desc = arg''.desc ->
+          (* (s.f1 <- v1).f2 <- s.f2  ==>  s.f1 <- v1 *)
+          arg
+        | _, Project (_, field', arg')
+          when field' = field && arg'.desc = arg.desc ->
+          (* s.f <- s.f  ==>  s *)
+          arg
+        | _, _ -> { exp with desc = SetField (arg, loc, field, v) }
+      end
     | Project (loc, field, arg) ->
       let arg = iter arg in
       { exp with desc = Project (loc, field, arg) }
