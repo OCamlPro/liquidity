@@ -33,8 +33,3 @@ if [ -f ${TEZOS_FULL_PATH} ] ; then
 else
     echo "\n${RED}${TEZOS_FULL_PATH} not present ! typechecking of tests/${test}_liq_tz.liq.tz skipped${DEFAULT}\n"
 fi
-
-# # Disabled bytecode compilation
-# echo ./_obuild/ocp-liquidity-comp/ocp-liquidity-comp.asm -I +../zarith zarith.cma -I _obuild/liquidity-env unix.cma ./_obuild/liquidity-env/liquidity-env.cma -impl tests/$test.liq
-# ./_obuild/ocp-liquidity-comp/ocp-liquidity-comp.asm -I +../zarith zarith.cma -I _obuild/liquidity-env unix.cma ./_obuild/liquidity-env/liquidity-env.cma -dsource -impl tests/$test.liq || exit 2
-# rm -f a.out
