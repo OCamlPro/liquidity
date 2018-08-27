@@ -66,7 +66,17 @@ let rec decode ( exp : encoded_exp ) : typed_exp =
 
   (* TODO *)
   (* List.rev -> List.reduce (::) *)
-  (* concat x y => concat [x; y] *)
+
+  | Apply ((Prim_concat |Prim_string_concat |Prim_bytes_concat), loc,
+           [{ desc = Apply (Prim_Cons, _, [
+                s1;
+                { desc = Apply (Prim_Cons, _, [
+                      s2;
+                      { desc = Const (_, _, CList []) }
+                    ]) }
+              ]) }]) ->
+    let s1, s2 = decode s1, decode s2 in
+    mk ?name:exp.name (Apply (Prim_concat_two, loc, [s1; s2])) exp.ty
 
   | Apply (prim, loc, args) ->
     let args = List.map decode args in
