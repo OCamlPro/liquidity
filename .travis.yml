@@ -8,7 +8,7 @@ sudo: required
 cache:
   directories:
   - $HOME/.opam
-#  - tezos
+  - tezos
 
 before_install:
 - sh travis-scripts/prepare-trusty.sh
@@ -18,7 +18,6 @@ install:
 
 script:
 - export OPAMYES=1
-- opam sw 4.06.1
 - eval `opam config env`
 - make
 - make tests-mini

@@ -3,16 +3,16 @@
 # Travis CI is done on Ubuntu trusty
 
 export OPAMYES=1
-sh <(curl -sL https://raw.githubusercontent.com/ocaml/opam/master/shell/install.sh)
+wget https://raw.githubusercontent.com/ocaml/opam/master/shell/install.sh
+yes "" | sh install.sh
 
-# currently, we only target OCaml 4.06.1 because we reuse parser of OCaml
-opam init -a --switch=ocaml-base-compiler.4.06.1
+# currently, we only target OCaml 4.06.1 because we reuse the parser of OCaml
+opam switch create liquidity 4.06.1
 
 eval $(opam config env)
 
 opam update
-opam install ocp-build zarith uutf uri uchar stringext sexplib re lwt.3.3.0 ocplib-endian bigstring jsonm hex ezjsonm cstruct calendar ocurl digestif sodium
+opam install ocp-build ocplib-endian zarith calendar digestif hex ocurl lwt lwt_log uri sodium bigstring ezjsonm
 make clone-tezos
-make -C tezos build-deps
-opam install ocplib-json-typed ocplib-json-typed-bson
-# TODO > other deps are missing ?
+tezos/scripts/install_build_deps.raw.sh
+# make -C tezos build-deps
