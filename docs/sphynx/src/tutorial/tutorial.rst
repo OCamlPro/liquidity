@@ -23,33 +23,33 @@ All the contracts have the following form::
      BODY
 
 
-The `version` statement tells the compiler in which version of
+The ``version`` statement tells the compiler in which version of
 Liquidity the contract is written. The compiler will reject any
 contract that has a version that it does not understand (too old, more
 recent). We expect to reach version 1.0 at the launch of the Tezos
 network.
 
-The `main` function is the default entry point for the contract.
-`let%entry` is the construct used to declare entry points (there is
+The ``main`` function is the default entry point for the contract.
+``let%entry`` is the construct used to declare entry points (there is
 currently only one entry point, but there will be probably more in the
 future).  The declaration takes two parameters with names
-`parameter`, `storage`, the arguments to the function. Their types must
+``parameter``, ``storage``, the arguments to the function. Their types must
 always be specified. The return type of the function must also be
 specified by a type annotation.
 
-A contract always returns a pair `(operations, storage)`, where
-`operations` is a list of internal operations to perform after
-exectution of the contract, and `storage` is the final state of the
+A contract always returns a pair ``(operations, storage)``, where
+``operations`` is a list of internal operations to perform after
+exectution of the contract, and ``storage`` is the final state of the
 contract after the call. The type of the pair must match the type of a
 pair where the first component is a list of opertations and the second
-is the type of the argument `storage` of `main`.
+is the type of the argument ``storage`` of ``main``.
 
-`<... local declarations ...>` is an optional set of optional type and
+``<... local declarations ...>`` is an optional set of optional type and
 function declarations. Type declarations can be used to define records
 and variants (sum-types), described later in this documentation.
 
 An optional initial storage or storage initializer can be given with
-`let%init storage`. When deploying a Liquidity contract, if the
+``let%init storage``. When deploying a Liquidity contract, if the
 storage is not constant it is evaluated in the prevalidation context.
 
 
@@ -58,33 +58,33 @@ Types
 
 Types in Liquidity are monomorphic. The built-in base types are:
 
-- `unit`: whose only constructor is `()`
-- `bool`: Booleans
-- `int`: unbounded integers
-- `nat`: unbounded naturals
-- `tez`: the type of amounts
-- `string`: character strings
-- `bytes`: bytes sequences
-- `timestamp`: dates and timestamps
-- `key`: cryptographic keys
-- `key_hash`: hashes of cryptographic keys
-- `signature`: cryptographic signatures
-- `operation`: type of operations, can only be constructed
-- `address`: abstract type of contract addresses
+- ``unit``: whose only constructor is ``()``
+- ``bool``: Booleans
+- ``int``: unbounded integers
+- ``nat``: unbounded naturals
+- ``tez``: the type of amounts
+- ``string``: character strings
+- ``bytes``: bytes sequences
+- ``timestamp``: dates and timestamps
+- ``key``: cryptographic keys
+- ``key_hash``: hashes of cryptographic keys
+- ``signature``: cryptographic signatures
+- ``operation``: type of operations, can only be constructed
+- ``address``: abstract type of contract addresses
 
 The other types are:
 
-- tuples: noted `(t1 * t2 * t3)`
-- option type: `'a option = None | Some of 'a`
-- variant type: `('a, 'b) variant = Left of 'a | Right of 'b`
-- lists: `'a list` is the type of lists of elements in `'a`
-- sets: `'a set` is the type of sets of elements in `'a`
-- maps: `('a, 'b) map` is the type of maps whose keys are of type
-  `'a` and values of type `'b`
-- big maps: `('a, 'b) big_map` is the type of lazily deserialized maps whose
-  keys are of type `'a` and values of type `'b`
-- contracts: `'a contract` for contracts whose parameter is of type `'a`
-- functions: `'a -> 'b` is the type of functions from `'a` to `'b`
+- tuples: noted ``(t1 * t2 * t3)``
+- option type: ``'a option = None | Some of 'a``
+- variant type: ``('a, 'b) variant = Left of 'a | Right of 'b``
+- lists: ``'a list`` is the type of lists of elements in ``'a``
+- sets: ``'a set`` is the type of sets of elements in ``'a``
+- maps: ``('a, 'b) map`` is the type of maps whose keys are of type
+  ``'a`` and values of type ``'b``
+- big maps: ``('a, 'b) big_map`` is the type of lazily deserialized maps whose
+  keys are of type ``'a`` and values of type ``'b``
+- contracts: ``'a contract`` for contracts whose parameter is of type ``'a``
+- functions: ``'a -> 'b`` is the type of functions from ``'a`` to ``'b``
 
 Record and variant types must be declared beforehand and are referred
 to by their names.
@@ -94,7 +94,7 @@ Calling another contract
 ------------------------
 
 Calling another contract is done by constructing an operation with the
-built-in `Contract.call` function, and **returning** this value at the
+built-in ``Contract.call`` function, and **returning** this value at the
 end of the contract. Internal contract calls are performed after
 execution of the contract is over, in the order in which the resulting
 operations are returned.
@@ -106,10 +106,10 @@ operations are returned.
 
 where:
 
-- `CONTRACT` is the value of the contract being called;
-- `AMOUNT` is the value of the amount of Tez sent to the contract;
-- `ARG` is the argument sent to the contract.
-- `BODY` is some code to be executed after the contract.
+- ``CONTRACT`` is the value of the contract being called;
+- ``AMOUNT`` is the value of the amount of Tez sent to the contract;
+- ``ARG`` is the argument sent to the contract.
+- ``BODY`` is some code to be executed after the contract.
 
 For the call to be actually performed by the blockchain, it _has_ to be
 returned as part of the list of operations.
@@ -120,38 +120,38 @@ Operators and functions
 Here is a list of equivalences between MICHELSON instructions and
 Liquidity functions:
 
-* `FAIL`/`FAILWITH` : `Current.failwith <object>`. Makes the contract abort.
-* `SELF` : `Contract.self ()`. Returns the current contract being executed.
-* `BALANCE` : `Current.balance ()`. Returns the current balance of the
+* ``FAIL``/``FAILWITH`` : ``Current.failwith <object>``. Makes the contract abort.
+* ``SELF`` : ``Contract.self ()``. Returns the current contract being executed.
+* ``BALANCE`` : ``Current.balance ()``. Returns the current balance of the
        current contract.
-* `NOW` : `Current.time ()`. Returns the timestamp of the block containing
+* ``NOW`` : ``Current.time ()``. Returns the timestamp of the block containing
        the transaction in the blockchain.
-* `AMOUNT` : `Current.amount ()`. Returns the amount of tezzies that were
+* ``AMOUNT`` : ``Current.amount ()``. Returns the amount of tezzies that were
        transfered when the contract was called.
-* `STEPS_TO_QUOTA` : `Current.gas ()`. Returns the current gas available
+* ``STEPS_TO_QUOTA`` : ``Current.gas ()``. Returns the current gas available
        to execute the end of the contract.
-* `SOURCE` : `Current.source`.
+* ``SOURCE`` : ``Current.source``.
        Returns the address of the contract that initiated the current transaction.
-* `SENDER` : `Current.sender`.
+* ``SENDER`` : ``Current.sender``.
        Returns the address of the last contract that called the current contract.
-* `CONS` : `x :: y`
-* `NIL ele_type` : `( [] : ele_type list )`
-* `BLAKE2B` : `Crypto.blake2b x`. Returns the Blake2b hash of its
-  argument. (Same for `Crypto.sha256` and `Crypto.sha512`)
-* `HASH_KEY` : `Crypto.hash_key k`. Returns the hash of the key `k`.
-* `CHECK_SIGNATURE` : `Crypto.check key signature data`. Returns `true` if
+* ``CONS`` : ``x :: y``
+* ``NIL ele_type`` : ``( [] : ele_type list )``
+* ``BLAKE2B`` : ``Crypto.blake2b x``. Returns the Blake2b hash of its
+  argument. (Same for ``Crypto.sha256`` and ``Crypto.sha512``)
+* ``HASH_KEY`` : ``Crypto.hash_key k``. Returns the hash of the key ``k``.
+* ``CHECK_SIGNATURE`` : ``Crypto.check key signature data``. Returns ``true`` if
      the public key has been used to generate the signature of the data.
-* `CREATE_ACCOUNT` : `Account.create`. Creates a new account.
-* `CREATE_CONTRACT` : `Contract.create`. Creates a new contract.
-* `SET_DELEGATE` : `Contract.set_delegate`. Sets the delegate (or unset,
-  if argument is `None`) of the current contract.
-* `CONTRACT param_type` : `(Contract.at addr : param_type contract option)`:
+* ``CREATE_ACCOUNT`` : ``Account.create``. Creates a new account.
+* ``CREATE_CONTRACT`` : ``Contract.create``. Creates a new contract.
+* ``SET_DELEGATE`` : ``Contract.set_delegate``. Sets the delegate (or unset,
+  if argument is ``None``) of the current contract.
+* ``CONTRACT param_type`` : ``(Contract.at addr : param_type contract option)``:
    returns the contract stored at this address, if it exists
-* `EXEC` : `Lambda.pipe x f` or `x |> f` or `f x`, is the application of the
-     lambda `f` on the argument `x`.
-* `IMPLICIT_ACCOUNT` : `Account.default key_hash`. Returns the default contract
-    (of type `unit contract`) associated with a key hash.
-* `ADDRESS` : `Contract.address` to retrieve the address of a contract
+* ``EXEC`` : ``Lambda.pipe x f`` or ``x |> f`` or ``f x``, is the application of the
+     lambda ``f`` on the argument ``x``.
+* ``IMPLICIT_ACCOUNT`` : ``Account.default key_hash``. Returns the default contract
+    (of type ``unit contract``) associated with a key hash.
+* ``ADDRESS`` : ``Contract.address`` to retrieve the address of a contract
   
 
 Comparison operators
@@ -159,134 +159,133 @@ Comparison operators
 
 These operators take two values of the same type, and return a Boolean value:
 
-* `COMPARE; EQ` : `x = y`
-* `COMPARE; NEQ` : `x <> y`
-* `COMPARE; LE` : `x <= y`
-* `COMPARE; LT` : `x < y`
-* `COMPARE; GE` : `x >= y`
-* `COMPARE; GT` : `x > y`
+* ``COMPARE; EQ`` : ``x = y``
+* ``COMPARE; NEQ`` : ``x <> y``
+* ``COMPARE; LE`` : ``x <= y``
+* ``COMPARE; LT`` : ``x < y``
+* ``COMPARE; GE`` : ``x >= y``
+* ``COMPARE; GT`` : ``x > y``
 
 The last one returns an integer:
 
-* `COMPARE` : `compare x y`
+* ``COMPARE`` : ``compare x y``
 
 
 Operations on data structures
 -----------------------------
-* `GET` : `Map.find`
-* `UPDATE`: `Map.update` or `Set.update`
-* `MEM`: `Map.mem` or `Set.mem`
-* `CONCAT` : `@`
-* `SIZE` : `List.size` or `Set.size` or `Map.size`
-* `ITER` : `List.iter` or `Set.iter` or `Map.iter` or `List.fold` or
-  `Set.fold` or `Map.fold`
-* `MAP` : `List.map` or `Set.map` or `Map.map` or `List.map_fold` or
-  `Set.map_fold` or `Map.map_fold`
+* ``GET`` : ``Map.find``
+* ``UPDATE``: ``Map.update`` or ``Set.update``
+* ``MEM``: ``Map.mem`` or ``Set.mem``
+* ``CONCAT`` : ``@``
+* ``SIZE`` : ``List.size`` or ``Set.size`` or ``Map.size``
+* ``ITER`` : ``List.iter`` or ``Set.iter`` or ``Map.iter`` or ``List.fold`` or
+  ``Set.fold`` or ``Map.fold``
+* ``MAP`` : ``List.map`` or ``Set.map`` or ``Map.map`` or ``List.map_fold`` or
+  ``Set.map_fold`` or ``Map.map_fold``
 
-(it is possible to use the generic `Coll.` prefix for all collections,
-but not in a polymorphic way, i.e. `Coll.` is immediately replaced by the
+(it is possible to use the generic ``Coll.`` prefix for all collections,
+but not in a polymorphic way, i.e. ``Coll.`` is immediately replaced by the
 type-specific version for the type of its argument.)
 
 Liquidity also provides additional operations:
 
-* `List.rev : 'a list -> 'a list` : List reversal
-* `Map.add : 'a -> 'b -> ('a, 'b) map -> ('a, 'b) map` : add (or
+* ``List.rev : 'a list -> 'a list`` : List reversal
+* ``Map.add : 'a -> 'b -> ('a, 'b) map -> ('a, 'b) map`` : add (or
   replace) a binding to a map
-* `Map.remove : 'a -> ('a, 'b) map -> ('a, 'b) map` : remove a binding,
+* ``Map.remove : 'a -> ('a, 'b) map -> ('a, 'b) map`` : remove a binding,
   if it exists, in a map
-* `Set.add : 'a -> 'a set -> 'a set` : add an element to a set
-* `Set.remove : 'a -> 'a set -> 'a set` : remove an element, if it
+* ``Set.add : 'a -> 'a set -> 'a set`` : add an element to a set
+* ``Set.remove : 'a -> 'a set -> 'a set`` : remove an element, if it
   exists, in a set
 
 Arithmetic and logic operators
 ------------------------------
 
-* `OR` : `x || y` or `x lor y`
-* `AND` : `x && y` or `x land y`
-* `XOR` : `x xor y` or `x lxor y`
-* `NOT` : `not x` or `lnot x`
-* `ABS` : `abs x` with the difference that `abs` returns an integer
-* `INT` : `int x`
-* `NEG` : `-x`
-* `ADD` : `x + y`
-* `SUB` : `x - y`
-* `MUL` : `x * y`
-* `EDIV` : `x / y`
-* `LSR` : `x >> y` or `x lsr y`
-* `LSL` : `x << y` or `x lsl y`
-* `ISNAT` : `is_nat x` return `(Some y)` iff x is positive, where y is
-  of type `nat` and y = x
+* ``OR`` : ``x || y`` or ``x lor y``
+* ``AND`` : ``x && y`` or ``x land y``
+* ``XOR`` : ``x xor y`` or ``x lxor y``
+* ``NOT`` : ``not x`` or ``lnot x``
+* ``ABS`` : ``abs x`` with the difference that ``abs`` returns an integer
+* ``INT`` : ``int x``
+* ``NEG`` : ``-x``
+* ``ADD`` : ``x + y``
+* ``SUB`` : ``x - y``
+* ``MUL`` : ``x * y``
+* ``EDIV`` : ``x / y``
+* ``LSR`` : ``x >> y`` or ``x lsr y``
+* ``LSL`` : ``x << y`` or ``x lsl y``
+* ``ISNAT`` : ``is_nat x`` return ``(Some y)`` iff x is positive, where y is
+  of type ``nat`` and y = x
 
-For converting `int` to `nat`, Liquidity provides a special
-pattern-matching construct `match%nat`, on two constructors `Plus` and
-`Minus`. For instance, in the following where `x` has type `int`::
+For converting ``int`` to ``nat``, Liquidity provides a special
+pattern-matching construct ``match%nat``, on two constructors ``Plus`` and
+``Minus``. For instance, in the following where ``x`` has type ``int``::
 
  match%nat x with
  | Plus p -> p + 1p
  | Minus m -> m + 1p
 
-`m` and `p` are of type `nat` and:
+``m`` and ``p`` are of type ``nat`` and:
 
-* `x = int m` when `x` is positive or null
-* `x = - (int p)` when `x` is negative
+* ``x = int m`` when ``x`` is positive or null
+* ``x = - (int p)`` when ``x`` is negative
 
 
 Constants
 ---------
 
-The unique constructor of type `unit` is `()`.
+The unique constructor of type ``unit`` is ``()``.
 
 The two Booleans constants are:
 
-* `true`
-* `false`
+* ``true``
+* ``false``
 
 As in Michelson, there are different types of integers:
 
 * int : an unbounded integer, positive or negative, simply
-    written `0`,`1`,`2`,`-1`,`-2`,...
-* nat : an unbounded positive integer, written either with a `p` suffix
-    (`0p`, `12p`, etc.) or as an integer with a type coercion ( `(0 : nat)` ).
+    written ``0``,``1``,``2``,``-1``,``-2``,...
+* nat : an unbounded positive integer, written either with a ``p`` suffix
+    (``0p``, ``12p``, etc.) or as an integer with a type coercion ( ``(0 : nat)`` ).
 * tez : an unbounded positive float of Tezzies, written either with
-    a `tz` suffix (`1.00tz`, etc.) or as a string with type coercion
-    (`("1.00" : tez)`).
+    a ``tz`` suffix (``1.00tz``, etc.) or as a string with type coercion
+    (``("1.00" : tez)``).
 
-Strings are delimited by the characters `"` and `"`.
+Strings are delimited by the characters ``"`` and ``"``.
 
-Bytes are sequences of hexadecimal pairs preceeded by `0x`, for
+Bytes are sequences of hexadecimal pairs preceeded by ``0x``, for
 instance:
 
-* `0x`
-* `0xabcdef`
+* ``0x``
+* ``0xabcdef``
 
 Timestamps are written in ISO 8601 format, like in Michelson:
 
-* `2015-12-01T10:01:00+01:00`
+* ``2015-12-01T10:01:00+01:00``
 
 Keys, key hashes and signatures are base58-check encoded, the same as in Michelson:
 
-* `tz1YLtLqD1fWHthSVHPD116oYvsd4PTAHUoc` is a key hash
-* `edpkuit3FiCUhd6pmqf9ztUTdUs1isMTbF9RBGfwKk1ZrdTmeP9ypN` is a public
+* ``tz1YLtLqD1fWHthSVHPD116oYvsd4PTAHUoc`` is a key hash
+* ``edpkuit3FiCUhd6pmqf9ztUTdUs1isMTbF9RBGfwKk1ZrdTmeP9ypN`` is a public
   key
 *
-  `edsigedsigthTzJ8X7MPmNeEwybRAvdxS1pupqcM5Mk4uCuyZAe7uEk68YpuGDeViW8wSXMr
-  Ci5CwoNgqs8V2w8ayB5dMJzrYCHhD8C7` is a signature
+  ``edsigedsigthTzJ8X7MPmNeEwybRAvdxS1pupqcM5Mk4uCuyZAe7uEk68YpuGDeViW8wSXMrCi5CwoNgqs8V2w8ayB5dMJzrYCHhD8C7`` is a signature
 
 There are also three types of collections: lists, sets and
 maps. Constants collections can be created directly:
 
-* Lists: `["x"; "y"]`;
-* Sets: `Set [1; 2; 3; 4]`;
-* Maps: `Map [1, "x"; 2, "y"; 3, "z"]`;
-* Big maps: `BigMap [1, "x"; 2, "y"; 3, "z"]`;
+* Lists: ``["x"; "y"]``;
+* Sets: ``Set [1; 2; 3; 4]``;
+* Maps: ``Map [1, "x"; 2, "y"; 3, "z"]``;
+* Big maps: ``BigMap [1, "x"; 2, "y"; 3, "z"]``;
 
 In the case of an empty collection, whose type cannot be inferred, the
   type must be specified:
 
-* Lists: `([] : int list)`
-* Sets: `(Set : int set)`
-* Maps: `(Map : (int, string) map)`
-* Big maps: `(BigMap : (int, string) big_map)`
+* Lists: ``([] : int list)``
+* Sets: ``(Set : int set)``
+* Maps: ``(Map : (int, string) map)``
+* Big maps: ``(BigMap : (int, string) big_map)``
 
 
 Tuples
@@ -357,7 +356,7 @@ Variants can be created using::
  let y = Z s in
  ...
 
-The `match` construct can be used to pattern-match on them, but only
+The ``match`` construct can be used to pattern-match on them, but only
 on the first constructor::
 
  match x with
@@ -365,7 +364,7 @@ on the first constructor::
  | Y i -> ...
  | Z s -> ...
 
-where `i` and `s` are variables that are bound by the construct to the
+where ``i`` and ``s`` are variables that are bound by the construct to the
 parameter of the variant.
 
 Parameters of variants can also be deconstructed when they are tuples,
@@ -378,12 +377,12 @@ so one can write::
 
 
 
-A special case of variants is the `Left | Right` predefined variant,
-called `variant`::
+A special case of variants is the ``Left | Right`` predefined variant,
+called ``variant``::
 
- type (`left, `right) variant =
- | Left of `left
- | Right of `right
+ type (``left, ``right) variant =
+ | Left of ``left
+ | Right of ``right
 
 
 All occurrences of these variants should be constrained with type
@@ -394,13 +393,13 @@ annotations::
  | Left left  -> ...
  | Right right -> ...
 
-Another special variant is the `Source` variant: it is used to refer to
+Another special variant is the ``Source`` variant: it is used to refer to
 the contract that called the current contract::
 
  let s = (Source : (unit, unit) contract) in
  ...
 
-As for `Left` and `Right`, `Source` occurrences should be constrained by
+As for ``Left`` and ``Right``, ``Source`` occurrences should be constrained by
 type annotations.
 
 Functions and Closures
@@ -412,8 +411,8 @@ however recommended to use a single tuple argument when possible.  Arguments
 must be annotated with their (monomorphic) type, while the return type
 is inferred.
 
-Function applications are often done using the `Lambda.pipe` function
-or the `|>` operator::
+Function applications are often done using the ``Lambda.pipe`` function
+or the ``|>`` operator::
 
   let succ = fun (x : int) -> x + 1 in
   let one = 0 |> succ in

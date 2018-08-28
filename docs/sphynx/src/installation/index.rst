@@ -36,9 +36,7 @@ As of Aug 15, 2018, the following process should work:
 
 4. Install Liquidity dependencies::
 
-     opam install ocp-build
-     opam install ocplib-endian zarith calendar digestif hex ocurl lwt \
-       lwt_log uri sodium bigstring ezjsonm
+     make build-deps
 
 5. Build and install::
 

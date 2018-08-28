@@ -92,13 +92,13 @@ Let's have a look at the generated ``simple.liq.tz`` file::
 
 Note that we can use a more compact version, on a single line and without annotations::
 
-  ─➤ liquidity simple.liq
+  ─➤ liquidity-mini --compact simple.liq
   File "simple.liq.tz" generated
   If tezos is compiled, you may want to typecheck with:
     tezos-client typecheck script simple.liq.tz
   
    ─➤ cat simple.liq.tz
-  parameter int; storage int; code { DUP ;        DIP { CDR } ;        CAR ;        DUP ;        SWAP ;        DROP ;        SWAP ;        ADD ;        NIL operation ;        PAIR };
+  parameter int; storage int; code { DUP ; DIP { CDR } ; CAR ; DUP ; SWAP ; DROP ; SWAP ; ADD ; NIL operation ; PAIR };
 
   
 In case of error, for example if we set the storage to type ``nat`` instead of ``int``, the compiler will provide the location of the error in a standard format::
@@ -112,7 +112,7 @@ In case of error, for example if we set the storage to type ``nat`` instead of `
   (exit 1)
 
 
-Relevant options::
+Relevant options:
   -k                       Continue on error
   --verbose                Increment verbosity
   --no-peephole            Disable peephole optimizations
@@ -145,7 +145,7 @@ We can now check the result of the decompilation::
 The ``liquidity`` tool will decompile in the same way any file with
 the ``.tz`` extension provided on the command line.
       
-Relevant options::
+Relevant options:
   -k                       Continue on error
   --verbose                Increment verbosity
 
@@ -155,7 +155,7 @@ Interacting with a Tezos node
 
 (TODO)
 
-Relevant options::
+Relevant options:
  --amount <1.99tz>                           Set amount for deploying or running a contract (default: 0tz)
  --fee <0.05tz>                              Set fee for deploying a contract (default: 0.05tz)
  --source <tz1...>                           Set the source for deploying or running a contract (default: none)

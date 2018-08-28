@@ -92,8 +92,7 @@ Types can be composed using the following type operators:
 and the following predefined combinators:
   
 - lists: ``'a list`` is the type of lists of elements in ``'a``
-- sets: ``'a set`` is the type of sets of elements in ``'a`` (``'a`` must
-   be a comparable type)
+- sets: ``'a set`` is the type of sets of elements in ``'a`` (``'a`` must be a comparable type)
 - maps: ``('key, 'val) map`` is the type of maps whose keys are of type
   ``'key``, a comparable type, and values of type ``'val``;
 - big maps: ``('key, 'val) big_map`` is the type of lazily
@@ -122,9 +121,14 @@ The two Booleans (``bool``) constants are:
 
 As in Michelson, there are different types of integers:
 
-* ``int`` : an unbounded integer, positive or negative, simply written ``0``,``1``,``2``,``-1``,``-2``,...
-* ``nat`` : an unbounded positive integer, written either with a ``p`` suffix (``0p``, ``12p``, etc.) or as an integer with a type coercion ( ``(0 : nat)`` ).
-* ``tez`` : an unbounded positive float of Tezzies, written either with a ``tz`` suffix (``1.00tz``, etc.) or as a string with type coercion (``("1.00" : tez)``).
+* ``int`` : an unbounded integer, positive or negative, simply written
+  ``0``, ``1``, ``2``, ``-1``, ``-2``, ...
+* ``nat`` : an unbounded positive integer, written either with a ``p``
+  suffix (``0p``, ``12p``, etc.) or as an integer with a type coercion
+  ( ``(0 : nat)`` ).
+* ``tez`` : an unbounded positive float of Tezzies, written either
+  with a ``tz`` suffix (``1.00tz``, etc.) or as a string with type
+  coercion (``("1.00" : tez)``).
 
 Strings (``string``) are delimited by the characters ``"`` and ``"``.
 
@@ -144,8 +148,7 @@ Keys, key hashes and signatures are base58-check encoded, the same as in Michels
 * ``edpkuit3FiCUhd6pmqf9ztUTdUs1isMTbF9RBGfwKk1ZrdTmeP9ypN`` is a public
   key (``key``)
 *
-  ``edsigedsigthTzJ8X7MPmNeEwybRAvdxS1pupqcM5Mk4uCuyZAe7uEk68YpuGDeViW8wSXMr
-  Ci5CwoNgqs8V2w8ayB5dMJzrYCHhD8C7`` is a signature (``signature``)
+  ``edsigedsigthTzJ8X7MPmNeEwybRAvdxS1pupqcM5Mk4uCuyZAe7uEk68YpuGDeViW8wSXMrCi5CwoNgqs8V2w8ayB5dMJzrYCHhD8C7`` is a signature (``signature``)
 
 There are also three types of collections: lists, sets and
 maps. Constants collections can be created directly:
@@ -217,8 +220,8 @@ Whereas functions can only take one argument in Liquidity/Michelson
 Comparison between values
 ~~~~~~~~~~~~~~~~~~~~~~~~~
 
-All the values are not comparable. Only two values of the following
-types can be compared with each other:
+All values are not comparable. Only two values of the following types
+can be compared with each other:
 
 * ``bool``
 * ``int``
@@ -236,11 +239,11 @@ The following comparison operators are available:
 * ``<>`` : not-equal
 * ``<`` : strictly less
 * ``<=`` : less or equal
-* ``>`` : strictly more
-* ``>=`` : more or equal
+* ``>`` : strictly greater
+* ``>=`` : greater or equal
 
-There is also a function ``compare x y`` to compare two values and return
-an integer, as follows:
+There is also a function ``compare : 'a -> 'a -> int`` to compare two
+values and return an integer, as follows. ``compare x y``
 
 * returns 0 if ``x`` and ``y`` are equal
 * returns a strictly positive integer if ``x > y``
@@ -286,7 +289,7 @@ The ``Current`` module
 
     let remaining_gas = Current.gas () in
     if remaining_gas < 1000p then
-      Current.failwith ("not enough gas", remaining_gas);
+      Current.failwith ("Not enough gas", remaining_gas);
     ...
   
 * ``Current.source: unit -> address``: returns the address that
@@ -321,7 +324,7 @@ The ``Current`` module
 
     let remaining_gas = Current.gas () in
     if remaining_gas < 1000p then
-      Current.failwith ("not enough gas", remaining_gas);
+      Current.failwith ("Not enough gas", remaining_gas);
     ...
   
 Operations on tuples
@@ -330,15 +333,15 @@ Operations on tuples
 * ``get t n``, ``Array.get t n`` and ``t.(n)`` where ``n`` is a
   constant positive-or-nul int: returns the ``n``-th element of the
   tuple ``t``. Tuples are translated to Michelson by pairing on the
-  right, i.e. ``(a,b,c,d)`` becomes ``(a, (b, (c,d)))``. In this
+  right, i.e. ``(a,b,c,d)`` becomes ``(a, (b, (c, d)))``. In this
   example, ``a`` is the ``0``-th element.
 
   Example::
 
-    let x = (1,2,3,4) in
+    let x = (1, 2, 3, 4) in
     let car = x.(0) in
     let cdr = x.(1) in
-    if car <> 1 || car <> 2 then Current.failwith "Error !";
+    if car <> 1 || car <> 2 then failwith "Error !";
   
 * ``set t n x``, ``Array.set t n x`` and ``t.(n) <- x`` where ``n`` is
   constant positive-or-nul int: returns the tuple where the ``n``-th element
@@ -349,7 +352,7 @@ Operations on tuples
     let x = (1,2,3,4) in
     let x0 = x.(0) <- 10 in
     let x1 = x0.(1) <- 11 in
-    if x1 <> (10,11,3,4) then Current.failwith "Error !";
+    if x1 <> (10, 11, 3, 4) then failwith "Error !";
 
   
 Operations on numeric values
@@ -371,9 +374,10 @@ Operations on numeric values
   * ``int|nat -> int|nat -> int``
   * ``timestamp -> int|nat -> timestamp``
   * ``timestamp -> timestamp -> int``
-  * ``int|nat -> int`` (negation)
+  * ``int|nat -> int`` (unary negation)
   
-    It is translated to ``SUB`` in Michelson.
+    It is translated to ``SUB`` (or ``NEG`` for unary negation) in
+    Michelson.
 
 * ``*``: Multiplication. With the following types:
 
@@ -411,28 +415,28 @@ Operations on numeric values
   
     It is translated to ``NEG`` in Michelson.
   
-* ``lor``, ``or`` and ``||``: OR with the following types:
+* ``lor``, ``or`` and ``||``: logical OR with the following types:
 
   * ``bool -> bool -> bool``
   * ``nat -> nat -> nat``
   
     It is translated to ``OR`` in Michelson.
     
-* ``&``, ``land`` and ``&&``: AND with the following types:
+* ``&``, ``land`` and ``&&``: logical AND with the following types:
 
   * ``bool -> bool -> bool``
   * ``nat|int -> nat -> nat``
   
     It is translated to ``AND`` in Michelson.
 
-* ``lxor``, ``xor``: Exclusive OR with the following types:
+* ``lxor``, ``xor``: logical exclusive OR with the following types:
 
   * ``bool -> bool -> bool``
   * ``nat -> nat -> nat``
   
     It is translated to ``XOR`` in Michelson.
     
-* ``not``: NOT
+* ``not``: logical NOT
 
   * ``bool -> bool``
   * ``nat|int -> int`` (two-complement with sign negation)
@@ -441,7 +445,7 @@ Operations on numeric values
 
 * ``abs``: Absolute value. Type ``int -> int``
 
-    It is translated to ``ABS`` in Michelson.
+    It is translated to ``ABS; INT`` in Michelson.
 
 * ``is_nat``: Maybe positive. Type ``int -> nat option``. It is
   translated to ``IS_NAT`` in Michelson.
@@ -555,8 +559,13 @@ Operations on contracts
   contract with code. The contract is only created when the operation
   is executed, so it must be returned by the transaction. Note that
   the code must be specified as an inline function with two arguments
-  ``parameter`` and ``storage`` with type annotatinons. It is
+  ``parameter`` and ``storage`` with type annotations. It is
   translated to ``CREATE_CONTRACT`` in Michelson.
+  ``Contract.create manager delegate_opt spendable delegatable
+  initial_amount (fun ... -> <code> )`` forges an operation with
+  manager ``manager``, optional delegate ``delegate``, Boolean
+  spendable flag ``spendable``, Boolean delegatable flag
+  ``delegatable`` and initial balance ``initial_amount``.
 
 
   Example::
@@ -565,7 +574,7 @@ Operations on contracts
     let spendable = false in
     let contract_storage = (10tz,"Hello") in
     let (op, addr) =
-       Contract.create manager (Some delegate) delegatable spendable
+       Contract.create manager (Some delegate) spendable delegatable
          10tz contract_storage
          (fun (parameter:string) (storage: tez * string) ->
          ...)
@@ -636,7 +645,7 @@ Operations on bytes
 
   Example::
 
-    let s = Bytes.pack [1;2;3;4;5] in
+    let s = Bytes.pack [1; 2; 3; 4; 5] in
     let hash = Crypto.sha256 s in
     ...
   
@@ -647,17 +656,20 @@ Operations on bytes
 
   Example::
 
-    let s = Bytes.pack (1,2,3,4) in
+    let s = Bytes.pack (1, 2, 3, 4) in
     let t = (Bytes.unpack s : (int * int * int * int) option) in
-    if t.(0) <> 1 then failwith "bad unpack";
-    ...
+    match t with
+    | None -> then failwith "bad unpack"
+    | Some t ->
+      if t.(0) <> 1 then failwith "bad unpack";
+      ...
   
 * ``Bytes.length`` or ``Bytes.size: bytes -> nat``. Return the size of
   the sequence of bytes. It is translated to ``SIZE`` in Michelson.
 
   Example::
 
-    let s = Bytes.pack (1,2,3,4) in
+    let s = Bytes.pack (1, 2, 3, 4) in
     let n = Bytes.length s in
     if n > 10p then failwith "serialization too long";
     ...
@@ -680,21 +692,23 @@ Operations on bytes
   Example::
 
     let b = 0x616161 in
-    let s = Bytes.concat [ b;b ] in
+    let s = Bytes.concat [ b; b ] in
     let b' = Bytes.sub 3p 3p in
-    if b <> b' then failwith "Bad concat or sub !";
-    ...
+    match b' with
+    | None -> failwith "Bad concat or sub !"
+    | Some b' ->
+      if b <> b' then failwith "Bad concat or sub !";
+      ...
   
 * ``( @ ) : bytes -> bytes -> bytes``. Append two sequences of bytes into a
-  single sequence of bytes. It is translated to ``CONCAT`` in
-  Michelson.
+  single sequence of bytes. ``b1 @ b2`` is syntactic sugar for ``Bytes.concat
+  [b1; b2]``.
 
   Example::
 
     let b = 0x616161 in
     let s = b @ b in
     let b' = Bytes.sub 3p 3p in
-    if b <> b' then failwith "Bad concat or sub !";
     ...
 
 Operations on strings
@@ -736,7 +750,8 @@ printable subset of 7-bit ASCII, plus some escaped characters (``\n``,
     ...
   
 * ``( @ ) : string -> string -> string``. Append two strings into a single
-  string. It is translated to ``CONCAT`` in Michelson.
+  string. ``s1 @ s2`` is syntactic sugar for ``String.concat
+  [s1; s2]``.
 
   Example::
 
@@ -754,6 +769,7 @@ Operations on lambdas
      
      let square (x : int) = x * x in
      let x = 23 |> square in
+     let y = square 23 in (* this is the same as x *)
      ...
 
 Operations on lists              
@@ -765,7 +781,8 @@ immutable, all **modification** primitives return a new list, and the
 list given in argument is unmodified.
 
 * ``( :: ) : 'a -> 'a list -> 'a list`` Add a new element at the head
-  of the list. The previous list becomes the tail of the new list.
+  of the list. The previous list becomes the tail of the new list.  It
+  is translated to ``CONS`` in Michelson.
 
   Example::
 
@@ -776,7 +793,7 @@ list given in argument is unmodified.
 
   Example::
 
-    let list = List.rev [7; 5;10] in
+    let list = List.rev [7; 5; 10] in
     (* list = [10; 5; 7] *)
     ...
   
@@ -785,7 +802,7 @@ list given in argument is unmodified.
 
   Example::
 
-    let size = List.length [10;20;30;40] in
+    let size = List.length [10; 20; 30; 40] in
     (* size = 4 *)
     ...
   
@@ -801,20 +818,19 @@ list given in argument is unmodified.
       list;
     ...
   
-* ``List.fold: ('ele * 'acc -> unit) -> 'ele list -> 'acc ->
+* ``List.fold: ('elt * 'acc -> unit) -> 'elt list -> 'acc ->
   'acc``. Iter on all elements of a list, while modifying an
-  accumulator. It is translated to ``FOLD`` in Michelson.
+  accumulator. It is translated to ``ITER`` in Michelson.
 
   Example::
 
-    let sum = List.fold (fun x ->
-       let (ele, acc) = x in
+    let sum = List.fold (fun (elt, acc) ->
        ele + acc
-       ) [1;2;3;4;5] 0
+       ) [1; 2; 3; 4; 5] 0
     in
     ...
 
-* ``List.map: ('src -> 'dst) -> 'src list -> 'dst list``. Return a
+* ``List.map: ('a -> 'b) -> 'a list -> 'b list``. Return a
   list with the result of applying the function on each element of the
   list. It is translated to ``MAP`` in Michelson.
 
@@ -825,17 +841,16 @@ list given in argument is unmodified.
       ) list in
     ...
   
-* ``List.map_fold: ('src * 'acc -> 'dst * 'acc) -> 'src list -> 'acc
-  -> 'dst list * 'acc``.  Return a list with the result of applying the
+* ``List.map_fold: ('a * 'acc -> 'b * 'acc) -> 'a list -> 'acc
+  -> 'b list * 'acc``.  Return a list with the result of applying the
   function on each element of the list, plus an accumulator. It is
-  translated to ``MAP_FOLD`` in Michelson.
+  translated to ``MAP`` in Michelson.
 
   Example::
 
-    let (list, acc) = List.map_fold (fun x ->
-       let (ele, acc) = x in
+    let (list, acc) = List.map_fold (fun (elt, acc) ->
        ( ele+1, ele+acc )
-       ) [1;2;3;4;5] 0 in
+       ) [1; 2; 3; 4; 5] 0 in
     ...
   
 Operations on sets
@@ -858,7 +873,8 @@ unmodified.
     ...
   
 * ``Set.add: 'a -> 'a set -> 'a set`` . Add an element to a set, if
-  not present. It is translated to ``ADD`` in Michelson.
+  not present. ``Set.add x s`` is syntactic sugar for ``Set.update
+  x true s``.
 
   Example::
 
@@ -866,7 +882,8 @@ unmodified.
     ...
   
 * ``Set.remove: 'a -> 'a set -> 'a set``. Remove an element to a
-  set, if present. It is translated to ``REMOVE`` in Michelson.
+  set, if present. ``Set.remove x s`` is syntactic sugar for ``Set.update
+  x false s``.
 
   Example::
 
@@ -907,13 +924,12 @@ unmodified.
 * ``Set.fold: ('ele * 'acc -> unit) -> 'ele set -> 'acc ->
   'acc``. Apply a function on all elements of the set, updating an
   accumulator and returning it at the end. It is translated to
-  ``FOLD`` in Michelson.
+  ``ITER`` in Michelson.
 
   Example::
 
     (* compute the sum of elements *)
-    let sum = Set.fold (fun x ->
-      let (ele, acc) = x in
+    let sum = Set.fold (fun (ele, acc) ->
       ele + acc
       ) my_set
     in
@@ -932,7 +948,7 @@ unmodified.
 * ``Set.map_fold: ('src * 'acc -> 'dst * 'acc) -> 'src set -> 'acc ->
   'dst set * 'acc``.  Apply a function on all the elements of a set,
   return a new set with the results of the function, and an
-  accumulator updated at each step. It is translated to ``MAP_FOLD``
+  accumulator updated at each step. It is translated to ``MAP``
   in Michelson.
 
   Example::
@@ -942,7 +958,7 @@ unmodified.
          | None -> Some ele
          | Some acc -> Some (if acc > ele then ele else acc)
        in
-       let negated_ele = -ele in
+       let negated_ele = - ele in
        (negated_ele, acc)
        ) my_set None
     in
@@ -956,10 +972,10 @@ keys (a comparable type) and values (any type). Since they are
 immutable, all **modification** primitives return a new updated map,
 and the map given in argument is unmodified.
   
-* ``Map.add: 'key -> 'val -> ('key,'val) map -> ('key,'val)
+* ``Map.add: 'key -> 'val -> ('key, 'val) map -> ('key, 'val)
   map``. Return a map with a new association between a key and a
   value. If an association previously existed for the same key, it is
-  not present in the new map. It is translated to ``ADD`` in
+  not present in the new map. It is translated with ``UPDATE`` in
   Michelson.
 
   Example::
@@ -971,7 +987,7 @@ and the map given in argument is unmodified.
 
 * ``Map.remove: 'key -> ('key,'val) map -> ('key,'val) map``. Return a
   map where any associated with the key has been removed. It is
-  translated to ``REMOVE`` in Michelson.
+  translated with ``UPDATE`` in Michelson.
 
   Example::
 
@@ -1018,7 +1034,7 @@ and the map given in argument is unmodified.
 
   Example::
 
-    if Map.size owners = 0 then
+    if Map.size owners = 0p then
       failwith "you cannot remove all owners";
     ...
   
@@ -1029,8 +1045,7 @@ and the map given in argument is unmodified.
 
   Example::
 
-    Map.iter (fun x ->
-      let (key, val) = x in
+    Map.iter (fun (_, val) ->
       if val < 0 then
         failwith "No option should be negative"
       ) map;
@@ -1038,13 +1053,12 @@ and the map given in argument is unmodified.
 
 * ``Map.fold: (('key * 'val) * 'acc -> unit) -> ('key,'val) map ->
   'acc -> 'acc``. Apply a function on all associations of the map,
-  updating and returning an accumulator. It is translated to ``FOLD``
+  updating and returning an accumulator. It is translated to ``ITER``
   in Michelson.
 
   Example::
 
-    let sum_vals = Map.fold (fun x ->
-      let ( (key, val), acc ) = x in
+    let sum_vals = Map.fold (fun ((key, _), acc) ->
       acc + key
       ) map 0p
     in
@@ -1057,8 +1071,7 @@ and the map given in argument is unmodified.
 
   Example::
 
-    let negated_values = Map.map (fun x ->
-      let (key, val) = x in
+    let negated_values = Map.map (fun (_key, val) ->
       - val
       ) map
     in
@@ -1067,7 +1080,7 @@ and the map given in argument is unmodified.
 * ``Map.map_fold: (('key * 'src) * 'acc -> 'dst * 'acc) -> ('key,'src)
   map -> 'acc -> ('key,'dst) map * 'acc``.  Apply a function on all
   associations of a map, returning both a new map and an updated
-  accumulator. It is translated to ``MAP_FOLD`` in Michelson.
+  accumulator. It is translated to ``MAP`` in Michelson.
 
   Example::
 
@@ -1090,7 +1103,8 @@ Big maps are a specific kind of maps, optimized for storing. They can
 be updated incrementally and scale to a high number of associations,
 whereas standard maps will have an expensive serialization and
 deserialization cost. You are limited by Michelson to one big map per
-smart contract, that should appear as the first element of the storage.
+smart contract, that should appear as the first element of the
+storage. Big maps cannot be iterated.
 
 * ``Map.find: 'key -> ('key,'val) big_map -> 'val option``. Return the
   value associated with a key in the map. It is translated to ``GET``
@@ -1126,6 +1140,12 @@ smart contract, that should appear as the first element of the storage.
       failwith ("not allowed", sender);
     ...
 
+* ``Map.add: 'key -> 'val -> ('key, 'val) big_map -> ('key, 'val)
+  big_map``. Syntactic sugar for ``Map.update (Some ...)``.
+
+* ``Map.remove: 'key -> ('key,'val) big_map -> ('key,'val) big_map``.
+   Syntactic sugar for ``Map.update None``.
+
 Operations on generic collections
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -1156,9 +1176,9 @@ Here is a table of how Michelson instructions translate to Liquidity:
   
 * ``ADDRESS``: ``Contract.address addr``
 * ``AMOUNT``: ``Current.amount()``
-* ``ABS``: ``abs x``
+* ``ABS``: ``match%nat x with Plus n -> | Minus n -> n``
 * ``ADD``: ``x + y``
-* ``AND``: ``x land y`` or ``x && y``
+* ``AND``: ``x land y`` or ``x && y`` or ``x & y``
 * ``BALANCE``: ``Current.balance()``
 * ``BLAKE2B``: ``Crypto.blake2b bytes``
 * ``CAR``: ``x.(0)``
@@ -1178,8 +1198,8 @@ Here is a table of how Michelson instructions translate to Liquidity:
 * ``EMPTY_MAP``: ``(Map : (int, string) map)``
 * ``EMPTY_SET``: ``(Set : int set)``
 * ``EQ``: ``x = y``
-* ``EXEC``: ``x |> f``
-* ``FAILWITH``: ``Current.failwith ("error",x)``
+* ``EXEC``: ``x |> f`` or ``f x``
+* ``FAILWITH``: ``Current.failwith``
 * ``GE``: ``x >= y``
 * ``GET``: ``Map.find key map``
 * ``GT``: ``x > y``
@@ -1196,9 +1216,9 @@ Here is a table of how Michelson instructions translate to Liquidity:
 * ``LE``: ``x <= y``
 * ``LEFT``: ``Left x``
 * ``LOOP``: ``Loop.loop (fun x -> ...; (cond, x')) x0``
-* ``LOOP_LEFT``:
+* ``LOOP_LEFT``: Not supported at the moment
 * ``LSL``: ``x lsl y`` or ``x << y``
-* ``LSR`` ``x lsr y`` or ``x >> y``
+* ``LSR``: ``x lsr y`` or ``x >> y``
 * ``LT``: ``x < y``
 * ``MAP``: ``List.map``, ``Set.map``, ``Map.map``
 * ``MEM``: ``Set.mem ele set``, ``Map.mem key map``
@@ -1209,7 +1229,7 @@ Here is a table of how Michelson instructions translate to Liquidity:
 * ``NONE``: ``(None : int option)``
 * ``NOT``: ``not x``
 * ``NOW``: ``Current.time ()``
-* ``OR``: ``x lor y`` or ``x || y``
+* ``OR``: ``x lor y``, or ``x || y``, or ``x or y``
 * ``PACK``: ``Bytes.pack x``
 * ``PAIR``: ``( x, y )``
 * ``PUSH``: automatic stack management
@@ -1243,20 +1263,21 @@ Toplevel:
 * ``let%entry main (parameter:`` Type ``) (storage:`` Type ``) =`` Expression
 * ``type`` LIDENT ``=`` Type
 * ``type`` LIDENT ``= {`` [ LIDENT ``:`` Type ``;``]+ ``}``
-* ``type`` LIDENT ``= [ ``|`` UIDENT ``of`` Type ]+
+* ``type`` LIDENT ``=`` [ ``|`` UIDENT ``of`` Type ]+
 
 Expression:
 
 * LIDENT
 * UIDENT ``.`` LIDENT
-* Expression ``.`` LIDENT
-* Expression ``.`` LIDENT ``<-`` Expression
+* [LIDENT ``.``]+ LIDENT
+* [LIDENT ``.``]+ LIDENT ``<-`` Expression
+* ``(`` Expression `:` Type ``)``
 * ``if`` Expression ``then`` Expression
 * ``if`` Expression ``then`` Expression ``else`` Expression
 * ``Contract.create`` Expression Expression Expression Expression
   Expression Expression ``(fun ( parameter:`` Type ``) (storage:``
   Type ``) ->`` Expression ``)``
-* ``(Contract.at`` Expression ``:`` Type ``)``
+* ``(Contract.at`` Expression ``:`` Type ``contract option)``
 * ``(Bytes.unpack`` Expression ``:`` Type ``option )``
 * ``let`` LIDENT ``=`` Expression ``in`` Expression
 * ``let%inline`` LIDENT ``=`` Expression ``in`` Expression
@@ -1302,8 +1323,6 @@ Type:
 * ``(`` Type ``,`` Type ``) variant``
 * ``(`` Type ``,`` Type ``) map``
 * ``(`` Type ``,`` Type ``) big_map``
-* ``(`` Type ``,`` Type ``) variant``
-* ``(`` Type ``,`` Type ``) variant``
 * Type [ ``*`` Type]+
 * Type ``->`` Type
 * ``_``
@@ -1311,5 +1330,65 @@ Type:
   
 Constant:
 
-* ``tz1...``
-* ...  
+* ``tz1`` B58Char+(33)
+* ``tz2`` B58Char+(33)
+* ``tz3`` B58Char+(33)
+* ``edpk`` B58Char+(50)
+* ``sppk`` B58Char+(50)
+* ``p2pk`` B58Char+(50)
+* ``edsig`` B58Char+(94)
+* ``p2sig`` B58Char+(93)
+* ``spsig1`` B58Char+(93)
+* ``KT1`` B58Char+(33)
+* ``0x`` [HexChar HexChar]*
+* ``true``
+* ``false``
+* DIGIT [DIGIT | ``_``]*
+* DIGIT [DIGIT | ``_``]* ``p``
+* DIGIT [DIGIT | ``_``]* [``.`` [DIGIT | ``_``]*]? ``tz``
+* DAY [``T`` HOUR [ TIMEZONE ]?]?
+* ``"`` CHAR* ``"``
+* ``()``
+* ``[`` Constant+`;` ``]``
+* ``Map`` | ``Map`` ``[`` Constant+``;`` ``]``
+* ``Set`` | ``Set`` ``[`` Constant+``;`` ``]``
+* ``BigMap`` | ``BigMap`` ``[`` Constant+``;`` ``]``
+
+B58Char:
+
+* [ ``1``- ``9`` | ``A``-``H`` | ``J``-``N`` | ``P``-``Z`` | ``a``-``k`` | ``m``-``z`` ]
+
+
+HexChar:
+
+* [``0``-``9`` | ``A``-``F`` | ``a``-``f``]
+
+
+LIDENT:
+
+* [``a``-``z`` | ``_``] [``A``-``Z`` | ``a``-``z`` | ``_`` | ``'`` | ``0``-``9``]*
+
+
+UIDENT:
+
+* [``A``-``Z``] [``A``-``Z`` | ``a``-``z`` | ``_`` | ``'`` | ``0``-``9``]*
+
+
+DIGIT:
+
+* [``0``-``9``]
+
+
+DAY:
+
+* DIGIT+(4) ``-`` DIGIT+(2) ``-`` DIGIT+(2)
+
+
+HOUR:
+
+* DIGIT+(2) ``:`` DIGIT+(2) [``:`` DIGIT+(2)]?
+
+TIMEZONE:
+
+* ``+`` DIGIT+(2) ``:`` DIGIT+(2)
+* ``Z``

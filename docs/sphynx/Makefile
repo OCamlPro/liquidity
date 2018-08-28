@@ -11,11 +11,11 @@ epub: Makefile
 
 pdf: Makefile
 	$(SPHINXBUILD) -b latex "$(SOURCEDIR)" _pdf $(SPHINXOPTS)
-	cd _pdf && pdflatex Liquidity && pdflatex Liquidity
+	cd _pdf && xelatex Liquidity && xelatex Liquidity
 	mv _pdf/Liquidity.pdf Liquidity.pdf
 
 clean:
-	rm -rf _* *~ Liquidity.pdf Liquidity.epub
+	rm -rf _site _epub _pdf *~ Liquidity.pdf Liquidity.epub
 	find . -name '*~' -exec rm -f {} \;
 
 web:
