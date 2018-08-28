@@ -53,10 +53,8 @@ As of Aug 15, 2018, the following process should work:
 7. Optionnally, you can build some local documentation with sphynx
    and the Read-The-Docs theme (``pip3 install sphinx-rtd-theme``)::
 
-     cd docs/sphynx
-     make pdf
-     make epub
-     make html
+     make doc
 
-   The documentation should then be available in ``Liquidity.pdf``,
-   ``Liquidity.epub`` and in the ``_site/`` sub-directory for HTML.
+   The documentation should then be available in
+   ``docs/sphinx/Liquidity.pdf``, ``docs/sphinx/Liquidity.epub`` and
+   in the ``docs/sphinx/_site/`` sub-directory for HTML.
