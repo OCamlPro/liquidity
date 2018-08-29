@@ -751,6 +751,100 @@ let mk =
     in
     { desc; name; ty; bv; fail; transfer }
 
+let rec eq_exp_desc eq_ty eq_var e1 e2 = match e1, e2 with
+  | Const (_, t1, c1), Const (_, t2, c2) -> c1 = c2 && eq_types t1 t2
+  | Var (v1, _), Var (v2, _) -> eq_var v1 v2
+  | Failwith (e1, _), Failwith (e2, _) -> eq_exp eq_ty eq_var e1 e2
+  | Project (_, n1, e1), Project (_, n2, e2) ->
+    n1 = n2 && eq_exp eq_ty eq_var e1 e2
+  | Constructor (_, c1, e1), Constructor (_, c2, e2) ->
+    c1 = c2 && eq_exp eq_ty eq_var e1 e2
+  | ContractAt (_, e1, csig1), ContractAt (_, e2, csig2) ->
+    eq_signature csig1 csig2 && eq_exp eq_ty eq_var e1 e2
+  | Unpack (_, e1, t1), Unpack (_, e2, t2) ->
+    eq_types t1 t2 && eq_exp eq_ty eq_var e1 e2
+  | Lambda (arg1, aty1, _, e1, rty1), Lambda (arg2, aty2, _, e2, rty2) ->
+    arg1 = arg2 && eq_types aty1 aty2 && eq_types rty1 rty2 &&
+    eq_exp eq_ty eq_var e1 e2
+  | SetField (e1, _, f1, v1), SetField (e2, _, f2, v2) ->
+    f1 = f2 && eq_exp eq_ty eq_var e1 e2 && eq_exp eq_ty eq_var v1 v2
+  | Seq (x1, y1), Seq (x2, y2) ->
+    eq_exp eq_ty eq_var x1 x2 && eq_exp eq_ty eq_var x1 x2
+  | Let (n1, i1, _, e1, v1), Let (n2, i2, _, e2, v2) ->
+    n1 = n2 && i1 = i2 && eq_exp eq_ty eq_var e1 e2 && eq_exp eq_ty eq_var v1 v2
+  | Loop (n1, _, e1, a1), Loop (n2, _, e2, a2) ->
+    n1 = n2 && eq_exp eq_ty eq_var e1 e2 && eq_exp eq_ty eq_var a1 a2
+  | Map (p1, _, n1, e1, x1), Map (p2, _, n2, e2, x2) ->
+    p1 = p2 && n1 = n2 && eq_exp eq_ty eq_var e1 e2 && eq_exp eq_ty eq_var x1 x2
+  | MapFold (p1, _, n1, e1, x1, a1), MapFold (p2, _, n2, e2, x2, a2) ->
+    p1 = p2 && n1 = n2 &&
+    eq_exp eq_ty eq_var e1 e2 && eq_exp eq_ty eq_var x1 x2 &&
+    eq_exp eq_ty eq_var a1 a2
+  | Fold (p1, _, n1, e1, x1, a1), Fold (p2, _, n2, e2, x2, a2) ->
+    p1 = p2 && n1 = n2 &&
+    eq_exp eq_ty eq_var e1 e2 && eq_exp eq_ty eq_var x1 x2 &&
+    eq_exp eq_ty eq_var a1 a2
+  | Transfer (_, c1, a1, e1, p1), Transfer (_, c2, a2, e2, p2) ->
+    e1 = e2 &&
+    eq_exp eq_ty eq_var c1 c2 && eq_exp eq_ty eq_var a1 a2 &&
+    eq_exp eq_ty eq_var p1 p2
+  | If (c1, t1, e1), If (c2, t2, e2) ->
+    eq_exp eq_ty eq_var c1 c2 && eq_exp eq_ty eq_var t1 t2 &&
+    eq_exp eq_ty eq_var e1 e2
+  | MatchOption (x1, _, n1, a1, s1), MatchOption (x2, _, n2, a2, s2) ->
+    a1 = a2 && eq_exp eq_ty eq_var x1 x2 && eq_exp eq_ty eq_var n1 n2 &&
+    eq_exp eq_ty eq_var s1 s2
+  | MatchNat (x1, _, v1, n1, a1, s1), MatchNat (x2, _, v2, n2, a2, s2) ->
+    a1 = a2 && v1 = v2 &&
+    eq_exp eq_ty eq_var x1 x2 && eq_exp eq_ty eq_var n1 n2 &&
+    eq_exp eq_ty eq_var s1 s2
+  | MatchList (x1, _, v1, a1, n1, s1), MatchList (x2, _, v2, a2, n2, s2) ->
+    a1 = a2 && v1 = v2 &&
+    eq_exp eq_ty eq_var x1 x2 && eq_exp eq_ty eq_var n1 n2 &&
+    eq_exp eq_ty eq_var s1 s2
+  | Apply (p1, _, l1), Apply (p2, _, l2) ->
+    p1 = p2 && (try List.for_all2 (eq_exp eq_ty eq_var) l1 l2
+                with Invalid_argument _ -> false)
+  | Closure (a1, t1, _, env1, e1, r1), Closure (a2, t2, _, env2, e2, r2) ->
+    a1 = a2 && eq_types t1 t2 && eq_types r1 r2 &&
+    eq_exp eq_ty eq_var e1 e2 &&
+    (try List.for_all2 (fun (n1, e1) (n2, e2) ->
+         n1 = n2 && eq_exp eq_ty eq_var e1 e2) env1 env2
+     with Invalid_argument _ -> false)
+  | Record (_, l1), Record (_, l2) ->
+    (try List.for_all2 (fun (n1, e1) (n2, e2) ->
+         n1 = n2 && eq_exp eq_ty eq_var e1 e2) l1 l2
+     with Invalid_argument _ -> false)
+  | MatchVariant (e1, _, c1), MatchVariant (e2, _, c2) ->
+    eq_exp eq_ty eq_var e1 e2 &&
+    (try List.for_all2 (fun (c1, e1) (c2, e2) ->
+         c1 = c2 && eq_exp eq_ty eq_var e1 e2) c1 c2
+     with Invalid_argument _ -> false)
+  | CreateContract (_, l1, c1), CreateContract (_, l2, c2) ->
+    (try
+       List.for_all2 (eq_exp eq_ty eq_var) l1 l2 &&
+       eq_types c1.storage c2.storage &&
+       List.for_all2 (fun (v1, i1, e1) (v2, i2, e2) ->
+           v1 = v2 && i1 = i2 && eq_exp eq_ty eq_var e1 e2)
+         c1.values c2.values &&
+       List.for_all2 (fun e1 e2 ->
+           e1.entry_sig.entry_name = e2.entry_sig.entry_name &&
+           e1.entry_sig.parameter_name = e2.entry_sig.parameter_name &&
+           e1.entry_sig.storage_name = e2.entry_sig.storage_name &&
+           eq_types e1.entry_sig.parameter e2.entry_sig.parameter &&
+           eq_exp eq_ty eq_var e1.code e2.code
+         ) c1.entries c2.entries
+     with Invalid_argument _ -> false)
+  | _, _ -> false
+
+(* Equality modulo location, renaming, etc. *)
+and eq_exp eq_ty eq_var e1 e2 =
+  eq_ty e1.ty e2.ty &&
+  eq_exp_desc eq_ty eq_var e1.desc e2.desc
+
+let eq_typed_exp eq_var e1 e2 = eq_exp eq_types eq_var e1 e2
+let eq_syntax_exp e1 e2 = eq_exp (fun _ _ -> true) (=) e1 e2
+
 
 type michelson_exp =
   | M_INS of string * string list

@@ -77,11 +77,11 @@ let rec compute decompile code to_inline =
         | SetField (arg', _, field', _),
           Project (_, field'', arg'')
           when field' <> field && field'' = field &&
-               arg'.desc = arg''.desc ->
+               eq_syntax_exp arg' arg'' ->
           (* (s.f1 <- v1).f2 <- s.f2  ==>  s.f1 <- v1 *)
           arg
         | _, Project (_, field', arg')
-          when field' = field && arg'.desc = arg.desc ->
+          when field' = field && eq_syntax_exp arg' arg ->
           (* s.f <- s.f  ==>  s *)
           arg
         | _, _ -> { exp with desc = SetField (arg, loc, field, v) }

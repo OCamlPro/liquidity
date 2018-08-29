@@ -81,6 +81,14 @@ let find_var ?(count_used=true) env loc name =
   with Not_found ->
     error loc "unbound variable %S" name
 
+let eq_exp env (e1 : typed_exp) (e2 : typed_exp) =
+  let eq_var v1 v2 =
+    let get v =
+      try let (v, _, _) = StringMap.find v1 env.vars in v
+      with Not_found -> error (noloc env) "unbound variable %S" v in
+    get v1 = get v2 in
+  eq_typed_exp eq_var e1 e2
+
 let type_error loc msg actual expected =
   error loc "%s.\nExpected type:\n  %s\nActual type:\n  %s"
     msg
@@ -671,18 +679,18 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
         let rec normalize acc rev_cases = match rev_cases, acc with
           | [], _ -> acc
           | (_, CAny, body1) :: rev_cases, [CAny, body2]
-            when body1.desc = body2.desc ->
+            when eq_syntax_exp body1 body2 ->
             normalize [CAny, body1] rev_cases
           | (_, CAny, body1) :: rev_cases, [CConstr (_, vars2), body2]
-            when are_unbound vars2 body2 && body1.desc = body2.desc ->
+            when are_unbound vars2 body2 && eq_syntax_exp body1 body2 ->
             normalize [CAny, body1] rev_cases
           | (_, CConstr (_, vars1) , body1) :: rev_cases, [CAny, body2]
-            when are_unbound vars1 body1 && body1.desc = body2.desc ->
+            when are_unbound vars1 body1 && eq_syntax_exp body1 body2 ->
             normalize [CAny, body1] rev_cases
           | (_, CConstr (_, vars1) , body1) :: rev_cases,
             [CConstr (_, vars2), body2]
             when are_unbound vars1 body1 && are_unbound vars2 body2 &&
-                 body1.desc = body2.desc ->
+                 eq_syntax_exp body1 body2 ->
             normalize [CAny, body1] rev_cases
           | (c1, CAny, body1) :: rev_cases, _ ->
             (* body1 <> body2 *)
