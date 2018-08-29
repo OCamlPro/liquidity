@@ -883,16 +883,15 @@ let rec encode env ( exp : typed_exp ) : encoded_exp =
         [ "Left", left_ty; "Right", right_ty]
       | _ -> assert false
     in
-    let cases = List.map (fun case ->
-       let c, var, e = match case with
-        | CConstr (c, []), e -> c, "_", e
-        | CConstr (c, [var]), e -> c, var, e
-        | CAny, _ | CConstr _, _ -> assert false
-       in
-       let var_ty = List.assoc c constrs in
-       let (var, env, _) = new_binding env var var_ty in
-       let e = encode env e in
-       (CConstr (c, [var]), e)
+    let cases = List.map (fun (pat, e) ->
+        let pat, env = match pat with
+          | CAny | CConstr (_, []) -> pat, env
+          | CConstr (c, [var]) ->
+            let var_ty = List.assoc c constrs in
+            let (var, env, _) = new_binding env var var_ty in
+            CConstr (c, [var]), env
+          | CConstr _ -> assert false in
+        (pat, encode env e)
       ) cases
     in
     mk ?name:exp.name (MatchVariant (arg, loc, cases)) exp.ty

@@ -231,27 +231,30 @@ let rec translate_code ~parameter_name ~storage_name code =
        arg @ [ ii ~loc @@ IF_CONS (seq (ifcons @ ifcons_end), seq ifnil )]
 
     | MatchVariant(arg, loc, cases) ->
-       let arg = compile depth env arg in
-       let cases = List.map (function
-           | CConstr (constr, [ arg_name ]), e ->
-             let env = StringMap.add arg_name depth env in
-             let depth = depth + 1 in
-             let e = compile depth env e in
-             arg_name, e, depth
-           | _ -> assert false) cases
-       in
-       let rec iter cases =
-         match cases with
-         | [] -> assert false
-         | (arg_name, left, depth) :: cases ->
-            let left_end = [ii ~loc @@ DIP_DROP(1,1)] in
-            let arg_annot = compile_arg_name arg_name in
-            let left = arg_annot @ left @ left_end in
-            match cases with
+      let arg = compile depth env arg in
+      let rec iter cases =
+        match cases with
+        | [] -> [ii ~loc DROP]
+        | (CConstr (_, args), e) :: cases ->
+          let env, depth, left_start, left_end =
+            match args with
+            | _ :: _ :: _ -> assert false
+            | [] -> env, depth, [ii ~loc DROP], []
+            | [arg_name] ->
+              let env = StringMap.add arg_name depth env in
+              let depth = depth + 1 in
+              let left_end = [ii ~loc @@ DIP_DROP(1,1)] in
+              let arg_annot = compile_arg_name arg_name in
+              env, depth, arg_annot, left_end in
+          let left = left_start @ compile depth env e @ left_end in
+          begin match cases with
             | [] -> left
             | _ ->
-               let right = iter cases in
-               [ii ~loc @@ IF_LEFT( seq (left), seq right )]
+              let right = iter cases in
+              [ii ~loc @@ IF_LEFT( seq (left), seq right )]
+          end
+        | [CAny, e] -> [ii ~loc DROP] @ compile depth env e
+        | _ -> assert false
        in
        arg @ iter cases
 
@@ -322,7 +325,7 @@ let rec translate_code ~parameter_name ~storage_name code =
       let mic_contract = translate contract in
       let contract_code = ii ~loc @@ CREATE_CONTRACT mic_contract in
       (* if !LiquidOptions.annotmic then
-       *   (\* Hack: using annotataion to represent contract name *\)
+       *   (\* Hack: using annotation to represent contract name *\)
        *   contract_code.loc_name <- Some (prefix_contract^contract.contract_name); *)
       args_code @
       [contract_code; ii ~loc PAIR]

@@ -181,10 +181,10 @@ let rec untype (env : env) (code : (datatype, 'a) exp) : (datatype, 'b) exp =
     | MatchVariant (arg, loc, cases) ->
       let arg = untype env arg in
       let cases = List.map (function
-          | CConstr (c, vars), carg ->
-            let vars, carg = untype_case env vars carg in
-            CConstr (c, vars), carg
-          | _ -> assert false
+          | CConstr (c, vars), body ->
+            let vars, body = untype_case env vars body in
+            CConstr (c, vars), body
+          | CAny, body -> CAny, untype env body
         ) cases in
        MatchVariant (arg, loc, cases)
 

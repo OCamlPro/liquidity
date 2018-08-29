@@ -186,14 +186,40 @@ let compile_tezos_file filename =
   Printf.eprintf "File %S generated\n%!" output;
   ()
 
+let report_error = function
+  | LiquidError error ->
+    LiquidLoc.report_error Format.err_formatter error;
+  | LiquidFromTezos.Missing_program_field f ->
+    Format.eprintf "Missing script field %s@." f;
+  | LiquidDeploy.RequestError (code, msg) ->
+    Format.eprintf "Request Error (code %d):\n%s@." code msg;
+  | LiquidDeploy.ResponseError msg ->
+    Format.eprintf "Response Error:\n%s@." msg;
+  | LiquidDeploy.RuntimeError (error, _trace) ->
+    LiquidLoc.report_error ~kind:"Runtime error" Format.err_formatter error;
+  | LiquidDeploy.LocalizedError error ->
+    LiquidLoc.report_error ~kind:"Error" Format.err_formatter error;
+  | LiquidDeploy.RuntimeFailure (error, None, _trace) ->
+    LiquidLoc.report_error ~kind:"Failed at runtime" Format.err_formatter error;
+  | LiquidDeploy.RuntimeFailure (error, Some s, _trace) ->
+    LiquidLoc.report_error ~kind:"Failed at runtime" Format.err_formatter error;
+    Format.eprintf "Failed with %s@." s;
+  | Failure f ->
+    Format.eprintf "Failure: %s@." f
+  | exn ->
+    let backtrace = Printexc.get_backtrace () in
+    Format.eprintf "Error: %s\nBacktrace:\n%s@."
+      (Printexc.to_string exn) backtrace
+
 let compile_tezos_file filename =
   try compile_tezos_file filename
   with exn ->
     (* Rety and ignore annotations if failing *)
     if !LiquidOptions.ignore_annots then raise exn;
+    report_error exn;
     Format.printf
       "Decompilation failed, retrying and ignoring \
-       Michelson type annotataions@.";
+       Michelson type annotations@.";
     LiquidOptions.ignore_annots := true;
     compile_tezos_file filename;
     LiquidOptions.ignore_annots := false
@@ -529,38 +555,6 @@ let () =
   Printexc.record_backtrace true;
   try
     main ()
-  with
-  | LiquidError error ->
-    LiquidLoc.report_error Format.err_formatter error;
+  with exn ->
+    report_error exn;
     exit 1
-  | LiquidFromTezos.Missing_program_field f ->
-    Format.eprintf "Missing script field %s@." f;
-    exit 1
-  | LiquidDeploy.RequestError (code, msg) ->
-    Format.eprintf "Request Error (code %d):\n%s@." code msg;
-    exit 1
-  | LiquidDeploy.ResponseError msg ->
-    Format.eprintf "Response Error:\n%s@." msg;
-    exit 1
-  | LiquidDeploy.RuntimeError (error, _trace) ->
-    LiquidLoc.report_error ~kind:"Runtime error" Format.err_formatter error;
-    exit 1
-  | LiquidDeploy.LocalizedError error ->
-    LiquidLoc.report_error ~kind:"Error" Format.err_formatter error;
-    exit 1
-  | LiquidDeploy.RuntimeFailure (error, None, _trace) ->
-    LiquidLoc.report_error ~kind:"Failed at runtime" Format.err_formatter error;
-    exit 1
-  | LiquidDeploy.RuntimeFailure (error, Some s, _trace) ->
-    LiquidLoc.report_error ~kind:"Failed at runtime" Format.err_formatter error;
-    Format.eprintf "Failed with %s@." s;
-    exit 1
-  | Failure f ->
-    Format.eprintf "Failure: %s@." f;
-    exit 2
-(*
-  | exn ->
-     Printf.eprintf "Fatal Error: aborting\n";
-     Printf.eprintf "  Exception: %s\n%!" (Printexc.to_string exn);
-    exit 2
- *)

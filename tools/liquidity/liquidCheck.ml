@@ -197,7 +197,9 @@ let rec merge_matches acc loc cases constrs =
                         | Left -> ...*)
 
         merge_matches ((CConstr (c1, l), case_l) :: acc) loc cases constrs
-      | _ -> raise Exit
+      | _ ->
+        (* ==> match | C1 l -> case_l | _ -> case_r *)
+        List.rev @@ (CAny, case_r) :: (CConstr (c1, l), case_l) :: acc
     end
   | _ -> raise Exit
 
@@ -655,31 +657,48 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
             ) StringSet.empty cases
           |> ref
         in
+        (* Normalize cases:
+           - match cases in order
+           - one (at most) wildcard at the end *)
         let cases = List.map (fun constr ->
-            let cve = find_case loc env constr cases in
+            let pat, body = find_case loc env constr cases in
             cases_extra_constrs := StringSet.remove constr !cases_extra_constrs;
-            cve
+            constr, pat, body
           ) constrs in
+        let are_unbound vars body =
+          let body_vars = LiquidBoundVariables.bv body in
+          not (List.exists (fun v -> StringSet.mem v body_vars) vars) in
+        let rec normalize acc rev_cases = match rev_cases, acc with
+          | [], _ -> acc
+          | (_, CAny, body1) :: rev_cases, [CAny, body2]
+            when body1.desc = body2.desc ->
+            normalize [CAny, body1] rev_cases
+          | (_, CAny, body1) :: rev_cases, [CConstr (_, vars2), body2]
+            when are_unbound vars2 body2 && body1.desc = body2.desc ->
+            normalize [CAny, body1] rev_cases
+          | (_, CConstr (_, vars1) , body1) :: rev_cases, [CAny, body2]
+            when are_unbound vars1 body1 && body1.desc = body2.desc ->
+            normalize [CAny, body1] rev_cases
+          | (_, CConstr (_, vars1) , body1) :: rev_cases,
+            [CConstr (_, vars2), body2]
+            when are_unbound vars1 body1 && are_unbound vars2 body2 &&
+                 body1.desc = body2.desc ->
+            normalize [CAny, body1] rev_cases
+          | (c1, CAny, body1) :: rev_cases, _ ->
+            (* body1 <> body2 *)
+            normalize ((CConstr (c1, []), body1) :: acc)  rev_cases
+          | (_, CConstr (c1, vars1), body1) :: rev_cases, _ ->
+            normalize ((CConstr (c1, vars1), body1) :: acc)  rev_cases
+        in
+        let cases = normalize [] (List.rev cases) in
 
         if not (StringSet.is_empty !cases_extra_constrs) then
           error loc "constructors %s do not belong to type %s"
             (String.concat ", " (StringSet.elements !cases_extra_constrs))
             (LiquidPrinter.Liquid.string_of_type arg.ty);
 
-        let cases = List.map (fun (constr, vars, e) ->
-            let var_ty = match is_left_right, constr with
-              | Some (left_ty, _), "Left" -> left_ty
-              | Some (_, right_ty), "Right" -> right_ty
-              | Some _, _ -> error loc "unknown constructor %S" constr
-              | None, _ ->
-                let ty_name', var_ty =
-                  try StringMap.find constr env.env.constrs
-                  with Not_found -> error loc "unknown constructor %S" constr
-                in
-                (* if ty_name <> ty_name' then error loc "inconsistent constructors"; *)
-                var_ty
-            in
-            let env, count_opt =
+        let cases = List.map (fun (pat, e) ->
+            let add_vars_env vars var_ty =
               match vars with
               | [] -> env, None
               | [ var ] ->
@@ -687,6 +706,30 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
                 env, Some count
               | _ ->
                 error loc "cannot deconstruct constructor args"
+            in
+            let env, count_opt =
+              match pat with
+              | CConstr ("Left", vars) ->
+                let var_ty = match is_left_right with
+                  | Some (left_ty, _) -> left_ty
+                  | None -> error loc "expected variant, got %s"
+                              (LiquidPrinter.Liquid.string_of_type arg.ty) in
+                add_vars_env vars var_ty
+              | CConstr ("Right", vars) ->
+                let var_ty = match is_left_right with
+                  | Some (_, right_ty) -> right_ty
+                  | None -> error loc "expected variant, got %s"
+                              (LiquidPrinter.Liquid.string_of_type arg.ty) in
+                add_vars_env vars var_ty
+              | CConstr (constr, vars) ->
+                let ty_name', var_ty =
+                  try StringMap.find constr env.env.constrs
+                  with Not_found -> error loc "unknown constructor %S" constr
+                in
+                (* if ty_name <> ty_name' then
+                   error loc "inconsistent constructors"; *)
+                add_vars_env vars var_ty
+              | CAny -> env, None
             in
             let e =
               match !expected_type with
@@ -700,11 +743,12 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
                 end;
                 e
             in
-            begin match vars, count_opt with
-              | [name], Some count -> check_used env name loc count
+            begin match pat, count_opt with
+              | CConstr (_, [var]), Some count ->
+                 check_used env var loc count
               | _ -> ()
             end;
-            (CConstr (constr, vars), e)
+            (pat, e)
           ) cases
         in
 
@@ -757,13 +801,13 @@ and find_case loc env constr cases =
   with
   | [] ->
     error loc "non-exhaustive pattern. Constructor %s is not matched." constr
-  | m :: unused ->
-    List.iter (fun (_, e) ->
-        LiquidLoc.warn (loc_exp e) (UnusedMatched constr)
+  | matched_case :: unused ->
+    List.iter (function
+        | CAny, _ -> ()
+        | (CConstr _, e) ->
+          LiquidLoc.warn (loc_exp e) (UnusedMatched constr)
       ) unused;
-    match m with
-    | CAny, e -> constr, [], e
-    | CConstr (_, vars), e -> constr, vars, e
+    matched_case
 
 and typecheck_prim1 env prim loc args =
   match prim, args with
