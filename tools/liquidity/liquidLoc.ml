@@ -51,6 +51,8 @@ let default_warning_printer loc w =
      | UnusedMatched constr ->
        Format.fprintf fmt
          "unused branch, constructor %S is already matched" constr
+     | IgnoredTypeAnnot ty ->
+       Format.fprintf fmt "ignored type annotation: %s" ty
   ) w
 
 let warning_printer = ref default_warning_printer

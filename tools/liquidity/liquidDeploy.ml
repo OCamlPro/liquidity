@@ -10,8 +10,8 @@ open LiquidTypes
 open Michelson_Tezos (* for crypto *)
 
 type from =
-  | From_string of string
-  | From_file of string
+  | From_strings of string list
+  | From_files of string list
 
 type key_diff =
   | DiffKeyHash of string
@@ -497,14 +497,17 @@ let mk_json_arr l = "[" ^ String.concat "," l ^ "]"
 
 
 let compile_liquid liquid =
-  let ocaml_ast, filename = match liquid with
-    | From_string s ->
-      LiquidFromOCaml.structure_of_string ~filename:"liquidity_buffer" s,
-      "liquidity_buffer"
-    | From_file f -> LiquidFromOCaml.read_file f, f
+  let ocaml_asts = match liquid with
+    | From_strings ss ->
+      List.map (fun s ->
+          "liquidity_buffer",
+          LiquidFromOCaml.structure_of_string ~filename:"liquidity_buffer"
+            s) ss
+    | From_files files ->
+      List.map (fun f -> f, LiquidFromOCaml.read_file f) files
   in
   let syntax_ast, syntax_init, env =
-    LiquidFromOCaml.translate ~filename ocaml_ast in
+    LiquidFromOCaml.translate_multi ocaml_asts in
   let contract_sig = sig_of_contract syntax_ast in
   let typed_ast = LiquidCheck.typecheck_contract
       ~warnings:true ~decompiling:false env syntax_ast in
@@ -1115,7 +1118,10 @@ let forge_call ?head ?source ?public_key
     LiquidData.translate { env with filename = "call_parameter" }
       contract_sig contract.storage input_string entry.entry_sig.parameter
   in
-  let parameter = (CConstr (prefix_entry ^ entry_name, input) : const) in
+  let parameter = match contract_sig.entries_sig with
+    | [_] -> input
+    | _ -> LiquidEncode.encode_const env contract_sig contract.storage
+             (CConstr (prefix_entry ^ entry_name, input)) in
   let _, loc_table =
     LiquidToTezos.convert_contract ~expand:true pre_michelson in
   let parameter_m = LiquidToTezos.convert_const parameter in

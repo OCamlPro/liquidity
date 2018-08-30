@@ -8,8 +8,8 @@
 open LiquidTypes
 
 type from =
-  | From_string of string
-  | From_file of string
+  | From_strings of string list
+  | From_files of string list
 
 let post = ref (fun ~data _ ->
   failwith "mini version cannot do post request")

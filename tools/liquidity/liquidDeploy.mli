@@ -6,9 +6,10 @@
 (*                                                                        *)
 (**************************************************************************)
 
+
 type from =
-  | From_string of string
-  | From_file of string
+  | From_strings of string list
+  | From_files of string list
 
 type key_diff =
   | DiffKeyHash of string

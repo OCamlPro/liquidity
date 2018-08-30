@@ -108,7 +108,8 @@ let translate env contract_sig storage_ty s ty =
     LiquidFromOCaml.expression_of_string ~filename:env.filename s in
   (* hackish: add type annotation for constants *)
   let ml_ty = LiquidToOCaml.convert_type ~abbrev:false ty in
-  let ml_exp = Ast_helper.Exp.constraint_ ml_exp ml_ty in
+  let ml_exp = Ast_helper.Exp.constraint_
+      ~loc:(Location.in_file env.filename) ml_exp ml_ty in
   let sy_exp = LiquidFromOCaml.translate_expression env ml_exp in
   let tenv = empty_typecheck_env ~warnings:true contract_sig storage_ty env in
   let ty_exp = LiquidCheck.typecheck_code tenv ~expected_ty:ty sy_exp in
@@ -116,25 +117,6 @@ let translate env contract_sig storage_ty s ty =
   let loc = LiquidLoc.loc_in_file env.filename in
   translate_const_exp loc enc_exp
 
-(*
-let data_of_liq ~filename ~contract ~typ ~parameter =
-    (* first, extract the types *)
-    let ocaml_ast = LiquidFromOCaml.structure_of_string
-                      ~filename contract in
-    let contract, _, env = LiquidFromOCaml.translate ~filename ocaml_ast in
-    let _ = LiquidCheck.typecheck_contract
-        ~warnings:true env contract in
-    let translate filename s typ =
-      try
-        let c = translate { env with filename } contract.contract_sig s typ in
-        Ok c
-      with LiquidError error ->
-        Error error in
-    match typ with
-     | "parameter" ->  translate typ parameter contract.contract_sig.parameter
-     | "storage" ->  translate typ parameter contract.contract_sig.storage
-     | _ -> raise (Invalid_argument typ)
-*)
 
 let string_of_const ?ty c =
   let e = LiquidToOCaml.convert_const c in

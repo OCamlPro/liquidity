@@ -306,6 +306,21 @@ let rec encode_const env c = match c with
   | CConstr (constr, x) when env.decompiling ->
     CConstr (constr, encode_const env x)
 
+  | CConstr (constr, x) when is_entry_case constr ->
+    let entry_name = entry_name_of_case constr in
+    let rec iter entries =
+      match entries with
+      | [] -> assert false
+      | [e] ->
+        if e.entry_name <> entry_name then
+          error (noloc env)  "unknown entry point %s" entry_name;
+        encode_const env x
+      | e :: entries ->
+        if e.entry_name = entry_name then CLeft (encode_const env x)
+        else CRight (iter entries)
+    in
+    iter env.t_contract_sig.entries_sig
+
   | CConstr (constr, x) ->
     try
       let ty_name, _ = StringMap.find constr env.env.constrs in

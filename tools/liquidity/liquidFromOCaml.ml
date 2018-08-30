@@ -1368,6 +1368,13 @@ from the head element. We use unit for that type. *)
                 Apply(Prim_tuple, loc_of_loc exp.pexp_loc, exps)
             end
 
+          | { pexp_desc = Pexp_constraint (exp, ty); pexp_loc } ->
+            (* ignore type constraint for others *)
+            LiquidLoc.warn loc
+              (IgnoredTypeAnnot
+                 (Format.asprintf "%a" LiquidOCamlPrinter.core_type ty));
+            (translate_code contracts env exp).desc
+
           | { pexp_loc } ->
             error_loc pexp_loc
               "in expression %s"
@@ -2073,7 +2080,9 @@ let mk_toplevel_env filename top_env =
 
 let translate_multi l =
   match List.rev l with
-  | [] -> exit 2
+  | [] ->
+    Format.eprintf "No contracts@.";
+    exit 2
   | (filename, ast) :: r_others ->
     let top_env = initial_env filename in
     let exception Stop of syntax_contract * syntax_init option * env in

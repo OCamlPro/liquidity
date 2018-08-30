@@ -1141,6 +1141,7 @@ let dummy_syntax_contract : syntax_contract = {
 type warning =
   | Unused of string
   | UnusedMatched of string
+  | IgnoredTypeAnnot of string
 
 let reserved_keywords = [
   "let"; "in"; "match" ; "int"; "bool"; "string"; "bytes";
