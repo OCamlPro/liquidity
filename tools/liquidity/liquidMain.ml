@@ -14,6 +14,8 @@
 
 open LiquidTypes
 
+exception Bad_arg
+
 (* We use the parser of the OCaml compiler parser to parse the file,
   we then translate it to a simplified AST, before compiling it
   to Michelson. No type-checking yet.
@@ -211,20 +213,18 @@ module Data = struct
     let contract = FileString.read_file filename in
     let parameter = !parameter in
     let storage = !storage in
-    let parameters = List.rev !init_inputs in
-    match parameters with 
-    | [] -> raise (Invalid_argument "input")
-    | parameter :: parameters -> 
-      let parameter_str = liquid_to_mic filename contract "parameter" parameter in
-      match parameters with 
-      | [] -> 
-        Printf.printf "%s\n%!" parameter_str
-      | storage :: _ ->
+    let parameter_str = liquid_to_mic filename contract "parameter" parameter in
+    if storage = "" then
+      (* Only translate parameter *)
+      Printf.printf "%s\n%!" parameter_str
+    else
       let storage_str = liquid_to_mic filename contract "storage" storage in
       if !LiquidOptions.json then
-        Printf.printf "{\n  \"parameter\": %s; \n  \"storage\": %s\n}\n%!" parameter_str storage_str
+        Printf.printf "{\n  \"parameter\": %s; \n  \"storage\": %s\n}\n%!"
+          parameter_str storage_str
       else
-        Printf.printf "parameter: %s \nstorage: %s\n%!" parameter_str storage_str
+        Printf.printf "parameter: %s \nstorage: %s\n%!"
+          parameter_str storage_str
 
   let run () =
     let open LiquidDeploy in
@@ -272,7 +272,7 @@ module Data = struct
       LiquidDeploy.Sync.init_storage
         (LiquidDeploy.From_file !contract) (List.rev !init_inputs)
     in
-    Printf.eprintf "Initial storage:\n--------------\n%!";
+    Printf.eprintf "Initial storage:\n----------------\n%!";
     if !LiquidOptions.json then
       Printf.printf "%s\n%!" LiquidToTezos.(json_of_const @@ convert_const storage)
     else
@@ -414,7 +414,7 @@ let main () =
             work_done := true;
             Data.init_storage ());
       ],
-      "FILE.liq INPUT1 INPUT2 ... Forge deployment operation for contract";
+      "FILE.liq [INPUT1 INPUT2 ...] Forge deployment operation for contract";
 
 
       "--forge-deploy", Arg.Tuple [
@@ -424,7 +424,7 @@ let main () =
             work_done := true;
             Data.forge_deploy ());
       ],
-      "FILE.liq INPUT1 INPUT2 ... Forge deployment operation for contract";
+      "FILE.liq [INPUT1 INPUT2 ...] Forge deployment operation for contract";
 
       "--deploy", Arg.Tuple [
         Arg.String (fun s -> Data.contract := s);
@@ -433,7 +433,7 @@ let main () =
             work_done := true;
             Data.deploy ());
       ],
-      "FILE.liq INPUT1 INPUT2 ... Deploy contract";
+      "FILE.liq [INPUT1 INPUT2 ...] Deploy contract";
 
       "--get-storage", Arg.Tuple [
         Arg.String (fun s -> Data.contract := s);
@@ -454,14 +454,21 @@ let main () =
       ],
       "FILE.liq <TZ1...> PARAMETER Call deployed contract";
 
-      "--data", Arg.Tuple [
-        Arg.String (fun s -> Data.contract := s);
-        Arg.Rest Data.register_deploy_input;
-        Arg.Unit (fun () ->
-            work_done := true;
-            Data.translate ());
-      ],
-      "FILE.liq PARAMETER STORAGE Translate to Michelson";
+      "--data",
+      (let data_args = ref [] in
+       Arg.Tuple [
+         Arg.String (fun s -> Data.contract := s);
+         Arg.Rest (fun s -> data_args := s :: !data_args);
+         Arg.Unit (fun () ->
+             begin match !data_args with
+               | [p] -> Data.parameter := p
+               | [s; p] -> Data.parameter := p; Data.storage := s
+               | _ -> raise Bad_arg
+             end;
+             work_done := true;
+             Data.translate ());
+       ]),
+      "FILE.liq PARAMETER [STORAGE] Translate to Michelson";
 
     ] @ LiquidToTezos.arg_list work_done
 
@@ -476,10 +483,10 @@ let main () =
       "Available options:";
     ]
   in
-  Arg.parse arg_list (fun s -> work_done := true; handle_file s)
-    arg_usage;
-
-  if not !work_done then
+  try
+    Arg.parse arg_list (fun s -> work_done := true; handle_file s) arg_usage;
+    if not !work_done then raise Bad_arg
+  with Bad_arg ->
     Arg.usage arg_list arg_usage
 
 

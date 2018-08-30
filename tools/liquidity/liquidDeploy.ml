@@ -826,11 +826,10 @@ let get_public_key_from_secret_key sk =
   (* |> Ed25519.Secret_key.to_public_key *)
   |> Ed25519.Public_key.to_b58check
 
-let init_storage ?source
-    liquid init_params_strings =
-  let source = match source, !LiquidOptions.source with
-    | Some source, _ | _, Some source -> source
-    | None, None -> raise (ResponseError "init_storage: Missing source")
+let init_storage ?source liquid init_params_strings =
+  let source = match source with
+    | Some _ -> source
+    | None -> !LiquidOptions.source
   in
   let env, syntax_ast, pre_michelson, pre_init_infos = compile_liquid liquid in
   let contract_sig = syntax_ast.contract_sig in
@@ -869,8 +868,7 @@ let init_storage ?source
         | [x] -> x
         | _ -> CTuple init_params in
 
-      run_pre env contract_sig c (Some source)
-        eval_input_parameter eval_input_storage
+      run_pre env contract_sig c source eval_input_parameter eval_input_storage
       >>= fun (_, eval_init_storage, big_map_diff, _) ->
       (* Add elements of big map *)
       let eval_init_storage = match eval_init_storage, big_map_diff with
@@ -907,10 +905,7 @@ let forge_deploy ?head ?source ?public_key
     | None, None -> raise (ResponseError "forge_deploy: Missing source")
   in
   let env, syntax_ast, pre_michelson, _ = compile_liquid liquid in
-  let contract_sig = syntax_ast.contract_sig in
-  
   init_storage ~source liquid init_params_strings >>= fun init_storage ->
-
   begin match head with
     | Some head -> return head
     | None -> get_head_hash ()
@@ -1250,10 +1245,8 @@ let activate ~secret =
 module Async = struct
   type 'a t = 'a Lwt.t
 
-  let init_storage 
-      liquid init_params_strings =
+  let init_storage liquid init_params_strings =
     init_storage liquid init_params_strings
-    >>= fun storage -> return storage
 
   let forge_deploy ?(delegatable=false) ?(spendable=false)
       liquid init_params_strings =
@@ -1287,10 +1280,8 @@ end
 module Sync = struct
   type 'a t = 'a
 
-  let init_storage
-      liquid init_params_strings =
-    Lwt_main.run (init_storage liquid init_params_strings
-                  >>= fun storage -> return storage)
+  let init_storage liquid init_params_strings =
+    Lwt_main.run (init_storage liquid init_params_strings)
 
   let forge_deploy ?(delegatable=false) ?(spendable=false)
       liquid init_params_strings =

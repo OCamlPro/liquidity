@@ -78,8 +78,7 @@ module type S = sig
     from -> string -> string ->
     (operation list * LiquidTypes.const * big_map_diff option * trace) t
 
-(** compute the initial storage for a specific script
-      ![LiquidOptions], returns storage data *)
+  (** Compute the initial storage for a specific script, returns storage data *)
   val init_storage : from -> string list -> LiquidTypes.const t
 
   (** Forge a deployment operation contract on the Tezos node specified in
