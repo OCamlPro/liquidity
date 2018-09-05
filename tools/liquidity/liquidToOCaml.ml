@@ -279,32 +279,36 @@ let convert_primitive prim args =
 
 let rec convert_code ~abbrev expr =
   match expr.desc with
-  | Var (name, loc) -> Exp.ident ~loc:(loc_of_loc loc) (lid name)
+  | Var { name; loc } -> Exp.ident ~loc:(loc_of_loc loc) (lid name)
 
-  | Project (loc, field, exp) ->
+  | Project { loc; field; record } ->
     Exp.field ~loc:(loc_of_loc loc)
-      (convert_code ~abbrev exp) (lid field)
+      (convert_code ~abbrev record) (lid field)
 
-  | SetField (exp, loc, field, arg) -> (* TODO pretty print x.y.z <- w *)
+  | SetField {record; loc; field; set_val } ->
+    (* TODO pretty print x.y.z <- w *)
     Exp.setfield ~loc:(loc_of_loc loc)
-      (convert_code ~abbrev exp)
+      (convert_code ~abbrev record)
       (lid field)
-      (convert_code ~abbrev arg)
+      (convert_code ~abbrev set_val)
 
-  | If (cond, ifthen, { desc = Const(_loc, Tunit, CUnit) }) ->
+  | If { cond; ifthen; ifelse = { desc = Const { const = CUnit }}} ->
      Exp.ifthenelse (convert_code ~abbrev cond)
                     (convert_code ~abbrev ifthen) None
-  | If (cond, ifthen, ifelse) ->
-     Exp.ifthenelse (convert_code ~abbrev cond)
-                    (convert_code ~abbrev ifthen) (Some (convert_code ~abbrev ifelse))
-  | Seq (x, { desc = Const(_loc, Tunit, CUnit) }) ->
-     convert_code ~abbrev x
+  | If { cond; ifthen; ifelse } ->
+    Exp.ifthenelse
+      (convert_code ~abbrev cond)
+      (convert_code ~abbrev ifthen)
+      (Some (convert_code ~abbrev ifelse))
+
+  | Seq (x, { desc = Const { const = CUnit }}) ->
+    convert_code ~abbrev x
 
   | Seq (x, y) ->
      Exp.sequence (convert_code ~abbrev x) (convert_code ~abbrev y)
 
-  | Const (loc, ty, cst) -> begin
-      match ty, cst with
+  | Const { loc; ty; const } -> begin
+      match ty, const with
       | (Tint
         | Tnat
         | Tstring
@@ -312,35 +316,35 @@ let rec convert_code ~abbrev expr =
         | Ttimestamp
         | Ttez
         | Tbool
-        | Toperation), _ -> convert_const cst
+        | Toperation), _ -> convert_const const
       | _, (CList (_ :: _) | CMap (_ :: _) | CBigMap (_ :: _)) ->
-        convert_const cst
+        convert_const const
       | (Tsignature, CSignature s
         | Tkey, CKey s
-        | Tkey_hash, CKey_hash s) when s.[0] <> '0' -> convert_const cst
+        | Tkey_hash, CKey_hash s) when s.[0] <> '0' -> convert_const const
       | _ ->
         Exp.constraint_
-          ~loc:(loc_of_loc loc) (convert_const cst) (convert_type ~abbrev ty)
+          ~loc:(loc_of_loc loc) (convert_const const) (convert_type ~abbrev ty)
     end
 
-  | Let (var, _inline, loc, exp, body) ->
+  | Let { bnd_var; loc; bnd_val; body } ->
      Exp.let_ ~loc:(loc_of_loc loc) Nonrecursive
-       [ Vb.mk (pat_of_name ~loc var)
-           (convert_code ~abbrev exp)]
+       [ Vb.mk (pat_of_name ~loc bnd_var)
+           (convert_code ~abbrev bnd_val)]
        (convert_code ~abbrev body)
 
-  | Lambda (arg_name, arg_type, loc, body, _res_type) ->
+  | Lambda { arg_name; arg_ty; loc; body } ->
      Exp.fun_ ~loc:(loc_of_loc loc) Nolabel None
        (Pat.constraint_
           (pat_of_name ~loc arg_name)
-          (convert_type ~abbrev ~name:(arg_name^"_t") arg_type))
+          (convert_type ~abbrev ~name:(arg_name^"_t") arg_ty))
        (convert_code ~abbrev body)
 
   | Closure _ -> assert false
 
-  | Apply (Prim_Cons, loc, args) ->
+  | Apply { prim = Prim_Cons; loc; args} ->
     let args = match List.rev args with
-      | { desc = Const (_, _, (CList [] as cst)) } :: r_args ->
+      | { desc = Const { const = CList [] as cst }} :: r_args ->
         List.fold_left (fun l a -> convert_code ~abbrev a :: l)
           [convert_const cst]
           r_args
@@ -349,17 +353,17 @@ let rec convert_code ~abbrev expr =
     in
     Exp.construct ~loc:(loc_of_loc loc) (lid "::") (Some (Exp.tuple args))
 
-  | Apply (Prim_Some, loc, [arg]) ->
+  | Apply { prim = Prim_Some; loc; args = [arg] } ->
     Exp.construct ~loc:(loc_of_loc loc)
       (lid "Some") (Some (convert_code ~abbrev arg))
-  | Apply (Prim_tuple, loc, args) ->
+  | Apply { prim = Prim_tuple; loc; args } ->
     Exp.tuple ~loc:(loc_of_loc loc)
       (List.map (convert_code ~abbrev) args)
-  | Apply (Prim_exec, loc, [x; f]) ->
+  | Apply { prim =  Prim_exec; loc; args =  [x; f] } ->
     Exp.apply ~loc:(loc_of_loc loc)
       (convert_code ~abbrev f) [Nolabel, convert_code ~abbrev x]
 
-  | Apply (prim, loc, args) ->
+  | Apply { prim; loc; args } ->
      let prim_name =
        try convert_primitive prim args
        with Not_found -> assert false
@@ -370,173 +374,179 @@ let rec convert_code ~abbrev expr =
             Nolabel,
             convert_code ~abbrev arg) args)
 
-  | Failwith (err, loc) ->
+  | Failwith { arg; loc}  ->
     Exp.apply ~loc:(loc_of_loc loc)
       (Exp.ident (lid "Current.failwith"))
-      [Nolabel, convert_code ~abbrev err]
+      [Nolabel, convert_code ~abbrev arg]
 
-  | MatchOption (exp, loc, ifnone, some_pat, ifsome) ->
-     Exp.match_ ~loc:(loc_of_loc loc) (convert_code ~abbrev exp)
+  | MatchOption { arg; loc; ifnone; some_name; ifsome } ->
+     Exp.match_ ~loc:(loc_of_loc loc) (convert_code ~abbrev arg)
                 [
                   Exp.case (Pat.construct (lid "None") None)
                            (convert_code ~abbrev ifnone);
                   Exp.case (Pat.construct (lid "Some")
-                                          (Some (pat_of_name ~loc some_pat)))
+                                          (Some (pat_of_name ~loc some_name)))
                            (convert_code ~abbrev ifsome);
                 ]
 
-  | MatchNat (exp, loc, p, ifplus, m, ifminus) ->
+  | MatchNat { arg; loc; plus_name; ifplus; minus_name; ifminus } ->
     Exp.extension ~loc:(loc_of_loc loc) (id ~loc "nat", PStr [
         Str.eval (
-          Exp.match_ (convert_code ~abbrev exp)
+          Exp.match_ (convert_code ~abbrev arg)
                 [
                   Exp.case (Pat.construct (lid "Plus")
-                              (Some (pat_of_name ~loc p)))
+                              (Some (pat_of_name ~loc plus_name)))
                     (convert_code ~abbrev ifplus);
                   Exp.case (Pat.construct (lid "Minus")
-                              (Some (pat_of_name ~loc m)))
+                              (Some (pat_of_name ~loc minus_name)))
                     (convert_code ~abbrev ifminus);
                 ])
       ])
 
-  | MatchList (exp, loc, head_pat, tail_pat, ifcons, ifnil) ->
-     Exp.match_ ~loc:(loc_of_loc loc) (convert_code ~abbrev exp)
+  | MatchList { arg; loc; head_name; tail_name; ifcons; ifnil } ->
+     Exp.match_ ~loc:(loc_of_loc loc) (convert_code ~abbrev arg)
                 [
                   Exp.case (Pat.construct (lid "[]") None)
                            (convert_code ~abbrev ifnil);
                   Exp.case (Pat.construct (lid "::")
                                           (Some (
                                                Pat.tuple
-                                                 [pat_of_name ~loc head_pat;
-                                                  pat_of_name ~loc tail_pat]
+                                                 [pat_of_name ~loc head_name;
+                                                  pat_of_name ~loc tail_name]
                            )))
                            (convert_code ~abbrev ifcons);
                 ]
 
-  | Transfer (loc, contract_exp, amount_exp,
-              None, { desc = Const (_, _, CUnit) } ) ->
+  | Transfer { loc; contract; amount; entry = None;
+               arg = { desc = Const { const = CUnit }} } ->
     Exp.apply ~loc:(loc_of_loc loc) (Exp.ident (lid "Contract.transfer"))
       [
-        Labelled "dest", convert_code ~abbrev contract_exp;
-        Labelled "amount", convert_code ~abbrev amount_exp;
+        Labelled "dest", convert_code ~abbrev contract;
+        Labelled "amount", convert_code ~abbrev amount;
       ]
 
-  | Transfer (loc, contract_exp, amount_exp, None, arg_exp) ->
+  | Transfer { loc; contract; amount; entry = None; arg } ->
     Exp.apply ~loc:(loc_of_loc loc) (Exp.ident (lid "Contract.call"))
       [
-        Labelled "dest", convert_code ~abbrev contract_exp;
-        Labelled "amount", convert_code ~abbrev amount_exp;
-        Labelled "parameter", convert_code ~abbrev arg_exp;
+        Labelled "dest", convert_code ~abbrev contract;
+        Labelled "amount", convert_code ~abbrev amount;
+        Labelled "parameter", convert_code ~abbrev arg;
       ]
 
-  | Transfer (loc, contract_exp, amount_exp, Some entry, arg_exp) ->
-    let contract_exp = convert_code ~abbrev contract_exp in
+  | Transfer { loc; contract; amount; entry = Some entry; arg } ->
+    let contract_exp = convert_code ~abbrev contract in
     Exp.apply ~loc:(loc_of_loc loc)
       (Exp.field contract_exp (lid entry))
       [
-        Nolabel, convert_code ~abbrev arg_exp;
-        Labelled "amount", convert_code ~abbrev amount_exp;
+        Nolabel, convert_code ~abbrev arg;
+        Labelled "amount", convert_code ~abbrev amount;
       ]
 
-  | Loop (var_arg, loc, body_exp, arg_exp) ->
+  | Loop { arg_name; loc; body; arg } ->
     Exp.apply ~loc:(loc_of_loc loc)
       (Exp.ident (lid "Loop.loop"))
                [
                  Nolabel, Exp.fun_ Nolabel None
-                                   (pat_of_name ~loc var_arg)
-                                   (convert_code ~abbrev body_exp);
-                 Nolabel, convert_code ~abbrev arg_exp
+                                   (pat_of_name ~loc arg_name)
+                                   (convert_code ~abbrev body);
+                 Nolabel, convert_code ~abbrev arg
                ]
 
-  | Fold ((Prim_map_iter|Prim_set_iter|Prim_list_iter as prim),
-          var_arg, loc,
-          { desc = Apply(Prim_exec, _, [ { desc = Var (iter_arg, _) }; f])},
-          arg_exp, _acc_exp) when iter_arg = var_arg ->
+  | Fold { prim = (Prim_map_iter|Prim_set_iter|Prim_list_iter as prim);
+           arg_name; loc;
+           body = { desc = Apply {
+               prim = Prim_exec;
+               args = [{ desc = Var { name = iter_arg }}; f] }};
+           arg } when iter_arg = arg_name ->
     Exp.apply ~loc:(loc_of_loc loc)
       (Exp.ident (lid (LiquidTypes.string_of_fold_primitive prim)))
       [ Nolabel, convert_code ~abbrev f;
-        Nolabel, convert_code ~abbrev arg_exp;
+        Nolabel, convert_code ~abbrev arg;
       ]
-  | Fold ((Prim_map_iter|Prim_set_iter|Prim_list_iter as prim),
-          var_arg, loc, body_exp, arg_exp, _acc_exp) ->
+  | Fold { prim = (Prim_map_iter|Prim_set_iter|Prim_list_iter as prim);
+           arg_name; loc; body; arg } ->
     Exp.apply ~loc:(loc_of_loc loc)
       (Exp.ident (lid (LiquidTypes.string_of_fold_primitive prim)))
       [
         Nolabel, Exp.fun_ Nolabel None
-          (pat_of_name ~loc var_arg)
-          (convert_code ~abbrev body_exp);
-        Nolabel, convert_code ~abbrev arg_exp;
+          (pat_of_name ~loc arg_name)
+          (convert_code ~abbrev body);
+        Nolabel, convert_code ~abbrev arg;
       ]
-  | Fold (prim, var_arg, loc,
-          { desc = Apply(Prim_exec, _, [ { desc = Var (iter_arg, _) }; f])},
-          arg_exp,
-          acc_exp) when iter_arg = var_arg ->
+  | Fold { prim; arg_name; loc;
+           body = { desc = Apply {
+               prim = Prim_exec;
+               args = [{ desc = Var { name = iter_arg }}; f] }};
+          arg; acc } when iter_arg = arg_name ->
     Exp.apply ~loc:(loc_of_loc loc)
       (Exp.ident (lid (LiquidTypes.string_of_fold_primitive prim)))
       [
         Nolabel, convert_code ~abbrev f;
-        Nolabel, convert_code ~abbrev arg_exp;
-        Nolabel, convert_code ~abbrev acc_exp;
+        Nolabel, convert_code ~abbrev arg;
+        Nolabel, convert_code ~abbrev acc;
       ]
-  | Fold (prim, var_arg, loc, body_exp, arg_exp, acc_exp) ->
+  | Fold { prim; arg_name; loc; body; arg; acc } ->
     Exp.apply ~loc:(loc_of_loc loc)
       (Exp.ident (lid (LiquidTypes.string_of_fold_primitive prim)))
       [
         Nolabel, Exp.fun_ Nolabel None
-          (pat_of_name ~loc var_arg)
-          (convert_code ~abbrev body_exp);
-        Nolabel, convert_code ~abbrev arg_exp;
-        Nolabel, convert_code ~abbrev acc_exp;
+          (pat_of_name ~loc arg_name)
+          (convert_code ~abbrev body);
+        Nolabel, convert_code ~abbrev arg;
+        Nolabel, convert_code ~abbrev acc;
       ]
 
-  | Map (prim, var_arg, loc,
-          { desc = Apply(Prim_exec, _, [ { desc = Var (map_arg, _) }; f])},
-          arg_exp) when map_arg = var_arg ->
+  | Map { prim; arg_name; loc;
+          body = { desc = Apply {
+              prim = Prim_exec;
+              args = [{ desc = Var { name = map_arg }}; f] }};
+          arg } when map_arg = arg_name ->
     Exp.apply ~loc:(loc_of_loc loc)
       (Exp.ident (lid (LiquidTypes.string_of_map_primitive prim)))
       [
         Nolabel, convert_code ~abbrev f;
-        Nolabel, convert_code ~abbrev arg_exp;
+        Nolabel, convert_code ~abbrev arg;
       ]
-  | Map (prim, var_arg, loc, body_exp, arg_exp) ->
+  | Map { prim; arg_name; loc; body; arg } ->
     Exp.apply ~loc:(loc_of_loc loc)
       (Exp.ident (lid (LiquidTypes.string_of_map_primitive prim)))
       [
         Nolabel, Exp.fun_ Nolabel None
-          (pat_of_name ~loc var_arg)
-          (convert_code ~abbrev body_exp);
-        Nolabel, convert_code ~abbrev arg_exp;
+          (pat_of_name ~loc arg_name)
+          (convert_code ~abbrev body);
+        Nolabel, convert_code ~abbrev arg;
       ]
 
-  | MapFold (prim, var_arg, loc,
-          { desc = Apply(Prim_exec, _, [ { desc = Var (map_arg, _) }; f])},
-          arg_exp,
-          acc_exp) when map_arg = var_arg ->
+  | MapFold { prim; arg_name; loc;
+              body = { desc = Apply {
+                  prim = Prim_exec;
+                  args = [{ desc = Var { name = map_arg }}; f] }};
+              arg; acc } when map_arg = arg_name ->
     Exp.apply ~loc:(loc_of_loc loc)
       (Exp.ident (lid (LiquidTypes.string_of_map_fold_primitive prim)))
       [
         Nolabel, convert_code ~abbrev f;
-        Nolabel, convert_code ~abbrev arg_exp;
-        Nolabel, convert_code ~abbrev acc_exp;
+        Nolabel, convert_code ~abbrev arg;
+        Nolabel, convert_code ~abbrev acc;
       ]
-  | MapFold (prim, var_arg, loc, body_exp, arg_exp, acc_exp) ->
+  | MapFold { prim; arg_name; loc; body; arg; acc } ->
     Exp.apply ~loc:(loc_of_loc loc)
       (Exp.ident (lid (LiquidTypes.string_of_map_fold_primitive prim)))
       [
         Nolabel, Exp.fun_ Nolabel None
-          (pat_of_name ~loc var_arg)
-          (convert_code ~abbrev body_exp);
-        Nolabel, convert_code ~abbrev arg_exp;
-        Nolabel, convert_code ~abbrev acc_exp;
+          (pat_of_name ~loc arg_name)
+          (convert_code ~abbrev body);
+        Nolabel, convert_code ~abbrev arg;
+        Nolabel, convert_code ~abbrev acc;
       ]
 
-  | Record (loc, fields) ->
+  | Record { loc; fields } ->
     Exp.record ~loc:(loc_of_loc loc)
       (List.map (fun (name, exp) ->
            lid name, convert_code ~abbrev exp
          ) fields) None
 
-  | MatchVariant (arg, loc, cases) ->
+  | MatchVariant { arg; loc; cases } ->
      Exp.match_ ~loc:(loc_of_loc loc) (convert_code ~abbrev arg)
        (List.map (function
             | CAny, exp ->
@@ -558,19 +568,20 @@ let rec convert_code ~abbrev expr =
                 (convert_code ~abbrev exp)
           ) cases)
 
-  | Constructor (loc, Constr id, { desc = Const (_loc', Tunit, CUnit) } ) ->
+  | Constructor { loc; constr =  Constr id;
+                  arg = { desc = Const { const = CUnit }}}  ->
      Exp.construct ~loc:(loc_of_loc loc) (lid id) None
-  | Constructor (loc, Constr id, arg) ->
+  | Constructor { loc; constr = Constr id; arg } ->
      Exp.construct ~loc:(loc_of_loc loc) (lid id)
        (Some (convert_code ~abbrev arg))
-  | Constructor (loc, Left right_ty, arg) ->
+  | Constructor { loc; constr = Left right_ty; arg } ->
      Exp.constraint_ ~loc:(loc_of_loc loc)
        (Exp.construct (lid "Left")
                       (Some
                          (convert_code ~abbrev arg)))
        (Typ.constr (lid "variant")
                    [Typ.any (); convert_type ~abbrev right_ty])
-  | Constructor (loc, Right left_ty, arg) ->
+  | Constructor { loc; constr =  Right left_ty; arg } ->
      Exp.constraint_ ~loc:(loc_of_loc loc)
        (Exp.construct (lid "Right")
                       (Some
@@ -578,8 +589,10 @@ let rec convert_code ~abbrev expr =
        (Typ.constr (lid "variant")
                    [convert_type ~abbrev left_ty; Typ.any ()])
 
-  | CreateContract (loc, [manager; delegate; spendable;
-                          delegatable; init_balance; init_storage], contract) ->
+  | CreateContract { loc;
+                     args = [manager; delegate; spendable;
+                             delegatable; init_balance; init_storage];
+                     contract } ->
     let restore_env = save_env () in
     let structure = structure_of_contract ~abbrev contract in
     restore_env ();
@@ -602,18 +615,18 @@ let rec convert_code ~abbrev expr =
 
   | CreateContract _ -> assert false
 
-  | ContractAt (loc, addr, csig) ->
+  | ContractAt { loc; arg; c_sig } ->
     Exp.constraint_ ~loc:(loc_of_loc loc)
       (Exp.apply ~loc:(loc_of_loc loc)
          (Exp.ident (lid "Contract.at"))
-         [ Nolabel, convert_code ~abbrev addr ])
-      (convert_type ~abbrev (Toption (Tcontract csig)))
+         [ Nolabel, convert_code ~abbrev arg ])
+      (convert_type ~abbrev (Toption (Tcontract c_sig)))
 
-  | Unpack (loc, e, ty) ->
+  | Unpack { loc; arg; ty } ->
     Exp.constraint_ ~loc:(loc_of_loc loc)
       (Exp.apply ~loc:(loc_of_loc loc)
          (Exp.ident (lid "Bytes.unpack"))
-         [ Nolabel, convert_code ~abbrev e ])
+         [ Nolabel, convert_code ~abbrev arg ])
       (convert_type ~abbrev (Toption ty))
 
 

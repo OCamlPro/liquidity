@@ -599,88 +599,117 @@ type ('ty, 'a) exp = {
 }
 
 and ('ty, 'a) exp_desc =
-  | Let of string * bool * location * ('ty, 'a) exp * ('ty, 'a) exp
-  | Var of string * location
-  | SetField of ('ty, 'a) exp * location * string * ('ty, 'a) exp
-  | Project of location * string * ('ty, 'a) exp
-  | Const of location * datatype * const
-  | Apply of primitive * location * ('ty, 'a) exp list
-  | If of ('ty, 'a) exp * ('ty, 'a) exp * ('ty, 'a) exp
+  | Let of { bnd_var: string;
+             inline: bool;
+             loc: location;
+             bnd_val: ('ty, 'a) exp;
+             body: ('ty, 'a) exp }
+  | Var of { name: string;
+             loc: location }
+  | SetField of { record : ('ty, 'a) exp;
+                  loc: location;
+                  field: string;
+                  set_val: ('ty, 'a) exp }
+  | Project of { loc: location;
+                 field: string;
+                 record: ('ty, 'a) exp }
+  | Const of { loc: location;
+               ty: datatype;
+               const: const }
+  | Apply of { prim: primitive;
+               loc: location;
+               args: ('ty, 'a) exp list }
+  | If of { cond: ('ty, 'a) exp;
+            ifthen: ('ty, 'a) exp;
+            ifelse: ('ty, 'a) exp }
   | Seq of ('ty, 'a) exp * ('ty, 'a) exp
-  | Transfer of location
-                * (* contract_ *) ('ty, 'a) exp
-                * (* tez_ *) ('ty, 'a) exp
-                * (* entry_ *) string option
-                * (* arg_ *) ('ty, 'a) exp
-  | MatchOption of ('ty, 'a) exp  (* argument *)
-                     * location
-                     * ('ty, 'a) exp  (* ifnone *)
-                     * string * ('ty, 'a) exp (*  ifsome *)
-  | MatchList of ('ty, 'a) exp  (* argument *)
-                 * location
-                 * string * string * ('ty, 'a) exp * (* ifcons *)
-                       ('ty, 'a) exp (*  ifnil *)
-  | Loop of string * location
-              * ('ty, 'a) exp  (* body *)
-              * ('ty, 'a) exp (*  arg *)
+  | Transfer of { loc: location;
+                  contract: ('ty, 'a) exp;
+                  amount: ('ty, 'a) exp;
+                  entry: string option;
+                  arg: ('ty, 'a) exp }
+  | MatchOption of { arg : ('ty, 'a) exp;
+                     loc: location;
+                     ifnone: ('ty, 'a) exp;
+                     some_name: string;
+                     ifsome: ('ty, 'a) exp }
+  | MatchList of { arg: ('ty, 'a) exp;
+                  loc : location;
+                  head_name: string;
+                  tail_name: string;
+                  ifcons: ('ty, 'a) exp;
+                  ifnil: ('ty, 'a) exp }
+  | Loop of { arg_name: string;
+              loc: location;
+              body: ('ty, 'a) exp;
+              arg: ('ty, 'a) exp }
 
-  | Fold of prim_fold (* iter/fold *)
-            * string * location
-            * ('ty, 'a) exp (* body *)
-            * ('ty, 'a) exp (* arg *)
-            * ('ty, 'a) exp (* acc *)
+  | Fold of { prim: prim_fold;
+              arg_name: string;
+              loc: location;
+              body: ('ty, 'a) exp;
+              arg: ('ty, 'a) exp;
+              acc: ('ty, 'a) exp }
 
-  | Map of prim_map
-           * string * location
-           * ('ty, 'a) exp (* body *)
-           * ('ty, 'a) exp (* arg *)
+  | Map of { prim: prim_map;
+             arg_name: string;
+             loc: location;
+             body: ('ty, 'a) exp;
+             arg: ('ty, 'a) exp }
 
-  | MapFold of prim_map_fold
-               * string * location
-               * ('ty, 'a) exp (* body *)
-               * ('ty, 'a) exp (* arg *)
-               * ('ty, 'a) exp (* acc *)
+  | MapFold of { prim: prim_map_fold;
+                 arg_name: string;
+                 loc: location;
+                 body: ('ty, 'a) exp;
+                 arg: ('ty, 'a) exp;
+                 acc: ('ty, 'a) exp }
 
-  | Lambda of string (* argument name *)
-              * datatype (* argument type *)
-              * location
-              * ('ty, 'a) exp (* body *)
-              * datatype (* final datatype,
-                            inferred during typechecking *)
+  | Lambda of { arg_name: string;
+                arg_ty: datatype;
+                loc: location;
+                body: ('ty, 'a) exp;
+                ret_ty: datatype; (* inferred during typechecking *)
+              }
 
-  | Closure of string (* argument name *)
-              * datatype (* argument type *)
-              * location
-              * (string * ('ty, 'a) exp) list (* call environment *)
-              * ('ty, 'a) exp (* body *)
-              * datatype (* final datatype,
-                            inferred during typechecking *)
+  | Closure of { arg_name: string;
+                 arg_ty: datatype;
+                 loc: location;
+                 call_env: (string * ('ty, 'a) exp) list;
+                 body: ('ty, 'a) exp;
+                 ret_ty: datatype; (* inferred during typechecking *)
+               }
 
-  | Record of location * (string * ('ty, 'a) exp) list
-  | Constructor of location * constructor * ('ty, 'a) exp
+  | Record of { loc: location;
+                fields: (string * ('ty, 'a) exp) list }
+  | Constructor of { loc: location;
+                     constr: constructor;
+                     arg: ('ty, 'a) exp }
 
-  | MatchVariant of ('ty, 'a) exp
-                    * location
-                    * (pattern * ('ty, 'a) exp) list
+  | MatchVariant of { arg: ('ty, 'a) exp;
+                      loc: location;
+                      cases: (pattern * ('ty, 'a) exp) list }
 
-  | MatchNat of ('ty, 'a) exp  (* argument *)
-                * location
-                * string * ('ty, 'a) exp (* ifplus *)
-                * string * ('ty, 'a) exp (* ifminus *)
+  | MatchNat of { arg: ('ty, 'a) exp;
+                  loc: location;
+                  plus_name: string;
+                  ifplus: ('ty, 'a) exp;
+                  minus_name: string;
+                  ifminus: ('ty, 'a) exp }
 
-  | Failwith of ('ty, 'a) exp * location
+  | Failwith of { arg: ('ty, 'a) exp;
+                  loc: location }
 
-  | CreateContract of location
-                      * ('ty, 'a) exp list (* arguments *)
-                      * ('ty, 'a) exp contract (* body *)
+  | CreateContract of { loc: location;
+                        args: ('ty, 'a) exp list;
+                        contract: ('ty, 'a) exp contract }
 
-  | ContractAt of location
-                  * ('ty, 'a) exp
-                  * contract_sig
+  | ContractAt of { loc: location;
+                    arg: ('ty, 'a) exp;
+                    c_sig: contract_sig }
 
-  | Unpack of location
-              * ('ty, 'a) exp
-              * datatype
+  | Unpack of { loc: location;
+                arg: ('ty, 'a) exp;
+                ty: datatype }
 
 
 type typed
@@ -695,145 +724,156 @@ let mk =
   let bv = StringSet.empty in
   fun ?name desc ty ->
     let fail, transfer = match desc with
-      | Const (_, _, _)
-      | Var (_, _) -> false, false
+      | Const _
+      | Var _ -> false, false
 
-      | Failwith (_, _) -> true, false
+      | Failwith _ -> true, false
 
-      | Project (_, _, e)
-      | Constructor (_, _, e)
-      | ContractAt (_, e, _)
-      | Unpack (_, e, _)
-      | Lambda (_, _, _, e, _) -> e.fail, false (* e.transfer *)
+      | Project { record = e }
+      | Constructor { arg = e}
+      | ContractAt { arg = e}
+      | Unpack { arg = e }
+      | Lambda { body = e } -> e.fail, false (* e.transfer *)
 
-      | SetField (e1, _, _, e2)
+      | SetField { record = e1; set_val = e2 }
       | Seq (e1, e2)
-      | Let (_, _, _, e1, e2)
-      | Loop (_, _, e1, e2)
-      | Map (_, _, _, e1, e2) ->
+      | Let { bnd_val = e1; body = e2 }
+      | Loop { body = e1; arg = e2 }
+      | Map { body = e1; arg = e2 } ->
         e1.fail || e2.fail, false (* e1.transfer || e2.transfer *)
 
-      | Transfer (_, e1, e2, _, e3) ->
-        e1.fail || e2.fail || e3.fail,
+      | Transfer { contract; amount; arg } ->
+        contract.fail || amount.fail || arg.fail,
         true
 
-      | If (e1, e2, e3)
-      | MatchOption (e1, _, e2, _, e3)
-      | MatchNat (e1, _, _, e2, _, e3)
-      | MatchList (e1, _, _, _, e2, e3)
-      | Fold (_, _, _, e1, e2, e3)
-      | MapFold (_, _, _, e1, e2, e3) ->
+      | If { cond = e1; ifthen = e2; ifelse = e3 }
+      | MatchOption { arg = e1; ifnone = e2; ifsome = e3 }
+      | MatchNat { arg = e1; ifplus = e2; ifminus = e3 }
+      | MatchList { arg = e1; ifcons = e2; ifnil = e3 }
+      | Fold { body = e1;  arg = e2; acc = e3 }
+      | MapFold { body = e1;  arg = e2; acc = e3 } ->
         e1.fail || e2.fail || e3.fail,
         false (* e1.transfer || e2.transfer || e3.transfer *)
 
-      | Apply (prim, _, l) ->
-        List.exists (fun e -> e.fail) l,
+      | Apply { prim; args } ->
+        List.exists (fun e -> e.fail) args,
         prim = Prim_set_delegate
         || prim = Prim_create_account
-        (* || List.exists (fun e -> e.transfer) l *)
+        (* || List.exists (fun e -> e.transfer) args *)
 
-      | Closure (_, _, _, env, e, _) ->
-        e.fail || List.exists (fun (_, e) -> e.fail) env,
+      | Closure { call_env; body } ->
+        body.fail || List.exists (fun (_, e) -> e.fail) call_env,
         false (* e.transfer || List.exists (fun (_, e) -> e.transfer) env *)
 
-      | Record (_, labels) ->
-        List.exists (fun (_, e) -> e.fail) labels,
+      | Record { fields } ->
+        List.exists (fun (_, e) -> e.fail) fields,
         false (* List.exists (fun (_, e) -> e.transfer) labels *)
 
-      | MatchVariant (e, _, cases) ->
-        e.fail || List.exists (fun (_, e) -> e.fail) cases,
+      | MatchVariant { arg; cases } ->
+        arg.fail || List.exists (fun (_, e) -> e.fail) cases,
         false (* e.transfer || List.exists (fun (_, e) -> e.transfer) cases *)
 
-      | CreateContract (_, l, _) ->
-        List.exists (fun e -> e.fail) l,
+      | CreateContract { args } ->
+        List.exists (fun e -> e.fail) args,
         true
 
     in
     { desc; name; ty; bv; fail; transfer }
 
 let rec eq_exp_desc eq_ty eq_var e1 e2 = match e1, e2 with
-  | Const (_, t1, c1), Const (_, t2, c2) -> c1 = c2 && eq_types t1 t2
-  | Var (v1, _), Var (v2, _) -> eq_var v1 v2
-  | Failwith (e1, _), Failwith (e2, _) -> eq_exp eq_ty eq_var e1 e2
-  | Project (_, n1, e1), Project (_, n2, e2) ->
-    n1 = n2 && eq_exp eq_ty eq_var e1 e2
-  | Constructor (_, c1, e1), Constructor (_, c2, e2) ->
-    c1 = c2 && eq_exp eq_ty eq_var e1 e2
-  | ContractAt (_, e1, csig1), ContractAt (_, e2, csig2) ->
-    eq_signature csig1 csig2 && eq_exp eq_ty eq_var e1 e2
-  | Unpack (_, e1, t1), Unpack (_, e2, t2) ->
-    eq_types t1 t2 && eq_exp eq_ty eq_var e1 e2
-  | Lambda (arg1, aty1, _, e1, rty1), Lambda (arg2, aty2, _, e2, rty2) ->
-    arg1 = arg2 && eq_types aty1 aty2 && eq_types rty1 rty2 &&
-    eq_exp eq_ty eq_var e1 e2
-  | SetField (e1, _, f1, v1), SetField (e2, _, f2, v2) ->
-    f1 = f2 && eq_exp eq_ty eq_var e1 e2 && eq_exp eq_ty eq_var v1 v2
+  | Const c1, Const c2 -> c1.const = c2.const && eq_types c1.ty c2.ty
+  | Var v1, Var v2 -> eq_var v1.name v2.name
+  | Failwith { arg = e1 }, Failwith { arg = e2 } -> eq_exp eq_ty eq_var e1 e2
+  | Project p1, Project p2 ->
+    p1.field = p2.field && eq_exp eq_ty eq_var p1.record p2.record
+  | Constructor c1, Constructor c2 ->
+    c1.constr = c2.constr && eq_exp eq_ty eq_var c1.arg c2.arg
+  | ContractAt c1, ContractAt c2 ->
+    eq_signature c1.c_sig c2.c_sig && eq_exp eq_ty eq_var c1.arg c2.arg
+  | Unpack u1, Unpack u2 ->
+    eq_types u1.ty u2.ty && eq_exp eq_ty eq_var u1.arg u2.arg
+  | Lambda l1, Lambda l2 ->
+    l1.arg_name = l2.arg_name && eq_types l1.arg_ty l2.arg_ty &&
+    eq_types l1.ret_ty l2.ret_ty && eq_exp eq_ty eq_var l1.body l2.body
+  | SetField s1, SetField s2 ->
+    s1.field = s2.field && eq_exp eq_ty eq_var s1.record s2.record &&
+    eq_exp eq_ty eq_var s1.set_val s2.set_val
   | Seq (x1, y1), Seq (x2, y2) ->
     eq_exp eq_ty eq_var x1 x2 && eq_exp eq_ty eq_var x1 x2
-  | Let (n1, i1, _, e1, v1), Let (n2, i2, _, e2, v2) ->
-    n1 = n2 && i1 = i2 && eq_exp eq_ty eq_var e1 e2 && eq_exp eq_ty eq_var v1 v2
-  | Loop (n1, _, e1, a1), Loop (n2, _, e2, a2) ->
-    n1 = n2 && eq_exp eq_ty eq_var e1 e2 && eq_exp eq_ty eq_var a1 a2
-  | Map (p1, _, n1, e1, x1), Map (p2, _, n2, e2, x2) ->
-    p1 = p2 && n1 = n2 && eq_exp eq_ty eq_var e1 e2 && eq_exp eq_ty eq_var x1 x2
-  | MapFold (p1, _, n1, e1, x1, a1), MapFold (p2, _, n2, e2, x2, a2) ->
-    p1 = p2 && n1 = n2 &&
-    eq_exp eq_ty eq_var e1 e2 && eq_exp eq_ty eq_var x1 x2 &&
-    eq_exp eq_ty eq_var a1 a2
-  | Fold (p1, _, n1, e1, x1, a1), Fold (p2, _, n2, e2, x2, a2) ->
-    p1 = p2 && n1 = n2 &&
-    eq_exp eq_ty eq_var e1 e2 && eq_exp eq_ty eq_var x1 x2 &&
-    eq_exp eq_ty eq_var a1 a2
-  | Transfer (_, c1, a1, e1, p1), Transfer (_, c2, a2, e2, p2) ->
-    e1 = e2 &&
-    eq_exp eq_ty eq_var c1 c2 && eq_exp eq_ty eq_var a1 a2 &&
-    eq_exp eq_ty eq_var p1 p2
-  | If (c1, t1, e1), If (c2, t2, e2) ->
-    eq_exp eq_ty eq_var c1 c2 && eq_exp eq_ty eq_var t1 t2 &&
-    eq_exp eq_ty eq_var e1 e2
-  | MatchOption (x1, _, n1, a1, s1), MatchOption (x2, _, n2, a2, s2) ->
-    a1 = a2 && eq_exp eq_ty eq_var x1 x2 && eq_exp eq_ty eq_var n1 n2 &&
-    eq_exp eq_ty eq_var s1 s2
-  | MatchNat (x1, _, v1, n1, a1, s1), MatchNat (x2, _, v2, n2, a2, s2) ->
-    a1 = a2 && v1 = v2 &&
-    eq_exp eq_ty eq_var x1 x2 && eq_exp eq_ty eq_var n1 n2 &&
-    eq_exp eq_ty eq_var s1 s2
-  | MatchList (x1, _, v1, a1, n1, s1), MatchList (x2, _, v2, a2, n2, s2) ->
-    a1 = a2 && v1 = v2 &&
-    eq_exp eq_ty eq_var x1 x2 && eq_exp eq_ty eq_var n1 n2 &&
-    eq_exp eq_ty eq_var s1 s2
-  | Apply (p1, _, l1), Apply (p2, _, l2) ->
-    p1 = p2 && (try List.for_all2 (eq_exp eq_ty eq_var) l1 l2
-                with Invalid_argument _ -> false)
-  | Closure (a1, t1, _, env1, e1, r1), Closure (a2, t2, _, env2, e2, r2) ->
-    a1 = a2 && eq_types t1 t2 && eq_types r1 r2 &&
-    eq_exp eq_ty eq_var e1 e2 &&
-    (try List.for_all2 (fun (n1, e1) (n2, e2) ->
-         n1 = n2 && eq_exp eq_ty eq_var e1 e2) env1 env2
+  | Let l1, Let l2 ->
+    l1.bnd_var = l2.bnd_var && l1.inline = l2.inline &&
+    eq_exp eq_ty eq_var l1.bnd_val l1.bnd_val &&
+    eq_exp eq_ty eq_var l1.body l2.body
+  | Loop l1, Loop l2 ->
+    l1.arg_name = l2.arg_name && eq_exp eq_ty eq_var l1.arg l2.arg &&
+    eq_exp eq_ty eq_var l1.body l2.body
+  | Map m1, Map m2 ->
+    m1.prim = m2.prim && m1.arg_name = m2.arg_name &&
+    eq_exp eq_ty eq_var m1.arg m2.arg && eq_exp eq_ty eq_var m1.body m2.body
+  | MapFold m1, MapFold m2 ->
+    m1.prim = m2.prim && m1.arg_name = m2.arg_name &&
+    eq_exp eq_ty eq_var m1.arg m2.arg && eq_exp eq_ty eq_var m1.acc m2.acc &&
+    eq_exp eq_ty eq_var m1.body m2.body
+  | Fold f1, Fold f2 ->
+    f1.prim = f2.prim && f1.arg_name = f2.arg_name &&
+    eq_exp eq_ty eq_var f1.arg f2.arg && eq_exp eq_ty eq_var f1.acc f2.acc &&
+    eq_exp eq_ty eq_var f1.body f2.body
+  | Transfer t1, Transfer t2 ->
+    t1.entry = t2.entry &&
+    eq_exp eq_ty eq_var t1.contract t2.contract &&
+    eq_exp eq_ty eq_var t1.amount t2.amount &&
+    eq_exp eq_ty eq_var t1.arg t2.arg
+  | If ite1, If ite2 ->
+    eq_exp eq_ty eq_var ite1.cond ite2.cond &&
+    eq_exp eq_ty eq_var ite1.ifthen ite2.ifthen &&
+    eq_exp eq_ty eq_var ite1.ifelse ite2.ifelse
+  | MatchOption m1, MatchOption m2 ->
+    m1.some_name = m2.some_name && eq_exp eq_ty eq_var m1.arg m2.arg &&
+    eq_exp eq_ty eq_var m1.ifnone m2.ifnone &&
+    eq_exp eq_ty eq_var m1.ifsome m2.ifsome
+  | MatchNat n1, MatchNat n2 ->
+    n1.plus_name = n2.plus_name && n1.minus_name = n2.minus_name &&
+    eq_exp eq_ty eq_var n1.arg n2.arg &&
+    eq_exp eq_ty eq_var n1.ifplus n2.ifplus &&
+    eq_exp eq_ty eq_var n1.ifminus n2.ifminus
+  | MatchList m1, MatchList m2 ->
+    m1.head_name = m2.head_name && m1.tail_name = m2.tail_name &&
+    eq_exp eq_ty eq_var m1.arg m2.arg &&
+    eq_exp eq_ty eq_var m1.ifnil m2.ifnil &&
+    eq_exp eq_ty eq_var m1.ifcons m2.ifcons
+  | Apply a1, Apply a2 ->
+    a1.prim = a2.prim &&
+    (try List.for_all2 (eq_exp eq_ty eq_var) a1.args a2.args
      with Invalid_argument _ -> false)
-  | Record (_, l1), Record (_, l2) ->
+  | Closure c1, Closure c2 ->
+    c1.arg_name = c2.arg_name && eq_types c1.arg_ty c2.arg_ty &&
+    eq_types c1.ret_ty c2.ret_ty && eq_exp eq_ty eq_var c1.body c2.body &&
     (try List.for_all2 (fun (n1, e1) (n2, e2) ->
-         n1 = n2 && eq_exp eq_ty eq_var e1 e2) l1 l2
+         n1 = n2 && eq_exp eq_ty eq_var e1 e2) c1.call_env c2.call_env
      with Invalid_argument _ -> false)
-  | MatchVariant (e1, _, c1), MatchVariant (e2, _, c2) ->
-    eq_exp eq_ty eq_var e1 e2 &&
+  | Record r1, Record r2 ->
+    (try List.for_all2 (fun (n1, e1) (n2, e2) ->
+         n1 = n2 && eq_exp eq_ty eq_var e1 e2) r1.fields r2.fields
+     with Invalid_argument _ -> false)
+  | MatchVariant m1, MatchVariant m2 ->
+    eq_exp eq_ty eq_var m1.arg m2.arg &&
     (try List.for_all2 (fun (c1, e1) (c2, e2) ->
-         c1 = c2 && eq_exp eq_ty eq_var e1 e2) c1 c2
+         c1 = c2 && eq_exp eq_ty eq_var e1 e2) m1.cases m2.cases
      with Invalid_argument _ -> false)
-  | CreateContract (_, l1, c1), CreateContract (_, l2, c2) ->
+  | CreateContract c1, CreateContract c2 ->
     (try
-       List.for_all2 (eq_exp eq_ty eq_var) l1 l2 &&
-       eq_types c1.storage c2.storage &&
+       List.for_all2 (eq_exp eq_ty eq_var) c1.args c2.args &&
+       eq_types c1.contract.storage c2.contract.storage &&
        List.for_all2 (fun (v1, i1, e1) (v2, i2, e2) ->
            v1 = v2 && i1 = i2 && eq_exp eq_ty eq_var e1 e2)
-         c1.values c2.values &&
+         c1.contract.values c2.contract.values &&
        List.for_all2 (fun e1 e2 ->
            e1.entry_sig.entry_name = e2.entry_sig.entry_name &&
            e1.entry_sig.parameter_name = e2.entry_sig.parameter_name &&
            e1.entry_sig.storage_name = e2.entry_sig.storage_name &&
            eq_types e1.entry_sig.parameter e2.entry_sig.parameter &&
            eq_exp eq_ty eq_var e1.code e2.code
-         ) c1.entries c2.entries
+         ) c1.contract.entries c2.contract.entries
      with Invalid_argument _ -> false)
   | _, _ -> false
 

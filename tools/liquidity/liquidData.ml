@@ -58,47 +58,47 @@ let rec default_const = function
 
 let rec translate_const_exp loc (exp : encoded_exp) =
   match exp.desc with
-  | Let (_, _, loc, _, _) ->
+  | Let { loc } ->
      LiquidLoc.raise_error ~loc "'let' forbidden in constant"
-  | Const (_loc, ty, c) -> c
+  | Const { const } -> const
 
-  | Record (loc, fields) ->
+  | Record { loc; fields } ->
     CRecord (List.map (fun (f, e) -> (f, translate_const_exp loc e)) fields)
 
-  | Constructor (loc, Constr c, arg) ->
+  | Constructor { loc; constr = Constr c; arg } ->
     CConstr (c, translate_const_exp loc arg)
-  | Constructor (loc, Left _, arg) -> CLeft (translate_const_exp loc arg)
-  | Constructor (loc, Right _, arg) -> CRight (translate_const_exp loc arg)
+  | Constructor { loc; constr = Left _; arg } -> CLeft (translate_const_exp loc arg)
+  | Constructor { loc; constr = Right _; arg } -> CRight (translate_const_exp loc arg)
 
-  | Apply (Prim_Left, _, [x]) -> CLeft (translate_const_exp loc x)
-  | Apply (Prim_Right, _, [x]) -> CRight (translate_const_exp loc x)
-  | Apply (Prim_Some, _, [x]) -> CSome (translate_const_exp loc x)
-  | Apply (Prim_Cons, _, list) ->
-     CList (List.map (translate_const_exp loc) list)
-  | Apply (Prim_tuple, _, list) ->
-     CTuple (List.map (translate_const_exp loc) list)
+  | Apply { prim = Prim_Left; args = [x] } -> CLeft (translate_const_exp loc x)
+  | Apply { prim = Prim_Right; args = [x] } -> CRight (translate_const_exp loc x)
+  | Apply { prim = Prim_Some; args = [x] } -> CSome (translate_const_exp loc x)
+  | Apply { prim = Prim_Cons; args } ->
+     CList (List.map (translate_const_exp loc) args)
+  | Apply { prim = Prim_tuple; args } ->
+     CTuple (List.map (translate_const_exp loc) args)
 
   | Apply _
-  | Var (_, _)
-  | SetField (_, _, _, _)
-  | Project (_, _, _)
-  | If (_, _, _)
-  | Seq (_, _)
-  | Transfer (_, _, _, _, _)
-  | MatchOption (_, _, _, _, _)
-  | MatchNat (_, _, _, _, _, _)
-  | MatchList (_, _, _, _, _, _)
-  | Loop (_, _, _, _)
-  | Fold (_, _, _, _, _, _)
-  | Map (_, _, _, _, _)
-  | MapFold (_, _, _, _, _, _)
-  | Lambda (_, _, _, _, _)
-  | Closure (_, _, _, _, _, _)
-  | MatchVariant (_, _, _)
-  | Failwith (_, _)
-  | CreateContract (_, _, _)
-  | ContractAt (_, _, _)
-  | Unpack (_, _, _)
+  | Var _
+  | SetField _
+  | Project _
+  | If _
+  | Seq _
+  | Transfer _
+  | MatchOption _
+  | MatchNat _
+  | MatchList _
+  | Loop _
+  | Fold _
+  | Map _
+  | MapFold _
+  | Lambda _
+  | Closure _
+  | MatchVariant _
+  | Failwith _
+  | CreateContract _
+  | ContractAt _
+  | Unpack _
     ->
     LiquidLoc.raise_error ~loc "non-constant expression"
 

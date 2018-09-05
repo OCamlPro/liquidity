@@ -71,7 +71,7 @@ let rec translate_code ~parameter_name ~storage_name code =
 
   let rec compile_desc depth env desc =
     match desc with
-    | Var (name, loc) ->
+    | Var { name; loc } ->
        let pos = try
            StringMap.find name env
          with Not_found ->
@@ -81,42 +81,42 @@ let rec translate_code ~parameter_name ~storage_name code =
        in
        [ dup ~loc (depth - pos) ]
 
-    | Const (loc, ty, cst) ->
-      [ push ~loc ty cst ]
+    | Const { loc; ty; const } ->
+      [ push ~loc ty const ]
 
-    | Project (loc, label, arg) ->
-      begin match arg.ty with
+    | Project { loc; field; record } ->
+      begin match record.ty with
         | Trecord (_, fields) ->
           let n =
             let exception Found of int in
             try
               List.iteri
-                (fun i (l, _) -> if l = label then raise (Found i))
+                (fun i (l, _) -> if l = field then raise (Found i))
                 fields;
               LiquidLoc.raise_error ~loc
-                "Internal Error: field %s not found\n%!" label
+                "Internal Error: field %s not found\n%!" field
             with Found n -> n
           in
           let last_n = List.length fields - 1 in
-          let arg = compile depth env arg in
+          let record = compile depth env record in
           let ins =
             if n = last_n then
-              ii ~loc @@ CDDR (n-1, Some label)
+              ii ~loc @@ CDDR (n-1, Some field)
             else
-              ii ~loc @@ CDAR (n, Some label)
+              ii ~loc @@ CDAR (n, Some field)
           in
-          arg @ [ ins ]
+          record @ [ ins ]
         | _ -> assert false
       end
 
-    | SetField (arg, loc, label, exp) ->
-      begin match arg.ty with
+    | SetField { record; loc; field; set_val } ->
+      begin match record.ty with
         | Trecord (_, fields) ->
-          let arg = compile depth env arg in
+          let record = compile depth env record in
           let fields = List.map fst fields in
           let set_code =
-            compile_record_set ~loc (depth+1) env fields label exp in
-          arg @ set_code
+            compile_record_set ~loc (depth+1) env fields field set_val in
+          record @ set_code
         | _ -> assert false
       end
 
@@ -125,62 +125,62 @@ let rec translate_code ~parameter_name ~storage_name code =
        let e2 = compile depth env e2 in
        e1 @ [ ii ~loc:LiquidLoc.noloc DROP ] @ e2
 
-    | Let (name, _inline, loc, e1, e2) ->
-       let e1 = compile depth env e1 in
-       let env = StringMap.add name depth env in
+    | Let { bnd_var; loc; bnd_val; body } ->
+       let bnd_val = compile depth env bnd_val in
+       let env = StringMap.add bnd_var depth env in
        let depth = depth + 1 in
-       let e2 = compile depth env e2 in
+       let body = compile depth env body in
        let cleanup_stack = [ ii ~loc @@ DIP_DROP (1, 1) ] in
-       e1 @ e2 @ cleanup_stack
+       bnd_val @ body @ cleanup_stack
 
-    | Lambda (arg_name, arg_type, loc, body, res_type) ->
+    | Lambda { arg_name; arg_ty; loc; body; ret_ty } ->
        let env = StringMap.empty in
        let env = StringMap.add arg_name 0 env in
        let depth = 1 in
-       let arg_type = LiquidEncode.encode_type arg_type in
-       let res_type = LiquidEncode.encode_type res_type in
+       let arg_type = LiquidEncode.encode_type arg_ty in
+       let res_type = LiquidEncode.encode_type ret_ty in
        let body = compile depth env body in
        let arg_annot = compile_arg_name arg_name in
        [ ii ~loc @@
          LAMBDA (arg_type, res_type,
                  seq (arg_annot @ body @ [ii ~loc @@ DIP_DROP (1,1)])) ]
 
-    | Closure (arg_name, p_arg_type, loc, call_env, body, res_type) ->
+    | Closure { arg_name; arg_ty; loc; call_env; body; ret_ty } ->
       let call_env_code = match call_env with
         | [] -> assert false
         | [_, e] -> compile depth env e
         | _ -> compile_tuple ~loc depth env (List.rev_map snd call_env)
       in
-      let p_arg_type = LiquidEncode.encode_type p_arg_type in
-      let res_type = LiquidEncode.encode_type res_type in
+      let arg_ty = LiquidEncode.encode_type arg_ty in
+      let ret_ty = LiquidEncode.encode_type ret_ty in
       call_env_code @
       compile_desc depth env
-        (Lambda (arg_name, p_arg_type, loc, body, res_type)) @
+        (Lambda { arg_name; arg_ty; loc; body; ret_ty }) @
       [ ii ~loc PAIR ]
 
-    | If (cond, ifthen, ifelse) ->
+    | If { cond; ifthen; ifelse } ->
       let cond = compile depth env cond in
       let ifthen = compile depth env ifthen in
       let ifelse = compile depth env ifelse in
       let loc = loc_of_many cond in
       cond @ [ ii ~loc @@ IF (seq ifthen, seq ifelse)]
 
-    | Transfer(loc, contract_exp, tez_exp, Some _, arg_exp) ->
+    | Transfer { entry = Some _ } ->
       assert false (* should have been encoded *)
 
-    | Transfer(loc, contract_exp, tez_exp, None, arg_exp) ->
-       let contract = compile depth env contract_exp in
-       let amount = compile (depth+1) env tez_exp in
-       let arg = compile (depth+2) env arg_exp in
+    | Transfer { loc; contract; amount; entry = None; arg } ->
+       let contract = compile depth env contract in
+       let amount = compile (depth+1) env amount in
+       let arg = compile (depth+2) env arg in
        contract @ amount @ arg @ [ ii ~loc TRANSFER_TOKENS ]
 
-    | Failwith (err, loc) ->
-      let err = compile depth env err in
-      err @ [ ii ~loc FAILWITH ]
+    | Failwith { arg; loc } ->
+      let arg = compile depth env arg in
+      arg @ [ ii ~loc FAILWITH ]
 
-    | Apply (Prim_unknown, _loc, args) -> assert false
+    | Apply { prim = Prim_unknown } -> assert false
 
-    | Apply (Prim_exec, loc, [arg; { ty = Tclosure _ } as f]) ->
+    | Apply { prim = Prim_exec; loc; args = [arg; { ty = Tclosure _ } as f] } ->
       let f_env = compile depth env f in
       let arg = compile (depth+1) env arg in
       f_env @ arg @
@@ -188,23 +188,23 @@ let rec translate_code ~parameter_name ~storage_name code =
                      ii ~loc SWAP; ii ~loc @@ CDR None] ] @
       [ ii ~loc PAIR ; ii ~loc EXEC ]
 
-    | Apply (prim, loc, ([_; { ty = Tlambda _ } ] as args)) ->
+    | Apply { prim; loc; args = ([_; { ty = Tlambda _ } ] as args) } ->
       compile_prim ~loc depth env prim args
 
-    | Apply (prim, loc, args) ->
+    | Apply { prim; loc; args } ->
       compile_prim ~loc depth env prim args
 
-    | MatchOption(arg, loc, ifnone, name, ifsome) ->
+    | MatchOption { arg; loc; ifnone; some_name; ifsome } ->
        let arg = compile depth env arg in
        let ifnone = compile depth env ifnone in
-       let env = StringMap.add name depth env in
+       let env = StringMap.add some_name depth env in
        let depth = depth + 1 in
        let ifsome = compile depth env ifsome in
        let loc2, loc3 = loc_of_many ifnone, loc_of_many ifsome in
        let ifsome_end = [ii ~loc:loc3 @@ DIP_DROP(1,1)] in
        arg @ [ ii ~loc @@ IF_NONE (seq ifnone, seq (ifsome @ ifsome_end) )]
 
-    | MatchNat(arg, loc, plus_name, ifplus, minus_name, ifminus) ->
+    | MatchNat { arg; loc; plus_name; ifplus; minus_name; ifminus } ->
        let arg = compile depth env arg in
        let env' = StringMap.add plus_name depth env in
        let ifplus = compile (depth + 1) env' ifplus in
@@ -219,7 +219,7 @@ let rec translate_code ~parameter_name ~storage_name code =
          ii ~loc @@ IF (seq (ifplus @ ifplus_end),
                         seq (ifminus @ ifminus_end) )]
 
-    | MatchList(arg, loc, head_name, tail_name, ifcons, ifnil) ->
+    | MatchList { arg; loc; head_name; tail_name; ifcons; ifnil } ->
        let arg = compile depth env arg in
        let ifnil = compile depth env ifnil in
        let env = StringMap.add tail_name depth env in
@@ -230,7 +230,7 @@ let rec translate_code ~parameter_name ~storage_name code =
        let ifcons_end = [ii ~loc:loc3 @@ DIP_DROP(1,2)] in
        arg @ [ ii ~loc @@ IF_CONS (seq (ifcons @ ifcons_end), seq ifnil )]
 
-    | MatchVariant(arg, loc, cases) ->
+    | MatchVariant { arg; loc; cases } ->
       let arg = compile depth env arg in
       let rec iter cases =
         match cases with
@@ -258,11 +258,11 @@ let rec translate_code ~parameter_name ~storage_name code =
        in
        arg @ iter cases
 
-    | Loop (name, loc, body, arg) ->
+    | Loop { arg_name; loc; body; arg } ->
        let arg = compile depth env arg in
-       let env = StringMap.add name depth env in
+       let env = StringMap.add arg_name depth env in
        let depth = depth + 1 in
-       let arg_annot = compile_arg_name name in
+       let arg_annot = compile_arg_name arg_name in
        let body = compile depth env body in
        let body_end = [ ii ~loc @@ DIP_DROP (1,1);
                         ii ~loc @@ DUP 1;
@@ -272,13 +272,13 @@ let rec translate_code ~parameter_name ~storage_name code =
        @ [ ii ~loc @@ PUSH (Tbool, CBool true) ]
        @ [ ii ~loc @@ LOOP (seq (arg_annot @ body @ body_end)) ]
 
-    | Fold (prim, name, loc, body, arg, acc) ->
+    | Fold { prim; arg_name; loc; body; arg; acc } ->
       let acc = compile depth env acc in
       let depth = depth + 1 in
       let arg = compile depth env arg in
-      let env = StringMap.add name depth env in
+      let env = StringMap.add arg_name depth env in
       let depth = depth + 1 in
-      let arg_annot = compile_arg_name name in
+      let arg_annot = compile_arg_name arg_name in
       let body = compile depth env body in
       let body_begin = match prim with
         | Prim_map_iter | Prim_set_iter | Prim_list_iter ->
@@ -290,23 +290,23 @@ let rec translate_code ~parameter_name ~storage_name code =
       acc @ arg @
       [ii ~loc @@ ITER (seq (arg_annot @ body_begin @ body @ body_end))]
 
-    | Map (_prim, name, loc, body, arg) ->
+    | Map { arg_name; loc; body; arg } ->
       let arg = compile depth env arg in
-      let env = StringMap.add name depth env in
+      let env = StringMap.add arg_name depth env in
       let depth = depth + 1 in
-      let arg_annot = compile_arg_name name in
+      let arg_annot = compile_arg_name arg_name in
       let body = compile depth env body in
       let body_end = [ ii ~loc @@ DIP_DROP (1,1) ] in
       arg @
       [ii ~loc @@ MAP (seq (arg_annot @ body @ body_end))]
 
-    | MapFold (_prim, name, loc, body, arg, acc) ->
+    | MapFold { arg_name; loc; body; arg; acc } ->
       let acc = compile depth env acc in
       let depth = depth + 1 in
       let arg = compile depth env arg in
-      let env = StringMap.add name depth env in
+      let env = StringMap.add arg_name depth env in
       let depth = depth + 1 in
-      let arg_annot = compile_arg_name name in
+      let arg_annot = compile_arg_name arg_name in
       let body = compile depth env body in
       let body_begin = [ dip ~loc 1 [ii ~loc @@ DUP 1]; ii ~loc PAIR ] in
       let body_end = [
@@ -320,7 +320,7 @@ let rec translate_code ~parameter_name ~storage_name code =
        ii ~loc PAIR ]
       (* TODO check this *)
 
-    | CreateContract (loc, args, contract) ->
+    | CreateContract { loc; args; contract } ->
       let _depth, args_code = compile_args depth env args in
       let mic_contract = translate contract in
       let contract_code = ii ~loc @@ CREATE_CONTRACT mic_contract in
@@ -330,17 +330,17 @@ let rec translate_code ~parameter_name ~storage_name code =
       args_code @
       [contract_code; ii ~loc PAIR]
 
-    | ContractAt (loc, addr, csig) ->
-      let param_ty = LiquidEncode.encode_contract_sig csig in
-      compile depth env addr @
+    | ContractAt { loc; arg; c_sig } ->
+      let param_ty = LiquidEncode.encode_contract_sig c_sig in
+      compile depth env arg @
       [ ii ~loc (CONTRACT param_ty) ]
 
-    | Unpack (loc, e, ty) ->
+    | Unpack { loc; arg; ty } ->
       let ty = LiquidEncode.encode_type ty in
-      compile depth env e @
+      compile depth env arg @
       [ ii ~loc (UNPACK ty) ]
 
-    | Record (loc, fields) ->
+    | Record { loc; fields } ->
       compile_record ~loc depth env fields
 
     (* removed during typechecking, replaced by tuple *)
@@ -353,7 +353,7 @@ let rec translate_code ~parameter_name ~storage_name code =
        compile_tuple ~loc depth env (List.rev args)
 
     | Prim_tuple_get,
-      [arg; { desc = Const (loc, _, (CInt n | CNat n))} ] ->
+      [arg; { desc = Const { loc; const = CInt n | CNat n }}] ->
        let size = size_of_type arg.ty in
        let arg = compile depth env arg in
        let n = LiquidPrinter.int_of_integer n in
@@ -367,7 +367,7 @@ let rec translate_code ~parameter_name ~storage_name code =
     | Prim_tuple_get, _ -> assert false
 
     | Prim_tuple_set,
-      [x; { desc = Const (loc, _, (CInt n | CNat n))}; y ] ->
+      [x; { desc = Const { loc; const = CInt n | CNat n }}; y ] ->
       let x_code = compile depth env x in
       let n = LiquidPrinter.int_of_integer n in
       let size = size_of_type x.ty in
@@ -384,14 +384,14 @@ let rec translate_code ~parameter_name ~storage_name code =
     | Prim_source, _ -> [ ii SOURCE ]
     | Prim_sender, _ -> [ ii SENDER ]
 
-    | Prim_Left, [ arg; { desc = Apply (Prim_unused constr, _, _);
+    | Prim_Left, [ arg; { desc = Apply { prim = Prim_unused constr };
                           ty = right_ty }] ->
       let right_ty = LiquidEncode.encode_type right_ty in
       compile depth env arg @
       [ ii (LEFT (right_ty, constr)) ]
     | Prim_Left, _ -> assert false
 
-    | Prim_Right, [ arg; { desc = Apply (Prim_unused constr, _, _);
+    | Prim_Right, [ arg; { desc = Apply { prim = Prim_unused constr };
                            ty = left_ty } ] ->
       let left_ty = LiquidEncode.encode_type left_ty in
       compile depth env arg @
@@ -399,7 +399,7 @@ let rec translate_code ~parameter_name ~storage_name code =
     | Prim_Right, _ -> assert false
 
     (* catch the special case of [a;b;c] where
-the ending NIL is not annotated with a type *)
+       the ending NIL is not annotated with a type *)
     | Prim_Cons, [ { ty } as arg; { ty = Tunit } ] ->
       let ty = LiquidEncode.encode_type ty in
       let arg = compile (depth+1) env arg in
