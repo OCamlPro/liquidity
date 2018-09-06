@@ -14,46 +14,48 @@ type init =
                   LiquidTypes.loc_michelson_contract)
 
 let c_empty_op ~loc =
-  mk (Const { loc; ty = Tlist Toperation; const = CList []})  ()
+  mk ~loc (Const { ty = Tlist Toperation; const = CList []})  ()
 let mk_nat ~loc i =
-  mk
-    (Const { loc; ty = Tnat; const = CNat (LiquidPrinter.integer_of_int i) })
+  mk ~loc
+    (Const { ty = Tnat; const = CNat (LiquidPrinter.integer_of_int i) })
     ()
 
 let rec subst_empty_big_map code =
   let empty_big_map loc =
-    let storage_var = mk (Var { name = "_storage"; loc }) () in
-    Apply { prim = Prim_tuple_get; loc; args = [storage_var; mk_nat ~loc 0] }
+    let storage_var = mk ~loc (Var "_storage") () in
+    Apply { prim = Prim_tuple_get; args = [storage_var; mk_nat ~loc 0] }
   in
   let desc = code.desc in
+  let loc = code.loc in
   let desc = match desc with
-    | Const { loc; const = CBigMap [] } ->
+    | Const { const = CBigMap [] } ->
       empty_big_map loc
-    | Const { loc; const = CBigMap _ } ->
+    | Const { const = CBigMap _ } ->
       LiquidLoc.raise_error ~loc
         "Only use empty big map constants in storage initializer"
     | Const _ -> desc
     | Transfer _ -> assert false
     | Var _ -> desc
 
-    | Failwith { arg; loc } ->
+    | Failwith arg ->
       let arg' = subst_empty_big_map arg in
-      if arg == arg' then desc else Failwith { arg = arg'; loc }
+      if arg == arg' then desc else Failwith arg'
 
-    | Project { loc; field; record } ->
+
+    | Project { field; record } ->
       let record' = subst_empty_big_map record in
       if record == record' then desc
-      else Project { loc; field; record = record' }
+      else Project { field; record = record' }
 
-    | SetField { record = e1; loc; field; set_val = e2 } ->
+    | SetField { record = e1; field; set_val = e2 } ->
       let e1' = subst_empty_big_map e1 in
       let e2' = subst_empty_big_map e2 in
       if e1 == e1' && e2 == e2' then desc
-      else SetField { record = e1'; loc; field; set_val = e2' }
+      else SetField { record = e1'; field; set_val = e2' }
 
-    | Constructor { loc; constr; arg } ->
+    | Constructor { constr; arg } ->
       let arg' = subst_empty_big_map arg in
-      if arg == arg' then desc else Constructor { loc; constr; arg = arg' }
+      if arg == arg' then desc else Constructor { constr; arg = arg' }
 
     | Lambda l ->
       let e' = subst_empty_big_map l.body in
@@ -64,17 +66,17 @@ let rec subst_empty_big_map code =
       let e2' = subst_empty_big_map e2 in
       if e1 == e1' && e2 == e2' then desc else Seq (e1', e2')
 
-    | Let { bnd_var; inline; loc; bnd_val = e1; body = e2 } ->
+    | Let { bnd_var; inline; bnd_val = e1; body = e2 } ->
       let e1' = subst_empty_big_map e1 in
       let e2' = subst_empty_big_map e2 in
       if e1 == e1' && e2 == e2' then desc
-      else Let { bnd_var; inline; loc; bnd_val = e1'; body = e2' }
+      else Let { bnd_var; inline; bnd_val = e1'; body = e2' }
 
-    | Loop { arg_name; loc; body = e1; arg = e2 } ->
+    | Loop { arg_name; body = e1; arg = e2 } ->
       let e1' = subst_empty_big_map e1 in
       let e2' = subst_empty_big_map e2 in
       if e1 == e1' && e2 == e2' then desc
-      else Loop { arg_name; loc; body = e1'; arg = e2' }
+      else Loop { arg_name; body = e1'; arg = e2' }
 
     | If { cond = e1; ifthen = e2; ifelse = e3 } ->
       let e1' = subst_empty_big_map e1 in
@@ -83,96 +85,96 @@ let rec subst_empty_big_map code =
       if e1 == e1' && e2 == e2' && e3 == e3' then desc
       else If { cond = e1'; ifthen = e2'; ifelse = e3' }
 
-    | MatchOption { arg = e1; loc; ifnone = e2; some_name; ifsome = e3 } ->
+    | MatchOption { arg = e1; ifnone = e2; some_name; ifsome = e3 } ->
       let e1' = subst_empty_big_map e1 in
       let e2' = subst_empty_big_map e2 in
       let e3' = subst_empty_big_map e3 in
       if e1 == e1' && e2 == e2' && e3 == e3' then desc
-      else MatchOption { arg = e1'; loc; ifnone = e2'; some_name; ifsome = e3' }
+      else MatchOption { arg = e1'; ifnone = e2'; some_name; ifsome = e3' }
 
-    | MatchNat { arg = e1; loc;
+    | MatchNat { arg = e1;
                  plus_name; ifplus = e2;
                  minus_name; ifminus = e3 } ->
       let e1' = subst_empty_big_map e1 in
       let e2' = subst_empty_big_map e2 in
       let e3' = subst_empty_big_map e3 in
       if e1 == e1' && e2 == e2' && e3 == e3' then desc
-      else MatchNat { arg = e1'; loc;
+      else MatchNat { arg = e1';
                       plus_name; ifplus = e2';
                       minus_name; ifminus = e3' }
 
-    | MatchList { arg = e1; loc;
+    | MatchList { arg = e1;
                   head_name; tail_name; ifcons = e2; ifnil = e3 } ->
       let e1' = subst_empty_big_map e1 in
       let e2' = subst_empty_big_map e2 in
       let e3' = subst_empty_big_map e3 in
       if e1 == e1' && e2 == e2' && e3 == e3' then desc
-      else MatchList { arg = e1; loc;
+      else MatchList { arg = e1;
                        head_name; tail_name; ifcons = e2'; ifnil = e3' }
 
-    | Fold { prim; arg_name; loc; body = e1; arg = e2; acc = e3 } ->
+    | Fold { prim; arg_name; body = e1; arg = e2; acc = e3 } ->
       let e1' = subst_empty_big_map e1 in
       let e2' = subst_empty_big_map e2 in
       let e3' = subst_empty_big_map e3 in
       if e1 == e1' && e2 == e2' && e3 == e3' then desc
-      else Fold { prim; arg_name; loc; body = e1'; arg = e2'; acc = e3' }
+      else Fold { prim; arg_name; body = e1'; arg = e2'; acc = e3' }
 
-    | Map { prim; arg_name; loc; body = e1; arg = e2 } ->
+    | Map { prim; arg_name; body = e1; arg = e2 } ->
       let e1' = subst_empty_big_map e1 in
       let e2' = subst_empty_big_map e2 in
       if e1 == e1' && e2 == e2' then desc
-      else Map { prim; arg_name; loc; body = e1'; arg = e2' }
+      else Map { prim; arg_name; body = e1'; arg = e2' }
 
-    | MapFold { prim; arg_name; loc; body = e1; arg = e2; acc = e3 } ->
+    | MapFold { prim; arg_name; body = e1; arg = e2; acc = e3 } ->
       let e1' = subst_empty_big_map e1 in
       let e2' = subst_empty_big_map e2 in
       let e3' = subst_empty_big_map e3 in
       if e1 == e1' && e2 == e2' && e3 == e3' then desc
-      else MapFold { prim; arg_name; loc; body = e1'; arg = e2'; acc = e3' }
+      else MapFold { prim; arg_name; body = e1'; arg = e2'; acc = e3' }
 
-    | Apply { prim; loc; args } ->
+    | Apply { prim; args } ->
       let args' = List.map subst_empty_big_map args in
       if List.for_all2 (==) args args' then desc
-      else Apply { prim; loc; args = args' }
+      else Apply { prim; args = args' }
 
-    | Closure { arg_name; arg_ty; loc; call_env; body; ret_ty } ->
+    | Closure { arg_name; arg_ty; call_env; body; ret_ty } ->
       let body' = subst_empty_big_map body in
       let call_env' =
         List.map (fun (x, e) -> x, subst_empty_big_map e) call_env in
       if body == body' &&
          List.for_all2 (fun (_, e) (_, e') -> e == e') call_env call_env'
       then desc
-      else Closure { arg_name; arg_ty; loc;
+      else Closure { arg_name; arg_ty;
                      call_env = call_env'; body = body'; ret_ty }
 
-    | Record { loc; fields } ->
+    | Record fields ->
       let fields' = List.map (fun (x, e) -> x, subst_empty_big_map e) fields in
       if List.for_all2 (fun (_, e) (_, e') -> e == e') fields fields'
       then desc
-      else Record { loc; fields = fields' }
+      else Record fields'
 
-    | MatchVariant { arg; loc; cases } ->
+    | MatchVariant { arg; cases } ->
       let arg' = subst_empty_big_map arg in
       let cases' = List.map (fun (x, e) -> x, subst_empty_big_map e) cases in
       if arg == arg' &&
          List.for_all2 (fun (_, e) (_, e') -> e == e') cases cases'
       then desc
-      else MatchVariant { arg = arg'; loc; cases = cases' }
+      else MatchVariant { arg = arg'; cases = cases' }
 
-    | CreateContract { loc; args; contract } ->
+    | CreateContract { args; contract } ->
       let args' = List.map subst_empty_big_map args in
       if List.for_all2 (==) args args' then desc
-      else CreateContract { loc; args = args'; contract }
+      else CreateContract { args = args'; contract }
 
-    | ContractAt { loc; arg; c_sig } ->
+    | ContractAt { arg; c_sig } ->
       let arg' = subst_empty_big_map arg in
       if arg == arg' then desc
-      else ContractAt { loc; arg = arg'; c_sig }
+      else ContractAt { arg = arg'; c_sig }
 
-    | Unpack { loc; arg; ty } ->
+    | Unpack { arg; ty } ->
       let arg' = subst_empty_big_map arg in
       if arg == arg' then desc
-      else Unpack { loc; arg = arg'; ty }
+      else Unpack { arg = arg'; ty }
 
   in
   if desc == code.desc then
@@ -185,22 +187,25 @@ let rec subst_empty_big_map code =
 
 let tmp_contract_of_init ~loc init storage_ty =
   let storage = storage_ty in
-  let parameter_var = mk (Var { name = "_parameter"; loc }) () in
+  let parameter_var = mk ~loc (Var "_parameter") () in
   let parameter, code = match init.init_args with
     | [] -> Tunit, init.init_body
     | [arg, loc, ty] ->
-      let code = mk (Let { bnd_var = arg; inline = false; loc;
-                           bnd_val = parameter_var;
-                           body = init.init_body }) () in
+      let code = mk ~loc
+          (Let { bnd_var = { nname = arg; nloc = loc };
+                 inline = false;
+                 bnd_val = parameter_var;
+                 body = init.init_body }) () in
       ty, code
     | args ->
       let parameter = Ttuple (List.map (fun (_,_,ty) -> ty) args) in
       let code, _ = List.fold_right (fun (arg, loc, ty) (code, i) ->
           let i = i - 1 in
-          let code = mk (
-              Let { bnd_var = arg; inline = false; loc;
-                    bnd_val = mk (Apply {
-                        prim = Prim_tuple_get; loc;
+          let code = mk ~loc (
+              Let { bnd_var = { nname = arg; nloc = loc };
+                    inline = false;
+                    bnd_val = mk ~loc (Apply {
+                        prim = Prim_tuple_get;
                         args = [parameter_var; mk_nat ~loc i] })
                         ();
                     body = code }) ()
@@ -213,8 +218,8 @@ let tmp_contract_of_init ~loc init storage_ty =
   (* Empty big map is fetched in given storage which is always empty *)
   let code = subst_empty_big_map code in
   let code =
-    mk (Apply { prim = Prim_tuple; loc;
-                args = [ c_empty_op ~loc; code ] }) () in
+    mk ~loc (Apply { prim = Prim_tuple;
+                     args = [ c_empty_op ~loc; code ] }) () in
   { contract_name = "_dummy_init";
     storage;
     values = [];
@@ -226,7 +231,7 @@ let tmp_contract_of_init ~loc init storage_ty =
   }
 
 let compile_liquid_init env contract storage_ty init (* ((args, sy_init) as init) *) =
-  let loc = LiquidCheck.loc_exp init.init_body in
+  let loc = init.init_body.loc in
   if init.init_body.transfer then
     LiquidLoc.raise_error ~loc
       "No transfer allowed in storage initializer";
@@ -235,7 +240,7 @@ let compile_liquid_init env contract storage_ty init (* ((args, sy_init) as init
     let ty_init = LiquidCheck.typecheck_code tenv
         ~expected_ty:storage_ty init.init_body in
     let enc_init = LiquidEncode.encode_code tenv ty_init in
-    let c_init = LiquidData.translate_const_exp loc enc_init in
+    let c_init = LiquidData.translate_const_exp enc_init in
     Init_constant c_init
   (* let s = LiquidPrinter.Michelson.line_of_const c_init in
    * let output = env.filename ^ ".init.tz" in

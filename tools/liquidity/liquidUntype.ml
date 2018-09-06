@@ -13,7 +13,7 @@
 
 open LiquidTypes
 
-let mk desc ty = mk desc ty
+let mk ~loc desc ty = mk ~loc desc ty
 
 type env = {
     env_map : string StringMap.t;
@@ -31,6 +31,9 @@ let new_binding tyvar var env =
     env_revmap = StringMap.add var tyvar env.env_revmap;
   }
 
+let new_lbinding tyvar var env =
+  new_binding tyvar.nname var.nname env
+
 let find_name env name =
   try
     StringMap.find name env.env_map
@@ -43,6 +46,9 @@ let base_of_var arg =
     String.sub arg 0 pos
   with Not_found ->
     raise (Invalid_argument ("base_of_var: "^arg))
+
+let base_of_lvar arg =
+  { arg with nname = base_of_var arg.nname }
 
 let escape_var arg =
   try
@@ -74,6 +80,10 @@ let find_free env var_arg bv =
   let env' = new_binding var_arg var_arg' env in
   (var_arg', env')
 
+let find_lfree env v bv =
+  let (nv, env) = find_free env v.nname bv in
+  { v with nname = nv}, env
+
 (* To improve the naming of variables, we compute bound-variables for their
 scopes. Unfortunately, without hash-consing, this can be quite expensive.
  *)
@@ -87,107 +97,105 @@ let rec untype (env : env) (code : (datatype, 'a) exp) : (datatype, 'b) exp =
            ifelse = untype env ifelse }
     | Seq (x, y) -> Seq (untype env x, untype env y)
     | Const c -> Const c
-    | Failwith { arg; loc } -> Failwith { arg = untype env arg; loc }
+    | Failwith arg -> Failwith (untype env arg)
 
-    | Apply { prim = Prim_Left; loc; args =  [arg; unused] } ->
-       Constructor { loc; constr = Left unused.ty; arg = untype env arg }
-    | Apply { prim = Prim_Right; loc; args = [arg; unused] } ->
-       Constructor { loc; constr = Right unused.ty; arg =  untype env arg }
-    | Apply { prim; loc; args } ->
-      Apply { prim; loc; args = List.map (untype env) args }
+    | Apply { prim = Prim_Left; args =  [arg; unused] } ->
+       Constructor { constr = Left unused.ty; arg = untype env arg }
+    | Apply { prim = Prim_Right; args = [arg; unused] } ->
+       Constructor { constr = Right unused.ty; arg =  untype env arg }
+    | Apply { prim; args } ->
+      Apply { prim; args = List.map (untype env) args }
 
-    | Lambda { arg_name; arg_ty; loc; body } ->
-       let base = base_of_var arg_name in
+    | Lambda { arg_name; arg_ty; body } ->
+       let base = base_of_lvar arg_name in
        let env = empty_env () in
-       let env = new_binding arg_name base env in
-       Lambda { arg_name = base; arg_ty; loc;
+       let env = new_lbinding arg_name base env in
+       Lambda { arg_name = base; arg_ty;
                 body = untype env body; ret_ty = Tunit }
 
-    | Closure { arg_name; arg_ty; loc; call_env; body } ->
+    | Closure { arg_name; arg_ty; call_env; body } ->
        let call_env = List.map (fun (name, t) -> name, untype env t) call_env in
-       let base = base_of_var arg_name in
+       let base = base_of_lvar arg_name in
        let env = empty_env () in
-       let env = new_binding arg_name base env in
-       Closure { arg_name = base; arg_ty; loc; call_env;
+       let env = new_lbinding arg_name base env in
+       Closure { arg_name = base; arg_ty; call_env;
                  body = untype env body; ret_ty = Tunit }
 
-    | Var { name; loc } ->
+    | Var name ->
        let name = find_name env name in
-       Var { name; loc }
+       Var name
 
-    | Project { loc; field; record } ->
-      Project { loc; field; record = untype env record }
+    | Project { field; record } ->
+      Project { field; record = untype env record }
 
-    | SetField { record; loc; field; set_val } ->
+    | SetField { record; field; set_val } ->
       SetField { record = untype env record;
-                 loc;
                  field;
                  set_val = untype env set_val }
 
-    | Loop { arg_name; loc; body; arg } ->
+    | Loop { arg_name; body; arg } ->
        let arg = untype env arg in
-       let (arg_name, env) = find_free env arg_name body.bv in
+       let (arg_name, env) = find_lfree env arg_name body.bv in
        let body = untype env body in
-       Loop { arg_name; loc; body; arg }
+       Loop { arg_name; body; arg }
 
-    | Fold { prim; arg_name; loc; body; arg; acc } ->
-       let arg = untype env arg in
-       let acc = untype env acc in
-       let (arg_name, env) = find_free env arg_name body.bv in
-       let body = untype env body in
-       Fold { prim; arg_name; loc; body; arg; acc }
-
-    | Map { prim; arg_name; loc; body; arg } ->
-       let arg = untype env arg in
-       let (arg_name, env) = find_free env arg_name body.bv in
-       let body = untype env body in
-       Map { prim; arg_name; loc; body; arg }
-
-    | MapFold { prim; arg_name; loc; body; arg; acc } ->
+    | Fold { prim; arg_name; body; arg; acc } ->
        let arg = untype env arg in
        let acc = untype env acc in
-       let (arg_name, env) = find_free env arg_name body.bv in
+       let (arg_name, env) = find_lfree env arg_name body.bv in
        let body = untype env body in
-       MapFold { prim; arg_name; loc; body; arg; acc }
+       Fold { prim; arg_name; body; arg; acc }
 
-    | Let { bnd_var; inline; loc; bnd_val; body } ->
+    | Map { prim; arg_name; body; arg } ->
+       let arg = untype env arg in
+       let (arg_name, env) = find_lfree env arg_name body.bv in
+       let body = untype env body in
+       Map { prim; arg_name; body; arg }
+
+    | MapFold { prim; arg_name; body; arg; acc } ->
+       let arg = untype env arg in
+       let acc = untype env acc in
+       let (arg_name, env) = find_lfree env arg_name body.bv in
+       let body = untype env body in
+       MapFold { prim; arg_name; body; arg; acc }
+
+    | Let { bnd_var; inline; bnd_val; body } ->
        let bnd_val = untype env bnd_val in
-       let (bnd_var, env) = find_free env bnd_var body.bv in
+       let (bnd_var, env) = find_lfree env bnd_var body.bv in
        let body = untype env body in
-       Let { bnd_var; inline; loc; bnd_val; body }
+       Let { bnd_var; inline; bnd_val; body }
 
-    | MatchOption { arg; loc; ifnone; some_name; ifsome } ->
+    | MatchOption { arg; ifnone; some_name; ifsome } ->
       let arg = untype env arg in
       let ifnone = untype env ifnone in
-      let (some_name, env) = find_free env some_name ifsome.bv in
+      let (some_name, env) = find_lfree env some_name ifsome.bv in
       let ifsome = untype env ifsome in
-      MatchOption { arg; loc; ifnone; some_name; ifsome }
+      MatchOption { arg; ifnone; some_name; ifsome }
 
-    | MatchNat { arg; loc; plus_name; ifplus; minus_name; ifminus } ->
-      let (plus_name, env') = find_free env plus_name ifplus.bv in
-      let (minus_name, env'') = find_free env minus_name ifminus.bv in
+    | MatchNat { arg; plus_name; ifplus; minus_name; ifminus } ->
+      let (plus_name, env') = find_lfree env plus_name ifplus.bv in
+      let (minus_name, env'') = find_lfree env minus_name ifminus.bv in
       let arg = untype env arg in
       let ifplus = untype env' ifplus in
       let ifminus = untype env'' ifminus in
-      MatchNat { arg; loc; plus_name; ifplus; minus_name; ifminus }
+      MatchNat { arg; plus_name; ifplus; minus_name; ifminus }
 
-    | MatchList { arg; loc; head_name; tail_name; ifcons; ifnil } ->
+    | MatchList { arg; head_name; tail_name; ifcons; ifnil } ->
       let arg = untype env arg in
       let ifnil = untype env ifnil in
       let bv = ifcons.bv in
-      let (head_name, env) = find_free env head_name bv in
-      let (tail_name, env) = find_free env tail_name bv in
+      let (head_name, env) = find_lfree env head_name bv in
+      let (tail_name, env) = find_lfree env tail_name bv in
       let ifcons = untype env ifcons in
-      MatchList { arg; loc; head_name; tail_name; ifcons; ifnil }
+      MatchList { arg; head_name; tail_name; ifcons; ifnil }
 
-    | Transfer { loc; contract; amount; entry; arg } ->
-      Transfer { loc;
-                 contract = untype env contract;
+    | Transfer { contract; amount; entry; arg } ->
+      Transfer { contract = untype env contract;
                  amount = untype env amount;
                  entry;
                  arg = untype env arg }
 
-    | MatchVariant { arg; loc; cases } ->
+    | MatchVariant { arg; cases } ->
       let arg = untype env arg in
       let cases = List.map (function
           | CConstr (c, vars), body ->
@@ -195,24 +203,23 @@ let rec untype (env : env) (code : (datatype, 'a) exp) : (datatype, 'b) exp =
             CConstr (c, vars), body
           | CAny, body -> CAny, untype env body
         ) cases in
-      MatchVariant { arg; loc; cases }
+      MatchVariant { arg; cases }
 
-    | Constructor { loc; constr; arg } ->
-      Constructor { loc; constr; arg = untype env arg }
+    | Constructor { constr; arg } ->
+      Constructor { constr; arg = untype env arg }
 
-    | CreateContract { loc; args; contract } ->
-      CreateContract { loc;
-                       args = List.map (untype env) args;
+    | CreateContract { args; contract } ->
+      CreateContract { args = List.map (untype env) args;
                        contract = untype_contract contract }
 
-    | ContractAt { loc; arg; c_sig } ->
-      ContractAt { loc; arg = untype env arg; c_sig }
+    | ContractAt { arg; c_sig } ->
+      ContractAt { arg = untype env arg; c_sig }
 
-    | Unpack { loc; arg; ty } ->
-      Unpack { loc; arg = untype env arg; ty }
+    | Unpack { arg; ty } ->
+      Unpack { arg = untype env arg; ty }
 
-    | Record { loc; fields } ->
-      Record { loc; fields = List.map (fun (l, e) -> l, untype env e) fields }
+    | Record fields ->
+      Record (List.map (fun (l, e) -> l, untype env e) fields)
 
     (* | _ ->
      *
@@ -221,7 +228,7 @@ let rec untype (env : env) (code : (datatype, 'a) exp) : (datatype, 'b) exp =
      *      (LiquidPrinter.Liquid.string_of_code code) *)
 
   in
-  mk desc code.ty
+  mk ~loc:code.loc desc code.ty
 
 and untype_case env vars arg =
   let bv = arg.bv in

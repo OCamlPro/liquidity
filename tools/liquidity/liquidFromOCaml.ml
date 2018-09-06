@@ -609,7 +609,7 @@ and translate_pair exp =
   | _ -> error_loc exp.pexp_loc "pair expected"
 
 
-let mk desc = mk desc ()
+let mk ~loc desc = mk ~loc desc ()
 
 let vars_info_pat env pat =
   let rec vars_info_pat_aux acc indexes = function
@@ -638,32 +638,39 @@ let vars_info_pat env pat =
   vars_info_pat_aux [] [] pat
 
 let access_of_deconstruct var_name loc indexes =
-  let a = mk (Var { name = var_name; loc }) in
+  let a = mk ~loc (Var var_name) in
   List.fold_right (fun i a ->
-      mk (Apply { prim = Prim_tuple_get; loc;
-                  args = [
-                    a;
-                    mk (Const { loc; ty = Tnat;
-                                const = CNat (LiquidPrinter.integer_of_int i) })
-                  ] })
+      mk ~loc (Apply {
+          prim = Prim_tuple_get;
+          args = [
+            a;
+            mk ~loc (Const { ty = Tnat;
+                             const = CNat (LiquidPrinter.integer_of_int i) })
+          ] })
     ) indexes a
 
 let deconstruct_pat env pat e =
   let vars_infos, ty = vars_info_pat env pat in
   match vars_infos with
   | [] -> assert false
-  | [v, _loc, []] -> v, ty, e
+  | [nname, nloc, []] -> { nname; nloc }, ty, e
   | _ ->
     let var_name =
       String.concat "_" ( "" :: (List.rev_map (fun (v,_,_) -> v) vars_infos)) in
     let e =
       List.fold_left (fun e (v, loc, indexes) ->
           let access = access_of_deconstruct var_name loc indexes in
-          mk (Let { bnd_var = v; inline = false; loc;
-                    bnd_val = access; body = e })
+          mk ~loc (Let { bnd_var = { nname = v; nloc = loc };
+                         inline = false;
+                         bnd_val = access; body = e })
         ) e vars_infos
     in
-    var_name, ty, e
+    let nloc = match vars_infos, List.rev vars_infos with
+      | (_, first_loc, _) :: _, (_, last_loc, _) :: _ ->
+        LiquidLoc.merge first_loc last_loc
+      | _ -> assert false
+    in
+    ({ nname = var_name; nloc }, ty, e)
 
 let order_labelled_args loc labels args =
   let labelled_exps, args =
@@ -767,12 +774,12 @@ let rec translate_code contracts env exp =
   let desc =
     match exp with
     | { pexp_desc = Pexp_ident ( { txt = var } ) } ->
-      Var { name = str_of_id var; loc }
+      Var (str_of_id var)
 
     | { pexp_desc = Pexp_field (exp, { txt = label }) } ->
       let field = str_of_id label in
       let record = translate_code contracts env exp in
-      Project { loc; field; record }
+      Project { field; record }
 
     | { pexp_desc = Pexp_setfield (exp, { txt = label }, arg) } ->
       let field = str_of_id label in
@@ -781,15 +788,15 @@ let rec translate_code contracts env exp =
       let rec set_field record loc field set_val =
         match record.desc with
         | Project p ->
-          let set_val = mk (SetField { record; loc; field; set_val }) in
-          set_field p.record p.loc p.field set_val
-        | _ -> SetField { record; loc; field; set_val } in
+          let set_val = mk ~loc (SetField { record; field; set_val }) in
+          set_field p.record record.loc p.field set_val
+        | _ -> SetField { record; field; set_val } in
       set_field record loc field set_val
 
     | { pexp_desc = Pexp_ifthenelse (e1, e2, None) } ->
       If { cond = translate_code contracts env e1;
            ifthen = translate_code contracts env e2;
-           ifelse = mk (Const { loc; ty = Tunit; const = CUnit }) }
+           ifelse = mk ~loc (Const { ty = Tunit; const = CUnit }) }
     | { pexp_desc = Pexp_ifthenelse (e1, e2, Some e3) } ->
       If { cond = translate_code contracts env e1;
            ifthen = translate_code contracts env e2;
@@ -805,11 +812,10 @@ let rec translate_code contracts env exp =
         match order_labelled_args pexp_loc ["dest"; "amount"] args with
         | [c; a] -> c, a
         | _ -> assert false in
-      Transfer { loc;
-                contract = translate_code contracts env contract;
-                amount = translate_code contracts env amount;
-                entry = None;
-                arg = mk (Const { loc; ty = Tunit; const = CUnit }) }
+      Transfer { contract = translate_code contracts env contract;
+                 amount = translate_code contracts env amount;
+                 entry = None;
+                 arg = mk ~loc (Const { ty = Tunit; const = CUnit }) }
 
     | { pexp_desc =
           Pexp_apply (
@@ -823,8 +829,7 @@ let rec translate_code contracts env exp =
         with
         | [c; t; a] -> c, t, a
         | _ -> assert false in
-      Transfer { loc;
-                 contract = translate_code contracts env contract;
+      Transfer { contract = translate_code contracts env contract;
                  amount = translate_code contracts env amount;
                  entry = None;
                  arg = translate_code contracts env arg }
@@ -842,8 +847,7 @@ let rec translate_code contracts env exp =
         | [c; t; { pexp_desc = Pexp_ident { txt = e }}; a] ->
           c, t, str_of_id e, a
         | _ -> error_loc pexp_loc "wrong arguments" in
-      Transfer { loc;
-                 contract = translate_code contracts env contract;
+      Transfer { contract = translate_code contracts env contract;
                  amount = translate_code contracts env amount;
                  entry = Some entry;
                  arg = translate_code contracts env arg }
@@ -881,8 +885,7 @@ let rec translate_code contracts env exp =
           (d, m, de, s, a, st, contract)
         | _ -> error_loc pexp_loc "wrong arguments for Contract.create" in
       CreateContract
-        { loc;
-          args = [translate_code contracts env manager_exp;
+        { args = [translate_code contracts env manager_exp;
                   translate_code contracts env delegate_exp;
                   translate_code contracts env spendable_exp;
                   translate_code contracts env delegatable_exp;
@@ -918,7 +921,7 @@ let rec translate_code contracts env exp =
         | _ -> error_loc pty.ptyp_loc
                  "Contract.at type must be (contract C) option for some C"
       in
-      ContractAt { loc; arg =  translate_code contracts env addr_exp; c_sig }
+      ContractAt { arg =  translate_code contracts env addr_exp; c_sig }
 
     | { pexp_desc =
           Pexp_apply (
@@ -947,7 +950,7 @@ let rec translate_code contracts env exp =
         | _ -> error_loc pty.ptyp_loc
                  "Bytes.unpack type must be 'a option for some 'a"
       in
-      Unpack { loc; arg = translate_code contracts env exp; ty }
+      Unpack { arg = translate_code contracts env exp; ty }
 
     | { pexp_desc =
           Pexp_apply (
@@ -971,7 +974,7 @@ let rec translate_code contracts env exp =
       let inline = match attrs with
         | [ { txt = "inline"} , PStr [] ] -> true
         | _ -> false in
-      Let { bnd_var; inline; loc = loc_of_loc pat.ppat_loc; bnd_val; body }
+      Let { bnd_var; inline; bnd_val; body }
 
     | { pexp_desc = Pexp_sequence (exp1, exp2) } ->
       Seq (translate_code contracts env exp1, translate_code contracts env exp2)
@@ -987,7 +990,7 @@ let rec translate_code contracts env exp =
         pexp_loc
       } ->
       let arg = translate_code contracts env err in
-      Failwith { arg; loc }
+      Failwith arg
 
     | { pexp_desc =
           Pexp_apply (
@@ -1004,7 +1007,8 @@ let rec translate_code contracts env exp =
       ]) } ->
       let arg_name, body =
         match pat.ppat_desc with
-        | Ppat_var { txt = name } -> name, body
+        | Ppat_var { txt = name } ->
+          { nname = name; nloc = loc_of_loc pat.ppat_loc}, body
         | _ ->
           incr ident_counter;
           let name = Printf.sprintf "tmp#%d" !ident_counter in
@@ -1020,11 +1024,11 @@ let rec translate_code contracts env exp =
                             pvb_loc = exp.pexp_loc;
                           }],
                          body) } in
-          name, body
+          { nname = name; nloc = loc_of_loc pat.ppat_loc}, body
       in
       let body = translate_code contracts env body in
       let arg = translate_code contracts env arg in
-      Loop { arg_name; loc = loc_of_loc exp.pexp_loc; body; arg }
+      Loop { arg_name; body; arg }
 
     | { pexp_desc =
           Pexp_apply (
@@ -1038,8 +1042,8 @@ let rec translate_code contracts env exp =
       let arg = translate_code contracts env arg in
       let arg_name, _, body = deconstruct_pat env pat body in
       let prim = LiquidTypes.fold_primitive_of_string (iter_coll^".iter") in
-      let acc = mk (Const { loc; ty = Tunit; const =  CUnit }) in
-      Fold { prim; arg_name; loc; body; arg; acc }
+      let acc = mk ~loc (Const { ty = Tunit; const =  CUnit }) in
+      Fold { prim; arg_name; body; arg; acc }
 
     | { pexp_desc =
           Pexp_apply (
@@ -1054,7 +1058,7 @@ let rec translate_code contracts env exp =
       let body = translate_code contracts env body in
       let arg_name, _, body = deconstruct_pat env pat body in
       let prim = LiquidTypes.fold_primitive_of_string (iter_coll^".fold") in
-      Fold { prim; arg_name; loc; body; arg; acc }
+      Fold { prim; arg_name; body; arg; acc }
 
     | { pexp_desc =
           Pexp_apply (
@@ -1067,7 +1071,7 @@ let rec translate_code contracts env exp =
       let body = translate_code contracts env body in
       let arg_name, _, body = deconstruct_pat env pat body in
       let prim = LiquidTypes.map_primitive_of_string (map_coll^".map") in
-      Map { prim; arg_name; loc; body; arg }
+      Map { prim; arg_name; body; arg }
 
     | { pexp_desc =
           Pexp_apply (
@@ -1082,7 +1086,7 @@ let rec translate_code contracts env exp =
       let body = translate_code contracts env body in
       let arg_name, _, body = deconstruct_pat env pat body in
       let prim = LiquidTypes.map_fold_primitive_of_string (map_fold_coll^".map_fold") in
-      MapFold { prim; arg_name; loc; body; arg; acc }
+      MapFold { prim; arg_name; body; arg; acc }
 
     | { pexp_desc =
           Pexp_apply (
@@ -1094,14 +1098,15 @@ let rec translate_code contracts env exp =
               Nolabel, arg
             ]) } ->
       let f = translate_code contracts env f_exp in
+      let vloc = loc_of_loc vloc in
       let arg_name = "_iter_arg" in
-      let arg_var = mk (Var { name = arg_name; loc = loc_of_loc vloc }) in
-      let body =
-        mk (Apply { prim = Prim_exec; loc; args = [arg_var; f] }) in
+      let arg_var = mk ~loc:vloc (Var arg_name) in
+      let body = mk ~loc (Apply { prim = Prim_exec; args = [arg_var; f] }) in
       let arg = translate_code contracts env arg in
       let prim = LiquidTypes.fold_primitive_of_string (iter_coll^".iter") in
-      let acc = mk (Const { loc; ty = Tunit; const =  CUnit }) in
-      Fold { prim; arg_name; loc; body; arg; acc }
+      let acc = mk ~loc (Const { ty = Tunit; const =  CUnit }) in
+      let arg_name = { nname = arg_name ; nloc = vloc } in
+      Fold { prim; arg_name; body; arg; acc }
 
     | { pexp_desc =
           Pexp_apply (
@@ -1115,13 +1120,14 @@ let rec translate_code contracts env exp =
             ]) } ->
       let f = translate_code contracts env f_exp in
       let arg_name = "_fold_arg" in
-      let arg_var = mk (Var { name = arg_name; loc = loc_of_loc vloc }) in
-      let body =
-        mk (Apply { prim = Prim_exec; loc; args = [arg_var; f] }) in
+      let vloc = loc_of_loc vloc in
+      let arg_var = mk ~loc:vloc (Var arg_name) in
+      let body = mk ~loc (Apply { prim = Prim_exec; args = [arg_var; f] }) in
       let arg = translate_code contracts env arg in
       let acc = translate_code contracts env acc in
       let prim = LiquidTypes.fold_primitive_of_string (iter_coll^".fold") in
-      Fold { prim; arg_name; loc; body; arg; acc }
+      let arg_name = { nname = arg_name ; nloc = vloc } in
+      Fold { prim; arg_name; body; arg; acc }
 
     | { pexp_desc =
           Pexp_apply (
@@ -1134,12 +1140,13 @@ let rec translate_code contracts env exp =
             ]) } ->
       let f = translate_code contracts env f_exp in
       let arg_name = "_map_arg" in
-      let arg_var = mk (Var { name = arg_name; loc = loc_of_loc vloc }) in
-      let body =
-        mk (Apply { prim = Prim_exec; loc; args = [arg_var; f] }) in
+      let vloc = loc_of_loc vloc in
+      let arg_var = mk ~loc:vloc (Var arg_name) in
+      let body = mk ~loc (Apply { prim = Prim_exec; args = [arg_var; f] }) in
       let arg = translate_code contracts env arg in
       let prim = LiquidTypes.map_primitive_of_string (map_coll^".map") in
-      Map { prim; arg_name; loc; body; arg }
+      let arg_name = { nname = arg_name ; nloc = vloc } in
+      Map { prim; arg_name; body; arg }
 
     | { pexp_desc =
           Pexp_apply (
@@ -1153,14 +1160,15 @@ let rec translate_code contracts env exp =
             ]) } ->
       let f = translate_code contracts env f_exp in
       let arg_name = "_map_fold_arg" in
-      let arg_var = mk (Var { name = arg_name; loc = loc_of_loc vloc }) in
-      let body =
-        mk (Apply { prim = Prim_exec; loc; args = [arg_var; f] }) in
+      let vloc = loc_of_loc vloc in
+      let arg_var = mk ~loc:vloc (Var arg_name) in
+      let body = mk ~loc (Apply { prim = Prim_exec; args = [arg_var; f] }) in
       let arg = translate_code contracts env arg in
       let acc = translate_code contracts env acc in
       let prim =
         LiquidTypes.map_fold_primitive_of_string (map_fold_coll^".map_fold") in
-      MapFold { prim; arg_name; loc; body; arg; acc }
+      let arg_name = { nname = arg_name ; nloc = vloc } in
+      MapFold { prim; arg_name; body; arg; acc }
 
     | { pexp_desc = Pexp_apply (
         { pexp_desc = Pexp_ident { txt = Ldot(Lident "Account", "create") } },
@@ -1173,7 +1181,6 @@ let rec translate_code contracts env exp =
         | [m; d; de; a] -> (m, d, de, a)
         | _ -> error_loc pexp_loc "wrong arguments for Account.create" in
       Apply { prim = Prim_create_account;
-              loc;
               args = [
                 translate_code contracts env manager;
                 translate_code contracts env delegate;
@@ -1187,15 +1194,14 @@ let rec translate_code contracts env exp =
         ( [Nolabel, param; Labelled "amount", amount]
         | [Labelled "amount", amount; Nolabel, param] )
       ) } ->
-      Transfer { loc;
-                 contract = translate_code contracts env contract;
+      Transfer { contract = translate_code contracts env contract;
                  amount = translate_code contracts env amount;
                  entry = Some entry;
                  arg = translate_code contracts env param }
 
     | { pexp_desc = Pexp_apply (exp, args) } ->
        let exp = translate_code contracts env exp in
-       Apply { prim = Prim_unknown; loc;
+       Apply { prim = Prim_unknown;
                args = exp :: List.map (function
                    | (Nolabel, exp) -> translate_code contracts env exp
                    | (_, { pexp_loc }) -> error_loc pexp_loc "in arg"
@@ -1211,47 +1217,55 @@ let rec translate_code contracts env exp =
       )} ->
       let arg = translate_code contracts env e in
       let cases = List.map (translate_case contracts env) cases in
-      let loc = loc_of_loc pexp_loc in
       let plus_name, ifplus, minus_name, ifminus = match cases with
-        | [ CConstr ("Plus", [p]), ifplus; CConstr ("Minus", [m]), ifminus ]
-        | [ CConstr ("Minus", [m]), ifminus; CConstr ("Plus", [p]), ifplus ] ->
-          p, ifplus, m, ifminus
-        | [ CConstr ("Plus", [p]), ifplus; CAny, ifminus ] ->
-          p, ifplus, "_", ifminus
-        | [ CConstr ("Minus", [m]), ifminus; CAny, ifplus ] ->
-          "_", ifplus, m, ifminus
+        | [ CConstr ("Plus", [p]), ifplus, ploc;
+            CConstr ("Minus", [m]), ifminus, mloc ]
+        | [ CConstr ("Minus", [m]), ifminus, mloc;
+            CConstr ("Plus", [p]), ifplus, ploc ] ->
+          { nname = p; nloc = ploc}, ifplus, { nname = m; nloc = mloc }, ifminus
+        | [ CConstr ("Plus", [p]), ifplus, ploc; CAny, ifminus, mloc ] ->
+          { nname = p; nloc = ploc}, ifplus, { nname = "_"; nloc = mloc}, ifminus
+        | [ CConstr ("Minus", [m]), ifminus, mloc; CAny, ifplus, ploc ] ->
+          { nname = "_"; nloc = ploc}, ifplus, { nname = m; nloc = mloc }, ifminus
         | _ -> error_loc pexp_loc "match%%nat patterns are Plus _, Minus _"
       in
-      MatchNat { arg; loc; plus_name; ifplus; minus_name; ifminus }
+      MatchNat { arg; plus_name; ifplus; minus_name; ifminus }
 
     | { pexp_desc = Pexp_match (e, cases) } ->
        let arg = translate_code contracts env e in
        let cases = List.map (translate_case contracts env) cases in
        begin
          match cases with
-         | [ CConstr ("None", []), ifnone; CConstr ("Some", [s]), ifsome ]
-         | [ CConstr ("Some", [s]), ifsome; CConstr ("None", []), ifnone ]
-         | [ CConstr ("Some", [s]), ifsome; CAny, ifnone ] ->
-           MatchOption {arg; loc; ifnone; some_name = s; ifsome }
-         | [ CConstr ("None", []), ifnone; CAny, ifsome ] ->
-           MatchOption {arg; loc; ifnone; some_name = "_"; ifsome }
+         | [ CConstr ("None", []), ifnone, _; CConstr ("Some", [s]), ifsome, sloc ]
+         | [ CConstr ("Some", [s]), ifsome, sloc; CConstr ("None", []), ifnone, _ ]
+         | [ CConstr ("Some", [s]), ifsome, sloc; CAny, ifnone, _ ] ->
+           MatchOption {arg; ifnone; some_name = { nname = s; nloc = sloc }; ifsome }
+         | [ CConstr ("None", []), ifnone, _; CAny, ifsome, sloc ] ->
+           MatchOption {arg; ifnone;
+                        some_name = { nname = "_"; nloc = sloc }; ifsome }
 
-         | [ CConstr ("[]", []), ifnil; CConstr ("::", [h; t]), ifcons ]
-         | [ CConstr ("::", [h; t]), ifcons; CConstr ("[]", []), ifnil ]
-         | [ CConstr ("::", [h; t]), ifcons; CAny, ifnil ] ->
-           MatchList { arg; loc; head_name = h; tail_name = t; ifcons; ifnil }
-         | [ CConstr ("[]", []), ifnil; CAny, ifcons ] ->
-           MatchList { arg; loc; head_name = "_head"; tail_name = "_tail";
+         | [ CConstr ("[]", []), ifnil, _; CConstr ("::", [h; t]), ifcons, htloc ]
+         | [ CConstr ("::", [h; t]), ifcons, htloc; CConstr ("[]", []), ifnil, _ ]
+         | [ CConstr ("::", [h; t]), ifcons, htloc; CAny, ifnil, _ ] ->
+           MatchList { arg;
+                       head_name = { nname = h; nloc = htloc };
+                       tail_name = { nname = t; nloc = htloc };
+                       ifcons; ifnil }
+         | [ CConstr ("[]", []), ifnil, _; CAny, ifcons, nloc ] ->
+           MatchList { arg;
+                       head_name = { nname = "_head"; nloc };
+                       tail_name = { nname = "_tail"; nloc };
                        ifcons; ifnil }
 
          | _ ->
-           MatchVariant { arg; loc; cases }
+           let cases = List.map (fun (c, e, _) -> (c, e)) cases in
+           MatchVariant { arg; cases }
        end
 
     | { pexp_desc = Pexp_fun (Nolabel, None, pat, body_exp) } ->
       let body_exp = translate_code contracts env body_exp in
       let arg_name, arg_ty, body = deconstruct_pat env pat body_exp in
-      Lambda { arg_name; arg_ty; loc; body;
+      Lambda { arg_name; arg_ty; body;
                ret_ty = Tunit; (* not yet inferred *) }
 
     | { pexp_desc = Pexp_record (lab_x_exp_list, None) } ->
@@ -1259,17 +1273,17 @@ let rec translate_code contracts env exp =
          List.map (fun ({ txt = label }, exp) ->
                      str_of_id label, translate_code contracts env exp
                   ) lab_x_exp_list in
-       Record { loc; fields }
+       Record fields
 
     | exp ->
        match translate_const env exp with
        | _, None -> error_loc exp.pexp_loc "constant needs a type annotation"
-       | const, Some ty -> Const { loc; ty; const }
+       | const, Some ty -> Const { ty; const }
        | exception NotAConstant ->
           match exp with
           | { pexp_desc = Pexp_construct (
                               { txt = Lident "Some" }, Some args) } ->
-            Apply { prim = Prim_Some; loc;
+            Apply { prim = Prim_Some;
                     args = [translate_code contracts env args] }
 
           (* Ok, this is a very special case. We accept
@@ -1285,15 +1299,15 @@ from the head element. We use unit for that type. *)
                                     Pexp_construct(
                                         { txt = Lident "[]" }, None) }]}) }
             ->
-            Apply { prim = Prim_Cons; loc;
+            Apply { prim = Prim_Cons;
                     args = [translate_code contracts env a;
-                            mk (Const { loc; ty = Tunit; const =  CList [] }) (* XXX ? *)
+                            mk ~loc (Const { ty = Tunit; const =  CList [] }) (* XXX ? *)
                            ] }
 
           | { pexp_desc = Pexp_construct (
                               { txt = Lident "::" },
                               Some { pexp_desc = Pexp_tuple [a;b]}) } ->
-             Apply { prim = Prim_Cons; loc;
+             Apply { prim = Prim_Cons;
                      args = [translate_code contracts env a;
                              translate_code contracts env b] }
 
@@ -1303,11 +1317,10 @@ from the head element. We use unit for that type. *)
             begin
               try
                 let (_ty_name, _ty) = find_constr lid env in
-                Constructor { loc;
-                              constr = Constr lid;
+                Constructor { constr = Constr lid;
                               arg = match args with
                                 | None ->
-                                  mk (Const { loc; ty = Tunit; const = CUnit })
+                                  mk ~loc (Const { ty = Tunit; const = CUnit })
                                 | Some arg -> translate_code contracts env arg }
               with Not_found -> match lid with
                 | "Map" | "Set" | "BigMap" ->
@@ -1335,11 +1348,10 @@ from the head element. We use unit for that type. *)
                 | _ -> error_loc pty.ptyp_loc
                          "Type of Left must be a variant"
             in
-            Constructor { loc;
-                          constr = Left right_ty;
+            Constructor { constr = Left right_ty;
                           arg = match args with
                             | None ->
-                              mk (Const { loc; ty = Tunit; const = CUnit })
+                              mk ~loc (Const { ty = Tunit; const = CUnit })
                             | Some arg -> translate_code contracts env arg }
 
           | { pexp_desc =
@@ -1359,11 +1371,10 @@ from the head element. We use unit for that type. *)
                 | _ -> error_loc pty.ptyp_loc
                          "Type of Right must be a variant"
             in
-            Constructor { loc;
-                          constr = Right left_ty;
+            Constructor { constr = Right left_ty;
                           arg = match args with
                             | None ->
-                              mk (Const { loc; ty = Tunit; const = CUnit })
+                              mk ~loc (Const { ty = Tunit; const = CUnit })
                             | Some arg -> translate_code contracts env arg }
 
           (* TODO *)
@@ -1378,9 +1389,9 @@ from the head element. We use unit for that type. *)
                       | _ -> raise Exit
                     ) exps)
                 in
-                Const { loc; ty = Ttuple tys; const = CTuple csts }
+                Const { ty = Ttuple tys; const = CTuple csts }
               with Exit ->
-                Apply { prim = Prim_tuple; loc; args = exps }
+                Apply { prim = Prim_tuple; args = exps }
             end
 
           | { pexp_desc = Pexp_constraint (exp, ty); pexp_loc } ->
@@ -1401,10 +1412,10 @@ from the head element. We use unit for that type. *)
        todo_loc ("constructor " ^ id) exp.pexp_loc
    *)
   in
-  mk desc
+  mk ~loc desc
 
-and translate_case contracts env case =
-  let  var_of_pat = function
+and translate_case contracts env case : (pattern * syntax_exp * location) =
+  let var_of_pat = function
     | { ppat_desc = Ppat_var { txt = var } } -> var
     | { ppat_desc = Ppat_any } -> "_"
     | { ppat_desc = Ppat_construct _; ppat_loc } ->
@@ -1419,8 +1430,8 @@ and translate_case contracts env case =
     let e = case.pc_rhs in
     let e = translate_code contracts env e in
     match case.pc_lhs with
-    | { ppat_desc = Ppat_any } ->
-      (CAny, e)
+    | { ppat_desc = Ppat_any; ppat_loc} ->
+      (CAny, e, loc_of_loc ppat_loc)
     | { ppat_desc =
           Ppat_construct (
             { txt = Lident ("Some" | "::" | "Plus" | "Minus" as c) },
@@ -1431,18 +1442,19 @@ and translate_case contracts env case =
           Ppat_construct ( { txt = Lident ("None" | "[]" as c) }, Some _);
         ppat_loc }  ->
       error_loc ppat_loc "Constructor %S takes no arguments" c
-    | { ppat_desc = Ppat_construct ( { txt = name } , None) }  ->
-      (CConstr (str_of_id name, []), e)
+    | { ppat_desc = Ppat_construct ( { txt = name } , None); ppat_loc }  ->
+      (CConstr (str_of_id name, []), e, loc_of_loc ppat_loc)
     | { ppat_desc =
           Ppat_construct (
             { txt = Lident "::" } ,
             Some { ppat_desc = Ppat_tuple [ p1; p2 ]}
-          ) }  ->
-      (CConstr ("::", [var_of_pat p1; var_of_pat p2]), e)
+          );
+        ppat_loc }  ->
+      (CConstr ("::", [var_of_pat p1; var_of_pat p2]), e, loc_of_loc ppat_loc)
 
-    | { ppat_desc = Ppat_construct ({ txt = name } , Some pat) }  ->
+    | { ppat_desc = Ppat_construct ({ txt = name } , Some pat); ppat_loc }  ->
       let var_name, _, e = deconstruct_pat env pat e in
-      (CConstr (str_of_id name, [var_name]), e)
+      (CConstr (str_of_id name, [var_name.nname]), e, loc_of_loc ppat_loc)
 
     | { ppat_loc } ->
       error_loc ppat_loc "bad pattern"

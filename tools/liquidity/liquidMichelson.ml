@@ -69,22 +69,22 @@ let drop_stack ~loc n depth =
      lambda (pair (pair tez 'arg) 'global) -> (pair 'ret 'global) *)
 let rec translate_code ~parameter_name ~storage_name code =
 
-  let rec compile_desc depth env desc =
+  let rec compile_desc depth env ~loc desc =
     match desc with
-    | Var { name; loc } ->
+    | Var name ->
        let pos = try
            StringMap.find name env
          with Not_found ->
            LiquidLoc.raise_error ~loc
-                                 "Internal Error(Michelson): variable %S not found\n%!"
-                                 name
+             "Internal Error(Michelson): variable %S not found\n%!"
+             name
        in
        [ dup ~loc (depth - pos) ]
 
-    | Const { loc; ty; const } ->
+    | Const { ty; const } ->
       [ push ~loc ty const ]
 
-    | Project { loc; field; record } ->
+    | Project { field; record } ->
       begin match record.ty with
         | Trecord (_, fields) ->
           let n =
@@ -109,7 +109,7 @@ let rec translate_code ~parameter_name ~storage_name code =
         | _ -> assert false
       end
 
-    | SetField { record; loc; field; set_val } ->
+    | SetField { record; field; set_val } ->
       begin match record.ty with
         | Trecord (_, fields) ->
           let record = compile depth env record in
@@ -125,27 +125,27 @@ let rec translate_code ~parameter_name ~storage_name code =
        let e2 = compile depth env e2 in
        e1 @ [ ii ~loc:LiquidLoc.noloc DROP ] @ e2
 
-    | Let { bnd_var; loc; bnd_val; body } ->
+    | Let { bnd_var; bnd_val; body } ->
        let bnd_val = compile depth env bnd_val in
-       let env = StringMap.add bnd_var depth env in
+       let env = StringMap.add bnd_var.nname depth env in
        let depth = depth + 1 in
        let body = compile depth env body in
        let cleanup_stack = [ ii ~loc @@ DIP_DROP (1, 1) ] in
        bnd_val @ body @ cleanup_stack
 
-    | Lambda { arg_name; arg_ty; loc; body; ret_ty } ->
+    | Lambda { arg_name; arg_ty; body; ret_ty } ->
        let env = StringMap.empty in
-       let env = StringMap.add arg_name 0 env in
+       let env = StringMap.add arg_name.nname 0 env in
        let depth = 1 in
        let arg_type = LiquidEncode.encode_type arg_ty in
        let res_type = LiquidEncode.encode_type ret_ty in
        let body = compile depth env body in
-       let arg_annot = compile_arg_name arg_name in
+       let arg_annot = compile_arg_name arg_name.nname in
        [ ii ~loc @@
          LAMBDA (arg_type, res_type,
                  seq (arg_annot @ body @ [ii ~loc @@ DIP_DROP (1,1)])) ]
 
-    | Closure { arg_name; arg_ty; loc; call_env; body; ret_ty } ->
+    | Closure { arg_name; arg_ty; call_env; body; ret_ty } ->
       let call_env_code = match call_env with
         | [] -> assert false
         | [_, e] -> compile depth env e
@@ -154,8 +154,8 @@ let rec translate_code ~parameter_name ~storage_name code =
       let arg_ty = LiquidEncode.encode_type arg_ty in
       let ret_ty = LiquidEncode.encode_type ret_ty in
       call_env_code @
-      compile_desc depth env
-        (Lambda { arg_name; arg_ty; loc; body; ret_ty }) @
+      compile_desc depth env ~loc
+        (Lambda { arg_name; arg_ty; body; ret_ty }) @
       [ ii ~loc PAIR ]
 
     | If { cond; ifthen; ifelse } ->
@@ -168,19 +168,19 @@ let rec translate_code ~parameter_name ~storage_name code =
     | Transfer { entry = Some _ } ->
       assert false (* should have been encoded *)
 
-    | Transfer { loc; contract; amount; entry = None; arg } ->
+    | Transfer { contract; amount; entry = None; arg } ->
        let contract = compile depth env contract in
        let amount = compile (depth+1) env amount in
        let arg = compile (depth+2) env arg in
        contract @ amount @ arg @ [ ii ~loc TRANSFER_TOKENS ]
 
-    | Failwith { arg; loc } ->
+    | Failwith arg ->
       let arg = compile depth env arg in
       arg @ [ ii ~loc FAILWITH ]
 
     | Apply { prim = Prim_unknown } -> assert false
 
-    | Apply { prim = Prim_exec; loc; args = [arg; { ty = Tclosure _ } as f] } ->
+    | Apply { prim = Prim_exec; args = [arg; { ty = Tclosure _ } as f] } ->
       let f_env = compile depth env f in
       let arg = compile (depth+1) env arg in
       f_env @ arg @
@@ -188,27 +188,27 @@ let rec translate_code ~parameter_name ~storage_name code =
                      ii ~loc SWAP; ii ~loc @@ CDR None] ] @
       [ ii ~loc PAIR ; ii ~loc EXEC ]
 
-    | Apply { prim; loc; args = ([_; { ty = Tlambda _ } ] as args) } ->
+    | Apply { prim; args = ([_; { ty = Tlambda _ } ] as args) } ->
       compile_prim ~loc depth env prim args
 
-    | Apply { prim; loc; args } ->
+    | Apply { prim; args } ->
       compile_prim ~loc depth env prim args
 
-    | MatchOption { arg; loc; ifnone; some_name; ifsome } ->
+    | MatchOption { arg; ifnone; some_name; ifsome } ->
        let arg = compile depth env arg in
        let ifnone = compile depth env ifnone in
-       let env = StringMap.add some_name depth env in
+       let env = StringMap.add some_name.nname depth env in
        let depth = depth + 1 in
        let ifsome = compile depth env ifsome in
        let loc2, loc3 = loc_of_many ifnone, loc_of_many ifsome in
        let ifsome_end = [ii ~loc:loc3 @@ DIP_DROP(1,1)] in
        arg @ [ ii ~loc @@ IF_NONE (seq ifnone, seq (ifsome @ ifsome_end) )]
 
-    | MatchNat { arg; loc; plus_name; ifplus; minus_name; ifminus } ->
+    | MatchNat { arg; plus_name; ifplus; minus_name; ifminus } ->
        let arg = compile depth env arg in
-       let env' = StringMap.add plus_name depth env in
+       let env' = StringMap.add plus_name.nname depth env in
        let ifplus = compile (depth + 1) env' ifplus in
-       let env'' = StringMap.add minus_name depth env in
+       let env'' = StringMap.add minus_name.nname depth env in
        let ifminus = compile (depth + 1) env'' ifminus in
        let loc2, loc3 = loc_of_many ifplus, loc_of_many ifminus in
        let (ifplus_end, ifminus_end) =
@@ -219,18 +219,18 @@ let rec translate_code ~parameter_name ~storage_name code =
          ii ~loc @@ IF (seq (ifplus @ ifplus_end),
                         seq (ifminus @ ifminus_end) )]
 
-    | MatchList { arg; loc; head_name; tail_name; ifcons; ifnil } ->
+    | MatchList { arg; head_name; tail_name; ifcons; ifnil } ->
        let arg = compile depth env arg in
        let ifnil = compile depth env ifnil in
-       let env = StringMap.add tail_name depth env in
-       let env = StringMap.add head_name (depth+1) env in
+       let env = StringMap.add tail_name.nname depth env in
+       let env = StringMap.add head_name.nname (depth+1) env in
        let depth = depth + 2 in
        let ifcons = compile depth env ifcons in
        let loc2, loc3 = loc_of_many ifnil, loc_of_many ifcons in
        let ifcons_end = [ii ~loc:loc3 @@ DIP_DROP(1,2)] in
        arg @ [ ii ~loc @@ IF_CONS (seq (ifcons @ ifcons_end), seq ifnil )]
 
-    | MatchVariant { arg; loc; cases } ->
+    | MatchVariant { arg; cases } ->
       let arg = compile depth env arg in
       let rec iter cases =
         match cases with
@@ -258,11 +258,11 @@ let rec translate_code ~parameter_name ~storage_name code =
        in
        arg @ iter cases
 
-    | Loop { arg_name; loc; body; arg } ->
+    | Loop { arg_name; body; arg } ->
        let arg = compile depth env arg in
-       let env = StringMap.add arg_name depth env in
+       let env = StringMap.add arg_name.nname depth env in
        let depth = depth + 1 in
-       let arg_annot = compile_arg_name arg_name in
+       let arg_annot = compile_arg_name arg_name.nname in
        let body = compile depth env body in
        let body_end = [ ii ~loc @@ DIP_DROP (1,1);
                         ii ~loc @@ DUP 1;
@@ -272,13 +272,13 @@ let rec translate_code ~parameter_name ~storage_name code =
        @ [ ii ~loc @@ PUSH (Tbool, CBool true) ]
        @ [ ii ~loc @@ LOOP (seq (arg_annot @ body @ body_end)) ]
 
-    | Fold { prim; arg_name; loc; body; arg; acc } ->
+    | Fold { prim; arg_name; body; arg; acc } ->
       let acc = compile depth env acc in
       let depth = depth + 1 in
       let arg = compile depth env arg in
-      let env = StringMap.add arg_name depth env in
+      let env = StringMap.add arg_name.nname depth env in
       let depth = depth + 1 in
-      let arg_annot = compile_arg_name arg_name in
+      let arg_annot = compile_arg_name arg_name.nname in
       let body = compile depth env body in
       let body_begin = match prim with
         | Prim_map_iter | Prim_set_iter | Prim_list_iter ->
@@ -290,23 +290,23 @@ let rec translate_code ~parameter_name ~storage_name code =
       acc @ arg @
       [ii ~loc @@ ITER (seq (arg_annot @ body_begin @ body @ body_end))]
 
-    | Map { arg_name; loc; body; arg } ->
+    | Map { arg_name; body; arg } ->
       let arg = compile depth env arg in
-      let env = StringMap.add arg_name depth env in
+      let env = StringMap.add arg_name.nname depth env in
       let depth = depth + 1 in
-      let arg_annot = compile_arg_name arg_name in
+      let arg_annot = compile_arg_name arg_name.nname in
       let body = compile depth env body in
       let body_end = [ ii ~loc @@ DIP_DROP (1,1) ] in
       arg @
       [ii ~loc @@ MAP (seq (arg_annot @ body @ body_end))]
 
-    | MapFold { arg_name; loc; body; arg; acc } ->
+    | MapFold { arg_name; body; arg; acc } ->
       let acc = compile depth env acc in
       let depth = depth + 1 in
       let arg = compile depth env arg in
-      let env = StringMap.add arg_name depth env in
+      let env = StringMap.add arg_name.nname depth env in
       let depth = depth + 1 in
-      let arg_annot = compile_arg_name arg_name in
+      let arg_annot = compile_arg_name arg_name.nname in
       let body = compile depth env body in
       let body_begin = [ dip ~loc 1 [ii ~loc @@ DUP 1]; ii ~loc PAIR ] in
       let body_end = [
@@ -320,7 +320,7 @@ let rec translate_code ~parameter_name ~storage_name code =
        ii ~loc PAIR ]
       (* TODO check this *)
 
-    | CreateContract { loc; args; contract } ->
+    | CreateContract { args; contract } ->
       let _depth, args_code = compile_args depth env args in
       let mic_contract = translate contract in
       let contract_code = ii ~loc @@ CREATE_CONTRACT mic_contract in
@@ -330,17 +330,17 @@ let rec translate_code ~parameter_name ~storage_name code =
       args_code @
       [contract_code; ii ~loc PAIR]
 
-    | ContractAt { loc; arg; c_sig } ->
+    | ContractAt { arg; c_sig } ->
       let param_ty = LiquidEncode.encode_contract_sig c_sig in
       compile depth env arg @
       [ ii ~loc (CONTRACT param_ty) ]
 
-    | Unpack { loc; arg; ty } ->
+    | Unpack { arg; ty } ->
       let ty = LiquidEncode.encode_type ty in
       compile depth env arg @
       [ ii ~loc (UNPACK ty) ]
 
-    | Record { loc; fields } ->
+    | Record fields ->
       compile_record ~loc depth env fields
 
     (* removed during typechecking, replaced by tuple *)
@@ -353,7 +353,7 @@ let rec translate_code ~parameter_name ~storage_name code =
        compile_tuple ~loc depth env (List.rev args)
 
     | Prim_tuple_get,
-      [arg; { desc = Const { loc; const = CInt n | CNat n }}] ->
+      [arg; { desc = Const { const = CInt n | CNat n }}] ->
        let size = size_of_type arg.ty in
        let arg = compile depth env arg in
        let n = LiquidPrinter.int_of_integer n in
@@ -367,7 +367,7 @@ let rec translate_code ~parameter_name ~storage_name code =
     | Prim_tuple_get, _ -> assert false
 
     | Prim_tuple_set,
-      [x; { desc = Const { loc; const = CInt n | CNat n }}; y ] ->
+      [x; { desc = Const { const = CInt n | CNat n }}; y ] ->
       let x_code = compile depth env x in
       let n = LiquidPrinter.int_of_integer n in
       let size = size_of_type x.ty in
@@ -611,7 +611,7 @@ let rec translate_code ~parameter_name ~storage_name code =
     compile_record_rev ~loc depth env ((* List.rev *) fields)
 
   and compile depth env e =
-    let code = compile_desc depth env e.desc in
+    let code = compile_desc depth env ~loc:e.loc e.desc in
     match e.desc with
     | If _ | MatchVariant _ | MatchNat _
     | MatchOption _ | MatchList _ | Loop _ | Fold _

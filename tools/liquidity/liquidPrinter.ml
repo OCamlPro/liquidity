@@ -1014,14 +1014,14 @@ module Liquid = struct
     match code.desc with
     | Let { bnd_var; inline; bnd_val; body } ->
        let indent2 = indent ^ "  " in
-       Printf.bprintf b "\n%slet %s =" indent bnd_var;
+       Printf.bprintf b "\n%slet %s =" indent bnd_var.nname;
        bprint_code_rec ~debug b indent2 bnd_val;
        Printf.bprintf b "\n%s%sin" indent (if inline then "[@@inline] " else "");
        bprint_code_rec ~debug b indent body
     | Const { ty ; const } ->
        Printf.bprintf b "\n%s" indent;
        bprint_const b indent const;
-    | Var { name } ->
+    | Var name ->
        Printf.bprintf b " %s" name;
     | SetField { record; field; set_val } ->
        let indent2 = indent ^ "  " in
@@ -1033,7 +1033,7 @@ module Liquid = struct
     | Project { field; record } ->
        bprint_code_rec ~debug b indent record;
        Printf.bprintf b ".%s" field;
-    | Failwith { arg } ->
+    | Failwith arg ->
        Printf.bprintf b "\n%sCurrent.failwith" indent;
        let indent2 = indent ^ "  " in
        bprint_code_rec ~debug b indent2 arg;
@@ -1081,7 +1081,7 @@ module Liquid = struct
        Printf.bprintf b " with\n";
        Printf.bprintf b "\n%s| None ->\n" indent2;
        bprint_code_rec ~debug b indent4 ifnone;
-       Printf.bprintf b "\n%s| Some %s ->\n" indent2 some_name;
+       Printf.bprintf b "\n%s| Some %s ->\n" indent2 some_name.nname;
        bprint_code_rec ~debug b indent4 ifsome;
        ()
     | MatchNat { arg; plus_name; ifplus; minus_name; ifminus } ->
@@ -1090,9 +1090,9 @@ module Liquid = struct
        Printf.bprintf b "\n%smatch%%nat " indent;
        bprint_code_rec ~debug b indent2 arg;
        Printf.bprintf b " with\n";
-       Printf.bprintf b "\n%s| Plus %s ->\n" indent2 plus_name;
+       Printf.bprintf b "\n%s| Plus %s ->\n" indent2 plus_name.nname;
        bprint_code_rec ~debug b indent4 ifplus;
-       Printf.bprintf b "\n%s| Minus %s ->\n" indent2 minus_name;
+       Printf.bprintf b "\n%s| Minus %s ->\n" indent2 minus_name.nname;
        bprint_code_rec ~debug b indent4 ifminus;
        ()
     | MatchList { arg; head_name; tail_name; ifcons; ifnil } ->
@@ -1103,13 +1103,13 @@ module Liquid = struct
        Printf.bprintf b " with\n";
        Printf.bprintf b "\n%s| [] ->\n" indent2;
        bprint_code_rec ~debug b indent4 ifnil;
-       Printf.bprintf b "\n%s| %s :: %s ->\n" indent2 head_name tail_name;
+       Printf.bprintf b "\n%s| %s :: %s ->\n" indent2 head_name.nname tail_name.nname;
        bprint_code_rec ~debug b indent4 ifcons;
        ()
     | Loop { arg_name; body; arg } ->
        let indent2 = indent ^ "  " in
        let indent4 = indent2 ^ "  " in
-       Printf.bprintf b "\n%sLoop.loop (fun %s -> " indent arg_name;
+       Printf.bprintf b "\n%sLoop.loop (fun %s -> " indent arg_name.nname;
        bprint_code_rec ~debug b indent4 body;
        Printf.bprintf b ")\n%s" indent2;
        bprint_code_rec ~debug b indent2 arg;
@@ -1119,7 +1119,7 @@ module Liquid = struct
        let indent2 = indent ^ "  " in
        let indent4 = indent2 ^ "  " in
        Printf.bprintf b "\n%s%s (fun %s -> "
-         indent (LiquidTypes.string_of_fold_primitive prim) arg_name;
+         indent (LiquidTypes.string_of_fold_primitive prim) arg_name.nname;
        bprint_code_rec ~debug b indent4 body;
        Printf.bprintf b ")\n%s" indent2;
        bprint_code_rec ~debug b indent2 arg;
@@ -1128,7 +1128,7 @@ module Liquid = struct
        let indent2 = indent ^ "  " in
        let indent4 = indent2 ^ "  " in
        Printf.bprintf b "\n%s%s (fun %s -> "
-         indent (LiquidTypes.string_of_fold_primitive prim) arg_name;
+         indent (LiquidTypes.string_of_fold_primitive prim) arg_name.nname;
        bprint_code_rec ~debug b indent4 body;
        Printf.bprintf b ")\n%s" indent2;
        bprint_code_rec ~debug b indent2 arg;
@@ -1138,7 +1138,7 @@ module Liquid = struct
        let indent2 = indent ^ "  " in
        let indent4 = indent2 ^ "  " in
        Printf.bprintf b "\n%s%s (fun %s -> "
-         indent (LiquidTypes.string_of_map_primitive prim) arg_name;
+         indent (LiquidTypes.string_of_map_primitive prim) arg_name.nname;
        bprint_code_rec ~debug b indent4 body;
        Printf.bprintf b ")\n%s" indent2;
        bprint_code_rec ~debug b indent2 arg;
@@ -1147,7 +1147,7 @@ module Liquid = struct
        let indent2 = indent ^ "  " in
        let indent4 = indent2 ^ "  " in
        Printf.bprintf b "\n%s%s (fun %s -> "
-         indent (LiquidTypes.string_of_map_fold_primitive prim) arg_name;
+         indent (LiquidTypes.string_of_map_fold_primitive prim) arg_name.nname;
        bprint_code_rec ~debug b indent4 body;
        Printf.bprintf b ")\n%s" indent2;
        bprint_code_rec ~debug b indent2 arg;
@@ -1158,12 +1158,12 @@ module Liquid = struct
     | Lambda { arg_name; arg_ty; body; ret_ty } ->
        let indent2 = indent ^ "  " in
        let indent4 = indent2 ^ "  " in
-       Printf.bprintf b "\n%s(fun ( %s : " indent arg_name;
+       Printf.bprintf b "\n%s(fun ( %s : " indent arg_name.nname;
        bprint_type b indent2 arg_ty;
        Printf.bprintf b ") ->\n%s" indent2;
        bprint_code_rec ~debug b indent4 body;
        Printf.bprintf b ")"
-    | Record { fields } ->
+    | Record fields ->
        let indent2 = indent ^ "  " in
        let indent4 = indent2 ^ "  " in
        Printf.bprintf b "\n%s{" indent;

@@ -52,24 +52,24 @@ let new_binding env name ?(fail=false) ty =
             } in
   (env, count)
 
-let check_used env name loc count =
-  if env.warnings && !count = 0 && name.[0] <> '_' then begin
-      LiquidLoc.warn loc (Unused name)
+let check_used env name count =
+  if env.warnings && !count = 0 && name.nname.[0] <> '_' then begin
+      LiquidLoc.warn name.nloc (Unused name.nname)
   end
 
-let check_used_in_env env name loc =
+let check_used_in_env env name =
   try
-    let count = StringMap.find name env.vars_counts in
-    check_used env name loc count;
+    let count = StringMap.find name.nname env.vars_counts in
+    check_used env name count;
   with Not_found ->
   match env.clos_env with
-  | None -> check_used env name loc (ref 0)
+  | None -> check_used env name (ref 0)
   | Some ce ->
     try
-      let _, (count, _) = StringMap.find name ce.env_bindings in
-      check_used env name loc count;
+      let _, (count, _) = StringMap.find name.nname ce.env_bindings in
+      check_used env name count;
     with Not_found ->
-      check_used env name loc (ref 0)
+      check_used env name (ref 0)
 
 (* Find variable name in either the global environment *)
 let find_var ?(count_used=true) env loc name =
@@ -77,7 +77,7 @@ let find_var ?(count_used=true) env loc name =
     let (name, ty, fail) = StringMap.find name env.vars in
     let count = StringMap.find name env.vars_counts in
     if count_used then incr count;
-    { (mk (Var { name; loc }) ty) with fail }
+    { (mk (Var name) ~loc ty) with fail }
   with Not_found ->
     error loc "unbound variable %S" name
 
@@ -118,41 +118,6 @@ let error_prim loc prim args expected_args =
     assert false
 
 
-  (* approximate location *)
-let rec loc_exp e = match e.desc with
-  | Const { loc }
-  | Var { loc }
-  | SetField { loc }
-  | Project { loc }
-  | Apply { loc }
-  | Transfer { loc }
-  | MatchOption { loc }
-  | MatchNat { loc }
-  | MatchList { loc }
-  | Loop { loc }
-  | Fold { loc }
-  | Map { loc }
-  | MapFold { loc }
-  | Lambda { loc }
-  | Closure { loc }
-  | Record { loc }
-  | Constructor { loc }
-  | MatchVariant { loc }
-  | Failwith { loc }
-  | CreateContract { loc }
-  | ContractAt { loc }
-  | Unpack { loc } -> loc
-
-  | Let { body } -> loc_exp body
-
-  | If { cond = e1; ifelse = e2 }
-  | Seq (e1, e2) ->
-    match loc_exp e1, loc_exp e2 with
-    | ({ loc_pos = Some ( loc_begin , _ ) } as loc),
-      { loc_pos = Some ( _, loc_end ) } ->
-      { loc with loc_pos = Some (loc_begin, loc_end) }
-    | loc, _ -> loc
-
 let sig_of_contract env contract =
   let c_sig = sig_of_contract contract in
   let sig_name = StringMap.fold (fun name c_sig' -> function
@@ -181,9 +146,9 @@ let rec merge_matches acc loc cases constrs =
 
   | [ CConstr ("Left", l), case_l;
       CConstr ("Right", [x]), { desc = Let { bnd_var = v; bnd_val = case_r;
-                                             body = { desc = Var { name = v' } }}}],
+                                             body = { desc = Var v' }}}],
     _ :: _
-    when v = v'
+    when v.nname = v'
     ->
     merge_matches acc loc [ CConstr ("Left", l), case_l;
                             CConstr ("Right", [x]), case_r ] constrs
@@ -198,7 +163,7 @@ let rec merge_matches acc loc cases constrs =
   | [ CConstr ("Left", l), case_l; CConstr ("Right", [x]), case_r ],
     (c1, ty1) :: constrs ->
     begin match case_r.desc with
-      | MatchVariant { arg = { desc = Var { name = x' } }; loc; cases }
+      | MatchVariant { arg = { desc = Var x' }; cases }
         when x = x' ->
         (* match arg with
            | Left l -> case_l
@@ -238,30 +203,30 @@ let rec merge_matches acc loc cases constrs =
    * whether the expression performs a TRANSFER_TOKENS
    *)
 let rec typecheck env ( exp : syntax_exp ) : typed_exp =
+  let loc = exp.loc in
   match exp.desc with
 
-  | Const { loc; ty; const } ->
-    mk ?name:exp.name (Const { loc; ty; const }) (ty:datatype)
+  | Const { ty; const } ->
+    mk ?name:exp.name ~loc (Const { ty; const }) (ty:datatype)
 
-  | Let { bnd_var; inline; loc; bnd_val; body } ->
+  | Let { bnd_var; inline; bnd_val; body } ->
      let bnd_val = typecheck env bnd_val in
      if bnd_val.ty = Tfail then
        match bnd_val.desc with
        | Failwith _ -> bnd_val
        | _ ->
-         mk (Failwith {
-             arg = mk (Const { loc; ty = Tunit; const = CUnit }) Tunit;
-             loc }) Tfail
+         mk (Failwith (mk (Const { ty = Tunit; const = CUnit }) ~loc Tunit))
+           ~loc Tfail
      else
-       let (env, count) = new_binding env bnd_var ~fail:exp.fail bnd_val.ty in
+       let (env, count) = new_binding env bnd_var.nname ~fail:exp.fail bnd_val.ty in
        let body = typecheck env body in
-       let desc = Let { bnd_var; inline; loc; bnd_val; body } in
-       check_used env bnd_var loc count;
-       mk ?name:exp.name desc body.ty
+       let desc = Let { bnd_var; inline; bnd_val; body } in
+       check_used env bnd_var count;
+       mk ?name:exp.name ~loc desc body.ty
 
-  | Var { name; loc } -> find_var env loc name
+  | Var v -> find_var env loc v
 
-  | Project { loc; field; record } ->
+  | Project { field; record } ->
     let record = typecheck env record in
     let ty = match record.ty with
       | Trecord (record_name, ltys) ->
@@ -275,9 +240,9 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
                  (LiquidPrinter.Liquid.string_of_type rty)
                  field
     in
-    mk ?name:exp.name (Project { loc; field; record }) ty
+    mk ?name:exp.name ~loc (Project { field; record }) ty
 
-  | SetField { record; loc; field; set_val } ->
+  | SetField { record; field; set_val } ->
     let record = typecheck env record in
     let exp_ty =
       let ty_name, _, ty =
@@ -291,14 +256,14 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
       ty
     in
     let set_val = typecheck_expected "field update" env exp_ty set_val in
-    mk ?name:exp.name (SetField { record; loc; field; set_val }) record.ty
+    mk ?name:exp.name ~loc (SetField { record; field; set_val }) record.ty
 
   | Seq (exp1, exp2) ->
     let exp1 = typecheck_expected "sequence" env Tunit exp1 in
     let exp2 = typecheck env exp2 in
     let desc = Seq (exp1, exp2) in
     (* TODO: if not fail1 then remove exp1 *)
-    mk ?name:exp.name desc exp2.ty
+    mk ?name:exp.name ~loc desc exp2.ty
 
   | If { cond; ifthen; ifelse } ->
      let cond =
@@ -314,9 +279,9 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
          ifelse, ifthen.ty
      in
      let desc = If { cond; ifthen; ifelse } in
-     mk ?name:exp.name desc ty
+     mk ?name:exp.name ~loc desc ty
 
-  | Transfer { loc; contract; amount; entry; arg } ->
+  | Transfer { contract; amount; entry; arg } ->
      let amount = typecheck_expected "call amount" env Ttez amount in
      let contract = typecheck env contract in
      let entry' = match entry with None -> "main" | Some e -> e in
@@ -330,20 +295,20 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
              let arg = typecheck_expected "call argument" env arg_ty arg in
              if amount.transfer || contract.transfer || arg.transfer then
                error loc "transfer within transfer arguments";
-             let desc = Transfer { loc; contract; amount; entry; arg } in
-             mk ?name:exp.name desc Toperation
+             let desc = Transfer { contract; amount; entry; arg } in
+             mk ?name:exp.name ~loc desc Toperation
            with Not_found ->
              error loc "contract has no entry point %s" entry';
          end
        | ty ->
-         error (loc_exp contract)
+         error contract.loc
            "Bad contract type.\nExpected type:\n  'a contract\n\
             Actual type:\n  %s"
            (LiquidPrinter.Liquid.string_of_type ty)
      end
 
   (* contract.main (param) amount *)
-  | Apply { prim = Prim_unknown; loc;
+  | Apply { prim = Prim_unknown;
             args = { desc = Project { field = entry; record = contract }} ::
                    [param; amount] }
     when match (typecheck env contract).ty with
@@ -351,11 +316,11 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
       | _ -> false
     ->
     typecheck env
-      (mk (Transfer { loc; contract; amount; entry = Some entry; arg = param })
-         ())
+      (mk (Transfer { contract; amount; entry = Some entry; arg = param })
+         ~loc ())
 
-  | Apply { prim = Prim_unknown; loc;
-            args = { desc = Var { name = "Contract.call" }} :: args } ->
+  | Apply { prim = Prim_unknown;
+            args = { desc = Var "Contract.call" } :: args } ->
     let nb_args = List.length args in
     if nb_args <> 3 then
       error loc
@@ -364,8 +329,8 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
     else
       error loc "Bad syntax for Contract.call."
 
-  | Apply { prim = Prim_unknown; loc;
-            args = { desc = Var { name }} ::args }
+  | Apply { prim = Prim_unknown;
+            args = { desc = Var name } ::args }
     when not (StringMap.mem name env.vars) ->
      let prim =
        try
@@ -374,24 +339,24 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
          error loc "Unknown identifier %S" name
      in
      typecheck env { exp with
-                     desc = Apply { prim; loc; args } }
+                     desc = Apply { prim; args } }
 
 
-  | Apply { prim = Prim_unknown; loc; args = f :: ((_ :: _) as r) } ->
+  | Apply { prim = Prim_unknown; args = f :: ((_ :: _) as r) } ->
      let exp = List.fold_left (fun f x ->
-        { exp with desc = Apply { prim = Prim_exec; loc; args =  [x; f] }}
+        { exp with desc = Apply { prim = Prim_exec; args =  [x; f] }}
       ) f r
      in
      typecheck env exp
 
-  | Apply { prim; loc; args } ->
-    typecheck_apply ?name:exp.name env prim loc args
+  | Apply { prim; args } ->
+    typecheck_apply ?name:exp.name ~loc env prim loc args
 
-  | Failwith { arg; loc } ->
+  | Failwith arg ->
     let arg = typecheck env arg in
-    mk (Failwith { arg; loc }) Tfail (* no name *)
+    mk (Failwith arg) ~loc Tfail (* no name *)
 
-  | MatchOption { arg; loc; ifnone; some_name; ifsome } ->
+  | MatchOption { arg; ifnone; some_name; ifsome } ->
      let arg = typecheck env arg in
      let arg_ty = match arg.ty with
        | Tfail -> error loc "cannot match failure"
@@ -399,10 +364,10 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
        | _ -> error loc "not an option type"
      in
      let ifnone = typecheck env ifnone in
-     let (env, count) = new_binding env some_name arg_ty in
+     let (env, count) = new_binding env some_name.nname arg_ty in
      let ifsome = typecheck env ifsome in
-     check_used env some_name loc count;
-     let desc = MatchOption { arg; loc; ifnone; some_name; ifsome } in
+     check_used env some_name count;
+     let desc = MatchOption { arg; ifnone; some_name; ifsome } in
      let ty =
        match ifnone.ty, ifsome.ty with
        | ty, Tfail | Tfail, ty -> ty
@@ -411,17 +376,17 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
            type_error loc "branches of match have different types" ty2 ty1;
          ty1
      in
-     mk ?name:exp.name desc ty
+     mk ?name:exp.name ~loc desc ty
 
-  | MatchNat { arg; loc; plus_name; ifplus; minus_name; ifminus } ->
+  | MatchNat { arg; plus_name; ifplus; minus_name; ifminus } ->
      let arg = typecheck_expected "match%nat" env Tint arg in
-     let (env2, count_p) = new_binding env plus_name Tnat in
+     let (env2, count_p) = new_binding env plus_name.nname Tnat in
      let ifplus = typecheck env2 ifplus in
-     let (env3, count_m) = new_binding env minus_name Tnat in
+     let (env3, count_m) = new_binding env minus_name.nname Tnat in
      let ifminus = typecheck env3 ifminus in
-     check_used env plus_name loc count_p;
-     check_used env minus_name loc count_m;
-     let desc = MatchNat { arg; loc; plus_name; ifplus; minus_name; ifminus } in
+     check_used env plus_name count_p;
+     check_used env minus_name count_m;
+     let desc = MatchNat { arg; plus_name; ifplus; minus_name; ifminus } in
      let ty =
        match ifplus.ty, ifminus.ty with
        | ty, Tfail | Tfail, ty -> ty
@@ -431,18 +396,18 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
              ty2 ty1;
          ty1
      in
-     mk ?name:exp.name desc ty
+     mk ?name:exp.name ~loc desc ty
 
-  | Loop { arg_name; loc; body; arg } ->
+  | Loop { arg_name; body; arg } ->
      let arg = typecheck env arg in
      if arg.ty = Tfail then error loc "loop arg is a failure";
-     let (env, count) = new_binding env arg_name arg.ty in
+     let (env, count) = new_binding env arg_name.nname arg.ty in
      let body =
        typecheck_expected "loop body" env (Ttuple [Tbool; arg.ty]) body in
-     check_used env arg_name loc count;
-     mk ?name:exp.name (Loop { arg_name; loc; body; arg }) arg.ty
+     check_used env arg_name count;
+     mk ?name:exp.name ~loc (Loop { arg_name; body; arg }) arg.ty
 
-  | Fold { prim; arg_name; loc; body; arg; acc } ->
+  | Fold { prim; arg_name; body; arg; acc } ->
     let arg = typecheck env arg in
     let acc = typecheck env acc in
     let prim, arg_ty = match prim, arg.ty, acc.ty with
@@ -461,17 +426,17 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
         Prim_list_fold, Ttuple[elt_ty; acc_ty]
 
       | _ ->
-        error (loc_exp arg) "%s expects a collection, got %s"
+        error arg.loc "%s expects a collection, got %s"
           (LiquidTypes.string_of_fold_primitive prim)
           (LiquidPrinter.Liquid.string_of_type arg.ty)
     in
-    let (env, count) = new_binding env arg_name arg_ty in
+    let (env, count) = new_binding env arg_name.nname arg_ty in
     let body = typecheck_expected
         (LiquidTypes.string_of_fold_primitive prim ^" body") env acc.ty body in
-    check_used env arg_name loc count;
-    mk ?name:exp.name (Fold { prim; arg_name; loc; body; arg; acc }) acc.ty
+    check_used env arg_name count;
+    mk ?name:exp.name ~loc (Fold { prim; arg_name; body; arg; acc }) acc.ty
 
-  | Map { prim; arg_name; loc; body; arg } ->
+  | Map { prim; arg_name; body; arg } ->
     let arg = typecheck env arg in
     let prim, arg_ty = match prim, arg.ty with
       | (Prim_map_map|Prim_coll_map), Tmap (k_ty, v_ty) ->
@@ -481,11 +446,11 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
       | (Prim_list_map|Prim_coll_map), Tlist elt_ty ->
         Prim_list_map, elt_ty
       | _ ->
-        error (loc_exp arg) "%s expects a collection, got %s"
+        error arg.loc "%s expects a collection, got %s"
           (LiquidTypes.string_of_map_primitive prim)
           (LiquidPrinter.Liquid.string_of_type arg.ty)
     in
-    let (env, count) = new_binding env arg_name arg_ty in
+    let (env, count) = new_binding env arg_name.nname arg_ty in
     let body = typecheck env body in
     let ret_ty = match arg.ty with
       | Tmap (k_ty, _) -> Tmap (k_ty, body.ty)
@@ -493,10 +458,10 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
       | Tlist _ -> Tlist body.ty
       | _ -> assert false
     in
-    check_used env arg_name loc count;
-    mk ?name:exp.name (Map { prim; arg_name; loc; body; arg }) ret_ty
+    check_used env arg_name count;
+    mk ?name:exp.name ~loc (Map { prim; arg_name; body; arg }) ret_ty
 
-  | MapFold { prim; arg_name; loc; body; arg; acc } ->
+  | MapFold { prim; arg_name; body; arg; acc } ->
     let arg = typecheck env arg in
     let acc = typecheck env acc in
     let prim, arg_ty = match prim, arg.ty, acc.ty with
@@ -507,16 +472,16 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
       | (Prim_list_map_fold|Prim_coll_map_fold), Tlist elt_ty, acc_ty ->
         Prim_list_map_fold, Ttuple[elt_ty; acc_ty]
       | _ ->
-        error (loc_exp arg) "%s expects a collection, got %s"
+        error arg.loc "%s expects a collection, got %s"
           (LiquidTypes.string_of_map_fold_primitive prim)
           (LiquidPrinter.Liquid.string_of_type arg.ty)
     in
-    let (env, count) = new_binding env arg_name arg_ty in
+    let (env, count) = new_binding env arg_name.nname arg_ty in
     let body = typecheck env body in
     let body_r = match body.ty with
       | Ttuple [r; baccty] when eq_types baccty acc.ty -> r
       | _ ->
-        error (loc_exp body)
+        error body.loc
           "body of %s must be of type 'a * %s, but has type %s"
           (LiquidTypes.string_of_map_fold_primitive prim)
           (LiquidPrinter.Liquid.string_of_type acc.ty)
@@ -528,11 +493,11 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
       | Tlist _ -> Tlist body_r
       | _ -> assert false
     in
-    check_used env arg_name loc count;
-    mk ?name:exp.name (MapFold { prim; arg_name; loc; body; arg; acc })
+    check_used env arg_name count;
+    mk ?name:exp.name ~loc (MapFold { prim; arg_name; body; arg; acc })
       (Ttuple [ret_ty; acc.ty])
 
-  | MatchList { arg; loc; head_name; tail_name; ifcons; ifnil } ->
+  | MatchList { arg; head_name; tail_name; ifcons; ifnil } ->
      let arg  = typecheck env arg in
      let arg_ty = match arg.ty with
        | Tfail -> error loc "cannot match failure"
@@ -540,12 +505,12 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
        | _ -> error loc "not a list type"
      in
      let ifnil = typecheck env ifnil in
-     let (env, count_head) = new_binding env head_name arg_ty in
-     let (env, count_tail) = new_binding env tail_name (Tlist arg_ty) in
+     let (env, count_head) = new_binding env head_name.nname arg_ty in
+     let (env, count_tail) = new_binding env tail_name.nname (Tlist arg_ty) in
      let ifcons = typecheck env ifcons in
-     check_used env head_name loc count_head;
-     check_used env tail_name loc count_tail;
-     let desc = MatchList { arg; loc; head_name; tail_name; ifcons; ifnil } in
+     check_used env head_name count_head;
+     check_used env tail_name count_tail;
+     let desc = MatchList { arg; head_name; tail_name; ifcons; ifnil } in
      let ty =
        match ifnil.ty, ifcons.ty with
        | ty, Tfail | Tfail, ty -> ty
@@ -555,22 +520,22 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
              ty2 ty1;
           ty1
      in
-     mk ?name:exp.name desc ty
+     mk ?name:exp.name ~loc desc ty
 
-  | Lambda { arg_name; arg_ty; loc; body; ret_ty } ->
+  | Lambda { arg_name; arg_ty; body; ret_ty } ->
     assert (ret_ty = Tunit);
     (* allow closures at typechecking, do not reset env *)
-    let (env, arg_count) = new_binding env arg_name arg_ty in
+    let (env, arg_count) = new_binding env arg_name.nname arg_ty in
     let body = typecheck env body in
-    check_used env arg_name loc arg_count;
-    let desc = Lambda { arg_name; arg_ty; loc; body; ret_ty = body.ty } in
+    check_used env arg_name arg_count;
+    let desc = Lambda { arg_name; arg_ty; body; ret_ty = body.ty } in
     let ty = Tlambda (arg_ty, body.ty) in
-    mk ?name:exp.name desc ty
+    mk ?name:exp.name ~loc desc ty
 
   | Closure _ -> assert false
 
-  | Record { fields = [] } -> assert false
-  | Record { loc; fields = (( (label, _) :: _ ) as lab_x_exp_list) } ->
+  | Record [] -> assert false
+  | Record (( (label, _) :: _ ) as lab_x_exp_list) ->
      let ty_name, _, _ =
        try StringMap.find label env.env.labels
        with Not_found -> error loc "unbound label %S" label
@@ -591,7 +556,7 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
        ) lab_x_exp_list in
      if not (StringSet.is_empty !remaining_labels) then
        error loc "label %s is not defined" (StringSet.choose !remaining_labels);
-     mk ?name:exp.name (Record { loc; fields }) record_ty
+     mk ?name:exp.name ~loc (Record fields) record_ty
 
   (* TODO
      | Constructor(loc, Constr constr, arg)
@@ -607,31 +572,31 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
       env.env.constrs <-
         StringMap.add constr (ty_name, arg.ty) env.env.constrs;
       env.env.types <- StringMap.add ty_name constr_ty env.env.types;
-      mk ?name:exp.name (Constructor(loc, Constr constr, arg)) constr_ty
+      mk ?name:exp.name ~loc (Constructor(loc, Constr constr, arg)) constr_ty
   *)
 
-  | Constructor { loc; constr = Constr constr; arg } ->
+  | Constructor { constr = Constr constr; arg } ->
     begin try
         let ty_name, arg_ty = StringMap.find constr env.env.constrs in
         let arg = typecheck_expected "construtor argument" env arg_ty arg in
         let constr_ty = StringMap.find ty_name env.env.types in
-        mk ?name:exp.name (Constructor { loc; constr = Constr constr; arg })
+        mk ?name:exp.name ~loc (Constructor { constr = Constr constr; arg })
           constr_ty
       with Not_found ->
         error loc "unbound constructor %S" constr
     end
 
-  | Constructor { loc; constr = Left right_ty; arg } ->
+  | Constructor { constr = Left right_ty; arg } ->
      let arg = typecheck env arg in
      let ty = Tor (arg.ty, right_ty) in
-     mk ?name:exp.name (Constructor { loc; constr = Left right_ty; arg }) ty
+     mk ?name:exp.name ~loc (Constructor { constr = Left right_ty; arg }) ty
 
-  | Constructor { loc; constr = Right left_ty; arg } ->
+  | Constructor { constr = Right left_ty; arg } ->
      let arg = typecheck env arg in
      let ty = Tor (left_ty, arg.ty) in
-     mk ?name:exp.name (Constructor { loc; constr = Right left_ty; arg }) ty
+     mk ?name:exp.name ~loc (Constructor { constr = Right left_ty; arg }) ty
 
-  | MatchVariant { arg; loc; cases } ->
+  | MatchVariant { arg; cases } ->
     let untyped_arg = arg in
     let arg = typecheck env arg in
     let decoded = match arg.ty, env.decompiling with
@@ -641,7 +606,7 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
             let cases = merge_matches [] loc cases constrs in
             Some (typecheck env
                     { exp with
-                      desc = MatchVariant { arg = untyped_arg; loc; cases } })
+                      desc = MatchVariant { arg = untyped_arg; cases } })
           with Exit -> None
         end
       | _ -> None in
@@ -759,32 +724,32 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
             in
             begin match pat, count_opt with
               | CConstr (_, [var]), Some count ->
-                 check_used env var loc count
+                 check_used env { nname = var; nloc = loc} count
               | _ -> ()
             end;
             (pat, e)
           ) cases
         in
 
-        let desc = MatchVariant { arg; loc; cases } in
+        let desc = MatchVariant { arg; cases } in
         let ty = match !expected_type with
           | None -> Tfail
           | Some ty -> ty
         in
-        mk ?name:exp.name desc ty
+        mk ?name:exp.name ~loc desc ty
     end
 
-  | Unpack { loc; arg; ty } ->
+  | Unpack { arg; ty } ->
     let arg = typecheck_expected "Bytes.unpack argument" env Tbytes arg in
-    let desc = Unpack { loc; arg; ty } in
-    mk ?name:exp.name desc (Toption ty)
+    let desc = Unpack { arg; ty } in
+    mk ?name:exp.name ~loc desc (Toption ty)
 
-  | ContractAt { loc; arg; c_sig } ->
+  | ContractAt { arg; c_sig } ->
     let arg = typecheck_expected "Contract.at argument" env Taddress arg in
-    let desc = ContractAt { loc; arg; c_sig } in
-    mk ?name:exp.name desc (Toption (Tcontract c_sig))
+    let desc = ContractAt { arg; c_sig } in
+    mk ?name:exp.name ~loc desc (Toption (Tcontract c_sig))
 
-  | CreateContract { loc; args; contract } ->
+  | CreateContract { args; contract } ->
     let contract = typecheck_contract ~warnings:env.warnings
         ~decompiling:env.decompiling env.env contract in
     match args with
@@ -800,11 +765,10 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
       let init_storage = typecheck_expected "initial storage"
           env contract.storage init_storage in
       let desc = CreateContract {
-          loc;
           args = [manager; delegate; spendable;
                   delegatable; init_balance; init_storage];
           contract } in
-      mk ?name:exp.name desc (Ttuple [Toperation; Taddress])
+      mk ?name:exp.name ~loc desc (Ttuple [Toperation; Taddress])
     | _ ->
       error loc "Contract.create expects 7 arguments, was given %d"
         (List.length args)
@@ -820,15 +784,15 @@ and find_case loc env constr cases =
   | matched_case :: unused ->
     List.iter (function
         | CAny, _ -> ()
-        | (CConstr _, e) ->
-          LiquidLoc.warn (loc_exp e) (UnusedMatched constr)
+        | (CConstr _, (e : syntax_exp)) ->
+          LiquidLoc.warn e.loc (UnusedMatched constr)
       ) unused;
     matched_case
 
 and typecheck_prim1 env prim loc args =
   match prim, args with
   | Prim_tuple_get, [{ ty = tuple_ty };
-                     { desc = Const { loc; const = CInt n | CNat n }}] ->
+                     { desc = Const { const = CInt n | CNat n }}] ->
     let tuple = match tuple_ty with
       | Ttuple tuple -> tuple
       | Trecord (_, rtys) -> List.map snd rtys
@@ -842,7 +806,7 @@ and typecheck_prim1 env prim loc args =
     prim, ty
 
   | Prim_tuple_set, [{ ty = tuple_ty };
-                     { desc = Const { loc; const = CInt n | CNat n }};
+                     { desc = Const { const = CInt n | CNat n }};
                      { ty }] ->
     let tuple = match tuple_ty with
       | Ttuple tuple -> tuple
@@ -1097,14 +1061,14 @@ and typecheck_prim2 env prim loc args =
 and typecheck_expected info env expected_ty exp =
   let exp = typecheck env exp in
   if not @@ eq_types exp.ty expected_ty && exp.ty <> Tfail then
-    type_error (loc_exp exp)
+    type_error exp.loc
                ("Unexpected type for "^info) exp.ty expected_ty;
   exp
 
 and typecheck_apply ?name env prim loc args =
   let args = List.map (typecheck env)args in
   let prim, ty = typecheck_prim1 env prim loc args in
-  mk ?name (Apply { prim; loc; args }) ty
+  mk ?name (Apply { prim; args }) ty
 
 
 and typecheck_entry env entry =
@@ -1143,7 +1107,7 @@ and typecheck_contract ~warnings ~decompiling env contract =
       ) (env, [], []) contract.values in
   let entries = List.map (typecheck_entry env) contract.entries in
   List.iter (fun (name, count) ->
-      check_used env name (noloc env) (* TODO *) count
+      check_used env { nname = name; nloc = noloc env } (* TODO *) count
     ) counts;
   { contract with
     values = List.rev values;

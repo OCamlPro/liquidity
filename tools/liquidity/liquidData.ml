@@ -56,27 +56,28 @@ let rec default_const = function
   | Tlambda _
   | Toperation -> raise Not_found
 
-let rec translate_const_exp loc (exp : encoded_exp) =
+let rec translate_const_exp (exp : encoded_exp) =
+  let loc = exp.loc in
   match exp.desc with
-  | Let { loc } ->
+  | Let _ ->
      LiquidLoc.raise_error ~loc "'let' forbidden in constant"
   | Const { const } -> const
 
-  | Record { loc; fields } ->
-    CRecord (List.map (fun (f, e) -> (f, translate_const_exp loc e)) fields)
+  | Record fields ->
+    CRecord (List.map (fun (f, e) -> (f, translate_const_exp e)) fields)
 
-  | Constructor { loc; constr = Constr c; arg } ->
-    CConstr (c, translate_const_exp loc arg)
-  | Constructor { loc; constr = Left _; arg } -> CLeft (translate_const_exp loc arg)
-  | Constructor { loc; constr = Right _; arg } -> CRight (translate_const_exp loc arg)
+  | Constructor { constr = Constr c; arg } ->
+    CConstr (c, translate_const_exp arg)
+  | Constructor { constr = Left _; arg } -> CLeft (translate_const_exp arg)
+  | Constructor { constr = Right _; arg } -> CRight (translate_const_exp arg)
 
-  | Apply { prim = Prim_Left; args = [x] } -> CLeft (translate_const_exp loc x)
-  | Apply { prim = Prim_Right; args = [x] } -> CRight (translate_const_exp loc x)
-  | Apply { prim = Prim_Some; args = [x] } -> CSome (translate_const_exp loc x)
+  | Apply { prim = Prim_Left; args = [x] } -> CLeft (translate_const_exp x)
+  | Apply { prim = Prim_Right; args = [x] } -> CRight (translate_const_exp  x)
+  | Apply { prim = Prim_Some; args = [x] } -> CSome (translate_const_exp x)
   | Apply { prim = Prim_Cons; args } ->
-     CList (List.map (translate_const_exp loc) args)
+     CList (List.map translate_const_exp args)
   | Apply { prim = Prim_tuple; args } ->
-     CTuple (List.map (translate_const_exp loc) args)
+     CTuple (List.map translate_const_exp args)
 
   | Apply _
   | Var _
@@ -114,8 +115,7 @@ let translate env contract_sig storage_ty s ty =
   let tenv = empty_typecheck_env ~warnings:true contract_sig storage_ty env in
   let ty_exp = LiquidCheck.typecheck_code tenv ~expected_ty:ty sy_exp in
   let enc_exp = LiquidEncode.encode_code tenv ty_exp in
-  let loc = LiquidLoc.loc_in_file env.filename in
-  translate_const_exp loc enc_exp
+  translate_const_exp enc_exp
 
 
 let string_of_const ?ty c =

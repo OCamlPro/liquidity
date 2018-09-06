@@ -19,11 +19,6 @@ val typecheck_contract :
 val typecheck_entry :
   typecheck_env -> syntax_exp entry -> typed_exp entry
 
-                       (*
-val uniq_ident : string -> string
-                        *)
-val loc_exp : ('a, 'b) exp -> location
-
 val typecheck_code :
   typecheck_env ->
   ?expected_ty:LiquidTypes.datatype ->

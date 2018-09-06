@@ -11,7 +11,7 @@ open LiquidTypes
 
 val default_const : datatype -> const
 
-val translate_const_exp : location -> encoded_exp -> const
+val translate_const_exp : encoded_exp -> const
 
 val translate :
   env -> contract_sig -> datatype -> string -> datatype -> const
