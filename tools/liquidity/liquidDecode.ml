@@ -68,6 +68,7 @@ let rec decode ( exp : encoded_exp ) : typed_exp =
   (* TODO *)
   (* List.rev -> List.reduce (::) *)
 
+  (* String.concat [x1; x2] ==> x1 @ x2 *)
   | Apply { prim = Prim_concat | Prim_string_concat | Prim_bytes_concat;
             args = [{
                 desc = Apply {
@@ -171,6 +172,7 @@ let rec decode ( exp : encoded_exp ) : typed_exp =
     let contract = decode_contract contract in
     mk ?name:exp.name ~loc (CreateContract { args; contract }) exp.ty
 
+(* Recover entry point from a pattern matchin branch *)
 and entry_of_case param_constrs top_storage (pat, body) =
   match pat, body.desc with
   | CConstr (s, [parameter_name]),
@@ -204,7 +206,9 @@ and entry_of_case param_constrs top_storage (pat, body) =
     }
   | _ -> raise Exit
 
-
+(* Recover entries points from a top-level pattern matching, also move
+   top-level (at the level of the matching branch) local definitions
+   to global definitions *)
 and decode_entries param_constrs top_parameter top_storage values exp =
   match exp.desc with
   | MatchVariant { arg = { desc = Var var_parameter}; cases }
@@ -219,6 +223,8 @@ and decode_entries param_constrs top_parameter top_storage values exp =
       ((bnd_var.nname, inline, decode bnd_val) :: values) body
   | _ -> raise Exit
 
+(* Recover multiple-entry points contract from a contract in
+   single-entry point form *)
 and decode_contract contract =
   try match contract.entries with
     | [{ entry_sig = { entry_name = "main";

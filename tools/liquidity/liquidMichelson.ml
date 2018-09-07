@@ -7,10 +7,13 @@
 (*                                                                        *)
 (**************************************************************************)
 
+(* Michelson code generation *)
+
 open LiquidTypes
 
-
-(*  Translation to Michelson *)
+(********************
+ * Helper functions *
+ ********************)
 
 let loc_of_many (l : loc_michelson list) = match l, List.rev l with
   | [], _ | _, [] -> LiquidLoc.noloc
@@ -65,8 +68,11 @@ let drop_stack ~loc n depth =
     let exps = drop_stack depth in
     if n = 0 then exps else [ii ~loc @@ DIP_DROP (n, List.length exps)]
 
-(* The type of a contract code is usually:
-     lambda (pair (pair tez 'arg) 'global) -> (pair 'ret 'global) *)
+
+(*******************
+ * Code generation *
+ *******************)
+
 let rec translate_code ~parameter_name ~storage_name code =
 
   let rec compile_desc depth env ~loc desc =

@@ -13,9 +13,14 @@ module IntMap = Map.Make(struct type t = int let compare = compare end)
 
 exception InvalidFormat of string * string
 
+(** Tez constants are stored with strings *)
 type tez = { tezzies : string; mutez : string option }
+
+(** Unbounded integer constants *)
 type integer = { integer : Z.t }
 
+
+(** Liquidity constants *)
 type const =
   | CUnit
   | CBool of bool
@@ -31,7 +36,6 @@ type const =
   | CNone
   | CSome of const
 
-  (* Map [ key_x_value_list ] or (Map [] : ('key,'value) map) *)
   | CMap of (const * const) list
   | CBigMap of (const * const) list
   | CList of const list
@@ -47,6 +51,8 @@ type const =
   | CRecord of (string * const) list
   | CConstr of string * const
 
+
+(** Liquidity types *)
  and datatype =
    (* michelson *)
   | Tunit
@@ -81,27 +87,34 @@ type const =
   | Tclosure of (datatype * datatype) * datatype
   | Tfail
 
+(** A signature for an entry point *)
 and entry_sig = {
-  entry_name : string;
-  parameter : datatype;
-  parameter_name : string;
-  storage_name : string;
+  entry_name : string;     (** name of the entry point *)
+  parameter : datatype;    (** type of the parameter *)
+  parameter_name : string; (** name of the parameter argument *)
+  storage_name : string;   (** name of the storage argument (type is
+                               common to all entry points in a
+                               contract) *)
 }
 
+(** An entry point *)
 and 'exp entry = {
-  entry_sig : entry_sig;
-  code : 'exp;
+  entry_sig : entry_sig; (** Signature of the entry point *)
+  code : 'exp;           (** Liquidity code for the entry point *)
 }
 
+(** A Liquidity contract *)
 and 'exp contract = {
-  contract_name : string;
-  storage : datatype;
+  contract_name : string;    (** Name of the contract (Capitalized) *)
+  storage : datatype;        (** Type of storage *)
   values : (string * bool (* inline *) * 'exp) list;
-  entries : 'exp entry list;
+  (** Global constants or functions *)
+  entries : 'exp entry list; (** Entry points of the contract *)
 }
 
 and entries_sig = entry_sig list
 
+(** Signature (or interface) of a contract *)
 and contract_sig = {
   sig_name : string option;
   entries_sig : entries_sig;
@@ -112,6 +125,8 @@ let size_of_type = function
   | Trecord (_, l) -> List.length l
   | _ -> raise (Invalid_argument "size_of_type")
 
+(** Comparable types can be used as, e.g., keys in a map. This
+    corresponds to comparable types in Michelson *)
 let comparable_type = function
   | Tbool
   | Tint
@@ -124,6 +139,9 @@ let comparable_type = function
   | Taddress -> true
   | _ -> false
 
+(** Equality between types. Contract signatures are first order values
+    in types, and equality between those is modulo renaming (of
+    signatures). *)
 let rec eq_types ty1 ty2 = match ty1, ty2 with
   | Tunit, Tunit
   | Tbool, Tbool
@@ -173,6 +191,8 @@ let rec eq_types ty1 ty2 = match ty1, ty2 with
 
   | _, _ -> false
 
+
+(** Equality between signatures modulo names of signatures  *)
 and eq_signature { entries_sig = s1 } { entries_sig = s2 } =
   try
     List.for_all2 (fun e1 e2 ->
@@ -183,7 +203,8 @@ and eq_signature { entries_sig = s1 } { entries_sig = s2 } =
       ) s1 s2
   with Invalid_argument _ -> false
 
-
+(** Returns true if a type contains an operation (excepted in lambda's
+   where they are allowed in Michelson). *)
 let rec type_contains_nonlambda_operation = function
   | Toperation -> true
   | Tunit | Tbool | Tint | Tnat | Ttez | Tstring | Tbytes
@@ -200,26 +221,32 @@ let rec type_contains_nonlambda_operation = function
       s.entries_sig
   | Tlambda _ | Tclosure _ -> false
 
+(** Extract the signature of a contract *)
 let sig_of_contract c = {
   sig_name = None;
   entries_sig = List.map (fun e -> e.entry_sig) c.entries;
 }
 
+(** Type of source code locations *)
 type location = {
   loc_file : string;
   loc_pos : ((int * int) * (int * int)) option;
 }
 
+(** Type of located Liquidity errors *)
 type error = { err_loc: location; err_msg: string }
 
+(** Liquidity errors *)
 exception LiquidError of error
 
+(** Type of Michelson contracts *)
 type 'a mic_contract = {
   mic_parameter : datatype;
   mic_storage : datatype;
   mic_code : 'a;
 }
 
+(** Allowed built-in primities in Liquidity *)
 type primitive =
    (* resolved in LiquidCheck *)
   | Prim_unknown
@@ -312,6 +339,7 @@ type primitive =
   | Prim_string_concat
   | Prim_bytes_concat
 
+(** Allowed built-in primities for fold applications *)
 type prim_fold =
   | Prim_map_iter
   | Prim_set_iter
@@ -323,13 +351,14 @@ type prim_fold =
   | Prim_coll_iter
   | Prim_coll_fold
 
+(** Allowed built-in primities for map applications *)
 type prim_map =
   | Prim_map_map
   | Prim_set_map
   | Prim_list_map
   | Prim_coll_map
 
-
+(** Allowed built-in primities for map-fold applications *)
 type prim_map_fold =
   | Prim_map_map_fold
   | Prim_set_map_fold
@@ -337,9 +366,10 @@ type prim_map_fold =
   | Prim_coll_map_fold
 
 
+(** Parsing/printing of Liquidity primitives *)
+
 let primitive_of_string = Hashtbl.create 101
 let string_of_primitive = Hashtbl.create 101
-
 
 (* Some primitives should be kept internal:
 * get and set
@@ -576,89 +606,142 @@ let string_of_map_fold_primitive prim =
     raise Not_found
 
 
-(* `variant` is the only parameterized type authorized in Liquidity.
-   Its constructors, `Left` and `Right` must be constrained with type
-   annotations, for the correct types to be propagated in the sources.
+(** Type of constructors, of both sum types and variants.
+    [variant] is the only parameterized type authorized in Liquidity.
+    Its constructors, [Left] and [Right] must be constrained with type
+    annotations, for the correct types to be propagated in the sources.
 *)
 type constructor =
   Constr of string
 | Left of datatype
 | Right of datatype
 
+(** A pattern in a pattern-matching construct is either a constructor
+   [C (a, b, c)] or a wildcard [_] *)
 type pattern =
   | CConstr of string * string list
   | CAny
 
+(** Name with source location information *)
 type loc_name = { nname : string; nloc: location }
 
+(** The parameterized types of Liquidity expression. The parameter
+   ['ty] is either [unit] or [datatype] for resp. typed and untyped
+   expression. The parameter ['a] is a ghost type {!typed} or
+   {!encoded} to enforce some properties about expression through
+   typing.  *)
 type ('ty, 'a) exp = {
-  desc : ('ty, 'a) exp_desc;
-  name : string option;
-  loc : location;
-  ty : 'ty;
-  bv : StringSet.t;
-  fail : bool;
-  transfer : bool;
+  desc : ('ty, 'a) exp_desc; (** Actual expression *)
+  name : string option;      (** Potential name of expression *)
+  loc : location;            (** Source location *)
+  ty : 'ty;                  (** Type of expression *)
+  bv : StringSet.t;          (** Set of bound variable in the expression *)
+  fail : bool;               (** Fail flag, [true] if evaluation of
+                                 the expression can fail *)
+  transfer : bool;           (** Transfer flas, [true] if the
+                                expression can contain an operation
+                                (these should not be duplicated) *)
 }
 
+(** Type of raw Liquidity expression descriptions *)
 and ('ty, 'a) exp_desc =
   | Let of { bnd_var: loc_name;
              inline: bool;
              bnd_val: ('ty, 'a) exp;
              body: ('ty, 'a) exp }
-  | Var of string
+  (** Let binding: {[let@@inline bnd_var = bnd_val in body ]} *)
+
+  | Var of string (** Simple variable : [x] *)
+
   | SetField of { record : ('ty, 'a) exp;
                   field: string;
                   set_val: ('ty, 'a) exp }
+  (** Functional record field update: {[ record.field <- set_val ]} *)
+
   | Project of { field: string;
                  record: ('ty, 'a) exp }
+  (** Record projection: {[ record.field ]} *)
+
   | Const of { ty: datatype;
                const: const }
+  (** Constant with its type *)
+
   | Apply of { prim: primitive;
                args: ('ty, 'a) exp list }
+  (** Built-in function application. Functions that are not built-in
+      use the special primitive {!Prim_unknown}. *)
+
   | If of { cond: ('ty, 'a) exp;
             ifthen: ('ty, 'a) exp;
             ifelse: ('ty, 'a) exp }
+  (** If-then-else constructs: {[ if cond then ifthen else ifelse ]} *)
+
   | Seq of ('ty, 'a) exp * ('ty, 'a) exp
+  (** Sequences: {[ e1; e2 ]} *)
+
   | Transfer of { contract: ('ty, 'a) exp;
                   amount: ('ty, 'a) exp;
                   entry: string option;
                   arg: ('ty, 'a) exp }
+  (** Transfers, or contract calls:
+      - {[ contract.entry arg ~amount ]}
+      - {[ Contract.transfer ~dest:contract ~amount ]} *)
+
   | MatchOption of { arg : ('ty, 'a) exp;
                      ifnone: ('ty, 'a) exp;
                      some_name: loc_name;
                      ifsome: ('ty, 'a) exp }
+  (** Pattern matching over optional values:
+      {[ match arg with
+         | None -> ifnone
+         | Some some_name -> ifsome ]} *)
+
   | MatchList of { arg: ('ty, 'a) exp;
                    head_name: loc_name;
                    tail_name: loc_name;
                    ifcons: ('ty, 'a) exp;
                    ifnil: ('ty, 'a) exp }
+  (** Pattern matching over lists:
+      {[ match arg with
+         | head_name :: tail_name -> ifcons
+         | [] -> ifnil ]} *)
+
   | Loop of { arg_name: loc_name;
               body: ('ty, 'a) exp;
               arg: ('ty, 'a) exp }
+  (** Functional loops:
+      {[ Loop.loop (fun arg_name -> body) arg ]} *)
 
   | Fold of { prim: prim_fold;
               arg_name: loc_name;
               body: ('ty, 'a) exp;
               arg: ('ty, 'a) exp;
               acc: ('ty, 'a) exp }
+  (** Fold over collections with accumulator:
+      {[ List.fold (fun arg_name -> body) arg acc ]} *)
 
   | Map of { prim: prim_map;
              arg_name: loc_name;
              body: ('ty, 'a) exp;
              arg: ('ty, 'a) exp }
+  (** Map over collections:
+      {[ List.map (fun arg_name -> body) arg ]} *)
 
   | MapFold of { prim: prim_map_fold;
                  arg_name: loc_name;
                  body: ('ty, 'a) exp;
                  arg: ('ty, 'a) exp;
                  acc: ('ty, 'a) exp }
+  (** Map-Fold (like map-reduce) over collections with accumulator:
+      {[ List.map_fold (fun arg_name -> body) arg acc ]} *)
 
   | Lambda of { arg_name: loc_name;
                 arg_ty: datatype;
                 body: ('ty, 'a) exp;
                 ret_ty: datatype; (* inferred during typechecking *)
               }
+  (** Pure lambda abstractions:
+      {[ fun (arg_name : arg_ty) -> (body : ret_ty) ]} *)
 
   | Closure of { arg_name: loc_name;
                  arg_ty: datatype;
@@ -666,40 +749,71 @@ and ('ty, 'a) exp_desc =
                  body: ('ty, 'a) exp;
                  ret_ty: datatype; (* inferred during typechecking *)
                }
+  (** Closures: same as lambda-abstractions but with a call
+     environment. Closures cannot be written explicitely in Liquidity
+     syntax, rather lambda's that are not pure are transformed into
+     closures during typechecking. *)
 
   | Record of (string * ('ty, 'a) exp) list
+  (** Record constructs:
+      {[ { a = exp1; b = exp2; c = ... }]} *)
+
   | Constructor of { constr: constructor;
                      arg: ('ty, 'a) exp }
+  (** Constructor application: {[ C arg ]} *)
 
   | MatchVariant of { arg: ('ty, 'a) exp;
                       cases: (pattern * ('ty, 'a) exp) list }
+  (** Pattern matching over sum or variant types:
+      {[ match arg with
+        | C1 (a1, a2) -> exp1
+        | C2 (x1, x2, x3) -> exp2
+        | _ -> exp3 *)
 
   | MatchNat of { arg: ('ty, 'a) exp;
                   plus_name: loc_name;
                   ifplus: ('ty, 'a) exp;
                   minus_name: loc_name;
                   ifminus: ('ty, 'a) exp }
+  (** Special constructs for pattern matching over the sign of an integer:
+      {[ match%nat arg with
+        | Plus plus_name -> ifplus
+        | Minus minus_name -> ifminus ]}*)
 
   | Failwith of ('ty, 'a) exp
+  (** Failwith: {[ failwith arg ]} *)
 
   | CreateContract of { args: ('ty, 'a) exp list;
                         contract: ('ty, 'a) exp contract }
+  (** Oringinating contracts:
+      {[ Contract.create ~manager ~delegate ~spendable ~delegatable ~amount
+          (contract C) ]} *)
 
   | ContractAt of { arg: ('ty, 'a) exp;
                     c_sig: contract_sig }
+  (** Contract from address: {[ (Contract.at arg : (contract C_sig) option ]} *)
 
   | Unpack of { arg: ('ty, 'a) exp;
                 ty: datatype }
+  (** Unpacking bytes with type annotation:
+      {[ (Bytes.unpack arg : ty option) ]} *)
 
 
+(** Ghost type for typed expressions *)
 type typed
+(** Ghost type for encoded expressions *)
 type encoded
+(** Untyped expressions *)
 type syntax_exp = (unit, unit) exp
+(** Typed expressions *)
 type typed_exp = (datatype, typed) exp
+(** Endoced expressions *)
 type encoded_exp = (datatype, encoded) exp
+(** Simplified expressions *)
 type live_exp = (datatype * datatype StringMap.t, encoded) exp
 
 
+(** Smart constructor for Liquidity expressions *)
 let mk =
   let bv = StringSet.empty in
   fun ?name ~loc desc ty ->
@@ -860,20 +974,24 @@ let rec eq_exp_desc eq_ty eq_var e1 e2 = match e1, e2 with
      with Invalid_argument _ -> false)
   | _, _ -> false
 
-(* Equality modulo location, renaming, etc. *)
+(** Generic equality between expressions modulo location, renaming, etc. *)
 and eq_exp eq_ty eq_var e1 e2 =
   eq_ty e1.ty e2.ty &&
   eq_exp_desc eq_ty eq_var e1.desc e2.desc
 
+(** Instances of above function {!eq_exp} *)
 let eq_typed_exp eq_var e1 e2 = eq_exp eq_types eq_var e1 e2
 let eq_syntax_exp e1 e2 = eq_exp (fun _ _ -> true) (=) e1 e2
 
 
+(** Type of Michelson expression *)
 type michelson_exp =
   | M_INS of string * string list
   | M_INS_CST of string * datatype * const * string list
   | M_INS_EXP of string * datatype list * michelson_exp list * string list
 
+(** Intermediate representation for Michelson expressions, the first
+    parameter to allow annotated (or not) expressions *)
 type 'a pre_michelson =
   | RENAME of string option
   | SEQ of 'a list
@@ -962,6 +1080,8 @@ type 'a pre_michelson =
   | MOD
   | DIV
 
+(** Intermediate Michelson expressions with location information and
+   names *)
 type loc_michelson = {
   loc : location;
   ins : loc_michelson pre_michelson;
@@ -971,6 +1091,7 @@ type loc_michelson = {
 (* let mic ins = ins *)
 (* let mic_loc loc ins = { loc; ins } *)
 
+(** Type of closure environment used to typechecking *)
 type closure_env = {
   env_vars :  (string (* name outside closure *)
                * datatype
@@ -985,6 +1106,7 @@ type closure_env = {
   call_bindings : (string * encoded_exp) list;
 }
 
+(** Environment for parsing *)
 type env = {
     (* name of file being compiled *)
     filename : string;
@@ -1004,7 +1126,7 @@ type env = {
     top_env : env option;
   }
 
-(* fields updated in LiquidCheck *)
+(** Environment for typechecking *)
 type typecheck_env = {
     warnings : bool;
     annot : bool;
@@ -1036,17 +1158,10 @@ let empty_typecheck_env ~warnings t_contract_sig t_contract_storage env = {
 }
 
 
-let new_binding env name ?(fail=false) ty =
-  let count = ref 0 in
-  let env = { env with
-              vars = StringMap.add name (name, ty, fail) env.vars;
-              vars_counts = StringMap.add name count env.vars_counts;
-            } in
-  (env, count)
+(** {2 decompilation } *)
 
-
-(* decompilation *)
-
+(** Graph-like structure used for symbolic execution during
+    decompilation *)
 type node = {
   num : int;
   loc : location;
@@ -1120,7 +1235,7 @@ type node = {
 
 and node_exp = node * node
 
-
+(** Representation of Liquidity contract initializers *)
 type syntax_init = {
   init_name : string;
   init_args : (string * location * datatype) list; (* arguments *)
@@ -1136,7 +1251,8 @@ type loc_michelson_contract = loc_michelson mic_contract
 
 let noloc = { loc_file = "<unspecified>"; loc_pos = None }
 
-
+(** Build a default contract signature (with a single [main] entry
+    point) for a parameter type *)
 let contract_sig_of_param ?sig_name parameter = {
   sig_name;
   entries_sig = [ {
@@ -1147,6 +1263,7 @@ let contract_sig_of_param ?sig_name parameter = {
     }];
 }
 
+(** Predefined signature for contract with unit parameter *)
 let unit_contract_sig = contract_sig_of_param ~sig_name:"UnitContract" Tunit
 
 let dummy_contract_sig = {
@@ -1161,10 +1278,13 @@ let dummy_syntax_contract : syntax_contract = {
   entries = [];
 }
 
+(** Types of warning *)
 type warning =
   | Unused of string
   | UnusedMatched of string
   | IgnoredTypeAnnot of string
+
+(** {2 Reserved symbols in parsing }  *)
 
 let reserved_keywords = [
   "let"; "in"; "match" ; "int"; "bool"; "string"; "bytes";
@@ -1191,8 +1311,10 @@ let has_reserved_prefix s =
   | 's', 'p', 's' -> len >= 6 && s.[3] = 'i' && s.[4] = 'g' && s.[4] = '1'
   | _ -> false
 
+(** Prefix for constructor used to encode entry point names *)
 let prefix_entry = "_Liq_entry_"
 
+(** Prefix for constructor used to encode contracts *)
 let prefix_contract = "_Liq_contract_"
 
 let entry_name_of_case s =

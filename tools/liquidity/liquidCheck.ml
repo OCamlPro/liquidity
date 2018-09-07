@@ -7,9 +7,6 @@
 (*                                                                        *)
 (**************************************************************************)
 
-(* TODO: we should check that the keys of maps and sets are comparable,
-  in particular to avoid using `key` in maps instead of `key_hash`. *)
-
 (* TODO: we don't handle correctly all the occurrences of Tfail, i.e.
    when an error occurs in a sub-part of a type and another type is expected,
    we should probably unify.
@@ -17,15 +14,6 @@
 
 (*
   Typecheck an AST.
-  The following actions are also performed:
-  * variables are replaced by uniq identifiers: STRING/INTEGER
-  * Var(var,_loc,labels) -> Var(var,_loc,[]) with accesses thought "get"
-  * SetVar(var,_loc,labels) -> Var(var,_loc,[]) with accesses thought "get"
-                               and modification thought "set"
-  * Lambda(_,_,_,Tunit) -> Lambda(_,_,_, body.ty)
-  * Record(_,_) -> Apply("tuple", _)
-  * Constructor(_) -> Apply("Left"|"Right", [arg; unused ty])
-
  *)
 
 open LiquidTypes
@@ -35,14 +23,13 @@ let noloc env = LiquidLoc.loc_in_file env.env.filename
 let error loc msg =
   LiquidLoc.raise_error ~loc ("Type error:  " ^^ msg ^^ "%!")
 
-let comparable_ty ty1 ty2 =
-  comparable_type ty1 && eq_types ty1 ty2
-
-let error_not_comparable loc prim ty1 ty2 =
-  error loc "arguments of %s not comparable: %s\nwith\n%s\n"
-    (LiquidTypes.string_of_primitive prim)
-    (LiquidPrinter.Liquid.string_of_type ty1)
-    (LiquidPrinter.Liquid.string_of_type ty2)
+(* Two types are comparable if they are equal and of a comparable type *)
+let check_comparable loc prim ty1 ty2 =
+  if not (comparable_type ty1 && eq_types ty1 ty2) then
+    error loc "arguments of %s not comparable: %s\nwith\n%s\n"
+      (LiquidTypes.string_of_primitive prim)
+      (LiquidPrinter.Liquid.string_of_type ty1)
+      (LiquidPrinter.Liquid.string_of_type ty2)
 
 let new_binding env name ?(fail=false) ty =
   let count = ref 0 in
@@ -118,6 +105,9 @@ let error_prim loc prim args expected_args =
     assert false
 
 
+(* Extract signature of contract, use previous name if the same
+   signature was generated before otherwise use the same name as the
+   contract for its signature *)
 let sig_of_contract env contract =
   let c_sig = sig_of_contract contract in
   let sig_name = StringMap.fold (fun name c_sig' -> function
@@ -177,31 +167,7 @@ let rec merge_matches acc loc cases constrs =
     end
   | _ -> raise Exit
 
-(* (\* Flatten nested records to recover encodings *\)
- * let flatten_record env exp = match exp.desc with
- *   | Record (loc, [lx, x; ly, y]) ->
- *     let ty_rx = StringMap.find lx env.env.labels in
- *     let ty_ry = StringMap.find ly env.env.labels in
- *     if ty_rx <> ty_ry then exp
- *     else
- *       let nb_fields = match ty_rx with
- *         | Trecord (_, labels) -> List.length labels
- *         | _ -> assert false in
- *       let rec aux nb exp =
- *         if nb = 0 then exp
- *         else match exp.desc with
- *           | Record (loc, [lx, x; ly, y]) ->
- *             (lx, x) :: aux (nb - 1)
- *           | _ -> exp
- *       in
- *       aux nb_fields exp
- *   | _ -> exp *)
-
-  (* this function returns a triple with
-   * the expression annotated with its type
-   * whether the expression can fail
-   * whether the expression performs a TRANSFER_TOKENS
-   *)
+(* Typecheck an expression. Returns a typed expression *)
 let rec typecheck env ( exp : syntax_exp ) : typed_exp =
   let loc = exp.loc in
   match exp.desc with
@@ -322,13 +288,14 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
   | Apply { prim = Prim_unknown;
             args = { desc = Var "Contract.call" } :: args } ->
     let nb_args = List.length args in
-    if nb_args <> 3 then
+    if nb_args <> 3 || nb_args <> 4  then
       error loc
-        "Contract.call expects 3 arguments, it was given %d arguments."
+        "Contract.call expects 3 or 4 arguments, it was given %d arguments."
         nb_args
     else
       error loc "Bad syntax for Contract.call."
 
+  (* <unknown> (prim, args) -> prim args *)
   | Apply { prim = Prim_unknown;
             args = { desc = Var name } ::args }
     when not (StringMap.mem name env.vars) ->
@@ -341,7 +308,7 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
      typecheck env { exp with
                      desc = Apply { prim; args } }
 
-
+  (* <unknown> (f, x1, x2, x3) -> ((f x1) x2) x3) *)
   | Apply { prim = Prim_unknown; args = f :: ((_ :: _) as r) } ->
      let exp = List.fold_left (fun f x ->
         { exp with desc = Apply { prim = Prim_exec; args =  [x; f] }}
@@ -406,6 +373,8 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
        typecheck_expected "loop body" env (Ttuple [Tbool; arg.ty]) body in
      check_used env arg_name count;
      mk ?name:exp.name ~loc (Loop { arg_name; body; arg }) arg.ty
+
+  (* For collections, replace generic primitives with their typed ones *)
 
   | Fold { prim; arg_name; body; arg; acc } ->
     let arg = typecheck env arg in
@@ -532,9 +501,12 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
     let ty = Tlambda (arg_ty, body.ty) in
     mk ?name:exp.name ~loc desc ty
 
+  (* This cannot be produced by parsing *)
   | Closure _ -> assert false
 
+  (* Records with zero elements cannot be parsed *)
   | Record [] -> assert false
+
   | Record (( (label, _) :: _ ) as lab_x_exp_list) ->
      let ty_name, _, _ =
        try StringMap.find label env.env.labels
@@ -596,6 +568,10 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
      let ty = Tor (left_ty, arg.ty) in
      mk ?name:exp.name ~loc (Constructor { constr = Right left_ty; arg }) ty
 
+  (* Typecheck and normalize pattern matching.
+     - When decompiling, try to merge nested patterns
+     - Order cases based on constructor order in type declaration
+     - Merge wildcard patterns if they are compatible (keep at most one)  *)
   | MatchVariant { arg; cases } ->
     let untyped_arg = arg in
     let arg = typecheck env arg in
@@ -852,12 +828,12 @@ and typecheck_prim2 env prim loc args =
   match prim, List.map (fun a -> a.ty) args with
   | ( Prim_neq | Prim_lt | Prim_gt | Prim_eq | Prim_le | Prim_ge ),
     [ ty1; ty2 ] ->
-     if comparable_ty ty1 ty2 then Tbool
-     else error_not_comparable loc prim ty1 ty2
+     check_comparable loc prim ty1 ty2;
+     Tbool
   | Prim_compare,
     [ ty1; ty2 ] ->
-     if comparable_ty ty1 ty2 then Tint
-     else error_not_comparable loc prim ty1 ty2
+     check_comparable loc prim ty1 ty2;
+     Tint
 
   | Prim_neg, [( Tint | Tnat )] -> Tint
 
@@ -1066,20 +1042,27 @@ and typecheck_expected info env expected_ty exp =
   exp
 
 and typecheck_apply ?name env prim loc args =
-  let args = List.map (typecheck env)args in
+  let args = List.map (typecheck env) args in
   let prim, ty = typecheck_prim1 env prim loc args in
   mk ?name (Apply { prim; args }) ty
 
 
 and typecheck_entry env entry =
   (* let env = { env with clos_env = None } in *)
-  let (env, _) =
+  (* register storage *)
+  let (env, count_storage) =
     new_binding env entry.entry_sig.storage_name env.t_contract_storage in
-  let (env, _) =
+  (* register parameter *)
+  let (env, count_param) =
     new_binding env entry.entry_sig.parameter_name entry.entry_sig.parameter in
   let expected_ty = Ttuple [Tlist Toperation; env.t_contract_storage] in
+  (* Code for entry point must be of type (operation list * storage) *)
   let code =
     typecheck_expected "return value" env expected_ty entry.code in
+  let check_used v c =
+    check_used env { nname = v; nloc = noloc env } c in
+  check_used entry.entry_sig.parameter_name count_param;
+  check_used entry.entry_sig.storage_name count_storage;
   { entry with code }
 
 and typecheck_contract ~warnings ~decompiling env contract =
@@ -1099,13 +1082,16 @@ and typecheck_contract ~warnings ~decompiling env contract =
       t_contract_storage = contract.storage;
     } in
 
+  (* Add bindings to the environment for the global values *)
   let env, values, counts =
     List.fold_left (fun (env, values, counts) (name, inline, exp) ->
         let exp = typecheck env exp in
         let (env, count) = new_binding env name ~fail:exp.fail exp.ty in
         env, ((name, inline, exp) :: values), ((name, count) :: counts)
       ) (env, [], []) contract.values in
+  (* Typecheck entries *)
   let entries = List.map (typecheck_entry env) contract.entries in
+  (* Report unused global values *)
   List.iter (fun (name, count) ->
       check_used env { nname = name; nloc = noloc env } (* TODO *) count
     ) counts;

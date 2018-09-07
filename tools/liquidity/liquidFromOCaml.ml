@@ -19,6 +19,7 @@ type 'a ast_elt =
   | Syn_entry of 'a entry
   | Syn_init of syntax_init
 
+(* redefined keywords of the modified OCaml lexer *)
 let () =
   LiquidOCamlLexer.define_keywords
  [
@@ -339,8 +340,7 @@ let rec translate_type env ?expected typ = match typ with
 exception NotAConstant
 
 (* Translate an expression, expecting a constant. Fails with [NotAConstant]
- if the expression is not a constant. *)
-
+   if the expression is not a constant. *)
 let rec translate_const env exp =
   match exp with
   | { pexp_desc = Pexp_construct ( { txt = Lident "()" }, None ) } ->

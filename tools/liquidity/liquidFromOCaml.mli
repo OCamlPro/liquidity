@@ -7,6 +7,8 @@
 (*                                                                        *)
 (**************************************************************************)
 
+(** Parsing from OCaml AST to Liquidity AST *)
+
 open LiquidTypes
 
 val predefined_types : datatype StringMap.t

@@ -62,6 +62,9 @@ let uniq_ident env name =
 (*     incr cpt; *)
 (*     Printf.sprintf "tmp#%d" !cpt *)
 
+
+(* Create a new binding in the typechecing environment to uniquely
+   rename variable for alpha-renaming (prevents capture). *)
 let new_binding env name ?(fail=false) ty =
   let new_name = uniq_ident env name in
   let count = ref 0 in
@@ -100,6 +103,9 @@ let find_var ?(count_used=true) env loc name =
 
 (* Create environment for closure *)
 let env_for_clos env bvs arg_name arg_type =
+  (* Look for free variables that are bound outside the lambda,
+     remember their type and give them index (position) in the future
+     call environment *)
   let _, free_vars = StringSet.fold (fun v (index, free_vars) ->
       let index = index + 1 in
       let free_vars =
@@ -127,10 +133,13 @@ let env_for_clos env bvs arg_name arg_type =
   let ext_env = env in
   let env = { env with vars = StringMap.empty } in
   match free_vars_l with
-  | [] -> (* no closure environment *)
+  | [] ->
+    (* If there are no free variables we don't need to build a closure *)
     let (new_name, env, _) = new_binding env arg_name.nname arg_type in
     env, { arg_name with nname = new_name }, arg_type, []
   | _ ->
+    (* Build a closure environment and change lambda argument from arg to
+       a tuple (arg, (x1, x2, x3, ...)) *)
     let loc = arg_name.nloc in
     let env_arg_name = uniq_ident env "closure_env" in
     let env_arg_type =
@@ -171,7 +180,8 @@ let env_for_clos env bvs arg_name arg_type =
     in
     env, { arg_name with nname = env_arg_name}, env_arg_type, call_bindings
 
-
+(* Encode a type. The only change perfomed here is to encode contract
+   signatures to single entry form *)
 let rec encode_type ty =
   (* if env.only_typecheck then ty *)
   (* else *)
@@ -209,10 +219,8 @@ let rec encode_type ty =
     if t1 == t1' && t2 == t2' && t3 == t3' then ty
     else Tclosure ((t1', t2'), t3')
   | Trecord (name, labels) ->
-    (* encode_record_type labels *)
     Trecord (name, List.map (fun (l, ty) -> l, encode_type ty) labels)
   | Tsum (name, cstys) ->
-    (* encode_sum_type cstys *)
     Tsum (name, List.map (fun (c, ty) -> c, encode_type ty) cstys)
   | Tcontract contract_sig ->
     let parameter = encode_type (encode_contract_sig contract_sig) in
@@ -223,28 +231,19 @@ let rec encode_type ty =
         parameter;
       }] }
 
-and encode_record_type labels =
-  Ttuple (List.map (fun (_, ty) -> encode_type ty) labels)
-
-and encode_sum_type cstys =
-  let rec rassoc = function
-    | [] -> assert false
-    | [_, ty] -> encode_type ty
-    | (_, lty) :: rstys ->
-      Tor (encode_type lty, rassoc rstys)
-  in
-  rassoc cstys
-
+(* encode a contract signature to the corresponding single entry form
+   sum type *)
 and encode_contract_sig csig =
   match csig.entries_sig with
   | [] -> assert false (* ? *)
   | [{ parameter }] -> parameter
   | entries ->
-      Tsum ("_entries",
-            List.map (fun { entry_name; parameter = t } ->
+    Tsum ("_entries",
+          List.map (fun { entry_name; parameter = t } ->
               (prefix_entry ^ entry_name, t)
-              ) entries)
+            ) entries)
 
+(* returns true if the type has a big map anywhere *)
 let rec has_big_map = function
   | Tbigmap (_t1, _t2) -> true
   | Ttez | Tunit | Ttimestamp | Tint | Tnat | Tbool | Tkey | Tkey_hash
@@ -264,6 +263,8 @@ let rec has_big_map = function
   | Tcontract { entries_sig } ->
     List.exists (fun { parameter } -> has_big_map parameter) entries_sig
 
+(* Encode storage type. This checks that big maps appear only as the
+   first component of the toplevel tuple or record storage. *)
 let encode_storage_type env ty =
   let ty = encode_type ty in
   match ty with
@@ -277,18 +278,15 @@ let encode_storage_type env ty =
       "only one big map is only allowed as first component of storage \
        (either a tuple or a record)"
 
+(* Encode parameter type. Parameter cannot have big maps. *)
 let encode_parameter_type env ty =
   let ty = encode_type ty in
   if has_big_map ty then
     error (noloc env) "big maps are not allowed in parameter type";
   ty
 
-let encode_return_type env ty =
-  let ty = encode_type ty in
-  if has_big_map ty then
-    error (noloc env) "big maps are not allowed in return type";
-  ty
-
+(* Encode a constant: constructors are turned into (netsed) Left/Right
+   variant values *)
 let rec encode_const env c = match c with
   | CUnit | CBool _ | CInt _ | CNat _ | CTez _ | CTimestamp _ | CString _
   | CBytes _ | CKey _ | CContract _ | CSignature _ | CNone  | CKey_hash _
@@ -350,6 +348,11 @@ let rec encode_const env c = match c with
     with Not_found ->
       error (noloc env)  "unknown constructor %s" constr
 
+
+(* Unfortunately, operations are not allowed in Michelson constants,
+   so when they appear in one, we have to turn them to non constant
+   expressions. For instance (Set [op]) is turned into
+   Set.add op (Set : operation set) *)
 let rec deconstify loc ty c =
   if not @@ type_contains_nonlambda_operation ty then
     mk ~loc (Const { ty; const = c }) ty
@@ -416,6 +419,7 @@ let rec deconstify loc ty c =
         (LiquidPrinter.Liquid.string_of_type ty);
       assert false
 
+(* Decrement counters for variables that they appear in an expression *)
 let rec decr_counts_vars env e =
   if e.fail then () else
   match e.desc with
@@ -470,6 +474,7 @@ let rec decr_counts_vars env e =
     List.iter (fun (_, e) -> decr_counts_vars env e) cases
 
 
+(* Encode a Liquidity expression *)
 let rec encode env ( exp : typed_exp ) : encoded_exp =
   let loc = exp.loc in
   match exp.desc with
@@ -898,7 +903,31 @@ and encode_entry env entry =
     code = encode env entry.code;
   }
 
+(* Contract is encoded to single entry point form (with name "main"):
+   {contract C = struct
+      ...
+      let%entry e1 (p1 : ty1) s1 = code_entry_1
+      let%entry e2 (p2 : ty2) s2 = code_entry_2
+      let%entry e3 (p3 : ty3) s3 = code_entry_3
+    end}
+   ===>
+   contract C = struct
+     ...
+     type p =
+      | _Liq_entry_e1 of ty1
+      | _Liq_entry_e2 of ty2
+      | _Liq_entry_e3 of ty3
 
+     let%entry main (paramter : p) storage =
+       match parameter with
+       | _Liq_entry_e1 p1 ->
+         let s1 = storage in {code_entry_1}
+       | _Liq_entry_e2 p2 ->
+         let s2 = storage in {code_entry_2}
+       | _Liq_entry_e3 p3 ->
+         let s3 = storage in {code_entry_3}
+   end
+*)
 and encode_contract ?(annot=false) ?(decompiling=false) env contract =
   let env =
     {
