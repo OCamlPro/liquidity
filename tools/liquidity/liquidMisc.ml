@@ -27,7 +27,7 @@ let rec list_remove n list =
     match list with
     | [] -> failwith "list_remove"
     | _ :: tail ->
-       list_remove (n-1) tail
+      list_remove (n-1) tail
   else list
 
 (* Replace a character with another one in a string. Returns a new

@@ -55,22 +55,22 @@ let rec convert_const ~loc expr =
   | CTuple [] -> assert false
   | CTuple [_] -> assert false
   | CTuple [x;y] ->
-     Micheline.Prim(loc, "Pair", [convert_const ~loc x;
-                                  convert_const ~loc y], [])
+    Micheline.Prim(loc, "Pair", [convert_const ~loc x;
+                                 convert_const ~loc y], [])
   | CTuple (x :: y) ->
-     Micheline.Prim(loc, "Pair", [convert_const ~loc x;
-                                  convert_const ~loc (CTuple y)], [])
+    Micheline.Prim(loc, "Pair", [convert_const ~loc x;
+                                 convert_const ~loc (CTuple y)], [])
 
   | CList args | CSet args ->
     Micheline.Seq(loc, List.map (convert_const ~loc) args)
 
   | CMap args | CBigMap args ->
-     Micheline.Seq(loc,
-                      List.map (fun (x,y) ->
-                          Micheline.Prim(loc, "Elt", [convert_const ~loc x;
-                                                       convert_const ~loc y], []
-                                          ))
-                               args)
+    Micheline.Seq(loc,
+                  List.map (fun (x,y) ->
+                      Micheline.Prim(loc, "Elt", [convert_const ~loc x;
+                                                  convert_const ~loc y], []
+                                    ))
+                    args)
 
   | CNat n -> Micheline.Int (loc, LiquidPrinter.mic_of_integer n)
   | CTez n -> Micheline.Int (loc, LiquidPrinter.mic_mutez_of_tez n)
@@ -116,7 +116,7 @@ let rec convert_type ~loc expr =
   | Ttuple [x;y] ->
     prim_type ~loc "pair" [convert_type ~loc x; convert_type ~loc y]
   | Ttuple (x :: tys) ->
-     prim_type ~loc "pair" [convert_type ~loc x; convert_type ~loc (Ttuple tys)]
+    prim_type ~loc "pair" [convert_type ~loc x; convert_type ~loc (Ttuple tys)]
   | Tor (x,y) -> prim_type ~loc "or" [convert_type ~loc x; convert_type ~loc y]
   | Tcontract { sig_name; entries_sig = [{ parameter }]} ->
     let annots = match sig_name with
@@ -125,7 +125,7 @@ let rec convert_type ~loc expr =
     prim_type ~loc "contract" [convert_type ~loc parameter] ~annots
   | Tcontract _ -> assert false
   | Tlambda (x,y) -> prim_type ~loc "lambda" [convert_type ~loc x;
-                                         convert_type ~loc y]
+                                              convert_type ~loc y]
   | Tclosure ((x,e),r) ->
     convert_type ~loc (Ttuple [Tlambda (Ttuple [x; e], r); e ]);
   | Tmap (x,y) -> prim_type ~loc "map" [convert_type ~loc x;convert_type ~loc y]
@@ -226,7 +226,7 @@ let rec convert_code expand expr =
   | SENDER -> prim "SENDER" [] name
   | OR -> prim "OR" [] name
   | LAMBDA (ty1, ty2, expr) ->
-     prim "LAMBDA" [convert_type ty1; convert_type ty2; convert_code expand expr] name
+    prim "LAMBDA" [convert_type ty1; convert_type ty2; convert_code expand expr] name
   | COMPARE -> prim "COMPARE" [] name
   | PUSH (Tunit, CUnit) -> prim "UNIT" [] name
   | PUSH (Tlist ty, CList []) -> prim "NIL" [convert_type ty] name
@@ -267,9 +267,9 @@ let rec convert_code expand expr =
   | ITER body -> prim "ITER" [convert_code expand body] name
   | MAP body -> prim "MAP" [convert_code expand body] name
   | CONTRACT ty ->
-     prim "CONTRACT" [convert_type ty] name
+    prim "CONTRACT" [convert_type ty] name
   | UNPACK ty ->
-     prim "UNPACK" [convert_type ty] name
+    prim "UNPACK" [convert_type ty] name
   | INT -> prim "INT" [] name
   | ISNAT -> prim "ISNAT" [] name
   | ABS -> prim "ABS" [] name
@@ -413,7 +413,7 @@ let const_encoding =
   Micheline.canonical_encoding
     ~variant:"michelson_v1"
     Data_encoding.string
-  (* Micheline.erased_encoding 0 Data_encoding.string *)
+(* Micheline.erased_encoding 0 Data_encoding.string *)
 
 let json_of_const c =
   Data_encoding.Json.construct const_encoding c
@@ -432,9 +432,9 @@ let read_file filename =
   let lines = ref [] in
   let chan = open_in filename in
   begin try
-    while true; do
-      lines := input_line chan :: !lines
-    done;
+      while true; do
+        lines := input_line chan :: !lines
+      done;
     with
       End_of_file -> close_in chan
   end;
@@ -444,11 +444,11 @@ let read_tezos_file filename =
   let s = read_file filename in
   match LiquidFromTezos.contract_of_string filename s with
   | Some (code, loc_table) ->
-     Printf.eprintf "Program %S parsed\n%!" filename;
-     code, loc_table
+    Printf.eprintf "Program %S parsed\n%!" filename;
+    code, loc_table
   | None ->
-     Printf.eprintf "Errors parsing in %S\n%!" filename;
-     exit 2
+    Printf.eprintf "Errors parsing in %S\n%!" filename;
+    exit 2
 
 let read_tezos_json filename =
   let s = read_file filename in
@@ -560,8 +560,8 @@ let arg_list work_done = [
     "--amount", Arg.String (fun s -> contract_amount := s),
     "NNN.00 Number of Tez sent";
      *)
-  ]
+]
 
 (* force linking not anymore ?
-let execute = Script_interpreter.execute
- *)
+   let execute = Script_interpreter.execute
+*)

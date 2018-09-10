@@ -83,14 +83,14 @@ let rec translate_code ~parameter_name ~storage_name code =
       (* A variable whose value is stored at position pos in a stack
          of size depth, can be put on top of the stack with
          instruction DU*(depth-pos)P *)
-       let pos = try
-           StringMap.find name env
-         with Not_found ->
-           LiquidLoc.raise_error ~loc
-             "Internal Error(Michelson): variable %S not found\n%!"
-             name
-       in
-       [ dup ~loc (depth - pos) ]
+      let pos = try
+          StringMap.find name env
+        with Not_found ->
+          LiquidLoc.raise_error ~loc
+            "Internal Error(Michelson): variable %S not found\n%!"
+            name
+      in
+      [ dup ~loc (depth - pos) ]
 
     | Const { ty; const } ->
       (* Compiling a constant is just pushing it on the stack *)
@@ -135,34 +135,34 @@ let rec translate_code ~parameter_name ~storage_name code =
       end
 
     | Seq (e1, e2) ->
-       (* Sequences e1; e2 is compiled as a sequence in Michelson and
-          the result of e1 is droped (ignored) *)
-       let e1 = compile depth env e1 in
-       let e2 = compile depth env e2 in
-       e1 @ [ ii ~loc:LiquidLoc.noloc DROP ] @ e2
+      (* Sequences e1; e2 is compiled as a sequence in Michelson and
+         the result of e1 is droped (ignored) *)
+      let e1 = compile depth env e1 in
+      let e2 = compile depth env e2 in
+      e1 @ [ ii ~loc:LiquidLoc.noloc DROP ] @ e2
 
     | Let { bnd_var; bnd_val; body } ->
-       (* Compiling a let binding is compiling the bound value and
-          remembering the depth at which this value can be found on the
-          stack, and compiling the body *)
-       let bnd_val = compile depth env bnd_val in
-       let env = StringMap.add bnd_var.nname depth env in
-       let depth = depth + 1 in
-       let body = compile depth env body in
-       let cleanup_stack = [ ii ~loc @@ DIP_DROP (1, 1) ] in
-       bnd_val @ body @ cleanup_stack
+      (* Compiling a let binding is compiling the bound value and
+         remembering the depth at which this value can be found on the
+         stack, and compiling the body *)
+      let bnd_val = compile depth env bnd_val in
+      let env = StringMap.add bnd_var.nname depth env in
+      let depth = depth + 1 in
+      let body = compile depth env body in
+      let cleanup_stack = [ ii ~loc @@ DIP_DROP (1, 1) ] in
+      bnd_val @ body @ cleanup_stack
 
     | Lambda { arg_name; arg_ty; body; ret_ty } ->
-       let env = StringMap.empty in
-       let env = StringMap.add arg_name.nname 0 env in
-       let depth = 1 in
-       let arg_type = LiquidEncode.encode_type arg_ty in
-       let res_type = LiquidEncode.encode_type ret_ty in
-       let body = compile depth env body in
-       let arg_annot = compile_arg_name arg_name.nname in
-       [ ii ~loc @@
-         LAMBDA (arg_type, res_type,
-                 seq (arg_annot @ body @ [ii ~loc @@ DIP_DROP (1,1)])) ]
+      let env = StringMap.empty in
+      let env = StringMap.add arg_name.nname 0 env in
+      let depth = 1 in
+      let arg_type = LiquidEncode.encode_type arg_ty in
+      let res_type = LiquidEncode.encode_type ret_ty in
+      let body = compile depth env body in
+      let arg_annot = compile_arg_name arg_name.nname in
+      [ ii ~loc @@
+        LAMBDA (arg_type, res_type,
+                seq (arg_annot @ body @ [ii ~loc @@ DIP_DROP (1,1)])) ]
 
     | Closure { arg_name; arg_ty; call_env; body; ret_ty } ->
       (* A closure is compiled as a pair (call_env, lambda). Function
@@ -191,11 +191,11 @@ let rec translate_code ~parameter_name ~storage_name code =
       assert false (* should have been encoded *)
 
     | Transfer { contract; amount; entry = None; arg } ->
-       (* Contract.call (encoded) compiled to TRANSFER_TOKENS *)
-       let contract = compile depth env contract in
-       let amount = compile (depth+1) env amount in
-       let arg = compile (depth+2) env arg in
-       contract @ amount @ arg @ [ ii ~loc TRANSFER_TOKENS ]
+      (* Contract.call (encoded) compiled to TRANSFER_TOKENS *)
+      let contract = compile depth env contract in
+      let amount = compile (depth+1) env amount in
+      let arg = compile (depth+2) env arg in
+      contract @ amount @ arg @ [ ii ~loc TRANSFER_TOKENS ]
 
     | Failwith arg ->
       let arg = compile depth env arg in
@@ -226,44 +226,44 @@ let rec translate_code ~parameter_name ~storage_name code =
        branches. *)
 
     | MatchOption { arg; ifnone; some_name; ifsome } ->
-       (* Pattern matching on option compiled with IF_NONE. Here, drop
-          binding for Some, at the end. *)
-       let arg = compile depth env arg in
-       let ifnone = compile depth env ifnone in
-       let env = StringMap.add some_name.nname depth env in
-       let depth = depth + 1 in
-       let ifsome = compile depth env ifsome in
-       let loc2, loc3 = loc_of_many ifnone, loc_of_many ifsome in
-       let ifsome_end = [ii ~loc:loc3 @@ DIP_DROP(1,1)] in
-       arg @ [ ii ~loc @@ IF_NONE (seq ifnone, seq (ifsome @ ifsome_end) )]
+      (* Pattern matching on option compiled with IF_NONE. Here, drop
+         binding for Some, at the end. *)
+      let arg = compile depth env arg in
+      let ifnone = compile depth env ifnone in
+      let env = StringMap.add some_name.nname depth env in
+      let depth = depth + 1 in
+      let ifsome = compile depth env ifsome in
+      let loc2, loc3 = loc_of_many ifnone, loc_of_many ifsome in
+      let ifsome_end = [ii ~loc:loc3 @@ DIP_DROP(1,1)] in
+      arg @ [ ii ~loc @@ IF_NONE (seq ifnone, seq (ifsome @ ifsome_end) )]
 
     | MatchNat { arg; plus_name; ifplus; minus_name; ifminus } ->
-       (* match%nat is compiled with ABS *)
-       let arg = compile depth env arg in
-       let env' = StringMap.add plus_name.nname depth env in
-       let ifplus = compile (depth + 1) env' ifplus in
-       let env'' = StringMap.add minus_name.nname depth env in
-       let ifminus = compile (depth + 1) env'' ifminus in
-       let loc2, loc3 = loc_of_many ifplus, loc_of_many ifminus in
-       let (ifplus_end, ifminus_end) =
-         [ ii ~loc:loc2 @@ DIP_DROP(1,1) ],
-         [ ii ~loc:loc3 @@ DIP_DROP(1,1) ] in
-       arg @ [
-         dup ~loc 1; ii ~loc ABS; ii ~loc SWAP; ii ~loc GE;
-         ii ~loc @@ IF (seq (ifplus @ ifplus_end),
-                        seq (ifminus @ ifminus_end) )]
+      (* match%nat is compiled with ABS *)
+      let arg = compile depth env arg in
+      let env' = StringMap.add plus_name.nname depth env in
+      let ifplus = compile (depth + 1) env' ifplus in
+      let env'' = StringMap.add minus_name.nname depth env in
+      let ifminus = compile (depth + 1) env'' ifminus in
+      let loc2, loc3 = loc_of_many ifplus, loc_of_many ifminus in
+      let (ifplus_end, ifminus_end) =
+        [ ii ~loc:loc2 @@ DIP_DROP(1,1) ],
+        [ ii ~loc:loc3 @@ DIP_DROP(1,1) ] in
+      arg @ [
+        dup ~loc 1; ii ~loc ABS; ii ~loc SWAP; ii ~loc GE;
+        ii ~loc @@ IF (seq (ifplus @ ifplus_end),
+                       seq (ifminus @ ifminus_end) )]
 
     | MatchList { arg; head_name; tail_name; ifcons; ifnil } ->
-       (* Pattern matching on lists. Compiled with IF_CONS *)
-       let arg = compile depth env arg in
-       let ifnil = compile depth env ifnil in
-       let env = StringMap.add tail_name.nname depth env in
-       let env = StringMap.add head_name.nname (depth+1) env in
-       let depth = depth + 2 in
-       let ifcons = compile depth env ifcons in
-       let loc2, loc3 = loc_of_many ifnil, loc_of_many ifcons in
-       let ifcons_end = [ii ~loc:loc3 @@ DIP_DROP(1,2)] in
-       arg @ [ ii ~loc @@ IF_CONS (seq (ifcons @ ifcons_end), seq ifnil )]
+      (* Pattern matching on lists. Compiled with IF_CONS *)
+      let arg = compile depth env arg in
+      let ifnil = compile depth env ifnil in
+      let env = StringMap.add tail_name.nname depth env in
+      let env = StringMap.add head_name.nname (depth+1) env in
+      let depth = depth + 2 in
+      let ifcons = compile depth env ifcons in
+      let loc2, loc3 = loc_of_many ifnil, loc_of_many ifcons in
+      let ifcons_end = [ii ~loc:loc3 @@ DIP_DROP(1,2)] in
+      arg @ [ ii ~loc @@ IF_CONS (seq (ifcons @ ifcons_end), seq ifnil )]
 
     | MatchVariant { arg; cases } ->
       (* Pattern matching on sum types are compiled as nested IF_LEFT. *)
@@ -291,22 +291,22 @@ let rec translate_code ~parameter_name ~storage_name code =
           end
         | [CAny, e] -> [ii ~loc DROP] @ compile depth env e
         | _ -> assert false
-       in
-       arg @ iter cases
+      in
+      arg @ iter cases
 
     | Loop { arg_name; body; arg } ->
-       let arg = compile depth env arg in
-       let env = StringMap.add arg_name.nname depth env in
-       let depth = depth + 1 in
-       let arg_annot = compile_arg_name arg_name.nname in
-       let body = compile depth env body in
-       let body_end = [ ii ~loc @@ DIP_DROP (1,1);
-                        ii ~loc @@ DUP 1;
-                        ii ~loc @@ CAR None;
-                        ii ~loc @@ DIP (1, seq [ ii ~loc @@ CDR None ]) ] in
-       arg
-       @ [ ii ~loc @@ PUSH (Tbool, CBool true) ]
-       @ [ ii ~loc @@ LOOP (seq (arg_annot @ body @ body_end)) ]
+      let arg = compile depth env arg in
+      let env = StringMap.add arg_name.nname depth env in
+      let depth = depth + 1 in
+      let arg_annot = compile_arg_name arg_name.nname in
+      let body = compile depth env body in
+      let body_end = [ ii ~loc @@ DIP_DROP (1,1);
+                       ii ~loc @@ DUP 1;
+                       ii ~loc @@ CAR None;
+                       ii ~loc @@ DIP (1, seq [ ii ~loc @@ CDR None ]) ] in
+      arg
+      @ [ ii ~loc @@ PUSH (Tbool, CBool true) ]
+      @ [ ii ~loc @@ LOOP (seq (arg_annot @ body @ body_end)) ]
 
     | Fold { prim; arg_name; body; arg; acc } ->
       let acc = compile depth env acc in
@@ -354,7 +354,7 @@ let rec translate_code ~parameter_name ~storage_name code =
       acc @ arg @
       [ii ~loc @@ MAP (seq (arg_annot @ body_begin @ body @ body_end));
        ii ~loc PAIR ]
-      (* TODO check this *)
+    (* TODO check this *)
 
     | CreateContract { args; contract } ->
       let _depth, args_code = compile_args depth env args in
@@ -388,20 +388,20 @@ let rec translate_code ~parameter_name ~storage_name code =
     let ii = ii ~loc in
     match prim, args with
     | Prim_tuple, args ->
-       compile_tuple ~loc depth env (List.rev args)
+      compile_tuple ~loc depth env (List.rev args)
 
     | Prim_tuple_get,
       [arg; { desc = Const { const = CInt n | CNat n }}] ->
-       let size = size_of_type arg.ty in
-       let arg = compile depth env arg in
-       let n = LiquidPrinter.int_of_integer n in
-       let ins =
-         if size = n + 1 then
-           ii @@ CDDR (n-1, None)
-         else
-           ii @@ CDAR (n, None)
-       in
-       arg @ [ ins ]
+      let size = size_of_type arg.ty in
+      let arg = compile depth env arg in
+      let n = LiquidPrinter.int_of_integer n in
+      let ins =
+        if size = n + 1 then
+          ii @@ CDDR (n-1, None)
+        else
+          ii @@ CDAR (n, None)
+      in
+      arg @ [ ins ]
     | Prim_tuple_get, _ -> assert false
 
     | Prim_tuple_set,
@@ -468,108 +468,108 @@ let rec translate_code ~parameter_name ~storage_name code =
       | Prim_not|Prim_abs|Prim_int|Prim_neg|Prim_lsr|Prim_lsl|Prim_is_nat
       | Prim_exec|Prim_Cons|Prim_set_delegate|Prim_address),_ ->
       let _depth, args_code = compile_args depth env args in
-       let prim_code = match prim, List.length args with
-         | Prim_eq, 2 -> [ ii COMPARE; ii EQ ]
-         | Prim_neq, 2 -> [ ii COMPARE; ii NEQ ]
-         | Prim_lt, 2 -> [ ii COMPARE; ii LT ]
-         | Prim_le, 2 -> [ ii COMPARE; ii LE ]
-         | Prim_gt, 2 -> [ ii COMPARE; ii GT ]
-         | Prim_ge, 2 -> [ ii COMPARE; ii GE ]
-         | Prim_compare, 2 -> [ ii COMPARE ]
-         | Prim_add, 2 -> [ ii ADD ]
-         | Prim_sub, 2 -> [ ii SUB ]
-         | Prim_mul, 2 -> [ ii MUL ]
-         | Prim_ediv, 2 -> [ ii EDIV ]
-         | Prim_map_find, 2 -> [ ii GET ]
-         | Prim_map_update, 3 -> [ ii UPDATE ]
-         | Prim_map_add, 3 -> [dip ~loc 1 [ii SOME]; ii UPDATE ]
-         | Prim_map_remove, 2 ->
-           let ty = match args with
-             | [_; { ty = (Tmap (_, ty) | Tbigmap (_, ty)) }] -> ty
-             | _ -> assert false
-           in
-           [dip ~loc 1 [push ~loc (Toption ty) CNone]; ii UPDATE ]
-         | Prim_map_mem, 2 -> [ ii MEM ]
+      let prim_code = match prim, List.length args with
+        | Prim_eq, 2 -> [ ii COMPARE; ii EQ ]
+        | Prim_neq, 2 -> [ ii COMPARE; ii NEQ ]
+        | Prim_lt, 2 -> [ ii COMPARE; ii LT ]
+        | Prim_le, 2 -> [ ii COMPARE; ii LE ]
+        | Prim_gt, 2 -> [ ii COMPARE; ii GT ]
+        | Prim_ge, 2 -> [ ii COMPARE; ii GE ]
+        | Prim_compare, 2 -> [ ii COMPARE ]
+        | Prim_add, 2 -> [ ii ADD ]
+        | Prim_sub, 2 -> [ ii SUB ]
+        | Prim_mul, 2 -> [ ii MUL ]
+        | Prim_ediv, 2 -> [ ii EDIV ]
+        | Prim_map_find, 2 -> [ ii GET ]
+        | Prim_map_update, 3 -> [ ii UPDATE ]
+        | Prim_map_add, 3 -> [dip ~loc 1 [ii SOME]; ii UPDATE ]
+        | Prim_map_remove, 2 ->
+          let ty = match args with
+            | [_; { ty = (Tmap (_, ty) | Tbigmap (_, ty)) }] -> ty
+            | _ -> assert false
+          in
+          [dip ~loc 1 [push ~loc (Toption ty) CNone]; ii UPDATE ]
+        | Prim_map_mem, 2 -> [ ii MEM ]
 
-         | Prim_set_update, 3 -> [ ii UPDATE ]
-         | Prim_set_add, 2 -> [dip ~loc 1 [push ~loc Tbool (CBool true)]; ii UPDATE ]
-         | Prim_set_remove, 2 -> [dip ~loc 1 [push ~loc Tbool (CBool false)]; ii UPDATE ]
-         | Prim_set_mem, 2 -> [ ii MEM ]
+        | Prim_set_update, 3 -> [ ii UPDATE ]
+        | Prim_set_add, 2 -> [dip ~loc 1 [push ~loc Tbool (CBool true)]; ii UPDATE ]
+        | Prim_set_remove, 2 -> [dip ~loc 1 [push ~loc Tbool (CBool false)]; ii UPDATE ]
+        | Prim_set_mem, 2 -> [ ii MEM ]
 
-         | Prim_Some, 1 -> [ ii SOME ]
-         | Prim_string_concat, 1 -> [ ii CONCAT ]
-         | Prim_bytes_concat, 1 -> [ ii CONCAT ]
+        | Prim_Some, 1 -> [ ii SOME ]
+        | Prim_string_concat, 1 -> [ ii CONCAT ]
+        | Prim_bytes_concat, 1 -> [ ii CONCAT ]
 
-         | Prim_address, 1 -> [ ii ADDRESS ]
-         | Prim_create_account, 4 -> [ ii CREATE_ACCOUNT; ii PAIR ]
-         | Prim_blake2b, 1 -> [ ii BLAKE2B ]
-         | Prim_sha256, 1 -> [ ii SHA256 ]
-         | Prim_sha512, 1 -> [ ii SHA512 ]
-         | Prim_pack, 1 -> [ ii PACK ]
-         | Prim_hash_key, 1 -> [ ii HASH_KEY ]
-         | Prim_check, 3 -> [ ii CHECK_SIGNATURE ]
-         | Prim_default_account, 1 -> [ ii IMPLICIT_ACCOUNT ]
-         | Prim_set_delegate, 1 -> [ ii SET_DELEGATE ]
-         | Prim_list_size, 1 -> [ ii SIZE ]
-         | Prim_set_size, 1 -> [ ii SIZE ]
-         | Prim_map_size, 1 -> [ ii SIZE ]
+        | Prim_address, 1 -> [ ii ADDRESS ]
+        | Prim_create_account, 4 -> [ ii CREATE_ACCOUNT; ii PAIR ]
+        | Prim_blake2b, 1 -> [ ii BLAKE2B ]
+        | Prim_sha256, 1 -> [ ii SHA256 ]
+        | Prim_sha512, 1 -> [ ii SHA512 ]
+        | Prim_pack, 1 -> [ ii PACK ]
+        | Prim_hash_key, 1 -> [ ii HASH_KEY ]
+        | Prim_check, 3 -> [ ii CHECK_SIGNATURE ]
+        | Prim_default_account, 1 -> [ ii IMPLICIT_ACCOUNT ]
+        | Prim_set_delegate, 1 -> [ ii SET_DELEGATE ]
+        | Prim_list_size, 1 -> [ ii SIZE ]
+        | Prim_set_size, 1 -> [ ii SIZE ]
+        | Prim_map_size, 1 -> [ ii SIZE ]
 
-         | Prim_Cons, 2 -> [ ii CONS ]
-         | Prim_or, 2 -> [ ii OR ]
-         | Prim_and, 2 -> [ ii AND ]
-         | Prim_xor, 2 -> [ ii XOR ]
-         | Prim_not, 1 -> [ ii NOT ]
-         | Prim_abs, 1 -> [ ii ABS; ii INT ]
-         | Prim_is_nat, 1 -> [ ii ISNAT ]
-         | Prim_int, 1 -> [ ii INT ]
-         | Prim_neg, 1 -> [ ii NEG ]
-         | Prim_lsr, 2 -> [ ii LSR ]
-         | Prim_lsl, 2 -> [ ii LSL ]
+        | Prim_Cons, 2 -> [ ii CONS ]
+        | Prim_or, 2 -> [ ii OR ]
+        | Prim_and, 2 -> [ ii AND ]
+        | Prim_xor, 2 -> [ ii XOR ]
+        | Prim_not, 1 -> [ ii NOT ]
+        | Prim_abs, 1 -> [ ii ABS; ii INT ]
+        | Prim_is_nat, 1 -> [ ii ISNAT ]
+        | Prim_int, 1 -> [ ii INT ]
+        | Prim_neg, 1 -> [ ii NEG ]
+        | Prim_lsr, 2 -> [ ii LSR ]
+        | Prim_lsl, 2 -> [ ii LSL ]
 
-         | Prim_exec, 2 -> [ ii EXEC ]
+        | Prim_exec, 2 -> [ ii EXEC ]
 
-         | Prim_string_size, 1 -> [ ii SIZE ]
-         | Prim_bytes_size, 1 -> [ ii SIZE ]
+        | Prim_string_size, 1 -> [ ii SIZE ]
+        | Prim_bytes_size, 1 -> [ ii SIZE ]
 
-         | Prim_string_sub, 3 -> [ ii SLICE ]
-         | Prim_bytes_sub, 3 -> [ ii SLICE ]
+        | Prim_string_sub, 3 -> [ ii SLICE ]
+        | Prim_bytes_sub, 3 -> [ ii SLICE ]
 
-         | (Prim_eq|Prim_neq|Prim_lt|Prim_le|Prim_gt|Prim_ge
-           | Prim_compare|Prim_add|Prim_sub|Prim_mul|Prim_ediv|Prim_map_find
-           | Prim_map_update|Prim_map_add|Prim_map_remove
-           | Prim_map_mem
-           | Prim_set_update|Prim_set_add|Prim_set_remove
-           | Prim_set_mem|Prim_Some
-           | Prim_string_size|Prim_bytes_size
-           | Prim_string_sub|Prim_bytes_sub
-           | Prim_string_concat|Prim_bytes_concat
-           | Prim_create_account
-           | Prim_blake2b|Prim_sha256|Prim_sha512|Prim_pack
-           | Prim_hash_key|Prim_check|Prim_default_account|Prim_list_size
-           | Prim_set_size|Prim_map_size|Prim_or|Prim_and|Prim_xor
-           | Prim_not|Prim_abs|Prim_int|Prim_neg|Prim_lsr|Prim_lsl|Prim_is_nat
-           | Prim_exec|Prim_Cons|Prim_set_delegate|Prim_address),n ->
-           Printf.eprintf "Primitive %S: wrong number of args(%d)\n%!"
-             (LiquidTypes.string_of_primitive prim)
-             n;
-           assert false
-         (*                           | prim, args -> *)
+        | (Prim_eq|Prim_neq|Prim_lt|Prim_le|Prim_gt|Prim_ge
+          | Prim_compare|Prim_add|Prim_sub|Prim_mul|Prim_ediv|Prim_map_find
+          | Prim_map_update|Prim_map_add|Prim_map_remove
+          | Prim_map_mem
+          | Prim_set_update|Prim_set_add|Prim_set_remove
+          | Prim_set_mem|Prim_Some
+          | Prim_string_size|Prim_bytes_size
+          | Prim_string_sub|Prim_bytes_sub
+          | Prim_string_concat|Prim_bytes_concat
+          | Prim_create_account
+          | Prim_blake2b|Prim_sha256|Prim_sha512|Prim_pack
+          | Prim_hash_key|Prim_check|Prim_default_account|Prim_list_size
+          | Prim_set_size|Prim_map_size|Prim_or|Prim_and|Prim_xor
+          | Prim_not|Prim_abs|Prim_int|Prim_neg|Prim_lsr|Prim_lsl|Prim_is_nat
+          | Prim_exec|Prim_Cons|Prim_set_delegate|Prim_address),n ->
+          Printf.eprintf "Primitive %S: wrong number of args(%d)\n%!"
+            (LiquidTypes.string_of_primitive prim)
+            n;
+          assert false
+        (*                           | prim, args -> *)
 
-         | (Prim_unknown|Prim_tuple_get
-           | Prim_tuple_set|Prim_tuple
-           | Prim_self|Prim_balance|Prim_now|Prim_amount|Prim_gas
-           | Prim_Left|Prim_Right|Prim_source|Prim_sender|Prim_unused _
-           | Prim_coll_find|Prim_coll_update|Prim_coll_mem
-           | Prim_coll_size|Prim_list_rev|Prim_slice
-           | Prim_concat|Prim_concat_two), _ ->
-           (* already filtered out *)
-           Printf.eprintf "Primitive %S ?\n%!"
-             (LiquidTypes.string_of_primitive prim)
-             ;
-           assert false
+        | (Prim_unknown|Prim_tuple_get
+          | Prim_tuple_set|Prim_tuple
+          | Prim_self|Prim_balance|Prim_now|Prim_amount|Prim_gas
+          | Prim_Left|Prim_Right|Prim_source|Prim_sender|Prim_unused _
+          | Prim_coll_find|Prim_coll_update|Prim_coll_mem
+          | Prim_coll_size|Prim_list_rev|Prim_slice
+          | Prim_concat|Prim_concat_two), _ ->
+          (* already filtered out *)
+          Printf.eprintf "Primitive %S ?\n%!"
+            (LiquidTypes.string_of_primitive prim)
+          ;
+          assert false
 
-       in
-       args_code @ prim_code
+      in
+      args_code @ prim_code
 
   (* Compile a tuple update x.(0) <- y *)
   and compile_tuple_set ~loc last depth env n y =
@@ -582,17 +582,17 @@ let rec translate_code ~parameter_name ~storage_name code =
         [ ii @@ CDR None ] @ compile depth env y @ [ ii PAIR ]
     else
       [ ii (DUP 1); ii @@ CAR None; ii SWAP; ii @@ CDR None ] @
-        compile_tuple_set last ~loc (depth+1) env (n-1) y @
-          [ ii SWAP; ii PAIR ]
+      compile_tuple_set last ~loc (depth+1) env (n-1) y @
+      [ ii SWAP; ii PAIR ]
 
   (* Compile arguments of an apply *)
   and compile_args depth env args =
     match args with
     | [] -> depth,[]
     | arg :: args ->
-       let (depth, args) = compile_args depth env args in
-       let arg = compile depth env arg in
-       depth+1, args @ arg
+      let (depth, args) = compile_args depth env args in
+      let arg = compile depth env arg in
+      depth+1, args @ arg
 
   (* Compile a record update x.f <- y *)
   and compile_record_set ~loc depth env fields field_name y =
@@ -623,17 +623,17 @@ let rec translate_code ~parameter_name ~storage_name code =
     | []  -> assert false
     | [_] -> assert false
     | arg :: args ->
-       let arg = compile depth env arg in
-       let args = compile_tuple1 ~loc depth env args in
-       arg @ args
+      let arg = compile depth env arg in
+      let args = compile_tuple1 ~loc depth env args in
+      arg @ args
 
   and compile_tuple1 ~loc depth env args =
     match args with
     | [] -> []
     | arg :: args ->
-       let arg = compile (depth+1) env arg in
-       let args = compile_tuple1 ~loc depth env args in
-       arg @ [ ii ~loc PAIR ] @ args
+      let arg = compile (depth+1) env arg in
+      let args = compile_tuple1 ~loc depth env args in
+      arg @ [ ii ~loc PAIR ] @ args
 
   and compile_record_rev ~loc depth env fields =
     match fields with
@@ -705,10 +705,10 @@ let rec translate_code ~parameter_name ~storage_name code =
 
   (* replace ( parameter, storage ) with parameter :: storage *)
   let header = [
-      dup ~loc 1;
-      dip ~loc 1 [ ii ~loc @@ CDR None ];
-      ii ~loc @@ CAR None;
-    ]
+    dup ~loc 1;
+    dip ~loc 1 [ ii ~loc @@ CDR None ];
+    ii ~loc @@ CAR None;
+  ]
   in
   (* at the end of the code, drop everything excepted for the top-most
      element *)

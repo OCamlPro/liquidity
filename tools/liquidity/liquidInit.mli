@@ -14,6 +14,6 @@ type init =
   | Init_code of (LiquidTypes.syntax_contract *
                   LiquidTypes.loc_michelson_contract)
   (** initializer compiled to michelson contract (to be evaluated by
-     node) *)
+      node) *)
 
 val compile_liquid_init : env -> contract_sig -> datatype -> syntax_init -> init

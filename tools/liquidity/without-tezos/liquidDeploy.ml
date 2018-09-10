@@ -12,10 +12,10 @@ type from =
   | From_files of string list
 
 let post = ref (fun ~data _ ->
-  failwith "mini version cannot do post request")
+    failwith "mini version cannot do post request")
 
 let get = ref (fun _ ->
-  failwith "mini version cannot do get request")
+    failwith "mini version cannot do get request")
 
 type key_diff =
   | DiffKeyHash of string

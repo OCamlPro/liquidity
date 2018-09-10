@@ -30,8 +30,8 @@ let parseonly = ref false
 let singleline = ref false
 
 (** Produce outputs of the compiler in Json format. This can be used
-   to construct RPCs manually outside the Tezos client and Liquidity
-   client *)
+    to construct RPCs manually outside the Tezos client and Liquidity
+    client *)
 let json = ref false
 
 (** Ignore Michelson type annotations ([%c] and [:t]) when decompiling *)
@@ -69,7 +69,7 @@ let spendable = ref false
 let gas_limit = ref "400000"
 
 (** The storage limit for transactions and originations. The default
-   value is the maximum allowed by Tezos at the moment. *)
+    value is the maximum allowed by Tezos at the moment. *)
 let storage_limit = ref "60000"
 
 (** Private key can be given to the liquidity tezos-client when

@@ -18,9 +18,9 @@ let rec decode ( exp : encoded_exp ) : typed_exp =
     mk ?name:exp.name ~loc (Const c) exp.ty
 
   | Let { bnd_var; inline; bnd_val; body } ->
-     let bnd_val = decode bnd_val in
-     let body = decode body in
-     mk ?name:exp.name ~loc (Let { bnd_var; inline; bnd_val; body }) body.ty
+    let bnd_val = decode bnd_val in
+    let body = decode body in
+    mk ?name:exp.name ~loc (Let { bnd_var; inline; bnd_val; body }) body.ty
 
   | Var v ->
     mk ?name:exp.name ~loc (Var v) exp.ty
@@ -105,9 +105,9 @@ let rec decode ( exp : encoded_exp ) : typed_exp =
       (MatchNat { arg; plus_name; ifplus; minus_name; ifminus }) exp.ty
 
   | Loop { arg_name; body; arg } ->
-     let arg = decode arg in
-     let body = decode body in
-     mk ?name:exp.name ~loc (Loop { arg_name; body; arg }) exp.ty
+    let arg = decode arg in
+    let body = decode body in
+    mk ?name:exp.name ~loc (Loop { arg_name; body; arg }) exp.ty
 
   | Fold { prim; arg_name; body; arg; acc } ->
     let arg = decode arg in

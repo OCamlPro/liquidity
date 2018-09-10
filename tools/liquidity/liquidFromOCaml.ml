@@ -22,68 +22,68 @@ type 'a ast_elt =
 (* redefined keywords of the modified OCaml lexer *)
 let () =
   LiquidOCamlLexer.define_keywords
- [
-    "and", AND;
-    "as", AS;
-    "assert", ASSERT;
-    "begin", BEGIN;
-    (*    "class", CLASS; *)
-    (*    "constraint", CONSTRAINT; *)
-    "do", DO;
-    "done", DONE;
-    "downto", DOWNTO;
-    "else", ELSE;
-    "end", END;
-    (* "exception", EXCEPTION; *)
-    (* "external", EXTERNAL; *)
-    "false", FALSE;
-    "for", FOR;
-    "fun", FUN;
-    "function", FUNCTION;
-    (* "functor", FUNCTOR; *)
-    "if", IF;
-    "in", IN;
-    (* "include", INCLUDE; *)
-    (* "inherit", INHERIT; *)
-    (* "initializer", INITIALIZER; *)
-    (* "lazy", LAZY; *)
-    "let", LET;
-    "match", MATCH;
-    (* "entry", METHOD; *)
-    "contract", MODULE;
-    (* "mutable", MUTABLE; *)
-    (* "new", NEW; *)
-    (* "nonrec", NONREC; *)
-    (* "object", OBJECT; *)
-    "of", OF;
-    (* "open", OPEN; *)
-    "or", OR;
-    (*  "parser", PARSER; *)
-    (* "private", PRIVATE; *)
-    "rec", REC;
-    "sig", SIG;
-    "struct", STRUCT;
-    "then", THEN;
-    "to", TO;
-    "true", TRUE;
-    (* "try", TRY; *)
-    "type", TYPE;
-    "val", VAL;
-    (* "virtual", VIRTUAL; *)
+    [
+      "and", AND;
+      "as", AS;
+      "assert", ASSERT;
+      "begin", BEGIN;
+      (*    "class", CLASS; *)
+      (*    "constraint", CONSTRAINT; *)
+      "do", DO;
+      "done", DONE;
+      "downto", DOWNTO;
+      "else", ELSE;
+      "end", END;
+      (* "exception", EXCEPTION; *)
+      (* "external", EXTERNAL; *)
+      "false", FALSE;
+      "for", FOR;
+      "fun", FUN;
+      "function", FUNCTION;
+      (* "functor", FUNCTOR; *)
+      "if", IF;
+      "in", IN;
+      (* "include", INCLUDE; *)
+      (* "inherit", INHERIT; *)
+      (* "initializer", INITIALIZER; *)
+      (* "lazy", LAZY; *)
+      "let", LET;
+      "match", MATCH;
+      (* "entry", METHOD; *)
+      "contract", MODULE;
+      (* "mutable", MUTABLE; *)
+      (* "new", NEW; *)
+      (* "nonrec", NONREC; *)
+      (* "object", OBJECT; *)
+      "of", OF;
+      (* "open", OPEN; *)
+      "or", OR;
+      (*  "parser", PARSER; *)
+      (* "private", PRIVATE; *)
+      "rec", REC;
+      "sig", SIG;
+      "struct", STRUCT;
+      "then", THEN;
+      "to", TO;
+      "true", TRUE;
+      (* "try", TRY; *)
+      "type", TYPE;
+      "val", VAL;
+      (* "virtual", VIRTUAL; *)
 
-    (* "when", WHEN; *)
-    "while", WHILE;
-    "with", WITH;
+      (* "when", WHEN; *)
+      "while", WHILE;
+      "with", WITH;
 
-    "lor", INFIXOP3("lor"); (* Should be INFIXOP2 *)
-    "lxor", INFIXOP3("lxor"); (* Should be INFIXOP2 *)
-    "mod", INFIXOP3("mod");
-    "land", INFIXOP3("land");
-    "lsl", INFIXOP4("lsl");
-    "lsr", INFIXOP4("lsr");
-    "xor", INFIXOP3("xor"); (* Should be INFIXOP2 *)
-    "asr", INFIXOP4("asr")
-]
+      "lor", INFIXOP3("lor"); (* Should be INFIXOP2 *)
+      "lxor", INFIXOP3("lxor"); (* Should be INFIXOP2 *)
+      "mod", INFIXOP3("mod");
+      "land", INFIXOP3("land");
+      "lsl", INFIXOP4("lsl");
+      "lsr", INFIXOP4("lsr");
+      "xor", INFIXOP3("xor"); (* Should be INFIXOP2 *)
+      "asr", INFIXOP4("asr")
+    ]
 
 let ident_counter = ref 0
 
@@ -156,8 +156,8 @@ let lift_inner_env = function
         Tclosure ((lift_type t1, lift_type t2), lift_type t3)
     and lift_contract_sig c_sig =
       { sig_name = (match c_sig.sig_name with
-          | None -> None
-          | Some s -> Some (lift_name s));
+            | None -> None
+            | Some s -> Some (lift_name s));
         entries_sig = List.map (fun es ->
             { es with parameter = lift_type es.parameter }
           ) c_sig.entries_sig
@@ -344,169 +344,169 @@ exception NotAConstant
 let rec translate_const env exp =
   match exp with
   | { pexp_desc = Pexp_construct ( { txt = Lident "()" }, None ) } ->
-     CUnit, Some Tunit
+    CUnit, Some Tunit
   | { pexp_desc = Pexp_construct ( { txt = Lident "true" }, None ) } ->
-     CBool true, Some Tbool
+    CBool true, Some Tbool
   | { pexp_desc = Pexp_construct ( { txt = Lident "false" }, None ) } ->
-     CBool false, Some Tbool
+    CBool false, Some Tbool
   | { pexp_desc = Pexp_construct ( { txt = Lident "None" }, None ) } ->
-     CNone, None
+    CNone, None
   | { pexp_desc = Pexp_constant (Pconst_integer (s,None)) } ->
-     CInt (LiquidPrinter.integer_of_liq s), Some Tint
+    CInt (LiquidPrinter.integer_of_liq s), Some Tint
   | { pexp_desc = Pexp_constant (Pconst_integer (s, Some 'p')) } ->
-     CNat (LiquidPrinter.integer_of_liq s), Some Tnat
+    CNat (LiquidPrinter.integer_of_liq s), Some Tnat
 
   | { pexp_desc = Pexp_constant (Pconst_integer (s, Some '\231')) } ->
-     CTez (LiquidPrinter.tez_of_liq s), Some Ttez
+    CTez (LiquidPrinter.tez_of_liq s), Some Ttez
   | { pexp_desc = Pexp_constant (Pconst_float (s, Some '\231')) } ->
-     CTez (LiquidPrinter.tez_of_liq s), Some Ttez
+    CTez (LiquidPrinter.tez_of_liq s), Some Ttez
 
   (* Timestamps *)
   | { pexp_desc = Pexp_constant (Pconst_integer (s, Some '\232')) } ->
-     CTimestamp (ISO8601.of_string s), Some Ttimestamp
+    CTimestamp (ISO8601.of_string s), Some Ttimestamp
 
   (* Key_hash *)
   | { pexp_desc = Pexp_constant (Pconst_integer (s, Some '\233')) } ->
-     CKey_hash s, Some Tkey_hash
+    CKey_hash s, Some Tkey_hash
 
   (* Address *)
   | { pexp_desc = Pexp_constant (Pconst_integer (s, Some '\236')) } ->
-     CAddress s, Some Taddress
+    CAddress s, Some Taddress
 
   (* Key *)
   | { pexp_desc = Pexp_constant (Pconst_integer (s, Some '\234')) } ->
-     CKey s, Some Tkey
+    CKey s, Some Tkey
 
   (* Signature *)
   | { pexp_desc = Pexp_constant (Pconst_integer (s, Some '\235')) } ->
-     CSignature s, Some Tsignature
+    CSignature s, Some Tsignature
 
   (* Bytes *)
   | { pexp_desc = Pexp_constant (Pconst_integer (s, Some '\237')) } ->
-     CBytes s, Some Tbytes
+    CBytes s, Some Tbytes
 
   | { pexp_desc = Pexp_constant (Pconst_string (s, None)) } ->
-     CString s, Some Tstring
+    CString s, Some Tstring
 
   | { pexp_desc = Pexp_tuple exps } ->
-     let csts, tys = List.split (List.map (translate_const env) exps) in
-     let tys =
-       try
-         Some (Ttuple (List.map (function
-                                 | None -> raise Exit
-                                 | Some ty -> ty) tys))
-       with Exit -> None
-     in
-     CTuple csts, tys
+    let csts, tys = List.split (List.map (translate_const env) exps) in
+    let tys =
+      try
+        Some (Ttuple (List.map (function
+            | None -> raise Exit
+            | Some ty -> ty) tys))
+      with Exit -> None
+    in
+    CTuple csts, tys
 
   | { pexp_desc = Pexp_construct (
-                      { txt = Lident "[]" }, None) } ->
-     CList [], None
+      { txt = Lident "[]" }, None) } ->
+    CList [], None
 
   | { pexp_desc = Pexp_construct (
-                      { txt = Lident "::" },
-                      Some { pexp_desc = Pexp_tuple [head; tail] }) } ->
-     let head, head_ty = translate_const env head in
-     let tail, tail_ty = translate_const env tail in
-     begin
-       match tail with
-       | CList tail ->
-          let cst = CList (head :: tail) in
-          let ty =
-            match head_ty, tail_ty with
-            | Some head_ty, Some (Tlist tail_ty) ->
-               if not @@ eq_types head_ty tail_ty then
-                 error_loc exp.pexp_loc "inconsistent types in list";
-               Some (Tlist head_ty)
-            | Some head_ty, None ->
-               Some (Tlist head_ty)
-            | _ ->
-               error_loc exp.pexp_loc "inconsistent types in list"
-          in
-          cst, ty
-       | _ ->
-          error_loc exp.pexp_loc "inconsistent types in list"
-     end
+      { txt = Lident "::" },
+      Some { pexp_desc = Pexp_tuple [head; tail] }) } ->
+    let head, head_ty = translate_const env head in
+    let tail, tail_ty = translate_const env tail in
+    begin
+      match tail with
+      | CList tail ->
+        let cst = CList (head :: tail) in
+        let ty =
+          match head_ty, tail_ty with
+          | Some head_ty, Some (Tlist tail_ty) ->
+            if not @@ eq_types head_ty tail_ty then
+              error_loc exp.pexp_loc "inconsistent types in list";
+            Some (Tlist head_ty)
+          | Some head_ty, None ->
+            Some (Tlist head_ty)
+          | _ ->
+            error_loc exp.pexp_loc "inconsistent types in list"
+        in
+        cst, ty
+      | _ ->
+        error_loc exp.pexp_loc "inconsistent types in list"
+    end
 
   | { pexp_desc = Pexp_construct ({ txt = Lident "Map" }, None) } ->
-     CMap [], None
+    CMap [], None
 
   | { pexp_desc = Pexp_construct ({ txt = Lident "BigMap" }, None) } ->
-     CBigMap [], None
+    CBigMap [], None
 
   | { pexp_desc = Pexp_construct (
       { txt = Lident ("Map" | "BigMap" as map_kind) },
       Some pair_list) } ->
-     let pair_list = translate_list pair_list in
-     let pair_list = List.map translate_pair pair_list in
-     let pair_list = List.map (fun (e1,e2) ->
-                         let cst1, ty1 = translate_const env e1 in
-                         let cst2, ty2 = translate_const env e2 in
-                         (cst1, cst2), (ty1, ty2)
-                       ) pair_list in
-     let pair_list = List.sort compare pair_list in
-     let csts, tys = List.split pair_list in
-     let tys = match tys with
-       | (Some ty1, Some ty2) :: tail ->
+    let pair_list = translate_list pair_list in
+    let pair_list = List.map translate_pair pair_list in
+    let pair_list = List.map (fun (e1,e2) ->
+        let cst1, ty1 = translate_const env e1 in
+        let cst2, ty2 = translate_const env e2 in
+        (cst1, cst2), (ty1, ty2)
+      ) pair_list in
+    let pair_list = List.sort compare pair_list in
+    let csts, tys = List.split pair_list in
+    let tys = match tys with
+      | (Some ty1, Some ty2) :: tail ->
 
-          List.iter (function
-                       (Some ty1', Some ty2') when ty1' = ty1 && ty2' = ty2
-                                                   -> ()
-                     | _ -> error_loc exp.pexp_loc
-                              "inconsistent map types"
-                    )
-                     tail;
-          begin match map_kind with
-            | "Map" -> Some (Tmap (ty1, ty2))
-            | "BigMap" -> Some (Tbigmap (ty1, ty2))
-            | _ -> assert false
-          end
-       | _ -> None
-     in
-     begin match map_kind with
-       | "Map" -> CMap csts, tys
-       | "BigMap" -> CBigMap csts, tys
-       | _ -> assert false
-     end
-
-  | { pexp_desc = Pexp_construct (
-                      { txt = Lident "Set" }, None) } ->
-     CSet [], None
+        List.iter (function
+              (Some ty1', Some ty2') when ty1' = ty1 && ty2' = ty2
+              -> ()
+            | _ -> error_loc exp.pexp_loc
+                     "inconsistent map types"
+          )
+          tail;
+        begin match map_kind with
+          | "Map" -> Some (Tmap (ty1, ty2))
+          | "BigMap" -> Some (Tbigmap (ty1, ty2))
+          | _ -> assert false
+        end
+      | _ -> None
+    in
+    begin match map_kind with
+      | "Map" -> CMap csts, tys
+      | "BigMap" -> CBigMap csts, tys
+      | _ -> assert false
+    end
 
   | { pexp_desc = Pexp_construct (
-                      { txt = Lident "Set" }, Some pair_list) } ->
-     let list = translate_list pair_list in
-     let list = List.map (fun e1 ->
-                    let cst1, ty1 = translate_const env e1 in
-                    cst1, ty1
-                  ) list in
-     let list = List.sort compare list in
-     let csts, tys = List.split list in
-     let tys = match tys with
-       | Some ty1 :: tail ->
-          List.iter (function
-                       Some ty1' when ty1' = ty1 -> ()
-                     | _ -> error_loc exp.pexp_loc
-                              "inconsistent set types"
-                              )
-                    tail;
-          Some (Tset ty1)
-       | _ -> None
-     in
-     CSet csts, tys
+      { txt = Lident "Set" }, None) } ->
+    CSet [], None
+
+  | { pexp_desc = Pexp_construct (
+      { txt = Lident "Set" }, Some pair_list) } ->
+    let list = translate_list pair_list in
+    let list = List.map (fun e1 ->
+        let cst1, ty1 = translate_const env e1 in
+        cst1, ty1
+      ) list in
+    let list = List.sort compare list in
+    let csts, tys = List.split list in
+    let tys = match tys with
+      | Some ty1 :: tail ->
+        List.iter (function
+              Some ty1' when ty1' = ty1 -> ()
+            | _ -> error_loc exp.pexp_loc
+                     "inconsistent set types"
+          )
+          tail;
+        Some (Tset ty1)
+      | _ -> None
+    in
+    CSet csts, tys
 
 
   | { pexp_desc = Pexp_construct (
-                      { txt = Lident "Some" }, Some arg) } ->
-     let arg, ty = translate_const env arg in
-     let ty = match ty with
-       | None -> None
-       | Some ty -> Some (Toption ty)
-     in
-     CSome arg, ty
+      { txt = Lident "Some" }, Some arg) } ->
+    let arg, ty = translate_const env arg in
+    let ty = match ty with
+      | None -> None
+      | Some ty -> Some (Toption ty)
+    in
+    CSome arg, ty
 
   | { pexp_desc = Pexp_construct (
-                      { txt = Lident "Left" }, Some arg) } ->
+      { txt = Lident "Left" }, Some arg) } ->
     let arg, ty = translate_const env arg in
     let ty = match ty with
       | None -> None
@@ -515,7 +515,7 @@ let rec translate_const env exp =
     CLeft arg, ty
 
   | { pexp_desc = Pexp_construct (
-                      { txt = Lident "Right" }, Some arg) } ->
+      { txt = Lident "Right" }, Some arg) } ->
     let arg, ty = translate_const env arg in
     let ty = match ty with
       | None -> None
@@ -536,14 +536,14 @@ let rec translate_const env exp =
             let loc = loc_of_loc args.pexp_loc in
             LiquidCheck.check_const_type ~to_tez:LiquidPrinter.tez_of_liq
               loc tya c
-            (* begin match ty_opt with
-             *   | None -> ()
-             *   | Some ty ->
-             *     if ty <> tya then
-             *       error_loc exp.pexp_loc
-             *         ("wrong type for argument of constructor "^lid)
-             * end;
-             * c *)
+              (* begin match ty_opt with
+               *   | None -> ()
+               *   | Some ty ->
+               *     if ty <> tya then
+               *       error_loc exp.pexp_loc
+               *         ("wrong type for argument of constructor "^lid)
+               * end;
+               * c *)
         in
         let ty = find_type ty_name env in
         CConstr (lid, c), Some ty
@@ -553,21 +553,21 @@ let rec translate_const env exp =
   | { pexp_desc = Pexp_record (lab_x_exp_list, None) } ->
     let lab_x_exp_list =
       List.map (fun ({ txt = label; loc }, exp) ->
-            let label = str_of_id label in
-            let loc = loc_of_loc exp.pexp_loc in
-            let _, _, ty' = find_label label env in
-            let c, ty_opt = translate_const env exp in
-            (* begin match ty_opt with
-             * | None -> ()
-             * | Some ty ->
-             *   if ty <> ty' then
-             *     error_loc loc ("wrong type for label "^label)
-             * end; *)
-            let c =
-              LiquidCheck.check_const_type ~to_tez:LiquidPrinter.tez_of_liq
-                loc ty' c
-            in
-            label, c
+          let label = str_of_id label in
+          let loc = loc_of_loc exp.pexp_loc in
+          let _, _, ty' = find_label label env in
+          let c, ty_opt = translate_const env exp in
+          (* begin match ty_opt with
+           * | None -> ()
+           * | Some ty ->
+           *   if ty <> ty' then
+           *     error_loc loc ("wrong type for label "^label)
+           * end; *)
+          let c =
+            LiquidCheck.check_const_type ~to_tez:LiquidPrinter.tez_of_liq
+              loc ty' c
+          in
+          label, c
         ) lab_x_exp_list in
     let ty = match lab_x_exp_list with
       | [] -> error_loc exp.pexp_loc "empty record"
@@ -580,16 +580,16 @@ let rec translate_const env exp =
     CRecord lab_x_exp_list, Some ty
 
   | { pexp_desc = Pexp_constraint (cst, ty) } ->
-     let cst, tyo = translate_const env cst in
-     let ty = translate_type env ?expected:tyo ty in
-     begin
-       let loc = loc_of_loc exp.pexp_loc in
-       match tyo with
-       | None ->
-          LiquidCheck.check_const_type ~to_tez:LiquidPrinter.tez_of_liq loc ty cst, Some ty
-       | Some ty_infer ->
-          LiquidCheck.check_const_type ~to_tez:LiquidPrinter.tez_of_liq loc ty cst, Some ty
-     end
+    let cst, tyo = translate_const env cst in
+    let ty = translate_type env ?expected:tyo ty in
+    begin
+      let loc = loc_of_loc exp.pexp_loc in
+      match tyo with
+      | None ->
+        LiquidCheck.check_const_type ~to_tez:LiquidPrinter.tez_of_liq loc ty cst, Some ty
+      | Some ty_infer ->
+        LiquidCheck.check_const_type ~to_tez:LiquidPrinter.tez_of_liq loc ty cst, Some ty
+    end
 
   | _ -> raise NotAConstant
 
@@ -599,7 +599,7 @@ and translate_list exp =
 
   | Pexp_construct({ txt = Lident "::" },
                    Some { pexp_desc = Pexp_tuple [e1; e2] }) ->
-     e1 :: translate_list e2
+    e1 :: translate_list e2
 
   | _ -> error_loc exp.pexp_loc "list expected"
 
@@ -930,7 +930,7 @@ let rec translate_code contracts env exp =
             [
               Nolabel, addr_exp;
             ]);
-          pexp_loc } ->
+        pexp_loc } ->
       error_loc pexp_loc
         "Contract.at must be annotated by the resulting contract type (option)"
 
@@ -959,7 +959,7 @@ let rec translate_code contracts env exp =
             [
               Nolabel, addr_exp;
             ]);
-          pexp_loc } ->
+        pexp_loc } ->
       error_loc pexp_loc
         "Bytes.unpack must be annotated by the resulting type (option)"
 
@@ -994,17 +994,17 @@ let rec translate_code contracts env exp =
 
     | { pexp_desc =
           Pexp_apply (
-              { pexp_desc = Pexp_ident ( { txt = Ldot(Lident "Loop",
-                                                      "loop");
-                                           loc } ) },
-              [
-                Nolabel, { pexp_desc =
-                             Pexp_fun (Nolabel,None,
-                                       pat,
-                                       body
-                         ) };
-                Nolabel, arg
-      ]) } ->
+            { pexp_desc = Pexp_ident ( { txt = Ldot(Lident "Loop",
+                                                    "loop");
+                                         loc } ) },
+            [
+              Nolabel, { pexp_desc =
+                           Pexp_fun (Nolabel,None,
+                                     pat,
+                                     body
+                                    ) };
+              Nolabel, arg
+            ]) } ->
       let arg_name, body =
         match pat.ppat_desc with
         | Ppat_var { txt = name } ->
@@ -1200,13 +1200,13 @@ let rec translate_code contracts env exp =
                  arg = translate_code contracts env param }
 
     | { pexp_desc = Pexp_apply (exp, args) } ->
-       let exp = translate_code contracts env exp in
-       Apply { prim = Prim_unknown;
-               args = exp :: List.map (function
-                   | (Nolabel, exp) -> translate_code contracts env exp
-                   | (_, { pexp_loc }) -> error_loc pexp_loc "in arg"
-                 ) args
-             }
+      let exp = translate_code contracts env exp in
+      Apply { prim = Prim_unknown;
+              args = exp :: List.map (function
+                  | (Nolabel, exp) -> translate_code contracts env exp
+                  | (_, { pexp_loc }) -> error_loc pexp_loc "in arg"
+                ) args
+            }
 
     | { pexp_desc = Pexp_extension (
         { txt = "nat" },
@@ -1232,35 +1232,35 @@ let rec translate_code contracts env exp =
       MatchNat { arg; plus_name; ifplus; minus_name; ifminus }
 
     | { pexp_desc = Pexp_match (e, cases) } ->
-       let arg = translate_code contracts env e in
-       let cases = List.map (translate_case contracts env) cases in
-       begin
-         match cases with
-         | [ CConstr ("None", []), ifnone, _; CConstr ("Some", [s]), ifsome, sloc ]
-         | [ CConstr ("Some", [s]), ifsome, sloc; CConstr ("None", []), ifnone, _ ]
-         | [ CConstr ("Some", [s]), ifsome, sloc; CAny, ifnone, _ ] ->
-           MatchOption {arg; ifnone; some_name = { nname = s; nloc = sloc }; ifsome }
-         | [ CConstr ("None", []), ifnone, _; CAny, ifsome, sloc ] ->
-           MatchOption {arg; ifnone;
-                        some_name = { nname = "_"; nloc = sloc }; ifsome }
+      let arg = translate_code contracts env e in
+      let cases = List.map (translate_case contracts env) cases in
+      begin
+        match cases with
+        | [ CConstr ("None", []), ifnone, _; CConstr ("Some", [s]), ifsome, sloc ]
+        | [ CConstr ("Some", [s]), ifsome, sloc; CConstr ("None", []), ifnone, _ ]
+        | [ CConstr ("Some", [s]), ifsome, sloc; CAny, ifnone, _ ] ->
+          MatchOption {arg; ifnone; some_name = { nname = s; nloc = sloc }; ifsome }
+        | [ CConstr ("None", []), ifnone, _; CAny, ifsome, sloc ] ->
+          MatchOption {arg; ifnone;
+                       some_name = { nname = "_"; nloc = sloc }; ifsome }
 
-         | [ CConstr ("[]", []), ifnil, _; CConstr ("::", [h; t]), ifcons, htloc ]
-         | [ CConstr ("::", [h; t]), ifcons, htloc; CConstr ("[]", []), ifnil, _ ]
-         | [ CConstr ("::", [h; t]), ifcons, htloc; CAny, ifnil, _ ] ->
-           MatchList { arg;
-                       head_name = { nname = h; nloc = htloc };
-                       tail_name = { nname = t; nloc = htloc };
-                       ifcons; ifnil }
-         | [ CConstr ("[]", []), ifnil, _; CAny, ifcons, nloc ] ->
-           MatchList { arg;
-                       head_name = { nname = "_head"; nloc };
-                       tail_name = { nname = "_tail"; nloc };
-                       ifcons; ifnil }
+        | [ CConstr ("[]", []), ifnil, _; CConstr ("::", [h; t]), ifcons, htloc ]
+        | [ CConstr ("::", [h; t]), ifcons, htloc; CConstr ("[]", []), ifnil, _ ]
+        | [ CConstr ("::", [h; t]), ifcons, htloc; CAny, ifnil, _ ] ->
+          MatchList { arg;
+                      head_name = { nname = h; nloc = htloc };
+                      tail_name = { nname = t; nloc = htloc };
+                      ifcons; ifnil }
+        | [ CConstr ("[]", []), ifnil, _; CAny, ifcons, nloc ] ->
+          MatchList { arg;
+                      head_name = { nname = "_head"; nloc };
+                      tail_name = { nname = "_tail"; nloc };
+                      ifcons; ifnil }
 
-         | _ ->
-           let cases = List.map (fun (c, e, _) -> (c, e)) cases in
-           MatchVariant { arg; cases }
-       end
+        | _ ->
+          let cases = List.map (fun (c, e, _) -> (c, e)) cases in
+          MatchVariant { arg; cases }
+      end
 
     | { pexp_desc = Pexp_fun (Nolabel, None, pat, body_exp) } ->
       let body_exp = translate_code contracts env body_exp in
@@ -1269,142 +1269,142 @@ let rec translate_code contracts env exp =
                ret_ty = Tunit; (* not yet inferred *) }
 
     | { pexp_desc = Pexp_record (lab_x_exp_list, None) } ->
-       let fields =
-         List.map (fun ({ txt = label }, exp) ->
-                     str_of_id label, translate_code contracts env exp
-                  ) lab_x_exp_list in
-       Record fields
+      let fields =
+        List.map (fun ({ txt = label }, exp) ->
+            str_of_id label, translate_code contracts env exp
+          ) lab_x_exp_list in
+      Record fields
 
     | exp ->
-       match translate_const env exp with
-       | _, None -> error_loc exp.pexp_loc "constant needs a type annotation"
-       | const, Some ty -> Const { ty; const }
-       | exception NotAConstant ->
-          match exp with
-          | { pexp_desc = Pexp_construct (
-                              { txt = Lident "Some" }, Some args) } ->
-            Apply { prim = Prim_Some;
-                    args = [translate_code contracts env args] }
+      match translate_const env exp with
+      | _, None -> error_loc exp.pexp_loc "constant needs a type annotation"
+      | const, Some ty -> Const { ty; const }
+      | exception NotAConstant ->
+        match exp with
+        | { pexp_desc = Pexp_construct (
+            { txt = Lident "Some" }, Some args) } ->
+          Apply { prim = Prim_Some;
+                  args = [translate_code contracts env args] }
 
-          (* Ok, this is a very special case. We accept
-not knowing the full type of the empty list because it will be infered
-from the head element. We use unit for that type. *)
-          | { pexp_desc =
-                Pexp_construct (
-                    { txt = Lident "::" },
-                    Some { pexp_desc =
-                             Pexp_tuple
-                               [a;
-                                { pexp_desc =
-                                    Pexp_construct(
-                                        { txt = Lident "[]" }, None) }]}) }
-            ->
-            Apply { prim = Prim_Cons;
-                    args = [translate_code contracts env a;
-                            mk ~loc (Const { ty = Tunit; const =  CList [] }) (* XXX ? *)
-                           ] }
+        (* Ok, this is a very special case. We accept
+           not knowing the full type of the empty list because it will be infered
+           from the head element. We use unit for that type. *)
+        | { pexp_desc =
+              Pexp_construct (
+                { txt = Lident "::" },
+                Some { pexp_desc =
+                         Pexp_tuple
+                           [a;
+                            { pexp_desc =
+                                Pexp_construct(
+                                  { txt = Lident "[]" }, None) }]}) }
+          ->
+          Apply { prim = Prim_Cons;
+                  args = [translate_code contracts env a;
+                          mk ~loc (Const { ty = Tunit; const =  CList [] }) (* XXX ? *)
+                         ] }
 
-          | { pexp_desc = Pexp_construct (
-                              { txt = Lident "::" },
-                              Some { pexp_desc = Pexp_tuple [a;b]}) } ->
-             Apply { prim = Prim_Cons;
-                     args = [translate_code contracts env a;
-                             translate_code contracts env b] }
+        | { pexp_desc = Pexp_construct (
+            { txt = Lident "::" },
+            Some { pexp_desc = Pexp_tuple [a;b]}) } ->
+          Apply { prim = Prim_Cons;
+                  args = [translate_code contracts env a;
+                          translate_code contracts env b] }
 
 
-          | { pexp_desc = Pexp_construct ({ txt = lid }, args) } ->
-            let lid = str_of_id lid in
-            begin
-              try
-                let (_ty_name, _ty) = find_constr lid env in
-                Constructor { constr = Constr lid;
-                              arg = match args with
-                                | None ->
-                                  mk ~loc (Const { ty = Tunit; const = CUnit })
-                                | Some arg -> translate_code contracts env arg }
-              with Not_found -> match lid with
-                | "Map" | "Set" | "BigMap" ->
-                  error_loc exp.pexp_loc
-                    "constructor %s can only be used with a constant argument"
-                    lid
-                | _ ->
-                  error_loc exp.pexp_loc "unknown constructor: %s" lid
-            end
+        | { pexp_desc = Pexp_construct ({ txt = lid }, args) } ->
+          let lid = str_of_id lid in
+          begin
+            try
+              let (_ty_name, _ty) = find_constr lid env in
+              Constructor { constr = Constr lid;
+                            arg = match args with
+                              | None ->
+                                mk ~loc (Const { ty = Tunit; const = CUnit })
+                              | Some arg -> translate_code contracts env arg }
+            with Not_found -> match lid with
+              | "Map" | "Set" | "BigMap" ->
+                error_loc exp.pexp_loc
+                  "constructor %s can only be used with a constant argument"
+                  lid
+              | _ ->
+                error_loc exp.pexp_loc "unknown constructor: %s" lid
+          end
 
-          | { pexp_desc =
-                Pexp_constraint (
-                  { pexp_desc =
-                      Pexp_construct (
-                        { txt = Lident "Left" }, args) },
-                  pty
-                ) } ->
-            let right_ty = match pty with
-              | { ptyp_desc = Ptyp_constr (
-                  { txt = Lident "variant" },
-                  [ left_ty; right_ty ])} ->
-                translate_type env right_ty
-              | _ -> match translate_type env pty with
-                | Tor (_, right_ty) -> right_ty
-                | _ -> error_loc pty.ptyp_loc
-                         "Type of Left must be a variant"
-            in
-            Constructor { constr = Left right_ty;
-                          arg = match args with
-                            | None ->
-                              mk ~loc (Const { ty = Tunit; const = CUnit })
-                            | Some arg -> translate_code contracts env arg }
+        | { pexp_desc =
+              Pexp_constraint (
+                { pexp_desc =
+                    Pexp_construct (
+                      { txt = Lident "Left" }, args) },
+                pty
+              ) } ->
+          let right_ty = match pty with
+            | { ptyp_desc = Ptyp_constr (
+                { txt = Lident "variant" },
+                [ left_ty; right_ty ])} ->
+              translate_type env right_ty
+            | _ -> match translate_type env pty with
+              | Tor (_, right_ty) -> right_ty
+              | _ -> error_loc pty.ptyp_loc
+                       "Type of Left must be a variant"
+          in
+          Constructor { constr = Left right_ty;
+                        arg = match args with
+                          | None ->
+                            mk ~loc (Const { ty = Tunit; const = CUnit })
+                          | Some arg -> translate_code contracts env arg }
 
-          | { pexp_desc =
-                Pexp_constraint (
-                  { pexp_desc =
-                      Pexp_construct (
-                        { txt = Lident "Right" }, args) },
-                  pty
-                ) } ->
-            let left_ty = match pty with
-              | { ptyp_desc = Ptyp_constr (
-                  { txt = Lident "variant" },
-                  [ left_ty; right_ty ])} ->
-                translate_type env left_ty
-              | _ -> match translate_type env pty with
-                | Tor (left_ty, _) -> left_ty
-                | _ -> error_loc pty.ptyp_loc
-                         "Type of Right must be a variant"
-            in
-            Constructor { constr = Right left_ty;
-                          arg = match args with
-                            | None ->
-                              mk ~loc (Const { ty = Tunit; const = CUnit })
-                            | Some arg -> translate_code contracts env arg }
+        | { pexp_desc =
+              Pexp_constraint (
+                { pexp_desc =
+                    Pexp_construct (
+                      { txt = Lident "Right" }, args) },
+                pty
+              ) } ->
+          let left_ty = match pty with
+            | { ptyp_desc = Ptyp_constr (
+                { txt = Lident "variant" },
+                [ left_ty; right_ty ])} ->
+              translate_type env left_ty
+            | _ -> match translate_type env pty with
+              | Tor (left_ty, _) -> left_ty
+              | _ -> error_loc pty.ptyp_loc
+                       "Type of Right must be a variant"
+          in
+          Constructor { constr = Right left_ty;
+                        arg = match args with
+                          | None ->
+                            mk ~loc (Const { ty = Tunit; const = CUnit })
+                          | Some arg -> translate_code contracts env arg }
 
-          (* TODO *)
-          | { pexp_desc = Pexp_tuple exps } ->
-            let exps = List.map (translate_code contracts env) exps in
-            begin
-              try
-                let tys, csts = List.split (
-                    List.map (
-                      function
-                      | { desc = Const { ty; const }} -> (ty, const)
-                      | _ -> raise Exit
-                    ) exps)
-                in
-                Const { ty = Ttuple tys; const = CTuple csts }
-              with Exit ->
-                Apply { prim = Prim_tuple; args = exps }
-            end
+        (* TODO *)
+        | { pexp_desc = Pexp_tuple exps } ->
+          let exps = List.map (translate_code contracts env) exps in
+          begin
+            try
+              let tys, csts = List.split (
+                  List.map (
+                    function
+                    | { desc = Const { ty; const }} -> (ty, const)
+                    | _ -> raise Exit
+                  ) exps)
+              in
+              Const { ty = Ttuple tys; const = CTuple csts }
+            with Exit ->
+              Apply { prim = Prim_tuple; args = exps }
+          end
 
-          | { pexp_desc = Pexp_constraint (exp, ty); pexp_loc } ->
-            (* ignore type constraint for others *)
-            LiquidLoc.warn loc
-              (IgnoredTypeAnnot
-                 (Format.asprintf "%a" LiquidOCamlPrinter.core_type ty));
-            (translate_code contracts env exp).desc
+        | { pexp_desc = Pexp_constraint (exp, ty); pexp_loc } ->
+          (* ignore type constraint for others *)
+          LiquidLoc.warn loc
+            (IgnoredTypeAnnot
+               (Format.asprintf "%a" LiquidOCamlPrinter.core_type ty));
+          (translate_code contracts env exp).desc
 
-          | { pexp_loc } ->
-            error_loc pexp_loc
-              "in expression %s"
-              (LiquidOCamlPrinter.string_of_expression exp)
+        | { pexp_loc } ->
+          error_loc pexp_loc
+            "in expression %s"
+            (LiquidOCamlPrinter.string_of_expression exp)
 
 
   (*
@@ -1463,28 +1463,28 @@ and translate_entry name env contracts head_exp parameter storage_name =
   match head_exp with
   | { pexp_desc =
         Pexp_fun (
-            Nolabel, None,
-            { ppat_desc =
-                Ppat_constraint(
-                    { ppat_desc =
-                        Ppat_var { txt = parameter_name } },
-                    arg_type)
-            },
-            head_exp) } when parameter = None ->
+          Nolabel, None,
+          { ppat_desc =
+              Ppat_constraint(
+                { ppat_desc =
+                    Ppat_var { txt = parameter_name } },
+                arg_type)
+          },
+          head_exp) } when parameter = None ->
     translate_entry name env contracts head_exp
       (Some (parameter_name, translate_type env arg_type))
       storage_name
 
   | { pexp_desc =
         Pexp_fun (
-            Nolabel, None,
-            { ppat_desc =
-                Ppat_constraint(
-                    { ppat_desc =
-                        Ppat_var { txt = sto_name } },
-                    arg_type)
-            },
-            head_exp);
+          Nolabel, None,
+          { ppat_desc =
+              Ppat_constraint(
+                { ppat_desc =
+                    Ppat_var { txt = sto_name } },
+                arg_type)
+          },
+          head_exp);
       pexp_loc }
     when storage_name = None && parameter <> None ->
     let storage_ty = translate_type env arg_type in
@@ -1582,27 +1582,27 @@ and translate_entry name env contracts head_exp parameter storage_name =
     let storage_name = match storage_name with
       | Some s -> s
       | None -> assert false in
-     {
-       entry_sig = {
-         entry_name = name;
-         parameter;
-         parameter_name;
-         storage_name;
-       };
-       code;
-     }
+    {
+      entry_sig = {
+        entry_name = name;
+        parameter;
+        parameter_name;
+        storage_name;
+      };
+      code;
+    }
 
 and translate_initial_storage env init_name contracts exp args =
   match exp with
   | { pexp_desc =
         Pexp_fun (
-            Nolabel, None,
-            { ppat_desc =
-                Ppat_constraint(
-                    { ppat_desc = Ppat_var { txt = arg; loc } },
-                    arg_type)
-            },
-            exp) } ->
+          Nolabel, None,
+          { ppat_desc =
+              Ppat_constraint(
+                { ppat_desc = Ppat_var { txt = arg; loc } },
+                arg_type)
+          },
+          exp) } ->
     translate_initial_storage env init_name contracts exp
       ((arg, loc_of_loc loc, translate_type env arg_type) :: args)
 
@@ -1703,11 +1703,11 @@ and translate_signature contract_type_name env acc ast =
 
   | { psig_desc = Psig_modtype
           {
-      pmtd_name = { txt = contract_type_name };
-      pmtd_type = Some {
-          pmty_desc = Pmty_signature signature
-      }
-    }
+            pmtd_name = { txt = contract_type_name };
+            pmtd_type = Some {
+                pmty_desc = Pmty_signature signature
+              }
+          }
     } :: ast ->
     let inner_env = mk_inner_env env contract_type_name in
     let contract_sig =
@@ -1726,8 +1726,8 @@ and translate_structure env acc ast =
   match ast with
   | { pstr_desc =
         Pstr_extension
-            (({ Asttypes.txt = "version" },
-             PStr [{ pstr_desc = Pstr_eval (exp,[])}]),[])
+          (({ Asttypes.txt = "version" },
+            PStr [{ pstr_desc = Pstr_eval (exp,[])}]),[])
     } :: ast ->
     check_version exp;
     translate_structure env acc ast
@@ -1758,15 +1758,15 @@ and translate_structure env acc ast =
   | { pstr_desc =
         Pstr_extension
           (({ txt = "entry" },
-           PStr
-             [{ pstr_desc =
-                  Pstr_value (
-                      Nonrecursive,
-                      [ {
-                          pvb_pat = { ppat_desc = Ppat_var { txt = name } };
-                          pvb_expr = head_exp;
-                        }
-             ]) } ]
+            PStr
+              [{ pstr_desc =
+                   Pstr_value (
+                     Nonrecursive,
+                     [ {
+                       pvb_pat = { ppat_desc = Ppat_var { txt = name } };
+                       pvb_expr = head_exp;
+                     }
+                     ]) } ]
            ), []) } :: ast
     ->
     let entry =
@@ -1806,24 +1806,24 @@ and translate_structure env acc ast =
                                  ptype_loc;
                                  ptype_kind; (* Ptype_record labels;*)
                                }
-    ]) } :: ast ->
-     if StringMap.mem ty_name env.types then
-       error_loc ptype_loc "type %s already defined" ty_name;
-     begin match ptype_kind with
-     | Ptype_record labels ->
+                             ]) } :: ast ->
+    if StringMap.mem ty_name env.types then
+      error_loc ptype_loc "type %s already defined" ty_name;
+    begin match ptype_kind with
+      | Ptype_record labels ->
         if List.length labels < 2 then begin
-            error_loc ptype_loc "record must have at least two fields"
-          end;
+          error_loc ptype_loc "record must have at least two fields"
+        end;
         translate_record ty_name labels env;
-     | Ptype_abstract
-       | Ptype_open -> error_loc ptype_loc "bad type definition"
-     | Ptype_variant constrs ->
+      | Ptype_abstract
+      | Ptype_open -> error_loc ptype_loc "bad type definition"
+      | Ptype_variant constrs ->
         if List.length constrs < 2 then begin
-            error_loc ptype_loc "variant type must have at least two constructors"
-          end;
+          error_loc ptype_loc "variant type must have at least two constructors"
+        end;
         translate_variant ty_name constrs env;
-     end;
-     translate_structure env acc ast
+    end;
+    translate_structure env acc ast
 
   (* type alias *)
   | { pstr_desc = Pstr_type (Recursive,
@@ -1846,11 +1846,11 @@ and translate_structure env acc ast =
 
   | { pstr_desc = Pstr_modtype
           {
-      pmtd_name = { txt = contract_type_name };
-      pmtd_type = Some {
-          pmty_desc = Pmty_signature signature
-      }
-    }
+            pmtd_name = { txt = contract_type_name };
+            pmtd_type = Some {
+                pmty_desc = Pmty_signature signature
+              }
+          }
     } :: ast ->
     let inner_env = mk_inner_env env contract_type_name in
     let contract_sig =
@@ -1862,12 +1862,12 @@ and translate_structure env acc ast =
 
   | { pstr_desc = Pstr_modtype
           {
-      pmtd_name = { txt = contract_type_name };
-      pmtd_type = Some {
-          pmty_desc = Pmty_ident { txt = id };
-          pmty_loc;
-      }
-    }
+            pmtd_name = { txt = contract_type_name };
+            pmtd_type = Some {
+                pmty_desc = Pmty_ident { txt = id };
+                pmty_loc;
+              }
+          }
     } :: ast ->
     let contract_sig =
       try find_contract_type (str_of_id id) env
@@ -1880,14 +1880,14 @@ and translate_structure env acc ast =
 
   | { pstr_desc = Pstr_modtype
           {
-      pmtd_name = { txt = contract_type_name };
-      pmtd_type = Some {
-          pmty_desc = Pmty_typeof {
-              pmod_desc = Pmod_ident { txt = c_name };
-              pmod_loc;
-            }
-      }
-    }
+            pmtd_name = { txt = contract_type_name };
+            pmtd_type = Some {
+                pmty_desc = Pmty_typeof {
+                    pmod_desc = Pmod_ident { txt = c_name };
+                    pmod_loc;
+                  }
+              }
+          }
     } :: ast ->
     let contract =
       try StringMap.find (str_of_id c_name) (filter_contracts acc)
@@ -1967,51 +1967,51 @@ and pack_contract env toplevels =
 let predefined_constructors =
   List.fold_left (fun acc (constr, info) ->
       StringMap.add constr info acc) StringMap.empty
-                 (* These constructors are never looked-up in this
-                 map, hence we can provide wrong info. However, they
-                 need to be there to prevent the user from overriding
-                 them. *)
-                 [
-                   "Some", ("'a option", Tunit);
-                   "None", ("'a option", Tunit);
-                   "::", ("'a list", Tunit);
-                   "[]", ("'a list", Tunit);
-                   "Left", ("('a, 'b) variant", Tunit);
-                   "Right", ("('a, 'b) variant", Tunit);
-                 ]
+    (* These constructors are never looked-up in this
+       map, hence we can provide wrong info. However, they
+       need to be there to prevent the user from overriding
+       them. *)
+    [
+      "Some", ("'a option", Tunit);
+      "None", ("'a option", Tunit);
+      "::", ("'a list", Tunit);
+      "[]", ("'a list", Tunit);
+      "Left", ("('a, 'b) variant", Tunit);
+      "Right", ("('a, 'b) variant", Tunit);
+    ]
 
 let predefined_types =
   List.fold_left (fun acc (constr, info) ->
       StringMap.add constr info acc) StringMap.empty
-                 (* Enter predefined types with dummy-info to prevent
- the user from overriding them *)
-                 [
-                   "int", Tunit;
-                   "unit", Tunit;
-                   "bool", Tunit;
-                   "nat", Tunit;
-                   "tez", Tunit;
-                   "string", Tunit;
-                   "bytes", Tunit;
-                   "timestamp", Tunit;
-                   "key", Tunit;
-                   "key_hash", Tunit;
-                   "signature", Tunit;
-                   "operation", Tunit;
-                   "address", Tunit;
-                   "option", Tunit;
-                   "list", Tunit;
-                   "map", Tunit;
-                   "set", Tunit;
-                   "big_map", Tunit;
-                   "variant", Tunit;
-                 ]
+    (* Enter predefined types with dummy-info to prevent
+       the user from overriding them *)
+    [
+      "int", Tunit;
+      "unit", Tunit;
+      "bool", Tunit;
+      "nat", Tunit;
+      "tez", Tunit;
+      "string", Tunit;
+      "bytes", Tunit;
+      "timestamp", Tunit;
+      "key", Tunit;
+      "key_hash", Tunit;
+      "signature", Tunit;
+      "operation", Tunit;
+      "address", Tunit;
+      "option", Tunit;
+      "list", Tunit;
+      "map", Tunit;
+      "set", Tunit;
+      "big_map", Tunit;
+      "variant", Tunit;
+    ]
 
 let predefined_contract_types =
   List.fold_left (fun acc (name, cty) ->
       StringMap.add name cty acc
     ) StringMap.empty [
-     "UnitContract", unit_contract_sig;
+    "UnitContract", unit_contract_sig;
   ]
 
 
@@ -2035,50 +2035,50 @@ let initial_env filename =
 let translate_exn exn =
   match exn with
   | Location.Error err ->
-     let loc = loc_of_loc Location.(err.loc) in
-     LiquidLoc.raise_error ~loc "%s"  Location.(err.msg)
+    let loc = loc_of_loc Location.(err.loc) in
+    LiquidLoc.raise_error ~loc "%s"  Location.(err.msg)
 
   (* Syntax errors *)
   | Syntaxerr.Error err  ->
-     let (loc, msg) =
-       match err with
-       | Syntaxerr.Unclosed(opening_loc, opening, closing_loc, closing) ->
-          closing_loc,
-          Printf.sprintf "Syntax error: '%s' expected" closing
-       | Syntaxerr.Expecting (loc, nonterm) ->
-          loc,
-          Printf.sprintf "Syntax error: %s expected." nonterm
-       | Syntaxerr.Not_expecting (loc, nonterm) ->
-          loc,
-          Printf.sprintf "Syntax error: %s not expected." nonterm
-       | Syntaxerr.Applicative_path loc ->
-          loc,
-          "Syntax error: applicative paths of the form F(X).t \
-           are not supported when the option -no-app-func is set."
-       | Syntaxerr.Variable_in_scope (loc, var) ->
-          loc,
-          Printf.sprintf "In this scoped type, variable '%s \
-                             is reserved for the local type %s."
-                            var var
-       | Syntaxerr.Other loc ->
-          loc, "Syntax error"
-       | Syntaxerr.Ill_formed_ast (loc, s) ->
-          loc,
-          Printf.sprintf "broken invariant in parsetree: %s" s
-       | Syntaxerr.Invalid_package_type (loc, s) ->
-          loc,
-          Printf.sprintf "invalid package type: %s" s
-     in
-     let loc = loc_of_loc loc in
-     LiquidLoc.raise_error ~loc "%s" msg
+    let (loc, msg) =
+      match err with
+      | Syntaxerr.Unclosed(opening_loc, opening, closing_loc, closing) ->
+        closing_loc,
+        Printf.sprintf "Syntax error: '%s' expected" closing
+      | Syntaxerr.Expecting (loc, nonterm) ->
+        loc,
+        Printf.sprintf "Syntax error: %s expected." nonterm
+      | Syntaxerr.Not_expecting (loc, nonterm) ->
+        loc,
+        Printf.sprintf "Syntax error: %s not expected." nonterm
+      | Syntaxerr.Applicative_path loc ->
+        loc,
+        "Syntax error: applicative paths of the form F(X).t \
+         are not supported when the option -no-app-func is set."
+      | Syntaxerr.Variable_in_scope (loc, var) ->
+        loc,
+        Printf.sprintf "In this scoped type, variable '%s \
+                        is reserved for the local type %s."
+          var var
+      | Syntaxerr.Other loc ->
+        loc, "Syntax error"
+      | Syntaxerr.Ill_formed_ast (loc, s) ->
+        loc,
+        Printf.sprintf "broken invariant in parsetree: %s" s
+      | Syntaxerr.Invalid_package_type (loc, s) ->
+        loc,
+        Printf.sprintf "invalid package type: %s" s
+    in
+    let loc = loc_of_loc loc in
+    LiquidLoc.raise_error ~loc "%s" msg
 
   | LiquidOCamlLexer.Error (error, oloc) ->
-     let loc = loc_of_loc oloc in
-     LiquidLoc.raise_error ~loc "%s"
-                           (Location.error_of_printer
-                              oloc
-                              LiquidOCamlLexer.report_error error).Location.msg
-     LiquidOCamlLexer.report_error ppf error
+    let loc = loc_of_loc oloc in
+    LiquidLoc.raise_error ~loc "%s"
+      (Location.error_of_printer
+         oloc
+         LiquidOCamlLexer.report_error error).Location.msg
+      LiquidOCamlLexer.report_error ppf error
   | _ -> raise exn
 
 

@@ -8,8 +8,8 @@
 (**************************************************************************)
 
 (* TODO: We could use a simplify pass to propagate the no-effect
-  defining expression of once-used variables to their uniq use
-  site. It could dramatically decrease the size of the stack.  *)
+   defining expression of once-used variables to their uniq use
+   site. It could dramatically decrease the size of the stack.  *)
 
 
 open LiquidTypes
@@ -60,7 +60,7 @@ let rec translate_const_exp (exp : encoded_exp) =
   let loc = exp.loc in
   match exp.desc with
   | Let _ ->
-     LiquidLoc.raise_error ~loc "'let' forbidden in constant"
+    LiquidLoc.raise_error ~loc "'let' forbidden in constant"
   | Const { const } -> const
 
   | Record fields ->
@@ -75,9 +75,9 @@ let rec translate_const_exp (exp : encoded_exp) =
   | Apply { prim = Prim_Right; args = [x] } -> CRight (translate_const_exp  x)
   | Apply { prim = Prim_Some; args = [x] } -> CSome (translate_const_exp x)
   | Apply { prim = Prim_Cons; args } ->
-     CList (List.map translate_const_exp args)
+    CList (List.map translate_const_exp args)
   | Apply { prim = Prim_tuple; args } ->
-     CTuple (List.map translate_const_exp args)
+    CTuple (List.map translate_const_exp args)
 
   | Apply _
   | Var _

@@ -42,15 +42,15 @@ let rec emit_code ~expand code =
     M_INS_EXP ("IF_LEFT", [],
                [emit_code ~expand left; emit_code ~expand right], var_annot name)
   | LOOP loop ->
-     M_INS_EXP ("LOOP", [], [emit_code ~expand loop], var_annot name)
+    M_INS_EXP ("LOOP", [], [emit_code ~expand loop], var_annot name)
   | ITER body ->
-     M_INS_EXP ("ITER", [], [emit_code ~expand body], var_annot name)
+    M_INS_EXP ("ITER", [], [emit_code ~expand body], var_annot name)
   | MAP body ->
-     M_INS_EXP ("MAP", [], [emit_code ~expand body], var_annot name)
+    M_INS_EXP ("MAP", [], [emit_code ~expand body], var_annot name)
   | LAMBDA (arg_type, res_type, body) ->
-     M_INS_EXP ("LAMBDA",
-                [arg_type; res_type],
-                [emit_code ~expand body], var_annot name)
+    M_INS_EXP ("LAMBDA",
+               [arg_type; res_type],
+               [emit_code ~expand body], var_annot name)
   | LEFT (ty, constr) ->
     M_INS_EXP ("LEFT", [ty], [],
                var_annot name @ field_annot constr @ field_annot (Some ""))

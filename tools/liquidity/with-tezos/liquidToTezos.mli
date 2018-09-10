@@ -44,4 +44,4 @@ val read_tezos_file : string -> LiquidTezosTypes.contract * LiquidTezosTypes.env
 val read_tezos_json : string -> LiquidTezosTypes.contract * LiquidTezosTypes.env
 
 val arg_list : bool ref ->
-         (Arg.key * Arg.spec * Arg.doc) list
+  (Arg.key * Arg.spec * Arg.doc) list

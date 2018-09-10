@@ -69,8 +69,8 @@ module type S = sig
   type 'a t
 
   (** Run contract with given parameter and storage on the Tezos node specified
-     in ![LiquidOptions], returns the return value, the storage and a diff of a
-     big map id the contract contains any *)
+      in ![LiquidOptions], returns the return value, the storage and a diff of a
+      big map id the contract contains any *)
   val run :
     from -> string -> string -> string ->
     (operation list * LiquidTypes.const * big_map_diff option) t

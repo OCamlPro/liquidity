@@ -53,9 +53,9 @@ let rec to_dot ~sub_contract_of contract =
   in
 
   Ocamldot.add_node_attrs (node_of begin_node)
-                          [NodeColor "green"; NodeStyle Filled];
+    [NodeColor "green"; NodeStyle Filled];
   Ocamldot.add_node_attrs (node_of end_node)
-                          [NodeColor "red"; NodeStyle Filled];
+    [NodeColor "red"; NodeStyle Filled];
 
   let done_set = Hashtbl.create 1000 in
 
@@ -63,8 +63,8 @@ let rec to_dot ~sub_contract_of contract =
     match node.next with
     | None -> ()
     | Some next ->
-       add_edge node next [ EdgeStyle Bold ];
-       iter next
+      add_edge node next [ EdgeStyle Bold ];
+      iter next
 
   and iter node =
     if not (Hashtbl.mem done_set node.num) then begin

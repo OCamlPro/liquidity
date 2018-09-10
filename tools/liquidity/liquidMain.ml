@@ -8,8 +8,8 @@
 (**************************************************************************)
 
 (* TODO: We could use a simplify pass to propagate the no-effect
-  defining expression of once-used variables to their uniq use
-  site. It could dramatically decrease the size of the stack.  *)
+   defining expression of once-used variables to their uniq use
+   site. It could dramatically decrease the size of the stack.  *)
 
 
 open LiquidTypes
@@ -17,17 +17,17 @@ open LiquidTypes
 exception Bad_arg
 
 (* We use the parser of the OCaml compiler parser to parse the file,
-  we then translate it to a simplified AST, before compiling it
-  to Michelson. No type-checking yet.
- *)
+   we then translate it to a simplified AST, before compiling it
+   to Michelson. No type-checking yet.
+*)
 
 let compile_liquid_files files =
   let ocaml_asts = List.map (fun filename ->
-    let ocaml_ast = LiquidFromOCaml.read_file filename in
-    if !LiquidOptions.verbosity>0 then
-      FileString.write_file (filename ^ ".ocaml")
-        (LiquidOCamlPrinter.contract_ast ocaml_ast);
-    (filename, ocaml_ast)
+      let ocaml_ast = LiquidFromOCaml.read_file filename in
+      if !LiquidOptions.verbosity>0 then
+        FileString.write_file (filename ^ ".ocaml")
+          (LiquidOCamlPrinter.contract_ast ocaml_ast);
+      (filename, ocaml_ast)
     ) files in
   if !LiquidOptions.parseonly then exit 0;
   let syntax_ast, syntax_init, env =
@@ -39,9 +39,9 @@ let compile_liquid_files files =
                 String.uncapitalize_ascii (syntax_ast.contract_name))
       ^ ".liq" in
   if !LiquidOptions.verbosity>0 then
-  FileString.write_file (outprefix ^ ".syntax")
-                        (LiquidPrinter.Liquid.string_of_contract
-                           syntax_ast);
+    FileString.write_file (outprefix ^ ".syntax")
+      (LiquidPrinter.Liquid.string_of_contract
+         syntax_ast);
   let typed_ast = LiquidCheck.typecheck_contract
       ~warnings:true ~decompiling:false env syntax_ast in
   if !LiquidOptions.verbosity>0 then
@@ -58,9 +58,9 @@ let compile_liquid_files files =
 
   let live_ast = LiquidSimplify.simplify_contract encoded_ast to_inline in
   if !LiquidOptions.verbosity>0 then
-  FileString.write_file (outprefix ^ ".simple")
-                        (LiquidPrinter.Liquid.string_of_contract
-                           live_ast);
+    FileString.write_file (outprefix ^ ".simple")
+      (LiquidPrinter.Liquid.string_of_contract
+         live_ast);
 
   let pre_michelson = LiquidMichelson.translate live_ast in
 
@@ -74,32 +74,32 @@ let compile_liquid_files files =
 
   (* Output initial(izer/value) *)
   begin match syntax_init with
-  | None -> ()
-  | Some syntax_init ->
-    match LiquidInit.compile_liquid_init env
-            (sig_of_contract syntax_ast) syntax_ast.storage syntax_init with
-    | LiquidInit.Init_constant c_init when !LiquidOptions.json ->
-      let s = LiquidToTezos.(json_of_const @@ convert_const c_init) in
-      let output = outprefix ^ ".init.json" in
-      FileString.write_file output s;
-      Printf.eprintf "Constant initial storage generated in %S\n%!" output
-    | LiquidInit.Init_constant c_init ->
-      let s = LiquidPrinter.Michelson.line_of_const c_init in
-      let output = outprefix ^ ".init.tz" in
-      FileString.write_file output s;
-      Printf.eprintf "Constant initial storage generated in %S\n%!" output
-    | LiquidInit.Init_code (_, pre_init) ->
-      let mic_init, _ = LiquidToTezos.convert_contract ~expand:true pre_init in
-      let s, output =
-        if !LiquidOptions.json then
-          LiquidToTezos.json_of_contract mic_init,
-          outprefix ^ ".initializer.tz.json"
-        else
-          LiquidToTezos.string_of_contract mic_init,
-          outprefix ^ ".initializer.tz"
-      in
-      FileString.write_file output s;
-      Printf.eprintf "Storage initializer generated in %S\n%!" output
+    | None -> ()
+    | Some syntax_init ->
+      match LiquidInit.compile_liquid_init env
+              (sig_of_contract syntax_ast) syntax_ast.storage syntax_init with
+      | LiquidInit.Init_constant c_init when !LiquidOptions.json ->
+        let s = LiquidToTezos.(json_of_const @@ convert_const c_init) in
+        let output = outprefix ^ ".init.json" in
+        FileString.write_file output s;
+        Printf.eprintf "Constant initial storage generated in %S\n%!" output
+      | LiquidInit.Init_constant c_init ->
+        let s = LiquidPrinter.Michelson.line_of_const c_init in
+        let output = outprefix ^ ".init.tz" in
+        FileString.write_file output s;
+        Printf.eprintf "Constant initial storage generated in %S\n%!" output
+      | LiquidInit.Init_code (_, pre_init) ->
+        let mic_init, _ = LiquidToTezos.convert_contract ~expand:true pre_init in
+        let s, output =
+          if !LiquidOptions.json then
+            LiquidToTezos.json_of_contract mic_init,
+            outprefix ^ ".initializer.tz.json"
+          else
+            LiquidToTezos.string_of_contract mic_init,
+            outprefix ^ ".initializer.tz"
+        in
+        FileString.write_file output s;
+        Printf.eprintf "Storage initializer generated in %S\n%!" output
   end;
 
   let c, loc_table =
@@ -145,7 +145,7 @@ let compile_tezos_file filename =
   if !LiquidOptions.parseonly then exit 0;
   if !LiquidOptions.verbosity>0 then begin
     FileString.write_file  (filename ^ ".dot")
-                           (LiquidDot.to_string c);
+      (LiquidDot.to_string c);
     let cmd = Ocamldot.dot2pdf_cmd (filename ^ ".dot") (filename ^ ".pdf") in
     if Sys.command cmd <> 0 then
       Printf.eprintf "Warning: could not generate pdf from .dot file\n%!";
@@ -154,8 +154,8 @@ let compile_tezos_file filename =
 
   let c = LiquidDecomp.decompile c in
   if !LiquidOptions.verbosity>0 then
-  FileString.write_file  (filename ^ ".liq.pre")
-                         (LiquidPrinter.Liquid.string_of_contract c);
+    FileString.write_file  (filename ^ ".liq.pre")
+      (LiquidPrinter.Liquid.string_of_contract c);
   let env = LiquidFromTezos.convert_env env in
   let c = { c with contract_name = env.contractname } in
   let outprefix =
@@ -174,15 +174,15 @@ let compile_tezos_file filename =
     | Some output -> output
     | None -> outprefix ^ ".liq" in
   FileString.write_file  output
-                         (try
-                            LiquidToOCaml.string_of_structure
-                              (LiquidToOCaml.structure_of_contract
-                                 ~type_annots
-                                 ~types
-                                 untyped_ast)
-                          with LiquidError _ ->
-                            LiquidPrinter.Liquid.string_of_contract
-                              untyped_ast);
+    (try
+       LiquidToOCaml.string_of_structure
+         (LiquidToOCaml.structure_of_contract
+            ~type_annots
+            ~types
+            untyped_ast)
+     with LiquidError _ ->
+       LiquidPrinter.Liquid.string_of_contract
+         untyped_ast);
   Printf.eprintf "File %S generated\n%!" output;
   ()
 
@@ -470,7 +470,7 @@ let main () =
        contracts (default: 127.0.0.1:8732)\
        \n\
        \n\
-      Available commands:\
+       Available commands:\
       ";
 
       "--run", Arg.Tuple [

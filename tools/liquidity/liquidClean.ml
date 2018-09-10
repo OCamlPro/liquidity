@@ -22,7 +22,7 @@ let rec clean_code code =
     | LOOP e -> LOOP (clean_code e)
     | ITER e -> ITER (clean_code e)
     | LAMBDA (arg_type, res_type, e) ->
-       LAMBDA (arg_type, res_type, clean_code e)
+      LAMBDA (arg_type, res_type, clean_code e)
     | ins -> ins
   in
   match ins with
@@ -35,14 +35,14 @@ and clean_seq exprs =
   match exprs with
   | [] -> []
   | e :: exprs ->
-     let e = clean_code e in
-     match e.ins with
-     | FAILWITH -> [e]
-     | _ ->
-       let exprs =  clean_seq exprs in
-       match e, exprs with
-       | _, ({ins=FAILWITH} as fail) :: _ -> [fail]
-       | _ -> e :: exprs
+    let e = clean_code e in
+    match e.ins with
+    | FAILWITH -> [e]
+    | _ ->
+      let exprs =  clean_seq exprs in
+      match e, exprs with
+      | _, ({ins=FAILWITH} as fail) :: _ -> [fail]
+      | _ -> e :: exprs
 
 let clean_contract contract =
   { contract with mic_code = clean_code contract.mic_code }

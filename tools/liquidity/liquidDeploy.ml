@@ -188,7 +188,7 @@ let curl_post ~data path =
         (Ezjsonm.to_string ~minify:false (Ezjsonm.from_string json));
     return json
   with Curl.CurlException (code, i, s) (* as exn *) ->
-     raise (RequestError (Curl.errno code, s))
+    raise (RequestError (Curl.errno code, s))
 
 let curl_get path =
   let host = !LiquidOptions.tezos_node in
@@ -204,7 +204,7 @@ let curl_get path =
         (Ezjsonm.to_string ~minify:false (Ezjsonm.from_string json));
     return json
   with Curl.CurlException (code, i, s) (* as exn *) ->
-     raise (RequestError (Curl.errno code, s))
+    raise (RequestError (Curl.errno code, s))
 
 
 let post = ref curl_post
@@ -223,11 +223,11 @@ let get = ref curl_get
 
 let error_schema =
   lazy (
-      Lwt.catch
-        (fun () -> !get "/errors" >|= Ezjsonm.from_string)
-        (function
-          | RequestError _ | Not_found -> return @@ `O []
-          | exn -> Lwt.fail exn)
+    Lwt.catch
+      (fun () -> !get "/errors" >|= Ezjsonm.from_string)
+      (function
+        | RequestError _ | Not_found -> return @@ `O []
+        | exn -> Lwt.fail exn)
   )
 
 
@@ -559,15 +559,15 @@ let operation_of_json r =
     | "transaction" ->
       let open Ezjsonm in
       Transaction {
-          amount = find r ["amount"] |> get_string;
-          destination = find r ["destination"] |> get_string;
-          parameters =
-            try find r ["parameters"]
-                |> LiquidToTezos.const_of_ezjson
-                |> LiquidFromTezos.convert_const_notype env
-                |> Option.some
-            with Not_found -> None;
-        }
+        amount = find r ["amount"] |> get_string;
+        destination = find r ["destination"] |> get_string;
+        parameters =
+          try find r ["parameters"]
+              |> LiquidToTezos.const_of_ezjson
+              |> LiquidFromTezos.convert_const_notype env
+              |> Option.some
+          with Not_found -> None;
+      }
     | "origination" ->
       let open Ezjsonm in
       let script =
@@ -585,16 +585,16 @@ let operation_of_json r =
           Some (code, storage)
         with Not_found -> None in
       Origination {
-          manager = find r ["manager_pubkey"] |> get_string;
-          script;
-          spendable =
-            (try find r ["spendable"] |> get_bool with Not_found -> true);
-          delegatable =
-            (try find r ["delegatable"] |> get_bool with Not_found -> true);
-          balance = find r ["balance"] |> get_string;
-          delegate =
-            Option.try_with (fun () -> find r ["delegate"] |> get_string);
-        }
+        manager = find r ["manager_pubkey"] |> get_string;
+        script;
+        spendable =
+          (try find r ["spendable"] |> get_bool with Not_found -> true);
+        delegatable =
+          (try find r ["delegatable"] |> get_bool with Not_found -> true);
+        balance = find r ["balance"] |> get_string;
+        delegate =
+          Option.try_with (fun () -> find r ["delegate"] |> get_string);
+      }
 
     | "delegation" ->
       Delegation Ezjsonm.(
@@ -750,8 +750,8 @@ let get_json_int s =
 
 let get_counter source =
   send_get
-      (Printf.sprintf "/chains/main/blocks/head/context/contracts/%s/counter"
-         source)
+    (Printf.sprintf "/chains/main/blocks/head/context/contracts/%s/counter"
+       source)
   >>= fun r ->
   try
     get_json_int r |> return
@@ -854,65 +854,65 @@ let init_storage ?source liquid init_params_strings =
     | Some pre_init_infos -> pre_init_infos
   in
   match pre_init with
-    | LiquidInit.Init_constant c ->
-      if init_params_strings <> [] then
-        raise (ResponseError "init_storage: Constant storage, no inputs needed");
-      return c
-    | LiquidInit.Init_code (syntax_c, c) ->
-      let init_params =
-        try
-          List.map2 (fun input_str (input_name,_, input_ty) ->
+  | LiquidInit.Init_constant c ->
+    if init_params_strings <> [] then
+      raise (ResponseError "init_storage: Constant storage, no inputs needed");
+    return c
+  | LiquidInit.Init_code (syntax_c, c) ->
+    let init_params =
+      try
+        List.map2 (fun input_str (input_name,_, input_ty) ->
             LiquidData.translate { env with filename = input_name }
               contract_sig syntax_ast.storage input_str input_ty
-            ) init_params_strings init_infos
-        with Invalid_argument _ ->
-          raise
-            (ResponseError
-               (Printf.sprintf
-                  "init_storage: init storage needs %d arguments, but was given %d"
-                  (List.length init_infos) (List.length init_params_strings)
-               ))
-      in
-      let eval_input_storage =
-        try
-          LiquidData.default_const syntax_ast.storage
-          |> LiquidEncode.encode_const env contract_sig syntax_ast.storage
-        with Not_found -> failwith "could not construct dummy storage for eval"
-      in
-      let eval_input_parameter = match init_params with
-        | [] -> CUnit
-        | [x] -> x
-        | _ -> CTuple init_params in
+          ) init_params_strings init_infos
+      with Invalid_argument _ ->
+        raise
+          (ResponseError
+             (Printf.sprintf
+                "init_storage: init storage needs %d arguments, but was given %d"
+                (List.length init_infos) (List.length init_params_strings)
+             ))
+    in
+    let eval_input_storage =
+      try
+        LiquidData.default_const syntax_ast.storage
+        |> LiquidEncode.encode_const env contract_sig syntax_ast.storage
+      with Not_found -> failwith "could not construct dummy storage for eval"
+    in
+    let eval_input_parameter = match init_params with
+      | [] -> CUnit
+      | [x] -> x
+      | _ -> CTuple init_params in
 
-      run_pre env syntax_ast.storage c source
-        eval_input_parameter eval_input_storage
-      >>= fun (_, eval_init_storage, big_map_diff, _) ->
-      (* Add elements of big map *)
-      let eval_init_storage = match eval_init_storage, big_map_diff with
-        | CTuple (CBigMap m :: rtuple), Some l ->
-          let m = List.fold_left (fun m -> function
-              | Big_map_add (DiffKey k, v) -> (k, v) :: m
-              | Big_map_add (DiffKeyHash _, _) ->
-                failwith "Big map must be empty in initial storage with this version of Tezos node"
-              | Big_map_remove _ -> m
-            ) m l
-          in
-          CTuple (CBigMap m :: rtuple)
-        | CRecord ((bname, CBigMap m) :: rrecord), Some l ->
-          let m = List.fold_left (fun m -> function
-              | Big_map_add (DiffKey k, v) -> (k, v) :: m
-              | Big_map_add (DiffKeyHash _, _) ->
-                failwith "Big map must be empty in initial storage with this version of Tezos node"
-              | Big_map_remove _ -> m
-            ) m l
-          in
-          CRecord ((bname, CBigMap m) :: rrecord)
-        | _ -> eval_init_storage
-      in
-      Printf.eprintf "Evaluated initial storage: %s\n%!"
-        (LiquidData.string_of_const eval_init_storage);
-      return (LiquidEncode.encode_const env contract_sig syntax_ast.storage
-                eval_init_storage)
+    run_pre env syntax_ast.storage c source
+      eval_input_parameter eval_input_storage
+    >>= fun (_, eval_init_storage, big_map_diff, _) ->
+    (* Add elements of big map *)
+    let eval_init_storage = match eval_init_storage, big_map_diff with
+      | CTuple (CBigMap m :: rtuple), Some l ->
+        let m = List.fold_left (fun m -> function
+            | Big_map_add (DiffKey k, v) -> (k, v) :: m
+            | Big_map_add (DiffKeyHash _, _) ->
+              failwith "Big map must be empty in initial storage with this version of Tezos node"
+            | Big_map_remove _ -> m
+          ) m l
+        in
+        CTuple (CBigMap m :: rtuple)
+      | CRecord ((bname, CBigMap m) :: rrecord), Some l ->
+        let m = List.fold_left (fun m -> function
+            | Big_map_add (DiffKey k, v) -> (k, v) :: m
+            | Big_map_add (DiffKeyHash _, _) ->
+              failwith "Big map must be empty in initial storage with this version of Tezos node"
+            | Big_map_remove _ -> m
+          ) m l
+        in
+        CRecord ((bname, CBigMap m) :: rrecord)
+      | _ -> eval_init_storage
+    in
+    Printf.eprintf "Evaluated initial storage: %s\n%!"
+      (LiquidData.string_of_const eval_init_storage);
+    return (LiquidEncode.encode_const env contract_sig syntax_ast.storage
+              eval_init_storage)
 
 
 let forge_deploy ?head ?source ?public_key
@@ -1000,10 +1000,10 @@ let inject ?loc_table ?sk ~head json_op op =
         Operation_hash.to_b58check @@
         Operation_hash.hash_bytes [ op_b ] in
       op, op_hash, [[
-        "protocol", Printf.sprintf "%S" protocol;
-        "branch", Printf.sprintf "%S" head;
-        "contents", json_op;
-      ] |> mk_json_obj] |> mk_json_arr
+          "protocol", Printf.sprintf "%S" protocol;
+          "branch", Printf.sprintf "%S" head;
+          "contents", json_op;
+        ] |> mk_json_obj] |> mk_json_arr
 
     | Some sk ->
       let signature_b = sign sk op_b in
@@ -1014,11 +1014,11 @@ let inject ?loc_table ?sk ~head json_op op =
         Operation_hash.to_b58check @@
         Operation_hash.hash_bytes [ signed_op_b ] in
       signed_op, op_hash, [[
-        "protocol", Printf.sprintf "%S" protocol;
-        "branch", Printf.sprintf "%S" head;
-        "contents", json_op;
-        "signature", Printf.sprintf "%S" signature;
-      ] |> mk_json_obj] |> mk_json_arr
+          "protocol", Printf.sprintf "%S" protocol;
+          "branch", Printf.sprintf "%S" head;
+          "contents", json_op;
+          "signature", Printf.sprintf "%S" signature;
+        ] |> mk_json_obj] |> mk_json_arr
   in
   send_post ?loc_table ~data
     "/chains/main/blocks/head/helpers/preapply/operations"

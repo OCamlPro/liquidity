@@ -53,8 +53,8 @@ type const =
 
 
 (** Liquidity types *)
- and datatype =
-   (* michelson *)
+and datatype =
+  (* michelson *)
   | Tunit
   | Tbool
   | Tint
@@ -204,7 +204,7 @@ and eq_signature { entries_sig = s1 } { entries_sig = s2 } =
   with Invalid_argument _ -> false
 
 (** Returns true if a type contains an operation (excepted in lambda's
-   where they are allowed in Michelson). *)
+    where they are allowed in Michelson). *)
 let rec type_contains_nonlambda_operation = function
   | Toperation -> true
   | Tunit | Tbool | Tint | Tnat | Ttez | Tstring | Tbytes
@@ -248,7 +248,7 @@ type 'a mic_contract = {
 
 (** Allowed built-in primities in Liquidity *)
 type primitive =
-   (* resolved in LiquidCheck *)
+  (* resolved in LiquidCheck *)
   | Prim_unknown
   | Prim_coll_find
   | Prim_coll_update
@@ -372,126 +372,126 @@ let primitive_of_string = Hashtbl.create 101
 let string_of_primitive = Hashtbl.create 101
 
 (* Some primitives should be kept internal:
-* get and set
-* get_last and set_last
-* tuple
+ * get and set
+ * get_last and set_last
+ * tuple
 *)
 let () =
   List.iter (fun (n,p) ->
       Hashtbl.add primitive_of_string n p;
       Hashtbl.add string_of_primitive p n;
     )
-            [
-              "get", Prim_tuple_get;
-              "set", Prim_tuple_set;
-              "tuple", Prim_tuple;
+    [
+      "get", Prim_tuple_get;
+      "set", Prim_tuple_set;
+      "tuple", Prim_tuple;
 
-              "Array.get", Prim_tuple_get;
-              "Array.set", Prim_tuple_set;
+      "Array.get", Prim_tuple_get;
+      "Array.set", Prim_tuple_set;
 
-              "Current.balance", Prim_balance;
-              "Current.time", Prim_now;
-              "Current.amount", Prim_amount;
-              "Current.gas", Prim_gas;
-              "Current.source", Prim_source;
-              "Current.sender", Prim_sender;
+      "Current.balance", Prim_balance;
+      "Current.time", Prim_now;
+      "Current.amount", Prim_amount;
+      "Current.gas", Prim_gas;
+      "Current.source", Prim_source;
+      "Current.sender", Prim_sender;
 
-              "Left", Prim_Left;
-              "Right", Prim_Right;
-              "=", Prim_eq;
-              "<>", Prim_neq;
-              "<", Prim_lt;
-              "<=", Prim_le;
-              ">", Prim_gt;
-              ">=", Prim_ge;
-              "compare", Prim_compare;
-              "+", Prim_add;
-              "-", Prim_sub;
-              "*", Prim_mul;
-              "/", Prim_ediv;
-              "~-", Prim_neg;
+      "Left", Prim_Left;
+      "Right", Prim_Right;
+      "=", Prim_eq;
+      "<>", Prim_neq;
+      "<", Prim_lt;
+      "<=", Prim_le;
+      ">", Prim_gt;
+      ">=", Prim_ge;
+      "compare", Prim_compare;
+      "+", Prim_add;
+      "-", Prim_sub;
+      "*", Prim_mul;
+      "/", Prim_ediv;
+      "~-", Prim_neg;
 
-              "Map.find", Prim_map_find;
-              "Map.update", Prim_map_update;
-              "Map.add", Prim_map_add;
-              "Map.remove", Prim_map_remove;
-              "Map.mem", Prim_map_mem;
-              "Map.cardinal", Prim_map_size;
-              "Map.size", Prim_map_size;
+      "Map.find", Prim_map_find;
+      "Map.update", Prim_map_update;
+      "Map.add", Prim_map_add;
+      "Map.remove", Prim_map_remove;
+      "Map.mem", Prim_map_mem;
+      "Map.cardinal", Prim_map_size;
+      "Map.size", Prim_map_size;
 
-              "Set.update", Prim_set_update;
-              "Set.add", Prim_set_add;
-              "Set.remove", Prim_set_remove;
-              "Set.mem", Prim_set_mem;
-              "Set.cardinal", Prim_set_size;
-              "Set.size", Prim_set_size;
+      "Set.update", Prim_set_update;
+      "Set.add", Prim_set_add;
+      "Set.remove", Prim_set_remove;
+      "Set.mem", Prim_set_mem;
+      "Set.cardinal", Prim_set_size;
+      "Set.size", Prim_set_size;
 
-              "Some", Prim_Some;
+      "Some", Prim_Some;
 
-              "List.rev", Prim_list_rev;
-              "List.length", Prim_list_size;
-              "List.size", Prim_list_size;
+      "List.rev", Prim_list_rev;
+      "List.length", Prim_list_size;
+      "List.size", Prim_list_size;
 
-              "Contract.set_delegate", Prim_set_delegate;
-              "Contract.address", Prim_address;
-              "Contract.self", Prim_self;
+      "Contract.set_delegate", Prim_set_delegate;
+      "Contract.address", Prim_address;
+      "Contract.self", Prim_self;
 
-              "Account.create", Prim_create_account;
-              "Account.default", Prim_default_account;
+      "Account.create", Prim_create_account;
+      "Account.default", Prim_default_account;
 
-              "Crypto.blake2b", Prim_blake2b;
-              "Crypto.sha256", Prim_sha256;
-              "Crypto.sha512", Prim_sha512;
-              "Crypto.hash_key", Prim_hash_key;
-              "Crypto.check", Prim_check;
+      "Crypto.blake2b", Prim_blake2b;
+      "Crypto.sha256", Prim_sha256;
+      "Crypto.sha512", Prim_sha512;
+      "Crypto.hash_key", Prim_hash_key;
+      "Crypto.check", Prim_check;
 
-              "Bytes.pack", Prim_pack;
-              "Bytes.length", Prim_bytes_size;
-              "Bytes.size", Prim_bytes_size;
-              "Bytes.concat", Prim_bytes_concat;
-              "Bytes.slice", Prim_bytes_sub;
-              "Bytes.sub", Prim_bytes_sub;
+      "Bytes.pack", Prim_pack;
+      "Bytes.length", Prim_bytes_size;
+      "Bytes.size", Prim_bytes_size;
+      "Bytes.concat", Prim_bytes_concat;
+      "Bytes.slice", Prim_bytes_sub;
+      "Bytes.sub", Prim_bytes_sub;
 
-              "String.length", Prim_string_size;
-              "String.size", Prim_string_size;
-              "String.concat", Prim_string_concat;
-              "String.slice", Prim_string_sub;
-              "String.sub", Prim_string_sub;
+      "String.length", Prim_string_size;
+      "String.size", Prim_string_size;
+      "String.concat", Prim_string_concat;
+      "String.slice", Prim_string_sub;
+      "String.sub", Prim_string_sub;
 
-              "@", Prim_concat_two;
+      "@", Prim_concat_two;
 
-              "::", Prim_Cons;
-              "lor", Prim_or;
-              "or", Prim_or;
-              "||", Prim_or;
-              "&", Prim_and;
-              "land", Prim_and;
-              "&&", Prim_and;
-              "lxor", Prim_xor;
-              "xor", Prim_xor;
-              "not", Prim_not;
-              "abs", Prim_abs;
-              "is_nat", Prim_is_nat;
-              "int", Prim_int;
-              ">>", Prim_lsr;
-              "lsr", Prim_lsr;
-              "<<", Prim_lsl;
-              "lsl", Prim_lsl;
+      "::", Prim_Cons;
+      "lor", Prim_or;
+      "or", Prim_or;
+      "||", Prim_or;
+      "&", Prim_and;
+      "land", Prim_and;
+      "&&", Prim_and;
+      "lxor", Prim_xor;
+      "xor", Prim_xor;
+      "not", Prim_not;
+      "abs", Prim_abs;
+      "is_nat", Prim_is_nat;
+      "int", Prim_int;
+      ">>", Prim_lsr;
+      "lsr", Prim_lsr;
+      "<<", Prim_lsl;
+      "lsl", Prim_lsl;
 
-              "Lambda.pipe" , Prim_exec;
-              "|>", Prim_exec;
+      "Lambda.pipe" , Prim_exec;
+      "|>", Prim_exec;
 
-              "Coll.update", Prim_coll_update;
-              "Coll.mem", Prim_coll_mem;
-              "Coll.find", Prim_coll_find;
-              "Coll.size",Prim_coll_size;
-              "Coll.concat",Prim_concat;
-              "Coll.slice",Prim_slice;
+      "Coll.update", Prim_coll_update;
+      "Coll.mem", Prim_coll_mem;
+      "Coll.find", Prim_coll_find;
+      "Coll.size",Prim_coll_size;
+      "Coll.concat",Prim_concat;
+      "Coll.slice",Prim_slice;
 
-              "<unknown>", Prim_unknown;
-              "<unused>", Prim_unused None;
+      "<unknown>", Prim_unknown;
+      "<unused>", Prim_unused None;
 
-            ]
+    ]
 
 let primitive_of_string s =
   try
@@ -508,7 +508,7 @@ let string_of_primitive prim =
       Hashtbl.find string_of_primitive prim
   with Not_found ->
     Printf.eprintf "Debug: string_of_primitive(%d) raised Not_found\n%!"
-                   (Obj.magic prim : int);
+      (Obj.magic prim : int);
     raise Not_found
 
 
@@ -519,16 +519,16 @@ let () =
       Hashtbl.add fold_primitive_of_string n p;
       Hashtbl.add string_of_fold_primitive p n;
     )
-            [
-              "Map.iter", Prim_map_iter;
-              "Set.iter", Prim_set_iter;
-              "List.iter", Prim_list_iter;
-              "Map.fold", Prim_map_fold;
-              "Set.fold", Prim_set_fold;
-              "List.fold", Prim_list_fold;
-              "Coll.iter", Prim_coll_iter;
-              "Coll.fold", Prim_coll_fold;
-            ]
+    [
+      "Map.iter", Prim_map_iter;
+      "Set.iter", Prim_set_iter;
+      "List.iter", Prim_list_iter;
+      "Map.fold", Prim_map_fold;
+      "Set.fold", Prim_set_fold;
+      "List.fold", Prim_list_fold;
+      "Coll.iter", Prim_coll_iter;
+      "Coll.fold", Prim_coll_fold;
+    ]
 
 let fold_primitive_of_string s =
   try
@@ -542,7 +542,7 @@ let string_of_fold_primitive prim =
     Hashtbl.find string_of_fold_primitive prim
   with Not_found ->
     Printf.eprintf "Debug: string_of_fold_primitive(%d) raised Not_found\n%!"
-                   (Obj.magic prim : int);
+      (Obj.magic prim : int);
     raise Not_found
 
 
@@ -553,12 +553,12 @@ let () =
       Hashtbl.add map_primitive_of_string n p;
       Hashtbl.add string_of_map_primitive p n;
     )
-            [
-              "Map.map", Prim_map_map;
-              "Set.map", Prim_set_map;
-              "List.map", Prim_list_map;
-              "Coll.map", Prim_coll_map;
-            ]
+    [
+      "Map.map", Prim_map_map;
+      "Set.map", Prim_set_map;
+      "List.map", Prim_list_map;
+      "Coll.map", Prim_coll_map;
+    ]
 
 let map_primitive_of_string s =
   try
@@ -572,7 +572,7 @@ let string_of_map_primitive prim =
     Hashtbl.find string_of_map_primitive prim
   with Not_found ->
     Printf.eprintf "Debug: string_of_map_primitive(%d) raised Not_found\n%!"
-                   (Obj.magic prim : int);
+      (Obj.magic prim : int);
     raise Not_found
 
 
@@ -583,12 +583,12 @@ let () =
       Hashtbl.add map_fold_primitive_of_string n p;
       Hashtbl.add string_of_map_fold_primitive p n;
     )
-            [
-              "Map.map_fold", Prim_map_map_fold;
-              "Set.map_fold", Prim_set_map_fold;
-              "List.map_fold", Prim_list_map_fold;
-              "Coll.map_fold", Prim_coll_map_fold;
-            ]
+    [
+      "Map.map_fold", Prim_map_map_fold;
+      "Set.map_fold", Prim_set_map_fold;
+      "List.map_fold", Prim_list_map_fold;
+      "Coll.map_fold", Prim_coll_map_fold;
+    ]
 
 let map_fold_primitive_of_string s =
   try
@@ -602,7 +602,7 @@ let string_of_map_fold_primitive prim =
     Hashtbl.find string_of_map_fold_primitive prim
   with Not_found ->
     Printf.eprintf "Debug: string_of_map_fold_primitive(%d) raised Not_found\n%!"
-                   (Obj.magic prim : int);
+      (Obj.magic prim : int);
     raise Not_found
 
 
@@ -612,12 +612,12 @@ let string_of_map_fold_primitive prim =
     annotations, for the correct types to be propagated in the sources.
 *)
 type constructor =
-  Constr of string
-| Left of datatype
-| Right of datatype
+    Constr of string
+  | Left of datatype
+  | Right of datatype
 
 (** A pattern in a pattern-matching construct is either a constructor
-   [C (a, b, c)] or a wildcard [_] *)
+    [C (a, b, c)] or a wildcard [_] *)
 type pattern =
   | CConstr of string * string list
   | CAny
@@ -626,10 +626,10 @@ type pattern =
 type loc_name = { nname : string; nloc: location }
 
 (** The parameterized types of Liquidity expression. The parameter
-   ['ty] is either [unit] or [datatype] for resp. typed and untyped
-   expression. The parameter ['a] is a ghost type {!typed} or
-   {!encoded} to enforce some properties about expression through
-   typing.  *)
+    ['ty] is either [unit] or [datatype] for resp. typed and untyped
+    expression. The parameter ['a] is a ghost type {!typed} or
+    {!encoded} to enforce some properties about expression through
+    typing.  *)
 type ('ty, 'a) exp = {
   desc : ('ty, 'a) exp_desc; (** Actual expression *)
   name : string option;      (** Potential name of expression *)
@@ -639,8 +639,8 @@ type ('ty, 'a) exp = {
   fail : bool;               (** Fail flag, [true] if evaluation of
                                  the expression can fail *)
   transfer : bool;           (** Transfer flas, [true] if the
-                                expression can contain an operation
-                                (these should not be duplicated) *)
+                                 expression can contain an operation
+                                 (these should not be duplicated) *)
 }
 
 (** Type of raw Liquidity expression descriptions *)
@@ -693,8 +693,8 @@ and ('ty, 'a) exp_desc =
                      ifsome: ('ty, 'a) exp }
   (** Pattern matching over optional values:
       {[ match arg with
-         | None -> ifnone
-         | Some some_name -> ifsome ]} *)
+        | None -> ifnone
+        | Some some_name -> ifsome ]} *)
 
   | MatchList of { arg: ('ty, 'a) exp;
                    head_name: loc_name;
@@ -703,8 +703,8 @@ and ('ty, 'a) exp_desc =
                    ifnil: ('ty, 'a) exp }
   (** Pattern matching over lists:
       {[ match arg with
-         | head_name :: tail_name -> ifcons
-         | [] -> ifnil ]} *)
+        | head_name :: tail_name -> ifcons
+        | [] -> ifnil ]} *)
 
   | Loop of { arg_name: loc_name;
               body: ('ty, 'a) exp;
@@ -750,9 +750,9 @@ and ('ty, 'a) exp_desc =
                  ret_ty: datatype; (* inferred during typechecking *)
                }
   (** Closures: same as lambda-abstractions but with a call
-     environment. Closures cannot be written explicitely in Liquidity
-     syntax, rather lambda's that are not pure are transformed into
-     closures during typechecking. *)
+      environment. Closures cannot be written explicitely in Liquidity
+      syntax, rather lambda's that are not pure are transformed into
+      closures during typechecking. *)
 
   | Record of (string * ('ty, 'a) exp) list
   (** Record constructs:
@@ -853,7 +853,7 @@ let mk =
         List.exists (fun e -> e.fail) args,
         prim = Prim_set_delegate
         || prim = Prim_create_account
-        (* || List.exists (fun e -> e.transfer) args *)
+      (* || List.exists (fun e -> e.transfer) args *)
 
       | Closure { call_env; body } ->
         body.fail || List.exists (fun (_, e) -> e.fail) call_env,
@@ -1081,7 +1081,7 @@ type 'a pre_michelson =
   | DIV
 
 (** Intermediate Michelson expressions with location information and
-   names *)
+    names *)
 type loc_michelson = {
   loc : location;
   ins : loc_michelson pre_michelson;
@@ -1108,38 +1108,38 @@ type closure_env = {
 
 (** Environment for parsing *)
 type env = {
-    (* name of file being compiled *)
-    filename : string;
+  (* name of file being compiled *)
+  filename : string;
 
-    (* name of contract being compiled *)
-    contractname : string;
-    (* fields modified in LiquidFromOCaml *)
-    (* type definitions *)
-    mutable types : datatype StringMap.t;
-    (* contract type definitions *)
-    mutable contract_types : contract_sig StringMap.t;
-    (* labels of records in type definitions *)
-    mutable labels : (string * int * datatype) StringMap.t;
-    (* constructors of sum-types in type definitions *)
-    mutable constrs : (string * datatype) StringMap.t;
-    (* englobing env *)
-    top_env : env option;
-  }
+  (* name of contract being compiled *)
+  contractname : string;
+  (* fields modified in LiquidFromOCaml *)
+  (* type definitions *)
+  mutable types : datatype StringMap.t;
+  (* contract type definitions *)
+  mutable contract_types : contract_sig StringMap.t;
+  (* labels of records in type definitions *)
+  mutable labels : (string * int * datatype) StringMap.t;
+  (* constructors of sum-types in type definitions *)
+  mutable constrs : (string * datatype) StringMap.t;
+  (* englobing env *)
+  top_env : env option;
+}
 
 (** Environment for typechecking *)
 type typecheck_env = {
-    warnings : bool;
-    annot : bool;
-    decompiling : bool;
-    counter : int ref;
-    vars : (string * datatype * bool (* fails *) ) StringMap.t;
-    vars_counts : int ref StringMap.t;
-    env : env;
-    to_inline : encoded_exp StringMap.t ref;
-    force_inline : encoded_exp StringMap.t ref;
-    t_contract_sig : contract_sig;
-    t_contract_storage : datatype;
-    clos_env : closure_env option;
+  warnings : bool;
+  annot : bool;
+  decompiling : bool;
+  counter : int ref;
+  vars : (string * datatype * bool (* fails *) ) StringMap.t;
+  vars_counts : int ref StringMap.t;
+  env : env;
+  to_inline : encoded_exp StringMap.t ref;
+  force_inline : encoded_exp StringMap.t ref;
+  t_contract_sig : contract_sig;
+  t_contract_storage : datatype;
+  clos_env : closure_env option;
 }
 
 let empty_typecheck_env ~warnings t_contract_sig t_contract_storage env = {
@@ -1173,65 +1173,65 @@ type node = {
   mutable prevs : node list;
 }
 
- and node_kind =
-   | N_UNKNOWN of string
-   | N_VAR of string
-   | N_START
-   | N_IF of node * node
-   | N_IF_RESULT of node * int
-   | N_IF_THEN of node
-   | N_IF_ELSE of node
-   | N_IF_END of node * node
-   | N_IF_END_RESULT of node * node option * int
-   | N_IF_NONE of node
-   | N_IF_SOME of node * node
-   | N_IF_NIL of node
-   | N_IF_CONS of node * node * node
-   | N_IF_LEFT of node * node
-   | N_IF_RIGHT of node * node
-   | N_IF_PLUS of node * node
-   | N_IF_MINUS of node * node
-   | N_TRANSFER
-   | N_CREATE_CONTRACT of node_exp mic_contract
-   | N_CONST of datatype * const
-   | N_PRIM of string
-   | N_FAILWITH
-   | N_ARG of node * int
-   | N_LOOP of node * node
-   | N_LOOP_BEGIN of node
-   | N_LOOP_RESULT of (* N_LOOP *) node
-                                   * (* N_LOOP_BEGIN *) node * int
-   | N_LOOP_END of (* N_LOOP *) node
-                                * (* N_LOOP_BEGIN *) node
-                                * (* final_cond *) node
-   | N_FOLD of node * node
-   | N_FOLD_BEGIN of node
-   | N_FOLD_RESULT of node (* N_FOLD *)
-                      * node * int (* N_FOLD_BEGIN *)
-   | N_FOLD_END of node (* N_FOLD *)
-                   * node (* N_FOLD_BEGIN *)
-                   * node (* accumulator *)
-   | N_MAP of node * node
-   | N_MAP_BEGIN of node
-   | N_MAP_RESULT of node (* N_MAP *)
-                      * node * int (* N_MAP_BEGIN *)
-   | N_MAP_END of node (* N_MAP *)
-                   * node (* N_MAP_BEGIN *)
-                   * node (* accumulator *)
-   | N_LAMBDA of node * node * datatype * datatype
-   | N_LAMBDA_BEGIN
-   | N_LAMBDA_END of node
-   | N_END
-   | N_LEFT of datatype
-   | N_RIGHT of datatype
-   | N_CONTRACT of datatype
-   | N_UNPACK of datatype
-   | N_ABS
-   | N_RECORD of string list
-   | N_SETFIELD of string
-   | N_PROJ of string
-   | N_CONSTR of string
-   | N_RESULT of node * int
+and node_kind =
+  | N_UNKNOWN of string
+  | N_VAR of string
+  | N_START
+  | N_IF of node * node
+  | N_IF_RESULT of node * int
+  | N_IF_THEN of node
+  | N_IF_ELSE of node
+  | N_IF_END of node * node
+  | N_IF_END_RESULT of node * node option * int
+  | N_IF_NONE of node
+  | N_IF_SOME of node * node
+  | N_IF_NIL of node
+  | N_IF_CONS of node * node * node
+  | N_IF_LEFT of node * node
+  | N_IF_RIGHT of node * node
+  | N_IF_PLUS of node * node
+  | N_IF_MINUS of node * node
+  | N_TRANSFER
+  | N_CREATE_CONTRACT of node_exp mic_contract
+  | N_CONST of datatype * const
+  | N_PRIM of string
+  | N_FAILWITH
+  | N_ARG of node * int
+  | N_LOOP of node * node
+  | N_LOOP_BEGIN of node
+  | N_LOOP_RESULT of (* N_LOOP *) node
+                                  * (* N_LOOP_BEGIN *) node * int
+  | N_LOOP_END of (* N_LOOP *) node
+                               * (* N_LOOP_BEGIN *) node
+                               * (* final_cond *) node
+  | N_FOLD of node * node
+  | N_FOLD_BEGIN of node
+  | N_FOLD_RESULT of node (* N_FOLD *)
+                     * node * int (* N_FOLD_BEGIN *)
+  | N_FOLD_END of node (* N_FOLD *)
+                  * node (* N_FOLD_BEGIN *)
+                  * node (* accumulator *)
+  | N_MAP of node * node
+  | N_MAP_BEGIN of node
+  | N_MAP_RESULT of node (* N_MAP *)
+                    * node * int (* N_MAP_BEGIN *)
+  | N_MAP_END of node (* N_MAP *)
+                 * node (* N_MAP_BEGIN *)
+                 * node (* accumulator *)
+  | N_LAMBDA of node * node * datatype * datatype
+  | N_LAMBDA_BEGIN
+  | N_LAMBDA_END of node
+  | N_END
+  | N_LEFT of datatype
+  | N_RIGHT of datatype
+  | N_CONTRACT of datatype
+  | N_UNPACK of datatype
+  | N_ABS
+  | N_RECORD of string list
+  | N_SETFIELD of string
+  | N_PROJ of string
+  | N_CONSTR of string
+  | N_RESULT of node * int
 
 and node_exp = node * node
 
@@ -1295,9 +1295,9 @@ let reserved_keywords = [
 
 let has_reserved_prefix s =
   (* [
-  "tz1"; "tz2"; "tz3" ;
-  "edpk"; "sppk"; "p2pk";
-  "edsig"; "spsig1"; "p2sig";
+     "tz1"; "tz2"; "tz3" ;
+     "edpk"; "sppk"; "p2pk";
+     "edsig"; "spsig1"; "p2sig";
      ] *)
   let len = String.length s in
   len >= 3 &&

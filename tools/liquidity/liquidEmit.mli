@@ -10,7 +10,7 @@
 open LiquidTypes
 
 (** Convert from intermediate Michelson reprsentation to Michelson
-   expression *)
+    expression *)
 val emit_code : expand:bool -> loc_michelson -> michelson_exp
 
 (** Convert from intermediate Michelson contract to Michelson contract *)

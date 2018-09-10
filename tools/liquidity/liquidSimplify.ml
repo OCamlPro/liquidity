@@ -68,12 +68,12 @@ let rec compute decompile code to_inline =
     match exp.desc with
     | Const _ -> exp
     | Var name ->
-       begin
-         try
-           let v = StringMap.find name !to_inline in
-           iter v
-         with Not_found -> exp
-       end
+      begin
+        try
+          let v = StringMap.find name !to_inline in
+          iter v
+        with Not_found -> exp
+      end
     | SetField { record; field; set_val } ->
       let record = iter record in
       let set_val = iter set_val in
@@ -106,10 +106,10 @@ let rec compute decompile code to_inline =
                         args = [
                           { desc = Var name };
                           { desc = Const { const = CInt n | CNat n } }] } ->
-              let ok = ok && name = bnd_var.nname &&
-                       LiquidPrinter.int_of_integer n = i in
-              (i + 1, ok)
-            | _ -> (i + 1, false)
+                let ok = ok && name = bnd_var.nname &&
+                         LiquidPrinter.int_of_integer n = i in
+                (i + 1, ok)
+              | _ -> (i + 1, false)
             ) (0, true) tuple in
         ok && List.length tys = len
       ->
@@ -146,91 +146,91 @@ let rec compute decompile code to_inline =
         end
 
     | MatchOption { arg; ifnone; some_name; ifsome } ->
-       let arg = iter arg in
-       let ifnone = iter ifnone in
-       let ifsome = iter ifsome in
-       { exp with desc = MatchOption { arg; ifnone; some_name; ifsome } }
+      let arg = iter arg in
+      let ifnone = iter ifnone in
+      let ifsome = iter ifsome in
+      { exp with desc = MatchOption { arg; ifnone; some_name; ifsome } }
 
     | MatchNat { arg; plus_name; ifplus; minus_name; ifminus } ->
-       let arg = iter arg in
-       let ifplus = iter ifplus in
-       let ifminus = iter ifminus in
-       { exp with
-         desc = MatchNat { arg; plus_name; ifplus; minus_name; ifminus } }
+      let arg = iter arg in
+      let ifplus = iter ifplus in
+      let ifminus = iter ifminus in
+      { exp with
+        desc = MatchNat { arg; plus_name; ifplus; minus_name; ifminus } }
 
     | MatchList { arg; head_name; tail_name; ifcons; ifnil } ->
-       let arg = iter arg in
-       let ifcons = iter ifcons in
-       let ifnil = iter ifnil in
-       { exp with
-         desc = MatchList { arg; head_name; tail_name; ifcons; ifnil } }
+      let arg = iter arg in
+      let ifcons = iter ifcons in
+      let ifnil = iter ifnil in
+      { exp with
+        desc = MatchList { arg; head_name; tail_name; ifcons; ifnil } }
 
     | MatchVariant { arg; cases } ->
-       let arg = iter arg in
-       let cases = List.map (fun (pat, e) -> pat, iter e) cases in
-       { exp with desc = MatchVariant { arg; cases } }
+      let arg = iter arg in
+      let cases = List.map (fun (pat, e) -> pat, iter e) cases in
+      { exp with desc = MatchVariant { arg; cases } }
 
     | Loop { arg_name; body; arg } ->
-       let body = iter body in
-       let arg = iter arg in
-       { exp with desc = Loop { arg_name; body; arg } }
+      let body = iter body in
+      let arg = iter arg in
+      { exp with desc = Loop { arg_name; body; arg } }
 
     | Fold { prim; arg_name; body; arg; acc } ->
-       let body = iter body in
-       let arg = iter arg in
-       let acc = iter acc in
-       { exp with desc = Fold { prim; arg_name; body; arg; acc } }
+      let body = iter body in
+      let arg = iter arg in
+      let acc = iter acc in
+      { exp with desc = Fold { prim; arg_name; body; arg; acc } }
 
     | Map { prim; arg_name; body; arg } ->
-       let body = iter body in
-       let arg = iter arg in
-       { exp with desc = Map { prim; arg_name; body; arg } }
+      let body = iter body in
+      let arg = iter arg in
+      { exp with desc = Map { prim; arg_name; body; arg } }
 
     | MapFold { prim; arg_name; body; arg; acc } ->
-       let body = iter body in
-       let arg = iter arg in
-       let acc = iter acc in
-       { exp with desc = MapFold { prim; arg_name; body; arg; acc } }
+      let body = iter body in
+      let arg = iter arg in
+      let acc = iter acc in
+      { exp with desc = MapFold { prim; arg_name; body; arg; acc } }
 
     | Seq(e1, e2) ->
-       let e1 = iter e1 in
-       let e2 = iter e2 in
-       if e1.ty = Tfail (* e1 always fails *)
-       then e1
-       else if not e1.fail && not e1.transfer (* no side-effects *)
-       then e2
-       else { exp with desc = Seq(e1,e2) }
+      let e1 = iter e1 in
+      let e2 = iter e2 in
+      if e1.ty = Tfail (* e1 always fails *)
+      then e1
+      else if not e1.fail && not e1.transfer (* no side-effects *)
+      then e2
+      else { exp with desc = Seq(e1,e2) }
 
     | If { cond; ifthen; ifelse } ->
-       let cond = iter cond in
-       let ifthen = iter ifthen in
-       let ifelse = iter ifelse in
-       { exp with desc = If { cond; ifthen; ifelse } }
+      let cond = iter cond in
+      let ifthen = iter ifthen in
+      let ifelse = iter ifelse in
+      { exp with desc = If { cond; ifthen; ifelse } }
 
     | Apply { prim = Prim_exec; args =  [x; f] } ->
-       (* inline body of lambda *)
-       let x = iter x in
-       let f = iter f in
-       begin match f.desc with
-         | Lambda { arg_name; body } ->
-           iter { exp with
-                  desc = Let { bnd_var = arg_name;
-                               inline = false;
-                               bnd_val = x;  body }
-                }
-         | _ ->
-           { exp with desc = Apply { prim = Prim_exec; args = [x; f] } }
-       end
+      (* inline body of lambda *)
+      let x = iter x in
+      let f = iter f in
+      begin match f.desc with
+        | Lambda { arg_name; body } ->
+          iter { exp with
+                 desc = Let { bnd_var = arg_name;
+                              inline = false;
+                              bnd_val = x;  body }
+               }
+        | _ ->
+          { exp with desc = Apply { prim = Prim_exec; args = [x; f] } }
+      end
 
     | Apply { prim; args } ->
-       let args = List.map iter args in
-       { exp with desc = Apply { prim; args } }
+      let args = List.map iter args in
+      { exp with desc = Apply { prim; args } }
 
     | Transfer { contract; amount; entry; arg } ->
-       let contract = iter contract in
-       let amount = iter amount in
-       let arg = iter arg in
-       { exp with desc = Transfer { contract; amount; entry; arg } }
+      let contract = iter contract in
+      let amount = iter amount in
+      let arg = iter arg in
+      { exp with desc = Transfer { contract; amount; entry; arg } }
 
     | Lambda { arg_name; arg_ty; body; ret_ty } ->
       let body = iter body in
@@ -244,8 +244,8 @@ let rec compute decompile code to_inline =
         desc = Closure { arg_name; arg_ty; call_env; body; ret_ty } }
 
     | Record fields ->
-       let fields = List.map (fun (label, exp) -> label, iter exp) fields in
-       { exp with desc = Record fields }
+      let fields = List.map (fun (label, exp) -> label, iter exp) fields in
+      { exp with desc = Record fields }
 
     | Failwith arg ->
       { exp with desc = Failwith (iter arg) }
@@ -275,7 +275,7 @@ let rec compute decompile code to_inline =
 
   fixpoint code
 
-  (* iter code *)
+(* iter code *)
 
 and simplify_contract ?(decompile_annoted=false) contract to_inline =
   match contract.entries with

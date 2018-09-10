@@ -227,14 +227,14 @@ let rec convert_const env ?ty expr =
       | Some (Tmap (ty_k, ty_e)) ->
         CMap (List.map (function
             | Prim(_, "Elt", [k;e], _debug) ->
-                convert_const env ~ty:ty_k k, convert_const env ~ty:ty_e e
+              convert_const env ~ty:ty_k k, convert_const env ~ty:ty_e e
             | expr ->
               unknown_expr env "convert_const map element" expr
           ) elems)
       | Some (Tbigmap (ty_k, ty_e)) ->
         CBigMap (List.map (function
             | Prim(_, "Elt", [k;e], _debug) ->
-                convert_const env ~ty:ty_k k, convert_const env ~ty:ty_e e
+              convert_const env ~ty:ty_k k, convert_const env ~ty:ty_e e
             | expr ->
               unknown_expr env "convert_const big map element" expr
           ) elems)
@@ -259,9 +259,9 @@ let name_of_annots annots =
   let exception Found of string in
   try
     List.iter (fun a ->
-      try raise (Found (Scanf.sscanf a "@%s" (fun s -> s)))
-      with Scanf.Scan_failure _ | End_of_file -> ()
-    ) annots;
+        try raise (Found (Scanf.sscanf a "@%s" (fun s -> s)))
+        with Scanf.Scan_failure _ | End_of_file -> ()
+      ) annots;
     None
   with
   | Found ("" | "%" | "%%") -> None
@@ -282,11 +282,11 @@ let type_name_of_annots ?(allow_capital=false) annots =
   let exception Found of string in
   try
     List.iter (fun a ->
-      try raise (Found (Scanf.sscanf a ":%s" (fun s -> s)))
-      (* with Scanf.Scan_failure _ | End_of_file ->
-       * try raise (Found (Scanf.sscanf a "%%%s" (fun s -> s))) *)
-      with Scanf.Scan_failure _ | End_of_file -> ()
-    ) annots;
+        try raise (Found (Scanf.sscanf a ":%s" (fun s -> s)))
+        (* with Scanf.Scan_failure _ | End_of_file ->
+         * try raise (Found (Scanf.sscanf a "%%%s" (fun s -> s))) *)
+        with Scanf.Scan_failure _ | End_of_file -> ()
+      ) annots;
     None
   with
   | Found ("" | "%" | "@") -> None
@@ -456,8 +456,8 @@ let rec find nodes name =
   match nodes with
   | [] -> raise (Missing_program_field name)
   | Prim(_, name_maybe, [ v ], _) :: nodes ->
-     if name_maybe = name then v
-     else find nodes name
+    if name_maybe = name then v
+    else find nodes name
   | _ -> raise (Missing_program_field name)
 
 let rec expand expr =
@@ -712,17 +712,17 @@ let contract_of_string filename s =
   | error :: _ ->
     raise (LiquidError (error_to_liqerror filename error))
   | [] ->
-     let nodes, errors = Micheline_parser.parse_toplevel tokens in
-     match errors with
-     | error :: _ ->
-       raise (LiquidError (error_to_liqerror filename error))
-     | [] ->
-        let nodes = List.map Micheline.extract_locations nodes in
-        let (nodes, loc_tables) = List.split nodes in
-        let env = { (LiquidTezosTypes.empty_env filename) with
-                    loc_table = convert_loc_table filename loc_tables;
-                  } in
-        Some (nodes, env)
+    let nodes, errors = Micheline_parser.parse_toplevel tokens in
+    match errors with
+    | error :: _ ->
+      raise (LiquidError (error_to_liqerror filename error))
+    | [] ->
+      let nodes = List.map Micheline.extract_locations nodes in
+      let (nodes, loc_tables) = List.split nodes in
+      let env = { (LiquidTezosTypes.empty_env filename) with
+                  loc_table = convert_loc_table filename loc_tables;
+                } in
+      Some (nodes, env)
 
 let const_of_string filename s =
   let tokens, errors = Micheline_parser.tokenize s in
@@ -730,16 +730,16 @@ let const_of_string filename s =
   | error :: _ ->
     raise (LiquidError (error_to_liqerror filename error))
   | [] ->
-     let node, errors = Micheline_parser.parse_expression tokens in
-     match errors with
-     | error :: _ ->
-       raise (LiquidError (error_to_liqerror filename error))
-     | [] ->
-        let node, loc_table = Micheline.extract_locations node in
-        let env = { (LiquidTezosTypes.empty_env filename) with
-                    loc_table = convert_loc_table filename [loc_table];
-                  } in
-        Some (node, env)
+    let node, errors = Micheline_parser.parse_expression tokens in
+    match errors with
+    | error :: _ ->
+      raise (LiquidError (error_to_liqerror filename error))
+    | [] ->
+      let node, loc_table = Micheline.extract_locations node in
+      let env = { (LiquidTezosTypes.empty_env filename) with
+                  loc_table = convert_loc_table filename [loc_table];
+                } in
+      Some (node, env)
 
 let convert_env env =
   let ty_env = LiquidFromOCaml.initial_env env.filename in
