@@ -75,9 +75,14 @@ let drop_stack ~loc n depth =
 
 let rec translate_code ~parameter_name ~storage_name code =
 
+  (* Compile a Liquidity instruction. The parameter depth maintains
+     the current depth of the stack, this is used to recover variables. *)
   let rec compile_desc depth env ~loc desc =
     match desc with
     | Var name ->
+      (* A variable whose value is stored at position pos in a stack
+         of size depth, can be put on top of the stack with
+         instruction DU*(depth-pos)P *)
        let pos = try
            StringMap.find name env
          with Not_found ->
@@ -88,9 +93,12 @@ let rec translate_code ~parameter_name ~storage_name code =
        [ dup ~loc (depth - pos) ]
 
     | Const { ty; const } ->
+      (* Compiling a constant is just pushing it on the stack *)
       [ push ~loc ty const ]
 
     | Project { field; record } ->
+      (* Projection r.f is translated to access in a nested pair (with
+         CD*DR or CD*AR) annotated with the field name *)
       begin match record.ty with
         | Trecord (_, fields) ->
           let n =
@@ -127,11 +135,16 @@ let rec translate_code ~parameter_name ~storage_name code =
       end
 
     | Seq (e1, e2) ->
+       (* Sequences e1; e2 is compiled as a sequence in Michelson and
+          the result of e1 is droped (ignored) *)
        let e1 = compile depth env e1 in
        let e2 = compile depth env e2 in
        e1 @ [ ii ~loc:LiquidLoc.noloc DROP ] @ e2
 
     | Let { bnd_var; bnd_val; body } ->
+       (* Compiling a let binding is compiling the bound value and
+          remembering the depth at which this value can be found on the
+          stack, and compiling the body *)
        let bnd_val = compile depth env bnd_val in
        let env = StringMap.add bnd_var.nname depth env in
        let depth = depth + 1 in
@@ -152,6 +165,9 @@ let rec translate_code ~parameter_name ~storage_name code =
                  seq (arg_annot @ body @ [ii ~loc @@ DIP_DROP (1,1)])) ]
 
     | Closure { arg_name; arg_ty; call_env; body; ret_ty } ->
+      (* A closure is compiled as a pair (call_env, lambda). Function
+         application then distinguishes whether the function is a pure
+         lambda or a closure *)
       let call_env_code = match call_env with
         | [] -> assert false
         | [_, e] -> compile depth env e
@@ -175,6 +191,7 @@ let rec translate_code ~parameter_name ~storage_name code =
       assert false (* should have been encoded *)
 
     | Transfer { contract; amount; entry = None; arg } ->
+       (* Contract.call (encoded) compiled to TRANSFER_TOKENS *)
        let contract = compile depth env contract in
        let amount = compile (depth+1) env amount in
        let arg = compile (depth+2) env arg in
@@ -184,9 +201,13 @@ let rec translate_code ~parameter_name ~storage_name code =
       let arg = compile depth env arg in
       arg @ [ ii ~loc FAILWITH ]
 
-    | Apply { prim = Prim_unknown } -> assert false
+    | Apply { prim = Prim_unknown } ->
+      (* This is removed by typechecking *)
+      assert false
 
     | Apply { prim = Prim_exec; args = [arg; { ty = Tclosure _ } as f] } ->
+      (* Compile closure application. Open closure pair, pair argument
+         with call environment and pass to lambda. *)
       let f_env = compile depth env f in
       let arg = compile (depth+1) env arg in
       f_env @ arg @
@@ -200,7 +221,13 @@ let rec translate_code ~parameter_name ~storage_name code =
     | Apply { prim; args } ->
       compile_prim ~loc depth env prim args
 
+    (* For the different pattern matching constructs, we need to drop
+       values of the constructors arguments on the corresponding
+       branches. *)
+
     | MatchOption { arg; ifnone; some_name; ifsome } ->
+       (* Pattern matching on option compiled with IF_NONE. Here, drop
+          binding for Some, at the end. *)
        let arg = compile depth env arg in
        let ifnone = compile depth env ifnone in
        let env = StringMap.add some_name.nname depth env in
@@ -211,6 +238,7 @@ let rec translate_code ~parameter_name ~storage_name code =
        arg @ [ ii ~loc @@ IF_NONE (seq ifnone, seq (ifsome @ ifsome_end) )]
 
     | MatchNat { arg; plus_name; ifplus; minus_name; ifminus } ->
+       (* match%nat is compiled with ABS *)
        let arg = compile depth env arg in
        let env' = StringMap.add plus_name.nname depth env in
        let ifplus = compile (depth + 1) env' ifplus in
@@ -226,6 +254,7 @@ let rec translate_code ~parameter_name ~storage_name code =
                         seq (ifminus @ ifminus_end) )]
 
     | MatchList { arg; head_name; tail_name; ifcons; ifnil } ->
+       (* Pattern matching on lists. Compiled with IF_CONS *)
        let arg = compile depth env arg in
        let ifnil = compile depth env ifnil in
        let env = StringMap.add tail_name.nname depth env in
@@ -237,6 +266,7 @@ let rec translate_code ~parameter_name ~storage_name code =
        arg @ [ ii ~loc @@ IF_CONS (seq (ifcons @ ifcons_end), seq ifnil )]
 
     | MatchVariant { arg; cases } ->
+      (* Pattern matching on sum types are compiled as nested IF_LEFT. *)
       let arg = compile depth env arg in
       let rec iter cases =
         match cases with
@@ -349,9 +379,11 @@ let rec translate_code ~parameter_name ~storage_name code =
     | Record fields ->
       compile_record ~loc depth env fields
 
-    (* removed during typechecking, replaced by tuple *)
-    | Constructor _ -> assert false
+    | Constructor _ ->
+      (* removed during typechecking, replaced by tuple *)
+      assert false
 
+  (* Compile a Liquidity application (prim args) *)
   and compile_prim ~loc depth env prim args =
     let ii = ii ~loc in
     match prim, args with
@@ -539,7 +571,7 @@ let rec translate_code ~parameter_name ~storage_name code =
        in
        args_code @ prim_code
 
-
+  (* Compile a tuple update x.(0) <- y *)
   and compile_tuple_set ~loc last depth env n y =
     let ii = ii ~loc in
     if n = 0 then
@@ -553,6 +585,7 @@ let rec translate_code ~parameter_name ~storage_name code =
         compile_tuple_set last ~loc (depth+1) env (n-1) y @
           [ ii SWAP; ii PAIR ]
 
+  (* Compile arguments of an apply *)
   and compile_args depth env args =
     match args with
     | [] -> depth,[]
@@ -561,6 +594,7 @@ let rec translate_code ~parameter_name ~storage_name code =
        let arg = compile depth env arg in
        depth+1, args @ arg
 
+  (* Compile a record update x.f <- y *)
   and compile_record_set ~loc depth env fields field_name y =
     let ii = ii ~loc in
     match fields with
@@ -583,6 +617,7 @@ let rec translate_code ~parameter_name ~storage_name code =
       compile_record_set ~loc (depth + 1) env fields field_name y @
       [ ii SWAP; ii @@ RECORD (f, None) ]
 
+  (* Compile a tupe (x, y, z, ...) *)
   and compile_tuple ~loc depth env args =
     match args with
     | []  -> assert false
@@ -613,36 +648,52 @@ let rec translate_code ~parameter_name ~storage_name code =
       let exp = compile (depth+1) env exp in
       rest @ exp @ [ ii ~loc (RECORD (label, None)) ]
 
+  (* Compile a record construct { x = ...; y = ... } *)
   and compile_record ~loc depth env fields =
     compile_record_rev ~loc depth env ((* List.rev *) fields)
 
+  (* Top-level compile an instruction *)
   and compile depth env e =
     let code = compile_desc depth env ~loc:e.loc e.desc in
     match e.desc with
     | If _ | MatchVariant _ | MatchNat _
     | MatchOption _ | MatchList _ | Loop _ | Fold _
     | Map _ | MapFold _ ->
+      (* For Michelson instructions that do not accept name
+         annotations, we add a RENAME instruction after. *)
       compile_name ~annotafter:true e.name code
     | _ ->
       compile_name ~annotafter:false e.name code
 
+  (* Compile a name *)
   and compile_name ~annotafter name code =
     if annotafter then
+      (* Insert a RENAME @name instruction *)
       match name with
       | Some name ->
         code @ [ii ~loc:LiquidLoc.noloc (RENAME (Some (sanitize_name name)))]
       | None -> code
     else
+      (* Change in place the name associated with the instruction,
+         these are used by the Michelson pretty printer (or
+         translator) to produce variable annotations @name. *)
       match List.rev code with
       | c :: _ when name <> None ->
         c.loc_name <- sanitize_opt name;
         code
       | _ -> code
 
+  (* Argument names (for instance in bodies of lambda,
+     pattern-matching, iter, etc.) are compiled as just a RENAME
+     instruction as this is the only allowed for in Michelson. *)
   and compile_arg_name arg_name =
     [ii ~loc:LiquidLoc.noloc (RENAME (Some (sanitize_name arg_name)))]
 
   in
+
+  (* This is how we compile a contract: unpair the pair (parameter,
+     storage) to have a stack with parameter :: storage (parameter on
+     top). *)
 
   let env = StringMap.empty in
   let env = StringMap.add storage_name 0 env in
@@ -652,17 +703,20 @@ let rec translate_code ~parameter_name ~storage_name code =
   let exprs = compile depth env code in
   let loc = LiquidLoc.noloc in
 
-  (* replace ( parameter, storage ) *)
+  (* replace ( parameter, storage ) with parameter :: storage *)
   let header = [
       dup ~loc 1;
       dip ~loc 1 [ ii ~loc @@ CDR None ];
       ii ~loc @@ CAR None;
     ]
   in
+  (* at the end of the code, drop everything excepted for the top-most
+     element *)
   let trailer = drop_stack ~loc 1 depth in
   seq (header @ exprs @ trailer)
 
-
+(* FAILWITH must appear in tail position in Michelson, this function
+   removes instructions that appear after FAILWITH in a code block *)
 and finalize_fail_pre ({ ins } as e) =
   { e with
     ins =

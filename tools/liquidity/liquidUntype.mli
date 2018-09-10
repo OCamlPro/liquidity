@@ -7,6 +7,8 @@
 (*                                                                        *)
 (**************************************************************************)
 
+(** untype: rename variables STRING/NUM into valid OCaml identifiers. *)
+
 open LiquidTypes
 
 val untype_contract : (datatype, 'a) exp contract -> (datatype, 'b) exp contract

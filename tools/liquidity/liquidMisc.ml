@@ -7,6 +7,9 @@
 (*                                                                        *)
 (**************************************************************************)
 
+(* Miscellaneous functions *)
+
+(* Create a list of length n, where the i-th element is f i *)
 let list_init n f =
   let rec list_init i n f =
     if i = n then [] else
@@ -14,9 +17,11 @@ let list_init n f =
   in
   list_init 0 n f
 
+(* Create a list of length n with x everywhere *)
 let list_make n x =
   list_init n (fun _ -> x)
 
+(* Remove the nth element of a list *)
 let rec list_remove n list =
   if n > 0 then
     match list with
@@ -25,6 +30,8 @@ let rec list_remove n list =
        list_remove (n-1) tail
   else list
 
+(* Replace a character with another one in a string. Returns a new
+   string. *)
 let string_replace s c1 c2 =
   let rec look acc i =
     try

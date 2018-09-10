@@ -7,6 +7,9 @@
 (*                                                                        *)
 (**************************************************************************)
 
+(* Simplify a Liquidity contract, mostly inlining and some simple
+   simplifications (TODO: add mode simplifications) *)
+
 open LiquidTypes
 
 let rec compute decompile code to_inline =

@@ -7,6 +7,9 @@
 (*                                                                        *)
 (**************************************************************************)
 
+(** Convert Liquidity code and constants as OCaml AST objects for neat
+    pretty printing. *)
+
 open LiquidTypes
 
 val output_version : string
