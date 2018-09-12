@@ -5,6 +5,7 @@
 (*    All rights reserved. No warranty, explicit or implicit, provided.   *)
 (*                                                                        *)
 (**************************************************************************)
+[%%version 0.36]
 
 type pending_state = {
   yetNeeded : nat;

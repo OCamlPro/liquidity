@@ -1,4 +1,4 @@
-[%%version 0.3]
+[%%version 0.4]
 
 type storage = { q : nat; res : (tez * tez) option * (nat * tez) option }
 

@@ -1,4 +1,4 @@
-[%%version 0.35]
+[%%version 0.4]
 
 (* Will be inlined *)
 let f (x:int) = x + 1
