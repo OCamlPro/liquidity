@@ -62,9 +62,13 @@ let rec translate_const_exp loc (exp : encoded_exp) =
      LiquidLoc.raise_error ~loc "'let' forbidden in constant"
   | Const (_loc, ty, c) -> c
 
-  (* removed during typechecking *)
-  | Record (_, _)
-  | Constructor (_, _, _) -> assert false
+  | Record (loc, fields) ->
+    CRecord (List.map (fun (f, e) -> (f, translate_const_exp loc e)) fields)
+
+  | Constructor (loc, Constr c, arg) ->
+    CConstr (c, translate_const_exp loc arg)
+  | Constructor (loc, Left _, arg) -> CLeft (translate_const_exp loc arg)
+  | Constructor (loc, Right _, arg) -> CRight (translate_const_exp loc arg)
 
   | Apply (Prim_Left, _, [x]) -> CLeft (translate_const_exp loc x)
   | Apply (Prim_Right, _, [x]) -> CRight (translate_const_exp loc x)
@@ -74,11 +78,7 @@ let rec translate_const_exp loc (exp : encoded_exp) =
   | Apply (Prim_tuple, _, list) ->
      CTuple (List.map (translate_const_exp loc) list)
 
-
-  | Apply (prim, _, args)
-    -> LiquidLoc.raise_error ~loc "<apply %s(%d) not yet implemented>"
-                             (LiquidTypes.string_of_primitive prim)
-                             (List.length args)
+  | Apply _
   | Var (_, _)
   | SetField (_, _, _, _)
   | Project (_, _, _)

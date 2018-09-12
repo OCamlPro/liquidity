@@ -19,7 +19,7 @@ let mk_nat ~loc i =
 
 let rec subst_empty_big_map code =
   let empty_big_map loc =
-    let storage_var = mk (Var ("storage", loc)) () in
+    let storage_var = mk (Var ("_storage", loc)) () in
     Apply (Prim_tuple_get, loc, [storage_var; mk_nat ~loc 0])
   in
   let desc = code.desc in
@@ -169,7 +169,7 @@ let rec subst_empty_big_map code =
 
 let tmp_contract_of_init ~loc init storage_ty =
   let storage = storage_ty in
-  let parameter_var = mk (Var ("parameter", loc)) () in
+  let parameter_var = mk (Var ("_parameter", loc)) () in
   let parameter, code = match init.init_args with
     | [] -> Tunit, init.init_body
     | [arg, loc, ty] ->
@@ -201,8 +201,8 @@ let tmp_contract_of_init ~loc init storage_ty =
     values = [];
     entries = [{ entry_sig = { entry_name = "main";
                                parameter;
-                               parameter_name = "parameter";
-                               storage_name = "storage" };
+                               parameter_name = "_parameter";
+                               storage_name = "_storage" };
                  code }]
   }
 
