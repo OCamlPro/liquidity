@@ -1671,7 +1671,7 @@ and translate_signature contract_type_name env acc ast =
   | { psig_desc = Psig_extension (
       ({ txt = "entry" }, PSig [{
            psig_desc = Psig_value {
-               pval_name = { txt = entry_name };
+               pval_name = { txt = entry_name; loc = name_loc };
                pval_type = {
                  ptyp_desc = Ptyp_arrow (param_label, param_ty, {
                      ptyp_desc = Ptyp_arrow (stora_label, stora_ty, {
@@ -1699,6 +1699,8 @@ and translate_signature contract_type_name env acc ast =
                "entry must return operation list as first component"
     end;
     let entry = { entry_name; parameter; parameter_name; storage_name } in
+    if List.exists (fun e -> e.entry_name = entry_name) acc then
+      error_loc name_loc "entry point %s is already declared" entry_name;
     translate_signature contract_type_name env (entry :: acc) ast
 
   | { psig_desc = Psig_modtype
@@ -1763,12 +1765,17 @@ and translate_structure env acc ast =
                    Pstr_value (
                      Nonrecursive,
                      [ {
-                       pvb_pat = { ppat_desc = Ppat_var { txt = name } };
+                       pvb_pat = { ppat_desc =
+                                     Ppat_var { txt = name; loc = name_loc } };
                        pvb_expr = head_exp;
                      }
                      ]) } ]
            ), []) } :: ast
     ->
+    if List.exists (function
+        | Syn_entry e -> e.entry_sig.entry_name = name
+        | _ -> false) acc then
+      error_loc name_loc "entry point %s is already defined" name;
     let entry =
       Syn_entry (translate_entry name env
                    (filter_contracts acc) head_exp None None) in
