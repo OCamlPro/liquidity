@@ -10,31 +10,17 @@ Liquidity is a high-level statically-typed language to program Smart
 Contracts for Tezos. It uses a subset of the syntax of OCaml, and
 strictly complies to Michelson security restrictions. It comes with a
 decompiler that can translate Michelson contracts to Liquidity, for
-auditing purpose.
+auditing purposes.
 
 .. toctree::
    :maxdepth: 2
-   :caption: Introduction:
+   :caption: Liquidity Documentation
 
    introduction
-
-.. toctree::
-   :maxdepth: 2
-   :caption: Installation:
-
    installation/index
-
-.. toctree::
-   :maxdepth: 2
-   :caption: Usage:
-
    usage/index
-
-.. toctree::
-   :maxdepth: 2
-   :caption: Tutorial:
-
    tutorial/tutorial
+   reference/liquidity
 
 .. toctree::
 ..   :maxdepth: 2
@@ -43,14 +29,8 @@ auditing purpose.
 ..   liq-edit/editor
 
 .. toctree::
-   :maxdepth: 2
-   :caption: Liquidity Reference:
-
-   reference/liquidity
-   
-.. toctree::
    :maxdepth: 1
-   :caption: Michelson Reference:
+   :caption: Michelson
 
    reference/michelson
 
