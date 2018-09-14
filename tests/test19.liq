@@ -19,17 +19,29 @@ edsigtc766ouxRKCy6dfYMTanSB9NkaqnBk2eit2i1vNAcKAuMtQRZZUFWWcZ7NdhQgLkgXp9kYNKiXf
 contract PlusOne = struct
   type storage = int
 
+  type t = A | B
+
   let%init init_storage (x : bool) (y : int) = if x = false then 0 else y
 
-  let%entry main (parameter : unit) (storage : storage) =
+  let%entry main (_parameter : unit) (storage : storage) =
     ([] : operation list), storage + 1
 end
 
 contract type PS = contract type of PlusOne
 
+(* contract type PS = sig
+ *   type storage
+ *
+ *   val%entry main : unit -> storage -> operation list * storage
+ * end *)
+
 let%entry main
     (parameter : signature)
     storage =
+  let x = PS.A in
+  begin match x with
+  | PS.B -> failwith ()
+  | _ -> () end;
   (*  let c = Contract.self () in *)
   let key_hash = Crypto.hash_key storage.key in
   if key_hash = tz1KqTpEZ7Yob7QbPE4Hy4Wo8fHG8LhKxZSx then
@@ -45,7 +57,10 @@ let%entry main
     | Some qr -> qr
   in
   let delegatable = false in
-  let cocococ = (Contract.at storage.c : (contract PS) option) in
+  let cocococ = (Contract.at storage.c : PlusOne.instance option) in
+  let cocococ2 = PlusOne.at storage.c in
+  let cocococ3 = PS.at storage.c in
+  let op1 = (Contract.self ()).main parameter ~amount:0tz in
   let account_op, _account =
     Account.create
       key_hash delegate delegatable
@@ -57,7 +72,7 @@ let%entry main
       ~spendable
       ~delegatable:true
       ~amount:amount.(0)
-      ~storage:(9 : PlusOne.storage)
+      ~storage:(9 : PS.storage)
       (contract PlusOne)
       (* (contract struct
        *   type storage = int

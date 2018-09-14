@@ -128,12 +128,32 @@ let mk_inner_env env contractname =
     contractname;
   }
 
-let lift_inner_env = function
+let rec fold_env_proj f acc env proj =
+  let acc = StringMap.fold f (proj env) acc in
+  match env.top_env with
+  | None -> acc
+  | Some env -> fold_env_proj f acc env proj
+
+let rec shadow name env =
+  let prefix = name ^ "." in
+  let erase_in env proj =
+    fold_env_proj (fun s t acc ->
+        if LiquidMisc.has_prefix ~prefix s then
+          StringMap.remove s acc
+        else acc
+      ) (proj env) env proj in
+  env.types <- erase_in env (fun env -> env.types);
+  env.contract_types <- erase_in env (fun env -> env.contract_types);
+  env.labels <- erase_in env (fun env -> env.labels);
+  env.constrs <- erase_in env (fun env -> env.constrs);
+  ()
+
+let lift_env rename = function
   | { top_env = None } -> assert false
   | { types; contract_types; labels; constrs;
       filename; contractname = inner_name;
       top_env = Some top_env } ->
-    let lift_name n = String.concat "." [inner_name; n] in
+    let lift_name n = rename inner_name n in
     let rec lift_type ty = match ty with
       | Tunit | Tbool | Tint | Tnat | Ttez | Tstring | Tbytes | Ttimestamp
       | Tkey | Tkey_hash | Tsignature | Toperation | Taddress | Tfail -> ty
@@ -167,6 +187,8 @@ let lift_inner_env = function
       StringMap.fold (fun s v top ->
           StringMap.add (lift_name s) (lift_v v) top
         ) map top in
+    (* shadow previous definitions of inner_name *)
+    shadow inner_name top_env;
     top_env.types <- lift_to_top types top_env.types lift_type ;
     top_env.contract_types <-
       lift_to_top contract_types top_env.contract_types lift_contract_sig;
@@ -174,6 +196,10 @@ let lift_inner_env = function
         (fun (lab, n, ty) -> lift_name lab, n, lift_type ty);
     top_env.constrs <- lift_to_top constrs top_env.constrs
         (fun (c, ty) -> lift_name c, lift_type ty)
+
+let lift_inner_env =
+  let lift_name inner_name n = String.concat "." [inner_name; n] in
+  lift_env lift_name
 
 let rec rec_find s env proj =
   try StringMap.find s (proj env)
@@ -926,6 +952,28 @@ let rec translate_code contracts env exp =
     | { pexp_desc =
           Pexp_apply (
             { pexp_desc = Pexp_ident
+                  { txt = Ldot(Lident contract_name, "at") } },
+            [
+              Nolabel, addr_exp;
+            ]) }
+      when StringMap.mem contract_name env.contract_types ->
+      let c_sig = StringMap.find contract_name env.contract_types in
+      ContractAt { arg =  translate_code contracts env addr_exp; c_sig }
+
+    | { pexp_desc =
+          Pexp_apply (
+            { pexp_desc = Pexp_ident
+                  { txt = Ldot(Lident contract_name, "at") } },
+            [
+              Nolabel, addr_exp;
+            ]) }
+      when StringMap.mem contract_name contracts ->
+      let c_sig = sig_of_contract (StringMap.find contract_name contracts) in
+      ContractAt { arg =  translate_code contracts env addr_exp; c_sig }
+
+    | { pexp_desc =
+          Pexp_apply (
+            { pexp_desc = Pexp_ident
                   { txt = Ldot(Lident "Contract", "at") } },
             [
               Nolabel, addr_exp;
@@ -1612,11 +1660,46 @@ and translate_initial_storage env init_name contracts exp args =
       init_args = List.rev args;
       init_body }
 
+and renamespace env old_name new_name =
+  let prefix = old_name ^ "." in
+  let name_in_old s = LiquidMisc.has_prefix ~prefix s in
+  let fold_add env proj =
+    fold_env_proj (fun s t acc ->
+        if name_in_old s then StringMap.add s t acc else acc
+      ) (proj env) env proj in
+  (* match name_in_contract s with
+       *   | None -> acc
+       *   | Some s ->
+       *     (\* StringMap.add s t acc *\)
+       *     StringMap.add (String.concat "." [new_contract_name; s]) t acc
+         * ) *)
+  (* Make a new empty environment *)
+  let env = mk_inner_env env new_name in
+  (* copy old namespace to new env *)
+  env.types <- fold_add env (fun env -> env.types);
+  env.contract_types <- fold_add env (fun env -> env.contract_types);
+  env.labels <- fold_add env (fun env -> env.labels);
+  env.constrs <- fold_add env (fun env -> env.constrs);
+  let rename new_name s =
+    match LiquidMisc.remove_prefix ~prefix s with
+    | None -> s
+    | Some s -> String.concat "." [new_name; s] in
+  (* Lift to upper level and rename *)
+  lift_env rename env;
+  ()
+
+
 and translate_signature contract_type_name env acc ast =
   match ast with
   | [] ->
-    { sig_name = Some contract_type_name;
-      entries_sig = List.rev acc }
+    let csig =     {
+      sig_name = Some contract_type_name;
+      entries_sig = List.rev acc
+    } in
+    (* Register instance type in environment *)
+    env.types <-
+      StringMap.add "instance" (Tcontract csig) env.types;
+    csig
 
   | { psig_desc = Psig_type (
       Recursive, [
@@ -1630,7 +1713,6 @@ and translate_signature contract_type_name env acc ast =
           ptype_kind; (* Ptype_record labels;*)
         }
       ]) } :: ast ->
-    let ty_name = String.concat "." [contract_type_name; ty_name] in
     if StringMap.mem ty_name env.types then
       error_loc ptype_loc "type %s already defined" ty_name;
     begin match ptype_kind with
@@ -1663,7 +1745,6 @@ and translate_signature contract_type_name env acc ast =
           ptype_kind;
         }
       ]) } :: ast ->
-    let ty_name = String.concat "." [contract_type_name; ty_name] in
     let ty = translate_type env ct in
     env.types <- StringMap.add ty_name ty env.types;
     translate_signature contract_type_name env acc ast
@@ -1684,6 +1765,10 @@ and translate_signature contract_type_name env acc ast =
                pval_loc;
              }}
          ]), [])} :: ast ->
+    if List.mem entry_name reserved_keywords then
+      error_loc name_loc "entry point %S forbidden" entry_name;
+    if List.exists (fun e -> e.entry_name = entry_name) acc then
+      error_loc name_loc "entry point %S is already declared" entry_name;
     let parameter_name = match param_label with
       | Nolabel -> "parameter"
       | Optional _ -> error_loc pval_loc "cannot have optional parameter"
@@ -1699,8 +1784,6 @@ and translate_signature contract_type_name env acc ast =
                "entry must return operation list as first component"
     end;
     let entry = { entry_name; parameter; parameter_name; storage_name } in
-    if List.exists (fun e -> e.entry_name = entry_name) acc then
-      error_loc name_loc "entry point %s is already declared" entry_name;
     translate_signature contract_type_name env (entry :: acc) ast
 
   | { psig_desc = Psig_modtype
@@ -1772,10 +1855,12 @@ and translate_structure env acc ast =
                      ]) } ]
            ), []) } :: ast
     ->
+    if List.mem name reserved_keywords then
+      error_loc name_loc "entry point %S forbidden" name;
     if List.exists (function
         | Syn_entry e -> e.entry_sig.entry_name = name
         | _ -> false) acc then
-      error_loc name_loc "entry point %s is already defined" name;
+      error_loc name_loc "entry point %S is already defined" name;
     let entry =
       Syn_entry (translate_entry name env
                    (filter_contracts acc) head_exp None None) in
@@ -1785,7 +1870,7 @@ and translate_structure env acc ast =
       Pstr_value (
         Nonrecursive,
         [ {
-          pvb_pat = { ppat_desc = Ppat_var { txt = var_name } };
+          pvb_pat = { ppat_desc = Ppat_var { txt = var_name; loc = name_loc } };
           pvb_expr = var_exp;
           pvb_attributes = attrs;
         }
@@ -1794,11 +1879,13 @@ and translate_structure env acc ast =
     let inline = match attrs with
       | [ { txt = "inline"} , PStr [] ] -> true
       | _ -> false in
+    if List.mem var_name reserved_keywords then
+      error_loc name_loc "top-level value %S forbidden" var_name;
     if List.exists (function
         | Syn_value (n, _, _) -> n = var_name
         | _ -> false) acc
     then
-      error_loc f_loc "Top-level value %s already defined" var_name;
+      error_loc name_loc "Top-level value %S already defined" var_name;
     let value = Syn_value (var_name, inline, exp) in
     translate_structure env (value :: acc) ast
 
@@ -1881,6 +1968,7 @@ and translate_structure env acc ast =
       with Not_found ->
         error_loc pmty_loc "No contract type named %s knwon" (str_of_id id)
     in
+    renamespace env (str_of_id id) contract_type_name;
     env.contract_types <-
       StringMap.add contract_type_name contract_sig env.contract_types;
     translate_structure env acc ast
@@ -1902,6 +1990,7 @@ and translate_structure env acc ast =
         error_loc pmod_loc "No contract named %s knwon" (str_of_id c_name)
     in
     let contract_sig = sig_of_contract contract in
+    renamespace env (str_of_id c_name) contract_type_name;
     env.contract_types <-
       StringMap.add contract_type_name contract_sig env.contract_types;
     translate_structure env acc ast
@@ -1918,6 +2007,7 @@ and translate_structure env acc ast =
     begin try
         let contract = StringMap.find c_name (filter_contracts acc) in
         let contract = Syn_contract { contract with contract_name } in
+        renamespace env c_name contract_name;
         translate_structure env (contract :: acc) ast
       with Not_found ->
         unbound_contract loc c_name
@@ -1968,7 +2058,12 @@ and pack_contract env toplevels =
     | [] -> (List.rev contracts, List.rev values, List.rev entries, init) in
   let _contracts, values, entries, init =
     partition ([], [], [], None) toplevels in
-  { contract_name = env.contractname; storage; values; entries }, init, env
+  let contract =
+    { contract_name = env.contractname; storage; values; entries } in
+  (* Register instance type in environment *)
+  env.types <-
+    StringMap.add "instance" (Tcontract (sig_of_contract contract)) env.types;
+  contract, init, env
 
 
 let predefined_constructors =
@@ -2012,6 +2107,7 @@ let predefined_types =
       "set", Tunit;
       "big_map", Tunit;
       "variant", Tunit;
+      "instance", Tunit;
     ]
 
 let predefined_contract_types =

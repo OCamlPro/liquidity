@@ -493,12 +493,7 @@ let () =
 
     ]
 
-let primitive_of_string s =
-  try
-    Hashtbl.find primitive_of_string s
-  with Not_found ->
-    Printf.eprintf "Debug: primitive_of_string(%S) raised Not_found\n%!" s;
-    raise Not_found
+let primitive_of_string s = Hashtbl.find primitive_of_string s
 
 let string_of_primitive prim =
   try
@@ -530,12 +525,7 @@ let () =
       "Coll.fold", Prim_coll_fold;
     ]
 
-let fold_primitive_of_string s =
-  try
-    Hashtbl.find fold_primitive_of_string s
-  with Not_found ->
-    Printf.eprintf "Debug: fold_primitive_of_string(%S) raised Not_found\n%!" s;
-    raise Not_found
+let fold_primitive_of_string s = Hashtbl.find fold_primitive_of_string s
 
 let string_of_fold_primitive prim =
   try
@@ -560,12 +550,7 @@ let () =
       "Coll.map", Prim_coll_map;
     ]
 
-let map_primitive_of_string s =
-  try
-    Hashtbl.find map_primitive_of_string s
-  with Not_found ->
-    Printf.eprintf "Debug: map_primitive_of_string(%S) raised Not_found\n%!" s;
-    raise Not_found
+let map_primitive_of_string s = Hashtbl.find map_primitive_of_string s
 
 let string_of_map_primitive prim =
   try
@@ -590,12 +575,7 @@ let () =
       "Coll.map_fold", Prim_coll_map_fold;
     ]
 
-let map_fold_primitive_of_string s =
-  try
-    Hashtbl.find map_fold_primitive_of_string s
-  with Not_found ->
-    Printf.eprintf "Debug: map_fold_primitive_of_string(%S) raised Not_found\n%!" s;
-    raise Not_found
+let map_fold_primitive_of_string s = Hashtbl.find map_fold_primitive_of_string s
 
 let string_of_map_fold_primitive prim =
   try
@@ -1291,6 +1271,7 @@ let reserved_keywords = [
   "get"; "set"; "tuple"; "with"; "fun"; "or"; "and"; "land";
   "lor"; "xor"; "not"; "lsl"; "lsr"; "lxor"; "abs"; "type";
   "is_nat";
+  "at"; (* Reserved for ContractSig.at *)
 ]
 
 let has_reserved_prefix s =

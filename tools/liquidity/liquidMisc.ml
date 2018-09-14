@@ -45,3 +45,16 @@ let string_replace s c1 c2 =
     let b = Bytes.of_string s in
     List.iter (fun i -> Bytes.set b i c2) indexes;
     Bytes.to_string b
+
+let has_prefix ~prefix s =
+  let x = String.length prefix in
+  let n = String.length s in
+  n >= x && String.sub s 0 x = prefix
+
+let remove_prefix ~prefix s =
+  let x = String.length prefix in
+  let n = String.length s in
+  if n >= x && String.sub s 0 x = prefix then
+    Some (String.sub s x (n - x))
+  else
+    None
