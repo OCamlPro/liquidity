@@ -78,6 +78,12 @@ let rec subst_empty_big_map code =
       if e1 == e1' && e2 == e2' then desc
       else Loop { arg_name; body = e1'; arg = e2' }
 
+    | LoopLeft { arg_name; body = e1; arg = e2 } ->
+      let e1' = subst_empty_big_map e1 in
+      let e2' = subst_empty_big_map e2 in
+      if e1 == e1' && e2 == e2' then desc
+      else LoopLeft { arg_name; body = e1'; arg = e2' }
+
     | If { cond = e1; ifthen = e2; ifelse = e3 } ->
       let e1' = subst_empty_big_map e1 in
       let e2' = subst_empty_big_map e2 in

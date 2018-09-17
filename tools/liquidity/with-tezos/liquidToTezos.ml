@@ -264,6 +264,7 @@ let rec convert_code expand expr =
 
   | CONS -> prim "CONS" [] name
   | LOOP loop -> prim "LOOP" [convert_code expand loop] name
+  | LOOP_LEFT loop -> prim "LOOP_LEFT" [convert_code expand loop] name
   | ITER body -> prim "ITER" [convert_code expand body] name
   | MAP body -> prim "MAP" [convert_code expand body] name
   | CONTRACT ty ->

@@ -1368,16 +1368,18 @@ Here is a table of how Michelson instructions translate to Liquidity:
 * ``IMPLICIT_ACCOUNT``: ``Account.default keyhash``
 * ``INT``: ``int x``
 * ``ISNAT``:``is_nat x`` or ``match%int x with Plus x -> ... | Minus y -> ...``
-* ``ITER``: ``Loop.loop (fun x -> ...; (cond, x')) x0``
+* ``ITER``: ``List.iter``, ``Set.iter``, ``Map.iter``,
+            ``List.fold``, ``Set.fold``, ``Map.fold``
 * ``LAMBDA``: ``fun x -> ...``
 * ``LE``: ``x <= y``
 * ``LEFT``: ``Left x``
 * ``LOOP``: ``Loop.loop (fun x -> ...; (cond, x')) x0``
-* ``LOOP_LEFT``: Not supported at the moment
+* ``LOOP_LEFT``: ``Loop.left (fun x -> ...) x0``
 * ``LSL``: ``x lsl y`` or ``x << y``
 * ``LSR``: ``x lsr y`` or ``x >> y``
 * ``LT``: ``x < y``
-* ``MAP``: ``List.map``, ``Set.map``, ``Map.map``
+* ``MAP``: ``List.map``, ``Set.map``, ``Map.map``,
+           ``List.map_fold``, ``Set.map_fold``, ``Map.map_fold``
 * ``MEM``: ``Set.mem ele set``, ``Map.mem key map``
 * ``MUL``: ``x * y``
 * ``NEG``: ``~- x``
@@ -1453,6 +1455,7 @@ Expression:
 * ``let%inline`` LIDENT ``=`` Expression ``in`` Expression
 * Expression ``;`` Expression
 * ``Loop.loop (fun`` LIDENT ``->`` Expression ``)`` Expression
+* ``Loop.left (fun`` LIDENT ``->`` Expression ``)`` Expression
 * Expression Expression
 * ``match%nat`` Expression ``with | Plus`` LIDENT ``->`` Expression ``| Minus`` LIDENT ``->`` Expression
 * ``match`` Expression ``with | Left`` LIDENT ``->`` Expression ``| Right`` LIDENT ``->`` Expression

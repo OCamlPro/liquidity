@@ -139,6 +139,12 @@ let rec untype (env : env) (code : (datatype, 'a) exp) : (datatype, 'b) exp =
       let body = untype env body in
       Loop { arg_name; body; arg }
 
+    | LoopLeft { arg_name; body; arg } ->
+      let arg = untype env arg in
+      let (arg_name, env) = find_lfree env arg_name body.bv in
+      let body = untype env body in
+      LoopLeft { arg_name; body; arg }
+
     | Fold { prim; arg_name; body; arg; acc } ->
       let arg = untype env arg in
       let acc = untype env acc in

@@ -43,6 +43,8 @@ let rec emit_code ~expand code =
                [emit_code ~expand left; emit_code ~expand right], var_annot name)
   | LOOP loop ->
     M_INS_EXP ("LOOP", [], [emit_code ~expand loop], var_annot name)
+  | LOOP_LEFT loop ->
+    M_INS_EXP ("LOOP_LEFT", [], [emit_code ~expand loop], var_annot name)
   | ITER body ->
     M_INS_EXP ("ITER", [], [emit_code ~expand body], var_annot name)
   | MAP body ->

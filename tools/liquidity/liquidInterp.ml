@@ -237,6 +237,7 @@ let rec constrlabel_is_in_code c code =
     constrlabel_is_in_code c code
   | DIP (_, code)
   | LOOP code
+  | LOOP_LEFT code
   | ITER code
   | MAP code ->
     constrlabel_is_in_code c code
@@ -476,6 +477,38 @@ let rec interp contract =
             end_node.args <- List.rev end_node.args;
             loop_node.kind <- N_LOOP (begin_node, end_node);
             stack, loop_node
+      end
+
+    | LOOP_LEFT code, x :: prev_stack ->
+      let loopleft_node = node ins.loc (N_UNKNOWN "LOOP_LEFT") [x] [seq] in
+      let begin_node = node ins.loc N_LOOP_LEFT_BEGIN [] [] in
+      let arg = node code.loc (N_ARG (begin_node, 0)) [] [] in
+
+      let loopleft_stack, loopleft_seq =
+        decompile (arg :: prev_stack) begin_node code in
+      begin match loopleft_stack with
+        | [] -> assert false
+        | x :: end_stack ->
+          let end_node =
+            node ins.loc
+              (N_LOOP_LEFT_END (loopleft_node, begin_node, x))
+              [] [loopleft_seq] in
+          let rec merge i stack1 stack2 =
+            if stack1 == stack2 then stack1
+            else
+              match stack1, stack2 with
+              | [], [] -> []
+              | { kind = N_FAILWITH } :: _, _ -> stack2
+              | _, { kind = N_FAILWITH } :: _ -> stack1
+              | s1 :: stack1, s2 :: stack2 ->
+                assert (s1 == s2);
+                s1 :: (merge i stack1 stack2)
+              | _ -> assert false
+          in
+          let stack = merge 0 prev_stack end_stack in
+          begin_node.node_name <- arg.node_name;
+          loopleft_node.kind <- N_LOOP_LEFT (begin_node, end_node);
+          loopleft_node :: stack, loopleft_node
       end
 
     | ITER code, x :: prev_stack ->

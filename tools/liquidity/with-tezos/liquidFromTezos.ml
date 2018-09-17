@@ -636,6 +636,9 @@ let rec convert_code env expr =
   | Prim(index, "LOOP", [loop], annot) ->
     mic_loc env index annot
       (LOOP (convert_code env loop))
+  | Prim(index, "LOOP_LEFT", [loop], annot) ->
+    mic_loc env index annot
+      (LOOP_LEFT (convert_code env loop))
   | Prim(index, "ITER", [body], annot) ->
     mic_loc env index annot
       (ITER (convert_code env body))

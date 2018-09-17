@@ -367,12 +367,27 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
 
   | Loop { arg_name; body; arg } ->
     let arg = typecheck env arg in
-    if arg.ty = Tfail then error loc "loop arg is a failure";
+    if arg.ty = Tfail then error loc "Loop.loop arg is a failure";
     let (env, count) = new_binding env arg_name.nname arg.ty in
     let body =
-      typecheck_expected "loop body" env (Ttuple [Tbool; arg.ty]) body in
+      typecheck_expected "Loop.loop body" env (Ttuple [Tbool; arg.ty]) body in
     check_used env arg_name count;
     mk ?name:exp.name ~loc (Loop { arg_name; body; arg }) arg.ty
+
+  | LoopLeft { arg_name; body; arg } ->
+    let arg = typecheck env arg in
+    let left_ty, right_ty = match arg.ty with
+      | Tfail -> error loc "Loop.loop arg is a failure"
+      | Tor (left_ty, right_ty) -> left_ty, right_ty
+      | _ ->
+        error loc
+          "Loop.loop argument must be ('a, 'b) variant, \
+           got %s instead" (LiquidPrinter.Liquid.string_of_type arg.ty) in
+    let (env, count) = new_binding env arg_name.nname left_ty in
+    let body =
+      typecheck_expected "Loop.left body" env (Tor (left_ty, right_ty)) body in
+    check_used env arg_name count;
+    mk ?name:exp.name ~loc (LoopLeft { arg_name; body; arg }) right_ty
 
   (* For collections, replace generic primitives with their typed ones *)
 

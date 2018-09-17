@@ -82,12 +82,14 @@ let rec var_of node =
       | N_UNPACK _ -> Printf.sprintf "unpacked%d" node.num
       | N_RIGHT _ -> Printf.sprintf "right%d" node.num
       | N_TRANSFER -> Printf.sprintf "transfer%d" node.num
-      | N_IF_RESULT _ | N_IF_END_RESULT _ | N_LOOP_RESULT _ ->
+      | N_IF_RESULT _ | N_IF_END_RESULT _
+      | N_LOOP_RESULT _ | N_LOOP_LEFT_END _ ->
         Printf.sprintf "var%d" node.num
       | N_FAILWITH -> Printf.sprintf "fail%d" node.num
       | N_LOOP _ -> Printf.sprintf "loop%d" node.num
+      | N_LOOP_LEFT _ -> Printf.sprintf "loopleft%d" node.num
       | N_LAMBDA _ -> Printf.sprintf "fun%d" node.num
-      | N_LAMBDA_BEGIN | N_LOOP_BEGIN _ | N_FOLD_BEGIN _ ->
+      | N_LAMBDA_BEGIN | N_LOOP_BEGIN _ | N_FOLD_BEGIN _ | N_LOOP_LEFT_BEGIN ->
         Printf.sprintf "arg%d" node.num
       | N_CONST (ty, _) ->
         Printf.sprintf "%s%d" (const_name_of_datatype ty) node.num
@@ -139,12 +141,22 @@ let rec arg_of node =
       | 0, 1 -> arg_of begin_node
       | _ -> mk_get ~loc (arg_of begin_node) pos
     end
+  | N_ARG ({ kind = N_LOOP_LEFT_BEGIN; args } as begin_node, pos ) ->
+    arg_of begin_node
+    (* begin
+     *   match pos, List.length args with
+     *   | 0, 1 -> arg_of begin_node
+     *   | _ -> mk_get ~loc (arg_of begin_node) pos
+     * end *)
   | N_LOOP_RESULT (loop_node, begin_node, pos ) ->
     begin
       match pos, List.length begin_node.args with
       | 0, 1 -> arg_of loop_node
       | _ -> mk_get ~loc (arg_of loop_node) pos
     end
+  | N_LOOP_LEFT_END (_, _, res_node) ->
+    arg_of res_node
+
   | N_ARG ({ kind = N_FOLD_BEGIN ( _); args = acc } as begin_node, pos ) ->
     let x_acc = arg_of begin_node in
     begin
@@ -209,7 +221,9 @@ let rec decompile contract =
   let rec decompile_next node =
     let loc = node.loc in
     match node.next with
-    | None -> assert false
+    | None ->
+      Format.eprintf "%s@." (LiquidPrinter.string_of_node node);
+      assert false
     | Some node ->
       match node.kind, node.args with
       | N_PRIM "MOD", [arg1; arg2] ->
@@ -474,6 +488,16 @@ let rec decompile contract =
                          args = [arg_of final_cond;
                                  value_of_args ~loc args] })
 
+      | N_LOOP_LEFT (begin_node, end_node), args ->
+        let desc =
+          LoopLeft { arg_name = lvar_of begin_node;
+                     body = decompile_next begin_node;
+                     arg = value_of_args ~loc args } in
+        mklet node desc
+
+      | N_LOOP_LEFT_END (_, _, end_node), [] ->
+        arg_of end_node
+
       | N_FOLD ({args = rargs} as begin_node, end_node), [arg] ->
         let acc = value_of_args ~loc rargs in
         let desc = match acc.desc with
@@ -585,6 +609,8 @@ let rec decompile contract =
       | N_IF_PLUS (_, _)
       | N_IF_MINUS (_, _)
       | N_LOOP_BEGIN _
+      | N_LOOP_LEFT_BEGIN
+      | N_LOOP_LEFT_END _
       | N_ARG (_, _)
       | N_LOOP_RESULT (_, _, _)
       | N_FOLD_BEGIN _

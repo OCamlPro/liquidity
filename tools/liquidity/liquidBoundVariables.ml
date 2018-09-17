@@ -83,6 +83,7 @@ let rec bv code =
       ) StringSet.empty [contract; amount; arg]
 
   | Loop { arg_name; body; arg }
+  | LoopLeft { arg_name; body; arg }
   | Map { arg_name; body; arg } ->
     StringSet.union (bv arg)
       (StringSet.remove arg_name.nname (bv body))
@@ -281,12 +282,16 @@ let rec bound code =
     let desc = Transfer {contract; amount; entry; arg } in
     mk desc code bv
 
-  | Loop { arg_name; body; arg } ->
+  | Loop { arg_name; body; arg }
+  | LoopLeft { arg_name; body; arg } ->
     let arg = bound arg in
     let body = bound body in
     let bv = StringSet.union arg.bv (StringSet.remove arg_name.nname body.bv)
     in
-    let desc = Loop { arg_name; body; arg } in
+    let desc = match code.desc with
+      | Loop _ -> Loop { arg_name; body; arg }
+      | LoopLeft _ -> LoopLeft { arg_name; body; arg }
+      | _ -> assert false in
     mk desc code bv
 
   | Fold { arg_name; body; arg; acc }

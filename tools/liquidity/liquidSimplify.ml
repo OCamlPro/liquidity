@@ -33,7 +33,8 @@ let rec compute decompile code to_inline =
 
     | Let { bnd_val } -> size bnd_val
 
-    | Loop { arg; body } -> 30 + size arg + size body
+    | Loop { arg; body }
+    | LoopLeft { arg; body } -> 30 + size arg + size body
 
     | If { cond = e1 ; ifthen = e2 ; ifelse = e3 }
     | MatchNat { arg = e1; ifplus = e2; ifminus = e3 }
@@ -174,6 +175,11 @@ let rec compute decompile code to_inline =
       let body = iter body in
       let arg = iter arg in
       { exp with desc = Loop { arg_name; body; arg } }
+
+    | LoopLeft { arg_name; body; arg } ->
+      let body = iter body in
+      let arg = iter arg in
+      { exp with desc = LoopLeft { arg_name; body; arg } }
 
     | Fold { prim; arg_name; body; arg; acc } ->
       let body = iter body in

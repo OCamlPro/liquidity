@@ -90,6 +90,7 @@ let rec translate_const_exp (exp : encoded_exp) =
   | MatchNat _
   | MatchList _
   | Loop _
+  | LoopLeft _
   | Fold _
   | Map _
   | MapFold _

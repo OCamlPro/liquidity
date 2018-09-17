@@ -1053,30 +1053,28 @@ let rec translate_code contracts env exp =
                                     ) };
               Nolabel, arg
             ]) } ->
-      let arg_name, body =
-        match pat.ppat_desc with
-        | Ppat_var { txt = name } ->
-          { nname = name; nloc = loc_of_loc pat.ppat_loc}, body
-        | _ ->
-          incr ident_counter;
-          let name = Printf.sprintf "tmp#%d" !ident_counter in
-          let body =
-            { exp with
-              pexp_desc =
-                Pexp_let(Nonrecursive,
-                         [{ pvb_pat = pat;
-                            pvb_expr = { exp with
-                                         pexp_desc = Pexp_ident(
-                                             { txt = Lident name; loc })};
-                            pvb_attributes = [];
-                            pvb_loc = exp.pexp_loc;
-                          }],
-                         body) } in
-          { nname = name; nloc = loc_of_loc pat.ppat_loc}, body
-      in
       let body = translate_code contracts env body in
       let arg = translate_code contracts env arg in
+      let arg_name, _, body = deconstruct_pat env pat body in
       Loop { arg_name; body; arg }
+
+    | { pexp_desc =
+          Pexp_apply (
+            { pexp_desc = Pexp_ident ( { txt = Ldot(Lident "Loop",
+                                                    "left");
+                                         loc } ) },
+            [
+              Nolabel, { pexp_desc =
+                           Pexp_fun (Nolabel,None,
+                                     pat,
+                                     body
+                                    ) };
+              Nolabel, arg
+            ]) } ->
+      let body = translate_code contracts env body in
+      let arg = translate_code contracts env arg in
+      let arg_name, _, body = deconstruct_pat env pat body in
+      LoopLeft { arg_name; body; arg }
 
     | { pexp_desc =
           Pexp_apply (

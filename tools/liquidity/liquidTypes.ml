@@ -692,6 +692,12 @@ and ('ty, 'a) exp_desc =
   (** Functional loops:
       {[ Loop.loop (fun arg_name -> body) arg ]} *)
 
+  | LoopLeft of { arg_name: loc_name;
+                  body: ('ty, 'a) exp;
+                  arg: ('ty, 'a) exp }
+  (** Functional loops with accumulator:
+      {[ Loop.left (fun arg_name -> body) arg ]} *)
+
   | Fold of { prim: prim_fold;
               arg_name: loc_name;
               body: ('ty, 'a) exp;
@@ -813,6 +819,7 @@ let mk =
       | Seq (e1, e2)
       | Let { bnd_val = e1; body = e2 }
       | Loop { body = e1; arg = e2 }
+      | LoopLeft { body = e1; arg = e2 }
       | Map { body = e1; arg = e2 } ->
         e1.fail || e2.fail, false (* e1.transfer || e2.transfer *)
 
@@ -879,6 +886,9 @@ let rec eq_exp_desc eq_ty eq_var e1 e2 = match e1, e2 with
     eq_exp eq_ty eq_var l1.bnd_val l1.bnd_val &&
     eq_exp eq_ty eq_var l1.body l2.body
   | Loop l1, Loop l2 ->
+    l1.arg_name.nname = l2.arg_name.nname && eq_exp eq_ty eq_var l1.arg l2.arg &&
+    eq_exp eq_ty eq_var l1.body l2.body
+  | LoopLeft l1, LoopLeft l2 ->
     l1.arg_name.nname = l2.arg_name.nname && eq_exp eq_ty eq_var l1.arg l2.arg &&
     eq_exp eq_ty eq_var l1.body l2.body
   | Map m1, Map m2 ->
@@ -983,6 +993,7 @@ type 'a pre_michelson =
   | LOOP of 'a
   | ITER of 'a
   | MAP of 'a
+  | LOOP_LEFT of 'a
 
   | LAMBDA of datatype * datatype * 'a
   | EXEC
@@ -1184,6 +1195,10 @@ and node_kind =
   | N_LOOP_END of (* N_LOOP *) node
                                * (* N_LOOP_BEGIN *) node
                                * (* final_cond *) node
+  | N_LOOP_LEFT_BEGIN
+  | N_LOOP_LEFT_END of node * node * node
+  | N_LOOP_LEFT of node * node
+
   | N_FOLD of node * node
   | N_FOLD_BEGIN of node
   | N_FOLD_RESULT of node (* N_FOLD *)

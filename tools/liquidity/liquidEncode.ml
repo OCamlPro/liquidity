@@ -443,6 +443,7 @@ let rec decr_counts_vars env e =
     | Seq (e1, e2)
     | Let { bnd_val = e1; body = e2 }
     | Loop { body = e1; arg = e2 }
+    | LoopLeft { body = e1; arg = e2 }
     | Map { body = e1; arg = e2 } ->
       decr_counts_vars env e1;
       decr_counts_vars env e2;
@@ -649,6 +650,17 @@ let rec encode env ( exp : typed_exp ) : encoded_exp =
     let body = encode env body in
     (* check_used env name loc count; *)
     mk ?name:exp.name ~loc (Loop { arg_name; body; arg }) exp.ty
+
+  | LoopLeft { arg_name; body; arg } ->
+    let arg = encode env arg in
+    let arg_ty = match arg.ty with
+      | Tor (left_ty, _) -> left_ty
+      | _ -> assert false in
+    let (new_arg_name, env, count) = new_binding env arg_name.nname arg_ty in
+    let arg_name = { arg_name with nname = new_arg_name } in
+    let body = encode env body in
+    (* check_used env name loc count; *)
+    mk ?name:exp.name ~loc (LoopLeft { arg_name; body; arg }) exp.ty
 
   | Fold { prim; arg_name; body; arg; acc } ->
     let arg = encode env arg in

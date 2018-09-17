@@ -109,6 +109,11 @@ let rec decode ( exp : encoded_exp ) : typed_exp =
     let body = decode body in
     mk ?name:exp.name ~loc (Loop { arg_name; body; arg }) exp.ty
 
+  | LoopLeft { arg_name; body; arg } ->
+    let arg = decode arg in
+    let body = decode body in
+    mk ?name:exp.name ~loc (LoopLeft { arg_name; body; arg }) exp.ty
+
   | Fold { prim; arg_name; body; arg; acc } ->
     let arg = decode arg in
     let acc = decode acc in
