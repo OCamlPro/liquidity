@@ -29,7 +29,7 @@ As of Aug 15, 2018, the following process should work:
   This command should create a ``liquidity`` directory with the ``next`` branch.
 
 3. Within the ``liquidity`` directory, the Tezos sources in branch
-   ``betanet`` should be in a subdirectory ``tezos``. This can be
+   ``mainnet`` should be in a subdirectory ``tezos``. This can be
    achieved either with a symbolic link, or by checkouting the sources::
 
      make clone-tezos

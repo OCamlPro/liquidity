@@ -1374,7 +1374,7 @@ Here is a table of how Michelson instructions translate to Liquidity:
 * ``LE``: ``x <= y``
 * ``LEFT``: ``Left x``
 * ``LOOP``: ``Loop.loop (fun x -> ...; (cond, x')) x0``
-* ``LOOP_LEFT``: ``Loop.left (fun x -> ...) x0``
+* ``LOOP_LEFT``: ``Loop.left (fun (x, acc) -> (Left x/Right res, acc)) x0 acc``
 * ``LSL``: ``x lsl y`` or ``x << y``
 * ``LSR``: ``x lsr y`` or ``x >> y``
 * ``LT``: ``x < y``
