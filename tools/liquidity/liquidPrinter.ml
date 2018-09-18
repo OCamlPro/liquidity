@@ -1118,13 +1118,14 @@ module Liquid = struct
       Printf.bprintf b ")\n%s" indent2;
       bprint_code_rec ~debug b indent2 arg;
       ()
-    | LoopLeft { arg_name; body; arg } ->
+    | LoopLeft { arg_name; body; arg; acc } ->
       let indent2 = indent ^ "  " in
       let indent4 = indent2 ^ "  " in
       Printf.bprintf b "\n%sLoop.left (fun %s -> " indent arg_name.nname;
       bprint_code_rec ~debug b indent4 body;
       Printf.bprintf b ")\n%s" indent2;
       bprint_code_rec ~debug b indent2 arg;
+      bprint_code_rec ~debug b indent2 acc;
       ()
     | Fold { prim = (Prim_map_iter|Prim_set_iter|Prim_list_iter as prim);
              arg_name; body; arg } ->
@@ -1347,5 +1348,6 @@ let string_of_node node =
   | N_SETFIELD f -> "N_SETFIELD " ^ f
   | N_RESULT (_, i) -> Printf.sprintf "N_RESULT %d" i
   | N_LOOP_LEFT _ -> Printf.sprintf "N_LOOP_LEFT"
-  | N_LOOP_LEFT_BEGIN -> Printf.sprintf "N_LOOP_LEFT_BEGIN"
+  | N_LOOP_LEFT_BEGIN _ -> Printf.sprintf "N_LOOP_LEFT_BEGIN"
   | N_LOOP_LEFT_END _ -> Printf.sprintf "N_LOOP_LEFT_END"
+  | N_LOOP_LEFT_RESULT _ -> Printf.sprintf "N_LOOP_LEFT_RESULT"

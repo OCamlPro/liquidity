@@ -374,20 +374,32 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
     check_used env arg_name count;
     mk ?name:exp.name ~loc (Loop { arg_name; body; arg }) arg.ty
 
-  | LoopLeft { arg_name; body; arg } ->
+  | LoopLeft { arg_name; body; arg; acc } ->
     let arg = typecheck env arg in
-    let left_ty, right_ty = match arg.ty with
-      | Tfail -> error loc "Loop.loop arg is a failure"
-      | Tor (left_ty, right_ty) -> left_ty, right_ty
+    let acc = typecheck env acc in
+    let arg_ty = Ttuple [arg.ty; acc.ty] in
+    let (env, count) = new_binding env arg_name.nname arg_ty in
+    let body = typecheck env body in
+    let res_ty = match body.ty with
+      | Ttuple [Tor (left_ty, right_ty); acc_ty] ->
+        if not @@ eq_types acc_ty acc.ty then
+          error acc.loc
+            "Loop.left accumulator must be %s, got %s"
+            (LiquidPrinter.Liquid.string_of_type acc_ty)
+            (LiquidPrinter.Liquid.string_of_type acc.ty);
+        if not @@ eq_types left_ty arg.ty then
+          error acc.loc
+            "Loop.left argument must be %s, got %s"
+            (LiquidPrinter.Liquid.string_of_type left_ty)
+            (LiquidPrinter.Liquid.string_of_type arg.ty);
+        right_ty
       | _ ->
         error loc
-          "Loop.loop argument must be ('a, 'b) variant, \
-           got %s instead" (LiquidPrinter.Liquid.string_of_type arg.ty) in
-    let (env, count) = new_binding env arg_name.nname left_ty in
-    let body =
-      typecheck_expected "Loop.left body" env (Tor (left_ty, right_ty)) body in
+          "Loop.left body must be of type (('a, 'b) variant * 'c), \
+           got %s instead" (LiquidPrinter.Liquid.string_of_type body.ty) in
     check_used env arg_name count;
-    mk ?name:exp.name ~loc (LoopLeft { arg_name; body; arg }) right_ty
+    mk ?name:exp.name ~loc (LoopLeft { arg_name; body; arg; acc })
+      (Ttuple [res_ty; acc.ty])
 
   (* For collections, replace generic primitives with their typed ones *)
 

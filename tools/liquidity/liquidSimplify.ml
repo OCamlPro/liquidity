@@ -176,10 +176,11 @@ let rec compute decompile code to_inline =
       let arg = iter arg in
       { exp with desc = Loop { arg_name; body; arg } }
 
-    | LoopLeft { arg_name; body; arg } ->
+    | LoopLeft { arg_name; body; arg; acc } ->
       let body = iter body in
       let arg = iter arg in
-      { exp with desc = LoopLeft { arg_name; body; arg } }
+      let acc = iter acc in
+      { exp with desc = LoopLeft { arg_name; body; arg; acc } }
 
     | Fold { prim; arg_name; body; arg; acc } ->
       let body = iter body in

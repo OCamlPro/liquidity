@@ -83,13 +83,14 @@ let rec var_of node =
       | N_RIGHT _ -> Printf.sprintf "right%d" node.num
       | N_TRANSFER -> Printf.sprintf "transfer%d" node.num
       | N_IF_RESULT _ | N_IF_END_RESULT _
-      | N_LOOP_RESULT _ | N_LOOP_LEFT_END _ ->
+      | N_LOOP_RESULT _ | N_LOOP_LEFT_END _ | N_LOOP_LEFT_RESULT _ ->
         Printf.sprintf "var%d" node.num
       | N_FAILWITH -> Printf.sprintf "fail%d" node.num
       | N_LOOP _ -> Printf.sprintf "loop%d" node.num
       | N_LOOP_LEFT _ -> Printf.sprintf "loopleft%d" node.num
       | N_LAMBDA _ -> Printf.sprintf "fun%d" node.num
-      | N_LAMBDA_BEGIN | N_LOOP_BEGIN _ | N_FOLD_BEGIN _ | N_LOOP_LEFT_BEGIN ->
+      | N_LAMBDA_BEGIN | N_LOOP_BEGIN _ | N_FOLD_BEGIN _
+      | N_LOOP_LEFT_BEGIN _ ->
         Printf.sprintf "arg%d" node.num
       | N_CONST (ty, _) ->
         Printf.sprintf "%s%d" (const_name_of_datatype ty) node.num
@@ -141,21 +142,28 @@ let rec arg_of node =
       | 0, 1 -> arg_of begin_node
       | _ -> mk_get ~loc (arg_of begin_node) pos
     end
-  | N_ARG ({ kind = N_LOOP_LEFT_BEGIN; args } as begin_node, pos ) ->
-    arg_of begin_node
-    (* begin
-     *   match pos, List.length args with
-     *   | 0, 1 -> arg_of begin_node
-     *   | _ -> mk_get ~loc (arg_of begin_node) pos
-     * end *)
   | N_LOOP_RESULT (loop_node, begin_node, pos ) ->
     begin
       match pos, List.length begin_node.args with
       | 0, 1 -> arg_of loop_node
       | _ -> mk_get ~loc (arg_of loop_node) pos
     end
-  | N_LOOP_LEFT_END (_, _, res_node) ->
-    arg_of res_node
+
+  | N_ARG ({ kind = N_LOOP_LEFT_BEGIN _; args = acc } as begin_node, pos ) ->
+    let x_acc = arg_of begin_node in
+    begin
+      match pos, acc with
+      | 0, _ -> (* arg is left element *)
+        mk_get ?name:node.node_name ~loc x_acc 0
+      | 1, [_] -> (* arg is accumulator *)
+        mk_get ?name:node.node_name ~loc x_acc 1
+      | _, _ when pos > 0 -> (* arg in accumulator *)
+        let acc_liq = mk_get ~loc x_acc 1 in
+        mk_get ?name:node.node_name ~loc acc_liq (pos - 1)
+      | _ -> assert false
+    end
+  | N_LOOP_LEFT_RESULT (loop_node, end_node, pos ) ->
+    mk_get ~loc (arg_of loop_node) pos
 
   | N_ARG ({ kind = N_FOLD_BEGIN ( _); args = acc } as begin_node, pos ) ->
     let x_acc = arg_of begin_node in
@@ -488,15 +496,37 @@ let rec decompile contract =
                          args = [arg_of final_cond;
                                  value_of_args ~loc args] })
 
-      | N_LOOP_LEFT (begin_node, end_node), args ->
-        let desc =
-          LoopLeft { arg_name = lvar_of begin_node;
-                     body = decompile_next begin_node;
-                     arg = value_of_args ~loc args } in
+      | N_LOOP_LEFT (begin_node, end_node), [first] ->
+        let desc = match first.kind with
+          | N_LEFT _ ->
+            let arg_name = lvar_of begin_node in
+            LoopLeft { arg_name;
+                       body = decompile_next begin_node;
+                       arg = value_of_args ~loc first.args;
+                       acc = value_of_args ~loc begin_node.args }
+          | N_RIGHT _ ->
+            (value_of_args ~loc first.args).desc
+          | _ ->
+            let arg_name = lvar_of begin_node in
+            let loop_e =
+              mk ~loc
+                (LoopLeft { arg_name;
+                            body = decompile_next begin_node;
+                            arg = mk ~loc (Var arg_name.nname);
+                            acc = value_of_args ~loc begin_node.args }) in
+            MatchVariant {
+              arg = arg_of first;
+              cases = [ CConstr ("Left", [arg_name.nname]), loop_e;
+                        CConstr ("Right", [arg_name.nname]),
+                        value_of_args ~loc begin_node.args ];
+            }
+        in
         mklet node desc
 
-      | N_LOOP_LEFT_END (_, _, end_node), [] ->
-        arg_of end_node
+      | N_LOOP_LEFT_END (_, _, end_node), args ->
+        mk ~loc (Apply { prim = Prim_tuple;
+                         args = [arg_of end_node;
+                                 value_of_args ~loc args] })
 
       | N_FOLD ({args = rargs} as begin_node, end_node), [arg] ->
         let acc = value_of_args ~loc rargs in
@@ -581,6 +611,7 @@ let rec decompile contract =
       | N_LAMBDA _
       | N_TRANSFER
       | N_LOOP _
+      | N_LOOP_LEFT _
       | N_FOLD _
       | N_MAP _
       | N_IF _
@@ -609,10 +640,10 @@ let rec decompile contract =
       | N_IF_PLUS (_, _)
       | N_IF_MINUS (_, _)
       | N_LOOP_BEGIN _
-      | N_LOOP_LEFT_BEGIN
-      | N_LOOP_LEFT_END _
+      | N_LOOP_LEFT_BEGIN _
       | N_ARG (_, _)
       | N_LOOP_RESULT (_, _, _)
+      | N_LOOP_LEFT_RESULT (_, _, _)
       | N_FOLD_BEGIN _
       | N_FOLD_RESULT (_, _, _)
       | N_MAP_BEGIN _

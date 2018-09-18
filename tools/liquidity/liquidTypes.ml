@@ -694,9 +694,10 @@ and ('ty, 'a) exp_desc =
 
   | LoopLeft of { arg_name: loc_name;
                   body: ('ty, 'a) exp;
-                  arg: ('ty, 'a) exp }
+                  arg: ('ty, 'a) exp;
+                  acc: ('ty, 'a) exp }
   (** Functional loops with accumulator:
-      {[ Loop.left (fun arg_name -> body) arg ]} *)
+      {[ Loop.left (fun arg_name -> body) arg acc ]} *)
 
   | Fold of { prim: prim_fold;
               arg_name: loc_name;
@@ -819,7 +820,6 @@ let mk =
       | Seq (e1, e2)
       | Let { bnd_val = e1; body = e2 }
       | Loop { body = e1; arg = e2 }
-      | LoopLeft { body = e1; arg = e2 }
       | Map { body = e1; arg = e2 } ->
         e1.fail || e2.fail, false (* e1.transfer || e2.transfer *)
 
@@ -831,6 +831,7 @@ let mk =
       | MatchOption { arg = e1; ifnone = e2; ifsome = e3 }
       | MatchNat { arg = e1; ifplus = e2; ifminus = e3 }
       | MatchList { arg = e1; ifcons = e2; ifnil = e3 }
+      | LoopLeft { body = e1; arg = e2 ; acc = e3 }
       | Fold { body = e1;  arg = e2; acc = e3 }
       | MapFold { body = e1;  arg = e2; acc = e3 } ->
         e1.fail || e2.fail || e3.fail,
@@ -889,7 +890,9 @@ let rec eq_exp_desc eq_ty eq_var e1 e2 = match e1, e2 with
     l1.arg_name.nname = l2.arg_name.nname && eq_exp eq_ty eq_var l1.arg l2.arg &&
     eq_exp eq_ty eq_var l1.body l2.body
   | LoopLeft l1, LoopLeft l2 ->
-    l1.arg_name.nname = l2.arg_name.nname && eq_exp eq_ty eq_var l1.arg l2.arg &&
+    l1.arg_name.nname = l2.arg_name.nname &&
+    eq_exp eq_ty eq_var l1.arg l2.arg &&
+    eq_exp eq_ty eq_var l1.acc l2.acc &&
     eq_exp eq_ty eq_var l1.body l2.body
   | Map m1, Map m2 ->
     m1.prim = m2.prim && m1.arg_name.nname = m2.arg_name.nname &&
@@ -1195,8 +1198,9 @@ and node_kind =
   | N_LOOP_END of (* N_LOOP *) node
                                * (* N_LOOP_BEGIN *) node
                                * (* final_cond *) node
-  | N_LOOP_LEFT_BEGIN
+  | N_LOOP_LEFT_BEGIN of node
   | N_LOOP_LEFT_END of node * node * node
+  | N_LOOP_LEFT_RESULT of node * node * int
   | N_LOOP_LEFT of node * node
 
   | N_FOLD of node * node

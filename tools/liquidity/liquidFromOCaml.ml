@@ -1069,12 +1069,14 @@ let rec translate_code contracts env exp =
                                      pat,
                                      body
                                     ) };
-              Nolabel, arg
+              Nolabel, arg;
+              Nolabel, acc;
             ]) } ->
       let body = translate_code contracts env body in
       let arg = translate_code contracts env arg in
+      let acc = translate_code contracts env acc in
       let arg_name, _, body = deconstruct_pat env pat body in
-      LoopLeft { arg_name; body; arg }
+      LoopLeft { arg_name; body; arg; acc }
 
     | { pexp_desc =
           Pexp_apply (

@@ -164,6 +164,7 @@ let add_name stack seq name =
     begin match x.kind, seq.kind with
       | N_IF_END_RESULT _, N_IF _
       | N_LOOP_RESULT _, N_LOOP _
+      | N_LOOP_LEFT_RESULT _, N_LOOP_LEFT _
       | N_FOLD_RESULT _, N_FOLD _ ->
         if seq.node_name = None then seq.node_name <- Some name;
       | _ -> ()
@@ -438,7 +439,9 @@ let rec interp contract =
                   let arg = node code.loc (N_ARG (begin_node,i)) [] [] in
                   begin_node.args <- s1 :: begin_node.args;
                   arg :: (merge (i+1) stack1 stack2)
-              | _ -> assert false
+              | _ ->
+                LiquidLoc.raise_error ~loc:ins.loc
+                  "Bad stack size in LOOP body%!"
           in
           let stack = merge 0 prev_stack end_stack in
 
@@ -479,36 +482,75 @@ let rec interp contract =
             stack, loop_node
       end
 
+
     | LOOP_LEFT code, x :: prev_stack ->
       let loopleft_node = node ins.loc (N_UNKNOWN "LOOP_LEFT") [x] [seq] in
-      let begin_node = node ins.loc N_LOOP_LEFT_BEGIN [] [] in
+      let begin_node = node code.loc (N_LOOP_LEFT_BEGIN loopleft_node) [] [] in
       let arg = node code.loc (N_ARG (begin_node, 0)) [] [] in
 
-      let loopleft_stack, loopleft_seq =
-        decompile (arg :: prev_stack) begin_node code in
-      begin match loopleft_stack with
-        | [] -> assert false
-        | x :: end_stack ->
-          let end_node =
-            node ins.loc
-              (N_LOOP_LEFT_END (loopleft_node, begin_node, x))
-              [] [loopleft_seq] in
+      let pseudo_node = node ins.loc (N_UNKNOWN "LOOP_LEFT") [] [] in
+      begin match decompile (arg :: prev_stack) pseudo_node code with
+        | [],_ -> assert false
+        | x :: end_stack,_ ->
+
           let rec merge i stack1 stack2 =
             if stack1 == stack2 then stack1
             else
               match stack1, stack2 with
               | [], [] -> []
               | { kind = N_FAILWITH } :: _, _ -> stack2
-              | _, { kind = N_FAILWITH } :: _ -> stack1
+              | _, { kind = N_FAILWITH } :: _  -> stack1
               | s1 :: stack1, s2 :: stack2 ->
-                assert (s1 == s2);
-                s1 :: (merge i stack1 stack2)
-              | _ -> assert false
+                if s1 == s2 then
+                  s1 :: (merge i stack1 stack2)
+                else
+                  let arg = node code.loc (N_ARG (begin_node,i)) [] [] in
+                  begin_node.args <- s1 :: begin_node.args;
+                  arg :: (merge (i+1) stack1 stack2)
+              | _ ->
+                LiquidLoc.raise_error ~loc:ins.loc
+                  "Bad stack size in LOOP_LEFT body%!"
           in
-          let stack = merge 0 prev_stack end_stack in
-          begin_node.node_name <- arg.node_name;
-          loopleft_node.kind <- N_LOOP_LEFT (begin_node, end_node);
-          loopleft_node :: stack, loopleft_node
+          let stack = merge 1 prev_stack end_stack in
+
+          begin_node.args <- List.rev begin_node.args;
+
+          match decompile (arg :: stack) begin_node code with
+          | [], _ -> assert false
+          | x :: end_stack, loopleft_seq ->
+
+            let end_node = node x.loc
+                (N_LOOP_LEFT_END (loopleft_node, begin_node, x)) []
+                [ loopleft_seq ] in
+
+            let rec merge i stack1 stack2 =
+              if stack1 == stack2 then stack1
+              else
+                match stack1, stack2 with
+                | [], [] -> []
+                | { kind = N_FAILWITH } :: _, _ -> stack2
+                | _, { kind = N_FAILWITH } :: _ -> stack1
+                | { kind = N_ARG (n, i); node_name }:: stack1, s2 :: stack2
+                  when n == begin_node
+                  ->
+                  let arg = node ins.loc
+                      (N_LOOP_LEFT_RESULT (loopleft_node, end_node, i)) [] [] in
+                  end_node.args <- s2 :: end_node.args;
+                  arg :: merge (i+1) stack1 stack2
+                | s1 :: stack1, s2 :: stack2 ->
+                  assert (s1 == s2);
+                  s1 :: (merge i stack1 stack2)
+                | _ -> assert false
+            in
+
+            let stack = merge 1 stack end_stack in
+            let stack =
+              node ins.loc (N_LOOP_LEFT_RESULT (loopleft_node, end_node, 0)) [] [] ::
+              stack in
+            end_node.args <- List.rev end_node.args;
+            begin_node.node_name <- arg.node_name;
+            loopleft_node.kind <- N_LOOP_LEFT (begin_node, end_node);
+            stack, loopleft_node
       end
 
     | ITER code, x :: prev_stack ->
@@ -536,7 +578,8 @@ let rec interp contract =
                   begin_node.args <- s1 :: begin_node.args;
                   arg :: (merge (i+1) stack1 stack2)
               | _ ->
-                assert false
+                LiquidLoc.raise_error ~loc:ins.loc
+                  "Bad stack size in ITER body%!"
           in
           let stack = merge 1 prev_stack end_stack in
           begin_node.args <- List.rev begin_node.args;
@@ -606,15 +649,9 @@ let rec interp contract =
                   let arg = node code.loc (N_ARG (begin_node,i)) [] [] in
                   begin_node.args <- s1 :: begin_node.args;
                   arg :: (merge (i+1) stack1 stack2)
-              | _ :: _, [] ->
-                assert false
-              | [], [s2] ->
-                assert false
-              (* let arg = node code.loc (N_ARG (begin_node,i)) [] [] in
-               * begin_node.args <- s2 :: begin_node.args;
-               * [arg] *)
-              | [], _ :: _ ->
-                assert false
+              | _ ->
+                LiquidLoc.raise_error ~loc:ins.loc
+                  "Bad stack size in MAP body%!"
           in
           let stack = merge 1 prev_stack end_stack in
           begin_node.args <- List.rev begin_node.args;
@@ -1030,7 +1067,9 @@ let rec interp contract =
   let initial_code = match contract.mic_code.ins with
     | SEQ code -> mic_loc contract.mic_code.loc
                     (SEQ (mic_loc contract.mic_code.loc PAIR :: code))
-    | _ -> assert false
+    | _ ->
+      LiquidLoc.raise_error ~loc:contract.mic_code.loc
+        "Code of contract must be a sequence%!"
   in
 
   let start_node = node contract.mic_code.loc N_START [] [] in
@@ -1042,8 +1081,10 @@ let rec interp contract =
 
   let stack, seq = decompile initial_stack start_node initial_code in
   let end_node = match stack with
-      [ arg ] -> node arg.loc N_END [arg] [seq]
-    | _ -> assert false
+    | [ arg ] -> node arg.loc N_END [arg] [seq]
+    | _ ->
+      LiquidLoc.raise_error ~loc:contract.mic_code.loc
+        "Final stack of contract must have a single element%!"
   in
   let mic_code = (start_node, end_node) in
   { contract with mic_code }
