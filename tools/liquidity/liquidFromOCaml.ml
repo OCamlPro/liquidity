@@ -1701,7 +1701,7 @@ and translate_signature contract_type_name env acc ast =
 
   | { psig_desc = Psig_type (
       Recursive, [
-        { ptype_name = { txt = ty_name };
+        { ptype_name = { txt = ty_name; loc=name_loc };
           ptype_params = [];
           ptype_cstrs = [];
           ptype_private = Public;
@@ -1712,7 +1712,7 @@ and translate_signature contract_type_name env acc ast =
         }
       ]) } :: ast ->
     if StringMap.mem ty_name env.types then
-      error_loc ptype_loc "type %s already defined" ty_name;
+      error_loc name_loc "type %s already defined" ty_name;
     begin match ptype_kind with
       | Ptype_record labels ->
         if List.length labels < 2 then begin
@@ -1733,7 +1733,7 @@ and translate_signature contract_type_name env acc ast =
   | { psig_desc = Psig_type (
       Recursive,
       [
-        { ptype_name = { txt = ty_name };
+        { ptype_name = { txt = ty_name; loc=name_loc };
           ptype_params = [];
           ptype_cstrs = [];
           ptype_private = Public;
@@ -1744,6 +1744,8 @@ and translate_signature contract_type_name env acc ast =
         }
       ]) } :: ast ->
     let ty = translate_type env ct in
+    if StringMap.mem ty_name env.types then
+      error_loc name_loc "type %s already defined" ty_name;
     env.types <- StringMap.add ty_name ty env.types;
     translate_signature contract_type_name env acc ast
 
@@ -1889,7 +1891,7 @@ and translate_structure env acc ast =
 
   | { pstr_desc = Pstr_type (Recursive,
                              [
-                               { ptype_name = { txt = ty_name };
+                               { ptype_name = { txt = ty_name; loc=name_loc };
                                  ptype_params = [];
                                  ptype_cstrs = [];
                                  ptype_private = Public;
@@ -1900,7 +1902,7 @@ and translate_structure env acc ast =
                                }
                              ]) } :: ast ->
     if StringMap.mem ty_name env.types then
-      error_loc ptype_loc "type %s already defined" ty_name;
+      error_loc name_loc "type %s already defined" ty_name;
     begin match ptype_kind with
       | Ptype_record labels ->
         if List.length labels < 2 then begin
@@ -1920,7 +1922,7 @@ and translate_structure env acc ast =
   (* type alias *)
   | { pstr_desc = Pstr_type (Recursive,
                              [
-                               { ptype_name = { txt = ty_name };
+                               { ptype_name = { txt = ty_name; loc=name_loc };
                                  ptype_params = [];
                                  ptype_cstrs = [];
                                  ptype_private = Public;
@@ -1931,6 +1933,8 @@ and translate_structure env acc ast =
                                }
                              ]) } :: ast ->
     let ty = translate_type env ct in
+    if StringMap.mem ty_name env.types then
+      error_loc name_loc "type %s is already defined" ty_name;
     env.types <- StringMap.add ty_name ty env.types;
     translate_structure env acc ast
 
