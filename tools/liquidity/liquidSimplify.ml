@@ -239,10 +239,10 @@ let rec compute decompile code to_inline =
       let arg = iter arg in
       { exp with desc = Transfer { contract; amount; entry; arg } }
 
-    | Lambda { arg_name; arg_ty; body; ret_ty } ->
+    | Lambda { arg_name; arg_ty; body; ret_ty; recursive } ->
       let body = iter body in
       { exp with
-        desc = Lambda { arg_name; arg_ty; body; ret_ty } }
+        desc = Lambda { arg_name; arg_ty; body; ret_ty; recursive } }
 
     | Closure { arg_name; arg_ty; call_env; body; ret_ty } ->
       let body = iter body in

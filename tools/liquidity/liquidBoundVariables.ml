@@ -43,9 +43,13 @@ let rec bv code =
     StringSet.union (bv bnd_val)
       (StringSet.remove bnd_var.nname (bv body))
 
-  | Lambda { arg_name; arg_ty; body; ret_ty } ->
+  | Lambda { arg_name; arg_ty; body; ret_ty; recursive } ->
     bv body
     |> StringSet.remove arg_name.nname
+    |> fun bv -> begin match recursive with
+      | None -> bv
+      | Some f -> StringSet.remove f bv
+    end
 
   | Closure { arg_name; arg_ty; call_env; body; ret_ty } ->
     bv body
@@ -196,10 +200,13 @@ let rec bound code =
     let desc = Let { bnd_var; inline; bnd_val; body } in
     mk desc code bv
 
-  | Lambda { arg_name; arg_ty; body; ret_ty } ->
+  | Lambda { arg_name; arg_ty; body; ret_ty; recursive } ->
     let body = bound body in
-    let desc = Lambda { arg_name; arg_ty; body; ret_ty } in
+    let desc = Lambda { arg_name; arg_ty; body; ret_ty; recursive } in
     let bv = bv body |> StringSet.remove arg_name.nname in
+    let bv = match recursive with
+      | None -> bv
+      | Some f -> StringSet.remove f bv in
     mk desc code bv
 
   | Closure { arg_name; arg_ty; call_env; body; ret_ty } ->

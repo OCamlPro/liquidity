@@ -537,14 +537,25 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
     in
     mk ?name:exp.name ~loc desc ty
 
-  | Lambda { arg_name; arg_ty; body; ret_ty } ->
-    assert (ret_ty = Tunit);
+  | Lambda { arg_name; arg_ty; body; ret_ty; recursive = None } ->
     (* allow closures at typechecking, do not reset env *)
     let (env, arg_count) = new_binding env arg_name.nname arg_ty in
     let body = typecheck env body in
     check_used env arg_name arg_count;
-    let desc = Lambda { arg_name; arg_ty; body; ret_ty = body.ty } in
+    let desc =
+      Lambda { arg_name; arg_ty; body; ret_ty = body.ty; recursive = None } in
     let ty = Tlambda (arg_ty, body.ty) in
+    mk ?name:exp.name ~loc desc ty
+
+  | Lambda { arg_name; arg_ty; body; ret_ty;
+             recursive = (Some f as recursive) } ->
+    let ty = Tlambda (arg_ty, ret_ty) in
+    let (env, f_count) = new_binding env f ty in
+    let (env, arg_count) = new_binding env arg_name.nname arg_ty in
+    let body = typecheck_expected "recursive function body" env ret_ty body in
+    check_used env arg_name arg_count;
+    check_used env { nname = f; nloc = loc} f_count;
+    let desc = Lambda { arg_name; arg_ty; body; ret_ty; recursive } in
     mk ?name:exp.name ~loc desc ty
 
   (* This cannot be produced by parsing *)

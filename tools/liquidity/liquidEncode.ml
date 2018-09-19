@@ -737,7 +737,11 @@ let rec encode env ( exp : typed_exp ) : encoded_exp =
       (MatchList { arg; head_name; tail_name; ifcons; ifnil })
       exp.ty
 
-  | Lambda { arg_name; arg_ty; body } ->
+  | Lambda { arg_name; arg_ty; body; ret_ty; recursive = Some f } ->
+    encode_rec_fun env ~loc ?name:exp.name
+      f arg_name arg_ty ret_ty body
+
+  | Lambda { arg_name; arg_ty; body; recursive = None } ->
     let env_at_lambda = env in
     let lambda_arg_type = arg_ty in
     let lambda_arg_name = arg_name in
@@ -761,7 +765,7 @@ let rec encode env ( exp : typed_exp ) : encoded_exp =
       let ty = Tlambda (lambda_arg_type, body.ty) in
       mk ?name:exp.name  ~loc
         (Lambda { arg_name; arg_ty = lambda_arg_type;
-                  body; ret_ty = body.ty }) ty
+                  body; ret_ty = body.ty; recursive = None }) ty
     else
       (* create closure with environment *)
       let env, arg_name, arg_ty, call_env =
@@ -906,6 +910,93 @@ and encode_apply name env prim loc args ty =
     mk ~loc ?name (Apply { prim; args }) ty
 
   | _ -> mk ~loc ?name (Apply { prim; args }) ty
+
+
+(* Encode tail-recursive function with Loop.left *)
+and encode_rec_fun env ~loc ?name f arg_name arg_ty ret_ty body =
+  let body = LiquidBoundVariables.bound body in
+  let fail_if_called exp =
+    if StringSet.mem f exp.bv then
+      error exp.loc
+        "Expression contains a non tail-recursive call to %s" f
+  in
+  (* Replace tail calls with (Left arg) and results with (Right res) *)
+  let rec replace_tail_calls (body:typed_exp) =
+    let loc = body.loc in
+    if not @@ StringSet.mem f body.bv then
+      (* no recursive calls in body *)
+      if body.ty = Tfail then
+        body
+      else
+        mk_typed ~loc ?name:body.name (
+          Constructor { constr = Right arg_ty; arg = body }
+        ) (Tor (arg_ty, body.ty))
+    else match body.desc with
+      | Var v when v = f ->
+        error loc "Call to %s is not a tail-recursive call" f
+      | Apply { prim = Prim_exec; args = [arg; { desc = Var ff }] }
+        when ff = f ->
+        mk_typed ~loc ?name:body.name (
+          Constructor { constr = Left ret_ty; arg }
+        ) (Tor (arg.ty, ret_ty))
+      | Seq (e1, e2) ->
+        fail_if_called e1;
+        let e2 = replace_tail_calls e2 in
+        let desc = Seq (e1, e2) in
+        mk_typed ~loc ?name:body.name desc e2.ty
+      | Let { bnd_var; inline; bnd_val; body = let_body } ->
+        fail_if_called bnd_val;
+        let let_body = replace_tail_calls let_body in
+        let desc = Let { bnd_var; inline; bnd_val; body = let_body } in
+        mk_typed ~loc ?name:body.name desc let_body.ty
+      | If { cond; ifthen; ifelse } ->
+        fail_if_called cond;
+        let ifthen = replace_tail_calls ifthen in
+        let ifelse = replace_tail_calls ifelse in
+        let desc = If { cond; ifthen; ifelse } in
+        mk_typed ~loc ?name:body.name desc ifthen.ty
+      | MatchOption { arg; ifnone; some_name; ifsome } ->
+        fail_if_called arg;
+        let ifnone = replace_tail_calls ifnone in
+        let ifsome = replace_tail_calls ifsome in
+        let desc = MatchOption { arg; ifnone; some_name; ifsome } in
+        mk_typed ~loc ?name:body.name desc ifsome.ty
+      | MatchList { arg; head_name; tail_name; ifcons; ifnil } ->
+        fail_if_called arg;
+        let ifcons = replace_tail_calls ifcons in
+        let ifnil = replace_tail_calls ifnil in
+        let desc = MatchList { arg; head_name; tail_name; ifcons; ifnil } in
+        mk_typed ~loc ?name:body.name desc ifcons.ty
+      | MatchNat { arg; plus_name; ifplus; minus_name; ifminus } ->
+        fail_if_called arg;
+        let ifplus = replace_tail_calls ifplus in
+        let ifminus = replace_tail_calls ifminus in
+        let desc = MatchNat { arg; plus_name; ifplus; minus_name; ifminus } in
+        mk_typed ~loc ?name:body.name desc ifplus.ty
+      | MatchVariant { arg; cases } ->
+        fail_if_called arg;
+        let cases = List.map (fun (pat, e) ->
+            pat, replace_tail_calls e
+          ) cases in
+        let ty = match cases with
+          | [] -> body.ty
+          | (_, e) :: _ -> e.ty in
+        let desc = MatchVariant { arg; cases } in
+        mk_typed ~loc ?name:body.name desc ty
+      | _ ->
+        error loc "Expression contains a non tail-recursive call to %s" f
+  in
+  let body_desc =
+    LoopLeft { arg_name;
+               body = replace_tail_calls body;
+               arg = mk_typed ~loc:arg_name.nloc (Var arg_name.nname) arg_ty;
+               acc = None } in
+  let body = mk_typed ~loc:body.loc ?name:body.name body_desc ret_ty in
+  let lam =
+    mk_typed ~loc ?name
+      (Lambda { arg_name; arg_ty; body; ret_ty; recursive = None })
+      (Tlambda (arg_ty, ret_ty)) in
+  encode env lam
 
 
 and encode_entry env entry =

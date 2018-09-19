@@ -726,6 +726,7 @@ and ('ty, 'a) exp_desc =
                 arg_ty: datatype;
                 body: ('ty, 'a) exp;
                 ret_ty: datatype; (* inferred during typechecking *)
+                recursive: string option;
               }
   (** Pure lambda abstractions:
       {[ fun (arg_name : arg_ty) -> (body : ret_ty) ]} *)
@@ -1286,6 +1287,7 @@ type warning =
   | Unused of string
   | UnusedMatched of string
   | IgnoredTypeAnnot of string
+  | NotRecursive of string
 
 (** {2 Reserved symbols in parsing }  *)
 

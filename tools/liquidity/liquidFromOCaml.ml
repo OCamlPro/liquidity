@@ -774,16 +774,6 @@ let check_version = function
         req_version maximal_version;
   | { pexp_loc } -> error_loc pexp_loc "version must be a floating point number"
 
-let rec inline_funs exp = function
-  | [] -> exp
-  | (f_pvb, f_loc) :: funs ->
-    let f_in_exp = {
-      pexp_loc = f_loc;
-      pexp_desc = Pexp_let (Nonrecursive, [f_pvb], exp);
-      pexp_attributes = []; (* dummy value *)
-    } in
-    inline_funs f_in_exp funs
-
 let filter_contracts acc =
   List.fold_left (fun acc -> function
       | Syn_contract c -> StringMap.add c.contract_name c acc
@@ -1023,6 +1013,35 @@ let rec translate_code contracts env exp =
         | [ { txt = "inline"} , PStr [] ] -> true
         | _ -> false in
       Let { bnd_var; inline; bnd_val; body }
+
+
+    (* Special (limited) form for recursive functions:
+       let rec f = fun ... -> ... f ... *)
+    | { pexp_desc = Pexp_let (Recursive, [ {
+        pvb_pat = { ppat_desc = Ppat_var { txt = fun_name; loc = name_loc } };
+        pvb_expr = { pexp_desc = Pexp_fun (Nolabel, None, pat, {
+            pexp_desc = Pexp_constraint (fun_body, ret_ty) });
+            pexp_loc = fun_loc;
+          };
+        pvb_attributes = attrs;
+      } ], body) } ->
+      let ret_ty = translate_type env ret_ty in
+      let fun_body = translate_code contracts env fun_body in
+      let arg_name, arg_ty, fun_body = deconstruct_pat env pat fun_body in
+      let is_rec =
+        StringSet.mem fun_name
+          (StringSet.remove arg_name.nname
+             (LiquidBoundVariables.bv fun_body)) in
+      if not is_rec then LiquidLoc.warn loc (NotRecursive fun_name);
+      let recursive = if is_rec then Some fun_name else None in
+      let lam = mk ~loc:(loc_of_loc fun_loc)
+          (Lambda { arg_name; arg_ty; body = fun_body; ret_ty; recursive }) in
+      let inline = match attrs with
+        | [ { txt = "inline"} , PStr [] ] -> true
+        | _ -> false in
+      let body = translate_code contracts env body in
+      let bnd_var = { nname = fun_name; nloc = loc_of_loc name_loc } in
+      Let { bnd_var; inline; bnd_val = lam; body }
 
     | { pexp_desc = Pexp_sequence (exp1, exp2) } ->
       Seq (translate_code contracts env exp1, translate_code contracts env exp2)
@@ -1326,7 +1345,8 @@ let rec translate_code contracts env exp =
       let body_exp = translate_code contracts env body_exp in
       let arg_name, arg_ty, body = deconstruct_pat env pat body_exp in
       Lambda { arg_name; arg_ty; body;
-               ret_ty = Tunit; (* not yet inferred *) }
+               ret_ty = Tunit; (* not yet inferred *)
+               recursive = None }
 
     | { pexp_desc = Pexp_record (lab_x_exp_list, None) } ->
       let fields =
@@ -1902,6 +1922,46 @@ and translate_structure env acc ast =
       error_loc name_loc "Top-level value %S already defined" var_name;
     let value = Syn_value (var_name, inline, exp) in
     translate_structure env (value :: acc) ast
+
+
+  | { pstr_desc = (
+      Pstr_value (
+        Recursive,
+        [ {
+          pvb_pat = { ppat_desc = Ppat_var { txt = fun_name; loc = name_loc } };
+          pvb_expr = { pexp_desc = Pexp_fun (Nolabel, None, pat, {
+              pexp_desc = Pexp_constraint (fun_body, ret_ty) });
+              pexp_loc = fun_loc;
+            };
+          pvb_attributes = attrs;
+        }
+        ])); pstr_loc = f_loc } :: ast ->
+    let contracts = filter_contracts acc in
+    let ret_ty = translate_type env ret_ty in
+    let fun_body = translate_code contracts env fun_body in
+    let arg_name, arg_ty, fun_body = deconstruct_pat env pat fun_body in
+    let is_rec =
+      StringSet.mem fun_name
+        (StringSet.remove arg_name.nname
+           (LiquidBoundVariables.bv fun_body)) in
+    let loc = loc_of_loc fun_loc in
+    if not is_rec then LiquidLoc.warn loc (NotRecursive fun_name);
+    let recursive = if is_rec then Some fun_name else None in
+    let lam = mk ~loc
+        (Lambda { arg_name; arg_ty; body = fun_body; ret_ty; recursive }) in
+    let inline = match attrs with
+      | [ { txt = "inline"} , PStr [] ] -> true
+      | _ -> false in
+    if List.mem fun_name reserved_keywords then
+      error_loc name_loc "top-level value %S forbidden" fun_name;
+    if List.exists (function
+        | Syn_value (n, _, _) -> n = fun_name
+        | _ -> false) acc
+    then
+      error_loc name_loc "Top-level value %S already defined" fun_name;
+    let value = Syn_value (fun_name, inline, lam) in
+    translate_structure env (value :: acc) ast
+
 
   | { pstr_desc = Pstr_type (Recursive,
                              [

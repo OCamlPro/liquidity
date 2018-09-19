@@ -592,7 +592,9 @@ let rec decompile contract =
         let desc = Lambda { arg_name = lvar_of begin_node;
                             arg_ty;
                             body = decompile_next begin_node;
-                            ret_ty = Tunit (* res_ty, not yet inferred *) }
+                            ret_ty = Tunit; (* res_ty, not yet inferred *)
+                            recursive = None;
+                          }
         in
         mklet node desc
       | N_LAMBDA_END _, [arg] -> arg_of arg

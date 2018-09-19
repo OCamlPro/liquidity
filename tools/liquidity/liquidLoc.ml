@@ -53,6 +53,8 @@ let default_warning_printer loc w =
            "unused branch, constructor %S is already matched" constr
        | IgnoredTypeAnnot ty ->
          Format.fprintf fmt "ignored type annotation: %s" ty
+       | NotRecursive f ->
+         Format.fprintf fmt "%s is not recursive but was defined with rec" f
     ) w
 
 let warning_printer = ref default_warning_printer

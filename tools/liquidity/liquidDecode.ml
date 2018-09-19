@@ -139,10 +139,10 @@ let rec decode ( exp : encoded_exp ) : typed_exp =
     mk ?name:exp.name ~loc
       (MatchList { arg; head_name; tail_name; ifcons; ifnil }) exp.ty
 
-  | Lambda { arg_name; arg_ty; body; ret_ty } ->
+  | Lambda { arg_name; arg_ty; body; ret_ty; recursive } ->
     let body = decode body in
     mk ?name:exp.name ~loc
-      (Lambda { arg_name; arg_ty; body; ret_ty }) exp.ty
+      (Lambda { arg_name; arg_ty; body; ret_ty; recursive }) exp.ty
 
   | Closure { arg_name; arg_ty; call_env; body; ret_ty } ->
     let call_env = List.map (fun (v, e) -> v, decode e) call_env in
@@ -229,6 +229,18 @@ and decode_entries param_constrs top_parameter top_storage values exp =
       ((bnd_var.nname, inline, decode bnd_val) :: values) body
   | _ -> raise Exit
 
+and move_outer_lets parameter storage values exp =
+  match exp.desc with
+  | Let { bnd_var; inline; bnd_val; body }
+    when let bv = LiquidBoundVariables.bv bnd_val in
+      not @@ StringSet.mem parameter bv &&
+      not @@ StringSet.mem storage bv ->
+    move_outer_lets parameter storage
+      ((bnd_var.nname, inline, decode bnd_val) :: values) body
+  | _ ->
+    (* kept in reverse order because used as an accumulator to decode_entries *)
+    values, exp
+
 (* Recover multiple-entry points contract from a contract in
    single-entry point form *)
 and decode_contract contract =
@@ -240,10 +252,25 @@ and decode_contract contract =
                      };
          code;
        }] ->
-      (* raise Exit; *)
+      (* multi-entry points encoded contract *)
+      let values, code =
+        move_outer_lets parameter_name storage_name [] code in
       let values, entries =
-        decode_entries param_constrs parameter_name storage_name [] code in
+        decode_entries param_constrs parameter_name storage_name values code in
       { contract with values ; entries }
+    | [({ entry_sig = { parameter;
+                        parameter_name;
+                        storage_name;
+                      };
+          code;
+        } as e)] ->
+      (* sinle entry point contract *)
+      let values, code =
+        move_outer_lets parameter_name storage_name [] code in
+      { contract with
+        values = List.rev values;
+        entries = [ { e with code = decode code } ]
+      }
     | _ -> raise Exit
   with Exit ->
     (* decode contract without decoding entries *)

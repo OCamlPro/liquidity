@@ -106,12 +106,20 @@ let rec untype (env : env) (code : (datatype, 'a) exp) : (datatype, 'b) exp =
     | Apply { prim; args } ->
       Apply { prim; args = List.map (untype env) args }
 
-    | Lambda { arg_name; arg_ty; body } ->
+    | Lambda { arg_name; arg_ty; body; ret_ty; recursive } ->
       let base = base_of_lvar arg_name in
       let env = empty_env () in
       let env = new_lbinding arg_name base env in
+      let recursive, env, ret_ty = match recursive with
+        | None -> recursive, env, Tunit
+        | Some f ->
+          let f_base = base_of_var f in
+          let env = new_binding f f_base env in
+          (Some f_base, env, ret_ty)
+      in
       Lambda { arg_name = base; arg_ty;
-               body = untype env body; ret_ty = Tunit }
+               body = untype env body; ret_ty;
+               recursive }
 
     | Closure { arg_name; arg_ty; call_env; body } ->
       let call_env = List.map (fun (name, t) -> name, untype env t) call_env in

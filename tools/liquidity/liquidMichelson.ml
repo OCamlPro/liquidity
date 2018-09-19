@@ -152,7 +152,10 @@ let rec translate_code ~parameter_name ~storage_name code =
       let cleanup_stack = [ ii ~loc @@ DIP_DROP (1, 1) ] in
       bnd_val @ body @ cleanup_stack
 
-    | Lambda { arg_name; arg_ty; body; ret_ty } ->
+    | Lambda { recursive = Some _ } ->
+      assert false (* encoded *)
+
+    | Lambda { arg_name; arg_ty; body; ret_ty; recursive = None } ->
       let env = StringMap.empty in
       let env = StringMap.add arg_name.nname 0 env in
       let depth = 1 in
@@ -177,7 +180,7 @@ let rec translate_code ~parameter_name ~storage_name code =
       let ret_ty = LiquidEncode.encode_type ret_ty in
       call_env_code @
       compile_desc depth env ~loc
-        (Lambda { arg_name; arg_ty; body; ret_ty }) @
+        (Lambda { arg_name; arg_ty; body; ret_ty; recursive = None }) @
       [ ii ~loc PAIR ]
 
     | If { cond; ifthen; ifelse } ->
