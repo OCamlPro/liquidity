@@ -308,7 +308,7 @@ let rec translate_code ~parameter_name ~storage_name code =
       @ [ ii ~loc @@ PUSH (Tbool, CBool true) ]
       @ [ ii ~loc @@ LOOP (seq (arg_annot @ body @ body_end)) ]
 
-    | LoopLeft { arg_name; body; arg; acc } ->
+    | LoopLeft { arg_name; body; arg; acc = Some acc } ->
       let right_ty = match body.ty with
         | Ttuple [Tor (_, right_ty); _] -> right_ty
         | _ -> assert false in
@@ -329,6 +329,19 @@ let rec translate_code ~parameter_name ~storage_name code =
       acc @ arg @ [ ii ~loc (LEFT (right_ty, None)) ] @
       [ ii ~loc @@ LOOP_LEFT (seq (arg_annot @ body_begin @ body @ body_end));
         ii ~loc PAIR ]
+
+    | LoopLeft { arg_name; body; arg; acc = None } ->
+      let right_ty = match body.ty with
+        | Tor (_, right_ty) -> right_ty
+        | _ -> assert false in
+      let arg = compile depth env arg in
+      let env = StringMap.add arg_name.nname depth env in
+      let depth = depth + 1 in
+      let arg_annot = compile_arg_name arg_name.nname in
+      let body = compile depth env body in
+      let body_end = [ ii ~loc @@ DIP_DROP (1,1) ] in
+      arg @ [ ii ~loc (LEFT (right_ty, None)) ] @
+      [ ii ~loc @@ LOOP_LEFT (seq (arg_annot @ body @ body_end)) ]
 
     | Fold { prim; arg_name; body; arg; acc } ->
       let acc = compile depth env acc in

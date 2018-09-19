@@ -81,7 +81,9 @@ let rec subst_empty_big_map code =
     | LoopLeft { arg_name; body = e1; arg = e2; acc= e3 } ->
       let e1' = subst_empty_big_map e1 in
       let e2' = subst_empty_big_map e2 in
-      let e3' = subst_empty_big_map e3 in
+      let e3' = match e3 with
+        | None -> e3
+        | Some e3 -> Some (subst_empty_big_map e3) in
       if e1 == e1' && e2 == e2' && e3 == e3' then desc
       else LoopLeft { arg_name; body = e1'; arg = e2'; acc = e3' }
 

@@ -1125,7 +1125,10 @@ module Liquid = struct
       bprint_code_rec ~debug b indent4 body;
       Printf.bprintf b ")\n%s" indent2;
       bprint_code_rec ~debug b indent2 arg;
-      bprint_code_rec ~debug b indent2 acc;
+      (match acc with
+       | Some acc ->
+         bprint_code_rec ~debug b indent2 acc
+       | None -> ());
       ()
     | Fold { prim = (Prim_map_iter|Prim_set_iter|Prim_list_iter as prim);
              arg_name; body; arg } ->

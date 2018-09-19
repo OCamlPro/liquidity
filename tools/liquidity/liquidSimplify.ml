@@ -179,7 +179,7 @@ let rec compute decompile code to_inline =
     | LoopLeft { arg_name; body; arg; acc } ->
       let body = iter body in
       let arg = iter arg in
-      let acc = iter acc in
+      let acc = match acc with None -> None | Some acc -> Some (iter acc) in
       { exp with desc = LoopLeft { arg_name; body; arg; acc } }
 
     | Fold { prim; arg_name; body; arg; acc } ->

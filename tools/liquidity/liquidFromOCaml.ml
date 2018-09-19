@@ -1063,20 +1063,32 @@ let rec translate_code contracts env exp =
             { pexp_desc = Pexp_ident ( { txt = Ldot(Lident "Loop",
                                                     "left");
                                          loc } ) },
-            [
-              Nolabel, { pexp_desc =
-                           Pexp_fun (Nolabel,None,
-                                     pat,
-                                     body
-                                    ) };
-              Nolabel, arg;
-              Nolabel, acc;
-            ]) } ->
+            (Nolabel, { pexp_desc =
+                          Pexp_fun (Nolabel,None,
+                                    pat,
+                                    body
+                                   ) }) ::
+            (Nolabel, arg) ::
+            rest
+          ) } ->
       let body = translate_code contracts env body in
       let arg = translate_code contracts env arg in
-      let acc = translate_code contracts env acc in
       let arg_name, _, body = deconstruct_pat env pat body in
-      LoopLeft { arg_name; body; arg; acc }
+      begin match rest with
+        | [ Nolabel, acc ] ->
+          let acc = translate_code contracts env acc in
+          LoopLeft { arg_name; body; arg; acc = Some acc }
+        | [] ->
+          LoopLeft { arg_name; body; arg; acc = None }
+        | _ -> error_loc loc "wrong number of arguments for Loop.left"
+      end
+
+    | { pexp_desc =
+          Pexp_apply (
+            { pexp_desc = Pexp_ident ( { txt = Ldot(Lident "Loop",
+                                                    "left");
+                                         loc } ) }, _) } ->
+      error_loc loc "wrong of arguments for Loop.left"
 
     | { pexp_desc =
           Pexp_apply (

@@ -460,13 +460,15 @@ let rec convert_code ~abbrev (expr : (datatype, 'a) exp) =
   | LoopLeft { arg_name; body; arg; acc } ->
     Exp.apply ~loc
       (Exp.ident (lid "Loop.left"))
-      [
-        Nolabel, Exp.fun_ Nolabel None
-          (pat_of_lname arg_name)
-          (convert_code ~abbrev body);
-        Nolabel, convert_code ~abbrev arg;
-        Nolabel, convert_code ~abbrev acc
-      ]
+      (
+        (Nolabel, Exp.fun_ Nolabel None
+           (pat_of_lname arg_name)
+           (convert_code ~abbrev body)) ::
+        (Nolabel, convert_code ~abbrev arg) ::
+        (match acc with
+         | None -> []
+         | Some acc -> [Nolabel, convert_code ~abbrev acc])
+      )
 
   | Fold { prim = (Prim_map_iter|Prim_set_iter|Prim_list_iter as prim);
            arg_name;

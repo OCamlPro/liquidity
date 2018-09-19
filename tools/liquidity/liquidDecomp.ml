@@ -153,6 +153,8 @@ let rec arg_of node =
     let x_acc = arg_of begin_node in
     begin
       match pos, acc with
+      | 0, [] -> (* no accumulator *)
+        x_acc
       | 0, _ -> (* arg is left element *)
         mk_get ?name:node.node_name ~loc x_acc 0
       | 1, [_] -> (* arg is accumulator *)
@@ -163,7 +165,10 @@ let rec arg_of node =
       | _ -> assert false
     end
   | N_LOOP_LEFT_RESULT (loop_node, end_node, pos ) ->
-    mk_get ~loc (arg_of loop_node) pos
+    begin match pos, end_node.args with
+      | 0, [] -> arg_of loop_node (* no acc *)
+      | _ -> mk_get ~loc (arg_of loop_node) pos
+    end
 
   | N_ARG ({ kind = N_FOLD_BEGIN ( _); args = acc } as begin_node, pos ) ->
     let x_acc = arg_of begin_node in
@@ -497,36 +502,42 @@ let rec decompile contract =
                                  value_of_args ~loc args] })
 
       | N_LOOP_LEFT (begin_node, end_node), [first] ->
+        let arg_name = lvar_of begin_node in
+        let acc = match begin_node.args with
+          | [] -> None
+          | args -> Some (value_of_args ~loc begin_node.args) in
         let desc = match first.kind with
           | N_LEFT _ ->
-            let arg_name = lvar_of begin_node in
             LoopLeft { arg_name;
                        body = decompile_next begin_node;
                        arg = value_of_args ~loc first.args;
-                       acc = value_of_args ~loc begin_node.args }
+                       acc }
           | N_RIGHT _ ->
             (value_of_args ~loc first.args).desc
           | _ ->
-            let arg_name = lvar_of begin_node in
             let loop_e =
               mk ~loc
                 (LoopLeft { arg_name;
                             body = decompile_next begin_node;
                             arg = mk ~loc (Var arg_name.nname);
-                            acc = value_of_args ~loc begin_node.args }) in
+                            acc }) in
             MatchVariant {
               arg = arg_of first;
               cases = [ CConstr ("Left", [arg_name.nname]), loop_e;
                         CConstr ("Right", [arg_name.nname]),
-                        value_of_args ~loc begin_node.args ];
+                        value_of_args ~loc first.args ];
             }
         in
         mklet node desc
 
       | N_LOOP_LEFT_END (_, _, end_node), args ->
-        mk ~loc (Apply { prim = Prim_tuple;
-                         args = [arg_of end_node;
-                                 value_of_args ~loc args] })
+        begin match args with
+          | [] -> arg_of end_node
+          | _ ->
+            mk ~loc (Apply { prim = Prim_tuple;
+                             args = [arg_of end_node;
+                                     value_of_args ~loc args] })
+        end
 
       | N_FOLD ({args = rargs} as begin_node, end_node), [arg] ->
         let acc = value_of_args ~loc rargs in

@@ -111,7 +111,7 @@ let rec decode ( exp : encoded_exp ) : typed_exp =
 
   | LoopLeft { arg_name; body; arg; acc } ->
     let arg = decode arg in
-    let acc = decode acc in
+    let acc = match acc with None -> None | Some acc -> Some (decode acc) in
     let body = decode body in
     mk ?name:exp.name ~loc (LoopLeft { arg_name; body; arg; acc }) exp.ty
 

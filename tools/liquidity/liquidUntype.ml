@@ -141,7 +141,8 @@ let rec untype (env : env) (code : (datatype, 'a) exp) : (datatype, 'b) exp =
 
     | LoopLeft { arg_name; body; arg; acc } ->
       let arg = untype env arg in
-      let acc = untype env acc in
+      let acc =
+        match acc with None -> None | Some acc -> Some (untype env acc) in
       let (arg_name, env) = find_lfree env arg_name body.bv in
       let body = untype env body in
       LoopLeft { arg_name; body; arg; acc }

@@ -22,6 +22,7 @@ code { DUP ;
        LEFT int ;
        LOOP_LEFT @storage
          { RENAME @acc_slash_6 ;
+           DIP { PUSH int 100000; ADD @machin };
            PUSH int 10 ;
            DUUP @acc ;
            COMPARE ;
