@@ -354,7 +354,10 @@ module Michelson = struct
         ) true csts
       in
       Printf.bprintf b "}";
-    | CConstr _ | CRecord _ -> assert false
+    | CRecord fields ->
+      List.map snd fields
+      |> bprint_const_pairs fmt b indent
+    | CConstr _ -> assert false
 
   and bprint_const_pairs fmt b indent tys =
     match tys with
