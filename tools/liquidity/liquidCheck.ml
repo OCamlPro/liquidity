@@ -123,7 +123,9 @@ let sig_of_contract env contract =
     | Some n ->
       env.contract_types <- StringMap.add n c_sig env.contract_types
   end;
-  c_sig
+  { f_sig_name = c_sig.sig_name;
+    f_storage = contract.storage;
+    f_entries_sig = c_sig.entries_sig }
 
 (* Merge nested matches to recover encoding for pattern matching over
    sum type *)
@@ -1022,7 +1024,7 @@ and typecheck_prim2 env prim loc args =
     Tset key_ty
 
   | Prim_Some, [ ty ] -> Toption ty
-  | Prim_self, [ Tunit ] -> Tcontract env.t_contract_sig
+  | Prim_self, [ Tunit ] -> Tcontract (sig_of_full_sig env.t_contract_sig)
   | Prim_now, [ Tunit ] -> Ttimestamp
   | Prim_balance, [ Tunit ] -> Ttez
   | Prim_source, [ Tunit ] -> Taddress
@@ -1108,11 +1110,11 @@ and typecheck_entry env entry =
   (* let env = { env with clos_env = None } in *)
   (* register storage *)
   let (env, count_storage) =
-    new_binding env entry.entry_sig.storage_name env.t_contract_storage in
+    new_binding env entry.entry_sig.storage_name env.t_contract_sig.f_storage in
   (* register parameter *)
   let (env, count_param) =
     new_binding env entry.entry_sig.parameter_name entry.entry_sig.parameter in
-  let expected_ty = Ttuple [Tlist Toperation; env.t_contract_storage] in
+  let expected_ty = Ttuple [Tlist Toperation; env.t_contract_sig.f_storage] in
   (* Code for entry point must be of type (operation list * storage) *)
   let code =
     typecheck_expected "return value" env expected_ty entry.code in
@@ -1136,7 +1138,6 @@ and typecheck_contract ~warnings ~decompiling env contract =
       env = env;
       clos_env = None;
       t_contract_sig = sig_of_contract env contract;
-      t_contract_storage = contract.storage;
     } in
 
   (* Add bindings to the environment for the global values *)

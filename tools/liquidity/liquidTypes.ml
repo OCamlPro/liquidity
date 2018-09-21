@@ -120,6 +120,12 @@ and contract_sig = {
   entries_sig : entries_sig;
 }
 
+and full_contract_sig = {
+  f_sig_name : string option;
+  f_storage : datatype;
+  f_entries_sig : entries_sig;
+}
+
 let size_of_type = function
   | Ttuple l -> List.length l
   | Trecord (_, l) -> List.length l
@@ -225,6 +231,18 @@ let rec type_contains_nonlambda_operation = function
 let sig_of_contract c = {
   sig_name = None;
   entries_sig = List.map (fun e -> e.entry_sig) c.entries;
+}
+
+(** Extract the full signature (including storage type) of a contract *)
+let full_sig_of_contract c = {
+  f_sig_name = None;
+  f_storage = c.storage;
+  f_entries_sig = List.map (fun e -> e.entry_sig) c.entries;
+}
+
+let sig_of_full_sig s = {
+  sig_name = s.f_sig_name;
+  entries_sig = s.f_entries_sig;
 }
 
 (** Type of source code locations *)
@@ -1136,12 +1154,11 @@ type typecheck_env = {
   env : env;
   to_inline : encoded_exp StringMap.t ref;
   force_inline : encoded_exp StringMap.t ref;
-  t_contract_sig : contract_sig;
-  t_contract_storage : datatype;
+  t_contract_sig : full_contract_sig;
   clos_env : closure_env option;
 }
 
-let empty_typecheck_env ~warnings t_contract_sig t_contract_storage env = {
+let empty_typecheck_env ~warnings t_contract_sig env = {
   warnings;
   decompiling = false;
   annot = false;
@@ -1153,7 +1170,6 @@ let empty_typecheck_env ~warnings t_contract_sig t_contract_storage env = {
   env = env;
   clos_env = None;
   t_contract_sig;
-  t_contract_storage;
 }
 
 
@@ -1271,8 +1287,9 @@ let contract_sig_of_param ?sig_name parameter = {
 let unit_contract_sig = contract_sig_of_param ~sig_name:"UnitContract" Tunit
 
 let dummy_contract_sig = {
-  sig_name = None;
-  entries_sig = [];
+  f_sig_name = None;
+  f_storage = Tunit;
+  f_entries_sig = [];
 }
 
 let dummy_syntax_contract : syntax_contract = {

@@ -77,7 +77,7 @@ let compile_liquid_files files =
     | None -> ()
     | Some syntax_init ->
       match LiquidInit.compile_liquid_init env
-              (sig_of_contract syntax_ast) syntax_ast.storage syntax_init with
+              (full_sig_of_contract syntax_ast) syntax_init with
       | LiquidInit.Init_constant c_init when !LiquidOptions.json ->
         let s = LiquidToTezos.(json_of_const @@ convert_const c_init) in
         let output = outprefix ^ ".init.json" in
@@ -278,7 +278,7 @@ let translate () =
   (* first, extract the types *)
   let contract, _, env = LiquidFromOCaml.translate_multi ocaml_asts in
   let _ = LiquidCheck.typecheck_contract ~warnings:true env contract in
-  let contract_sig = sig_of_contract contract in
+  let contract_sig = full_sig_of_contract contract in
   let entry =
     try
       List.find (fun e -> e.entry_sig.entry_name = entry_name)
@@ -287,11 +287,11 @@ let translate () =
       Format.eprintf "Contract has no entry point %s@." entry_name; exit 2
   in
   let input = LiquidData.translate { env with filename = "parameter" }
-      contract_sig contract.storage parameter
+      contract_sig parameter
       entry.entry_sig.parameter in
-  let parameter_const = match contract_sig.entries_sig with
+  let parameter_const = match contract_sig.f_entries_sig with
     | [_] -> input
-    | _ -> LiquidEncode.encode_const env contract_sig contract.storage
+    | _ -> LiquidEncode.encode_const env contract_sig
              (CConstr (prefix_entry ^ entry_name, input)) in
   let to_str mic_data =
     if !LiquidOptions.json then
@@ -303,8 +303,7 @@ let translate () =
     Printf.printf "%s\n%!" (to_str parameter_const)
   else
     let storage_const = LiquidData.translate { env with filename = "storage" }
-        contract_sig contract.storage
-        storage contract.storage in
+        contract_sig storage contract.storage in
     if !LiquidOptions.json then
       Printf.printf "{\n  \"parameter\": %s; \n  \"storage\": %s\n}\n%!"
         (to_str parameter_const) (to_str storage_const)
@@ -405,7 +404,7 @@ let call () =
 
 let parse_tez_to_string expl amount =
   match LiquidData.translate (LiquidFromOCaml.initial_env expl)
-          dummy_contract_sig Tunit amount Ttez
+          dummy_contract_sig amount Ttez
   with
   | CTez t ->
     let mutez = match t.mutez with

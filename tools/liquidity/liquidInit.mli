@@ -16,4 +16,4 @@ type init =
   (** initializer compiled to michelson contract (to be evaluated by
       node) *)
 
-val compile_liquid_init : env -> contract_sig -> datatype -> syntax_init -> init
+val compile_liquid_init : env -> full_contract_sig -> syntax_init -> init

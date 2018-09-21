@@ -239,15 +239,15 @@ let tmp_contract_of_init ~loc init storage_ty =
                  code }]
   }
 
-let compile_liquid_init env contract storage_ty init (* ((args, sy_init) as init) *) =
+let compile_liquid_init env contract_sig init (* ((args, sy_init) as init) *) =
   let loc = init.init_body.loc in
   if init.init_body.transfer then
     LiquidLoc.raise_error ~loc
       "No transfer allowed in storage initializer";
   try (* Maybe it is constant *)
-    let tenv = empty_typecheck_env ~warnings:true contract storage_ty env in
+    let tenv = empty_typecheck_env ~warnings:true contract_sig env in
     let ty_init = LiquidCheck.typecheck_code tenv
-        ~expected_ty:storage_ty init.init_body in
+        ~expected_ty:contract_sig.f_storage init.init_body in
     let enc_init = LiquidEncode.encode_code tenv ty_init in
     let c_init = LiquidData.translate_const_exp enc_init in
     Init_constant c_init
@@ -257,7 +257,7 @@ let compile_liquid_init env contract storage_ty init (* ((args, sy_init) as init
    * Printf.eprintf "Constant initial storage generated in %S\n%!" output *)
   with LiquidError _ ->
     (* non constant initial value *)
-    let init_contract = tmp_contract_of_init ~loc init storage_ty in
+    let init_contract = tmp_contract_of_init ~loc init contract_sig.f_storage in
     let typed_init = LiquidCheck.typecheck_contract
         ~warnings:true ~decompiling:false env init_contract in
     let encoded_init, _ =

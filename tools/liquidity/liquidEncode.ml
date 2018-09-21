@@ -325,7 +325,7 @@ let rec encode_const env c = match c with
         if e.entry_name = entry_name then CLeft (encode_const env x)
         else CRight (iter entries)
     in
-    iter env.t_contract_sig.entries_sig
+    iter env.t_contract_sig.f_entries_sig
 
   | CConstr (constr, x) ->
     try
@@ -1002,7 +1002,7 @@ and encode_rec_fun env ~loc ?name f arg_name arg_ty ret_ty body =
 and encode_entry env entry =
   (* "storage/1" *)
   let (storage_name, env, _) =
-    new_binding env entry.entry_sig.storage_name env.t_contract_storage in
+    new_binding env entry.entry_sig.storage_name env.t_contract_sig.f_storage in
   (* "parameter/2" *)
   let (parameter_name, env, _) =
     new_binding env entry.entry_sig.parameter_name entry.entry_sig.parameter in
@@ -1054,11 +1054,10 @@ and encode_contract ?(annot=false) ?(decompiling=false) env contract =
       force_inline = ref StringMap.empty;
       env;
       clos_env = None;
-      t_contract_sig = sig_of_contract contract;
-      t_contract_storage = contract.storage;
+      t_contract_sig = full_sig_of_contract contract;
     } in
 
-  let parameter = encode_contract_sig env.t_contract_sig  in
+  let parameter = encode_contract_sig (sig_of_full_sig env.t_contract_sig) in
   let loc = LiquidLoc.loc_in_file env.env.filename in
   let rec values_on_top l exp = match l with
     | [] -> exp
@@ -1085,7 +1084,8 @@ and encode_contract ?(annot=false) ?(decompiling=false) env contract =
                                    nloc = loc };
                        inline = false;
                        bnd_val =
-                         mk_typed ~loc (Var "storage") env.t_contract_storage;
+                         mk_typed ~loc (Var "storage")
+                           env.t_contract_sig.f_storage;
                        body = e.code }) e.code.ty in
             pat, body
           ) contract.entries },
@@ -1095,7 +1095,7 @@ and encode_contract ?(annot=false) ?(decompiling=false) env contract =
 
   (* "storage/1" *)
   let (storage_name, env, _) =
-    new_binding env storage_name env.t_contract_storage in
+    new_binding env storage_name env.t_contract_sig.f_storage in
   (* "parameter/2" *)
   let (pname, env, _) = new_binding env parameter_name parameter in
 
@@ -1123,7 +1123,7 @@ let encode_code tenv code =
   encode tenv code
 
 
-let encode_const env t_contract_sig t_contract_storage const =
+let encode_const env t_contract_sig const =
   let env =
     {
       warnings = false;
@@ -1137,7 +1137,6 @@ let encode_const env t_contract_sig t_contract_storage const =
       env = env;
       clos_env = None;
       t_contract_sig;
-      t_contract_storage;
     } in
 
   encode_const env const

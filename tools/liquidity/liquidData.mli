@@ -13,7 +13,6 @@ val default_const : datatype -> const
 
 val translate_const_exp : encoded_exp -> const
 
-val translate :
-  env -> contract_sig -> datatype -> string -> datatype -> const
+val translate : env -> full_contract_sig -> string -> datatype -> const
 
 val string_of_const : ?ty:datatype -> const -> string
