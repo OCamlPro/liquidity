@@ -1837,8 +1837,11 @@ and translate_signature contract_type_name env acc ast =
     translate_signature contract_type_name env acc ast
 
   | { psig_loc } as ast :: _ ->
-    error_loc psig_loc "in signature:\n%a@."
-      Printast.interface [ast]
+    if !LiquidOptions.verbosity > 0 then
+      error_loc psig_loc "in signature:\n%a" Printast.interface [ast]
+    else
+      error_loc psig_loc "in signature"
+
 
 
 and translate_structure env acc ast =
@@ -2109,8 +2112,10 @@ and translate_structure env acc ast =
   | [] -> pack_contract env (List.rev acc)
 
   | { pstr_loc = loc } as ast :: _ ->
-    error_loc loc "at toplevel:\n%a@."
-      (Printast.structure 0) [ast]
+    if !LiquidOptions.verbosity > 0 then
+      error_loc loc "at toplevel:\n%a" Printast.implementation [ast]
+    else
+      error_loc loc "at toplevel"
 
 
 and pack_contract env toplevels =
