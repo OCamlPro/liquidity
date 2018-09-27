@@ -578,7 +578,7 @@ let operation_of_json r =
           Some (code, storage)
         with Not_found -> None in
       Origination {
-          manager = find r ["managerPubkey"] |> get_string;
+          manager = find r ["manager_pubkey"] |> get_string;
           script;
           spendable =
             (try find r ["spendable"] |> get_bool with Not_found -> true);
@@ -930,7 +930,7 @@ let forge_deploy ?head ?source ?public_key
     "counter", Printf.sprintf "\"%d\"" counter;
     "gas_limit", Printf.sprintf "%S" !LiquidOptions.gas_limit;
     "storage_limit", Printf.sprintf "%S" !LiquidOptions.storage_limit;
-    "managerPubkey", Printf.sprintf "%S" source;
+    "manager_pubkey", Printf.sprintf "%S" source;
     "balance", Printf.sprintf "%S" !LiquidOptions.amount;
     "spendable", string_of_bool spendable;
     "delegatable", string_of_bool delegatable;
