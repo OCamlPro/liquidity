@@ -346,10 +346,11 @@ let raise_error_from_l ?loc_table err_msg l =
     try
       List.iter (fun (kind, id, loc, title, descr, err) ->
           let is_rejected =
-            try
-              Scanf.sscanf id "proto.%_s@.scriptRejectedRuntimeError" ();
-              true
-            with _ -> false in
+            match String.rindex_opt id '.' with
+            | None -> false
+            | Some i ->
+              String.sub id i (String.length id - i) = ".script_rejected"
+          in
           match loc, kind, is_rejected with
           | Some loc, "temporary", true ->
             let err_loc, fail_str = fail_msg_of_err loc ~loc_table err in
