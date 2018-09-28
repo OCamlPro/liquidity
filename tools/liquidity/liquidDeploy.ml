@@ -717,7 +717,10 @@ let run ~debug liquid entry_name input_string storage_string =
     LiquidData.translate { env with filename = "run_input" }
       contract_sig input_string entry.entry_sig.parameter
   in
-  let parameter = (CConstr (prefix_entry ^ entry_name, input) : const) in
+  let parameter = match contract_sig.f_entries_sig with
+    | [_] -> input
+    | _ -> LiquidEncode.encode_const env contract_sig
+             (CConstr (prefix_entry ^ entry_name, input)) in
   let storage =
     LiquidData.translate { env with filename = "run_storage" }
       contract_sig storage_string contract.storage

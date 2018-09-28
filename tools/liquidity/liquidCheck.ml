@@ -572,8 +572,8 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
       with Not_found -> error loc "unbound label %S" label
     in
     let record_ty = StringMap.find ty_name env.env.types in
-    let remaining_labels = match record_ty with
-      | Trecord (_, rtys) -> List.map fst rtys |> StringSet.of_list |> ref
+    let labels = match record_ty with
+      | Trecord (_, rtys) -> List.map fst rtys
       | _ -> assert false in
     let fields = List.map (fun (label, exp) ->
         let ty_name', _, ty = try
@@ -582,11 +582,13 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
         in
         if ty_name <> ty_name' then error loc "inconsistent list of labels";
         let exp = typecheck_expected ("label "^ label) env ty exp in
-        remaining_labels := StringSet.remove label !remaining_labels;
         (label, exp)
       ) lab_x_exp_list in
-    if not (StringSet.is_empty !remaining_labels) then
-      error loc "label %s is not defined" (StringSet.choose !remaining_labels);
+    (* order record fields wrt type *)
+    let fields = List.map (fun l ->
+        try List.find (fun (l', _) -> l = l') fields
+        with Not_found -> error loc "label %s is not defined" l;
+      ) labels in
     mk ?name:exp.name ~loc (Record fields) record_ty
 
   (* TODO
@@ -1278,13 +1280,19 @@ let check_const_type ?(from_mic=false) ~to_tez loc ty cst =
       CSet (List.map (check_const_type ty) csts)
 
     | Trecord (rname, labels), CRecord fields ->
-      CRecord (List.map (fun (f, cst) ->
+      (* order record fields wrt type *)
+      List.iter (fun (f, _) ->
+          if not @@ List.mem_assoc f labels then
+            error loc "Record field %s is not in type %s" f rname
+        ) fields;
+      let fields = List.map (fun (f, ty) ->
           try
-            let ty = List.assoc f labels in
+            let cst = List.assoc f fields in
             f, check_const_type ty cst
           with Not_found ->
-            error loc "Record field %s is not in type %s" f rname
-        ) fields)
+            error loc "Record field %s is missing" f
+        ) labels in
+      CRecord fields
 
     | Tsum (sname, constrs), CConstr (c, cst) ->
       CConstr (c,

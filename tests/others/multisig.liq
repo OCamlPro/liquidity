@@ -21,7 +21,6 @@ type storage = {
 }
 
 let%init storage (owners : address set) (min_agree : nat) =
-  let owners = Set.add (Current.source ()) owners in
   let owners_length = Set.size owners in
   if min_agree > owners_length then
     Current.failwith "Number of owners must be greater or equal to quorum";
@@ -33,17 +32,15 @@ let%init storage (owners : address set) (min_agree : nat) =
   }
 
 (* fails if the proposition is not a valid one *)
-let check_proposition (p:proposition) =
+let[@inline] check_proposition (p:proposition) =
   if p.amount > Current.balance () then
     Current.failwith "Balance to low for withdrawal"
   else ()
-[@@inline]
 
 (* returns true if two proositions are identical *)
-let equal_props ((p1:proposition), (p2:proposition)) =
+let[@inline] equal_props ((p1:proposition), (p2:proposition)) =
   p1.destination = p2.destination &&
   p1.amount = p2.amount
-[@@inline]
 
 (* returns true if a proposition p should be executed immediately *)
 let should_execute ((p : proposition), (storage : storage)) =
@@ -62,7 +59,8 @@ let%entry manage (action : action) storage =
   (* Owner wants to perform an action *)
   let owner = Current.source () in
   (* the caller must be an owner*)
-  if not (Set.mem owner storage.owners) then Current.failwith ();
+  if not (Set.mem owner storage.owners) then
+    Current.failwith ("Not an owner", owner);
   (* Don't send money while managing multisig *)
   if Current.amount () <> 0tz then
     Current.failwith "Don't send money while managing multisig";

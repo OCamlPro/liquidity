@@ -260,9 +260,10 @@ let compile_liquid_init env contract_sig init (* ((args, sy_init) as init) *) =
     let init_contract = tmp_contract_of_init ~loc init contract_sig.f_storage in
     let typed_init = LiquidCheck.typecheck_contract
         ~warnings:true ~decompiling:false env init_contract in
-    let encoded_init, _ =
+    let encoded_init, to_inline =
       LiquidEncode.encode_contract env typed_init in
-    let pre_init = LiquidMichelson.translate encoded_init in
+    let live_init = LiquidSimplify.simplify_contract encoded_init to_inline in
+    let pre_init = LiquidMichelson.translate live_init in
     Init_code (init_contract, pre_init)
 (* let mic_init = LiquidToTezos.convert_contract pre_init in
  * let s = LiquidToTezos.line_of_contract mic_init in

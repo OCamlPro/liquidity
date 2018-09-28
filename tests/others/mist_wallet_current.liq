@@ -38,21 +38,31 @@ type storage = {
   m_last : timestamp;
 }
 
-let no_op = ([] : operation list) [@@inline]
+let%init storage (owners : address set) (required : nat) (limit : tez) =
+  let m_num_owners = Set.size owners in
+  if required > m_num_owners then Current.failwith ();
+  {
+    m_num_owners;
+    m_owners = owners;
+    m_required = required;
+    m_pending = (Map : (operation_hash, pending_state) map);
+    m_daily_limit = limit;
+    m_spent_today = 0tz;
+    m_last = Current.time ();
+  }
 
-let is_owner ((addr : address), (storage:storage)) =
+let[@inline] no_op = ([] : operation list)
+
+let[@inline] is_owner ((addr : address), (storage:storage)) =
   Set.mem addr storage.m_owners
-[@@inline]
 
-let onlyowner (storage:storage) =
+let[@inline] onlyowner (storage:storage) =
   if is_owner (Current.source (), storage)
   then ()
   else Current.failwith ()
-[@@inline]
 
-let clearPending (storage : storage) =
+let[@inline] clearPending (storage : storage) =
   storage.m_pending <- (Map : (operation_hash, pending_state) map)
-[@@inline]
 
 type check_result =
   | Confirmations_Needed of storage
@@ -187,35 +197,6 @@ let underLimit ((value: tez), (storage: storage)) =
     true, storage.m_spent_today <- storage.m_spent_today + value
   else
     false, storage
-
-let%init storage (owners : address set) (required : nat) (limit : tez) =
-  let m_owners = Set.add (Current.source ()) owners in
-  let m_num_owners = Set.size m_owners in
-  if required > m_num_owners then Current.failwith ();
-  {
-    m_num_owners;
-    m_owners;
-    m_required = required;
-    m_pending = (Map : (operation_hash, pending_state) map);
-    m_daily_limit = limit;
-    m_spent_today = 0tz;
-    m_last = Current.time ();
-  }
-
-(*
-let%init storage =
-{
-  m_num_owners = 1p;
-  m_owners = Set [ tz1XT2pgiSRWQqjHv5cefW7oacdaXmCVTKrU ];
-  m_required = 1p;
-  m_pending = (Map : (operation_hash, pending_state) map);
-  m_daily_limit = 10tz;
-  m_spent_today = 0tz;
-  m_last = 2017-12-06T10:23:55+01:00;
-}
-*)
-
-
 
 let%entry setDailyLimit (limit : tez) storage =
   (* let storage = storage.multi <- *)
