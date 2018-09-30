@@ -79,7 +79,7 @@ module type S = sig
   val forge_call : from -> string -> string -> string t
   val call : from -> string -> string -> (string * (unit, exn) result) t
   val activate : secret:string -> string t
-  val inject : operation:string -> signature:string -> unit t
+  val inject : operation:string -> signature:string -> string t
 end
 
 open Lwt
@@ -181,11 +181,11 @@ let curl_call meth f data path =
       meth host path data;
   try
     f host path data >>= fun (status, json) ->
-    if status <> 200 then raise (RequestError (status, json));
     if !LiquidOptions.verbosity > 0 then begin
       Printf.eprintf "\nNode Response %d:\n------------------\n<<<%s>>>\n%!"
         status json;
     end;
+    if status <> 200 then raise (RequestError (status, json));
     return json
   with Curl.CurlException (code, i, s) (* as exn *) ->
     raise (RequestError (Curl.errno code, s))
@@ -439,6 +439,10 @@ let raise_response_error ?loc_table msg r =
     try
       Ezjsonm.get_list (fun err ->
           let kind = Ezjsonm.find err ["kind"] |> Ezjsonm.get_string in
+          if kind = "generic" then begin
+            let err = Ezjsonm.find err ["error"] |> Ezjsonm.get_string in
+            raise (ResponseError err)
+          end;
           let id = Ezjsonm.find err ["id"] |> Ezjsonm.get_string in
           let title, descr = descr_of_id id schema in
           let loc =
@@ -1257,9 +1261,12 @@ let inject ~operation ~signature =
   Buffer.add_string b signature;
   Buffer.add_char b '"';
   let data = Buffer.contents b in
-  send_post "/injection/operation" ~data >>= fun result ->
-  Printf.eprintf "Inject returned:\n%S\n%!" result;
-  return ()
+  send_post "/injection/operation" ~data >>= fun r ->
+  try
+    get_json_string r |> return
+  with Not_found ->
+    raise_response_error "inject (/injection/operation)"
+      (Ezjsonm.from_string r)
 
 
 (* Withoud optional argument head *)

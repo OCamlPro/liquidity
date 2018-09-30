@@ -83,7 +83,7 @@ module type S = sig
   val forge_call : from -> string -> string -> string t
   val call : from -> string -> string -> (string * (unit, exn) result) t
   val activate : secret:string -> string t
-  val inject : operation:string -> signature:string -> unit t
+  val inject : operation:string -> signature:string -> string t
 end
 
 module Dummy = struct

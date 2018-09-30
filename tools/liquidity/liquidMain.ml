@@ -324,10 +324,8 @@ module Data = struct
     in
     (* an hexa encoded operation *)
     let operation = FileString.read_file file in
-    LiquidDeploy.Sync.inject
-            ~operation
-            ~signature;
-    Printf.printf "Operation injected\n%!"
+    let op_h = LiquidDeploy.Sync.inject ~operation ~signature in
+    Printf.printf "Operation injected: %s\n%!" op_h
 
 end
 
