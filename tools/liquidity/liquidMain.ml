@@ -194,10 +194,10 @@ module Data = struct
 
   let contract_address = ref ""
   let init_inputs = ref []
-    
+
   let liquid_to_mic filename contract typ parameter =
     let mic_data = LiquidData.data_of_liq filename contract typ parameter in
-    let mic_data = match mic_data with 
+    let mic_data = match mic_data with
       | Error error ->
         LiquidLoc.report_error Format.err_formatter error;
         (raise (Invalid_argument typ);)
@@ -427,6 +427,8 @@ let main () =
       ],
       "FILE.liq [INPUT1 INPUT2 ...] Forge deployment operation for contract";
 
+      "--counter", Arg.Int (fun n -> LiquidOptions.counter := Some n),
+      "N Set the counter for the operation instead of retrieving it";
 
       "--forge-deploy", Arg.Tuple [
         Arg.String (fun s -> Data.contract := s);
@@ -480,7 +482,6 @@ let main () =
              Data.translate ());
        ]),
       "FILE.liq PARAMETER [STORAGE] Translate to Michelson";
-
 
       "--signature", Arg.String (fun s -> LiquidOptions.signature := Some s),
       "SIGNATURE Set the signature for an operation";

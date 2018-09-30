@@ -37,3 +37,4 @@ let storage_limit = ref "60000"
 let private_key = ref (None : string option)
 let operation = ref (None : string option)
 let signature = ref (None : string option)
+let counter = ref (None : int option)

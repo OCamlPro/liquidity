@@ -574,7 +574,7 @@ let operation_of_json r =
           Some (code, storage)
         with Not_found -> None in
       Origination {
-          manager = find r ["manager_pubkey"] |> get_string;
+          manager = find r ["managerPubkey"] |> get_string;
           script;
           spendable =
             (try find r ["spendable"] |> get_bool with Not_found -> true);
@@ -737,6 +737,13 @@ let get_counter source =
     get_json_int r |> return
   with Not_found ->
     raise_response_error "get_counter" (Ezjsonm.from_string r)
+
+let get_next_counter source =
+  match !LiquidOptions.counter with
+  | None ->
+    get_counter source >>= fun counter ->
+    return (counter+1)
+  | Some counter -> return counter
 
 let get_head_hash () =
   send_get "/chains/main/blocks/head/header" >>= fun r ->
@@ -906,9 +913,8 @@ let forge_deploy ?head ?source ?public_key
     | Some head -> return head
     | None -> get_head_hash ()
   end >>= fun head ->
-  get_counter source >>= fun counter ->
+  get_next_counter source >>= fun counter ->
   is_revealed source >>= fun source_revealed ->
-  let counter = counter + 1 in
   let c, loc_table =
     LiquidToTezos.convert_contract ~expand:true pre_michelson in
   let init_storage_m = LiquidToTezos.convert_const init_storage in
@@ -926,7 +932,7 @@ let forge_deploy ?head ?source ?public_key
     "counter", Printf.sprintf "\"%d\"" counter;
     "gas_limit", Printf.sprintf "%S" !LiquidOptions.gas_limit;
     "storage_limit", Printf.sprintf "%S" !LiquidOptions.storage_limit;
-    "manager_pubkey", Printf.sprintf "%S" source;
+    "managerPubkey", Printf.sprintf "%S" source;
     "balance", Printf.sprintf "%S" !LiquidOptions.amount;
     "spendable", string_of_bool spendable;
     "delegatable", string_of_bool delegatable;
@@ -1097,9 +1103,8 @@ let forge_call ?head ?source ?public_key liquid address parameter_string =
     | Some head -> return head
     | None -> get_head_hash ()
   end >>= fun head ->
-  get_counter source >>= fun counter ->
+  get_next_counter source >>= fun counter ->
   is_revealed source >>= fun source_revealed ->
-  let counter = counter + 1 in
   let transaction_json counter = [
     "kind", "\"transaction\"";
     "source", Printf.sprintf "%S" source;
@@ -1169,8 +1174,7 @@ let reveal sk =
   let source = get_public_key_hash_from_secret_key sk in
   let public_key = get_public_key_from_secret_key sk in
   get_head_hash () >>= fun head ->
-  get_counter source >>= fun counter ->
-  let counter = counter + 1 in
+  get_next_counter source >>= fun counter ->
   let reveal_json = [
     "kind", "\"reveal\"";
     "source", Printf.sprintf "%S" source;
