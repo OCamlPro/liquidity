@@ -1,21 +1,20 @@
 
-[%%version 0.14]
+[%%version 0.3]
 
 type storage = {
   state : string;
   timeout : timestamp;
   pn : tez * tez;
-  x : (unit, unit) contract;
-  a : (unit, unit) contract;
-  b : (unit, unit) contract;
+  x : unit contract;
+  a : unit contract;
+  b : unit contract;
 }
 
 let%entry main
       (parameter : timestamp)
-      (storage : storage)
-      : unit * storage =
+      (storage : storage) =
 
-  if storage.state <> "open" then Current.fail ()
+  if storage.state <> "open" then Current.failwith ()
   else
     if Current.time () < storage.timeout then (* Before timeout *)
       (* We compute ((1 + P) + N) tez for keeping the contract alive *)
@@ -25,18 +24,16 @@ let%entry main
       if cost < b then
         (* # Not enough cash, we just accept the transaction
            # and leave the global untouched *)
-        ( (), storage )
+        ( ([]: operation list), storage )
       else
         (* # Enough cash, successful ending
                    # We update the global*)
         let storage = storage.state <- "success" in
         let (pn0, _) = storage.pn in
-        let (_result, storage) =
-          Contract.call storage.x pn0 storage () in
+        let op1 = Contract.call storage.x pn0 () in
         let (_, pn1) = storage.pn in
-        let (_result, storage) =
-            Contract.call storage.a pn1 storage () in
-        ( (), storage )
+        let op2 = Contract.call storage.a pn1 () in
+        ( [op1; op2], storage )
     else
       (* # After timeout, we refund
            # We update the global *)
@@ -49,11 +46,9 @@ let%entry main
         if available < p then available
         else p
       in
-      let _result, storage =
-          Contract.call storage.x transfer storage () in
+      let op1 = Contract.call storage.x transfer () in
       (* # We transfer the rest to B *)
       let transfer = Current.balance () - 1.00tz in
-      let _result, storage =
-          Contract.call storage.b transfer storage () in
+      let op2 = Contract.call storage.b transfer () in
 
-      ( (), storage )
+      ( [op1; op2], storage )

@@ -1,9 +1,10 @@
-[%%version 0.14]
+[%%version 0.3]
 
 let%entry main
     (parameter : bool)
-    (storage : bool)
-  : bool * bool =
+    (storage : bool) =
 
-  parameter <> storage,
-  parameter = storage
+  ([] : operation list),
+  (parameter <> storage)
+  &&
+  (parameter = storage)

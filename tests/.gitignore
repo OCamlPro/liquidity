@@ -1,9 +1,10 @@
-*.tz
 *.liq.typed
 *.liq.normal
 *.liq.syntax
 *.pdf
-*.liq.tz 
+*.liq.tz
+*.init.tz
+*.initializer.tz
 *.tz.liq
 *.mic
 *.dot

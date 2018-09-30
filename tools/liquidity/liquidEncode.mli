@@ -12,9 +12,9 @@ open LiquidTypes
 val encode_type : datatype -> datatype
 
 val encode_contract :
-  ?annot:bool -> env -> typed_contract ->
+  ?annot:bool -> ?decompiling:bool -> env -> typed_contract ->
   encoded_contract * encoded_exp StringMap.t
 
-val encode_code : env -> syntax_contract -> typed_exp -> encoded_exp
+val encode_code : typecheck_env -> typed_exp -> encoded_exp
 
-val encode_const : env -> syntax_contract -> const -> const
+val encode_const : env -> contract_sig -> const -> const

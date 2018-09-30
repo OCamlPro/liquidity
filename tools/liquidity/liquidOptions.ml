@@ -21,12 +21,17 @@ let typeonly = ref false
 let parseonly = ref false
 let singleline = ref false
 let annotmic = ref true
-let annotafter = ref true (* XXX: Disable when Tezos is fixed *)
+let annotafter = ref false (* XXX: Disable when Tezos is fixed *)
+let json = ref false
 
 let tezos_node = ref "127.0.0.1:8732"
 
 let source = ref (None : string option)
 let amount = ref "0"
-let fee = ref "5"
+let fee = ref "50000"
+let delegatable = ref false
+let spendable = ref false
+let gas_limit = ref "400000"
+let storage_limit = ref "60000"
 
 let private_key = ref (None : string option)

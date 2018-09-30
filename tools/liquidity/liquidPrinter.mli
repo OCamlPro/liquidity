@@ -9,11 +9,11 @@
 
 open LiquidTypes
 
-val mic_of_tez : tez -> string
-val mic_of_integer : integer -> string
+val mic_mutez_of_tez : tez -> Z.t
+val mic_of_integer : integer -> Z.t
 
-val tez_of_mic : string -> tez
-val integer_of_mic : string -> integer
+val tez_of_mic_mutez : Z.t -> tez
+val integer_of_mic : Z.t -> integer
 
 val liq_of_tez : tez -> string
 val liq_of_integer : integer -> string
@@ -43,8 +43,6 @@ module Michelson : sig
   val line_of_contract : michelson_contract -> string
   val string_of_code : michelson_exp -> string
   val line_of_code : michelson_exp -> string
-  val string_of_noloc_michelson : noloc_michelson -> string
-  val line_of_noloc_michelson : noloc_michelson -> string
   val string_of_loc_michelson : loc_michelson -> string
   val line_of_loc_michelson : loc_michelson -> string
 end

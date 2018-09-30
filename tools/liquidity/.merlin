@@ -17,3 +17,4 @@ PKG curl
 PKG sodium
 PKG nocrypto
 PKG lwt
+PKG bigstring

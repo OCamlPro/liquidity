@@ -1,11 +1,10 @@
 (* List.map with closure *)
 
-[%%version 0.14]
+[%%version 0.3]
 
 let%entry main
       (parameter : int)
-      (storage : int list)
-      : unit * int list =
+      (storage : int list) =
   let add_param (x : int) = x + parameter in
   let l = List.map add_param storage in
-  ( (), l )
+  ( ([] : operation list), l )

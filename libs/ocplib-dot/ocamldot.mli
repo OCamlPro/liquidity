@@ -15,8 +15,9 @@ module TYPES : sig
     { graph_name: string;
       mutable graph_nodes: node list;
       mutable graph_edges: edge list;
-      mutable node_counter: int;
-      graph_attributes: graph_attributes list }
+      mutable node_counter: int ref;
+      mutable graph_attributes: graph_attributes list;
+      mutable graph_subgraphs: graph list }
    and node =
      { mutable node_name: string;
        node_id: int;
@@ -29,6 +30,7 @@ module TYPES : sig
    and graph_attributes =
      | GraphSize of float * float
      | Ratio of graph_ratio
+     | Compound of bool
 
    and graph_ratio =
      RatioFill
@@ -61,6 +63,7 @@ module TYPES : sig
 end
 open TYPES
 val create : string -> graph_attributes list -> graph
+val cluster : graph -> string -> graph_attributes list -> graph
 val node : graph -> string -> node_attributes list -> node
 val edge : node -> node -> edge_attributes list -> edge
 val add_edge : node -> node -> edge_attributes list -> unit

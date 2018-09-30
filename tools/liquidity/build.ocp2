@@ -57,9 +57,9 @@ OCaml.library("ocplib-liquidity",
        "liquidEmit.ml";
        "liquidPeephole.ml";
        "liquidCheck.ml";
+       "liquidSimplify.ml";
        "liquidEncode.ml";
        "liquidMichelson.ml";
-       "liquidSimplify.ml";
 
        "liquidClean.ml";
        "liquidInterp.ml";
@@ -67,7 +67,8 @@ OCaml.library("ocplib-liquidity",
        "liquidUntype.ml";
      ];
      requires = [
-        "ocplib-dot";
+       "ocplib-dot";
+       "zarith";
      ];
 
    });
@@ -97,6 +98,8 @@ OCaml.program("ocp-liquidity-comp",
   ocaml + {
     requires = [ "ocplib-liquidity-ocaml" ];
     files = [
+       "liquidInit.ml";
+
        "ocaml/liquidOCamlPparse.ml";
 
        "ocaml/liquidOCamlTranslate.ml";
@@ -149,7 +152,7 @@ OCaml.program("liquidity",
 } else {
 OCaml.program("liquidity",
    ocaml + {
-     bytelink = ["-cclib"; "-lsodium_stubs -lsodium -lnocrypto_stubs"];
+     bytelink = ["-cclib"; "-lsodium_stubs -lsodium"];
      files = [
        "liquidMain.ml";
      ];

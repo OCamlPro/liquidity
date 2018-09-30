@@ -1,7 +1,6 @@
 let%entry main
-  (parameter : string)
-  (storage : tez set)
-  : bool * tez set =
+  (parameter : tez set)
+  (storage : bool) =
 
   let amount = Current.amount() in
   let f (arg: tez * bool) =
@@ -9,5 +8,5 @@ let%entry main
     else arg.(1)
   in
 
-  let b = Set.reduce f storage false in
-  (b, storage)
+  let b = Set.fold f parameter false in
+  (([] : operation list), b)

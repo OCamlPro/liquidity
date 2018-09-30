@@ -25,11 +25,6 @@ let usage = "Usage: ocamlc <options> <files>\nOptions are:"
 (* Error messages to standard error formatter *)
 let ppf = Format.err_formatter
 
-let show_config () =
-  Config.print_config stdout;
-  exit 0;
-;;
-
 module Options = Main_args.Make_bytecomp_options (struct
   let set r () = r := true
   let unset r () = r := false
@@ -42,7 +37,9 @@ module Options = Main_args.Make_bytecomp_options (struct
   let _cclib s = Compenv.defer (ProcessObjects (Misc.rev_split_words s))
   let _ccopt s = first_ccopts := s :: !first_ccopts
   let _compat_32 = set bytecode_compatible_32
-  let _config = show_config
+  (* let _config = Misc.show_config_and_exit
+   * let _config_var = Misc.show_config_variable_and_exit *)
+  let _config = fun () -> ()
   let _custom = set custom_runtime
   let _no_check_prims = set no_check_prims
   let _dllib s = defer (ProcessDLLs (Misc.rev_split_words s))
@@ -115,13 +112,16 @@ module Options = Main_args.Make_bytecomp_options (struct
   let _where = print_standard_library
   let _verbose = set verbose
   let _nopervasives = set nopervasives
+  (* let _dno_unique_ids = unset unique_ids *)
+  (* let _dunique_ids = set unique_ids *)
   let _dsource = set dump_source
   let _dparsetree = set dump_parsetree
   let _dtypedtree = set dump_typedtree
   let _drawlambda = set dump_rawlambda
   let _dlambda = set dump_lambda
   let _dinstr = set dump_instr
-  let _dtimings = set print_timings
+  let _dtimings () = profile_columns := [ `Time ]
+  let _dprofile () = profile_columns := Profile.all_columns
 
   let _args = Arg.read_arg
   let _args0 = Arg.read_arg0
@@ -131,6 +131,9 @@ end)
 
 let main () =
   Clflags.add_arguments __LOC__ Options.list;
+  Clflags.add_arguments __LOC__
+    ["-depend", Arg.Unit Makedepend.main_from_option,
+     "<options> Compute dependencies (use 'ocamlc -depend -help' for details)"];
   try
     readenv ppf Before_args;
     Clflags.parse_arguments anonymous usage;
@@ -200,7 +203,7 @@ let main () =
     Location.report_exception ppf x;
     exit 2
 
-let _ =
-  Timings.(time All) main ();
-  if !Clflags.print_timings then Timings.print Format.std_formatter;
+let () =
+  main ();
+  Profile.print Format.std_formatter !Clflags.profile_columns;
   exit 0

@@ -13,7 +13,9 @@ val warning_printer : (location -> warning -> unit) ref
 
 val warn : location -> warning -> unit
 
-val report_error : error -> unit
+val print_loc : Format.formatter -> location -> unit
+
+val report_error : ?kind:string -> Format.formatter -> error -> unit
 
 val raise_error :
   ?loc:location -> ('a, Format.formatter, unit, 'b) format4 -> 'a
@@ -21,3 +23,5 @@ val raise_error :
 val loc_in_file : string -> location
 
 val noloc : location
+
+val merge : location -> location -> location

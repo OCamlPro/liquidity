@@ -19,6 +19,8 @@ val read_file : string -> Parsetree.structure
 
 val translate_expression : env -> Parsetree.expression -> syntax_exp
 
+val translate_type : env -> Parsetree.core_type -> datatype
+
 val structure_of_string : ?filename:string -> string -> Parsetree.structure
 
 val expression_of_string : ?filename:string -> string -> Parsetree.expression

@@ -1,7 +1,7 @@
 
 open Error_monad
-open Hash
-open Utils
-open Tezos_data
+(* open Hash *)
+(* open Utils *)
+(* open Tezos_data *)
 
-#include "../../tezos/src/client/embedded/alpha/michelson_macros.ml"
+#include "../../tezos/src/proto_alpha/lib_client/michelson_v1_macros.ml"

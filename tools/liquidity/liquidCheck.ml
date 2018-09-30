@@ -36,26 +36,13 @@ let error loc msg =
   LiquidLoc.raise_error ~loc ("Type error:  " ^^ msg ^^ "%!")
 
 let comparable_ty ty1 ty2 =
-  match ty1, ty2 with
-  (* | (Tint|Tnat), (Tint|Tnat) *)
-  | Tint, Tint
-  | Tnat, Tnat
-  | Ttez, Ttez
-  | Ttimestamp, Ttimestamp
-  | Tstring, Tstring
-  | Tbool, Tbool
-  | Tkey_hash, Tkey_hash -> true
-  | _ -> false
+  comparable_type ty1 && ty1 = ty2
 
 let error_not_comparable loc prim ty1 ty2 =
   error loc "arguments of %s not comparable: %s\nwith\n%s\n"
     (LiquidTypes.string_of_primitive prim)
     (LiquidPrinter.Liquid.string_of_type ty1)
     (LiquidPrinter.Liquid.string_of_type ty2)
-
-let uniq_ident env name =
-  env.counter := !(env.counter) + 1;
-  Printf.sprintf "%s/%d" name !(env.counter)
 
 let new_binding env name ?(fail=false) ty =
   let count = ref 0 in
@@ -94,14 +81,6 @@ let find_var ?(count_used=true) env loc name =
   with Not_found ->
     error loc "unbound variable %S" name
 
-let maybe_reset_vars env transfer =
-  if transfer then
-    { env with
-      vars = StringMap.empty;
-      clos_env = None;
-    }
-  else env
-
 let type_error loc msg actual expected =
   error loc "%s.\nExpected type:\n  %s\nActual type:\n  %s"
     msg
@@ -121,7 +100,7 @@ let error_prim loc prim args expected_args =
     List.iteri (fun i (arg, expected) ->
         if arg <> expected then
           error loc
-                "Primitive %s, argument %d:\nExpected type:%sProvided type:%s"
+                "Primitive %s, argument %d:\nExpected type:%s\nProvided type:%s"
                 prim (i+1)
                 (LiquidPrinter.Liquid.string_of_type expected)
                 (LiquidPrinter.Liquid.string_of_type arg)
@@ -132,29 +111,34 @@ let error_prim loc prim args expected_args =
 
 
   (* approximate location *)
-let rec loc_exp env e = match e.desc with
+let rec loc_exp e = match e.desc with
+  | Const (loc, _, _)
   | Var (_, loc, _)
   | SetVar (_, loc, _, _)
   | Apply (_, loc, _)
-  | LetTransfer (_, _, loc, _, _, _, _, _)
+  | Transfer (loc, _, _, _)
   | MatchOption (_, loc, _, _, _)
   | MatchNat (_, loc, _, _, _, _)
   | MatchList (_, loc, _, _, _, _)
   | Loop (_, loc, _, _)
   | Fold (_, _, loc, _, _, _)
+  | Map (_, _, loc, _, _)
+  | MapFold (_, _, loc, _, _, _)
   | Lambda (_, _, loc, _, _)
   | Closure (_, _, loc, _, _, _)
   | Record (loc, _)
   | Constructor (loc, _, _)
-  | MatchVariant (_, loc, _) -> loc
+  | MatchVariant (_, loc, _)
+  | Failwith (_, loc)
+  | CreateContract (loc, _, _)
+  | ContractAt (loc, _, _)
+  | Unpack (loc, _, _) -> loc
 
-  | Let (_, _, _, e) -> loc_exp env e
-
-  | Const _ -> noloc env
+  | Let (_, _, _, _, e) -> loc_exp e
 
   | If (e1, _, e2)
   | Seq (e1, e2) ->
-    match loc_exp env e1, loc_exp env e2 with
+    match loc_exp e1, loc_exp e2 with
     | ({ loc_pos = Some ( loc_begin , _ ) } as loc),
       { loc_pos = Some ( _, loc_end ) } ->
       { loc with loc_pos = Some (loc_begin, loc_end) }
@@ -168,18 +152,22 @@ let rec loc_exp env e = match e.desc with
 let rec typecheck env ( exp : syntax_exp ) : typed_exp =
   match exp.desc with
 
-  | Const (ty, cst) ->
-    mk ?name:exp.name (Const (ty, cst)) ty
+  | Const (loc, ty, cst) ->
+    mk ?name:exp.name (Const (loc, ty, cst)) (ty:datatype)
 
-  | Let (name, loc, exp, body) ->
+  | Let (name, inline, loc, exp, body) ->
      let exp = typecheck env exp in
-     if exp.ty = Tfail then error loc "cannot assign failure";
-     let env = maybe_reset_vars env exp.transfer in
-     let (env, count) = new_binding env name ~fail:exp.fail exp.ty in
-     let body = typecheck env body in
-     let desc = Let (name, loc, exp, body ) in
-     check_used env name loc count;
-     mk ?name:exp.name desc body.ty
+     if exp.ty = Tfail then
+       match exp.desc with
+       | Failwith _ -> exp
+       | _ ->
+         mk (Failwith (mk (Const (loc, Tunit, CUnit)) Tunit, loc)) Tfail
+     else
+       let (env, count) = new_binding env name ~fail:exp.fail exp.ty in
+       let body = typecheck env body in
+       let desc = Let (name, inline, loc, exp, body ) in
+       check_used env name loc count;
+       mk ?name:exp.name desc body.ty
 
   | Var (name, loc, (_::_ as labels)) ->
     begin match find_var env loc name with
@@ -261,42 +249,23 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
      let desc = If(cond, ifthen, ifelse) in
      mk ?name:exp.name desc ty
 
-  | LetTransfer (storage_name, result_name,
-                 loc,
-                 contract_exp, tez_exp,
-                 storage_exp, arg_exp, body) ->
+  | Transfer (loc, contract_exp, tez_exp, arg_exp) ->
      let tez_exp = typecheck_expected "call amount" env Ttez tez_exp in
      let contract_exp = typecheck env contract_exp in
      begin
        match contract_exp.ty with
-       | Tcontract (arg_ty, return_ty) ->
-          let arg_exp = typecheck_expected "call-arg" env arg_ty arg_exp in
-          let storage_exp =
-            typecheck_expected "call storage"
-              env env.contract.storage storage_exp in
-          if tez_exp.transfer || contract_exp.transfer
-             || arg_exp.transfer || storage_exp.transfer then
+       | Tcontract arg_ty ->
+          let arg_exp = typecheck_expected "call argument" env arg_ty arg_exp in
+          if tez_exp.transfer || contract_exp.transfer || arg_exp.transfer then
             error loc "transfer within transfer arguments";
-          let (env, storage_count) =
-            new_binding env storage_name env.contract.storage in
-          let (env, result_count) =
-            new_binding env result_name return_ty in
-          let body = typecheck env body in
-          check_used env storage_name loc storage_count;
-          check_used env result_name loc result_count;
-          let desc = LetTransfer(storage_name, result_name,
-                                 loc,
-                                 contract_exp, tez_exp,
-                                 storage_exp, arg_exp, body)
-          in
-          mk ?name:exp.name desc body.ty
+          let desc = Transfer(loc, contract_exp, tez_exp, arg_exp) in
+          mk ?name:exp.name desc Toperation
        | ty ->
-         error (loc_exp env contract_exp)
-           "Bad contract type.\nExpected type:\n  ('a, 'b) contract\n\
+         error (loc_exp contract_exp)
+           "Bad contract type.\nExpected type:\n  'a contract\n\
             Actual type:\n  %s"
            (LiquidPrinter.Liquid.string_of_type ty)
      end
-
 
   | Apply (Prim_unknown, loc,
            ({ desc = Var (name, varloc, [])} as f) :: ((_ :: _) as r))
@@ -310,14 +279,12 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
   | Apply (Prim_unknown, loc,
            ({ desc = Var ("Contract.call", varloc, [])} :: args)) ->
     let nb_args = List.length args in
-    if nb_args <> 4 then
+    if nb_args <> 3 then
       error loc
-        "Contract.call expects 4 arguments, it was given %d arguments."
+        "Contract.call expects 3 arguments, it was given %d arguments."
         nb_args
     else
-      error loc
-        "The result of Contract.call must be bound under a \
-         \"let (result, storage) =\" directly."
+      error loc "Bad syntax for Contract.call."
 
   | Apply (Prim_unknown, loc,
            ({ desc = Var (name, varloc, [])} ::args)) ->
@@ -334,9 +301,11 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
      typecheck env { exp with
                      desc = Apply(Prim_exec, loc, [x; f]) }
 
-
-
   | Apply (prim, loc, args) -> typecheck_apply ?name:exp.name env prim loc args
+
+  | Failwith (err, loc) ->
+    let err = typecheck env err in
+    mk (Failwith (err, loc)) Tfail (* no name *)
 
   | MatchOption (arg, loc, ifnone, name, ifsome) ->
      let arg = typecheck env arg in
@@ -345,7 +314,6 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
        | Toption ty -> ty
        | _ -> error loc "not an option type"
      in
-     let env = maybe_reset_vars env arg.transfer in
      let ifnone = typecheck env ifnone in
      let (env, count) = new_binding env name arg_ty in
      let ifsome = typecheck env ifsome in
@@ -363,7 +331,6 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
 
   | MatchNat (arg, loc, plus_name, ifplus, minus_name, ifminus) ->
      let arg = typecheck_expected "match%nat" env Tint arg in
-     let env = maybe_reset_vars env arg.transfer in
      let (env2, count_p) = new_binding env plus_name Tnat in
      let ifplus = typecheck env2 ifplus in
      let (env3, count_m) = new_binding env minus_name Tnat in
@@ -385,7 +352,6 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
   | Loop (name, loc, body, arg) ->
      let arg = typecheck env arg in
      if arg.ty = Tfail then error loc "loop arg is a failure";
-     let env = maybe_reset_vars env arg.transfer in
      let (env, count) = new_binding env name arg.ty in
      let body =
        typecheck_expected "loop body" env (Ttuple [Tbool; arg.ty]) body in
@@ -411,16 +377,76 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
         Prim_list_fold, Ttuple[elt_ty; acc_ty]
 
       | _ ->
-        error (loc_exp env arg) "%s expects a collection, got %s"
+        error (loc_exp arg) "%s expects a collection, got %s"
           (LiquidTypes.string_of_fold_primitive prim)
           (LiquidPrinter.Liquid.string_of_type arg.ty)
     in
-    let env = maybe_reset_vars env arg.transfer in
     let (env, count) = new_binding env name name_ty in
     let body = typecheck_expected
         (LiquidTypes.string_of_fold_primitive prim ^" body") env acc.ty body in
     check_used env name loc count;
     mk ?name:exp.name (Fold (prim, name, loc, body, arg, acc)) acc.ty
+
+  | Map (prim, name, loc, body, arg) ->
+    let arg = typecheck env arg in
+    let prim, name_ty = match prim, arg.ty with
+      | (Prim_map_map|Prim_coll_map), Tmap (k_ty, v_ty) ->
+        Prim_map_map, Ttuple [k_ty; v_ty]
+      | (Prim_set_map|Prim_coll_map), Tset elt_ty ->
+        Prim_set_map, elt_ty
+      | (Prim_list_map|Prim_coll_map), Tlist elt_ty ->
+        Prim_list_map, elt_ty
+      | _ ->
+        error (loc_exp arg) "%s expects a collection, got %s"
+          (LiquidTypes.string_of_map_primitive prim)
+          (LiquidPrinter.Liquid.string_of_type arg.ty)
+    in
+    let (env, count) = new_binding env name name_ty in
+    let body = typecheck env body in
+    let ret_ty = match arg.ty with
+      | Tmap (k_ty, _) -> Tmap (k_ty, body.ty)
+      | Tset _ -> Tset body.ty
+      | Tlist _ -> Tlist body.ty
+      | _ -> assert false
+    in
+    check_used env name loc count;
+    mk ?name:exp.name (Map (prim, name, loc, body, arg)) ret_ty
+
+  | MapFold (prim, name, loc, body, arg, acc) ->
+    let arg = typecheck env arg in
+    let acc = typecheck env acc in
+    let prim, name_ty = match prim, arg.ty, acc.ty with
+      | (Prim_map_map_fold|Prim_coll_map_fold), Tmap (k_ty, v_ty), acc_ty ->
+        Prim_map_map_fold, Ttuple[Ttuple [k_ty; v_ty]; acc_ty]
+      | (Prim_set_map_fold|Prim_coll_map_fold), Tset elt_ty, acc_ty ->
+        Prim_set_map_fold, Ttuple[elt_ty; acc_ty]
+      | (Prim_list_map_fold|Prim_coll_map_fold), Tlist elt_ty, acc_ty ->
+        Prim_list_map_fold, Ttuple[elt_ty; acc_ty]
+      | _ ->
+        error (loc_exp arg) "%s expects a collection, got %s"
+          (LiquidTypes.string_of_map_fold_primitive prim)
+          (LiquidPrinter.Liquid.string_of_type arg.ty)
+    in
+    let (env, count) = new_binding env name name_ty in
+    let body = typecheck env body in
+    let body_r = match body.ty with
+      | Ttuple [r; baccty] when baccty = acc.ty -> r
+      | _ ->
+        error (loc_exp body)
+          "body of %s must be of type 'a * %s, but has type %s"
+          (LiquidTypes.string_of_map_fold_primitive prim)
+          (LiquidPrinter.Liquid.string_of_type acc.ty)
+          (LiquidPrinter.Liquid.string_of_type body.ty)
+    in
+    let ret_ty = match arg.ty with
+      | Tmap (k_ty, _) -> Tmap (k_ty, body_r)
+      | Tset _ -> Tset body_r
+      | Tlist _ -> Tlist body_r
+      | _ -> assert false
+    in
+    check_used env name loc count;
+    mk ?name:exp.name (MapFold (prim, name, loc, body, arg, acc))
+      (Ttuple [ret_ty; acc.ty])
 
   | MatchList (arg, loc, head_name, tail_name, ifcons, ifnil) ->
      let arg  = typecheck env arg in
@@ -429,13 +455,12 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
        | Tlist ty -> ty
        | _ -> error loc "not a list type"
      in
-     let env = maybe_reset_vars env arg.transfer in
      let ifnil = typecheck env ifnil in
-     let (env, count) = new_binding env head_name arg_ty in
-     let (env, count) = new_binding env tail_name (Tlist arg_ty) in
+     let (env, count_head) = new_binding env head_name arg_ty in
+     let (env, count_tail) = new_binding env tail_name (Tlist arg_ty) in
      let ifcons = typecheck env ifcons in
-     check_used env head_name loc count;
-     check_used env tail_name loc count;
+     check_used env head_name loc count_head;
+     check_used env tail_name loc count_tail;
      let desc = MatchList (arg, loc, head_name, tail_name, ifcons, ifnil) in
      let ty =
        match ifnil.ty, ifcons.ty with
@@ -456,7 +481,6 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
     (* allow closures at typechecking, do not reset env *)
     let (env, arg_count) = new_binding env lambda_arg_name lambda_arg_type in
     let body = typecheck env lambda_body in
-    if body.transfer then error loc "no transfer in lambda";
     check_used env lambda_arg_name loc arg_count;
     let desc = Lambda (arg_name, lambda_arg_type, loc, body, body.ty) in
     let ty = Tlambda (lambda_arg_type, body.ty) in
@@ -481,7 +505,6 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
          in
          if ty_name <> ty_name' then error loc "inconsistent list of labels";
          let exp = typecheck_expected ("label "^ label) env ty exp in
-         if exp.transfer then error loc "transfer not allowed in record";
          remaining_labels := StringSet.remove label !remaining_labels;
          (label, exp)
        ) lab_x_exp_list in
@@ -492,29 +515,18 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
   | Constructor(loc, Constr constr, arg) ->
      let ty_name, arg_ty = StringMap.find constr env.env.constrs in
      let arg = typecheck_expected "construtor argument" env arg_ty arg in
-     if arg.transfer then
-       error loc "transfer not allowed in constructor argument";
      let constr_ty = StringMap.find ty_name env.env.types in
      mk ?name:exp.name (Constructor(loc, Constr constr, arg)) constr_ty
 
   | Constructor(loc, Left right_ty, arg) ->
      let arg = typecheck env arg in
-     if arg.transfer then
-       error loc "transfer not allowed in constructor argument";
      let ty = Tor (arg.ty, right_ty) in
      mk ?name:exp.name (Constructor(loc, Left right_ty, arg)) ty
 
   | Constructor(loc, Right left_ty, arg) ->
      let arg = typecheck env arg in
-     if arg.transfer then
-       error loc "transfer not allowed in constructor argument";
      let ty = Tor (left_ty, arg.ty) in
      mk ?name:exp.name (Constructor(loc, Right left_ty, arg)) ty
-
-  | Constructor(loc, Source (from_ty, to_ty), arg) ->
-    let arg = typecheck env arg in
-    let ty = Tcontract(from_ty, to_ty) in
-    mk ?name:exp.name (Constructor(loc, Source (from_ty, to_ty), arg)) ty
 
   | MatchVariant (arg, loc, cases) ->
     let arg = typecheck env arg in
@@ -533,7 +545,6 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
         error loc "not a variant type: %s"
           (LiquidPrinter.Liquid.string_of_type arg.ty)
     in
-    let env = maybe_reset_vars env arg.transfer in
     let expected_type = ref None in
     let cases_extra_constrs =
       List.fold_left (fun acc -> function
@@ -602,6 +613,38 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
     in
     mk ?name:exp.name desc ty
 
+  | Unpack (loc, e, ty) ->
+    let e = typecheck_expected "Bytes.unpack argument" env Tbytes e in
+    let desc = Unpack (loc, e, ty) in
+    mk ?name:exp.name desc (Toption ty)
+
+  | ContractAt (loc, addr, ty) ->
+    let addr = typecheck_expected "Contract.at argument" env Taddress addr in
+    let desc = ContractAt (loc, addr, ty) in
+    mk ?name:exp.name desc (Toption (Tcontract ty))
+
+  | CreateContract (loc, args, contract) ->
+    let contract = typecheck_contract ~warnings:env.warnings env.env contract in
+    match args with
+    | [manager; delegate; delegatable; spendable; init_balance; init_storage] ->
+      let manager = typecheck_expected "manager" env Tkey_hash manager in
+      let delegate =
+        typecheck_expected "delegate" env (Toption Tkey_hash) delegate in
+      let delegatable =
+        typecheck_expected "delegatable" env Tbool delegatable in
+      let spendable = typecheck_expected "spendable" env Tbool spendable in
+      let init_balance =
+        typecheck_expected "initial balance" env Ttez init_balance in
+      let init_storage = typecheck_expected "initial storage"
+          env contract.contract_sig.storage init_storage in
+      let desc = CreateContract (loc, [manager; delegate; delegatable;
+                                       spendable; init_balance; init_storage],
+                                 contract) in
+      mk ?name:exp.name desc (Ttuple [Toperation; Taddress])
+    | _ ->
+      error loc "Contract.create expects 7 arguments, was given %d"
+        (List.length args)
+
 and find_case loc env constr cases =
   match List.find_all (function
       | CAny, _ -> true
@@ -612,7 +655,7 @@ and find_case loc env constr cases =
     error loc "non-exhaustive pattern. Constructor %s is not matched." constr
   | m :: unused ->
     List.iter (fun (_, e) ->
-        LiquidLoc.warn (loc_exp env e) (UnusedMatched constr)
+        LiquidLoc.warn (loc_exp e) (UnusedMatched constr)
       ) unused;
     match m with
     | CAny, e -> constr, [], e
@@ -621,7 +664,7 @@ and find_case loc env constr cases =
 and typecheck_prim1 env prim loc args =
   match prim, args with
   | Prim_tuple_get, [ { ty = tuple_ty };
-                      { desc = Const (_, (CInt n | CNat n)) }] ->
+                      { desc = Const (loc, _, (CInt n | CNat n)) }] ->
      let tuple = match tuple_ty with
        | Ttuple tuple -> tuple
        | Trecord (_, rtys) -> List.map snd rtys
@@ -635,7 +678,7 @@ and typecheck_prim1 env prim loc args =
      prim, ty
 
   | Prim_tuple_set, [ { ty = tuple_ty };
-                      { desc = Const (_, (CInt n | CNat n)) };
+                      { desc = Const (loc, _, (CInt n | CNat n)) };
                       { ty } ] ->
      let tuple = match tuple_ty with
        | Ttuple tuple -> tuple
@@ -659,19 +702,20 @@ and typecheck_prim1 env prim loc args =
          but they can be generated by decompiling Michelson. *)
        match prim, args with
        | Prim_coll_update, [ _; _; { ty = Tset _ }] -> Prim_set_update
-       | Prim_coll_update, [ _; _; { ty = Tmap _ }] -> Prim_map_update
+       | Prim_coll_update, [ _; _; { ty = (Tmap _ | Tbigmap _) }] ->
+         Prim_map_update
        | Prim_coll_mem, [ _; { ty = Tset _ } ] -> Prim_set_mem
-       | Prim_coll_mem, [ _; { ty = Tmap _ } ] -> Prim_map_mem
-       | Prim_coll_find, [ _; { ty = Tmap _ } ] -> Prim_map_find
-       | Prim_coll_map, [ _; { ty = Tlist _ } ] -> Prim_list_map
-       | Prim_coll_map, [_; { ty = Tmap _ } ] -> Prim_map_map
-       | Prim_coll_map, [_; { ty = Tset _ } ] -> Prim_set_map
-       | Prim_coll_reduce, [_; { ty = Tlist _ }; _ ] -> Prim_list_reduce
-       | Prim_coll_reduce, [_; { ty = Tset _ }; _ ] -> Prim_set_reduce
-       | Prim_coll_reduce, [_; { ty = Tmap _ }; _ ] -> Prim_map_reduce
+       | Prim_coll_mem, [ _; { ty = (Tmap _ | Tbigmap _) } ] -> Prim_map_mem
+       | Prim_coll_find, [ _; { ty = (Tmap _ | Tbigmap _) } ] -> Prim_map_find
        | Prim_coll_size, [{ ty = Tlist _ } ] -> Prim_list_size
        | Prim_coll_size, [{ ty = Tset _ } ] -> Prim_set_size
        | Prim_coll_size, [{ ty = Tmap _ } ] -> Prim_map_size
+       | Prim_coll_size, [{ ty = Tstring } ] -> Prim_string_size
+       | Prim_coll_size, [{ ty = Tbytes } ] -> Prim_bytes_size
+       | Prim_slice, [ _; _; { ty = Tstring } ] -> Prim_string_sub
+       | Prim_slice, [ _; _; { ty = Tbytes } ] -> Prim_bytes_sub
+       | Prim_concat, [{ ty = Tlist Tstring } ] -> Prim_string_concat
+       | Prim_concat, [{ ty = Tlist Tbytes } ] -> Prim_bytes_concat
        | _ -> prim
      in
      prim, typecheck_prim2 env prim loc args
@@ -687,15 +731,19 @@ and typecheck_prim2 env prim loc args =
      if comparable_ty ty1 ty2 then Tint
      else error_not_comparable loc prim ty1 ty2
 
-  | (Prim_add|Prim_sub|Prim_mul),
-    (  [ Ttez; (Ttez | Tint | Tnat) ]
-       | [ (Tint | Tnat); Ttez ])
-    -> Ttez
+  | Prim_neg, [( Tint | Tnat )] -> Tint
+
+  | (Prim_add | Prim_sub) , [ Ttez; Ttez ] -> Ttez
+  | Prim_mul, ([ Tnat; Ttez ] | [ Ttez; Tnat ]) -> Ttez
+
   | (Prim_add|Prim_mul), [ Tnat; Tnat ] -> Tnat
   | (Prim_add|Prim_sub|Prim_mul), [ (Tint|Tnat);
                                     (Tint|Tnat) ] -> Tint
+
   | Prim_add, [ Ttimestamp; Tint|Tnat ] -> Ttimestamp
   | Prim_add, [ Tint|Tnat; Ttimestamp ] -> Ttimestamp
+  | Prim_sub, [ Ttimestamp; Tint|Tnat ] -> Ttimestamp
+  | Prim_sub, [ Ttimestamp; Ttimestamp ] -> Tint
 
   (* TODO: improve types of ediv in Michelson ! *)
   | Prim_ediv, [ Tnat; Tnat ] ->
@@ -713,14 +761,12 @@ and typecheck_prim2 env prim loc args =
   | Prim_not, [ Tbool ] -> Tbool
 
   | Prim_xor, [ Tnat; Tnat ] -> Tnat
-  | Prim_xor, [ Tint|Tnat; Tint|Tnat ] -> Tint
   | Prim_or, [ Tnat; Tnat ] -> Tnat
-  | Prim_or, [ Tint|Tnat; Tint|Tnat ] -> Tint
   | Prim_and, [ Tnat; Tnat ] -> Tnat
-  | Prim_and, [ Tint|Tnat; Tint|Tnat ] -> Tint
   | Prim_not, [ Tint|Tnat ] -> Tint
 
   | Prim_abs, [ Tint ] -> Tint
+  | Prim_is_nat, [ Tint ] -> Toption Tnat
   | Prim_int, [ Tnat ] -> Tint
   | Prim_sub, [ Tint|Tnat ] -> Tint
 
@@ -730,38 +776,59 @@ and typecheck_prim2 env prim loc args =
 
   | Prim_tuple, ty_args -> Ttuple (List.map (fun e -> e.ty) args)
 
-  | Prim_map_find, [ key_ty; Tmap (expected_key_ty, value_ty)]
+  | Prim_map_find,
+    [ key_ty;
+      (Tmap (expected_key_ty, value_ty) | Tbigmap (expected_key_ty, value_ty)) ]
     ->
      if expected_key_ty <> key_ty then
        error loc "bad Map.find key type";
      Toption value_ty
-  | Prim_map_update, [ key_ty;
-                       Toption value_ty;
-                       Tmap (expected_key_ty, expected_value_ty)]
+  | Prim_map_update,
+    [ key_ty;
+      Toption value_ty;
+      ( Tmap (expected_key_ty, expected_value_ty)
+      | Tbigmap (expected_key_ty, expected_value_ty)) as m]
     ->
      if expected_key_ty <> key_ty then
        error loc "bad Map.update key type";
      if expected_value_ty <> value_ty then
        error loc "bad Map.update value type";
-     Tmap (key_ty, value_ty)
-  | Prim_map_add, [ key_ty;
-                       value_ty;
-                       Tmap (expected_key_ty, expected_value_ty)]
+     begin match m with
+       | Tmap _ -> Tmap (key_ty, value_ty)
+       | Tbigmap _ -> Tbigmap (key_ty, value_ty)
+       |  _ -> assert false
+     end
+  | Prim_map_add,
+    [ key_ty;
+      value_ty;
+      ( Tmap (expected_key_ty, expected_value_ty)
+      | Tbigmap (expected_key_ty, expected_value_ty)) as m]
     ->
      if expected_key_ty <> key_ty then
        error loc "bad Map.add key type";
      if expected_value_ty <> value_ty then
        error loc "bad Map.add value type";
-     Tmap (key_ty, value_ty)
-  | Prim_map_remove, [ key_ty;
-                       Tmap (expected_key_ty, expected_value_ty)]
+     begin match m with
+       | Tmap _ -> Tmap (key_ty, value_ty)
+       | Tbigmap _ -> Tbigmap (key_ty, value_ty)
+       |  _ -> assert false
+     end
+  | Prim_map_remove,
+    [ key_ty;
+      ( Tmap (expected_key_ty, value_ty)
+      | Tbigmap (expected_key_ty, value_ty)) as m]
     ->
      if expected_key_ty <> key_ty then
        error loc "bad Map.remove key type";
-     Tmap (key_ty, expected_value_ty)
+     begin match m with
+       | Tmap _ -> Tmap (key_ty, value_ty)
+       | Tbigmap _ -> Tbigmap (key_ty, value_ty)
+       |  _ -> assert false
+     end
 
-
-  | Prim_map_mem, [ key_ty; Tmap (expected_key_ty,_)]
+  | Prim_map_mem,
+    [ key_ty;
+      (Tmap (expected_key_ty,_) | Tbigmap (expected_key_ty,_)) ]
     ->
      if expected_key_ty <> key_ty then
        error loc "bad Mem.mem key type";
@@ -794,78 +861,37 @@ and typecheck_prim2 env prim loc args =
      Tset key_ty
 
   | Prim_Some, [ ty ] -> Toption ty
-  | Prim_fail, [ Tunit ] -> Tfail
-  | Prim_self, [ Tunit ] ->
-     Tcontract (env.contract.parameter, env.contract.return)
+  | Prim_self, [ Tunit ] -> Tcontract env.t_contract_sig.parameter
   | Prim_now, [ Tunit ] -> Ttimestamp
   | Prim_balance, [ Tunit ] -> Ttez
-  (*    | "Current.source", [ Tunit ] -> ... *)
+  | Prim_source, [ Tunit ] -> Taddress
+  | Prim_sender, [ Tunit ] -> Taddress
   | Prim_amount, [ Tunit ] -> Ttez
   | Prim_gas, [ Tunit ] -> Tnat
-  | Prim_hash, [ _ ] -> Tstring
+  | Prim_pack, [ _ ] -> Tbytes
+  | Prim_blake2b, [ Tbytes ] -> Tbytes
+  | Prim_sha256, [ Tbytes ] -> Tbytes
+  | Prim_sha512, [ Tbytes ] -> Tbytes
   | Prim_hash_key, [ Tkey ] -> Tkey_hash
-  | Prim_check, [ Tkey; Ttuple [Tsignature; Tstring] ] ->
+  | Prim_check, [ Tkey; Tsignature; Tbytes ] ->
      Tbool
   | Prim_check, _ ->
-     error_prim loc Prim_check args [Tkey; Ttuple [Tsignature; Tstring]]
+     error_prim loc Prim_check args [Tkey; Tsignature; Tbytes]
 
-  | Prim_manager, [ Tcontract(_,_) ] ->
-     Tkey_hash
+  | Prim_address, [ Tcontract _ ] ->
+     Taddress
 
   | Prim_create_account, [ Tkey_hash; Toption Tkey_hash; Tbool; Ttez ] ->
-     Tcontract (Tunit, Tunit)
+     Ttuple [Toperation; Taddress]
   | Prim_create_account, _ ->
      error_prim loc Prim_create_account args
                 [ Tkey_hash; Toption Tkey_hash; Tbool; Ttez ]
 
   | Prim_default_account, [ Tkey_hash ] ->
-     Tcontract (Tunit, Tunit)
+     Tcontract Tunit
 
-  | Prim_create_contract, [ Tkey_hash; (* manager *)
-                            Toption Tkey_hash; (* delegate *)
-                            Tbool; (* spendable *)
-                            Tbool; (* delegatable *)
-                            Ttez; (* initial amount *)
-                            Tlambda (
-                              Ttuple [ arg_type;
-                                       storage_arg],
-                              Ttuple [ result_type; storage_res]);
-                            storage_init
-                          ] ->
-     if storage_arg <> storage_res then
-       error loc "Contract.create: inconsistent storage in contract";
-     if storage_res <> storage_init then
-       error loc "Contract.create: wrong type for storage init";
-
-     Tcontract (arg_type, result_type)
-
-  | Prim_create_contract, _ ->
-
-     let expected_args = [ Tkey_hash; Toption Tkey_hash;
-                           Tbool; Tbool; Ttez ] in
-     let nexpected = 7 in
-     let prim = LiquidTypes.string_of_primitive Prim_create_contract in
-     let nargs = List.length args in
-     if nargs <> nexpected then
-       error loc "Prim %S: %d args provided, %d args expected"
-             prim nargs nexpected
-     else
-       let args = List.map (fun { ty } -> ty) args in
-       List.iteri (fun i (arg, expected) ->
-           if arg <> expected then
-             error loc
-                   "Primitive %s, argument %d:\nExpected type:%sProvided type:%s"
-                   prim (i+1)
-                   (LiquidPrinter.Liquid.string_of_type expected)
-                   (LiquidPrinter.Liquid.string_of_type arg)
-
-         ) (List.combine args expected_args);
-       error loc
-             "Primitive %s, argument %d:\n\
-              Expected type: (arg * storage) -> (res * storage)\n\
-              Provided type:%s"
-             prim 6
-             (LiquidPrinter.Liquid.string_of_type (List.nth args 5))
+  | Prim_set_delegate, [ Toption Tkey_hash ] ->
+    Toperation
 
   | Prim_exec, [ ty;
                  ( Tlambda(from_ty, to_ty)
@@ -874,84 +900,26 @@ and typecheck_prim2 env prim loc args =
        type_error loc "Bad argument type in function application" ty from_ty;
      to_ty
 
-  | ( Prim_list_map
-    | Prim_list_reduce
-    | Prim_set_reduce
-    | Prim_map_reduce
-    | Prim_map_map
-    | Prim_coll_map
-    | Prim_coll_reduce
-    ), Tclosure _ :: _ ->
-    error loc "Cannot use closures in %s" (LiquidTypes.string_of_primitive prim)
-
   | Prim_list_rev, [ Tlist ty ] -> Tlist ty
 
-  | Prim_list_map, [
-      Tlambda (from_ty, to_ty);
-      Tlist ty ] ->
-     if ty <> from_ty then
-       type_error loc "Bad argument type in List.map" ty from_ty;
-     Tlist to_ty
+  | Prim_concat_two, [ Tstring; Tstring ] -> Tstring
+  | Prim_concat_two, [ Tbytes; Tbytes ] -> Tbytes
+  | Prim_string_concat, [ Tlist Tstring ] -> Tstring
+  | Prim_bytes_concat, [ Tlist Tbytes ] -> Tbytes
 
-  | Prim_list_reduce, [
-      Tlambda (Ttuple [src_ty; dst_ty], dst_ty');
-      Tlist src_ty';
-      acc_ty;
-    ] ->
-     if src_ty <> src_ty' then
-       type_error loc "Bad argument source type in List.reduce" src_ty' src_ty;
-     if dst_ty <> dst_ty' then
-       type_error loc "Bad function type in List.reduce" dst_ty' dst_ty;
-     if acc_ty <> dst_ty' then
-       type_error loc "Bad accumulator type in List.reduce" acc_ty dst_ty';
-     acc_ty
-
-  | Prim_set_reduce, [
-      Tlambda (Ttuple [src_ty; dst_ty], dst_ty');
-      Tset src_ty';
-      acc_ty;
-    ] ->
-     if src_ty <> src_ty' then
-       type_error loc "Bad argument source type in Set.reduce" src_ty' src_ty;
-     if dst_ty <> dst_ty' then
-       type_error loc "Bad function type in Set.reduce" dst_ty' dst_ty;
-     if acc_ty <> dst_ty' then
-       type_error loc "Bad accumulator type in Set.reduce" acc_ty dst_ty';
-     acc_ty
-
-  | Prim_map_reduce, [
-      Tlambda (Ttuple [Ttuple [key_ty; src_ty]; dst_ty], dst_ty');
-      Tmap (key_ty', src_ty');
-      acc_ty;
-    ] ->
-     if src_ty <> src_ty' then
-       type_error loc "Bad argument source type in Map.reduce" src_ty' src_ty;
-     if dst_ty <> dst_ty' then
-       type_error loc "Bad function type in Map.reduce" dst_ty' dst_ty;
-     if acc_ty <> dst_ty' then
-       type_error loc "Bad accumulator type in Map.reduce" acc_ty dst_ty';
-     if key_ty <> key_ty' then
-       type_error loc "Bad function key type in Map.reduce" key_ty' key_ty;
-     acc_ty
-
-  | Prim_map_map, [
-      Tlambda (Ttuple [from_key_ty; from_value_ty], to_value_ty);
-      Tmap (key_ty, value_ty) ] ->
-     if from_key_ty <> key_ty then
-       type_error loc "Bad function key type in Map.map" key_ty from_key_ty;
-     if from_value_ty <> value_ty then
-       type_error loc "Bad function value type in Map.map"
-                  value_ty from_value_ty;
-     Tmap (key_ty, to_value_ty)
-
-
-  | Prim_concat, [ Tstring; Tstring] -> Tstring
   | Prim_Cons, [ head_ty; Tunit ] ->
      Tlist head_ty
   | Prim_Cons, [ head_ty; Tlist tail_ty ] ->
      if head_ty <> tail_ty then
        type_error loc "Bad types for list" head_ty tail_ty;
      Tlist tail_ty
+
+  | Prim_string_size, [ Tstring ] -> Tnat
+  | Prim_bytes_size, [ Tbytes ] -> Tnat
+
+  | Prim_string_sub, [ Tnat; Tnat; Tstring ] -> Toption Tstring
+  | Prim_bytes_sub, [ Tnat; Tnat; Tbytes ] -> Toption Tbytes
+
   | prim, _ ->
      error loc "Bad %d args for primitive %S:\n    %s\n" (List.length args)
            (LiquidTypes.string_of_primitive prim)
@@ -965,60 +933,88 @@ and typecheck_prim2 env prim loc args =
 and typecheck_expected info env expected_ty exp =
   let exp = typecheck env exp in
   if exp.ty <> expected_ty && exp.ty <> Tfail then
-    type_error (loc_exp env exp)
+    type_error (loc_exp exp)
                ("Unexpected type for "^info) exp.ty expected_ty;
   exp
 
 and typecheck_apply ?name env prim loc args =
-  let args = List.map (fun arg ->
-                 let arg = typecheck env arg in
-                 if arg.transfer then
-                   error loc "transfer within prim args";
-                 arg
-               ) args in
+  let args = List.map (typecheck env)args in
   let prim, ty = typecheck_prim1 env prim loc args in
   mk ?name (Apply (prim, loc, args)) ty
 
 
-let typecheck_contract ~warnings env contract =
+and typecheck_contract ~warnings env contract =
   let env =
     {
       warnings;
-      annot=false;
+      annot = false;
+      decompiling = false;
       counter = ref 0;
       vars = StringMap.empty;
       vars_counts = StringMap.empty;
       to_inline = ref StringMap.empty;
+      force_inline = ref StringMap.empty;
       env = env;
       clos_env = None;
-      contract;
+      t_contract_sig = contract.contract_sig;
     } in
 
-  let (env, _) = new_binding env  "storage" contract.storage in
-  let (env, _) = new_binding env "parameter" contract.parameter in
-  let expected_ty = Ttuple [contract.return; contract.storage] in
+  let (env, _) = new_binding env  "storage" contract.contract_sig.storage in
+  let (env, _) = new_binding env "parameter" contract.contract_sig.parameter in
+  let expected_ty = Ttuple [Tlist Toperation; contract.contract_sig.storage] in
   let code =
     typecheck_expected "return value" env expected_ty contract.code in
   { contract with code }
 
-let typecheck_code ~warnings env contract expected_ty code =
-  let env =
-    {
-      warnings;
-      annot=false;
-      counter = ref 0;
-      vars = StringMap.empty;
-      vars_counts = StringMap.empty;
-      to_inline = ref StringMap.empty;
-      env = env;
-      clos_env = None;
-      contract ;
-    } in
 
-  typecheck_expected "value" env expected_ty code
+let typecheck_code env ?expected_ty code =
+  match expected_ty with
+  | Some expected_ty -> typecheck_expected "value" env expected_ty code
+  | None -> typecheck env code
+
+
+(* XXX just for printing, do not use *)
+let rec type_of_const = function
+  | CUnit -> Tunit
+  | CBool _ -> Tbool
+  | CInt _ -> Tint
+  | CNat _ -> Tnat
+  | CTez _ -> Ttez
+  | CTimestamp _ -> Ttimestamp
+  | CString _ -> Tstring
+  | CBytes _ -> Tbytes
+  | CKey _ -> Tkey
+  | CSignature _ -> Tsignature
+  | CAddress _ -> Taddress
+  | CTuple l ->
+    Ttuple (List.map type_of_const l)
+  | CNone -> Toption Tunit
+  | CSome c -> Toption (type_of_const c)
+  | CMap [] -> Tmap (Tint, Tunit)
+  | CMap ((k,e) :: _) -> Tmap (type_of_const k, type_of_const e)
+
+  | CBigMap [] -> Tbigmap (Tint, Tunit)
+  | CBigMap ((k,e) :: _) -> Tbigmap (type_of_const k, type_of_const e)
+
+  | CList [] -> Tlist (Tunit)
+  | CList (e :: _) -> Tlist (type_of_const e)
+
+  | CSet [] -> Tset (Tint)
+  | CSet (e :: _) -> Tset (type_of_const e)
+
+  | CLeft c -> Tor (type_of_const c, Tunit)
+  | CRight c -> Tor (Tunit, type_of_const c)
+
+  | CKey_hash _ -> Tkey_hash
+  | CContract _ -> Tcontract Tunit
+
+  (* XXX just for printing *)
+  | CRecord _ -> Trecord ("<record>", [])
+  | CConstr _ -> Tsum ("<sum>", [])
 
 
 let check_const_type ?(from_mic=false) ~to_tez loc ty cst =
+  let top_ty, top_cst = ty, cst in
   let rec check_const_type ty cst =
     match ty, cst with
     | Tunit, CUnit -> CUnit
@@ -1032,12 +1028,30 @@ let check_const_type ?(from_mic=false) ~to_tez loc ty cst =
 
     | Tstring, CString s -> CString s
 
+    | Tbytes, CBytes s -> CBytes s
+
     | Ttez, CTez s -> CTez s
 
     | Tkey, CKey s -> CKey s
+    | Tkey, CBytes s -> CKey s
+
     | Tkey_hash, CKey_hash s -> CKey_hash s
+    | Tkey_hash, CBytes s -> CKey_hash s
+
+    | Tcontract _, CContract s -> CContract s
+    | Tcontract _, CAddress s -> CAddress s
+    | Tcontract Tunit, CKey_hash s -> CKey_hash s
+    | Tcontract _, CBytes s -> CContract s
+
+    | Taddress, CAddress s -> CAddress s
+    | Taddress, CContract s -> CContract s
+    | Taddress, CKey_hash s -> CKey_hash s
+    | Taddress, CBytes s -> CContract s
+
     | Ttimestamp, CTimestamp s -> CTimestamp s
+
     | Tsignature, CSignature s -> CSignature s
+    | Tsignature, CBytes s -> CSignature s
 
     | Ttuple tys, CTuple csts ->
        begin
@@ -1058,8 +1072,13 @@ let check_const_type ?(from_mic=false) ~to_tez loc ty cst =
 
     | Tmap (ty1, ty2), CMap csts ->
        CMap (List.map (fun (cst1, cst2) ->
-                 check_const_type ty1 cst1,
-                 check_const_type ty2 cst2) csts)
+          check_const_type ty1 cst1,
+          check_const_type ty2 cst2) csts)
+
+    | Tbigmap (ty1, ty2), (CMap csts | CBigMap csts) -> (* allow map *)
+       CBigMap (List.map (fun (cst1, cst2) ->
+          check_const_type ty1 cst1,
+          check_const_type ty2 cst2) csts)
 
     | Tlist ty, CList csts ->
        CList (List.map (check_const_type ty) csts)
@@ -1108,12 +1127,18 @@ let check_const_type ?(from_mic=false) ~to_tez loc ty cst =
 
          | Ttez, CString s -> CTez (to_tez s)
          | Tkey_hash, CString s -> CKey_hash s
+         | Tcontract _, CString s -> CContract s
          | Tkey, CString s -> CKey s
          | Tsignature, CString s -> CSignature s
 
-         | _ -> error loc "constant type mismatch"
+         | _ ->
+           error loc "constant type mismatch, expected %s, got %s"
+             (LiquidPrinter.Liquid.string_of_type top_ty)
+             (LiquidPrinter.Liquid.string_of_type (type_of_const top_cst))
        else
-         error loc "constant type mismatch"
+         error loc "constant type mismatch, expected %s, got %s"
+           (LiquidPrinter.Liquid.string_of_type top_ty)
+           (LiquidPrinter.Liquid.string_of_type (type_of_const top_cst))
 
   in
   check_const_type ty cst

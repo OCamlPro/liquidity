@@ -1,12 +1,11 @@
 
 (* loops *)
 
-[%%version 0.14]
+[%%version 0.3]
 
 let%entry main
       (parameter : int)
-      (storage : int set)
-      : unit * int set =
+      (storage : int set) =
 
       let x =
         Loop.loop (fun x ->
@@ -20,5 +19,5 @@ let%entry main
         ) (parameter, storage)
       in
       let storage = Array.get x 1 in
-      ( (), storage )
+      ( ([] : operation list), storage )
 

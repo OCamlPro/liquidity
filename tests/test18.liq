@@ -1,43 +1,10 @@
 
 let%entry main
       (parameter : int)
-      (storage : nat)
-      : int * nat =
+      (storage : (int * nat)) =
 
-  match int storage / parameter with
-  | None -> ( 0, 0p)
-  | Some res ->
-      ( res.(0), res.(1) )
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+  let s = match int storage.(1) / parameter with
+    | None -> (0, 0p)
+    | Some res ->
+      ( res.(0), res.(1) ) in
+  ( ([] : operation list), s )

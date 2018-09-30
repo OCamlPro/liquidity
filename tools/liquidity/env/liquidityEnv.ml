@@ -11,7 +11,8 @@
 file that has been correctly typechecked by the `liquidity`
 typechecker.  *)
 
-exception Fail
+type failure = Failure : 'a -> failure
+exception Fail of failure
 
 type integer =
   Int of Z.t
@@ -20,12 +21,14 @@ type integer =
 type timestamp = integer
 type tez = integer
 type nat = integer
+type bytes = string
 
 type key = Key of string
 type key_hash = Key_hash of string
 type signature = Signature of string
-
-type ('arg, 'res) contract
+type 'a contract = Contract of string
+type address = Address of string
+type operation
 
 module Signature : sig
   val of_string : string -> signature
@@ -43,6 +46,12 @@ module Key_hash : sig
   val of_string : string -> key_hash
   end = struct
   let of_string s = Key_hash s
+end
+
+module Address : sig
+  val of_string : string -> address
+  end = struct
+  let of_string s = Address s
 end
 
 module Tez : sig
@@ -86,16 +95,18 @@ module Current : sig
 
   val amount : unit -> tez
   val fail : unit -> 'a
+  val failwith : 'a -> 'b
   val time : unit -> timestamp
   val balance : unit -> tez
   val gas : unit -> tez (* NOT TESTED *)
-  val contract : unit -> ('a,'b) contract (* unsafe, NOT IMPLEMENTED !! *)
-  val source : unit -> ('a,'b) contract (* NOT TESTED *)
+  val contract : unit -> 'a contract (* unsafe, NOT IMPLEMENTED !! *)
+  val source : unit -> address (* NOT TESTED *)
 
 end = struct
 
   let amount () = Tez (Z.of_int 100)
-  let fail () = raise Fail
+  let failwith (type a) (x:a) = raise (Fail (Failure x))
+  let fail () = failwith ()
   let time () = Timestamp (Z.of_float (Unix.gettimeofday ()))
   let balance () = assert false (* TODO *)
   let gas () = assert false
@@ -130,6 +141,38 @@ end = struct (* Arrays are for tuples, not typable in OCaml *)
 
 end
 
+module String = struct
+  include String
+  let length s = Int (Z.of_int (length s))
+  let size = length
+  let sub start len s =
+    try
+      let start, len =
+        match start, len with
+        | Int start, Int len -> Z.to_int start, Z.to_int len
+        | _ -> assert false in
+      Some (sub s start len)
+    with _ -> None
+  let slice = sub
+  let concat = concat ""
+end
+
+module Bytes = struct
+  include Bytes
+  let length s = Int (Z.of_int (length s))
+  let size = length
+  let sub start len s =
+    try
+      let start, len =
+        match start, len with
+        | Int start, Int len -> Z.to_int start, Z.to_int len
+        | _ -> assert false in
+      Some (sub s start len)
+    with _ -> None
+  let slice = sub
+  let concat = concat empty
+end
+
 module Map : sig
 
   type ('key, 'value) map
@@ -156,6 +199,11 @@ module Map : sig
 
   val mem : 'key -> ('key, 'value) map -> bool (* NOT TESTED *)
   val size : ('key, 'value) map -> nat
+
+  val map_fold :
+    ( ('key * 'value) * 'acc -> 'res * 'acc) ->
+    ('key,'value) map -> 'acc ->
+    ('key,'res) map * 'acc
 
 end = struct
 
@@ -238,11 +286,21 @@ end = struct
 
   let size map = Int (Z.of_int (ObjMap.cardinal (Obj.magic map)))
 
+  let map_fold f map acc =
+    fold (fun ((k, v), (map, acc)) ->
+        let v', acc = f ((k, v), acc) in
+        add k v' map, acc
+      ) map (empty, acc)
+
 end
+
+module BigMap = Map
+
 include Array (* Remove ? *)
 
 
 type ('key,'value) map = ('key,'value) Map.map
+type ('key,'value) big_map = ('key,'value) map
 
 module Set : sig
 
@@ -258,6 +316,10 @@ module Set : sig
   val iter : ( 'key -> unit) -> 'key set -> unit
   val map : ('key -> 'res) -> 'key set -> 'res set
   val size : 'key set -> nat
+  val map_fold :
+    ( 'key * 'acc -> 'res * 'acc) ->
+    'key set -> 'acc ->
+    'res set * 'acc
 
 end = struct
 
@@ -327,6 +389,12 @@ end = struct
 
   let size set = Int (Z.of_int (ObjSet.cardinal (Obj.magic set)))
 
+  let map_fold f set acc =
+    fold (fun (v, (set, acc)) ->
+        let v', acc = f (v, acc) in
+        add v' set, acc
+      ) set (empty, acc)
+
 end
 
 type 'key set = 'key Set.set
@@ -337,9 +405,18 @@ module Arith : sig
   val (-) : integer -> integer -> integer
   val ( * ) : integer -> integer -> integer
   val ( / ) : integer -> integer -> (integer * integer) option
+  val (~-) : integer -> integer
+  val lnot : integer -> integer
+  val (land) : integer -> integer -> integer
+  val (lor) : integer -> integer -> integer
+  val (lxor) : integer -> integer -> integer
+  val (lsl) : integer -> integer -> integer
+  val (lsr) : integer -> integer -> integer
+  val xor : bool -> bool -> bool
 
   val int : integer -> integer
   val abs : integer -> integer
+  val is_nat : integer -> integer option
 
 end = struct
 
@@ -368,6 +445,54 @@ end = struct
     | Tez _, (Int _|Timestamp _)
       | (Int _ | Timestamp _), Tez _
     | Int _, Timestamp _
+      -> assert false
+
+  let (~-) = Z.neg
+  let (~-) x =
+    match x with
+    | Int x -> Int (- x)
+    | Tez _ | Timestamp _ -> assert false
+
+  let xor x y = (x || y) && not (x && y)
+
+  let lnot = Z.lognot
+  let lnot x =
+    match x with
+    | Int x -> Int (lnot x)
+    | Tez _ | Timestamp _
+      -> assert false
+
+  let (land) = Z.(land)
+  let (land) x y =
+    match x,y with
+    | Int x, Int y -> Int (x land y)
+    | (Tez _ | Timestamp _| Int _), (Tez _ | Timestamp _ | Int _)
+      -> assert false
+
+  let (lor) = Z.(lor)
+  let (lor) x y =
+    match x,y with
+    | Int x, Int y -> Int (x lor y)
+    | (Tez _ | Timestamp _| Int _), (Tez _ | Timestamp _ | Int _)
+      -> assert false
+
+  let (lxor) = Z.(lxor)
+  let (lxor) x y =
+    match x,y with
+    | Int x, Int y -> Int (x lxor y)
+    | (Tez _ | Timestamp _| Int _), (Tez _ | Timestamp _ | Int _)
+      -> assert false
+
+  let (lsl) x y =
+    match x,y with
+    | Int x, Int y -> Int (Z.shift_left x (Z.to_int y))
+    | (Tez _ | Timestamp _| Int _), (Tez _ | Timestamp _ | Int _)
+      -> assert false
+
+  let (lsr) x y =
+    match x,y with
+    | Int x, Int y -> Int (Z.shift_right x (Z.to_int y))
+    | (Tez _ | Timestamp _| Int _), (Tez _ | Timestamp _ | Int _)
       -> assert false
 
   let ediv x y =
@@ -416,6 +541,12 @@ end = struct
                    | Tez _
                    | Timestamp _ -> assert false
 
+  let is_nat = function
+    | Int x when Z.geq x Z.zero -> Some (Int x)
+    | Int x -> None
+    | Tez _
+    | Timestamp _ -> assert false
+
 end
 
 let (@) = (^)
@@ -439,24 +570,24 @@ end
 
 module Contract : sig
 
-  val call : ('arg, 'res) contract -> tez -> 'storage -> 'arg ->
-             'res * 'storage
+  val of_string : string -> 'a contract
+  val self : unit -> 'a contract
+  val call : 'arg contract -> tez -> 'arg -> operation
 
-  val manager : ('a,'b) contract -> key_hash
+  val manager : 'a -> 'b
   val create : key_hash -> key_hash option ->
                bool -> bool -> tez ->
-               ( ('a *'b) -> ('c * 'b) ) -> 'b ->
-               ('a,'c) contract
-  val source : unit -> ('a,'b) contract
-
+              'b -> ( 'a  -> 'b -> (operation list * 'b) ) ->
+               operation * 'a contract
 end = struct
 
-  let call contract amount storage arg = assert false (* TODO *)
+  let self () = Contract ""
+  let of_string s = Contract s
+  let call contract amount arg = assert false (* TODO *)
   let manager _contract = assert false (* TODO *)
-  let create _key _manager
-             _spendable _delegatable _amount
-             _f _storage = assert false (* TODO *)
-  let source () = assert false (* TODO *)
+  let create _manager _delegate
+             _delegatable _spendable _amount
+             _storage _f = assert false (* TODO *)
 end
 
 type ('a,'b) variant = Left of 'a | Right of 'b
@@ -469,6 +600,10 @@ module List : sig
   val map : ('a -> 'b) -> 'a list -> 'b list
   val rev : 'a list -> 'a list
   val size : 'a list -> nat
+  val map_fold :
+    ( 'key * 'acc -> 'res * 'acc) ->
+    'key list -> 'acc ->
+    'res list * 'acc
 
 end = struct
 
@@ -485,12 +620,20 @@ end = struct
   let rev = List.rev
   let size list = Int (Z.of_int (List.length list))
 
+  let map_fold f list acc =
+    let list, acc =
+      fold (fun (v, (list, acc)) ->
+        let v', acc = f (v, acc) in
+        v' :: list, acc
+        ) list ([], acc) in
+    rev list, acc
+
 end
 
 module Account : sig
   val create : key_hash -> key_hash option ->
-               bool -> tez -> (unit,unit) contract
-  val default : key_hash -> (unit,unit) contract
+               bool -> tez -> operation * unit contract
+  val default : key_hash -> unit contract
 end = struct
   let create key key_opt _spendable _amount = assert false (* TODO NOT TESTED *)
   let default _key = assert false (* TODO *)
@@ -499,11 +642,11 @@ end
 module Crypto : sig
   val hash : 'a -> string
   val hash_key : key -> key_hash
-  val check : key -> signature * string -> bool
+  val check : key -> signature -> string -> bool
 end = struct
   let hash _ = assert false (*TODO *)
   let hash_key _ = assert false (*TODO *)
-  let check _key (_sig, _hash) = assert false (* TODO *)
+  let check _key _sig _hash = assert false (* TODO *)
 end
 
 type int = integer

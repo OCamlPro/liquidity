@@ -1,12 +1,11 @@
 
 (* strings *)
 
-[%%version 0.14]
+[%%version 0.3]
 
 let%entry main
       (parameter : string)
-      (storage : string)
-      : unit * string =
+      (storage : string) =
 
 (* options *)
       let storage = if parameter = "" then
@@ -15,4 +14,4 @@ let%entry main
            storage @ parameter
        in
 
-      ( (), storage )
+      ( ([] : operation list), storage )

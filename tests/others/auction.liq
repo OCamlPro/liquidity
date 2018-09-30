@@ -1,6 +1,6 @@
 (* Auction contract from https://www.michelson-lang.com/contract-a-day.html *)
 
-[%%version 0.14]
+[%%version 0.3]
 
 type storage = {
   auction_end : timestamp;
@@ -10,16 +10,15 @@ type storage = {
 
 let%entry main
     (parameter : key_hash)
-    (storage : storage)
-    : unit * storage =
+    (storage : storage) =
 
   (* Check if auction has ended *)
-  if Current.time () > storage.auction_end then Current.fail ();
+  if Current.time () > storage.auction_end then Current.failwith ();
   
   let new_bid = Current.amount () in
   let new_bidder = parameter in
   (* Check if new bid is higher that the last *)
-  if new_bid <= storage.highest_bid then Current.fail ();
+  if new_bid <= storage.highest_bid then Current.failwith ();
 
   let previous_bidder = storage.bidder in
   let previous_bid = storage.highest_bid in
@@ -30,6 +29,5 @@ let%entry main
 
   (* refund previous bid to previous bidder *)
   let refund_to = Account.default previous_bidder in
-  let (_result, storage) =
-    Contract.call refund_to previous_bid storage () in
-  ((), storage)
+  let op = Contract.call refund_to previous_bid () in
+  ([op], storage)

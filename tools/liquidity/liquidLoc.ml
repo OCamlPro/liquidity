@@ -24,7 +24,7 @@ let pp_ksprintf ?before k fmt = (* From Location in OCaml *)
       k msg)
     ppf fmt
 
-let noloc = { loc_file = "<unspecified>"; loc_pos = None }
+let noloc = noloc
 
 let raise_error ?(loc=noloc) =
   pp_ksprintf (fun msg -> raise (LiquidError { err_loc = loc;
@@ -40,8 +40,8 @@ let print_loc ppf loc =
   | None ->
      Format.fprintf ppf "%s" loc.loc_file
 
-let report_error { err_loc; err_msg } =
-  Format.eprintf "%a: Error: @[%s@]\n%!" print_loc err_loc err_msg
+let report_error ?(kind="Error") fmt { err_loc; err_msg } =
+  Format.fprintf fmt "%a: %s: @[%s@]\n%!" print_loc err_loc kind err_msg
 
 let default_warning_printer loc w =
   Format.eprintf "%a: Warning: @[%a@]\n%!" print_loc loc
@@ -58,3 +58,19 @@ let warning_printer = ref default_warning_printer
 let warn loc w = !warning_printer loc w
 
 let loc_in_file loc_file = { loc_file; loc_pos = None }
+
+let compare_pos (l1, c1) (l2, c2) =
+  let c = compare l1 l2 in
+  if c <> 0 then c else compare c1 c2
+
+let max_pos p1 p2 = if p1 <= p2 then p2 else p1
+let min_pos p1 p2 = if p1 <= p2 then p1 else p2
+
+let merge l1 l2 =
+  let loc_file = l1.loc_file in
+  let loc_pos = match l1.loc_pos, l2.loc_pos with
+    | None, None -> None
+    | None, Some p | Some p, None -> Some p
+    | Some (b1, e1), Some (b2, e2) -> Some(min_pos b1 b2, max_pos e1 e2)
+  in
+  { loc_file; loc_pos }

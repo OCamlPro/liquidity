@@ -15,8 +15,8 @@ let of_bits b =
   let n = ref (Num.num_of_int 0) in
   let p = ref (Num.num_of_int 1) in
   let f = Num.num_of_int 256 in
-  for i = 0 to Bytes.length b - 1 do
-    let c = Char.code b.[i] in
+  for i = 0 to String.length b - 1 do
+    let c = Char.code (String.get b i) in
     n := Num.add_num !n (Num.mult_num !p (Num.num_of_int c));
     p := Num.mult_num !p f;
   done;
@@ -35,4 +35,22 @@ let to_bits n =
   List.iteri (fun i c ->
       Bytes.set b i c
     ) (List.rev !l);
-  b
+  Bytes.unsafe_to_string b
+
+let compare = Num.compare_num
+
+let numbits x = assert false
+
+let sign = Num.sign_num
+
+let neg = Num.minus_num
+
+let equal = Num.eq_num
+
+let extract _ _ _  =  assert false
+
+let abs = Num.abs_num
+
+let to_string = Num.string_of_num
+
+let of_string = Num.num_of_string

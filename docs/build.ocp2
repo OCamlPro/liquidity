@@ -1,9 +1,14 @@
 OCaml.library("ocplib-liquidity-documentation",
   ocaml + {
-    files =[
-      "liquidDoc.ml",
-            { file2string = [
-                    "liquidity.md"
-                          ] }           
-        ];
-        });
+    files =["liquidDoc.ml", { file2string = ["liquidity.html"] }];
+    build_rules = [
+      "./liquidity.html", {
+        commands = [
+          OCaml.system([
+              "pandoc";
+              "-o"; "./liquidity.html";
+              "liquidity.md";
+            ]);
+        ]
+      }]
+  });

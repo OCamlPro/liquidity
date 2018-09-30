@@ -1,4 +1,3 @@
-parameter string;
-return string;
+parameter unit;
 storage unit;
-code {};
+code { CDR; NIL operation; PAIR };

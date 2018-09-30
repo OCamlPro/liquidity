@@ -22,23 +22,26 @@ let rec default_const = function
   | Tnat -> CNat (LiquidPrinter.integer_of_int 0)
   | Ttez -> CTez (LiquidPrinter.tez_of_liq "0")
   | Tstring -> CString ""
+  | Tbytes -> CBytes "0x"
   | Ttimestamp -> CTimestamp "1970-01-01T00:00:00Z"
   | Tkey -> CKey "edpkuit3FiCUhd6pmqf9ztUTdUs1isMTbF9RBGfwKk1ZrdTmeP9ypN"
   | Tkey_hash -> CKey_hash "tz1YLtLqD1fWHthSVHPD116oYvsd4PTAHUoc"
   | Tsignature ->
     CSignature
-      "96c724f3eab3da9eb0002caa5456aef9a7c716e6d6d20c07f3b3659369e7dcf5\
-       b66a5a8c33dac317fba6174217140b919493acd063c3800b825890a557c39e0a"
+      "edsigthTzJ8X7MPmNeEwybRAvdxS1pupqcM5Mk4uCuyZAe7uEk\
+       68YpuGDeViW8wSXMrCi5CwoNgqs8V2w8ayB5dMJzrYCHhD8C7"
+  | Tcontract _ -> CContract "KT1GE2AZhazRxGsAjRVkQccHcB2pvANXQWd7"
+  | Taddress -> CAddress "KT1GE2AZhazRxGsAjRVkQccHcB2pvANXQWd7"
   | Ttuple l ->
     CTuple (List.map default_const l)
-
   | Toption ty -> CSome (default_const ty)
   | Tlist ty -> CList [default_const ty]
   | Tset ty -> CSet [default_const ty]
-
-  | Tmap (ty1, ty2) -> CMap [default_const ty1, default_const ty2]
+  | Tmap (ty1, ty2) ->
+    CMap [default_const ty1, default_const ty2]
+  | Tbigmap  (ty1, ty2) ->
+    CBigMap [default_const ty1, default_const ty2]
   | Tor (ty, _) -> CLeft (default_const ty)
-
   | Trecord (_, fields) ->
     CRecord (
       List.map (fun (name, ty) ->
@@ -49,22 +52,22 @@ let rec default_const = function
 
   | Tsum (_, [])
   | Tfail
-  | Tcontract _
   | Tclosure _
-  | Tlambda _ -> raise Not_found
+  | Tlambda _
+  | Toperation -> raise Not_found
 
 let rec translate_const_exp loc (exp : encoded_exp) =
   match exp.desc with
-  | Let (_, loc, _, _) ->
+  | Let (_, _, loc, _, _) ->
      LiquidLoc.raise_error ~loc "'let' forbidden in constant"
-  | Const (ty, c) -> c
+  | Const (_loc, ty, c) -> c
 
   (* removed during typechecking *)
   | Record (_, _)
   | Constructor (_, _, _) -> assert false
 
-  | Apply (Prim_Left, _, [x; _ty]) -> CLeft (translate_const_exp loc x)
-  | Apply (Prim_Right, _, [x; _ty]) -> CRight (translate_const_exp loc x)
+  | Apply (Prim_Left, _, [x]) -> CLeft (translate_const_exp loc x)
+  | Apply (Prim_Right, _, [x]) -> CRight (translate_const_exp loc x)
   | Apply (Prim_Some, _, [x]) -> CSome (translate_const_exp loc x)
   | Apply (Prim_Cons, _, list) ->
      CList (List.map (translate_const_exp loc) list)
@@ -73,35 +76,44 @@ let rec translate_const_exp loc (exp : encoded_exp) =
 
 
   | Apply (prim, _, args)
-    -> LiquidLoc.raise_error "<apply %s(%d) not yet implemented>"
+    -> LiquidLoc.raise_error ~loc "<apply %s(%d) not yet implemented>"
                              (LiquidTypes.string_of_primitive prim)
                              (List.length args)
   | Var (_, _, _)
   | SetVar (_, _, _, _)
   | If (_, _, _)
   | Seq (_, _)
-  | LetTransfer (_, _, _, _, _, _, _, _)
+  | Transfer (_, _, _, _)
   | MatchOption (_, _, _, _, _)
   | MatchNat (_, _, _, _, _, _)
   | MatchList (_, _, _, _, _, _)
   | Loop (_, _, _, _)
   | Fold (_, _, _, _, _, _)
+  | Map (_, _, _, _, _)
+  | MapFold (_, _, _, _, _, _)
   | Lambda (_, _, _, _, _)
   | Closure (_, _, _, _, _, _)
   | MatchVariant (_, _, _)
+  | Failwith (_, _)
+  | CreateContract (_, _, _)
+  | ContractAt (_, _, _)
+  | Unpack (_, _, _)
     ->
     LiquidLoc.raise_error ~loc "non-constant expression"
 
 
-let translate env contract s ty =
-    let ml_exp =
-      LiquidFromOCaml.expression_of_string ~filename:env.filename s in
-    let sy_exp = LiquidFromOCaml.translate_expression env ml_exp in
-    let ty_exp = LiquidCheck.typecheck_code
-        ~warnings:true env contract ty sy_exp in
-    let enc_exp = LiquidEncode.encode_code env contract ty_exp in
-    let loc = LiquidLoc.loc_in_file env.filename in
-    translate_const_exp loc enc_exp
+let translate env contract_sig s ty =
+  let ml_exp =
+    LiquidFromOCaml.expression_of_string ~filename:env.filename s in
+  (* hackish: add type annotation for constants *)
+  let ml_ty = LiquidToOCaml.convert_type ~abbrev:false ty in
+  let ml_exp = Ast_helper.Exp.constraint_ ml_exp ml_ty in
+  let sy_exp = LiquidFromOCaml.translate_expression env ml_exp in
+  let tenv = empty_typecheck_env ~warnings:true contract_sig env in
+  let ty_exp = LiquidCheck.typecheck_code tenv ~expected_ty:ty sy_exp in
+  let enc_exp = LiquidEncode.encode_code tenv ty_exp in
+  let loc = LiquidLoc.loc_in_file env.filename in
+  translate_const_exp loc enc_exp
 
 let data_of_liq ~filename ~contract ~parameter ~storage =
   (* first, extract the types *)
@@ -112,14 +124,14 @@ let data_of_liq ~filename ~contract ~parameter ~storage =
       ~warnings:true env contract in
   let translate filename s ty =
     try
-      let c = translate { env with filename } contract s ty in
+      let c = translate { env with filename } contract.contract_sig s ty in
       let s = LiquidPrinter.Michelson.line_of_const c in
       Ok s
     with LiquidError error ->
       Error error
   in
-  (translate "parameter" parameter contract.parameter),
-  (translate "storage" storage contract.storage)
+  (translate "parameter" parameter contract.contract_sig.parameter),
+  (translate "storage" storage contract.contract_sig.storage)
 
 
 let string_of_const ?ty c =

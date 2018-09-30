@@ -21,149 +21,81 @@ tezos_dir = "../../tezos/src/";
 (* Some functions to declare Tezos dependencies created by including source
   files with #include *)
 function pp_tezos(file){
-  return { more_deps = [ tezos_dir + file ] };
+  return file, { more_deps = [ tezos_dir + file ] };
 }
 
-function pp_proto_alpha(file){
-  return file, { more_deps = [ tezos_dir + "proto/alpha/" + file ] };
+function pp_proto_client(file){
+  return file, { more_deps = [ tezos_dir + "proto_002_PsYLVpVv/lib_client/" + file ] };
 }
 
-function pp_client(file){
-  return file, { more_deps = [ tezos_dir + "client/" + file ] };
+function pp_stdlib(file){
+  return file, { more_deps = [ tezos_dir + "lib_stdlib/" + file ] };
 }
 
-function pp_utils(file){
-  return file, { more_deps = [ tezos_dir + "utils/" + file ] };
+function pp_base(file){
+  return file, { more_deps = [ tezos_dir + "lib_base/" + file ] };
 }
 
-function pp_minutils(file){
-  return file, { more_deps = [ tezos_dir + "minutils/" + file ] };
+function pp_crypto(file){
+  return file, { more_deps = [ tezos_dir + "lib_crypto/" + file ] };
 }
 
-function pp_micheline(file){
-  return file, { more_deps = [ tezos_dir + "micheline/" + file ] };
-}
-
-function pp_client_emdebbed(file){
-  return file, { more_deps = [ tezos_dir + "client/embedded/alpha/" + file ] };
+function from_tezos(file){
+  return tezos_dir + file;
 }
 
 
-OCaml.library("michelson-base",
+OCaml.library("michelson",
   ocaml + {
      bytelink = [ "-custom" ];
      pp = [ "ocp-pp" ];
-     files = [
-        pp_minutils("compare.ml");
-        pp_minutils("mBytes.ml");
-        pp_minutils("hex_encode.ml");
-        pp_minutils("data_encoding.ml");
-        pp_utils("error_monad_sig.ml");
-        pp_utils("error_monad.ml");
-     ];
-     requires = [
-              "michelson-deps";
-              "ocplib-json-typed.bson"; (* data_encoding *)
-              "ocplib-endian";     (* data_encoding *)
-              "ocplib-endian.bigstring";
-              "calendar";
-     ];
-   });
-
-OCaml.library("micheline", ocaml + {
-     bytelink = [ "-custom" ];
-     pp = [ "ocp-pp" ];
-     files = [
-        pp_micheline("micheline.ml");
-        pp_micheline("micheline_parser.ml");
-        pp_micheline("micheline_printer.ml");
-     ];
-     requires = [
-              "michelson-deps";
-              "michelson-base";
-              "ocplib-json-typed.bson"; (* data_encoding *)
-              "ocplib-endian";     (* data_encoding *)
-              "calendar";
-
-     ];
-   });
-     
-OCaml.library("michelson", ocaml + {
-     bytelink = [ "-custom" ];
-     pp = [ "ocp-pp" ];
-     files = [
-
+     files = OCaml.pack("Michelson_Tezos", [
+        from_tezos("lib_stdlib/compare.ml");
+        from_tezos("lib_stdlib/option.ml");
+        from_tezos("lib_stdlib/mBytes.ml");
+        from_tezos("lib_stdlib/tzList.ml");
+        from_tezos("lib_stdlib/tzString.ml");
+        from_tezos("lib_stdlib/utils.ml");
+        from_tezos("lib_stdlib/binary_stream.ml");
+        from_tezos("lib_data_encoding/binary_size.ml");
+        from_tezos("lib_data_encoding/encoding.ml");
+        from_tezos("lib_data_encoding/binary_error.ml");
+        from_tezos("lib_data_encoding/binary_length.ml");
+        from_tezos("lib_data_encoding/binary_reader.ml");
+        from_tezos("lib_data_encoding/binary_writer.ml");
+        from_tezos("lib_data_encoding/binary_stream_reader.ml");
+        from_tezos("lib_data_encoding/json.ml");
+        from_tezos("lib_data_encoding/bson.ml");
+        from_tezos("lib_data_encoding/binary_schema.ml");
+        from_tezos("lib_data_encoding/binary_description.ml");
+        from_tezos("lib_data_encoding/data_encoding.ml");
+        from_tezos("lib_stdlib/tag.ml");
+        from_tezos("lib_stdlib/logging.ml");
+        from_tezos("lib_stdlib/lwt_utils.ml");
+        from_tezos("lib_stdlib/lwt_canceler.ml");
+        from_tezos("lib_error_monad/error_monad_sig.ml");
+        from_tezos("lib_error_monad/error_monad.ml");
+        from_tezos("lib_micheline/micheline.ml");
+        from_tezos("lib_micheline/micheline_parser.ml");
+        from_tezos("lib_micheline/micheline_printer.ml");
+        "tezos_micheline.ml";
         "data_encoding_ezjsonm.ml";
-        pp_utils("cli_entries.ml");
-        pp_utils("time.ml");
-        pp_utils("base58.ml");
-        pp_utils("hash.ml");
+        from_tezos("lib_crypto/base58.ml");
+        pp_crypto("blake2B.ml");
         "ed25519.ml";
-        pp_utils("tezos_data.ml");
-
-        pp_client_emdebbed("michelson_macros.ml");
-
-(*
-        pp_proto_alpha("tezos_hash.ml");
-        pp_proto_alpha("qty_repr.ml");
-        pp_proto_alpha("tez_repr.ml");
-        pp_proto_alpha("script_int_repr.ml");
-        pp_proto_alpha("manager_repr.ml");
-        pp_proto_alpha("michelson_v1_primitives.ml");
-        pp_proto_alpha("script_repr.ml");
-        pp_proto_alpha("contract_repr.ml");
-        pp_proto_alpha("period_repr.ml");
-        pp_proto_alpha("constants_repr.ml");
-        pp_proto_alpha("seed_repr.ml");
-        pp_proto_alpha("roll_repr.ml");
-        pp_proto_alpha("cycle_repr.ml");
-        pp_proto_alpha("raw_level_repr.ml");
-        pp_proto_alpha("voting_period_repr.ml");
-        pp_proto_alpha("level_repr.ml");
-        pp_proto_alpha("fitness_repr.ml");
-        pp_proto_alpha("vote_repr.ml");
-        pp_proto_alpha("time_repr.ml");
-
-        "persist.ml";
-        "context.ml";
-
-        pp_proto_alpha("raw_context.ml");
-        pp_proto_alpha("storage_sigs.ml");
-        pp_proto_alpha("storage_functors.ml");
-        pp_proto_alpha("storage.ml");
-        pp_proto_alpha("level_storage.ml");
-        pp_proto_alpha("seed_storage.ml");
-        pp_proto_alpha("roll_storage.ml");
-        pp_proto_alpha("reward_storage.ml");
-        pp_proto_alpha("bootstrap_storage.ml");
-        pp_proto_alpha("vote_storage.ml");
-        pp_proto_alpha("contract_storage.ml");
-
-        "tezos_context.ml";
-
-        pp_proto_alpha("script_typed_ir.ml");
-        pp_proto_alpha("script_ir_translator.ml");
-        pp_proto_alpha("script_interpreter.ml");
-        pp_proto_alpha("init_storage.ml");
-
-        "apply.ml";
-        pp_client("client_commands.ml");
-        pp_client("client_aliases.ml");
-        "packed_protocol.ml";
-
-        pp_client_emdebbed("script_located_ir.ml");
-        pp_client_emdebbed("client_proto_args.ml");
-        pp_client_emdebbed("client_proto_programs.ml");
-*)
-     ];
+        "tezos_crypto.ml";
+        pp_crypto("operation_hash.ml");
+        pp_proto_client("michelson_v1_macros.ml");
+     ]);
      requires = [
               "michelson-deps";
-              "micheline";
-              "ocplib-json-typed.bson"; (* data_encoding *)
+              "ocplib-json-typed";
+              "ocplib-json-typed-bson"; (* data_encoding *)
               "ocplib-endian";     (* data_encoding *)
               "ocplib-endian.bigstring";
+              "bigstring";
               "calendar";
-
+              "hex";
      ];
    });
 

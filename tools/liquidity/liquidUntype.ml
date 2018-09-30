@@ -13,7 +13,7 @@
 
 open LiquidTypes
 
-let mk desc = mk desc ()
+let mk desc ty = mk desc ty
 
 type env = {
     env_map : string StringMap.t;
@@ -41,7 +41,8 @@ let base_of_var arg =
   try
     let pos = String.index arg '/' in
     String.sub arg 0 pos
-  with Not_found -> assert false
+  with Not_found ->
+    raise (Invalid_argument ("base_of_var: "^arg))
 
 let escape_var arg =
   try
@@ -69,28 +70,26 @@ let find_free env var_arg bv =
   let var_arg' = iter 0 var_arg' in
   let env' = new_binding var_arg var_arg' env in
   (var_arg', env')
-;;
 
 (* To improve the naming of variables, we compute bound-variables for their
 scopes. Unfortunately, without hash-consing, this can be quite expensive.
  *)
 
-let rec untype (env : env) (code : encoded_exp) : syntax_exp =
+let rec untype (env : env) code =
   let desc =
     match code.desc with
     | If (cond, ifthen, ifelse) ->
        If (untype env cond, untype env ifthen, untype env ifelse)
     | Seq (x, y) -> Seq (untype env x, untype env y)
-    | Const (ty, cst) ->  Const (ty, cst)
+    | Const (loc, ty, cst) ->  Const (loc, ty, cst)
+    | Failwith (err, loc) -> Failwith (untype env err, loc)
 
-    | Apply(Prim_Source, loc, [from_arg; to_arg]) ->
-       Constructor(loc, Source (from_arg.ty, to_arg.ty), untype env from_arg)
     | Apply(Prim_Left, loc, [arg; unused]) ->
        Constructor(loc, Left unused.ty, untype env arg)
     | Apply(Prim_Right, loc, [arg; unused]) ->
        Constructor(loc, Right unused.ty, untype env arg)
     | Apply (prim, loc, args) ->
-       Apply(prim, loc, List.map (untype env) args)
+      Apply(prim, loc, List.map (untype env) args)
 
     | Lambda (arg_name, arg_type, loc, body, res_type) ->
        let base = base_of_var arg_name in
@@ -125,11 +124,24 @@ let rec untype (env : env) (code : encoded_exp) : syntax_exp =
        let (var_arg', env') = find_free env var_arg bv in
        Fold (prim, var_arg', loc, untype env' body_exp, arg_exp, acc_exp)
 
-    | Let (var_arg, loc, arg_exp, body_exp) ->
+    | Map (prim, var_arg, loc, body_exp, arg_exp) ->
        let arg_exp = untype env arg_exp in
        let bv = body_exp.bv in
        let (var_arg', env') = find_free env var_arg bv in
-       Let (var_arg', loc, arg_exp, untype env' body_exp)
+       Map (prim, var_arg', loc, untype env' body_exp, arg_exp)
+
+    | MapFold (prim, var_arg, loc, body_exp, arg_exp, acc_exp) ->
+       let arg_exp = untype env arg_exp in
+       let acc_exp = untype env acc_exp in
+       let bv = body_exp.bv in
+       let (var_arg', env') = find_free env var_arg bv in
+       MapFold (prim, var_arg', loc, untype env' body_exp, arg_exp, acc_exp)
+
+    | Let (var_arg, inline, loc, arg_exp, body_exp) ->
+       let arg_exp = untype env arg_exp in
+       let bv = body_exp.bv in
+       let (var_arg', env') = find_free env var_arg bv in
+       Let (var_arg', inline, loc, arg_exp, untype env' body_exp)
 
     | MatchOption (exp, loc, ifnone, some_pat, ifsome) ->
        let bv = ifsome.bv in
@@ -153,24 +165,11 @@ let rec untype (env : env) (code : encoded_exp) : syntax_exp =
                   head_pat, tail_pat, untype env'' ifcons,
                   untype env ifnil)
 
-    | LetTransfer ( var_storage, var_result,
-                    loc,
-                    contract_exp,
-                    amount_exp,
-                    storage_exp,
-                    arg_exp,
-                    body_exp) ->
-       let bv =  body_exp.bv in
-       let (var_storage', env') = find_free env var_storage bv in
-       let (var_result', env') = find_free env' var_result bv in
-
-       LetTransfer ( var_storage', var_result',
-                     loc,
-                     untype env contract_exp,
-                     untype env amount_exp,
-                     untype env storage_exp,
-                     untype env arg_exp,
-                     untype env' body_exp)
+    | Transfer (loc, contract_exp, amount_exp, arg_exp) ->
+      Transfer (loc,
+                untype env contract_exp,
+                untype env amount_exp,
+                untype env arg_exp)
 
     | MatchVariant (arg, loc,
                     [
@@ -186,16 +185,25 @@ let rec untype (env : env) (code : encoded_exp) : syntax_exp =
                       CConstr ("Right", [right_var]), right_arg;
                     ])
 
+    | CreateContract (loc, args, contract) ->
+      CreateContract (loc, List.map (untype env) args, untype_contract contract)
+
+    | ContractAt (loc, addr, ty) ->
+      ContractAt (loc, untype env addr, ty)
+
+    | Unpack (loc, e, ty) ->
+      Unpack (loc, untype env e, ty)
+
     | Record (_, _)
-      | Constructor (_, _, _)
-      | MatchVariant (_, _, _) ->
+    | Constructor (_, _, _)
+    | MatchVariant (_, _, _) ->
 
        LiquidLoc.raise_error
          "untype: unimplemented code:\n%s%!"
          (LiquidPrinter.Liquid.string_of_code code)
 
   in
-  mk desc
+  mk desc code.ty
 
 and untype_case env (var : string) arg =
   let bv = arg.bv in
@@ -203,9 +211,11 @@ and untype_case env (var : string) arg =
   let arg' = untype env' arg in
   (var', arg')
 
-let untype_contract contract =
+and untype_contract contract =
   let contract = LiquidBoundVariables.bound_contract contract in
   let env = empty_env () in
   let env = new_binding "storage/1" "storage" env in
   let env = new_binding "parameter/2" "parameter" env in
   { contract with code = untype env contract.code }
+
+let untype_code code = untype (empty_env ()) code

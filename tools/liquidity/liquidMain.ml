@@ -65,38 +65,68 @@ let compile_liquid_file filename =
   begin match syntax_init with
   | None -> ()
   | Some syntax_init ->
-    match LiquidInit.compile_liquid_init env syntax_ast syntax_init with
+    match LiquidInit.compile_liquid_init env syntax_ast.contract_sig syntax_init with
+    | LiquidInit.Init_constant c_init when !LiquidOptions.json ->
+      let s = LiquidToTezos.(json_of_const @@ convert_const c_init) in
+      let output = env.filename ^ ".init.json" in
+      FileString.write_file output s;
+      Printf.eprintf "Constant initial storage generated in %S\n%!" output
     | LiquidInit.Init_constant c_init ->
       let s = LiquidPrinter.Michelson.line_of_const c_init in
       let output = env.filename ^ ".init.tz" in
       FileString.write_file output s;
       Printf.eprintf "Constant initial storage generated in %S\n%!" output
     | LiquidInit.Init_code (_, pre_init) ->
-      let mic_init = LiquidToTezos.convert_contract ~expand:true pre_init in
-      let s = LiquidToTezos.line_of_contract mic_init in
-      let output = env.filename ^ ".initializer.tz" in
+      let mic_init, _ = LiquidToTezos.convert_contract ~expand:true pre_init in
+      let s, output =
+        if !LiquidOptions.json then
+          LiquidToTezos.json_of_contract mic_init,
+          env.filename ^ ".initializer.tz.json"
+        else
+          LiquidToTezos.line_of_contract mic_init,
+          env.filename ^ ".initializer.tz"
+      in
       FileString.write_file output s;
       Printf.eprintf "Storage initializer generated in %S\n%!" output
   end;
 
-  let output = filename ^ ".tz" in
-  let c = LiquidToTezos.convert_contract ~expand:false pre_michelson in
-  let s =
-    if !LiquidOptions.singleline
-    then LiquidToTezos.line_of_contract c
-    else LiquidToTezos.string_of_contract c
+  let c, loc_table =
+    LiquidToTezos.convert_contract ~expand:(!LiquidOptions.json) pre_michelson
   in
-  FileString.write_file output s;
-  Printf.eprintf "File %S generated\n%!" output;
-  Printf.eprintf "If tezos is compiled, you may want to typecheck with:\n";
-  Printf.eprintf "  tezos-client typecheck program %s\n" output
+
+  if !LiquidOptions.json then
+    let output = filename ^ ".tz.json" in
+    let s = LiquidToTezos.json_of_contract c in
+    FileString.write_file output s;
+    Printf.eprintf "File %S generated\n%!" output;
+    Printf.eprintf "If you have a node running, \
+                    you may want to typecheck with:\n";
+    Printf.eprintf "  curl http://127.0.0.1:8732/chains/main/blocks/head/\
+                    helpers/scripts/typecheck_code -H \
+                    \"Content-Type:application/json\" \
+                    -d '{\"program\":'$(cat %s)'}'\n" output
+  else
+    let output = filename ^ ".tz" in
+    let s =
+      if !LiquidOptions.singleline
+      then LiquidToTezos.line_of_contract c
+      else LiquidToTezos.string_of_contract c in
+    FileString.write_file output s;
+    Printf.eprintf "File %S generated\n%!" output;
+    Printf.eprintf "If tezos is compiled, you may want to typecheck with:\n";
+    Printf.eprintf "  tezos-client typecheck script %s\n" output
 
 
 let compile_tezos_file filename =
-  let code, env = LiquidToTezos.read_tezos_file filename in
+  let code, env =
+    if Filename.check_suffix filename ".json" || !LiquidOptions.json then
+      LiquidToTezos.read_tezos_json filename
+    else LiquidToTezos.read_tezos_file filename
+  in
 
-  let c, annoted_tz = LiquidFromTezos.convert_contract env code in
+  let c, annoted_tz, type_annots = LiquidFromTezos.convert_contract env code in
   let c = LiquidClean.clean_contract c in
+  (* let c = if !LiquidOptions.peephole then LiquidPeephole.simplify c else c in *)
   let c = LiquidInterp.interp c in
   if !LiquidOptions.parseonly then exit 0;
   if !LiquidOptions.verbosity>0 then begin
@@ -107,13 +137,15 @@ let compile_tezos_file filename =
       Printf.eprintf "Warning: could not generate pdf from .dot file\n%!";
   end;
   if !LiquidOptions.typeonly then exit 0;
+
   let c = LiquidDecomp.decompile c in
   if !LiquidOptions.verbosity>0 then
   FileString.write_file  (filename ^ ".liq.pre")
                          (LiquidPrinter.Liquid.string_of_contract c);
   let env = LiquidFromOCaml.initial_env filename in
   let typed_ast = LiquidCheck.typecheck_contract ~warnings:false env c in
-  let encode_ast, to_inline = LiquidEncode.encode_contract env typed_ast in
+  let encode_ast, to_inline =
+    LiquidEncode.encode_contract ~decompiling:true env typed_ast in
   let live_ast = LiquidSimplify.simplify_contract
       ~decompile_annoted:annoted_tz encode_ast to_inline in
   let untyped_ast = LiquidUntype.untype_contract live_ast in
@@ -123,6 +155,7 @@ let compile_tezos_file filename =
                          (try
                             LiquidToOCaml.string_of_structure
                               (LiquidToOCaml.structure_of_contract
+                                 ~type_annots
                                  untyped_ast)
                           with LiquidError _ ->
                             LiquidPrinter.Liquid.string_of_contract
@@ -135,12 +168,14 @@ let handle_file filename =
   if Filename.check_suffix filename ".liq" then
     compile_liquid_file filename
   else
-    if Filename.check_suffix filename ".tz" then
-      compile_tezos_file filename
-    else begin
-        Printf.eprintf "Error: unknown extension for %S\n%!" filename;
-        exit 2
-      end
+  if Filename.check_suffix filename ".tz" ||
+     Filename.check_suffix filename ".json"
+  then
+    compile_tezos_file filename
+  else begin
+    Printf.eprintf "Error: unknown extension for %S\n%!" filename;
+    exit 2
+  end
 
 let handle_file filename =
   try
@@ -167,18 +202,37 @@ module Data = struct
     List.iter (fun (s,x) ->
         match x with
         | Error error ->
-           LiquidLoc.report_error error
+           LiquidLoc.report_error Format.err_formatter error
         | Ok x ->
            Printf.printf "%s: %s\n%!" s x)
               [ "parameter", p; "storage", s ]
 
   let run () =
-    let result, r_storage =
-      LiquidDeploy.Sync.run
-        (LiquidDeploy.From_file !contract) !parameter !storage
+    let open LiquidDeploy in
+    let ops, r_storage, big_map_diff =
+      Sync.run (From_file !contract) !parameter !storage
     in
-    Printf.printf "%s\n%!"
-      (LiquidData.string_of_const (CTuple [result; r_storage]))
+    Printf.printf "%s\n# Internal operations: %d\n%!"
+      (LiquidData.string_of_const r_storage)
+      (List.length ops);
+    match big_map_diff with
+    | None -> ()
+    | Some diff ->
+      Printf.printf "\nBig map diff:\n";
+      List.iter (function
+          | Big_map_add (k, v) ->
+            Printf.printf "+  %s --> %s\n"
+              (match k with
+               | DiffKeyHash h -> h
+               | DiffKey k -> LiquidData.string_of_const k)
+              (LiquidData.string_of_const v)
+          | Big_map_remove k ->
+            Printf.printf "-  %s\n"
+              (match k with
+               | DiffKeyHash h -> h
+               | DiffKey k -> LiquidData.string_of_const k)
+        ) diff;
+      Printf.printf "%!"
 
 
   let init_inputs = ref []
@@ -189,18 +243,26 @@ module Data = struct
   let forge_deploy () =
     let op =
       LiquidDeploy.Sync.forge_deploy
+        ~delegatable:!LiquidOptions.delegatable
+        ~spendable:!LiquidOptions.spendable
         (LiquidDeploy.From_file !contract) (List.rev !init_inputs)
     in
     Printf.eprintf "Raw operation:\n--------------\n%!";
     Printf.printf "%s\n%!" op
 
   let deploy () =
-    let op_h, contract_id =
+    match
       LiquidDeploy.Sync.deploy
+        ~delegatable:!LiquidOptions.delegatable
+        ~spendable:!LiquidOptions.spendable
         (LiquidDeploy.From_file !contract) (List.rev !init_inputs)
-    in
-    Printf.printf "New contract %s deployed in operation %s\n%!"
-      contract_id op_h
+    with
+    | op_h, Ok contract_id ->
+      Printf.printf "New contract %s deployed in operation %s\n%!"
+        contract_id op_h
+    | op_h, Error e ->
+      Printf.printf "Failed deployment in operation %s\n%!" op_h;
+      raise e
 
   let get_storage () =
     let r_storage =
@@ -211,27 +273,33 @@ module Data = struct
       (LiquidData.string_of_const r_storage)
 
   let call () =
-    let op_h =
+    match
       LiquidDeploy.Sync.call
         (LiquidDeploy.From_file !contract)
         !contract_address
         !parameter
-    in
-    Printf.printf "Successful call to contract %s (at %s) in operation %s\n%!"
-      !contract !contract_address op_h
+    with
+    | op_h, Ok () ->
+      Printf.printf "Successful call to contract %s (at %s) in operation %s\n%!"
+        !contract !contract_address op_h
+    | op_h, Error e ->
+      Printf.printf "Failed call to contract %s (at %s) in operation %s\n%!"
+        !contract !contract_address op_h;
+      raise e
+
 
 end
 
 let parse_tez_to_string expl amount =
   match LiquidData.translate (LiquidFromOCaml.initial_env expl)
-          dummy_syntax_contract amount Ttez
+          dummy_contract_sig amount Ttez
   with
   | CTez t ->
-    let cents = match t.centiles with
-      | Some cents -> cents
-      | None  -> "00"
+    let mutez = match t.mutez with
+      | Some mutez -> mutez
+      | None  -> "000000"
     in
-    t.tezzies ^ cents
+    t.tezzies ^ mutez
   | _ -> assert false
 
 
@@ -242,6 +310,12 @@ let main () =
 
       "--verbose", Arg.Unit (fun () -> incr LiquidOptions.verbosity),
       " Increment verbosity";
+
+      "--version", Arg.Unit (fun () ->
+          Format.printf "%s@." LiquidToOCaml.output_version;
+          exit 0
+        ),
+      " Show version and exit";
 
       "--no-peephole", Arg.Clear LiquidOptions.peephole,
       " Disable peephole optimizations";
@@ -265,6 +339,9 @@ let main () =
           LiquidOptions.annotmic := false;
           LiquidOptions.singleline := true),
       " Produce compact Michelson";
+
+      "--json", Arg.Set LiquidOptions.json,
+      " Output Michelson in JSON representation";
 
       "--amount", Arg.String (fun amount ->
           LiquidOptions.amount := parse_tez_to_string "--amount" amount
@@ -295,6 +372,12 @@ let main () =
             Data.run ());
       ],
       "FILE.liq PARAMETER STORAGE Run Liquidity contract on Tezos node";
+
+      "--delegatable", Arg.Set LiquidOptions.delegatable,
+      " With --[forge-]deploy, deploy a delegatable contract";
+
+      "--spendable", Arg.Set LiquidOptions.spendable,
+      " With --[forge-]deploy, deploy a spendable contract";
 
       "--forge-deploy", Arg.Tuple [
         Arg.String (fun s -> Data.contract := s);
@@ -369,13 +452,29 @@ let () =
     main ()
   with
   | LiquidError error ->
-    LiquidLoc.report_error error;
+    LiquidLoc.report_error Format.err_formatter error;
     exit 1
   | LiquidFromTezos.Missing_program_field f ->
     Format.eprintf "Missing script field %s@." f;
     exit 1
-  | LiquidDeploy.RequestError msg ->
-    Format.eprintf "Request Error: %s@." msg;
+  | LiquidDeploy.RequestError (code, msg) ->
+    Format.eprintf "Request Error (code %d):\n%s@." code msg;
+    exit 1
+  | LiquidDeploy.ResponseError msg ->
+    Format.eprintf "Response Error:\n%s@." msg;
+    exit 1
+  | LiquidDeploy.RuntimeError (error, _trace) ->
+    LiquidLoc.report_error ~kind:"Runtime error" Format.err_formatter error;
+    exit 1
+  | LiquidDeploy.LocalizedError error ->
+    LiquidLoc.report_error ~kind:"Error" Format.err_formatter error;
+    exit 1
+  | LiquidDeploy.RuntimeFailure (error, None, _trace) ->
+    LiquidLoc.report_error ~kind:"Failed at runtime" Format.err_formatter error;
+    exit 1
+  | LiquidDeploy.RuntimeFailure (error, Some s, _trace) ->
+    LiquidLoc.report_error ~kind:"Failed at runtime" Format.err_formatter error;
+    Format.eprintf "Failed with %s@." s;
     exit 1
   | Failure f ->
     Format.eprintf "Failure: %s@." f;

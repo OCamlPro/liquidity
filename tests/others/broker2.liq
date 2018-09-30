@@ -15,7 +15,7 @@ let contract
       (storage : storage)
       [%return : unit] =
 
-  if storage.state <> "open" then Current.fail ()
+  if storage.state <> "open" then Current.failwith ()
   else
     if Current.time () < storage.timeout then (* Before timeout *)
       (* We compute ((1 + P) + N) tez for keeping the contract alive *)

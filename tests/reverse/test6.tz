@@ -1,15 +1,15 @@
 parameter bool;
-return int;
 storage int;
 code {DUP; CAR;
       DIP { CDR; PUSH int 1 };
       # stack is: parameter :: 1 :: storage
       IF # if parameter = true
-         { DROP; DUP;
-      # stack is storage :: storage
+         { DROP;
+      # stack is storage :: []
          }
-         {
-      # stack is 1 :: storage
+         { DIP { DROP }
+      # stack is 1 :: []
          };
+      NIL operation;
       PAIR;
      }

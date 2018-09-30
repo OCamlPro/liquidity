@@ -17,7 +17,7 @@ echo ${LIQEXEC} tests/$test.liq
 ${LIQEXEC} tests/$test.liq || exit 2
 
 if [ -f ${TEZOS_FULL_PATH} ] ; then
-    ${TEZOS_FULL_PATH} typecheck program tests/$test.liq.tz || exit 2
+    ${TEZOS_FULL_PATH} ${TEZOS_ARGS} typecheck script tests/$test.liq.tz || exit 2
 else
     echo "\n${RED}${TEZOS_FULL_PATH} not present ! typechecking of tests/$test.liq.tz skipped${DEFAULT}\n"
 fi
@@ -29,11 +29,11 @@ echo ${LIQEXEC} tests/$test.liq.tz.liq
 ${LIQEXEC} tests/$test.liq.tz.liq || exit 2
 
 if [ -f ${TEZOS_FULL_PATH} ] ; then
-    ${TEZOS_FULL_PATH} typecheck program tests/$test.liq.tz.liq.tz || exit 2
+    ${TEZOS_FULL_PATH} ${TEZOS_ARGS} typecheck script tests/$test.liq.tz.liq.tz || exit 2
 else
     echo "\n${RED}${TEZOS_FULL_PATH} not present ! typechecking of tests/$test.liq.tz.liq.tz skipped${DEFAULT}\n"
 fi
 
-echo ./_obuild/ocp-liquidity-comp/ocp-liquidity-comp.asm -I +../zarith zarith.cma -I _obuild/liquidity-env ./_obuild/liquidity-env/liquidity-env.cma -impl tests/$test.liq
+echo ./_obuild/ocp-liquidity-comp/ocp-liquidity-comp.asm -I +../zarith zarith.cma -I _obuild/liquidity-env unix.cma ./_obuild/liquidity-env/liquidity-env.cma -impl tests/$test.liq
 ./_obuild/ocp-liquidity-comp/ocp-liquidity-comp.asm -I +../zarith zarith.cma -I _obuild/liquidity-env unix.cma ./_obuild/liquidity-env/liquidity-env.cma -dsource -impl tests/$test.liq || exit 2
 rm -f a.out
