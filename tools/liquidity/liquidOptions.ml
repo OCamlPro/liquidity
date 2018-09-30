@@ -38,3 +38,5 @@ let private_key = ref (None : string option)
 let operation = ref (None : string option)
 let signature = ref (None : string option)
 let counter = ref (None : int option)
+
+let alphanet = ref false

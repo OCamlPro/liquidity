@@ -398,9 +398,15 @@ let main () =
       "--private-key", Arg.String (fun s -> LiquidOptions.private_key := Some s),
       "<edsk...> Set the private key for deploying a contract (default: none)";
 
+      "--counter", Arg.Int (fun n -> LiquidOptions.counter := Some n),
+      "N Set the counter for the operation instead of retrieving it";
+
       "--tezos-node", Arg.String (fun s -> LiquidOptions.tezos_node := s),
       "<addr:port> Set the address and port of a Tezos node to run or deploy \
        contracts (default: 127.0.0.1:8732)";
+
+      "--alphanet", Arg.Set LiquidOptions.alphanet,
+      " Use alphanet protocol (unstable)";
 
       "--run", Arg.Tuple [
         Arg.String (fun s -> Data.contract := s);
@@ -426,9 +432,6 @@ let main () =
             Data.init_storage ());
       ],
       "FILE.liq [INPUT1 INPUT2 ...] Forge deployment operation for contract";
-
-      "--counter", Arg.Int (fun n -> LiquidOptions.counter := Some n),
-      "N Set the counter for the operation instead of retrieving it";
 
       "--forge-deploy", Arg.Tuple [
         Arg.String (fun s -> Data.contract := s);
