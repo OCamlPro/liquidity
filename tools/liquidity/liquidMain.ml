@@ -289,7 +289,7 @@ module Data = struct
       Printf.printf "New contract %s deployed in operation %s\n%!"
         contract_id op_h
     | op_h, Error e ->
-      Printf.printf "Failed deployment in operation %s\n%!" op_h;
+      Printf.eprintf "Failed deployment in operation %s\n%!" op_h;
       raise e
 
   let get_storage () =
@@ -315,6 +315,19 @@ module Data = struct
         !contract !contract_address op_h;
       raise e
 
+  let inject file =
+    let signature = match !LiquidOptions.signature with
+      | None ->
+        Printf.eprintf "Error: missing --signature option for --inject\n%!";
+        exit 2
+      | Some signature -> signature
+    in
+    (* an hexa encoded operation *)
+    let operation = FileString.read_file file in
+    LiquidDeploy.Sync.inject
+            ~operation
+            ~signature;
+    Printf.printf "Operation injected\n%!"
 
 end
 
@@ -469,6 +482,16 @@ let main () =
              Data.translate ());
        ]),
       "FILE.liq PARAMETER [STORAGE] Translate to Michelson";
+
+
+      "--signature", Arg.String (fun s -> LiquidOptions.signature := Some s),
+      "SIGNATURE Set the signature for an operation";
+
+      "--inject", Arg.String (fun op ->
+          work_done := true;
+          Data.inject op
+        ), "OPERATION.bytes Inject a sign operation";
+
 
     ] @ LiquidToTezos.arg_list work_done
 

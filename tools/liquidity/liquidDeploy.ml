@@ -79,6 +79,7 @@ module type S = sig
   val forge_call : from -> string -> string -> string t
   val call : from -> string -> string -> (string * (unit, exn) result) t
   val activate : secret:string -> string t
+  val inject : operation:string -> signature:string -> unit t
 end
 
 open Lwt
@@ -171,39 +172,29 @@ module Network = struct
     Lwt.return (rc, (Buffer.contents r))
 end
 
-let curl_post ~data path =
+(*      (Ezjsonm.to_string ~minify:false (Ezjsonm.from_string data)); *)
+
+let curl_call meth f data path =
   let host = !LiquidOptions.tezos_node in
   if !LiquidOptions.verbosity > 0 then
-    Printf.eprintf "\nPOST to %s%s:\n--------------\n%s\n%!"
-      host path
-      (* data; *)
-      (Ezjsonm.to_string ~minify:false (Ezjsonm.from_string data));
+    Printf.eprintf "\n%s to %s%s:\n--------------\n<<<%s>>>\n%!"
+      meth host path data;
   try
-    Network.post host path data >>= fun (status, json) ->
+    f host path data >>= fun (status, json) ->
     if status <> 200 then raise (RequestError (status, json));
-    if !LiquidOptions.verbosity > 0 then
-      Printf.eprintf "\nNode Response %d:\n------------------\n%s\n%!"
-        status
-        (Ezjsonm.to_string ~minify:false (Ezjsonm.from_string json));
+    if !LiquidOptions.verbosity > 0 then begin
+      Printf.eprintf "\nNode Response %d:\n------------------\n<<<%s>>>\n%!"
+        status json;
+    end;
     return json
   with Curl.CurlException (code, i, s) (* as exn *) ->
-     raise (RequestError (Curl.errno code, s))
+    raise (RequestError (Curl.errno code, s))
+
+let curl_post ~data path =
+  curl_call "POST" Network.post data path
 
 let curl_get path =
-  let host = !LiquidOptions.tezos_node in
-  if !LiquidOptions.verbosity > 0 then
-    Printf.eprintf "\nGET to %s%s:\n--------------\\n%!"
-      host path;
-  try
-    Network.get host path >>= fun (status, json) ->
-    if status <> 200 then raise (RequestError (status, json));
-    if !LiquidOptions.verbosity > 0 then
-      Printf.eprintf "\nNode Response %d:\n------------------\n%s\n%!"
-        status
-        (Ezjsonm.to_string ~minify:false (Ezjsonm.from_string json));
-    return json
-  with Curl.CurlException (code, i, s) (* as exn *) ->
-     raise (RequestError (Curl.errno code, s))
+  curl_call "GET" (fun host path data -> Network.get host path) "" path
 
 
 let post = ref curl_post
@@ -974,7 +965,7 @@ let hash msg =
 let sign sk op_b =
   Ed25519.sign sk (hash op_b)
 
-let inject ?loc_table ?sk ~head json_op op =
+let inject_operation ?loc_table ?sk ~head json_op op =
   let op_b = MBytes.of_string (Hex.to_string op) in
   get_protocol () >>= fun protocol ->
   let signed_op, op_hash, data = match sk with
@@ -1077,7 +1068,7 @@ let deploy ?(delegatable=false) ?(spendable=false) liquid init_params_strings =
   forge_deploy ~head ~source ~public_key ~delegatable ~spendable
     liquid init_params_strings
   >>= fun (op, op_json, loc_table) ->
-  inject ~loc_table ~sk ~head op_json (`Hex op) >>= function
+  inject_operation ~loc_table ~sk ~head op_json (`Hex op) >>= function
   | op_h, Ok [c] -> return (op_h, Ok c)
   | op_h, Error e -> return (op_h, Error e)
   | _ -> raise (ResponseError "deploy (inject)")
@@ -1164,7 +1155,7 @@ let call liquid address parameter_string =
   forge_call ~head ~source ~public_key
     liquid address parameter_string
   >>= fun (op, op_json, loc_table) ->
-  inject ~loc_table ~sk ~head op_json (`Hex op) >>= function
+  inject_operation ~loc_table ~sk ~head op_json (`Hex op) >>= function
   | op_h, Ok [] -> return (op_h, Ok ())
   | op_h, Error e -> return (op_h, Error e)
   | _ -> raise (ResponseError "call (inject)")
@@ -1200,7 +1191,7 @@ let reveal sk =
      return_none
   ) >>= function
   | Some op ->
-    inject ~sk ~head operations_json (`Hex op) >>= fun _ ->
+    inject_operation ~sk ~head operations_json (`Hex op) >>= fun _ ->
     return_unit
   | None ->
     return_unit
@@ -1237,9 +1228,38 @@ let activate ~secret =
    with Not_found ->
      raise_response_error "forge activation" (Ezjsonm.from_string r)
   ) >>= fun op ->
-  inject ~sk ~head operations_json (`Hex op) >>= function
+  inject_operation ~sk ~head operations_json (`Hex op) >>= function
   | op_h, Ok [] -> return op_h
   | _, _ -> raise (ResponseError "activation (inject)")
+
+
+(* operation is an hexa string, signature is "edsig..." of 0x03..., where
+   [...] is the hexa string of operation. *)
+let inject ~operation ~signature =
+  let signature =
+    match Ed25519.Signature.of_b58check signature with
+    | Error _ -> failwith "cannot decode signature"
+    | Ok signature_b ->
+      Hex.show (Hex.of_string (MBytes.to_string signature_b))
+  in
+  let b = Buffer.create 1000 in
+  Buffer.add_char b '"';
+  for i = 0 to String.length operation -1 do
+    let c = operation.[i] in
+    match c with
+    | '0'..'9' | 'a' .. 'f' | 'A'..'F' -> Buffer.add_char b c
+    | ' ' | '\n' | '\t' -> ()
+    | _ ->
+      Printf.eprintf "Error: illegal characher '%s' in operation hexa\n%!"
+        (Char.escaped c);
+      exit 2
+  done;
+  Buffer.add_string b signature;
+  Buffer.add_char b '"';
+  let data = Buffer.contents b in
+  send_post "/injection/operation" ~data >>= fun result ->
+  Printf.eprintf "Inject returned:\n%S\n%!" result;
+  return ()
 
 
 (* Withoud optional argument head *)
@@ -1276,6 +1296,10 @@ module Async = struct
 
   let activate ~secret =
     activate ~secret
+
+  let inject ~operation ~signature =
+    inject ~operation ~signature
+
 end
 
 module Sync = struct
@@ -1311,5 +1335,8 @@ module Sync = struct
 
   let activate ~secret =
     Lwt_main.run (activate ~secret)
+
+  let inject ~operation ~signature =
+    Lwt_main.run (inject ~operation ~signature)
 
 end

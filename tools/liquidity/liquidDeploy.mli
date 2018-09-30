@@ -104,6 +104,8 @@ module type S = sig
 
   val activate : secret:string -> string t
 
+  (* Inject an operation in hexa and a signature *)
+  val inject : operation:string -> signature:string -> unit t
 end
 
 module Async : S with type 'a t = 'a Lwt.t
