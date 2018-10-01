@@ -27,7 +27,6 @@ type storage = {
 }
 
 let%init storage (owners : address set) (min_agree : nat) =
-  let owners = Set.add (Current.source ()) owners in
   let owners_length = Set.size owners in
   if min_agree > owners_length then
     Current.failwith "Number of owners must be greater or equal to quorum";

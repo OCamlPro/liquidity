@@ -272,11 +272,16 @@ module Data = struct
       LiquidDeploy.Sync.init_storage
         (LiquidDeploy.From_file !contract) (List.rev !init_inputs)
     in
-    Printf.eprintf "Initial storage:\n----------------\n%!";
     if !LiquidOptions.json then
-      Printf.printf "%s\n%!" LiquidToTezos.(json_of_const @@ convert_const storage)
+      let s = LiquidToTezos.(json_of_const @@ convert_const storage) in
+      let output = !contract ^ ".init.json" in
+      FileString.write_file output s;
+      Printf.printf "Constant initial storage generated in %S\n%!" output
     else
-      Printf.printf "%s\n%!" (LiquidData.string_of_const storage)
+      let s = LiquidPrinter.Michelson.line_of_const storage in
+      let output = !contract ^ ".init.tz" in
+      FileString.write_file output s;
+      Printf.printf "Constant initial storage generated in %S\n%!" output
 
   let deploy () =
     match
@@ -411,7 +416,7 @@ let main () =
           | "mainnet" -> LiquidOptions.protocol := Some Mainnet
           | s ->
             Format.eprintf
-              "Unknown protocol %s (use mainnet, zeronet, alphanet)" s;
+              "Unknown protocol %s (use mainnet, zeronet, alphanet)@." s;
             exit 2
         ),
       " Specify protocol (mainnet, zeronet, alphanet) \
@@ -440,7 +445,7 @@ let main () =
             work_done := true;
             Data.init_storage ());
       ],
-      "FILE.liq [INPUT1 INPUT2 ...] Forge deployment operation for contract";
+      "FILE.liq [INPUT1 INPUT2 ...] Generate initial storage";
 
       "--forge-deploy", Arg.Tuple [
         Arg.String (fun s -> Data.contract := s);
