@@ -35,8 +35,15 @@ let gas_limit = ref "400000"
 let storage_limit = ref "60000"
 
 let private_key = ref (None : string option)
-let operation = ref (None : string option)
 let signature = ref (None : string option)
 let counter = ref (None : int option)
 
-let alphanet = ref false
+type proto =
+  | Zeronet
+  | Mainnet
+  | Alphanet
+
+let protocol = ref (None : proto option)
+
+let main_id = "NetXdQprcVkpaWU"
+let zeronet_id = "NetXw7kCvfAKjhj"

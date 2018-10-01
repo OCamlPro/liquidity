@@ -405,8 +405,17 @@ let main () =
       "<addr:port> Set the address and port of a Tezos node to run or deploy \
        contracts (default: 127.0.0.1:8732)";
 
-      "--alphanet", Arg.Set LiquidOptions.alphanet,
-      " Use alphanet protocol (unstable)";
+      "--protocol", Arg.String (function
+          | "zeronet" -> LiquidOptions.protocol := Some Zeronet
+          | "alphanet" -> LiquidOptions.protocol := Some Alphanet
+          | "mainnet" -> LiquidOptions.protocol := Some Mainnet
+          | s ->
+            Format.eprintf
+              "Unknown protocol %s (use mainnet, zeronet, alphanet)" s;
+            exit 2
+        ),
+      " Specify protocol (mainnet, zeronet, alphanet) \
+       (detect if not specified)";
 
       "--run", Arg.Tuple [
         Arg.String (fun s -> Data.contract := s);

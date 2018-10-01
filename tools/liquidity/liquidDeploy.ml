@@ -537,13 +537,81 @@ let decompile_michelson code =
   let untyped_ast = LiquidUntype.untype_contract live_ast in
   untyped_ast
 
-let managerPubkey () =
-  if !LiquidOptions.alphanet then
-    "manager_pubkey"
-  else
-    "managerPubkey"
+let get_json_string s =
+  try Scanf.sscanf s "%S" (fun x -> x)
+  with _ -> raise Not_found
 
-let operation_of_json r =
+let get_json_int s =
+  try Scanf.sscanf s "%d" (fun x -> x)
+  with _ ->
+  try Scanf.sscanf s "\"%d\"" (fun x -> x)
+  with _ -> raise Not_found
+
+let get_counter source =
+  send_get
+      (Printf.sprintf "/chains/main/blocks/head/context/contracts/%s/counter"
+         source)
+  >>= fun r ->
+  try
+    get_json_int r |> return
+  with Not_found ->
+    raise_response_error "get_counter" (Ezjsonm.from_string r)
+
+let get_next_counter source =
+  match !LiquidOptions.counter with
+  | None ->
+    get_counter source >>= fun counter ->
+    return (counter+1)
+  | Some counter -> return counter
+
+let get_head_hash () =
+  send_get "/chains/main/blocks/head/header" >>= fun r ->
+  let r = Ezjsonm.from_string r in
+  try
+    Ezjsonm.find r ["hash"] |> Ezjsonm.get_string |> return
+  with Not_found ->
+    raise_response_error "get_head_hash" r
+
+type head = {
+  head_hash : string;
+  head_chain_id : string;
+}
+
+let get_head () =
+  send_get "/chains/main/blocks/head" >>= fun r ->
+  let r = Ezjsonm.from_string r in
+  try
+    let head_hash = Ezjsonm.find r ["hash"] |> Ezjsonm.get_string in
+    let head_chain_id = Ezjsonm.find r ["chain_id"] |> Ezjsonm.get_string in
+    return { head_hash; head_chain_id }
+  with Not_found ->
+    raise_response_error "get_head" r
+
+let get_predecessor () =
+  send_get "/chains/main/blocks/head/header" >>= fun r ->
+  let r = Ezjsonm.from_string r in
+  try
+    Ezjsonm.find r ["predecessor"] |> Ezjsonm.get_string |> return
+  with Not_found ->
+    raise_response_error "get_predecessor" r
+
+let get_protocol () =
+  send_get "/chains/main/blocks/head/header" >>= fun r ->
+  let r = Ezjsonm.from_string r in
+  try
+    Ezjsonm.find r ["protocol"] |> Ezjsonm.get_string |> return
+  with Not_found ->
+    raise_response_error "get_protocol" r
+
+let managerPubkey chain_id =
+  match !LiquidOptions.protocol with
+  | Some Zeronet -> "manager_pubkey"
+  | Some (Alphanet | Mainnet) -> "managerPubkey"
+  | None ->
+    if chain_id = LiquidOptions.zeronet_id then "manager_pubkey"
+    else "managerPubkey"
+
+let operation_of_json ~head r =
   let env = LiquidTezosTypes.empty_env "operation" in
   let source = Ezjsonm.(find r ["source"] |> get_string) in
   let nonce = Ezjsonm.(find r ["nonce"] |> get_int) in
@@ -579,7 +647,7 @@ let operation_of_json r =
           Some (code, storage)
         with Not_found -> None in
       Origination {
-          manager = find r [managerPubkey ()] |> get_string;
+          manager = find r [managerPubkey head.head_hash] |> get_string;
           script;
           spendable =
             (try find r ["spendable"] |> get_bool with Not_found -> true);
@@ -628,7 +696,8 @@ let run_pre ?(debug=false)
   try
     let storage_r = Ezjsonm.find r ["storage"] in
     let operations_r = Ezjsonm.find r ["operations"] in
-    let operations = Ezjsonm.get_list operation_of_json operations_r in
+    get_head () >>= fun head ->
+    let operations = Ezjsonm.get_list (operation_of_json ~head) operations_r in
     let big_map_diff_r =
       try Some (Ezjsonm.find r ["big_map_diff"])
       with Not_found -> None
@@ -722,72 +791,6 @@ let run liquid input_string storage_string =
   run ~debug:false liquid input_string storage_string
   >>= fun (nbops, sto, big_diff, _) ->
   Lwt.return (nbops, sto, big_diff)
-
-let get_json_string s =
-  try Scanf.sscanf s "%S" (fun x -> x)
-  with _ -> raise Not_found
-
-let get_json_int s =
-  try Scanf.sscanf s "%d" (fun x -> x)
-  with _ ->
-  try Scanf.sscanf s "\"%d\"" (fun x -> x)
-  with _ -> raise Not_found
-
-let get_counter source =
-  send_get
-      (Printf.sprintf "/chains/main/blocks/head/context/contracts/%s/counter"
-         source)
-  >>= fun r ->
-  try
-    get_json_int r |> return
-  with Not_found ->
-    raise_response_error "get_counter" (Ezjsonm.from_string r)
-
-let get_next_counter source =
-  match !LiquidOptions.counter with
-  | None ->
-    get_counter source >>= fun counter ->
-    return (counter+1)
-  | Some counter -> return counter
-
-let get_head_hash () =
-  send_get "/chains/main/blocks/head/header" >>= fun r ->
-  let r = Ezjsonm.from_string r in
-  try
-    Ezjsonm.find r ["hash"] |> Ezjsonm.get_string |> return
-  with Not_found ->
-    raise_response_error "get_head_hash" r
-
-type head = {
-  head_hash : string;
-  head_chain_id : string;
-}
-
-let get_head () =
-  send_get "/chains/main/blocks/head" >>= fun r ->
-  let r = Ezjsonm.from_string r in
-  try
-    let head_hash = Ezjsonm.find r ["hash"] |> Ezjsonm.get_string in
-    let head_chain_id = Ezjsonm.find r ["chain_id"] |> Ezjsonm.get_string in
-    return { head_hash; head_chain_id }
-  with Not_found ->
-    raise_response_error "get_head" r
-
-let get_predecessor () =
-  send_get "/chains/main/blocks/head/header" >>= fun r ->
-  let r = Ezjsonm.from_string r in
-  try
-    Ezjsonm.find r ["predecessor"] |> Ezjsonm.get_string |> return
-  with Not_found ->
-    raise_response_error "get_predecessor" r
-
-let get_protocol () =
-  send_get "/chains/main/blocks/head/header" >>= fun r ->
-  let r = Ezjsonm.from_string r in
-  try
-    Ezjsonm.find r ["protocol"] |> Ezjsonm.get_string |> return
-  with Not_found ->
-    raise_response_error "get_protocol" r
 
 let get_storage liquid address =
   let env, syntax_ast, pre_michelson, pre_init_infos = compile_liquid liquid in
@@ -916,7 +919,7 @@ let forge_deploy ?head ?source ?public_key
   init_storage ~source liquid init_params_strings >>= fun init_storage ->
   begin match head with
     | Some head -> return head
-    | None -> get_head_hash ()
+    | None -> get_head ()
   end >>= fun head ->
   get_next_counter source >>= fun counter ->
   is_revealed source >>= fun source_revealed ->
@@ -937,7 +940,7 @@ let forge_deploy ?head ?source ?public_key
     "counter", Printf.sprintf "\"%d\"" counter;
     "gas_limit", Printf.sprintf "%S" !LiquidOptions.gas_limit;
     "storage_limit", Printf.sprintf "%S" !LiquidOptions.storage_limit;
-    managerPubkey (), Printf.sprintf "%S" source;
+    managerPubkey head.head_chain_id, Printf.sprintf "%S" source;
     "balance", Printf.sprintf "%S" !LiquidOptions.amount;
     "spendable", string_of_bool spendable;
     "delegatable", string_of_bool delegatable;
@@ -961,7 +964,7 @@ let forge_deploy ?head ?source ?public_key
   in
   let operations_json = mk_json_arr operations in
   let data = [
-    "branch", Printf.sprintf "%S" head;
+    "branch", Printf.sprintf "%S" head.head_hash;
     "contents", operations_json;
   ] |> mk_json_obj
   in
@@ -990,7 +993,7 @@ let inject_operation ?loc_table ?sk ~head json_op op =
         Operation_hash.hash_bytes [ op_b ] in
       op, op_hash, [[
         "protocol", Printf.sprintf "%S" protocol;
-        "branch", Printf.sprintf "%S" head;
+        "branch", Printf.sprintf "%S" head.head_hash;
         "contents", json_op;
       ] |> mk_json_obj] |> mk_json_arr
 
@@ -1004,7 +1007,7 @@ let inject_operation ?loc_table ?sk ~head json_op op =
         Operation_hash.hash_bytes [ signed_op_b ] in
       signed_op, op_hash, [[
         "protocol", Printf.sprintf "%S" protocol;
-        "branch", Printf.sprintf "%S" head;
+        "branch", Printf.sprintf "%S" head.head_hash;
         "contents", json_op;
         "signature", Printf.sprintf "%S" signature;
       ] |> mk_json_obj] |> mk_json_arr
@@ -1079,7 +1082,7 @@ let deploy ?(delegatable=false) ?(spendable=false) liquid init_params_strings =
     | None -> get_public_key_hash_from_secret_key sk
   in
   let public_key = get_public_key_from_secret_key sk in
-  get_head_hash () >>= fun head ->
+  get_head () >>= fun head ->
   forge_deploy ~head ~source ~public_key ~delegatable ~spendable
     liquid init_params_strings
   >>= fun (op, op_json, loc_table) ->
@@ -1106,7 +1109,7 @@ let forge_call ?head ?source ?public_key liquid address parameter_string =
   let parameter_json = LiquidToTezos.json_of_const parameter_m in
   begin match head with
     | Some head -> return head
-    | None -> get_head_hash ()
+    | None -> get_head ()
   end >>= fun head ->
   get_next_counter source >>= fun counter ->
   is_revealed source >>= fun source_revealed ->
@@ -1139,7 +1142,7 @@ let forge_call ?head ?source ?public_key liquid address parameter_string =
   in
   let operations_json = mk_json_arr operations in
   let data = [
-    "branch", Printf.sprintf "%S" head;
+    "branch", Printf.sprintf "%S" head.head_hash;
     "contents", operations_json;
   ] |> mk_json_obj
   in
@@ -1165,7 +1168,7 @@ let call liquid address parameter_string =
     | None -> get_public_key_hash_from_secret_key sk
   in
   let public_key = get_public_key_from_secret_key sk in
-  get_head_hash () >>= fun head ->
+  get_head () >>= fun head ->
   forge_call ~head ~source ~public_key
     liquid address parameter_string
   >>= fun (op, op_json, loc_table) ->
@@ -1178,7 +1181,7 @@ let call liquid address parameter_string =
 let reveal sk =
   let source = get_public_key_hash_from_secret_key sk in
   let public_key = get_public_key_from_secret_key sk in
-  get_head_hash () >>= fun head ->
+  get_head () >>= fun head ->
   get_next_counter source >>= fun counter ->
   let reveal_json = [
     "kind", "\"reveal\"";
@@ -1192,7 +1195,7 @@ let reveal sk =
   in
   let operations_json = mk_json_arr [reveal_json] in
   let data = [
-    "branch", Printf.sprintf "%S" head;
+    "branch", Printf.sprintf "%S" head.head_hash;
     "contents", operations_json;
   ] |> mk_json_obj
   in
@@ -1221,7 +1224,7 @@ let activate ~secret =
     | Some source -> source
     | None -> get_public_key_hash_from_secret_key sk
   in
-  get_head_hash () >>= fun head ->
+  get_head () >>= fun head ->
   let activate_json = [
     "kind", "\"activate_account\"";
     "pkh", Printf.sprintf "%S" source;
@@ -1230,7 +1233,7 @@ let activate ~secret =
   in
   let operations_json = mk_json_arr [activate_json] in
   let data = [
-    "branch", Printf.sprintf "%S" head;
+    "branch", Printf.sprintf "%S" head.head_hash;
     "contents", operations_json;
   ] |> mk_json_obj
   in
