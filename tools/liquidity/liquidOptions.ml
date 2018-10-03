@@ -76,3 +76,15 @@ let storage_limit = ref "60000"
     injecting signed transactions and originations directly. *)
 let private_key = ref (None : string option)
 
+let signature = ref (None : string option)
+let counter = ref (None : int option)
+
+type proto =
+  | Zeronet
+  | Mainnet
+  | Alphanet
+
+let protocol = ref (None : proto option)
+
+let main_id = "NetXdQprcVkpaWU"
+let zeronet_id = "NetXw7kCvfAKjhj"

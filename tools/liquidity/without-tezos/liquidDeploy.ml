@@ -85,6 +85,7 @@ module type S = sig
   val call : from -> string -> string -> string ->
     (string * (unit, exn) result) t
   val activate : secret:string -> string t
+  val inject : operation:string -> signature:string -> string t
 end
 
 module Dummy = struct
@@ -115,6 +116,9 @@ module Dummy = struct
 
   let activate ~secret =
     failwith "mini version cannot activate"
+
+  let inject ~operation ~signature =
+    failwith "mini version cannot inject"
 end
 
 module Async = struct include Dummy type 'a t = 'a Lwt.t end

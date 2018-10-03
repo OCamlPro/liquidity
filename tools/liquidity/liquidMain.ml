@@ -311,6 +311,17 @@ let translate () =
       Printf.printf "parameter: %s \nstorage: %s\n%!"
         (to_str parameter_const) (to_str storage_const)
 
+let inject file =
+  let signature = match !LiquidOptions.signature with
+    | None ->
+      Printf.eprintf "Error: missing --signature option for --inject\n%!";
+      exit 2
+    | Some signature -> signature
+  in
+  (* an hexa encoded operation *)
+  let operation = FileString.read_file file in
+  let op_h = LiquidDeploy.Sync.inject ~operation ~signature in
+  Printf.printf "Operation injected: %s\n%!" op_h
 
 let run () =
   let open LiquidDeploy in
@@ -356,11 +367,27 @@ let init_storage () =
     LiquidDeploy.Sync.init_storage
       (LiquidDeploy.From_files (Data.get_files ())) (Data.get_inputs ())
   in
-  Printf.eprintf "Initial storage:\n----------------\n%!";
+  let outname =
+    let c = match !LiquidOptions.main with
+      | Some c -> c
+      | None -> match List.rev (Data.get_files ()) with
+        | c :: _ -> c
+        | [] -> assert false in
+    String.uncapitalize_ascii c in
   if !LiquidOptions.json then
-    Printf.printf "%s\n%!" LiquidToTezos.(json_of_const @@ convert_const storage)
+    let s = LiquidToTezos.(json_of_const @@ convert_const storage) in
+    let output = match !LiquidOptions.output with
+      | Some output -> output
+      | None -> outname ^ ".init.json" in
+    FileString.write_file output s;
+    Printf.printf "Constant initial storage generated in %S\n%!" output
   else
-    Printf.printf "%s\n%!" (LiquidData.string_of_const storage)
+    let s = LiquidPrinter.Michelson.line_of_const storage in
+    let output = match !LiquidOptions.output with
+      | Some output -> output
+      | None -> outname ^ ".init.tz" in
+    FileString.write_file output s;
+    Printf.printf "Constant initial storage generated in %S\n%!" output
 
 let deploy () =
   match
@@ -464,6 +491,9 @@ let main () =
       "--private-key", Arg.String (fun s -> LiquidOptions.private_key := Some s),
       "<edsk...> Set the private key for deploying a contract (default: none)";
 
+      "--counter", Arg.Int (fun n -> LiquidOptions.counter := Some n),
+      "N Set the counter for the operation instead of retrieving it";
+
       "--tezos-node", Arg.String (fun s -> LiquidOptions.tezos_node := s),
       "<addr:port> Set the address and port of a Tezos node to run or deploy \
        contracts (default: 127.0.0.1:8732)\
@@ -471,6 +501,18 @@ let main () =
        \n\
        Available commands:\
       ";
+
+      "--protocol", Arg.String (function
+          | "zeronet" -> LiquidOptions.protocol := Some Zeronet
+          | "alphanet" -> LiquidOptions.protocol := Some Alphanet
+          | "mainnet" -> LiquidOptions.protocol := Some Mainnet
+          | s ->
+            Format.eprintf
+              "Unknown protocol %s (use mainnet, zeronet, alphanet)@." s;
+            exit 2
+        ),
+      " Specify protocol (mainnet, zeronet, alphanet) \
+       (detect if not specified)";
 
       "--run", Arg.Tuple [
         Arg.String (fun s -> Data.entry_name := s);
@@ -494,8 +536,7 @@ let main () =
             work_done := true;
             init_storage ());
       ],
-      " [INPUT1 INPUT2 ...] Forge deployment operation for contract";
-
+      " [INPUT1 INPUT2 ...] Generate initial storage";
 
       "--forge-deploy", Arg.Tuple [
         Arg.Rest Data.register_deploy_input;
@@ -545,7 +586,16 @@ let main () =
              work_done := true;
              translate ());
        ]),
-      "ENTRY PARAMETER [STORAGE] Translate to Michelson\n\nMisc:";
+      "ENTRY PARAMETER [STORAGE] Translate to Michelson";
+
+      "--signature", Arg.String (fun s -> LiquidOptions.signature := Some s),
+      "SIGNATURE Set the signature for an operation";
+
+      "--inject", Arg.String (fun op ->
+          work_done := true;
+          inject op
+        ), "OPERATION.bytes Inject a sign operation\n\nMisc:";
+
 
     ]
   in

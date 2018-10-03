@@ -201,7 +201,7 @@ let transaction
 
 
 let%init storage (owners : address set) (required : nat) =
-  let m_owners = Set.add (Current.source ()) owners in
+  let m_owners = owners in
   let m_num_owners = Set.size m_owners in
   if required > m_num_owners then Current.failwith ();
   {

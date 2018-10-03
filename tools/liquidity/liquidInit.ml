@@ -141,6 +141,17 @@ let rec subst_empty_big_map code =
       if e1 == e1' && e2 == e2' && e3 == e3' then desc
       else MapFold { prim; arg_name; body = e1'; arg = e2'; acc = e3' }
 
+    | Apply { prim = (Prim_sender | Prim_source) as p } ->
+      LiquidLoc.raise_error ~loc
+        "%s forbidden in initializer (for this version of Tezos)"
+        (string_of_primitive p)
+
+    | Apply { prim = Prim_unknown;
+              args = { desc = Var (("Current.source" | "Curent.sender") as p);
+                       loc } :: _ } ->
+      LiquidLoc.raise_error ~loc
+        "%s forbidden in initializer (for this version of Tezos)" p
+
     | Apply { prim; args } ->
       let args' = List.map subst_empty_big_map args in
       if List.for_all2 (==) args args' then desc
