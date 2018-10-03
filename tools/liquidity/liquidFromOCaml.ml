@@ -339,19 +339,24 @@ let rec translate_type env ?expected typ = match typ with
     Ttuple (List.map2 (fun ty expected -> translate_type env ?expected ty)
               types expecteds)
 
+  | { ptyp_desc = Ptyp_constr ({ txt = ty_name }, []) }
+    when Longident.last ty_name = "instance" ->
+    let contract_type_name =
+      match List.rev (Longident.flatten ty_name) with
+      | _ :: rpath -> String.concat "." (List.rev rpath)
+      | _ -> assert false
+    in
+    begin
+      try Tcontract (find_contract_type contract_type_name env)
+      with Not_found ->
+        unbound_contract_type typ.ptyp_loc contract_type_name
+    end
+
   | { ptyp_desc = Ptyp_constr ({ txt = ty_name }, []) } ->
     let ty_name = str_of_id ty_name in
     begin
       try find_type ty_name env
       with Not_found -> unbound_type typ.ptyp_loc ty_name
-    end
-
-  | { ptyp_desc = Ptyp_package ({ txt = contract_type_name }, []) } ->
-    let contract_type_name = str_of_id contract_type_name in
-    begin
-      try Tcontract (find_contract_type contract_type_name env)
-      with Not_found ->
-        unbound_contract_type typ.ptyp_loc contract_type_name
     end
 
   | { ptyp_desc = Ptyp_any; ptyp_loc } ->
@@ -1724,14 +1729,8 @@ and renamespace env old_name new_name =
 and translate_signature contract_type_name env acc ast =
   match ast with
   | [] ->
-    let csig =     {
-      sig_name = Some contract_type_name;
-      entries_sig = List.rev acc
-    } in
-    (* Register instance type in environment *)
-    env.types <-
-      StringMap.add "instance" (Tcontract csig) env.types;
-    csig
+    { sig_name = Some contract_type_name;
+      entries_sig = List.rev acc }
 
   | { psig_desc = Psig_type (
       Recursive, [
@@ -2033,6 +2032,8 @@ and translate_structure env acc ast =
     lift_inner_env inner_env;
     translate_structure env acc ast
 
+  (* Deactivate aliases for signatures *)
+  (*
   | { pstr_desc = Pstr_modtype
           {
             pmtd_name = { txt = contract_type_name };
@@ -2073,9 +2074,12 @@ and translate_structure env acc ast =
     env.contract_types <-
       StringMap.add contract_type_name contract_sig env.contract_types;
     translate_structure env acc ast
+  *)
 
   (* contracts *)
 
+  (* Deactivate aliases for contracts *)
+  (*
   | { pstr_desc = Pstr_module {
       pmb_name = { txt = contract_name };
       pmb_expr = {
@@ -2091,6 +2095,7 @@ and translate_structure env acc ast =
       with Not_found ->
         unbound_contract loc c_name
     end
+  *)
 
   | { pstr_desc = Pstr_module {
       pmb_name = { txt = contract_name };
@@ -2105,6 +2110,10 @@ and translate_structure env acc ast =
       | Some main when main = contract_name ->
         contract, init, inner_env
       | _ ->
+        (* Register contract type (with same name as contract) in environment *)
+        env.contract_types <-
+          StringMap.add contract_name (sig_of_contract contract)
+            env.contract_types;
         lift_inner_env inner_env;
         translate_structure env (Syn_contract contract :: acc) ast
     end
@@ -2141,9 +2150,6 @@ and pack_contract env toplevels =
     partition ([], [], [], None) toplevels in
   let contract =
     { contract_name = env.contractname; storage; values; entries } in
-  (* Register instance type in environment *)
-  env.types <-
-    StringMap.add "instance" (Tcontract (sig_of_contract contract)) env.types;
   contract, init, env
 
 
@@ -2309,6 +2315,10 @@ let translate_multi l =
               | _ ->
                 Format.eprintf "Contract %s@." contract.contract_name;
             end;
+            (* Register contract type (with same name as contract) in environment *)
+            top_env.contract_types <-
+              StringMap.add contract.contract_name (sig_of_contract contract)
+                top_env.contract_types;
             lift_inner_env env;
             Syn_contract contract :: acc
           ) [] (List.rev r_others)

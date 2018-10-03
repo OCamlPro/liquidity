@@ -12,7 +12,7 @@ type pending_state = {
 }
 
 type transaction = {
-  destination : (contract UnitContract);
+  destination : UnitContract.instance;
   amount : tez;
 }
 
@@ -24,7 +24,7 @@ type wallet_operation =
   | ChangeRequirement of nat
   | SetDailyLimit of tez
   | ResetSpentToday
-  | Kill of (contract UnitContract)
+  | Kill of UnitContract.instance
 
 type operation_hash = bytes
 
@@ -219,7 +219,7 @@ let%entry deposit (_u : unit) (storage : storage) =
   if Current.amount () = 0tz then Current.failwith ()
   else no_op, storage
 
-let%entry kill (dest: (contract UnitContract)) storage =
+let%entry kill (dest: UnitContract.instance) storage =
   match confirmAndCheck (Kill dest, storage) with
   | Confirmations_Needed storage -> no_op, storage
   | Execute storage ->

@@ -5,9 +5,9 @@ contract type NatContract = sig
   val%entry thisisit : nat -> storage -> (operation list * storage)
 end
 
-type storage = bool * (contract NatContract)
+type storage = bool * NatContract.instance
 
-let%entry main (parameter : (contract NatContract)) storage =
+let%entry main (parameter : NatContract.instance) storage =
 
   let (b, c) = storage in
   if b then

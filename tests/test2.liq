@@ -4,9 +4,9 @@
 type storage =  string * (* 0: S *)
                 timestamp * (* 1: T *)
                 (tez * tez) * (* 2: P N *)
-                (contract UnitContract) * (* 3: X *)
-                (contract UnitContract) * (* 4: A *)
-                (contract UnitContract)  (* 5: B *)
+                UnitContract.instance * (* 3: X *)
+                UnitContract.instance * (* 4: A *)
+                UnitContract.instance  (* 5: B *)
 
 let%entry main
       (parameter : timestamp)

@@ -27,8 +27,6 @@ contract PlusOne = struct
     ([] : operation list), storage + 1
 end
 
-contract type PS = contract type of PlusOne
-
 (* contract type PS = sig
  *   type storage
  *
@@ -38,9 +36,9 @@ contract type PS = contract type of PlusOne
 let%entry main
     (parameter : signature)
     storage =
-  let x = PS.A in
+  let x = PlusOne.A in
   begin match x with
-  | PS.B -> failwith ()
+  | PlusOne.B -> failwith ()
   | _ -> () end;
   (*  let c = Contract.self () in *)
   let key_hash = Crypto.hash_key storage.key in
@@ -59,7 +57,6 @@ let%entry main
   let delegatable = false in
   let cocococ = (Contract.at storage.c : PlusOne.instance option) in
   let cocococ2 = PlusOne.at storage.c in
-  let cocococ3 = PS.at storage.c in
   let op1 = (Contract.self ()).main parameter ~amount:0tz in
   let account_op, _account =
     Account.create
@@ -72,7 +69,7 @@ let%entry main
       ~spendable
       ~delegatable:true
       ~amount:amount.(0)
-      ~storage:(9 : PS.storage)
+      ~storage:(9 : PlusOne.storage)
       (contract PlusOne)
       (* (contract struct
        *   type storage = int

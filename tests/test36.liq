@@ -1,6 +1,6 @@
 [%%version 0.4]
 
-type storage = ((int, tez) map * (contract UnitContract))
+type storage = ((int, tez) map * UnitContract.instance)
 
 let%entry main (parameter : unit) storage =
   let foo = storage.(0) in

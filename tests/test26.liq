@@ -8,7 +8,7 @@ contract type N = sig
 end
 
 let%entry main
-    (parameter : (contract N))
+    (parameter : N.instance)
     (storage : bool) =
 
   let b =

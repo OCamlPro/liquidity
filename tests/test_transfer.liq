@@ -6,7 +6,7 @@
 type storage = tez
 
 let%entry main
-      (parameter : (contract UnitContract))
+      (parameter : UnitContract.instance)
       (storage : tez) =
 
       let amount = Current.amount () in

@@ -5,9 +5,9 @@ type storage = {
   state : string;
   timeout : timestamp;
   pn : tez * tez;
-  x : (contract UnitContract);
-  a : (contract UnitContract);
-  b : (contract UnitContract);
+  x : UnitContract.instance;
+  a : UnitContract.instance;
+  b : UnitContract.instance;
 }
 
 let%entry main

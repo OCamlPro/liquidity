@@ -15,7 +15,7 @@ end
 
 
 let%entry main
-    (parameter : (contract UnitContract.U) * t)
+    (parameter : UnitContract.U.instance * t)
     (storage : int)  =
 
   let (c, m) = parameter in

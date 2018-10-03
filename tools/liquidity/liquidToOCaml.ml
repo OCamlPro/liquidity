@@ -65,13 +65,13 @@ let top_level_contracts = ref []
 let get_abbrev ty =
   match Hashtbl.find abbrevs ty with
   | s, TypeName _, _ -> typ_constr s []
-  | s, ContractType _, _ -> Typ.package (lid s) []
+  | s, ContractType _, _ -> typ_constr (s ^ ".instance") []
 let add_abbrev s ty kind =
   try
     match Hashtbl.find abbrevs ty with
     | s', kind', _ when s' <> s || kind' <> kind -> raise Not_found
     | _, TypeName _, _ -> typ_constr s []
-    | _, ContractType _, _ -> Typ.package (lid s) []
+    | _, ContractType _, _ -> typ_constr (s ^ ".instance") []
   with Not_found ->
     incr cpt_abbrev;
     let s =
@@ -81,7 +81,7 @@ let add_abbrev s ty kind =
     Hashtbl.replace rev_abbrevs s ();
     match kind with
     | TypeName _ -> typ_constr s []
-    | ContractType  _ -> Typ.package (lid s) []
+    | ContractType _ -> typ_constr (s ^ ".instance") []
 
 let reset_env () =
   cpt_abbrev := 0;
@@ -189,7 +189,7 @@ and convert_contract_sig ~abbrev csig =
       | None ->
         match csig'.sig_name with
         | Some name when eq_types (Tcontract csig') (Tcontract csig) ->
-          Some (Typ.package (lid name) [])
+          Some (typ_constr (name ^ ".instance") [])
         | _ -> None
     ) LiquidFromOCaml.predefined_contract_types None in
   match typ with

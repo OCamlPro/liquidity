@@ -4,7 +4,7 @@ type t = A of int | B | C of (int * nat)
 type storage = int
 
 let%entry main
-    (parameter : (contract UnitContract) * t)
+    (parameter : UnitContract.instance * t)
     (storage : int) =
 
   let (c, m) = parameter in

@@ -9,7 +9,7 @@ end
 
 
 let%entry main
-    (parameter : (contract I) * int list)
+    (parameter : I.instance * int list)
     (storage : int) =
 
   let (c, l) = parameter in

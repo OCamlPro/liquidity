@@ -8,7 +8,7 @@ contract type N = sig
 end
 
 let%entry main
-    (parameter : (contract N))
+    (parameter : N.instance)
     (storage : int) =
 
   let r, ops = match%nat (storage + 1)  with
