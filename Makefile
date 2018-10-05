@@ -30,7 +30,7 @@ distclean: clean
 	rm -rf _obuild
 
 doc:
-	$(MAKE) -C docs/sphynx/
+	$(MAKE) -C docs/sphinx/
 
 # All of these tests must be run with with_tezos=true
 

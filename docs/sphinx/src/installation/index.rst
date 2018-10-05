@@ -50,7 +50,7 @@ As of Aug 15, 2018, the following process should work:
 
      (cd tests && liquidity test0.liq)
 
-7. Optionnally, you can build some local documentation with sphynx
+7. Optionnally, you can build some local documentation with sphinx
    and the Read-The-Docs theme (``pip3 install sphinx-rtd-theme``)::
 
      make doc
