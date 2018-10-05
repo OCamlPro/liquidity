@@ -21,35 +21,40 @@ Let's run ``liquidity`` with no options::
   extension. Michelson files must end with the .tz extension.
 
   Available options:
-  --verbose                Increment verbosity
-  --version                Show version and exit
-  -o <filename>            Output code in <filename>
-  --main <ContractName>    Produce code for contract named <ContractName>
-  --no-peephole            Disable peephole optimizations
-  --type-only              Stop after type checking
-  --parse-only             Stop after parsing
-  --compact                Produce compact Michelson
-  --json                   Output Michelson in JSON representation
-  --amount <1.99tz>        Set amount for deploying or running a contract (default: 0tz)
-  --fee <0.05tz>           Set fee for deploying a contract (default: 0.05tz)
-  --source <tz1...>        Set the source for deploying or running a contract (default: none)
-  --private-key <edsk...>  Set the private key for deploying a contract (default: none)
-  --tezos-node <addr:port> Set the address and port of a Tezos node to run or deploy contracts (default: 127.0.0.1:8732)
+    --verbose                Increment verbosity
+    --version                Show version and exit
+    -o <filename>            Output code in <filename>
+    --main <ContractName>    Produce code for contract named <ContractName>
+    --no-peephole            Disable peephole optimizations
+    --type-only              Stop after type checking
+    --parse-only             Stop after parsing
+    --compact                Produce compact Michelson
+    --json                   Output Michelson in JSON representation
+    --amount <1.99tz>        Set amount for deploying or running a contract (default: 0tz)
+    --fee <0.05tz>           Set fee for deploying a contract (default: 0.05tz)
+    --source <tz1...>        Set the source for deploying or running a contract (default: none)
+    --private-key <edsk...>  Set the private key for deploying a contract (default: none)
+    --counter N              Set the counter for the operation instead of retrieving it
+    --tezos-node <addr:port> Set the address and port of a Tezos node to run or deploy contracts (default: 127.0.0.1:8732)
 
   Available commands:
-  --run ENTRY              PARAMETER STORAGE Run Liquidity contract on Tezos node
-  --delegatable            With --[forge-]deploy, deploy a delegatable contract
-  --spendable              With --[forge-]deploy, deploy a spendable contract
-  --init-storage           [INPUT1 INPUT2 ...] Forge deployment operation for contract
-  --forge-deploy           [INPUT1 INPUT2 ...] Forge deployment operation for contract
-  --deploy                 [INPUT1 INPUT2 ...] Deploy contract
-  --get-storage <KT1...>   Get deployed contract storage
-  --call <KT1...>          ENTRY PARAMETER Call deployed contract
-  --data ENTRY             PARAMETER [STORAGE] Translate to Michelson
+    --protocol               Specify protocol (mainnet, zeronet, alphanet) (detect if not specified)
+    --run ENTRY              PARAMETER STORAGE Run Liquidity contract on Tezos node
+    --delegatable            With --[forge-]deploy, deploy a delegatable contract
+    --spendable              With --[forge-]deploy, deploy a spendable contract
+    --init-storage           [INPUT1 INPUT2 ...] Generate initial storage
+    --forge-deploy           [INPUT1 INPUT2 ...] Forge deployment operation for contract
+    --deploy                 [INPUT1 INPUT2 ...] Deploy contract
+    --get-storage <KT1...>   Get deployed contract storage
+    --call <KT1...>          ENTRY PARAMETER Call deployed contract
+    --data ENTRY             PARAMETER [STORAGE] Translate to Michelson
+    --signature SIGNATURE    Set the signature for an operation
+    --inject OPERATION.bytes Inject a sign operation
 
   Misc:
-  -help                    Display this list of options
-  --help                   Display this list of options
+    -help                    Display this list of options
+    --help                   Display this list of options
+
 
 Note that this is equivalent to running ``liquidity`` with the ``-help`` or
 ``--help`` arguments.
@@ -96,7 +101,7 @@ Let's have a look at the generated ``simple.liq.tz`` file::
          NIL operation ;
          PAIR };
 
-Note that we can use a more compact version, on a single line and without annotations::
+Note that we can use a more compact version, on a single line::
 
   ─➤ liquidity-mini --compact simple.liq
   Main contract Simple
@@ -120,14 +125,11 @@ In case of error, for example if we set the storage to type ``nat`` instead of `
 
 
 Relevant options:
-  -k                       Continue on error
   --verbose                Increment verbosity
   --no-peephole            Disable peephole optimizations
   --type-only              Stop after type checking
   --parse-only             Stop after parsing
   --single-line            Output Michelson on a single line
-  --no-annot               Don't annotate Michelson with variable names
-  --annot-prim             Annotate Michelson primitives directly
   --compact                Produce compact Michelson
   --json                   Output Michelson in JSON representation
 

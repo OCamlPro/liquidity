@@ -116,7 +116,7 @@ and the following predefined combinators:
 - big maps: ``('key, 'val) big_map`` is the type of lazily
   deserialized maps whose keys are of type ``'key`` (a comparable
   type) and values of type ``'val``;
-- contracts: ``(contract S)`` is the type of contracts of signature
+- contracts: ``S.instance`` is the type of contracts (instances) of signature
   ``S`` (see `Contract Types and Signatures`_);
   
 and the predefined algebraic data types:
@@ -207,11 +207,11 @@ type and another compatible type, using the notation
 * A ``string`` can be coerced to ``tez`` (the string must contain an
   integer in mutez à la Michelson), ``timestamp``, ``key``,
   ``address``, ``_ contract``, ``key_hash`` and ``signature``.
-* A ``bytes`` can be coerced to ``address``, ``(contract _)``, ``key``,
+* A ``bytes`` can be coerced to ``address``, ``_.instance``, ``key``,
    ``key_hash`` and ``signature``.
-* An ``address`` can be coerced to ``(contract _)``.
-* A ``(contract _)`` can be coerced to ``address``.
-* A ``key_hash`` can be coerced to ``(contract UnitContract)`` and ``address``.
+* An ``address`` can be coerced to ``_.instance``.
+* A ``_.instance`` can be coerced to ``address``.
+* A ``key_hash`` can be coerced to ``UnitContract.instance`` and ``address``.
 
 
 Predefined Primitives
@@ -312,11 +312,11 @@ The ``Current`` module
     ...
   
 * ``Current.source: unit -> address``: returns the address that
-  initiated the current transaction in the blockchain. It is the same
-  one for all the operations in the transaction, standard and
-  internal. It is the address that paid the fees and storage cost, and
-  signed the operation on the blockchain. It is translated to
-  ``SOURCE`` in Michelson.
+  initiated the current top-level transaction in the blockchain. It is
+  the same one for all the transactions resulting from the top-level
+  transaction, standard and internal. It is the address that paid the
+  fees and storage cost, and signed the operation on the
+  blockchain. It is translated to ``SOURCE`` in Michelson.
 
   Example::
 
@@ -324,8 +324,8 @@ The ``Current`` module
     ...
     
 * ``Current.sender: unit -> address``: returns the address that
-  initiated the current operation. It is the same as the source for
-  the toplevel operation, but it is the originating contract for
+  initiated the current transaction. It is the same as the source for
+  the top-level transaction, but it is the originating contract for
   internal operations. It is translated to ``SENDER`` in Michelson.
 
   Example::
@@ -492,7 +492,7 @@ Operations on numeric values
 Operations on contracts
 ~~~~~~~~~~~~~~~~~~~~~~~
 
-* ``Contract.call: ~dest:(contract 'S) -> ~amount:tez ->
+* ``Contract.call: ~dest:'S.instance -> ~amount:tez ->
   ?entry:<entry_name> ~parameter:'a -> operation``. Forge an internal
   contract call. It is translated to ``TRANSFER_TOKENS`` in Michelson.
   Arguments can be labeled, in which case they can be given
@@ -500,12 +500,12 @@ Operations on contracts
 
   Example::
 
-    let dest = (tz1... : (contract UnitContract)) in
+    let dest = (tz1... : UnitContract.instance) in
     let op = Contract.call ~dest ~amount:1000tz () in
     ...
     ([op], storage)
 
-* ``Contract.transfer: ~dest:(contract 'S) -> ~amount:tez ->
+* ``Contract.transfer: ~dest:'S.instance -> ~amount:tez ->
   operation``. Forge an internal transaction. It is translated to
   ``TRANSFER_TOKENS`` in Michelson.  Arguments can be labeled, in
   which case they can be given in any order.
@@ -537,7 +537,7 @@ Operations on contracts
     ...
     ([op], storage)
   
-* ``Account.default: key_hash -> (contract UnitContract)``. Returns
+* ``Account.default: key_hash -> UnitContract.instance``. Returns
   the contract associated to the given ``key_hash``. Since this
   contract is not originated, it cannot contains code, so transfers to
   it cannot fail. It is translated to ``IMPLICIT_ACCOUNT`` in
@@ -564,7 +564,7 @@ Operations on contracts
     ...
     ([op1;op2], storage)
   
-* ``Contract.address: (contract _) -> address`` . Returns the address of
+* ``Contract.address: _.instance -> address`` . Returns the address of
   a contract. It is translated to ``ADDRESS`` in Michelson.
 
   Example::
@@ -573,19 +573,19 @@ Operations on contracts
     let map = Map.add addr contract map in
     ...
   
-* ``Contract.at: address -> (contract _) option``. Returns the contract
+* ``Contract.at: address -> _.instance option``. Returns the contract
   associated with the address and type annotation, if any. Must be
   annotated with the type of the contract. It is translated to
   ``CREATE_CONTRACT`` in Michelson.
 
   Example::
 
-    match (Contract.at addr : (contract BoolContract) option) with
+    match (Contract.at addr : BoolContract.instance option) with
     | None -> failwith ("Cannot recover bool contract from:", addr)
     | Some contract -> ...
   
     
-* ``Contract.self: unit -> (contract _)``. Returns the current
+* ``Contract.self: unit -> _.instance``. Returns the current
   executing contract. It is translated to ``SELF`` in Michelson.
 
   Example::
@@ -595,18 +595,18 @@ Operations on contracts
   
 * ``Contract.create: manager:key_hash -> delegate:key_hash option ->
   spendable:bool -> delegatable:bool -> amount:tez -> storage:'storage
-  -> code:<contract S> -> (operation, address)``. Forge an operation
+  -> code:(contract _) -> (operation, address)``. Forge an operation
   to originate a contract with code. The contract is only created when
   the operation is executed, so it must be returned by the
   transaction. Note that the code must be specified as a contract
   structure (inlined or not). It is translated to ``CREATE_CONTRACT``
   in Michelson.  ``Contract.create manager delegate_opt spendable
   delegatable initial_amount initial_storage (contract C)`` forges an
-  operation with manager ``manager``, optional delegate ``delegate``,
-  Boolean spendable flag ``spendable``, Boolean delegatable flag
-  ``delegatable``, initial balance ``initial_amount`` and initial
-  storage ``initial_storage``. Arguments can be named and put in any
-  order.
+  an origination operation for contract `C` with manager ``manager``,
+  optional delegate ``delegate``, Boolean spendable flag
+  ``spendable``, Boolean delegatable flag ``delegatable``, initial
+  balance ``initial_amount`` and initial storage
+  ``initial_storage``. Arguments can be named and put in any order.
 
 
   Example::
@@ -621,7 +621,7 @@ Operations on contracts
     in
 
     (* THIS WILL FAIL UNTIL THE OPERATION IS EXECUTED *)
-    let new_contract = (Contract.at addr : (contract StringContract) option) in
+    let new_contract = (Contract.at addr : StringContract.instance option) in
     ...
     ( [op], storage )
     
@@ -1279,10 +1279,10 @@ can be called in other Liquidity files.
 Contract Types and Signatures
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-A contract is a first class object in Liquidity (similarly to how
-modules are first class objects in OCaml). Contract signatures are
-introduced with the keyword ``sig`` and defined with the keyword
-``contract type``::
+A contract is a first class object in Liquidity only for the
+instruction ``Contract.create``, while contract *instances* can be
+used like any other values. Contract signatures are introduced with
+the keyword ``sig`` and defined with the keyword ``contract type``::
 
   contract type S = sig
     type storage = int
@@ -1297,16 +1297,15 @@ A contract signature contains a declaration for the type ``storage``
 declarations for the entry point signatures with the special keyword
 ``val%entry`` (names of argument can be specified).
 
-A contract signature can be used as a first class type with the
-keyword ``contract``. ``(contract S)`` is the type of contracts whose
-signatures is ``S``. Note that ``S`` must be declared as a contract
-signature beforehand if we want to use it as a first class type.
+The type of a contract (instance) whose signature is `S` is written
+``S.instance``. Note that ``S`` must be declared as a contract signature
+beforehand if we want to declare values of type ``S.instance``.
 
-For instance::
+For example::
 
   type t = {
     counter : int;
-    dest : (contract S);
+    dest : S.instance;
   }
 
 is a record type with a contract field ``dest`` of signature ``S``.
@@ -1427,7 +1426,6 @@ Structure:
 * ``type`` LIDENT ``=`` [ ``|`` UIDENT ``of`` Type ]+
 * ``contract`` LIDENT ``= struct`` Structure* ``end``
 * ``contract type`` LIDENT ``= sig`` Signature* ``end``
-* ``contract type`` LIDENT ``= contract type of`` LIDENT
 * ``let%init storage =`` Expression
 * ``let%entry`` LIDENT ``(`` LIDENT ``:`` Type ``) (`` LIDENT ``:`` Type ``) =`` Expression
 
@@ -1449,7 +1447,7 @@ Expression:
 * ``Contract.create`` Expression Expression Expression Expression
   Expression Expression ``(fun ( parameter:`` Type ``) (storage:``
   Type ``) ->`` Expression ``)``
-* ``(Contract.at`` Expression ``:`` Type ``contract option)``
+* ``(Contract.at`` Expression ``:`` Type ``option)``
 * ``(Bytes.unpack`` Expression ``:`` Type ``option )``
 * ``let`` LIDENT ``=`` Expression ``in`` Expression
 * ``let%inline`` LIDENT ``=`` Expression ``in`` Expression
