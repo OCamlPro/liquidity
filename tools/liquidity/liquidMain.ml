@@ -237,7 +237,10 @@ module Data = struct
   let contract_address = ref ""
   let init_inputs = ref []
 
-  let get_files () = List.rev !files
+  let get_files () =
+    let l = List.rev !files in
+    if l = [] then raise Bad_arg;
+    l
 
   let register_deploy_input s =
     init_inputs := s :: !init_inputs
@@ -428,6 +431,15 @@ let call () =
       !Data.contract_address op_h;
     raise e
 
+let forge_call () =
+  let op =
+    LiquidDeploy.Sync.forge_call
+      (LiquidDeploy.From_files (Data.get_files ()))
+      !Data.contract_address
+      !Data.entry_name
+      !Data.parameter in
+  Printf.eprintf "Raw operation:\n--------------\n%!";
+  Printf.printf "%s\n%!" op
 
 let parse_tez_to_string expl amount =
   match LiquidData.translate (LiquidFromOCaml.initial_env expl)
@@ -572,6 +584,16 @@ let main () =
       ],
       "<KT1...> ENTRY PARAMETER Call deployed contract";
 
+      "--forge-call", Arg.Tuple [
+        Arg.String (fun s -> Data.contract_address := s);
+        Arg.String (fun s -> Data.entry_name := s);
+        Arg.String (fun s -> Data.parameter := s);
+        Arg.Unit (fun () ->
+            work_done := true;
+            forge_call ());
+      ],
+      "<KT1...> ENTRY PARAMETER Forge call transaction operation";
+
       "--data",
       (let data_args = ref [] in
        Arg.Tuple [
@@ -611,7 +633,7 @@ let main () =
   in
   try
     Arg.parse arg_list (fun s -> Data.files := s :: !Data.files) arg_usage;
-    if Data.get_files () = [] then raise Bad_arg;
+    (* if Data.get_files () = [] then raise Bad_arg; *)
     if not !work_done then compile_files ();
   with Bad_arg ->
     Arg.usage arg_list arg_usage
