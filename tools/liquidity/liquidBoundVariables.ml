@@ -14,16 +14,16 @@ open LiquidTypes
 
 let rec bv code =
   match code.desc with
-  | If (cond, ifthen, ifelse) ->
-     StringSet.union (bv cond)
-                     (StringSet.union (bv ifthen) (bv ifelse))
+  | If { cond; ifthen; ifelse} ->
+    StringSet.union (bv cond)
+      (StringSet.union (bv ifthen) (bv ifelse))
   | Seq (x, y) -> StringSet.union (bv x) (bv y)
-  | Const (loc, ty, cst) ->  StringSet.empty
+  | Const { ty; const } ->  StringSet.empty
 
-  | Failwith (err, loc) -> bv err
+  | Failwith arg -> bv arg
 
-  | Apply (Prim_unknown, _,
-           ({ desc = Var (name, _, [])} :: args)) ->
+  | Apply { prim = Prim_unknown;
+            args = ({ desc = Var name } :: args) } ->
     let set =
       try
         LiquidTypes.primitive_of_string name |> ignore;
@@ -34,106 +34,105 @@ let rec bv code =
         StringSet.union set (bv arg)
       ) set args
 
-  | Apply (prim, loc, args) ->
-     List.fold_left (fun set arg ->
-         StringSet.union set (bv arg)
-       ) StringSet.empty args
+  | Apply { prim; args } ->
+    List.fold_left (fun set arg ->
+        StringSet.union set (bv arg)
+      ) StringSet.empty args
 
-  | Let (var, inline, loc, exp, body) ->
-     StringSet.union (bv exp)
-                     (StringSet.remove var (bv body))
+  | Let { bnd_var; inline; bnd_val; body } ->
+    StringSet.union (bv bnd_val)
+      (StringSet.remove bnd_var.nname (bv body))
 
-  | Lambda (arg_name, arg_type, loc, body, res_type) ->
+  | Lambda { arg_name; arg_ty; body; ret_ty; recursive } ->
     bv body
-    |> StringSet.remove arg_name
+    |> StringSet.remove arg_name.nname
+    |> fun bv -> begin match recursive with
+      | None -> bv
+      | Some f -> StringSet.remove f bv
+    end
 
-  | Closure (arg_name, arg_type, loc, call_env, body, res_type) ->
+  | Closure { arg_name; arg_ty; call_env; body; ret_ty } ->
     bv body
-    |> StringSet.remove arg_name
+    |> StringSet.remove arg_name.nname
     |> List.fold_right (fun (_, e) -> StringSet.union (bv e)) call_env
 
-  | Var (name, loc, fields) -> StringSet.add name StringSet.empty
+  | Var name -> StringSet.add name StringSet.empty
 
-  | SetVar (name, loc, fields, exp) ->
-     StringSet.add name (bv exp)
+  | SetField { record; field; set_val } ->
+    StringSet.union (bv record) (bv set_val)
 
-  | MatchOption (exp, loc, ifnone, some_pat, ifsome) ->
-     StringSet.union (bv exp)
-                     (StringSet.union (bv ifnone)
-                                      (StringSet.remove some_pat (bv ifsome)))
+  | Project { field; record } -> (bv record)
 
-  | MatchNat (exp, loc, p, ifplus, m, ifminus) ->
-     StringSet.union (bv exp)
-       (StringSet.union
-          (StringSet.remove m (bv ifminus))
-          (StringSet.remove p (bv ifplus)))
+  | MatchOption { arg; ifnone; some_name; ifsome } ->
+    StringSet.union (bv arg)
+      (StringSet.union (bv ifnone)
+         (StringSet.remove some_name.nname (bv ifsome)))
 
-  | MatchList (exp, loc, head_pat, tail_pat, ifcons, ifnil) ->
-     StringSet.union
-       (bv exp)
-       (StringSet.union (bv ifnil)
-                        (StringSet.remove head_pat
-                                          (StringSet.remove tail_pat
-                                                            (bv ifcons))))
-  | Transfer (loc, contract_exp, amount_exp, arg_exp) ->
-     List.fold_left (fun set exp ->
-         StringSet.union set (bv exp)
-       ) StringSet.empty [contract_exp;
-                          amount_exp;
-                          arg_exp]
+  | MatchNat { arg; plus_name; ifplus; minus_name; ifminus } ->
+    StringSet.union (bv arg)
+      (StringSet.union
+         (StringSet.remove minus_name.nname (bv ifminus))
+         (StringSet.remove plus_name.nname (bv ifplus)))
 
+  | MatchList { arg; head_name; tail_name; ifcons; ifnil } ->
+    StringSet.union
+      (bv arg)
+      (StringSet.union (bv ifnil)
+         (StringSet.remove head_name.nname
+            (StringSet.remove tail_name.nname
+               (bv ifcons))))
+  | Transfer { contract; amount; entry; arg } ->
+    List.fold_left (fun set exp ->
+        StringSet.union set (bv exp)
+      ) StringSet.empty [contract; amount; arg]
 
-  | Loop (var_arg, loc, body_exp, arg_exp) ->
-      StringSet.union (bv arg_exp)
-      (StringSet.remove var_arg
-         (bv body_exp))
+  | Loop { arg_name; body; arg }
+  | LoopLeft { arg_name; body; arg; acc = None }
+  | Map { arg_name; body; arg } ->
+    StringSet.union (bv arg)
+      (StringSet.remove arg_name.nname (bv body))
 
-  | Map (_, var_arg, loc, body_exp, arg_exp) ->
-    StringSet.union (bv arg_exp)
-      (StringSet.remove var_arg
-         (bv body_exp))
+  | MapFold { arg_name; body; arg; acc }
+  | Fold { arg_name; body; arg; acc }
+  | LoopLeft { arg_name; body; arg; acc = Some acc } ->
+    StringSet.union (bv acc)
+      (StringSet.union (bv arg)
+         (StringSet.remove arg_name.nname (bv body)))
 
-  | MapFold (_, var_arg, loc, body_exp, arg_exp, acc_exp)
-  | Fold (_, var_arg, loc, body_exp, arg_exp, acc_exp) ->
-    StringSet.union (bv acc_exp)
-      (StringSet.union (bv arg_exp)
-         (StringSet.remove var_arg
-            (bv body_exp)))
+  | Record fields ->
+    List.fold_left (fun set (_,exp) ->
+        StringSet.union set (bv exp)
+      ) StringSet.empty fields
 
-  | Record (_loc, labels) ->
-     List.fold_left (fun set (_,exp) ->
-         StringSet.union set (bv exp)
-       ) StringSet.empty labels
+  | Constructor { arg } -> bv arg
 
-  | Constructor (_loc, _lid, arg) ->
-     bv arg
-
-  | MatchVariant (exp, _loc, args) ->
-    StringSet.union (bv exp)
+  | MatchVariant { arg; cases } ->
+    StringSet.union (bv arg)
       (List.fold_left (fun set (pat, exp) ->
            let bv_exp = bv exp in
            let bv_case = match pat with
              | CConstr (_constr, var_args) ->
                List.fold_left (fun set var_arg ->
-                 StringSet.remove var_arg set
+                   StringSet.remove var_arg set
                  ) bv_exp var_args
              | CAny -> bv_exp
            in
            StringSet.union set bv_case
-         ) StringSet.empty args)
+         ) StringSet.empty cases)
 
-  | CreateContract (loc, args, contract) ->
-    let bc =
-      bv contract.code
-      |> StringSet.remove "parameter"
-      |> StringSet.remove "storage" in
-     List.fold_left (fun set arg ->
-         StringSet.union set (bv arg)
-       ) bc args
+  | CreateContract { args; contract } ->
+    let bv_entry acc e =
+      bv e.code
+      |> StringSet.remove e.entry_sig.parameter_name
+      |> StringSet.remove e.entry_sig.storage_name
+      |> StringSet.union acc in
+    let bc = List.fold_left bv_entry StringSet.empty contract.entries in
+    List.fold_left (fun set arg ->
+        StringSet.union set (bv arg)
+      ) bc args
 
-  | ContractAt (loc, addr, ty) -> bv addr
-
-  | Unpack (loc, e, ty) -> bv e
+  | ContractAt { arg }
+  | Unpack { arg } -> bv arg
 
 
 let mk desc exp bv = { exp with desc; bv }
@@ -141,33 +140,33 @@ let mk desc exp bv = { exp with desc; bv }
 let rec bound code =
   match code.desc with
 
-  | If (cond, ifthen, ifelse) ->
-     let cond = bound cond in
-     let ifthen = bound ifthen in
-     let ifelse = bound ifelse in
-     let bv = StringSet.union cond.bv
-                              (StringSet.union ifthen.bv ifelse.bv) in
-     let desc = If(cond, ifthen, ifelse) in
-     mk desc code bv
-
-  | Seq (x, y) ->
-     let x = bound x in
-     let y = bound y in
-     let bv = StringSet.union x.bv y.bv in
-     let desc = Seq(x,y) in
-     mk desc code bv
-
-  | Const (loc, ty, cst) ->
-     mk code.desc code StringSet.empty
-
-  | Failwith (err, loc) ->
-    let err = bound err in
-    let bv = err.bv in
-    let desc = Failwith (err, loc) in
+  | If { cond; ifthen; ifelse } ->
+    let cond = bound cond in
+    let ifthen = bound ifthen in
+    let ifelse = bound ifelse in
+    let bv = StringSet.union cond.bv
+        (StringSet.union ifthen.bv ifelse.bv) in
+    let desc = If { cond; ifthen; ifelse } in
     mk desc code bv
 
-  | Apply (Prim_unknown, loc,
-           ({ desc = Var (name, varloc, [])} :: args)) ->
+  | Seq (x, y) ->
+    let x = bound x in
+    let y = bound y in
+    let bv = StringSet.union x.bv y.bv in
+    let desc = Seq(x,y) in
+    mk desc code bv
+
+  | Const { ty; const } ->
+    mk code.desc code StringSet.empty
+
+  | Failwith arg ->
+    let arg = bound arg in
+    let bv = arg.bv in
+    let desc = Failwith arg in
+    mk desc code bv
+
+  | Apply { prim = Prim_unknown;
+            args = { desc = Var name } :: args } ->
     let args = List.map bound args in
     let bv =
       try
@@ -175,219 +174,234 @@ let rec bound code =
         StringSet.empty
       with Not_found -> StringSet.singleton name
     in
-    let v = mk (Var (name, varloc, [])) code bv in
-    let bv =
-      List.fold_left (fun set arg ->
-        StringSet.union set arg.bv
-        ) bv args
-    in
-    mk (Apply(Prim_unknown, loc, v :: args)) code bv
-
-  | Apply (prim, loc, args) ->
-     let args = List.map bound args in
-     let bv =
-       List.fold_left (fun set arg ->
-           StringSet.union set arg.bv
-         ) StringSet.empty args
-     in
-     let desc = Apply(prim,loc,args) in
-     mk desc code bv
-
-  | Let (var, inline, loc, exp, body) ->
-     let exp = bound exp in
-     let body = bound body in
-     let bv = StringSet.union exp.bv
-                              (StringSet.remove var body.bv) in
-     let desc = Let(var, inline, loc, exp, body) in
-     mk desc code bv
-
-  | Lambda (arg_name, arg_type, loc, body, res_type) ->
-     let body = bound body in
-     let desc = Lambda(arg_name, arg_type, loc, body, res_type) in
-     let bv = bv body |> StringSet.remove arg_name in
-     mk desc code bv
-
-  | Closure (arg_name, arg_type, loc, call_env, body, res_type) ->
-     let call_env = List.map (fun (name, t) -> name, bound t) call_env in
-     let body = bound body in
-     let bv =
-       body.bv
-       |> StringSet.remove arg_name
-       |> List.fold_right (fun (_, e) -> StringSet.union e.bv) call_env
-     in
-     let desc = Closure(arg_name, arg_type, loc, call_env, body, res_type) in
-     mk desc code bv
-
-  | Var (name, loc, fields) ->
-     let bv = StringSet.add name StringSet.empty in
-     let desc = Var(name, loc, fields) in
-     mk desc code bv
-
-  | SetVar (name, loc, fields, exp) ->
-     let exp = bound exp in
-     let bv = StringSet.add name exp.bv in
-     let desc = SetVar(name, loc, fields,exp) in
-     mk desc code bv
-
-  | MatchOption (exp, loc, ifnone, some_pat, ifsome) ->
-     let exp = bound exp in
-     let ifnone = bound ifnone in
-     let ifsome = bound ifsome in
-     let bv =
-       StringSet.union exp.bv
-                       (StringSet.union ifnone.bv
-                                        (StringSet.remove some_pat ifsome.bv))
-     in
-     let desc = MatchOption(exp,loc,ifnone, some_pat, ifsome) in
-     mk desc code bv
-
-
-  | MatchNat (exp, loc, p, ifplus, m, ifminus) ->
-    let exp = bound exp in
-    let ifplus = bound ifplus in
-    let ifminus = bound ifminus in
-    let bv =
-      StringSet.union exp.bv
-        (StringSet.union
-           (StringSet.remove m ifminus.bv)
-           (StringSet.remove p ifplus.bv))
-    in
-    let desc = MatchNat (exp, loc, p, ifplus, m, ifminus) in
-    mk desc code bv
-
-  | MatchList (exp, loc, head_pat, tail_pat, ifcons, ifnil) ->
-     let exp = bound exp in
-     let ifnil = bound ifnil in
-     let ifcons = bound ifcons in
-     let bv =
-       StringSet.union
-         (exp.bv)
-         (StringSet.union (ifnil.bv)
-                          (StringSet.remove head_pat
-                                            (StringSet.remove tail_pat
-                                                              (ifcons.bv))))
-     in
-     let desc = MatchList(exp, loc, head_pat, tail_pat, ifcons, ifnil) in
-     mk desc code bv
-
-  | Transfer (loc, contract_exp, amount_exp, arg_exp) ->
-     let contract_exp = bound contract_exp in
-     let amount_exp = bound amount_exp in
-     let arg_exp = bound arg_exp in
-     let bv =
-       List.fold_left (fun set exp ->
-           StringSet.union set (exp.bv)
-         ) StringSet.empty [contract_exp;
-                            amount_exp;
-                            arg_exp]
-     in
-     let desc = Transfer (loc, contract_exp, amount_exp, arg_exp) in
-     mk desc code bv
-
-  | Loop (var_arg, loc, body_exp, arg_exp) ->
-     let arg_exp = bound arg_exp in
-     let body_exp = bound body_exp in
-     let bv =
-       StringSet.union (arg_exp.bv)
-                       (StringSet.remove var_arg
-                                         (body_exp.bv))
-     in
-     let desc = Loop (var_arg, loc, body_exp, arg_exp) in
-     mk desc code bv
-
-  | Fold (_, var_arg, loc, body_exp, arg_exp, acc_exp)
-  | MapFold (_, var_arg, loc, body_exp, arg_exp, acc_exp) ->
-     let acc_exp = bound acc_exp in
-     let arg_exp = bound arg_exp in
-     let body_exp = bound body_exp in
-     let bv =
-       StringSet.union (acc_exp.bv)
-         (StringSet.union (arg_exp.bv)
-            (StringSet.remove var_arg
-               (body_exp.bv)))
-     in
-     let desc = match code.desc with
-       | Fold (prim, _, _, _, _, _) ->
-         Fold (prim, var_arg, loc, body_exp, arg_exp, acc_exp)
-       | MapFold (prim, _, _, _, _, _) ->
-         MapFold (prim, var_arg, loc, body_exp, arg_exp, acc_exp)
-       | _ -> assert false
-     in
-     mk desc code bv
-
-  | Map (prim, var_arg, loc, body_exp, arg_exp) ->
-     let arg_exp = bound arg_exp in
-     let body_exp = bound body_exp in
-     let bv =
-       StringSet.union (arg_exp.bv)
-         (StringSet.remove var_arg
-            (body_exp.bv))
-     in
-     let desc = Map (prim, var_arg, loc, body_exp, arg_exp) in
-     mk desc code bv
-
-  | Record (loc, labels) ->
-     let labels = List.map (fun (l, exp) -> (l,bound exp)) labels in
-     let bv =
-       List.fold_left (fun set (_,exp) ->
-           StringSet.union set (exp.bv)
-         ) StringSet.empty labels
-     in
-     let desc = Record(loc,labels) in
-     mk desc code bv
-
-  | Constructor (loc, lid, arg) ->
-     let arg = bound arg in
-     let desc = Constructor(loc,lid,arg) in
-     mk desc code arg.bv
-
-  | MatchVariant (exp, loc, args) ->
-     let exp = bound exp in
-     let args =
-       List.map (fun (pat, exp) ->
-           (pat, bound exp)
-         ) args in
-     let bv = List.fold_left (fun set (pat, exp) ->
-          let bv_exp = bv exp in
-          let bv_case = match pat with
-            | CConstr (_constr, var_args) ->
-              List.fold_left (fun set var_arg ->
-                  StringSet.remove var_arg set
-                ) bv_exp var_args
-            | CAny -> bv_exp
-          in
-          StringSet.union set bv_case
-       ) StringSet.empty args
-     in
-     let bv = StringSet.union (exp.bv) bv in
-     let desc = MatchVariant(exp,loc,args) in
-     mk desc code bv
-
-  | CreateContract (loc, args, contract) ->
-    let args = List.map bound args in
-    let contract = bound_contract contract in
-    let bv = contract.code.bv
-             |> StringSet.remove "parameter"
-             |> StringSet.remove "storage" in
+    let v = mk (Var name) code bv in
     let bv =
       List.fold_left (fun set arg ->
           StringSet.union set arg.bv
         ) bv args
     in
-    let desc = CreateContract (loc, args, contract) in
+    mk (Apply { prim = Prim_unknown; args = v :: args }) code bv
+
+  | Apply { prim; args } ->
+    let args = List.map bound args in
+    let bv =
+      List.fold_left (fun set arg ->
+          StringSet.union set arg.bv
+        ) StringSet.empty args
+    in
+    let desc = Apply { prim; args } in
     mk desc code bv
 
-  | ContractAt (loc, addr, ty) ->
-     let addr = bound addr in
-     let desc = ContractAt (loc, addr, ty) in
-     mk desc code addr.bv
+  | Let { bnd_var; inline; bnd_val; body } ->
+    let bnd_val = bound bnd_val in
+    let body = bound body in
+    let bv = StringSet.union bnd_val.bv
+        (StringSet.remove bnd_var.nname body.bv) in
+    let desc = Let { bnd_var; inline; bnd_val; body } in
+    mk desc code bv
 
-  | Unpack (loc, e, ty) ->
-     let e = bound e in
-     let desc = Unpack (loc, e, ty) in
-     mk desc code e.bv
+  | Lambda { arg_name; arg_ty; body; ret_ty; recursive } ->
+    let body = bound body in
+    let desc = Lambda { arg_name; arg_ty; body; ret_ty; recursive } in
+    let bv = bv body |> StringSet.remove arg_name.nname in
+    let bv = match recursive with
+      | None -> bv
+      | Some f -> StringSet.remove f bv in
+    mk desc code bv
+
+  | Closure { arg_name; arg_ty; call_env; body; ret_ty } ->
+    let call_env = List.map (fun (name, t) -> name, bound t) call_env in
+    let body = bound body in
+    let bv =
+      body.bv
+      |> StringSet.remove arg_name.nname
+      |> List.fold_right (fun (_, e) -> StringSet.union e.bv) call_env
+    in
+    let desc = Closure { arg_name; arg_ty; call_env; body; ret_ty } in
+    mk desc code bv
+
+  | Var name ->
+    let bv = StringSet.add name StringSet.empty in
+    let desc = Var name in
+    mk desc code bv
+
+  | SetField { record; field; set_val } ->
+    let record = bound record in
+    let set_val = bound set_val in
+    let bv = StringSet.union record.bv set_val.bv in
+    let desc = SetField { record; field; set_val } in
+    mk desc code bv
+
+  | Project { field; record } ->
+    let record = bound record in
+    let desc = Project { field; record } in
+    mk desc code record.bv
+
+  | MatchOption { arg; ifnone; some_name; ifsome } ->
+    let arg = bound arg in
+    let ifnone = bound ifnone in
+    let ifsome = bound ifsome in
+    let bv =
+      StringSet.union arg.bv
+        (StringSet.union ifnone.bv
+           (StringSet.remove some_name.nname ifsome.bv))
+    in
+    let desc = MatchOption { arg; ifnone; some_name; ifsome } in
+    mk desc code bv
+
+
+  | MatchNat { arg; plus_name; ifplus; minus_name; ifminus } ->
+    let arg = bound arg in
+    let ifplus = bound ifplus in
+    let ifminus = bound ifminus in
+    let bv =
+      StringSet.union arg.bv
+        (StringSet.union
+           (StringSet.remove minus_name.nname ifminus.bv)
+           (StringSet.remove plus_name.nname ifplus.bv))
+    in
+    let desc = MatchNat { arg; plus_name; ifplus; minus_name; ifminus } in
+    mk desc code bv
+
+  | MatchList { arg; head_name; tail_name; ifcons; ifnil } ->
+    let arg = bound arg in
+    let ifnil = bound ifnil in
+    let ifcons = bound ifcons in
+    let bv =
+      StringSet.union
+        arg.bv
+        (StringSet.union ifnil.bv
+           (StringSet.remove head_name.nname
+              (StringSet.remove tail_name.nname
+                 ifcons.bv)))
+    in
+    let desc = MatchList { arg; head_name; tail_name; ifcons; ifnil } in
+    mk desc code bv
+
+  | Transfer { contract; amount; entry; arg } ->
+    let contract = bound contract in
+    let amount = bound amount in
+    let arg = bound arg in
+    let bv =
+      List.fold_left (fun set exp ->
+          StringSet.union set (exp.bv)
+        ) StringSet.empty [contract; amount; arg]
+    in
+    let desc = Transfer {contract; amount; entry; arg } in
+    mk desc code bv
+
+  | Loop { arg_name; body; arg }
+  | LoopLeft { arg_name; body; arg; acc = None } ->
+    let arg = bound arg in
+    let body = bound body in
+    let bv = StringSet.union arg.bv (StringSet.remove arg_name.nname body.bv)
+    in
+    let desc = match code.desc with
+      | Loop _ -> Loop { arg_name; body; arg }
+      | LoopLeft _ -> LoopLeft { arg_name; body; arg; acc = None }
+      | _ -> assert false in
+    mk desc code bv
+
+  | Fold { arg_name; body; arg; acc }
+  | MapFold { arg_name; body; arg; acc }
+  | LoopLeft { arg_name; body; arg; acc = Some acc } ->
+    let acc = bound acc in
+    let arg = bound arg in
+    let body = bound body in
+    let bv =
+      StringSet.union acc.bv
+        (StringSet.union arg.bv
+           (StringSet.remove arg_name.nname body.bv))
+    in
+    let desc = match code.desc with
+      | Fold { prim } ->
+        Fold { prim; arg_name; body; arg; acc }
+      | MapFold { prim } ->
+        MapFold  { prim; arg_name; body; arg; acc }
+      | LoopLeft _ ->
+        LoopLeft { arg_name; body; arg; acc = Some acc }
+      | _ -> assert false
+    in
+    mk desc code bv
+
+  | Map { prim; arg_name; body; arg } ->
+    let arg = bound arg in
+    let body = bound body in
+    let bv = StringSet.union arg.bv (StringSet.remove arg_name.nname body.bv)
+    in
+    let desc = Map  { prim; arg_name; body; arg } in
+    mk desc code bv
+
+  | Record fields ->
+    let fields = List.map (fun (l, exp) -> (l,bound exp)) fields in
+    let bv =
+      List.fold_left (fun set (_,exp) ->
+          StringSet.union set (exp.bv)
+        ) StringSet.empty fields
+    in
+    let desc = Record fields in
+    mk desc code bv
+
+  | Constructor { constr; arg } ->
+    let arg = bound arg in
+    let desc = Constructor { constr; arg } in
+    mk desc code arg.bv
+
+  | MatchVariant { arg; cases } ->
+    let arg = bound arg in
+    let cases =
+      List.map (fun (pat, exp) ->
+          (pat, bound exp)
+        ) cases in
+    let bv = List.fold_left (fun set (pat, exp) ->
+        let bv_exp = bv exp in
+        let bv_case = match pat with
+          | CConstr (_constr, var_args) ->
+            List.fold_left (fun set var_arg ->
+                StringSet.remove var_arg set
+              ) bv_exp var_args
+          | CAny -> bv_exp
+        in
+        StringSet.union set bv_case
+      ) StringSet.empty cases
+    in
+    let bv = StringSet.union arg.bv bv in
+    let desc = MatchVariant { arg; cases } in
+    mk desc code bv
+
+  | CreateContract { args; contract } ->
+    let args = List.map bound args in
+    let contract = bound_contract contract in
+    let bv_entry acc e =
+      e.code.bv
+      |> StringSet.remove e.entry_sig.parameter_name
+      |> StringSet.remove e.entry_sig.storage_name
+      |> StringSet.union acc in
+    let bv = List.fold_left bv_entry StringSet.empty contract.entries in
+    let bv =
+      List.fold_left (fun set arg ->
+          StringSet.union set arg.bv
+        ) bv args
+    in
+    let desc = CreateContract { args; contract } in
+    mk desc code bv
+
+  | ContractAt { arg; c_sig } ->
+    let arg = bound arg in
+    let desc = ContractAt { arg; c_sig } in
+    mk desc code arg.bv
+
+  | Unpack { arg; ty } ->
+    let arg = bound arg in
+    let desc = Unpack { arg; ty } in
+    mk desc code arg.bv
+
+and bound_entry entry =
+  let c = bound entry.code in
+  assert (StringSet.equal c.bv (bv entry.code));
+  { entry with code = c }
 
 and bound_contract contract =
-  let c = bound contract.code in
-  assert (StringSet.equal c.bv (bv contract.code));
-  { contract with code = c }
+  { contract with
+    values = List.map (fun (v, i, body) -> (v, i, bound body)) contract.values;
+    entries = List.map bound_entry contract.entries }

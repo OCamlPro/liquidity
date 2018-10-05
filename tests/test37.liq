@@ -1,8 +1,8 @@
-[%%version 0.3]
+[%%version 0.4]
 
-let%entry main
-    (parameter : unit contract)
-    (storage : ((int, tez) map * unit contract)) =
+type storage = (int, tez) map * UnitContract.instance
+
+let%entry main (parameter : UnitContract.instance) storage =
   let foo = storage.(0) in
   let acc =
     Loop.loop (fun acc ->

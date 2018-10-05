@@ -7,6 +7,12 @@
 (*                                                                        *)
 (**************************************************************************)
 
+(** Peephole optimizations: try to simplify Michelson with peepholes
+    optims.
+
+    For now, mostly, move [DIP_DROP]s backwards to decrease the size of
+    the stack. *)
+
 open LiquidTypes
 
-val simplify : loc_michelson contract -> loc_michelson contract
+val simplify : loc_michelson_contract -> loc_michelson_contract

@@ -1,6 +1,8 @@
 (* List.rev *)
 
-[%%version 0.3]
+[%%version 0.4]
+
+type storage = int list
 
 let%entry main
       (parameter : int)

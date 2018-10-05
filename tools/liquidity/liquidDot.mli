@@ -9,4 +9,6 @@
 
 open LiquidTypes
 
-val to_string : node_exp contract -> string
+(** Generate graph representation (in dot graphviz format) from a
+    decompiled symbolic evaluated Michelson contract. *)
+val to_string : node_contract -> string

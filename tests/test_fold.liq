@@ -1,6 +1,8 @@
 (* Fold *)
 
-[%%version 0.3]
+[%%version 0.4]
+
+type storage = int
 
 let%entry main
     (parameter : int list)

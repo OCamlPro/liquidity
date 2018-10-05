@@ -9,6 +9,8 @@
 
 open LiquidTypes
 
+(** Simplify a Liquidity contract, mostly inlining and some simple
+    simplifications. *)
 val simplify_contract :
   ?decompile_annoted:bool ->
-  encoded_exp contract -> encoded_exp StringMap.t -> encoded_exp contract
+  encoded_contract -> encoded_exp StringMap.t -> encoded_contract

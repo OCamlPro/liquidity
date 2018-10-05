@@ -1,4 +1,6 @@
-[%%version 0.3]
+[%%version 0.4]
+
+type storage = bool
 
 let%init storage (i: int) (j: int) = i <= j
 

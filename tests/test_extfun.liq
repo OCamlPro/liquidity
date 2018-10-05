@@ -1,7 +1,9 @@
 
-[%%version 0.3]
+[%%version 0.4]
 
 let f ((x : unit), (_ : int) ) = x
+
+type storage = unit
 
 let%entry main
       (parameter : int)

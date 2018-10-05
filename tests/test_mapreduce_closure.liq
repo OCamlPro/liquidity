@@ -1,3 +1,6 @@
+
+type storage = bool
+
 let%entry main
   (parameter : (string, tez) map)
   (storage : bool) =

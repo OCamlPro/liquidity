@@ -1,6 +1,8 @@
-[%%version 0.3]
+[%%version 0.4]
 
 type t = A of int | B of (int * ((bool * unit) * nat))
+
+type storage = int
 
 let%entry main
     (parameter : t)

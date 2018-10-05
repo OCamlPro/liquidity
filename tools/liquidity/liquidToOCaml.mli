@@ -7,12 +7,17 @@
 (*                                                                        *)
 (**************************************************************************)
 
+(** Convert Liquidity code and constants as OCaml AST objects for neat
+    pretty printing. *)
+
 open LiquidTypes
 
 val output_version : string
 
 val structure_of_contract :
-  ?abbrev:bool -> ?type_annots: (datatype, string) Hashtbl.t ->
+  ?abbrev:bool ->
+  ?type_annots: (datatype, string) Hashtbl.t ->
+  ?types: (string * datatype) list ->
   (datatype, 'a) exp contract -> Parsetree.structure
 val convert_const : const -> Parsetree.expression
 val convert_code : ?abbrev:bool -> (datatype, 'a) exp -> Parsetree.expression

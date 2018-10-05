@@ -1,4 +1,4 @@
-
+type storage = string
 
 let%entry main (parameter : string) (storage : string) =
   let size = String.size parameter in

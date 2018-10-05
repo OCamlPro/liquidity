@@ -27,9 +27,7 @@ The Liquidity language provides the following features:
   Michelson can be written in Liquidity
 
 * Local variables instead of stack manipulations: values can be stored
-  in local variables. The only restriction is that local variables do
-  not survive to `Contract.call`, following the philosophy of Michelson
-  to force explicite storage of values to limit reentrancy bugs.
+  in local variables.
 
 * High-level types: types like sum-types and record-types can be defined
   and used in Liquidity programs.
@@ -46,12 +44,13 @@ next release.
 Installation and Usage
 ----------------------
 
-See [USAGE.md](USAGE.md).
+See [installation instructions](docs/sphinx/src/installation/index.rst) and
+[usage documentation](docs/sphinx/src/usage/index.rst).
 
 Documentation
 -------------
 
-Documentation can be found in [docs/liquidity.md](docs/liquidity.md)
+Documentation can be found in [the reference](docs/sphynx/src/reference/liquidity.rst)
 and many examples are in the [tests](tests/) and
 [tests/others](tests/others/) directories.
 

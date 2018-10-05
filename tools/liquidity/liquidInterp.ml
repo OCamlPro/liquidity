@@ -16,9 +16,9 @@ let node loc kind args prevs =
   let num = !counter in
   let node = { num; loc; node_name = None; kind; args; next = None; prevs } in
   List.iter (fun prev ->
-    match prev.next with
-    | None -> prev.next <- Some node
-    | Some _ -> assert false
+      match prev.next with
+      | None -> prev.next <- Some node
+      | Some s -> assert false
     ) prevs;
   Hashtbl.add nodes num node;
   node
@@ -96,65 +96,65 @@ let rec uniformize_stack if_stack stack =
   if stack_length = if_stack_length then
     if_stack
   else
-    if stack_length < if_stack_length then
-      LiquidMisc.list_remove (if_stack_length - stack_length) if_stack
-    else
-      LiquidMisc.list_make (stack_length - if_stack_length)
-        { num = -1; loc = LiquidLoc.noloc;
-          node_name = None;
-          kind = N_UNKNOWN "STACK"; args = [];
-          next = None; prevs = [] }
-      @ if_stack
+  if stack_length < if_stack_length then
+    LiquidMisc.list_remove (if_stack_length - stack_length) if_stack
+  else
+    LiquidMisc.list_make (stack_length - if_stack_length)
+      { num = -1; loc = LiquidLoc.noloc;
+        node_name = None;
+        kind = N_UNKNOWN "STACK"; args = [];
+        next = None; prevs = [] }
+    @ if_stack
 
 let rec merge_stacks if_stack end_node1 end_node2 stack1 stack2 =
   match stack1, stack2 with
   | [], [] -> []
   | { kind = N_FAILWITH } :: _, { kind = N_FAILWITH } :: _ -> stack1
   | { kind = N_FAILWITH } :: _, _ ->
-     begin
-       match end_node2 with
-       | None -> assert false
-       | Some end_node2 ->
-          merge_stacks if_stack end_node2 None
-                       stack2 (uniformize_stack if_stack stack2)
-     end
+    begin
+      match end_node2 with
+      | None -> assert false
+      | Some end_node2 ->
+        merge_stacks if_stack end_node2 None
+          stack2 (uniformize_stack if_stack stack2)
+    end
   | _, { kind = N_FAILWITH } :: _ ->
-     merge_stacks if_stack end_node1 None
-                  stack1 (uniformize_stack if_stack stack1)
+    merge_stacks if_stack end_node1 None
+      stack1 (uniformize_stack if_stack stack1)
   | _ ->
-     try
-       let rec merge i stack1 stack2 =
-         if stack1 == stack2 then stack1
-         else
-           match stack1, stack2 with
-           | [], [] -> []
-           | s1 :: stack1, s2 :: stack2 ->
-              if s1 == s2 then
-                s1 :: (merge i stack1 stack2)
-              else
-                let arg = node end_node1.loc
-                    (N_IF_END_RESULT (end_node1, end_node2, i))
-                    [] [] in
+    try
+      let rec merge i stack1 stack2 =
+        if stack1 == stack2 then stack1
+        else
+          match stack1, stack2 with
+          | [], [] -> []
+          | s1 :: stack1, s2 :: stack2 ->
+            if s1 == s2 then
+              s1 :: (merge i stack1 stack2)
+            else
+              let arg = node end_node1.loc
+                  (N_IF_END_RESULT (end_node1, end_node2, i))
+                  [] [] in
 
-                end_node1.args <- s1 :: end_node1.args;
-                (match end_node2 with
-                   None -> ()
-                 | Some node -> node.args <- s2 :: node.args);
-                arg :: (merge (i+1) stack1 stack2)
-           | _ -> raise Exit
+              end_node1.args <- s1 :: end_node1.args;
+              (match end_node2 with
+                 None -> ()
+               | Some node -> node.args <- s2 :: node.args);
+              arg :: (merge (i+1) stack1 stack2)
+          | _ -> raise Exit
 
-       in
-       let stack = merge 0 stack1 stack2 in
-       end_node1.args <- List.rev end_node1.args;
-       (match end_node2 with
-        | None -> ()
-        | Some node -> node.args <- List.rev node.args);
-       stack
-     with Exit ->
-       LiquidLoc.raise_error ~loc:end_node1.loc
-         "interp error merging stacks:\n%a%a"
-         (fprint_stack "stack1 ") stack1
-         (fprint_stack "stack2 ") stack2
+      in
+      let stack = merge 0 stack1 stack2 in
+      end_node1.args <- List.rev end_node1.args;
+      (match end_node2 with
+       | None -> ()
+       | Some node -> node.args <- List.rev node.args);
+      stack
+    with Exit ->
+      LiquidLoc.raise_error ~loc:end_node1.loc
+        "interp error merging stacks:\n%a%a"
+        (fprint_stack "stack1 ") stack1
+        (fprint_stack "stack2 ") stack2
 
 let add_name stack seq name =
   match stack with
@@ -164,6 +164,7 @@ let add_name stack seq name =
     begin match x.kind, seq.kind with
       | N_IF_END_RESULT _, N_IF _
       | N_LOOP_RESULT _, N_LOOP _
+      | N_LOOP_LEFT_RESULT _, N_LOOP_LEFT _
       | N_FOLD_RESULT _, N_FOLD _ ->
         if seq.node_name = None then seq.node_name <- Some name;
       | _ -> ()
@@ -176,7 +177,89 @@ let add_name_to_ins stack seq ins =
   | Some name, _, x :: _ -> add_name stack seq name
   | _, _, _ -> ()
 
+let rec short_circuit node ~from =
+  match node.node_name with
+  | Some n  -> ()
+  | None ->
+    List.iter (fun n ->
+        begin match n.next with
+          | Some k when k.num = node.num ->
+            n.next <- from.next
+          | _ -> ()
+        end;
+        short_circuit node ~from:n;
+      ) from.prevs
+
+let rec undo_cdr acc node =
+  match node with
+  | { kind = N_PRIM "CDR"; args = [x]; node_name = None } ->
+    undo_cdr (node :: acc) x
+  | _ -> acc, node
+
+let rec constrlabel_is_in_type c = function
+  | Tunit | Tbool | Tint | Tnat | Ttez | Tstring | Tbytes | Ttimestamp
+  | Tkey | Tkey_hash | Tsignature | Toperation | Taddress | Tfail ->
+    false
+  | Ttuple tys -> List.exists (constrlabel_is_in_type c) tys
+  | Toption ty | Tlist ty | Tset ty -> constrlabel_is_in_type c ty
+  | Tmap (t1, t2) | Tbigmap (t1, t2) | Tor (t1, t2) | Tlambda (t1, t2) ->
+    constrlabel_is_in_type c t1 || constrlabel_is_in_type c t2
+  | Tclosure ((t1, t2), t3) ->
+    constrlabel_is_in_type c t1 ||
+    constrlabel_is_in_type c t2 ||
+    constrlabel_is_in_type c t3
+  | Trecord (_, l) | Tsum (_, l) ->
+    List.exists (fun (c', _) -> c' = c) l ||
+    List.exists (fun (_, t) -> constrlabel_is_in_type c t) l
+  | Tcontract s ->
+    List.exists (fun e -> constrlabel_is_in_type c e.parameter)
+      s.entries_sig
+
+let rec constrlabel_is_in_code c code =
+  match code.ins with
+  | RENAME _
+  | EXEC | DUP _ | DIP_DROP _ | DROP | CAR _ | CDR _ | CDAR _ | CDDR _
+  | PAIR | RECORD _ | COMPARE | LE | LT | GE | GT | NEQ | EQ | FAILWITH
+  | NOW | TRANSFER_TOKENS | ADD | SUB | BALANCE | SWAP | GET | UPDATE | SOME
+  | CONCAT | MEM | SLICE | SELF | AMOUNT | STEPS_TO_QUOTA | CREATE_ACCOUNT
+  | BLAKE2B | SHA256 | SHA512 | HASH_KEY | CHECK_SIGNATURE | ADDRESS | CONS
+  | OR | XOR | AND | NOT | INT | ABS | ISNAT | NEG | MUL | EDIV | LSL | LSR
+  | SOURCE | SENDER | SIZE | IMPLICIT_ACCOUNT | SET_DELEGATE | PACK | MOD | DIV
+    -> false
+  | UNPACK ty
+  | PUSH (ty, _)
+  | LEFT (ty, _)
+  | RIGHT (ty, _)
+  | CONTRACT ty -> constrlabel_is_in_type c ty
+  | CREATE_CONTRACT contract -> constrlabel_is_in_contract c contract
+  | LAMBDA (ty1, ty2, code) ->
+    constrlabel_is_in_type c ty1 ||
+    constrlabel_is_in_type c ty2 ||
+    constrlabel_is_in_code c code
+  | DIP (_, code)
+  | LOOP code
+  | LOOP_LEFT code
+  | ITER code
+  | MAP code ->
+    constrlabel_is_in_code c code
+  | IF (code1, code2)
+  | IF_NONE (code1, code2)
+  | IF_CONS (code1, code2)
+  | IF_LEFT (code1, code2) ->
+    constrlabel_is_in_code c code1 ||
+    constrlabel_is_in_code c code2
+  | SEQ seq -> List.exists (constrlabel_is_in_code c) seq
+
+and constrlabel_is_in_contract c contract =
+  constrlabel_is_in_type c contract.mic_parameter ||
+  constrlabel_is_in_type c contract.mic_storage ||
+  constrlabel_is_in_code c contract.mic_code
+
 let rec interp contract =
+
+  let known_constrlabel c =
+    constrlabel_is_in_contract c contract
+  in
 
   let rec decompile_seq stack (seq : node) code =
     match code, stack with
@@ -220,8 +303,8 @@ let rec interp contract =
       decompile_seq stack seq code
 
     | ins :: code, _ ->
-       let stack, seq = decompile stack seq ins in
-       decompile_seq stack seq code
+      let stack, seq = decompile stack seq ins in
+      decompile_seq stack seq code
 
   and decompile stack seq ins =
     let stack, seq = decompile_aux stack seq ins in
@@ -235,14 +318,14 @@ let rec interp contract =
       stack, seq
 
     | SEQ exprs, _ ->
-       decompile_seq stack seq exprs
+      decompile_seq stack seq exprs
 
-(* If-expressions followed by FAIL: we create IF statements where the
-   FAIL is the neighbour of an empty sequence, so that the comparison
-   of stacks is meaningless. Of course, this assume that a sequence
-   of instructions finishing with a FAIL is forbidden. Be careful to
-   avoid infinite loops here...
-*)
+    (* If-expressions followed by FAIL: we create IF statements where the
+       FAIL is the neighbour of an empty sequence, so that the comparison
+       of stacks is meaningless. Of course, this assume that a sequence
+       of instructions finishing with a FAIL is forbidden. Be careful to
+       avoid infinite loops here...
+    *)
 
     | IF ({ins=SEQ [{ins=FAILWITH}]} as seq_fail,
           {ins=SEQ ( (_ :: _) as ifelse )}),_ ->
@@ -274,73 +357,73 @@ let rec interp contract =
                              mic_loc ins.loc (SEQ []))) :: ifelse)))
 
     | IF (ifthen, ifelse), x :: stack ->
-       let if_node = node ins.loc (N_UNKNOWN "IF") [x] [seq] in
+      let if_node = node ins.loc (N_UNKNOWN "IF") [x] [seq] in
 
-       let then_node = node ifthen.loc (N_IF_THEN if_node) [] [] in
-       let then_stack = stack in
+      let then_node = node ifthen.loc (N_IF_THEN if_node) [] [] in
+      let then_stack = stack in
 
-       let else_node = node ifelse.loc (N_IF_ELSE if_node) [] [] in
-       let else_stack = stack in
+      let else_node = node ifelse.loc (N_IF_ELSE if_node) [] [] in
+      let else_stack = stack in
 
-       decompile_if if_node stack
-                    ifthen then_node then_stack
-                    ifelse else_node else_stack
+      decompile_if if_node stack
+        ifthen then_node then_stack
+        ifelse else_node else_stack
 
     | IF_NONE (ifthen, ifelse), x :: stack ->
-       let if_node = node ins.loc (N_UNKNOWN "IF_NONE") [x] [seq] in
+      let if_node = node ins.loc (N_UNKNOWN "IF_NONE") [x] [seq] in
 
-       let then_node = node ifthen.loc (N_IF_NONE if_node) [] [] in
-       let then_stack = stack in
+      let then_node = node ifthen.loc (N_IF_NONE if_node) [] [] in
+      let then_stack = stack in
 
-       let var0 = node ifelse.loc (N_IF_RESULT (if_node, 0)) [] [] in
-       let else_node = node ifelse.loc (N_IF_SOME (if_node, var0)) [] [] in
-       let else_stack = var0 :: stack in
+      let var0 = node ifelse.loc (N_IF_RESULT (if_node, 0)) [] [] in
+      let else_node = node ifelse.loc (N_IF_SOME (if_node, var0)) [] [] in
+      let else_stack = var0 :: stack in
 
-       decompile_if if_node stack
-                    ifthen then_node then_stack
-                    ifelse else_node else_stack
+      decompile_if if_node stack
+        ifthen then_node then_stack
+        ifelse else_node else_stack
 
     | IF_LEFT (ifthen, ifelse), x :: stack ->
-       let if_node = node ins.loc (N_UNKNOWN "IF_LEFT") [x] [seq] in
+      let if_node = node ins.loc (N_UNKNOWN "IF_LEFT") [x] [seq] in
 
-       let var0 = node ifthen.loc (N_IF_RESULT (if_node,0)) [] [] in
-       let then_node = node ifthen.loc (N_IF_LEFT (if_node, var0)) [] [] in
-       let then_stack = var0 :: stack in
+      let var0 = node ifthen.loc (N_IF_RESULT (if_node,0)) [] [] in
+      let then_node = node ifthen.loc (N_IF_LEFT (if_node, var0)) [] [] in
+      let then_stack = var0 :: stack in
 
-       let var0 = node ifelse.loc (N_IF_RESULT (if_node,0)) [] [] in
-       let else_node = node ifelse.loc (N_IF_RIGHT (if_node, var0)) [] [] in
-       let else_stack = var0 :: stack in
+      let var0 = node ifelse.loc (N_IF_RESULT (if_node,0)) [] [] in
+      let else_node = node ifelse.loc (N_IF_RIGHT (if_node, var0)) [] [] in
+      let else_stack = var0 :: stack in
 
-       decompile_if if_node stack
-                    ifthen then_node then_stack
-                    ifelse else_node else_stack
+      decompile_if if_node stack
+        ifthen then_node then_stack
+        ifelse else_node else_stack
 
 
     | IF_CONS (ifthen, ifelse), x :: stack ->
-       let if_node = node ins.loc (N_UNKNOWN "IF_CONS") [x] [seq] in
+      let if_node = node ins.loc (N_UNKNOWN "IF_CONS") [x] [seq] in
 
-       let var0 = node ifthen.loc (N_IF_RESULT (if_node,0)) [] [] in
-       let var1 = node ifthen.loc (N_IF_RESULT (if_node, 1)) [] [] in
-       let then_node =
-         node ifthen.loc (N_IF_CONS (if_node, var0, var1)) [] [] in
-       let then_stack = var0 :: var1 :: stack in
+      let var0 = node ifthen.loc (N_IF_RESULT (if_node,0)) [] [] in
+      let var1 = node ifthen.loc (N_IF_RESULT (if_node, 1)) [] [] in
+      let then_node =
+        node ifthen.loc (N_IF_CONS (if_node, var0, var1)) [] [] in
+      let then_stack = var0 :: var1 :: stack in
 
-       let else_node = node ifelse.loc (N_IF_NIL if_node) [] [] in
-       let else_stack = stack in
+      let else_node = node ifelse.loc (N_IF_NIL if_node) [] [] in
+      let else_stack = stack in
 
-       decompile_if if_node stack
-                    ifthen then_node then_stack
-                    ifelse else_node else_stack
+      decompile_if if_node stack
+        ifthen then_node then_stack
+        ifelse else_node else_stack
 
 
     | LOOP code, x :: prev_stack ->
-       let loop_node = node ins.loc (N_UNKNOWN "LOOP") [x] [seq] in
-       let begin_node = node code.loc (N_LOOP_BEGIN loop_node) [] [] in
+      let loop_node = node ins.loc (N_UNKNOWN "LOOP") [x] [seq] in
+      let begin_node = node code.loc (N_LOOP_BEGIN loop_node) [] [] in
 
-       let pseudo_node = node ins.loc (N_UNKNOWN "LOOP") [] [] in
-       begin match decompile prev_stack pseudo_node code with
-       | [],_ -> assert false
-       | x :: end_stack,_ ->
+      let pseudo_node = node ins.loc (N_UNKNOWN "LOOP") [] [] in
+      begin match decompile prev_stack pseudo_node code with
+        | [],_ -> assert false
+        | x :: end_stack,_ ->
 
           let rec merge i stack1 stack2 =
             if stack1 == stack2 then stack1
@@ -350,13 +433,15 @@ let rec interp contract =
               | { kind = N_FAILWITH } :: _, _ -> stack2
               | _, { kind = N_FAILWITH } :: _ -> stack1
               | s1 :: stack1, s2 :: stack2 ->
-                 if s1 == s2 then
-                   s1 :: (merge i stack1 stack2)
-                 else
-                   let arg = node code.loc (N_ARG (begin_node,i)) [] [] in
-                   begin_node.args <- s1 :: begin_node.args;
-                   arg :: (merge (i+1) stack1 stack2)
-              | _ -> assert false
+                if s1 == s2 then
+                  s1 :: (merge i stack1 stack2)
+                else
+                  let arg = node code.loc (N_ARG (begin_node,i)) [] [] in
+                  begin_node.args <- s1 :: begin_node.args;
+                  arg :: (merge (i+1) stack1 stack2)
+              | _ ->
+                LiquidLoc.raise_error ~loc:ins.loc
+                  "Bad stack size in LOOP body%!"
           in
           let stack = merge 0 prev_stack end_stack in
 
@@ -366,46 +451,117 @@ let rec interp contract =
           | [], _ -> assert false
           | x :: end_stack, loop_seq ->
 
-             let end_node = node x.loc
-                 (N_LOOP_END (loop_node, begin_node, x)) []
-                 [ loop_seq ] in
+            let end_node = node x.loc
+                (N_LOOP_END (loop_node, begin_node, x)) []
+                [ loop_seq ] in
 
-             let rec merge i stack1 stack2 =
-               if stack1 == stack2 then stack1
-               else
-                 match stack1, stack2 with
-                 | [], [] -> []
-                 | { kind = N_FAILWITH } :: _, _ -> stack2
-                 | _, { kind = N_FAILWITH } :: _ -> stack1
-                 | { kind = N_ARG (n, i); node_name }:: stack1, s2 :: stack2
-                      when n == begin_node
-                   ->
-                   if i = 0 then begin_node.node_name <- node_name;
-                   let arg = node ins.loc
-                       (N_LOOP_RESULT (loop_node, begin_node, i)) [] [] in
-                   end_node.args <- s2 :: end_node.args;
-                   arg :: merge (i+1) stack1 stack2
-                 | s1 :: stack1, s2 :: stack2 ->
-                   assert (s1 == s2);
-                   s1 :: (merge i stack1 stack2)
-                 | _ -> assert false
-             in
+            let rec merge i stack1 stack2 =
+              if stack1 == stack2 then stack1
+              else
+                match stack1, stack2 with
+                | [], [] -> []
+                | { kind = N_FAILWITH } :: _, _ -> stack2
+                | _, { kind = N_FAILWITH } :: _ -> stack1
+                | { kind = N_ARG (n, i); node_name }:: stack1, s2 :: stack2
+                  when n == begin_node
+                  ->
+                  if i = 0 then begin_node.node_name <- node_name;
+                  let arg = node ins.loc
+                      (N_LOOP_RESULT (loop_node, begin_node, i)) [] [] in
+                  end_node.args <- s2 :: end_node.args;
+                  arg :: merge (i+1) stack1 stack2
+                | s1 :: stack1, s2 :: stack2 ->
+                  assert (s1 == s2);
+                  s1 :: (merge i stack1 stack2)
+                | _ -> assert false
+            in
 
-             let stack = merge 0 stack end_stack in
-             end_node.args <- List.rev end_node.args;
-             loop_node.kind <- N_LOOP (begin_node, end_node);
-             stack, loop_node
-       end
+            let stack = merge 0 stack end_stack in
+            end_node.args <- List.rev end_node.args;
+            loop_node.kind <- N_LOOP (begin_node, end_node);
+            stack, loop_node
+      end
+
+
+    | LOOP_LEFT code, x :: prev_stack ->
+      let loopleft_node = node ins.loc (N_UNKNOWN "LOOP_LEFT") [x] [seq] in
+      let begin_node = node code.loc (N_LOOP_LEFT_BEGIN loopleft_node) [] [] in
+      let arg = node code.loc (N_ARG (begin_node, 0)) [] [] in
+
+      let pseudo_node = node ins.loc (N_UNKNOWN "LOOP_LEFT") [] [] in
+      begin match decompile (arg :: prev_stack) pseudo_node code with
+        | [],_ -> assert false
+        | x :: end_stack,_ ->
+
+          let rec merge i stack1 stack2 =
+            if stack1 == stack2 then stack1
+            else
+              match stack1, stack2 with
+              | [], [] -> []
+              | { kind = N_FAILWITH } :: _, _ -> stack2
+              | _, { kind = N_FAILWITH } :: _  -> stack1
+              | s1 :: stack1, s2 :: stack2 ->
+                if s1 == s2 then
+                  s1 :: (merge i stack1 stack2)
+                else
+                  let arg = node code.loc (N_ARG (begin_node,i)) [] [] in
+                  begin_node.args <- s1 :: begin_node.args;
+                  arg :: (merge (i+1) stack1 stack2)
+              | _ ->
+                LiquidLoc.raise_error ~loc:ins.loc
+                  "Bad stack size in LOOP_LEFT body%!"
+          in
+          let stack = merge 1 prev_stack end_stack in
+
+          begin_node.args <- List.rev begin_node.args;
+
+          match decompile (arg :: stack) begin_node code with
+          | [], _ -> assert false
+          | x :: end_stack, loopleft_seq ->
+
+            let end_node = node x.loc
+                (N_LOOP_LEFT_END (loopleft_node, begin_node, x)) []
+                [ loopleft_seq ] in
+
+            let rec merge i stack1 stack2 =
+              if stack1 == stack2 then stack1
+              else
+                match stack1, stack2 with
+                | [], [] -> []
+                | { kind = N_FAILWITH } :: _, _ -> stack2
+                | _, { kind = N_FAILWITH } :: _ -> stack1
+                | { kind = N_ARG (n, i); node_name }:: stack1, s2 :: stack2
+                  when n == begin_node
+                  ->
+                  let arg = node ins.loc
+                      (N_LOOP_LEFT_RESULT (loopleft_node, end_node, i)) [] [] in
+                  end_node.args <- s2 :: end_node.args;
+                  arg :: merge (i+1) stack1 stack2
+                | s1 :: stack1, s2 :: stack2 ->
+                  assert (s1 == s2);
+                  s1 :: (merge i stack1 stack2)
+                | _ -> assert false
+            in
+
+            let stack = merge 1 stack end_stack in
+            let stack =
+              node ins.loc (N_LOOP_LEFT_RESULT (loopleft_node, end_node, 0)) [] [] ::
+              stack in
+            end_node.args <- List.rev end_node.args;
+            begin_node.node_name <- arg.node_name;
+            loopleft_node.kind <- N_LOOP_LEFT (begin_node, end_node);
+            stack, loopleft_node
+      end
 
     | ITER code, x :: prev_stack ->
-       let fold_node = node ins.loc (N_UNKNOWN "FOLD") [x] [seq] in
-       let begin_node = node code.loc (N_FOLD_BEGIN fold_node) [] [] in
+      let fold_node = node ins.loc (N_UNKNOWN "FOLD") [x] [seq] in
+      let begin_node = node code.loc (N_FOLD_BEGIN fold_node) [] [] in
 
-       let pseudo_node = node ins.loc (N_UNKNOWN "FOLD") [] [] in
-       let arg = node code.loc (N_ARG (begin_node,0)) [] [] in
+      let pseudo_node = node ins.loc (N_UNKNOWN "FOLD") [] [] in
+      let arg = node code.loc (N_ARG (begin_node,0)) [] [] in
 
-       begin match decompile (arg :: prev_stack) pseudo_node code with
-       | end_stack, fold_seq ->
+      begin match decompile (arg :: prev_stack) pseudo_node code with
+        | end_stack, fold_seq ->
 
           let rec merge i stack1 stack2 =
             if stack1 == stack2 then stack1
@@ -415,56 +571,57 @@ let rec interp contract =
               | { kind = N_FAILWITH } :: _, _ -> stack2
               | _, { kind = N_FAILWITH } :: _ -> stack1
               | s1 :: stack1, s2 :: stack2 ->
-                 if s1 == s2 then
-                   s1 :: (merge i stack1 stack2)
-                 else
-                   let arg = node code.loc (N_ARG (begin_node,i)) [] [] in
-                   begin_node.args <- s1 :: begin_node.args;
-                   arg :: (merge (i+1) stack1 stack2)
+                if s1 == s2 then
+                  s1 :: (merge i stack1 stack2)
+                else
+                  let arg = node code.loc (N_ARG (begin_node,i)) [] [] in
+                  begin_node.args <- s1 :: begin_node.args;
+                  arg :: (merge (i+1) stack1 stack2)
               | _ ->
-                assert false
+                LiquidLoc.raise_error ~loc:ins.loc
+                  "Bad stack size in ITER body%!"
           in
           let stack = merge 1 prev_stack end_stack in
           begin_node.args <- List.rev begin_node.args;
 
-         match decompile ( arg :: stack) begin_node code with
+          match decompile ( arg :: stack) begin_node code with
           | end_stack, fold_seq ->
 
-             let end_node = node x.loc
-                 (N_FOLD_END (fold_node, begin_node, begin_node)) [  ]
-                 [ fold_seq ] in
+            let end_node = node x.loc
+                (N_FOLD_END (fold_node, begin_node, begin_node)) [  ]
+                [ fold_seq ] in
 
-             let rec merge i stack1 stack2 =
-               if stack1 == stack2 then stack1
-               else
-                 match stack1, stack2 with
-                 | [], [] -> []
-                 | { kind = N_FAILWITH } :: _, _ -> stack2
-                 | _, { kind = N_FAILWITH } :: _ -> stack1
-                 | { kind = N_ARG (n, _) }:: stack1, s2 :: stack2
-                      when n == begin_node
-                      ->
-                   let arg = node ins.loc
-                       (N_FOLD_RESULT (fold_node, end_node, i)) [] [] in
-                   end_node.args <- s2 :: end_node.args;
-                   arg :: merge (i+1) stack1 stack2
-                 | s1 :: stack1, s2 :: stack2 ->
-                   assert (s1 == s2);
-                   s1 :: (merge i stack1 stack2)
-                 | _ -> assert false
-             in
+            let rec merge i stack1 stack2 =
+              if stack1 == stack2 then stack1
+              else
+                match stack1, stack2 with
+                | [], [] -> []
+                | { kind = N_FAILWITH } :: _, _ -> stack2
+                | _, { kind = N_FAILWITH } :: _ -> stack1
+                | { kind = N_ARG (n, _) }:: stack1, s2 :: stack2
+                  when n == begin_node
+                  ->
+                  let arg = node ins.loc
+                      (N_FOLD_RESULT (fold_node, end_node, i)) [] [] in
+                  end_node.args <- s2 :: end_node.args;
+                  arg :: merge (i+1) stack1 stack2
+                | s1 :: stack1, s2 :: stack2 ->
+                  assert (s1 == s2);
+                  s1 :: (merge i stack1 stack2)
+                | _ -> assert false
+            in
 
-             let stack = merge 0 stack end_stack in
-             end_node.args <- List.rev end_node.args;
-             begin match begin_node.next with
-               | Some { node_name = Some name } ->
-                 begin_node.node_name <- Some name
-               | _ ->
-                 begin_node.node_name <- arg.node_name
-             end;
-             fold_node.kind <- N_FOLD (begin_node, end_node);
-             stack, fold_node
-       end
+            let stack = merge 0 stack end_stack in
+            end_node.args <- List.rev end_node.args;
+            begin match begin_node.next with
+              | Some { node_name = Some name } ->
+                begin_node.node_name <- Some name
+              | _ ->
+                begin_node.node_name <- arg.node_name
+            end;
+            fold_node.kind <- N_FOLD (begin_node, end_node);
+            stack, fold_node
+      end
 
     | MAP code, x :: prev_stack ->
       let map_node = node ins.loc (N_UNKNOWN "MAP") [x] [seq] in
@@ -492,15 +649,9 @@ let rec interp contract =
                   let arg = node code.loc (N_ARG (begin_node,i)) [] [] in
                   begin_node.args <- s1 :: begin_node.args;
                   arg :: (merge (i+1) stack1 stack2)
-              | _ :: _, [] ->
-                assert false
-              | [], [s2] ->
-                assert false
-                (* let arg = node code.loc (N_ARG (begin_node,i)) [] [] in
-                 * begin_node.args <- s2 :: begin_node.args;
-                 * [arg] *)
-              | [], _ :: _ ->
-                assert false
+              | _ ->
+                LiquidLoc.raise_error ~loc:ins.loc
+                  "Bad stack size in MAP body%!"
           in
           let stack = merge 1 prev_stack end_stack in
           begin_node.args <- List.rev begin_node.args;
@@ -532,7 +683,7 @@ let rec interp contract =
                   s1 :: (merge i stack1 stack2)
                 | [], [s2] ->
                   assert false
-                  (* [s2] *)
+                (* [s2] *)
                 | _ -> assert false
             in
 
@@ -549,268 +700,336 @@ let rec interp contract =
 
     | LAMBDA (arg_ty, res_ty, code), stack ->
 
-       let begin_node = node ins.loc N_LAMBDA_BEGIN [] [] in
-       let lambda_stack, lambda_seq =
-         decompile [ begin_node ] begin_node code in
-       begin match lambda_stack with
-       | [] | _ :: _ :: _ -> assert false
-       | [res_node] ->
+      let begin_node = node ins.loc N_LAMBDA_BEGIN [] [] in
+      let lambda_stack, lambda_seq =
+        decompile [ begin_node ] begin_node code in
+      begin match lambda_stack with
+        | [] | _ :: _ :: _ -> assert false
+        | [res_node] ->
           let end_node = node res_node.loc (N_LAMBDA_END begin_node) [res_node]
-                              [lambda_seq] in
+              [lambda_seq] in
           let lambda_node = node ins.loc
               (N_LAMBDA (begin_node, end_node, arg_ty, res_ty)) [] [seq]
           in
           lambda_node :: stack, lambda_node
-       end
+      end
 
     (* Stack modifications *)
     | DUP 1, v :: _ ->
-       v :: stack, seq
+      v :: stack, seq
     | DROP, _ :: stack ->
-       stack, seq
+      stack, seq
     | DIP (1, code), x :: stack ->
-       let stack, seq = decompile stack seq code in
-       x :: stack, seq
+      let stack, seq = decompile stack seq code in
+      x :: stack, seq
     | SWAP, x :: y :: stack ->
-       y :: x :: stack, seq
+      y :: x :: stack, seq
 
 
 
     (* Primitives *)
 
     | PUSH (ty, cst), stack ->
-       let x = node ins.loc (N_CONST (ty, cst)) [] [seq] in
-       x :: stack, x
+      let x = node ins.loc (N_CONST (ty, cst)) [] [seq] in
+      x :: stack, x
 
     | FAILWITH, arg :: _ ->
       let x = node ins.loc N_FAILWITH [arg] [seq] in
       [x], x
 
     | TRANSFER_TOKENS, arg :: amount :: contract :: stack ->
-       let x = node ins.loc N_TRANSFER [contract; amount; arg] [seq] in
-       x :: stack, x
+      let x = node ins.loc N_TRANSFER [contract; amount; arg] [seq] in
+      x :: stack, x
 
     | SOURCE, stack ->
-       let x = node ins.loc (N_PRIM "SOURCE") [] [seq] in
-       x :: stack, x
+      let x = node ins.loc (N_PRIM "SOURCE") [] [seq] in
+      x :: stack, x
     | SENDER, stack ->
-       let x = node ins.loc (N_PRIM "SENDER") [] [seq] in
-       x :: stack, x
+      let x = node ins.loc (N_PRIM "SENDER") [] [seq] in
+      x :: stack, x
     | SELF, stack ->
-       let x = node ins.loc (N_PRIM "SELF") [] [seq] in
-       x :: stack, x
+      let x = node ins.loc (N_PRIM "SELF") [] [seq] in
+      x :: stack, x
     | NOW, stack ->
-       let x = node ins.loc (N_PRIM "NOW") [] [seq] in
-       x :: stack, x
+      let x = node ins.loc (N_PRIM "NOW") [] [seq] in
+      x :: stack, x
     | BALANCE, stack ->
-       let x = node ins.loc (N_PRIM "BALANCE") [] [seq] in
-       x :: stack, x
+      let x = node ins.loc (N_PRIM "BALANCE") [] [seq] in
+      x :: stack, x
     | AMOUNT, stack ->
-       let x = node ins.loc (N_PRIM "AMOUNT") [] [seq] in
-       x :: stack, x
+      let x = node ins.loc (N_PRIM "AMOUNT") [] [seq] in
+      x :: stack, x
 
     | IMPLICIT_ACCOUNT, key :: stack ->
-       let x = node ins.loc (N_PRIM "IMPLICIT_ACCOUNT") [key] [seq] in
-       x :: stack, x
+      let x = node ins.loc (N_PRIM "IMPLICIT_ACCOUNT") [key] [seq] in
+      x :: stack, x
 
     | SET_DELEGATE, key :: stack ->
-       let x = node ins.loc (N_PRIM "SET_DELEGATE") [key] [seq] in
-       x :: stack, x
+      let x = node ins.loc (N_PRIM "SET_DELEGATE") [key] [seq] in
+      x :: stack, x
 
     | ADDRESS, x :: stack ->
-       let x = node ins.loc (N_PRIM "ADDRESS") [x] [seq] in
-       x :: stack, x
+      let x = node ins.loc (N_PRIM "ADDRESS") [x] [seq] in
+      x :: stack, x
     | PACK, x :: stack ->
-       let x = node ins.loc (N_PRIM "PACK") [x] [seq] in
-       x :: stack, x
+      let x = node ins.loc (N_PRIM "PACK") [x] [seq] in
+      x :: stack, x
     | BLAKE2B, x :: stack ->
-       let x = node ins.loc (N_PRIM "BLAKE2B") [x] [seq] in
-       x :: stack, x
+      let x = node ins.loc (N_PRIM "BLAKE2B") [x] [seq] in
+      x :: stack, x
     | SHA256, x :: stack ->
-       let x = node ins.loc (N_PRIM "SHA256") [x] [seq] in
-       x :: stack, x
+      let x = node ins.loc (N_PRIM "SHA256") [x] [seq] in
+      x :: stack, x
     | SHA512, x :: stack ->
-       let x = node ins.loc (N_PRIM "SHA512") [x] [seq] in
-       x :: stack, x
+      let x = node ins.loc (N_PRIM "SHA512") [x] [seq] in
+      x :: stack, x
     | HASH_KEY, x :: stack ->
-       let x = node ins.loc (N_PRIM "HASH_KEY") [x] [seq] in
-       x :: stack, x
+      let x = node ins.loc (N_PRIM "HASH_KEY") [x] [seq] in
+      x :: stack, x
     | SOME, x :: stack ->
-       let x = node ins.loc (N_PRIM "SOME") [x] [seq] in
-       x :: stack, x
-    | LEFT right_ty, x :: stack -> (* TODO : keep types too ! *)
-       let x = node ins.loc (N_LEFT right_ty) [x] [seq] in
-       x :: stack, x
-    | RIGHT left_ty, x :: stack -> (* TODO : keep types too ! *)
-       let x = node ins.loc (N_RIGHT left_ty) [x] [seq] in
-       x :: stack, x
+      let x = node ins.loc (N_PRIM "SOME") [x] [seq] in
+      x :: stack, x
+
+    | RIGHT (right_ty, Some "_"), ({ kind = N_CONSTR c; } as x) :: stack ->
+      (* special case decoding nested (Right .. (Right (Left x))) *)
+      x :: stack, seq
+    | LEFT (_, Some constr), x :: stack when known_constrlabel constr ->
+      let x = node ins.loc (N_CONSTR constr) [x] [seq] in
+      x :: stack, x
+    | RIGHT (_, Some constr), x :: stack when known_constrlabel constr ->
+      let x = node ins.loc (N_CONSTR constr) [x] [seq] in
+      x :: stack, x
+
+    | LEFT (right_ty, _), x :: stack ->
+      let x = node ins.loc (N_LEFT right_ty) [x] [seq] in
+      x :: stack, x
+    | RIGHT (left_ty, _), x :: stack ->
+      let x = node ins.loc (N_RIGHT left_ty) [x] [seq] in
+      x :: stack, x
+
     | CONTRACT ty, x :: stack -> (* TODO : keep types too ! *)
-       let x = node ins.loc (N_CONTRACT ty) [x] [seq] in
-       x :: stack, x
+      let x = node ins.loc (N_CONTRACT ty) [x] [seq] in
+      x :: stack, x
     | UNPACK ty, x :: stack -> (* TODO : keep types too ! *)
-       let x = node ins.loc (N_UNPACK ty) [x] [seq] in
-       x :: stack, x
+      let x = node ins.loc (N_UNPACK ty) [x] [seq] in
+      x :: stack, x
     | INT, x :: stack ->
-       let x = node ins.loc (N_PRIM "INT") [x] [seq] in
-       x :: stack, x
+      let x = node ins.loc (N_PRIM "INT") [x] [seq] in
+      x :: stack, x
     | ISNAT, x :: stack ->
-       let x = node ins.loc (N_PRIM "ISNAT") [x] [seq] in
-       x :: stack, x
+      let x = node ins.loc (N_PRIM "ISNAT") [x] [seq] in
+      x :: stack, x
     | ABS, x :: stack ->
-       let x = node ins.loc (N_PRIM "ABS") [x] [seq] in
-       x :: stack, x
-    | CAR, { kind = N_PRIM "PAIR"; args = [x;_] } :: stack ->
-       x :: stack, seq
-    | CDR, { kind = N_PRIM "PAIR"; args = [_;x] } :: stack ->
-       x :: stack, seq
-    | CAR, x :: stack ->
-       let x = node ins.loc (N_PRIM "CAR") [x] [seq] in
-       x :: stack, x
-    | CDR, x :: stack ->
-       let x = node ins.loc (N_PRIM "CDR") [x] [seq] in
-       x :: stack, x
+      let x = node ins.loc (N_PRIM "ABS") [x] [seq] in
+      x :: stack, x
+
+    | CAR (Some f), { kind = N_RECORD (f' :: _); args = x :: _ } :: stack
+      when f = f'->
+      x :: stack, seq
+    | (CAR (Some field) | CDR (Some field)), x :: stack
+      when known_constrlabel field ->
+      let to_remove, x = undo_cdr [] x in
+      let x = node ins.loc (N_PROJ field) [x] [seq] in
+      List.iter (short_circuit ~from:x) to_remove;
+      x :: stack, x
+
+    | CAR _, { kind = N_PRIM "PAIR"; args = [x;_] } :: stack ->
+      x :: stack, seq
+    | CDR _, { kind = N_PRIM "PAIR"; args = [_;x] } :: stack ->
+      x :: stack, seq
+    | CAR _, x :: stack ->
+      let x = node ins.loc (N_PRIM "CAR") [x] [seq] in
+      x :: stack, x
+    | CDR _, x :: stack ->
+      let x = node ins.loc (N_PRIM "CDR") [x] [seq] in
+      x :: stack, x
 
     | NEQ, { kind = N_PRIM "COMPARE"; args = [x;y] } :: stack->
-       let x = node ins.loc (N_PRIM "NEQ") [x;y] [seq] in
-       x :: stack, x
+      let x = node ins.loc (N_PRIM "NEQ") [x;y] [seq] in
+      x :: stack, x
     | NEQ, x :: stack ->
-       let x = node ins.loc (N_PRIM "NEQ") [x] [seq] in
-       x :: stack, x
+      let x = node ins.loc (N_PRIM "NEQ") [x] [seq] in
+      x :: stack, x
     | EQ, { kind = N_PRIM "COMPARE"; args = [x;y] } :: stack->
-       let x = node ins.loc (N_PRIM "EQ") [x;y] [seq] in
-       x :: stack, x
+      let x = node ins.loc (N_PRIM "EQ") [x;y] [seq] in
+      x :: stack, x
     | EQ, x :: stack ->
-       let x = node ins.loc (N_PRIM "EQ") [x] [seq] in
-       x :: stack, x
+      let x = node ins.loc (N_PRIM "EQ") [x] [seq] in
+      x :: stack, x
     | LE, { kind = N_PRIM "COMPARE"; args = [x;y] } :: stack->
-       let x = node ins.loc (N_PRIM "LE") [x;y] [seq] in
-       x :: stack, x
+      let x = node ins.loc (N_PRIM "LE") [x;y] [seq] in
+      x :: stack, x
     | LE, x :: stack ->
-       let x = node ins.loc (N_PRIM "LE") [x] [seq] in
-       x :: stack, x
+      let x = node ins.loc (N_PRIM "LE") [x] [seq] in
+      x :: stack, x
     | LT, { kind = N_PRIM "COMPARE"; args = [x;y] } :: stack->
-       let x = node ins.loc (N_PRIM "LT") [x;y] [seq] in
-       x :: stack, x
+      let x = node ins.loc (N_PRIM "LT") [x;y] [seq] in
+      x :: stack, x
     | LT, x :: stack ->
-       let x = node ins.loc (N_PRIM "LT") [x] [seq] in
-       x :: stack, x
+      let x = node ins.loc (N_PRIM "LT") [x] [seq] in
+      x :: stack, x
     | GE, { kind = N_PRIM "COMPARE"; args = [x;y] } :: stack->
-       let x = node ins.loc (N_PRIM "GE") [x;y] [seq] in
-       x :: stack, x
+      let x = node ins.loc (N_PRIM "GE") [x;y] [seq] in
+      x :: stack, x
     | GE, x :: stack ->
-       let x = node ins.loc (N_PRIM "GE") [x] [seq] in
-       x :: stack, x
+      let x = node ins.loc (N_PRIM "GE") [x] [seq] in
+      x :: stack, x
     | GT, { kind = N_PRIM "COMPARE"; args = [x;y] } :: stack->
-       let x = node ins.loc (N_PRIM "GT") [x;y] [seq] in
-       x :: stack, x
+      let x = node ins.loc (N_PRIM "GT") [x;y] [seq] in
+      x :: stack, x
     | GT, x :: stack ->
-       let x = node ins.loc (N_PRIM "GT") [x] [seq] in
-       x :: stack, x
+      let x = node ins.loc (N_PRIM "GT") [x] [seq] in
+      x :: stack, x
 
     | CHECK_SIGNATURE, x :: y :: z :: stack ->
-       let x = node ins.loc (N_PRIM "CHECK_SIGNATURE") [x; y; z] [seq] in
-       x :: stack, x
+      let x = node ins.loc (N_PRIM "CHECK_SIGNATURE") [x; y; z] [seq] in
+      x :: stack, x
     | MOD, x :: y :: stack ->
-       let x = node ins.loc (N_PRIM "MOD") [x; y] [seq] in
-       x :: stack, x
+      let x = node ins.loc (N_PRIM "MOD") [x; y] [seq] in
+      x :: stack, x
     | DIV, x :: y :: stack ->
-       let x = node ins.loc (N_PRIM "DIV") [x; y] [seq] in
-       x :: stack, x
+      let x = node ins.loc (N_PRIM "DIV") [x; y] [seq] in
+      x :: stack, x
     | CONS, x :: y :: stack ->
-       let x = node ins.loc (N_PRIM "CONS") [x; y] [seq] in
-       x :: stack, x
+      let x = node ins.loc (N_PRIM "CONS") [x; y] [seq] in
+      x :: stack, x
     | MEM, x :: y :: stack ->
-       let x = node ins.loc (N_PRIM "MEM") [x;y] [seq] in
-       x :: stack, x
+      let x = node ins.loc (N_PRIM "MEM") [x;y] [seq] in
+      x :: stack, x
     | CONCAT, x :: stack ->
-       let x = node ins.loc (N_PRIM "CONCAT") [x] [seq] in
-       x :: stack, x
+      let x = node ins.loc (N_PRIM "CONCAT") [x] [seq] in
+      x :: stack, x
     | SLICE, x :: y :: z :: stack ->
-       let x = node ins.loc (N_PRIM "SLICE") [x;y;z] [seq] in
-       x :: stack, x
+      let x = node ins.loc (N_PRIM "SLICE") [x;y;z] [seq] in
+      x :: stack, x
     | OR, x :: y :: stack ->
-       let x = node ins.loc (N_PRIM "OR") [x;y] [seq] in
-       x :: stack, x
+      let x = node ins.loc (N_PRIM "OR") [x;y] [seq] in
+      x :: stack, x
     | MUL, x :: y :: stack ->
-       let x = node ins.loc (N_PRIM "MUL") [x;y] [seq] in
-       x :: stack, x
+      let x = node ins.loc (N_PRIM "MUL") [x;y] [seq] in
+      x :: stack, x
     | EDIV, x :: y :: stack ->
-       let x = node ins.loc (N_PRIM "EDIV") [x;y] [seq] in
-       x :: stack, x
+      let x = node ins.loc (N_PRIM "EDIV") [x;y] [seq] in
+      x :: stack, x
     | ADD, x :: y :: stack ->
-       let x = node ins.loc (N_PRIM "ADD") [x;y] [seq] in
-       x :: stack, x
+      let x = node ins.loc (N_PRIM "ADD") [x;y] [seq] in
+      x :: stack, x
     | SUB, x :: y :: stack ->
-       let x = node ins.loc (N_PRIM "SUB") [x;y] [seq] in
-       x :: stack, x
+      let x = node ins.loc (N_PRIM "SUB") [x;y] [seq] in
+      x :: stack, x
     | NEG, x :: stack ->
       let x = node ins.loc (N_PRIM "NEG") [x] [seq] in
       x :: stack, x
+
+    | PAIR, { kind = N_PRIM "CAR"; args = [p] } ::
+            { kind = N_PRIM "CDR"; args = [p'] } :: stack when p.num = p'.num ->
+      p :: stack, seq
+
     | PAIR, x :: y :: stack ->
-       let x = node ins.loc (N_PRIM "PAIR") [x;y] [seq] in
-       x :: stack, x
+      let x = node ins.loc (N_PRIM "PAIR") [x;y] [seq] in
+      x :: stack, x
+
+    | RECORD (label_x, None), x :: y :: stack
+      when not @@ known_constrlabel label_x ->
+      let x = node ins.loc (N_PRIM "PAIR") [x;y] [seq] in
+      x :: stack, x
+
+    | RECORD (label_x, Some label_y), x :: y :: stack
+      when not (known_constrlabel label_x && known_constrlabel label_y) ->
+      let x = node ins.loc (N_PRIM "PAIR") [x;y] [seq] in
+      x :: stack, x
+
+    | RECORD (label_x, Some label_y), x :: y :: stack ->
+      let x = node ins.loc (N_RECORD [label_x; label_y]) [x;y] [seq] in
+      x :: stack, x
+
+    | RECORD (label_x, None),
+      x :: ({ kind = N_RECORD y_labels; args } as y) :: stack ->
+      let x =
+        node ins.loc (N_RECORD (label_x :: y_labels)) (x :: args) [seq] in
+      short_circuit ~from:x y;
+      x :: stack, x
+
+    | RECORD (label_x, None),
+      x :: ({ kind = N_PRIM "CDR"; args = [_] } as y) :: stack ->
+      let to_remove, y = undo_cdr [] y in
+      let x =
+        node ins.loc (N_SETFIELD label_x) [x; y] [seq] in
+      List.iter (short_circuit ~from:x) to_remove;
+      x :: stack, x
+
+    | RECORD (label_x, None),
+      x :: ({ kind = N_SETFIELD _ } as y) :: stack ->
+      let x =
+        node ins.loc (N_SETFIELD label_x) [x; y] [seq] in
+      x :: stack, x
+
+
+    | RECORD (label_x, None), x :: y :: stack ->
+      let x = node ins.loc (N_RECORD [label_x; "_"]) [x;y] [seq] in
+      x :: stack, x
 
     | COMPARE, x ::  { kind = N_CONST (Tint,CInt n)} :: stack
-         when LiquidPrinter.int_of_integer n = 0
+      when LiquidPrinter.int_of_integer n = 0
       ->
-       x :: stack, seq
+      x :: stack, seq
 
     | COMPARE, x :: y :: stack ->
-       let x = node ins.loc (N_PRIM "COMPARE") [x;y] [seq] in
-       x :: stack, x
+      let x = node ins.loc (N_PRIM "COMPARE") [x;y] [seq] in
+      x :: stack, x
     | GET, x :: y :: stack ->
-       let x = node ins.loc (N_PRIM "GET") [x;y] [seq] in
-       x :: stack, x
+      let x = node ins.loc (N_PRIM "GET") [x;y] [seq] in
+      x :: stack, x
     | EXEC, x :: y :: stack ->
-       let x = node ins.loc (N_PRIM "EXEC") [x;y] [seq] in
-       x :: stack, x
+      let x = node ins.loc (N_PRIM "EXEC") [x;y] [seq] in
+      x :: stack, x
 
     | UPDATE, x :: y :: z :: stack ->
-       let x = node ins.loc (N_PRIM "UPDATE") [x;y;z] [seq] in
-       x :: stack, x
+      let x = node ins.loc (N_PRIM "UPDATE") [x;y;z] [seq] in
+      x :: stack, x
 
     | SIZE, x :: stack ->
-       let x = node ins.loc (N_PRIM "SIZE") [x] [seq] in
-       x :: stack, x
+      let x = node ins.loc (N_PRIM "SIZE") [x] [seq] in
+      x :: stack, x
 
     | AND, x :: y :: stack ->
-       let x = node ins.loc (N_PRIM "AND") [x; y] [seq] in
-       x :: stack, x
+      let x = node ins.loc (N_PRIM "AND") [x; y] [seq] in
+      x :: stack, x
 
     | XOR, x :: y :: stack ->
-       let x = node ins.loc (N_PRIM "XOR") [x; y] [seq] in
-       x :: stack, x
+      let x = node ins.loc (N_PRIM "XOR") [x; y] [seq] in
+      x :: stack, x
 
     | NOT, x :: stack ->
-       let x = node ins.loc (N_PRIM "NOT") [x] [seq] in
-       x :: stack, x
+      let x = node ins.loc (N_PRIM "NOT") [x] [seq] in
+      x :: stack, x
 
     | LSL, x :: y :: stack ->
-       let x = node ins.loc (N_PRIM "LSL") [x; y] [seq] in
-       x :: stack, x
+      let x = node ins.loc (N_PRIM "LSL") [x; y] [seq] in
+      x :: stack, x
 
     | LSR, x :: y :: stack ->
-       let x = node ins.loc (N_PRIM "LSR") [x; y] [seq] in
-       x :: stack, x
+      let x = node ins.loc (N_PRIM "LSR") [x; y] [seq] in
+      x :: stack, x
 
     | STEPS_TO_QUOTA, stack ->
-       let x = node ins.loc (N_PRIM "STEPS_TO_QUOTA") [] [seq] in
-       x :: stack, x
+      let x = node ins.loc (N_PRIM "STEPS_TO_QUOTA") [] [seq] in
+      x :: stack, x
 
     | CREATE_ACCOUNT, manager :: delegate :: delegatable :: amount :: stack ->
-       let x = node ins.loc (N_PRIM "CREATE_ACCOUNT")
-           [manager; delegate; delegatable; amount] [seq] in
-       let res_op = node ins.loc (N_RESULT (x, 0)) [] [] in
-       let res_cont = node ins.loc (N_RESULT (x, 1)) [] [] in
-       res_op :: res_cont :: stack, x
+      let x = node ins.loc (N_PRIM "CREATE_ACCOUNT")
+          [manager; delegate; delegatable; amount] [seq] in
+      let res_op = node ins.loc (N_RESULT (x, 0)) [] [] in
+      let res_cont = node ins.loc (N_RESULT (x, 1)) [] [] in
+      res_op :: res_cont :: stack, x
 
     | CREATE_CONTRACT contract, manager :: delegate ::
-                                delegatable :: spendable ::
+                                spendable :: delegatable ::
                                 amount :: storage :: stack ->
       let contract = interp contract in
       let x = node ins.loc (N_CREATE_CONTRACT contract)
           [manager; delegate;
-           delegatable; spendable;
+           spendable; delegatable;
            amount; storage] [seq] in
       let res_op = node ins.loc (N_RESULT (x, 0)) [] [] in
       let res_addr = node ins.loc (N_RESULT (x, 1)) [] [] in
@@ -822,8 +1041,8 @@ let rec interp contract =
       LiquidLoc.raise_error ~loc:ins.loc "Error while decompiling:\n %s%!" s
 
   and decompile_if if_node if_stack
-                   ifthen then_node then_stack
-                   ifelse else_node else_stack =
+      ifthen then_node then_stack
+      ifelse else_node else_stack =
 
     let then_stack, then_seq =
       decompile then_stack then_node ifthen
@@ -833,38 +1052,42 @@ let rec interp contract =
     in
 
     let then_end_node = node ifthen.loc (N_IF_END (if_node, then_node)) []
-                             [ then_seq ] in
+        [ then_seq ] in
     let else_end_node = node ifelse.loc (N_IF_END (if_node, else_node)) []
-                             [ else_seq ] in
+        [ else_seq ] in
     let stack = merge_stacks if_stack
-                  then_end_node (Some else_end_node)
-                  then_stack else_stack in
+        then_end_node (Some else_end_node)
+        then_stack else_stack in
     if_node.kind <- N_IF (then_end_node, else_end_node);
 
     stack, if_node
 
   in
 
-  let initial_code = match contract.code.ins with
-    | SEQ code -> mic_loc contract.code.loc
-                    (SEQ (mic_loc contract.code.loc PAIR :: code))
-    | _ -> assert false
+  let initial_code = match contract.mic_code.ins with
+    | SEQ code -> mic_loc contract.mic_code.loc
+                    (SEQ (mic_loc contract.mic_code.loc PAIR :: code))
+    | _ ->
+      LiquidLoc.raise_error ~loc:contract.mic_code.loc
+        "Code of contract must be a sequence%!"
   in
 
-  let start_node = node contract.code.loc N_START [] [] in
+  let start_node = node contract.mic_code.loc N_START [] [] in
 
   let initial_stack = [
-    node contract.code.loc (N_VAR "parameter") [] [];
-    node contract.code.loc (N_VAR "storage") [] [];
-    ] in
+    node contract.mic_code.loc (N_VAR "parameter") [] [];
+    node contract.mic_code.loc (N_VAR "storage") [] [];
+  ] in
 
   let stack, seq = decompile initial_stack start_node initial_code in
   let end_node = match stack with
-      [ arg ] -> node arg.loc N_END [arg] [seq]
-    | _ -> assert false
+    | [ arg ] -> node arg.loc N_END [arg] [seq]
+    | _ ->
+      LiquidLoc.raise_error ~loc:contract.mic_code.loc
+        "Final stack of contract must have a single element%!"
   in
-  let code = (start_node, end_node) in
-  { contract with code }
+  let mic_code = (start_node, end_node) in
+  { contract with mic_code }
 
 
 let interp contract =

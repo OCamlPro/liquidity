@@ -1,7 +1,9 @@
 
 (* strings *)
 
-[%%version 0.3]
+[%%version 0.4]
+
+type storage = string
 
 let%entry main
       (parameter : string)

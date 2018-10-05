@@ -7,6 +7,9 @@
 (*                                                                        *)
 (**************************************************************************)
 
+(** Michelson code generation *)
+
 open LiquidTypes
 
-val translate : encoded_exp contract -> loc_michelson_contract
+(** Compile contract to intermediate michelson representation *)
+val translate : encoded_contract -> loc_michelson_contract

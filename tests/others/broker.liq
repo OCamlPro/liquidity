@@ -1,13 +1,13 @@
 
-[%%version 0.3]
+[%%version 0.4]
 
 type storage = {
   state : string;
   timeout : timestamp;
   pn : tez * tez;
-  x : unit contract;
-  a : unit contract;
-  b : unit contract;
+  x : UnitContract.instance;
+  a : UnitContract.instance;
+  b : UnitContract.instance;
 }
 
 let%entry main

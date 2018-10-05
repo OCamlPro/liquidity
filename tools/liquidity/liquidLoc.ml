@@ -19,9 +19,9 @@ let pp_ksprintf ?before k fmt = (* From Location in OCaml *)
   end;
   Format.kfprintf
     (fun _ ->
-      Format.pp_print_flush ppf ();
-      let msg = Buffer.contents buf in
-      k msg)
+       Format.pp_print_flush ppf ();
+       let msg = Buffer.contents buf in
+       k msg)
     ppf fmt
 
 let noloc = noloc
@@ -33,25 +33,29 @@ let raise_error ?(loc=noloc) =
 let print_loc ppf loc =
   match loc.loc_pos with
   | Some ( (begin_line, begin_char) , (end_line, end_char) ) ->
-     Format.fprintf ppf "%s:%d.%d-%d.%d"
-                    loc.loc_file
-                    begin_line begin_char
-                    end_line end_char
+    Format.fprintf ppf "%s:%d.%d-%d.%d"
+      loc.loc_file
+      begin_line begin_char
+      end_line end_char
   | None ->
-     Format.fprintf ppf "%s" loc.loc_file
+    Format.fprintf ppf "%s" loc.loc_file
 
 let report_error ?(kind="Error") fmt { err_loc; err_msg } =
   Format.fprintf fmt "%a: %s: @[%s@]\n%!" print_loc err_loc kind err_msg
 
 let default_warning_printer loc w =
   Format.eprintf "%a: Warning: @[%a@]\n%!" print_loc loc
-  (fun fmt -> function
-     | Unused name ->
-       Format.fprintf fmt "unused variable %S" name
-     | UnusedMatched constr ->
-       Format.fprintf fmt
-         "unused branch, constructor %S is already matched" constr
-  ) w
+    (fun fmt -> function
+       | Unused name ->
+         Format.fprintf fmt "unused variable %S" name
+       | UnusedMatched constr ->
+         Format.fprintf fmt
+           "unused branch, constructor %S is already matched" constr
+       | IgnoredTypeAnnot ty ->
+         Format.fprintf fmt "ignored type annotation: %s" ty
+       | NotRecursive f ->
+         Format.fprintf fmt "%s is not recursive but was defined with rec" f
+    ) w
 
 let warning_printer = ref default_warning_printer
 

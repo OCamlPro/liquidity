@@ -6,7 +6,9 @@
 (*                                                                        *)
 (**************************************************************************)
 
+(** {2 Options of the Liquidity compiler } *)
 
+(** Verbosity level *)
 let verbosity =
   ref
     (try int_of_string (Sys.getenv "LIQUID_VERBOSITY")
@@ -15,26 +17,65 @@ let verbosity =
      | _ -> 1 (* LIQUID_DEBUG not a number *)
     )
 
+(** Do peephole optimiztions *)
 let peephole = ref true
-let keepon = ref false
+
+(** Stop after typing *)
 let typeonly = ref false
+
+(** Stop after parsing *)
 let parseonly = ref false
+
+(** Produce Michelson on a single line (no indentation) *)
 let singleline = ref false
-let annotmic = ref true
-let annotafter = ref false (* XXX: Disable when Tezos is fixed *)
+
+(** Produce outputs of the compiler in Json format. This can be used
+    to construct RPCs manually outside the Tezos client and Liquidity
+    client *)
 let json = ref false
 
+(** Ignore Michelson type annotations ([%c] and [:t]) when decompiling *)
+let ignore_annots = ref false
+
+(** Name of main contract when compiling *)
+let main = ref (None : string option)
+
+(** Path/name of ouptut file for compiling/decompiling *)
+let output = ref (None : string option)
+
+
+(** {2 Options of the Liquidity tezos client } *)
+
+(** Address of the node with the RPC port *)
 let tezos_node = ref "127.0.0.1:8732"
 
+(** Source (optional) of the transaction, a tz.. or a KT1... *)
 let source = ref (None : string option)
+
+(** Amount in tez for the transaction or origination *)
 let amount = ref "0"
+
+(** Fee (default 0.05 tz) in microtez *)
 let fee = ref "50000"
+
+(** Originate a delegatable contract *)
 let delegatable = ref false
+
+(** Originate a spendable contract *)
 let spendable = ref false
+
+(** Gas limit for transactions and originations. The default value is
+    the maximum allowed by Tezos at the moment. *)
 let gas_limit = ref "400000"
+
+(** The storage limit for transactions and originations. The default
+    value is the maximum allowed by Tezos at the moment. *)
 let storage_limit = ref "60000"
 
+(** Private key can be given to the liquidity tezos-client when
+    injecting signed transactions and originations directly. *)
 let private_key = ref (None : string option)
+
 let signature = ref (None : string option)
 let counter = ref (None : int option)
 

@@ -1,5 +1,7 @@
 type t = A | B | C
 
+type storage = int
+
 let%entry main
     (parameter : t)
     (storage : int) =

@@ -1,4 +1,4 @@
-[%%version 0.35]
+[%%version 0.4]
 
 (* Will be inlined *)
 let f (x:int) = x + 1
@@ -12,6 +12,7 @@ let h (x:int) = x + 3 [@@inline]
 (* Will not be inlined, even with attribute *)
 let op = Contract.call (Contract.self ()) 0tz () [@@inline]
 
+type storage = int
 
 let%entry main (parameter : unit) (storage : int) =
   let a = f storage in

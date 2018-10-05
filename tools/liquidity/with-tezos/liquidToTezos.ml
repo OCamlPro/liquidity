@@ -21,17 +21,19 @@ let loc_of_many (l : loc_michelson list) = match l, List.rev l with
   | [], _ | _, [] -> LiquidLoc.noloc
   | first :: _, last :: _ -> LiquidLoc.merge first.loc last.loc
 
-let prim ~loc name args var_name =
+let prim ~loc ?(fields=[]) name args var_name =
+  let annots = List.map (fun f -> "%" ^ f) fields in
   let annots = match var_name with
-    | Some s -> ["@" ^ s]
-    | None -> []
+    | Some s -> ("@" ^ s) :: annots
+    | None -> annots
   in
   Micheline.Prim(loc, name, args, annots)
 
 let seq ~loc exprs =
   Micheline.Seq(loc, exprs)
 
-let prim_type ~loc name args = Micheline.Prim(loc, name, args, [])
+let prim_type ~loc ?(annots=[]) name args =
+  Micheline.Prim(loc, name, args, annots)
 
 let rec convert_const ~loc expr =
   let bytes_of_hex s =
@@ -53,22 +55,22 @@ let rec convert_const ~loc expr =
   | CTuple [] -> assert false
   | CTuple [_] -> assert false
   | CTuple [x;y] ->
-     Micheline.Prim(loc, "Pair", [convert_const ~loc x;
-                                  convert_const ~loc y], [])
+    Micheline.Prim(loc, "Pair", [convert_const ~loc x;
+                                 convert_const ~loc y], [])
   | CTuple (x :: y) ->
-     Micheline.Prim(loc, "Pair", [convert_const ~loc x;
-                                  convert_const ~loc (CTuple y)], [])
+    Micheline.Prim(loc, "Pair", [convert_const ~loc x;
+                                 convert_const ~loc (CTuple y)], [])
 
   | CList args | CSet args ->
     Micheline.Seq(loc, List.map (convert_const ~loc) args)
 
   | CMap args | CBigMap args ->
-     Micheline.Seq(loc,
-                      List.map (fun (x,y) ->
-                          Micheline.Prim(loc, "Elt", [convert_const ~loc x;
-                                                       convert_const ~loc y], []
-                                          ))
-                               args)
+    Micheline.Seq(loc,
+                  List.map (fun (x,y) ->
+                      Micheline.Prim(loc, "Elt", [convert_const ~loc x;
+                                                  convert_const ~loc y], []
+                                    ))
+                    args)
 
   | CNat n -> Micheline.Int (loc, LiquidPrinter.mic_of_integer n)
   | CTez n -> Micheline.Int (loc, LiquidPrinter.mic_mutez_of_tez n)
@@ -114,11 +116,16 @@ let rec convert_type ~loc expr =
   | Ttuple [x;y] ->
     prim_type ~loc "pair" [convert_type ~loc x; convert_type ~loc y]
   | Ttuple (x :: tys) ->
-     prim_type ~loc "pair" [convert_type ~loc x; convert_type ~loc (Ttuple tys)]
+    prim_type ~loc "pair" [convert_type ~loc x; convert_type ~loc (Ttuple tys)]
   | Tor (x,y) -> prim_type ~loc "or" [convert_type ~loc x; convert_type ~loc y]
-  | Tcontract x -> prim_type ~loc "contract" [convert_type ~loc x]
+  | Tcontract { sig_name; entries_sig = [{ parameter }]} ->
+    let annots = match sig_name with
+      | None -> []
+      | Some n -> [":" ^ n] in
+    prim_type ~loc "contract" [convert_type ~loc parameter] ~annots
+  | Tcontract _ -> assert false
   | Tlambda (x,y) -> prim_type ~loc "lambda" [convert_type ~loc x;
-                                         convert_type ~loc y]
+                                              convert_type ~loc y]
   | Tclosure ((x,e),r) ->
     convert_type ~loc (Ttuple [Tlambda (Ttuple [x; e], r); e ]);
   | Tmap (x,y) -> prim_type ~loc "map" [convert_type ~loc x;convert_type ~loc y]
@@ -127,7 +134,37 @@ let rec convert_type ~loc expr =
   | Tset x -> prim_type ~loc "set" [convert_type ~loc x]
   | Tlist x -> prim_type ~loc "list" [convert_type ~loc x]
   | Toption x -> prim_type ~loc "option" [convert_type ~loc x]
-  | Tfail | Trecord _ | Tsum _ -> assert false
+  | Trecord (name, labels) -> convert_record_type ~loc name labels
+  | Tsum (name, constrs) -> convert_sum_type ~loc name constrs
+  | Tfail -> assert false
+
+and convert_record_type ~loc name labels =
+  convert_composed_type "pair" ~loc name labels
+
+and convert_sum_type ~loc name constrs =
+  convert_composed_type "or" ~loc name constrs
+
+and convert_composed_type ty_c ~loc name labels =
+  match labels with
+  | [] -> assert false
+  | [l, ty] ->
+    begin match convert_type ~loc ty with
+      | Micheline.Prim(loc, "big_map", args, annots) ->
+        Micheline.Prim(loc, "big_map", args, [":"^l])
+      | Micheline.Prim(loc, name, args, annots) ->
+        Micheline.Prim(loc, name, args, annots @ ["%"^l])
+      | _ -> assert false
+    end
+  | (l, ty) :: labels ->
+    let annots = if name = "" then [] else [":"^name] in
+    let ty = match convert_type ~loc ty with
+      | Micheline.Prim(loc, "big_map", args, annots) ->
+        Micheline.Prim(loc, "big_map", args, [":"^l])
+      | Micheline.Prim(loc, name, args, annots) ->
+        Micheline.Prim(loc, name, args, annots @ ["%"^l])
+      | _ -> assert false in
+    prim_type ~loc ~annots ty_c
+      [ty; convert_composed_type ty_c ~loc "" labels]
 
 let rec convert_code expand expr =
   let name = expr.loc_name in
@@ -153,8 +190,10 @@ let rec convert_code expand expr =
     else
       prim (Printf.sprintf "D%sP" (String.make n 'I'))
         [ convert_code expand arg ] name
-  | CAR -> prim "CAR" [] name
-  | CDR -> prim "CDR" [] name
+  | CAR None -> prim "CAR" []  name
+  | CAR (Some field) -> prim "CAR" [] ~fields:[field] name
+  | CDR None -> prim "CDR" []  name
+  | CDR (Some field) -> prim "CDR" [] ~fields:[field] name
   | SWAP -> prim "SWAP" [] name
   | IF (x,y) ->
     prim "IF" [convert_code expand x; convert_code expand y] name
@@ -166,6 +205,8 @@ let rec convert_code expand expr =
     prim "IF_CONS" [convert_code expand x; convert_code expand y] name
   | NOW -> prim "NOW" [] name
   | PAIR -> prim "PAIR" [] name
+  | RECORD (f1, None) -> prim "PAIR" [] ~fields:[f1] name
+  | RECORD (f1, Some f2) -> prim "PAIR" [] ~fields:[f1; f2] name
   | BALANCE -> prim "BALANCE" [] name
   | SUB -> prim "SUB" [] name
   | ADD -> prim "ADD" [] name
@@ -185,7 +226,7 @@ let rec convert_code expand expr =
   | SENDER -> prim "SENDER" [] name
   | OR -> prim "OR" [] name
   | LAMBDA (ty1, ty2, expr) ->
-     prim "LAMBDA" [convert_type ty1; convert_type ty2; convert_code expand expr] name
+    prim "LAMBDA" [convert_type ty1; convert_type ty2; convert_code expand expr] name
   | COMPARE -> prim "COMPARE" [] name
   | PUSH (Tunit, CUnit) -> prim "UNIT" [] name
   | PUSH (Tlist ty, CList []) -> prim "NIL" [convert_type ty] name
@@ -211,18 +252,25 @@ let rec convert_code expand expr =
   | prim "NONE" [ty] ->
      PUSH (Toption (convert_type ty), CNone)
                     *)
-  | LEFT ty ->
-     prim "LEFT" [convert_type ty] name
+  | LEFT (ty, None) ->
+    prim "LEFT" [convert_type ty] name
+  | RIGHT (ty, None) ->
+    prim "RIGHT" [convert_type ty] name
+
+  | LEFT (ty, Some c) ->
+    prim "LEFT" [convert_type ty] name ~fields:[c; ""]
+  | RIGHT (ty, Some c) ->
+    prim "RIGHT" [convert_type ty] name ~fields:[""; c]
+
   | CONS -> prim "CONS" [] name
   | LOOP loop -> prim "LOOP" [convert_code expand loop] name
+  | LOOP_LEFT loop -> prim "LOOP_LEFT" [convert_code expand loop] name
   | ITER body -> prim "ITER" [convert_code expand body] name
   | MAP body -> prim "MAP" [convert_code expand body] name
-  | RIGHT ty ->
-     prim "RIGHT" [convert_type ty] name
   | CONTRACT ty ->
-     prim "CONTRACT" [convert_type ty] name
+    prim "CONTRACT" [convert_type ty] name
   | UNPACK ty ->
-     prim "UNPACK" [convert_type ty] name
+    prim "UNPACK" [convert_type ty] name
   | INT -> prim "INT" [] name
   | ISNAT -> prim "ISNAT" [] name
   | ABS -> prim "ABS" [] name
@@ -257,27 +305,37 @@ let rec convert_code expand expr =
     convert_code expand @@
     ii @@ DIP (ndip, ii @@ SEQ (LiquidMisc.list_init ndrop (fun _ -> ii DROP)))
 
-  | CDAR 0 -> convert_code expand { expr with ins = CAR }
-  | CDDR 0 -> convert_code expand { expr with ins = CDR }
-  | CDAR n ->
+  | CDAR (0, field) -> convert_code expand { expr with ins = CAR field }
+  | CDDR (0, field) -> convert_code expand { expr with ins = CDR field }
+  | CDAR (n, field) ->
     if expand then
       convert_code expand @@ ii @@
-      SEQ (LiquidMisc.list_init n (fun _ -> ii CDR) @ [{ expr with ins = CAR }])
-    else prim (Printf.sprintf "C%sAR" (String.make n 'D')) [] name
-  | CDDR n ->
+      SEQ (LiquidMisc.list_init n (fun _ -> ii @@ CDR None) @
+           [{ expr with ins = CAR field }])
+    else
+      let fields = match field with
+        | Some f -> [f]
+        | None -> [] in
+      prim (Printf.sprintf "C%sAR" (String.make n 'D')) [] name ~fields
+  | CDDR (n, field) ->
     if expand then
       convert_code expand @@ ii @@
-      SEQ (LiquidMisc.list_init n (fun _ -> ii CDR) @ [{ expr with ins = CDR }])
-    else prim (Printf.sprintf "C%sDR" (String.make n 'D')) [] name
+      SEQ (LiquidMisc.list_init n (fun _ -> ii @@ CDR None) @
+           [{ expr with ins = CDR field }])
+    else
+      let fields = match field with
+        | Some f -> [f]
+        | None -> [] in
+      prim (Printf.sprintf "C%sDR" (String.make n 'D')) [] name ~fields
   | SIZE -> prim "SIZE" [] name
   | IMPLICIT_ACCOUNT -> prim "IMPLICIT_ACCOUNT" [] name
   | SET_DELEGATE -> prim "SET_DELEGATE" [] name
 
 and convert_contract_raw expand c =
   let loc = LiquidLoc.noloc in
-  let arg_type = convert_type ~loc c.contract_sig.parameter in
-  let storage_type = convert_type ~loc c.contract_sig.storage in
-  let code = convert_code expand c.code in
+  let arg_type = convert_type ~loc c.mic_parameter in
+  let storage_type = convert_type ~loc c.mic_storage in
+  let code = convert_code expand c.mic_code in
   let p = Micheline.Prim(loc, "parameter", [arg_type], []) in
   let s = Micheline.Prim(loc, "storage", [storage_type], []) in
   let c = Micheline.Prim((loc, None), "code", [code], []) in
@@ -356,7 +414,7 @@ let const_encoding =
   Micheline.canonical_encoding
     ~variant:"michelson_v1"
     Data_encoding.string
-  (* Micheline.erased_encoding 0 Data_encoding.string *)
+(* Micheline.erased_encoding 0 Data_encoding.string *)
 
 let json_of_const c =
   Data_encoding.Json.construct const_encoding c
@@ -375,9 +433,9 @@ let read_file filename =
   let lines = ref [] in
   let chan = open_in filename in
   begin try
-    while true; do
-      lines := input_line chan :: !lines
-    done;
+      while true; do
+        lines := input_line chan :: !lines
+      done;
     with
       End_of_file -> close_in chan
   end;
@@ -387,20 +445,16 @@ let read_tezos_file filename =
   let s = read_file filename in
   match LiquidFromTezos.contract_of_string filename s with
   | Some (code, loc_table) ->
-     Printf.eprintf "Program %S parsed\n%!" filename;
-     code, loc_table
+    Printf.eprintf "Program %S parsed\n%!" filename;
+    code, loc_table
   | None ->
-     Printf.eprintf "Errors parsing in %S\n%!" filename;
-     exit 2
+    Printf.eprintf "Errors parsing in %S\n%!" filename;
+    exit 2
 
 let read_tezos_json filename =
   let s = read_file filename in
   let nodes = contract_of_json s in
-  let env = LiquidTezosTypes.{ filename;
-                               loc_table = IntMap.empty;
-                               type_annots = Hashtbl.create 17;
-                               annoted = false;
-                             } in
+  let env = LiquidTezosTypes.empty_env filename in
   nodes, env
 
 
@@ -507,8 +561,8 @@ let arg_list work_done = [
     "--amount", Arg.String (fun s -> contract_amount := s),
     "NNN.00 Number of Tez sent";
      *)
-  ]
+]
 
 (* force linking not anymore ?
-let execute = Script_interpreter.execute
- *)
+   let execute = Script_interpreter.execute
+*)

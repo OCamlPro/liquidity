@@ -1,4 +1,6 @@
 
+type storage = unit
+
 let%entry main
       (parameter : int)
       (storage : unit) =

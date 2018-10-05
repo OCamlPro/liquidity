@@ -7,13 +7,22 @@
 (*                                                                        *)
 (**************************************************************************)
 
+(** Parsing from OCaml AST to Liquidity AST *)
+
 open LiquidTypes
+
+val predefined_types : datatype StringMap.t
+val predefined_contract_types : contract_sig StringMap.t
 
 val initial_env : string -> env
 
 val translate :
   filename:string -> Parsetree.structure ->
-  syntax_exp contract * syntax_init option * env
+  syntax_contract * syntax_init option * env
+
+val translate_multi :
+  (string * Parsetree.structure) list ->
+  syntax_contract * syntax_init option * env
 
 val read_file : string -> Parsetree.structure
 

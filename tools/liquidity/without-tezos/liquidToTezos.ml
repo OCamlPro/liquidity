@@ -11,20 +11,20 @@ open LiquidTypes
 
 type loc_table = (int * (LiquidTypes.location * string option)) list
 
-let string_of_contract (c : michelson_exp contract) =
+let string_of_contract (c : michelson_contract) =
   LiquidPrinter.Michelson.string_of_contract c
 
-let line_of_contract (c : michelson_exp contract) =
+let line_of_contract (c : michelson_contract) =
   LiquidPrinter.Michelson.line_of_contract c
 
-let convert_contract ~expand (c : loc_michelson contract) =
+let convert_contract ~expand (c : loc_michelson_contract) =
   LiquidEmit.emit_contract ~expand c,
   [] (* TODO : loc_table *)
 
 let convert_const (c : const) =
   failwith "mini version cannot convert const"
 
-let json_of_contract (c : michelson_exp contract) =
+let json_of_contract (c : michelson_contract) =
   failwith "mini version cannot generate json contract"
 
 let contract_of_json _ =

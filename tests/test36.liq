@@ -1,8 +1,8 @@
-[%%version 0.3]
+[%%version 0.4]
 
-let%entry main
-    (parameter : unit)
-    (storage : ((int, tez) map * unit contract)) =
+type storage = ((int, tez) map * UnitContract.instance)
+
+let%entry main (parameter : unit) storage =
   let foo = storage.(0) in
   let acc =
     Map.fold (fun ((_i, j), acc) ->

@@ -9,18 +9,26 @@
 
 open LiquidTypes
 
+(** Raise a typecheching error *)
 val error :
   location ->
   ('a, Format.formatter, unit, unit, unit, 'b) format6 -> 'a
 
+(** Typecheck a contract, returna a contract with type information.
+    @param warnings flag to indicate if warnings whould be produced
+    @param decompiling flag to indicate if we are typechecking an AST
+    constructed by the decompiler, in this case typing is more
+    permissive *)
 val typecheck_contract :
-  warnings:bool -> env -> syntax_contract -> typed_contract
+  warnings:bool -> decompiling:bool -> env -> syntax_contract -> typed_contract
 
-                       (*
-val uniq_ident : string -> string
-                        *)
-val loc_exp : ('a, 'b) exp -> location
+(** Typecheck a single entry point *)
+val typecheck_entry :
+  typecheck_env -> syntax_exp entry -> typed_exp entry
 
+(** Typecheck an expression. If the paramater [expected_ty] is
+    present, fails if the type of the expression is not the expected
+    one. *)
 val typecheck_code :
   typecheck_env ->
   ?expected_ty:LiquidTypes.datatype ->

@@ -1,6 +1,3 @@
-
-
-
 Liquidity Reference
 ===================
 
@@ -9,21 +6,34 @@ Contract Format
 
 All the contracts have the following form::
 
- [%%version 0.3]
+ [%%version 0.4]
  
  <... local declarations ...>
- 
+
+ type storage = TYPE
+
  let%init storage
      (x : TYPE)
-     (x : TYPE)
+     (y : TYPE)
      ... =
      BODY
  
+ let%entry entrypoint1
+     (p1 : TYPE)
+     (s1 : TYPE) =
+     BODY
+
+ let%entry entrypoint2
+     (p2 : TYPE)
+     (s2 : TYPE) =
+     BODY
+
  let%entry main
      (parameter : TYPE)
      (storage : TYPE) =
      BODY
 
+  ...
 
 The ``version`` statement tells the compiler in which version of
 Liquidity the contract is written. The compiler will reject any
@@ -31,20 +41,28 @@ contract that has a version that it does not understand (too old, more
 recent). We expect to reach version 1.0 at the launch of the Tezos
 network.
 
-The ``main`` function is the default entry point for the contract.
-``let%entry`` is the construct used to declare entry points (there is
-currently only one entry point, but there will be probably more in the
-future).  The declaration takes two parameters with names
-``parameter``, ``storage``, the arguments to the function. Their types must
-always be specified. The return type of the function must also be
-specified by a type annotation.
+A contract is composed of type declarations, local values definitions,
+an initializer, and a set of entry points. The type ``storage`` must
+be defined for all contracts.
 
-A contract always returns a pair ``(operations, storage)``, where
+Each entry point is a special function declared with the keyword
+``let%entry``. An entry point must have two arguments, the first one
+being the parameter (which must be type annotated) and the second one
+is the storage (type annotation optional). The return type of the
+function can be specified but is not necessary. Each entry point must
+be given a unique name within the same contract.
+
+If there is an entry point named ``main``, it will be the default
+entry point for the contract, *i.e.* the one that is called when the
+entry point is not specified in ``Contract.call`` and
+``Contract.transfer``.
+
+An entry point always returns a pair ``(operations, storage)``, where
 ``operations`` is a list of internal operations to perform after
-exectution of the contract, and ``storage`` is the final state of the
+execution of the contract, and ``storage`` is the final state of the
 contract after the call. The type of the pair must match the type of a
 pair where the first component is a list of opertations and the second
-is the type of the argument ``storage`` of ``main``.
+is the type of the storage argument.
 
 ``<... local declarations ...>`` is an optional set of optional type and
 function declarations. Type declarations can be used to define records
@@ -52,7 +70,7 @@ and variants (sum-types), described later in this documentation.
 
 An optional initial storage or storage initializer can be given with
 ``let%init storage``. When deploying a Liquidity contract, if the
-storage is not constant it is evaluated in the prevalidation context.
+storage is not constant it is evaluated in the head context.
 
 Basic Types and Values
 ----------------------
@@ -98,7 +116,8 @@ and the following predefined combinators:
 - big maps: ``('key, 'val) big_map`` is the type of lazily
   deserialized maps whose keys are of type ``'key`` (a comparable
   type) and values of type ``'val``;
-- contracts: ``'a contract`` for contracts whose parameter is of type ``'a``;
+- contracts: ``S.instance`` is the type of contracts (instances) of signature
+  ``S`` (see `Contract Types and Signatures`_);
   
 and the predefined algebraic data types:
 
@@ -188,11 +207,11 @@ type and another compatible type, using the notation
 * A ``string`` can be coerced to ``tez`` (the string must contain an
   integer in mutez à la Michelson), ``timestamp``, ``key``,
   ``address``, ``_ contract``, ``key_hash`` and ``signature``.
-* A ``bytes`` can be coerced to ``address``, ``_ contract``, ``key``,
+* A ``bytes`` can be coerced to ``address``, ``_.instance``, ``key``,
    ``key_hash`` and ``signature``.
-* An ``address`` can be coerced to ``_ contract``.
-* A ``_ contract`` can be coerced to ``address``.
-* A ``key_hash`` can be coerced to ``unit contract`` and ``address``.
+* An ``address`` can be coerced to ``_.instance``.
+* A ``_.instance`` can be coerced to ``address``.
+* A ``key_hash`` can be coerced to ``UnitContract.instance`` and ``address``.
 
 
 Predefined Primitives
@@ -293,11 +312,11 @@ The ``Current`` module
     ...
   
 * ``Current.source: unit -> address``: returns the address that
-  initiated the current transaction in the blockchain. It is the same
-  one for all the operations in the transaction, standard and
-  internal. It is the address that paid the fees and storage cost, and
-  signed the operation on the blockchain. It is translated to
-  ``SOURCE`` in Michelson.
+  initiated the current top-level transaction in the blockchain. It is
+  the same one for all the transactions resulting from the top-level
+  transaction, standard and internal. It is the address that paid the
+  fees and storage cost, and signed the operation on the
+  blockchain. It is translated to ``SOURCE`` in Michelson.
 
   Example::
 
@@ -305,8 +324,8 @@ The ``Current`` module
     ...
     
 * ``Current.sender: unit -> address``: returns the address that
-  initiated the current operation. It is the same as the source for
-  the toplevel operation, but it is the originating contract for
+  initiated the current transaction. It is the same as the source for
+  the top-level transaction, but it is the originating contract for
   internal operations. It is translated to ``SENDER`` in Michelson.
 
   Example::
@@ -473,21 +492,41 @@ Operations on numeric values
 Operations on contracts
 ~~~~~~~~~~~~~~~~~~~~~~~
 
-* ``Contract.call: 'a contract -> tez -> 'a -> operation``. Forge an
-  internal transaction. It is translated to ``TRANSFER_TOKENS`` in
-  Michelson.
+* ``Contract.call: ~dest:'S.instance -> ~amount:tez ->
+  ?entry:<entry_name> ~parameter:'a -> operation``. Forge an internal
+  contract call. It is translated to ``TRANSFER_TOKENS`` in Michelson.
+  Arguments can be labeled, in which case they can be given
+  in any order. The entry point name is optional (``main`` by default).
 
   Example::
 
-    let contract =  (tz1... : unit contract) in
-    let op = Contract.call contract 1000tz () in
+    let dest = (tz1... : UnitContract.instance) in
+    let op = Contract.call ~dest ~amount:1000tz () in
     ...
     ([op], storage)
-  
-* ``Account.create: key_hash -> key_hash option -> bool -> tez ->
-  operation * address``. Forge an operation to create a new
-  (originated) account and returns its address. It is translated to
-  ``CREATE_ACCOUNT`` in Michelson.
+
+* ``Contract.transfer: ~dest:'S.instance -> ~amount:tez ->
+  operation``. Forge an internal transaction. It is translated to
+  ``TRANSFER_TOKENS`` in Michelson.  Arguments can be labeled, in
+  which case they can be given in any order.
+
+  ``Contract.transfer ~dest:c ~amount:a`` is syntactic sugar for
+  ``Contract.call ~dest:c ~entry:main ~parameter:() ~amount:a``.
+
+* ``<c.entry>: 'parameter -> ~amount:tez -> operation``. Forge an
+  internal contract call. It is translated to ``TRANSFER_TOKENS`` in
+  Michelson.  The amount argument can be labeled, in which case it can
+  appear before the parameter.
+
+  ``c.my_entry p ~amount:a`` is syntactic sugar for
+  ``Contract.call ~dest:c ~entry:my_entry ~parameter:p ~amount:a``.
+
+* ``Account.create: manager:key_hash -> delegate:key_hash option ->
+  delegatable:bool -> amount:tez -> operation * address``. Forge an
+  operation to create a new (originated) account and returns its
+  address. It is translated to ``CREATE_ACCOUNT`` in
+  Michelson. Arguments can be labeled, in which case they can be given
+  in any order.
 
   Example::
 
@@ -498,10 +537,11 @@ Operations on contracts
     ...
     ([op], storage)
   
-* ``Account.default: key_hash -> unit contract``. Returns the contract
-  associated to the given ``key_hash``. Since this contract is not
-  originated, it cannot contains code, so transfers to it cannot
-  fail. It is translated to ``IMPLICIT_ACCOUNT`` in Michelson.
+* ``Account.default: key_hash -> UnitContract.instance``. Returns
+  the contract associated to the given ``key_hash``. Since this
+  contract is not originated, it cannot contains code, so transfers to
+  it cannot fail. It is translated to ``IMPLICIT_ACCOUNT`` in
+  Michelson.
 
   Example::
 
@@ -524,7 +564,7 @@ Operations on contracts
     ...
     ([op1;op2], storage)
   
-* ``Contract.address: _ contract -> address`` . Returns the address of
+* ``Contract.address: _.instance -> address`` . Returns the address of
   a contract. It is translated to ``ADDRESS`` in Michelson.
 
   Example::
@@ -533,19 +573,19 @@ Operations on contracts
     let map = Map.add addr contract map in
     ...
   
-* ``Contract.at: address -> 'a contract option``. Returns the contract
+* ``Contract.at: address -> _.instance option``. Returns the contract
   associated with the address and type annotation, if any. Must be
   annotated with the type of the contract. It is translated to
   ``CREATE_CONTRACT`` in Michelson.
 
   Example::
 
-    match (Contract.at addr : (bool contract) option) with
+    match (Contract.at addr : BoolContract.instance option) with
     | None -> failwith ("Cannot recover bool contract from:", addr)
     | Some contract -> ...
   
     
-* ``Contract.self: unit -> 'a contract``. Returns the current
+* ``Contract.self: unit -> _.instance``. Returns the current
   executing contract. It is translated to ``SELF`` in Michelson.
 
   Example::
@@ -553,19 +593,20 @@ Operations on contracts
     let contract = Contract.self () in
     ...
   
-* ``Contract.create: key_hash -> key_hash option -> bool -> bool ->
-  tez -> 'storage -> ('param -> 'storage -> operation list * 'storage)
-  -> (operation, address)``. Forge an operation to originate a
-  contract with code. The contract is only created when the operation
-  is executed, so it must be returned by the transaction. Note that
-  the code must be specified as an inline function with two arguments
-  ``parameter`` and ``storage`` with type annotations. It is
-  translated to ``CREATE_CONTRACT`` in Michelson.
-  ``Contract.create manager delegate_opt spendable delegatable
-  initial_amount (fun ... -> <code> )`` forges an operation with
-  manager ``manager``, optional delegate ``delegate``, Boolean
-  spendable flag ``spendable``, Boolean delegatable flag
-  ``delegatable`` and initial balance ``initial_amount``.
+* ``Contract.create: manager:key_hash -> delegate:key_hash option ->
+  spendable:bool -> delegatable:bool -> amount:tez -> storage:'storage
+  -> code:(contract _) -> (operation, address)``. Forge an operation
+  to originate a contract with code. The contract is only created when
+  the operation is executed, so it must be returned by the
+  transaction. Note that the code must be specified as a contract
+  structure (inlined or not). It is translated to ``CREATE_CONTRACT``
+  in Michelson.  ``Contract.create manager delegate_opt spendable
+  delegatable initial_amount initial_storage (contract C)`` forges an
+  an origination operation for contract `C` with manager ``manager``,
+  optional delegate ``delegate``, Boolean spendable flag
+  ``spendable``, Boolean delegatable flag ``delegatable``, initial
+  balance ``initial_amount`` and initial storage
+  ``initial_storage``. Arguments can be named and put in any order.
 
 
   Example::
@@ -574,14 +615,13 @@ Operations on contracts
     let spendable = false in
     let contract_storage = (10tz,"Hello") in
     let (op, addr) =
-       Contract.create manager (Some delegate) spendable delegatable
-         10tz contract_storage
-         (fun (parameter:string) (storage: tez * string) ->
-         ...)
+       Contract.create ~initial_storage ~manager ~spendable
+         ~delegatable ~delegate:(Some delegate) ~amount:10tz
+         (contract struct ... end)
     in
 
     (* THIS WILL FAIL UNTIL THE OPERATION IS EXECUTED *)
-    let new_contract = (Contract.at addr : string contract option) in
+    let new_contract = (Contract.at addr : StringContract.instance option) in
     ...
     ( [op], storage )
     
@@ -1168,6 +1208,122 @@ collections.
 * ``Coll.map_fold``
 
 
+The Module-like Contract System
+-------------------------------
+
+The system described in this section allows to define several
+contracts in the same file, to reference contracts by their names, and
+to call contracts defined in other files.
+
+Contract Structures
+~~~~~~~~~~~~~~~~~~~
+
+The notion of *contract structure* in Liquidity is a way to define
+namespaces and to encapsulate types and contracts in packages. These
+packages are called structures and are introduced with the ``struct``
+keyword. They contain the exact same syntax elements that are allowed
+to define contracts (see `Contract Format`_). These contract
+structures are given names with the keyword ``contract``.
+
+For instance the following structure defines a contract named ``C``
+with a single entry point ``main``::
+
+  contract C = struct
+
+    type storage = int
+
+    let succ (x : int) = x + 1 [@@inline]
+
+    let%init storage = 0
+
+    let%entry main (u : unit) storage =
+      ([] : operation list), succ storage
+
+  end
+
+Components of ``C`` can later be referred to using identifiers
+qualified (with a dot ``.``) by the contract name ``C``:
+
+- ``C.storage`` can be used as a type
+- ``succ`` cannot be called from outside the contract
+
+Contracts can also be used as first class values::
+
+  Contract.create
+    ~manager:key_hash
+    ~delegate:None
+    ~spendable:false
+    ~delegatable:true
+    ~amount:0tz
+    ~storage:0
+    (contract C)
+
+**Instances** of contracts can be called with four different syntaxes:
+
+- ``Contract.transfer c 1tz``
+- ``Contract.call ~dest:c ~amount:1tz ~parameter:"hello"``
+- ``Contract.call ~dest:c ~amount:1tz ~entry:main ~parameter:"hello"``
+- ``c.main "hello" ~amount:1tz``
+
+The last three ones are equivalent, while the first one is simply
+syntactic sugar for ``c.main () ~amount:1tz``.
+
+Toplevel Contracts
+~~~~~~~~~~~~~~~~~~
+
+A contract defined at toplevel in a file ``path/to/my_contract.liq``
+implicitly defines a contract structure named ``My_contract`` which
+can be called in other Liquidity files.
+
+
+Contract Types and Signatures
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+A contract is a first class object in Liquidity only for the
+instruction ``Contract.create``, while contract *instances* can be
+used like any other values. Contract signatures are introduced with
+the keyword ``sig`` and defined with the keyword ``contract type``::
+
+  contract type S = sig
+    type storage = int
+    val%entry entry1 : p1:TYPE -> s1:TYPE -> operation list * storage
+    val%entry entry2 : p2:TYPE -> s2:TYPE -> operation list * storage
+    val%entry main : TYPE -> TYPE -> operation list * storage
+    ...
+  end
+
+A contract signature contains a declaration for the type ``storage``
+(this type can be abstract from the outside of the contract), and
+declarations for the entry point signatures with the special keyword
+``val%entry`` (names of argument can be specified).
+
+The type of a contract (instance) whose signature is `S` is written
+``S.instance``. Note that ``S`` must be declared as a contract signature
+beforehand if we want to declare values of type ``S.instance``.
+
+For example::
+
+  type t = {
+    counter : int;
+    dest : S.instance;
+  }
+
+is a record type with a contract field ``dest`` of signature ``S``.
+
+
+Predefined Contract Signatures
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The contract signature ``UnitContract`` is built-in, in Liquidity, and
+stands for contracts with a single entry point ``main`` whose
+parameter is of type ``unit``::
+
+  contract type UnitContract = sig
+    type storage
+    val%entry main : unit -> storage -> operation list * storage
+  end
+
+
 From Michelson to Liquidity
 ---------------------------
 
@@ -1211,16 +1367,18 @@ Here is a table of how Michelson instructions translate to Liquidity:
 * ``IMPLICIT_ACCOUNT``: ``Account.default keyhash``
 * ``INT``: ``int x``
 * ``ISNAT``:``is_nat x`` or ``match%int x with Plus x -> ... | Minus y -> ...``
-* ``ITER``: ``Loop.loop (fun x -> ...; (cond, x')) x0``
+* ``ITER``: ``List.iter``, ``Set.iter``, ``Map.iter``,
+            ``List.fold``, ``Set.fold``, ``Map.fold``
 * ``LAMBDA``: ``fun x -> ...``
 * ``LE``: ``x <= y``
 * ``LEFT``: ``Left x``
 * ``LOOP``: ``Loop.loop (fun x -> ...; (cond, x')) x0``
-* ``LOOP_LEFT``: Not supported at the moment
+* ``LOOP_LEFT``: ``Loop.left (fun (x, acc) -> (Left x/Right res, acc)) x0 acc``
 * ``LSL``: ``x lsl y`` or ``x << y``
 * ``LSR``: ``x lsr y`` or ``x >> y``
 * ``LT``: ``x < y``
-* ``MAP``: ``List.map``, ``Set.map``, ``Map.map``
+* ``MAP``: ``List.map``, ``Set.map``, ``Map.map``,
+           ``List.map_fold``, ``Set.map_fold``, ``Map.map_fold``
 * ``MEM``: ``Set.mem ele set``, ``Map.mem key map``
 * ``MUL``: ``x * y``
 * ``NEG``: ``~- x``
@@ -1259,11 +1417,23 @@ Liquidity Grammar
 Toplevel:
 
 * ``[%%version`` FLOAT ``]``
-* ``let%init storage =`` Expression
-* ``let%entry main (parameter:`` Type ``) (storage:`` Type ``) =`` Expression
+* Structure*
+
+Structure:
+
 * ``type`` LIDENT ``=`` Type
 * ``type`` LIDENT ``= {`` [ LIDENT ``:`` Type ``;``]+ ``}``
 * ``type`` LIDENT ``=`` [ ``|`` UIDENT ``of`` Type ]+
+* ``contract`` LIDENT ``= struct`` Structure* ``end``
+* ``contract type`` LIDENT ``= sig`` Signature* ``end``
+* ``let%init storage =`` Expression
+* ``let%entry`` LIDENT ``(`` LIDENT ``:`` Type ``) (`` LIDENT ``:`` Type ``) =`` Expression
+
+Signature:
+
+* ``type`` LIDENT ``=`` Type
+* ``type`` LIDENT
+* ``val%entry`` LIDENT ``:`` LIDENT ``:`` Type ``->`` LIDENT ``:`` Type ``-> operation list *`` Type
 
 Expression:
 
@@ -1277,12 +1447,13 @@ Expression:
 * ``Contract.create`` Expression Expression Expression Expression
   Expression Expression ``(fun ( parameter:`` Type ``) (storage:``
   Type ``) ->`` Expression ``)``
-* ``(Contract.at`` Expression ``:`` Type ``contract option)``
+* ``(Contract.at`` Expression ``:`` Type ``option)``
 * ``(Bytes.unpack`` Expression ``:`` Type ``option )``
 * ``let`` LIDENT ``=`` Expression ``in`` Expression
 * ``let%inline`` LIDENT ``=`` Expression ``in`` Expression
 * Expression ``;`` Expression
 * ``Loop.loop (fun`` LIDENT ``->`` Expression ``)`` Expression
+* ``Loop.left (fun`` LIDENT ``->`` Expression ``)`` Expression
 * Expression Expression
 * ``match%nat`` Expression ``with | Plus`` LIDENT ``->`` Expression ``| Minus`` LIDENT ``->`` Expression
 * ``match`` Expression ``with | Left`` LIDENT ``->`` Expression ``| Right`` LIDENT ``->`` Expression

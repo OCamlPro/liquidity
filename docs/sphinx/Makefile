@@ -2,7 +2,7 @@ SPHINXBUILD   = sphinx-build
 SPHINXOPTS    = -aE -n
 SOURCEDIR     = src
 
-sources := $(shell find $(SOURCEDIR) -type f) Makefile ../../.git/logs/HEAD
+sources := $(shell find $(SOURCEDIR) -type f) Makefile ../../.git/logs/HEAD $(SOURCEDIR)/reference/michelson.rst
 
 all: html pdf epub
 
@@ -28,3 +28,7 @@ clean:
 
 web: _site
 	cd _site && php -S localhost:10000
+
+$(SOURCEDIR)/reference/michelson.rst:
+	wget https://gitlab.com/tezos/tezos/raw/betanet/docs/whitedoc/michelson.rst \
+	-O $(SOURCEDIR)/reference/michelson.rst

@@ -1,10 +1,12 @@
 
 (* transfers *)
 
-[%%version 0.3]
+[%%version 0.4]
+
+type storage = tez
 
 let%entry main
-      (parameter : unit contract)
+      (parameter : UnitContract.instance)
       (storage : tez) =
 
       let amount = Current.amount () in

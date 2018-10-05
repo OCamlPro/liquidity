@@ -1,8 +1,10 @@
 (* List.map *)
 
-[%%version 0.3]
+[%%version 0.4]
 
 let succ (x : int) = x + 1
+
+type storage = int list
 
 let%entry main
       (parameter : int)

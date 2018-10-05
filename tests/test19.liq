@@ -1,4 +1,4 @@
-[%%version 0.33]
+[%%version 0.4]
 
 type storage = {
   key : key;
@@ -16,9 +16,30 @@ let%init storage : storage = {
 edsigtc766ouxRKCy6dfYMTanSB9NkaqnBk2eit2i1vNAcKAuMtQRZZUFWWcZ7NdhQgLkgXp9kYNKiXfKsBvpk6ebWwQkMbNvgk
 *)
 
+contract PlusOne = struct
+  type storage = int
+
+  type t = A | B
+
+  let%init init_storage (x : bool) (y : int) = if x = false then 0 else y
+
+  let%entry main (_parameter : unit) (storage : storage) =
+    ([] : operation list), storage + 1
+end
+
+(* contract type PS = sig
+ *   type storage
+ *
+ *   val%entry main : unit -> storage -> operation list * storage
+ * end *)
+
 let%entry main
     (parameter : signature)
-    (storage : storage) =
+    storage =
+  let x = PlusOne.A in
+  begin match x with
+  | PlusOne.B -> failwith ()
+  | _ -> () end;
   (*  let c = Contract.self () in *)
   let key_hash = Crypto.hash_key storage.key in
   if key_hash = tz1KqTpEZ7Yob7QbPE4Hy4Wo8fHG8LhKxZSx then
@@ -34,18 +55,27 @@ let%entry main
     | Some qr -> qr
   in
   let delegatable = false in
+  let cocococ = (Contract.at storage.c : PlusOne.instance option) in
+  let cocococ2 = PlusOne.at storage.c in
+  let op1 = (Contract.self ()).main parameter ~amount:0tz in
   let account_op, _account =
     Account.create
       key_hash delegate delegatable
       (amount.(0) + amount.(1)) in
   let c_op, c_addr =
     Contract.create
-      key_hash delegate
-      spendable true
-      amount.(0) 0
-      (fun (parameter : unit) (storage : int) ->
-         ([] : operation list), storage + 1
-      )
+      ~manager:key_hash
+      ~delegate
+      ~spendable
+      ~delegatable:true
+      ~amount:amount.(0)
+      ~storage:(9 : PlusOne.storage)
+      (contract PlusOne)
+      (* (contract struct
+       *   type storage = int
+       *   let%entry main (parameter : unit) (storage : storage) =
+       *     ([] : operation list), storage + 1
+       * end) *)
   in
   let storage = storage.c <- c_addr in
   ( [account_op; c_op], storage )

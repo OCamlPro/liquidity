@@ -9,4 +9,4 @@
 
 open LiquidTypes
 
-val interp : loc_michelson contract -> node_exp contract
+val interp : loc_michelson_contract -> node_contract

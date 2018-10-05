@@ -1,17 +1,17 @@
 
 (* constructors *)
 
-[%%version 0.3]
+[%%version 0.4]
 
-type s =
+type storage =
         bool *
         int option *
         (string,int) map
 
 let%entry main
       (parameter : bool)
-      (storage : s)
-      : operation list * s =
+      (storage : storage)
+      : operation list * storage =
 
 (* options *)
       let x = 3 in

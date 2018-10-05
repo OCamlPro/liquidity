@@ -8,8 +8,8 @@
 (**************************************************************************)
 
 (* TODO: We could use a simplify pass to propagate the no-effect
-  defining expression of once-used variables to their uniq use
-  site. It could dramatically decrease the size of the stack.  *)
+   defining expression of once-used variables to their uniq use
+   site. It could dramatically decrease the size of the stack.  *)
 
 
 open LiquidTypes
@@ -56,48 +56,51 @@ let rec default_const = function
   | Tlambda _
   | Toperation -> raise Not_found
 
-let rec translate_const_exp loc (exp : encoded_exp) =
+let rec translate_const_exp (exp : encoded_exp) =
+  let loc = exp.loc in
   match exp.desc with
-  | Let (_, _, loc, _, _) ->
-     LiquidLoc.raise_error ~loc "'let' forbidden in constant"
-  | Const (_loc, ty, c) -> c
+  | Let _ ->
+    LiquidLoc.raise_error ~loc "'let' forbidden in constant"
+  | Const { const } -> const
 
-  (* removed during typechecking *)
-  | Record (_, _)
-  | Constructor (_, _, _) -> assert false
+  | Record fields ->
+    CRecord (List.map (fun (f, e) -> (f, translate_const_exp e)) fields)
 
-  | Apply (Prim_Left, _, [x]) -> CLeft (translate_const_exp loc x)
-  | Apply (Prim_Right, _, [x]) -> CRight (translate_const_exp loc x)
-  | Apply (Prim_Some, _, [x]) -> CSome (translate_const_exp loc x)
-  | Apply (Prim_Cons, _, list) ->
-     CList (List.map (translate_const_exp loc) list)
-  | Apply (Prim_tuple, _, list) ->
-     CTuple (List.map (translate_const_exp loc) list)
+  | Constructor { constr = Constr c; arg } ->
+    CConstr (c, translate_const_exp arg)
+  | Constructor { constr = Left _; arg } -> CLeft (translate_const_exp arg)
+  | Constructor { constr = Right _; arg } -> CRight (translate_const_exp arg)
 
+  | Apply { prim = Prim_Left; args = [x] } -> CLeft (translate_const_exp x)
+  | Apply { prim = Prim_Right; args = [x] } -> CRight (translate_const_exp  x)
+  | Apply { prim = Prim_Some; args = [x] } -> CSome (translate_const_exp x)
+  | Apply { prim = Prim_Cons; args } ->
+    CList (List.map translate_const_exp args)
+  | Apply { prim = Prim_tuple; args } ->
+    CTuple (List.map translate_const_exp args)
 
-  | Apply (prim, _, args)
-    -> LiquidLoc.raise_error ~loc "<apply %s(%d) not yet implemented>"
-                             (LiquidTypes.string_of_primitive prim)
-                             (List.length args)
-  | Var (_, _, _)
-  | SetVar (_, _, _, _)
-  | If (_, _, _)
-  | Seq (_, _)
-  | Transfer (_, _, _, _)
-  | MatchOption (_, _, _, _, _)
-  | MatchNat (_, _, _, _, _, _)
-  | MatchList (_, _, _, _, _, _)
-  | Loop (_, _, _, _)
-  | Fold (_, _, _, _, _, _)
-  | Map (_, _, _, _, _)
-  | MapFold (_, _, _, _, _, _)
-  | Lambda (_, _, _, _, _)
-  | Closure (_, _, _, _, _, _)
-  | MatchVariant (_, _, _)
-  | Failwith (_, _)
-  | CreateContract (_, _, _)
-  | ContractAt (_, _, _)
-  | Unpack (_, _, _)
+  | Apply _
+  | Var _
+  | SetField _
+  | Project _
+  | If _
+  | Seq _
+  | Transfer _
+  | MatchOption _
+  | MatchNat _
+  | MatchList _
+  | Loop _
+  | LoopLeft _
+  | Fold _
+  | Map _
+  | MapFold _
+  | Lambda _
+  | Closure _
+  | MatchVariant _
+  | Failwith _
+  | CreateContract _
+  | ContractAt _
+  | Unpack _
     ->
     LiquidLoc.raise_error ~loc "non-constant expression"
 
@@ -107,33 +110,13 @@ let translate env contract_sig s ty =
     LiquidFromOCaml.expression_of_string ~filename:env.filename s in
   (* hackish: add type annotation for constants *)
   let ml_ty = LiquidToOCaml.convert_type ~abbrev:false ty in
-  let ml_exp = Ast_helper.Exp.constraint_ ml_exp ml_ty in
+  let ml_exp = Ast_helper.Exp.constraint_
+      ~loc:(Location.in_file env.filename) ml_exp ml_ty in
   let sy_exp = LiquidFromOCaml.translate_expression env ml_exp in
   let tenv = empty_typecheck_env ~warnings:true contract_sig env in
   let ty_exp = LiquidCheck.typecheck_code tenv ~expected_ty:ty sy_exp in
   let enc_exp = LiquidEncode.encode_code tenv ty_exp in
-  let loc = LiquidLoc.loc_in_file env.filename in
-  translate_const_exp loc enc_exp
-
-
-let data_of_liq ~filename ~contract ~typ ~parameter =
-    (* first, extract the types *)
-    let ocaml_ast = LiquidFromOCaml.structure_of_string
-                      ~filename contract in
-    let contract, _, env = LiquidFromOCaml.translate ~filename ocaml_ast in
-    let _ = LiquidCheck.typecheck_contract
-        ~warnings:true env contract in
-    let translate filename s typ =
-      try
-        let c = translate { env with filename } contract.contract_sig s typ in
-        Ok c
-      with LiquidError error ->
-        Error error in
-    match typ with
-     | "parameter" ->  translate typ parameter contract.contract_sig.parameter
-     | "storage" ->  translate typ parameter contract.contract_sig.storage
-     | _ -> raise (Invalid_argument typ)
-    
+  translate_const_exp enc_exp
 
 
 let string_of_const ?ty c =
