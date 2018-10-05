@@ -8,7 +8,7 @@ build: _obuild
 	ocp-build build
 
 install: _obuild
-	ocp-build install
+	ocp-build install liquidity
 
 _obuild: Makefile
 	ocp-build init
@@ -22,8 +22,15 @@ clean-sources:
 clean: _obuild clean-tests clean-sources
 	ocp-build clean
 
+build-deps:
+	opam install ocp-build ocplib-endian zarith calendar digestif hex ocurl lwt \
+	       lwt_log uri sodium bigstring ezjsonm
+
 distclean: clean
 	rm -rf _obuild
+
+doc:
+	$(MAKE) -C docs/sphynx/
 
 # All of these tests must be run with with_tezos=true
 

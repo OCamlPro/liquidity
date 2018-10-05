@@ -78,6 +78,9 @@ module type S = sig
     from -> string -> string ->
     (operation list * LiquidTypes.const * big_map_diff option * trace) t
 
+  (** Compute the initial storage for a specific script, returns storage data *)
+  val init_storage : from -> string list -> LiquidTypes.const t
+
   (** Forge a deployment operation contract on the Tezos node specified in
       ![LiquidOptions], returns the hex-encoded operation *)
   val forge_deploy :
@@ -101,6 +104,9 @@ module type S = sig
 
   val activate : secret:string -> string t
 
+  (** Inject an operation in hexa with its signature, and returns an
+      operation hash *)
+  val inject : operation:string -> signature:string -> string t
 end
 
 module Async : S with type 'a t = 'a Lwt.t

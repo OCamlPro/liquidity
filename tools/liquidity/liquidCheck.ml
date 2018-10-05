@@ -762,7 +762,7 @@ and typecheck_prim2 env prim loc args =
 
   | Prim_xor, [ Tnat; Tnat ] -> Tnat
   | Prim_or, [ Tnat; Tnat ] -> Tnat
-  | Prim_and, [ Tnat; Tnat ] -> Tnat
+  | Prim_and, [ Tint|Tnat; Tnat ] -> Tnat
   | Prim_not, [ Tint|Tnat ] -> Tint
 
   | Prim_abs, [ Tint ] -> Tint

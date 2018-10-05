@@ -1,3 +1,26 @@
+0.37  2018-10-05
+    NEW FEATURES
+    * Compatibility with Tezos's Mainnet/Zeronet/Alphanet
+    * Support bytes constants for key, key_hash, address, contract and signature
+    * Attribute [@@inlining] to force inlining when not dangerous
+    * Command --init-storage (Pierre Michard)
+    * Command --inject to inject signed operation
+
+    IMPROVEMENTS
+    * Client: Show failing calls and deployments
+    * Inline bodies of lambdas
+    * Sphinx documentation
+    * Easier build with make build-deps
+    * More optimizations on Michelson code
+
+    BUG FIXES
+    * Fix issue with printing of signatures
+    * Missing decompilation for LSL, LSR
+    * Fix inlining bug in decompilation
+    * Code elimination after FAILWITH in code generation
+    * Fix erroneous pretty-printing of tez values
+    * Forbid source, sender in initializer
+
 0.32  2018-07-11
     NEW FEATURES
     * Compatibility with Tezos's Betanet

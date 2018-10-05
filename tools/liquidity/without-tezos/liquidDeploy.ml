@@ -73,6 +73,8 @@ module type S = sig
     (operation list * LiquidTypes.const * big_map_diff option) t
   val run_debug : from -> string -> string ->
     (operation list * LiquidTypes.const * big_map_diff option * trace) t
+  val init_storage :
+    from -> string list -> LiquidTypes.const t
   val forge_deploy : ?delegatable:bool -> ?spendable:bool ->
     from -> string list -> string t
   val deploy : ?delegatable:bool -> ?spendable:bool ->
@@ -81,6 +83,7 @@ module type S = sig
   val forge_call : from -> string -> string -> string t
   val call : from -> string -> string -> (string * (unit, exn) result) t
   val activate : secret:string -> string t
+  val inject : operation:string -> signature:string -> string t
 end
 
 module Dummy = struct
@@ -90,6 +93,9 @@ module Dummy = struct
 
   let run_debug _ _ _ =
     failwith "mini version cannot run debug"
+
+  let init_storage _ _ =
+    failwith "mini version cannot deploy"
 
   let forge_deploy ?(delegatable=false) ?(spendable=false) _ _ =
     failwith "mini version cannot deploy"
@@ -108,6 +114,9 @@ module Dummy = struct
 
   let activate ~secret =
     failwith "mini version cannot activate"
+
+  let inject ~operation ~signature =
+    failwith "mini version cannot inject"
 end
 
 module Async = struct include Dummy type 'a t = 'a Lwt.t end

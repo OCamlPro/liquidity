@@ -1,0 +1,19 @@
+@media screen and (min-width: 1400px) {
+    .wy-nav-content-wrap {
+        background: #fcfcfc;
+    }
+    .wy-nav-content {
+        margin: auto;
+        background: #fcfcfc;
+    }
+}
+
+@media screen and (min-width: 1100px) {
+    .wy-nav-content-wrap {
+        background: #fcfcfc;
+    }
+    .wy-nav-content {
+        margin: auto;
+        background: #fcfcfc;
+    }
+}
