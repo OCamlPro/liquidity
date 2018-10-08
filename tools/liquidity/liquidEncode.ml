@@ -182,18 +182,18 @@ let env_for_clos env bvs arg_name arg_type =
 
 (* Encode a type. The only change perfomed here is to encode contract
    signatures to single entry form *)
-let rec encode_type ty =
+let rec encode_type ?(decompiling=false) ty =
   (* if env.only_typecheck then ty *)
   (* else *)
   match ty with
   | Ttez | Tunit | Ttimestamp | Tint | Tnat | Tbool | Tkey | Tkey_hash
   | Tsignature | Tstring | Tbytes | Toperation | Taddress | Tfail -> ty
   | Ttuple tys ->
-    let tys' = List.map encode_type tys in
+    let tys' = List.map (encode_type ~decompiling) tys in
     if List.for_all2 (==) tys tys' then ty
     else Ttuple tys'
   | Tset t | Tlist t | Toption t ->
-    let t' = encode_type t in
+    let t' = encode_type ~decompiling t in
     if t' == t then ty
     else begin match ty with
       | Tset t -> Tset t'
@@ -203,7 +203,7 @@ let rec encode_type ty =
     end
   | Tor (t1, t2) | Tlambda (t1, t2)
   | Tbigmap (t1, t2) | Tmap (t1, t2) ->
-    let t1', t2' = encode_type t1, encode_type t2 in
+    let t1', t2' = encode_type ~decompiling t1, encode_type ~decompiling t2 in
     if t1 == t1' && t2 == t2' then ty
     else begin match ty with
       | Tor (t1, t2) -> Tor (t1', t2')
@@ -213,17 +213,24 @@ let rec encode_type ty =
       | _ -> assert false
     end
   | Tclosure  ((t1, t2), t3) ->
-    let t1' = encode_type t1 in
-    let t2' = encode_type t2 in
-    let t3' = encode_type t3 in
+    let t1' = encode_type ~decompiling t1 in
+    let t2' = encode_type ~decompiling t2 in
+    let t3' = encode_type ~decompiling t3 in
     if t1 == t1' && t2 == t2' && t3 == t3' then ty
     else Tclosure ((t1', t2'), t3')
   | Trecord (name, labels) ->
-    Trecord (name, List.map (fun (l, ty) -> l, encode_type ty) labels)
+    Trecord (name, List.map (fun (l, ty) -> l, encode_type ~decompiling ty) labels)
   | Tsum (name, cstys) ->
-    Tsum (name, List.map (fun (c, ty) -> c, encode_type ty) cstys)
+    Tsum (name, List.map (fun (c, ty) -> c, encode_type ~decompiling ty) cstys)
+  | Tcontract contract_sig when decompiling ->
+    Tcontract { contract_sig with
+                entries_sig =
+                  List.map (fun e ->
+                      { e with parameter = encode_type ~decompiling e. parameter }
+                    ) contract_sig.entries_sig
+              }
   | Tcontract contract_sig ->
-    let parameter = encode_type (encode_contract_sig contract_sig) in
+    let parameter = encode_type ~decompiling (encode_contract_sig contract_sig) in
     Tcontract { contract_sig with entries_sig = [{
         entry_name = "main";
         parameter_name = "parameter";
@@ -266,7 +273,7 @@ let rec has_big_map = function
 (* Encode storage type. This checks that big maps appear only as the
    first component of the toplevel tuple or record storage. *)
 let encode_storage_type env ty =
-  let ty = encode_type ty in
+  let ty = encode_type ~decompiling:env.decompiling ty in
   match ty with
   | Ttuple (Tbigmap (t1, t2) :: r)
     when not @@ List.exists has_big_map (t1 :: t2 :: r) -> ty
@@ -280,7 +287,7 @@ let encode_storage_type env ty =
 
 (* Encode parameter type. Parameter cannot have big maps. *)
 let encode_parameter_type env ty =
-  let ty = encode_type ty in
+  let ty = encode_type ~decompiling:env.decompiling ty in
   if has_big_map ty then
     error (noloc env) "big maps are not allowed in parameter type";
   ty
@@ -353,10 +360,10 @@ let rec encode_const env c = match c with
    so when they appear in one, we have to turn them to non constant
    expressions. For instance (Set [op]) is turned into
    Set.add op (Set : operation set) *)
-let rec deconstify loc ty c =
+let rec deconstify env loc ty c =
   if not @@ type_contains_nonlambda_operation ty then
     mk ~loc (Const { ty; const = c }) ty
-  else match c, (encode_type ty) with
+  else match c, (encode_type ~decompiling:env.decompiling ty) with
     | (CUnit | CBool _ | CInt _ | CNat _ | CTez _ | CTimestamp _ | CString _
       | CBytes _
       | CKey _ | CContract _ | CSignature _ | CNone  | CKey_hash _ | CAddress _),
@@ -364,21 +371,21 @@ let rec deconstify loc ty c =
       mk ~loc (Const { ty; const =c }) ty
 
     | CSome c, Toption ty' ->
-      mk ~loc (Apply { prim = Prim_Some; args = [deconstify loc ty' c] }) ty
+      mk ~loc (Apply { prim = Prim_Some; args = [deconstify env loc ty' c] }) ty
 
     | CLeft c, Tor (ty', _) ->
-      mk ~loc (Apply { prim = Prim_Left; args = [deconstify loc ty' c] }) ty
+      mk ~loc (Apply { prim = Prim_Left; args = [deconstify env loc ty' c] }) ty
     | CRight c, Tor (_, ty') ->
-      mk ~loc (Apply { prim = Prim_Right; args = [deconstify loc ty' c] }) ty
+      mk ~loc (Apply { prim = Prim_Right; args = [deconstify env loc ty' c] }) ty
 
     | CTuple cs, Ttuple tys ->
       mk ~loc (Apply { prim = Prim_tuple;
-                       args = List.map2 (deconstify loc) tys cs }) ty
+                       args = List.map2 (deconstify env loc) tys cs }) ty
 
     | CList cs, Tlist ty' ->
       List.fold_right (fun c acc ->
           mk ~loc (Apply { prim = Prim_Cons;
-                           args = [deconstify loc ty' c; acc] }) ty
+                           args = [deconstify env loc ty' c; acc] }) ty
         )
         cs
         (mk ~loc (Const { ty; const = CList [] }) ty)
@@ -386,7 +393,7 @@ let rec deconstify loc ty c =
     | CSet cs, Tset ty' ->
       List.fold_right (fun c acc ->
           mk ~loc (Apply { prim = Prim_set_add;
-                           args = [deconstify loc ty' c; acc] }) ty
+                           args = [deconstify env loc ty' c; acc] }) ty
         )
         cs
         (mk ~loc (Const { ty; const = CSet [] }) ty)
@@ -394,7 +401,7 @@ let rec deconstify loc ty c =
     | CMap cs, Tmap (tk, te) ->
       List.fold_right (fun (k, e) acc ->
           mk (Apply { prim = Prim_map_add;
-                      args = [deconstify loc tk k; deconstify loc te e; acc] })
+                      args = [deconstify env loc tk k; deconstify env loc te e; acc] })
             ~loc ty
         )
         cs
@@ -403,7 +410,7 @@ let rec deconstify loc ty c =
     | CBigMap cs, Tbigmap (tk, te) ->
       List.fold_right (fun (k, e) acc ->
           mk (Apply { prim = Prim_map_add;
-                      args = [deconstify loc tk k; deconstify loc te e; acc] })
+                      args = [deconstify env loc tk k; deconstify env loc te e; acc] })
             ~loc ty
         )
         cs
@@ -484,7 +491,7 @@ let rec encode env ( exp : typed_exp ) : encoded_exp =
   | Const { ty; const } ->
     let const = encode_const env const in
     (* use functions instead of constants if contains operations *)
-    let c = deconstify loc ty const in
+    let c = deconstify env loc ty const in
     mk ?name:exp.name ~loc c.desc ty
 
   | Let { bnd_var; inline; bnd_val; body } ->
@@ -544,23 +551,53 @@ let rec encode env ( exp : typed_exp ) : encoded_exp =
   | Transfer { contract; amount; entry; arg } ->
     let amount = encode env amount in
     let contract = encode env contract in
-    let arg =  match entry with
-      | None -> arg
-      | Some _
-        when match contract.ty with
-          | Tcontract { entries_sig = [_] } -> true
-          | _ -> false
-        -> arg
-      | Some entry ->
-        let arg_ty = encode_type contract.ty in
-        (* constant type not yet encoded *)
-        mk_typed ?name:arg.name ~loc
-          (Constructor { constr = Constr (prefix_entry ^ entry); arg })
-          arg_ty
-    in
     let arg = encode env arg in
+    let arg =
+      if env.decompiling then arg
+      else match entry with
+        | None -> arg
+        | Some _
+          when match contract.ty with
+            | Tcontract { entries_sig = [_] } -> true
+            | _ -> false
+          -> arg
+        | Some entry ->
+          let constr = prefix_entry ^ entry in
+          let rec iter entries =
+            match entries with
+            | [] -> assert false
+            | [e] ->
+              if e.entry_name <> entry then
+                error (noloc env)  "unknown entry point %s" entry;
+              arg
+            | e :: entries ->
+              let mk_sums entries =
+                List.map (fun e -> prefix_entry ^ e.entry_name, e.parameter)
+                  entries in
+              let desc =
+                if e.entry_name = entry then
+                  let right_ty = Tsum ("", mk_sums entries) in
+                  Apply { prim = Prim_Left;
+                          args = [arg; unused env ~loc ~constr right_ty] }
+                else
+                  let arg = iter entries in
+                  let left_ty = e.parameter in
+                  let u = match entries with
+                    | [_] -> unused env ~loc ~constr left_ty
+                    | _ ->
+                      (* marker for partially contructed values *)
+                      unused env ~loc ~constr:"_" left_ty in
+                  Apply { prim = Prim_Right; args =  [arg; u] }
+              in
+              mk ~loc desc (Tsum ("", mk_sums (e :: entries)))
+          in
+          iter (match contract.ty with
+              | Tcontract c_sig -> c_sig.entries_sig
+              | _ -> assert false)
+    in
+    let entry = if env.decompiling then entry else None in
     mk ?name:exp.name ~loc
-      (Transfer { contract; amount; entry = None; arg }) Toperation
+      (Transfer { contract; amount; entry; arg }) Toperation
 
   | Failwith arg ->
     let arg = encode env arg in
@@ -844,7 +881,7 @@ let rec encode env ( exp : typed_exp ) : encoded_exp =
             in
             mk ~loc desc orty
         in
-        iter constrs (encode_type constr_ty)
+        iter constrs (encode_type ~decompiling:env.decompiling constr_ty)
       | _ -> assert false
     in
     mk ?name:exp.name ~loc exp.desc constr_ty

@@ -600,10 +600,14 @@ let rec decompile contract =
       | N_LAMBDA_END _, [arg] -> arg_of arg
 
       | N_TRANSFER, [contract; amount; arg] ->
+        let entry, arg = match arg.kind, arg.args with
+          | N_CONSTR c, [arg] when is_entry_case c ->
+            Some (entry_name_of_case c), arg
+          | _ -> None, arg in
         mklet node
           (Transfer { contract = arg_of contract;
                       amount = arg_of amount;
-                      entry = None;
+                      entry;
                       arg = arg_of arg })
       (* TODO *)
 

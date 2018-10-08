@@ -9,7 +9,7 @@
 
 open LiquidTypes
 
-val encode_type : datatype -> datatype
+val encode_type : ?decompiling:bool -> datatype -> datatype
 
 val encode_contract :
   ?annot:bool -> ?decompiling:bool -> env -> typed_contract ->
