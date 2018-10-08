@@ -1787,11 +1787,7 @@ and translate_signature contract_type_name env acc ast =
            psig_desc = Psig_value {
                pval_name = { txt = entry_name; loc = name_loc };
                pval_type = {
-                 ptyp_desc = Ptyp_arrow (param_label, param_ty, {
-                     ptyp_desc = Ptyp_arrow (stora_label, stora_ty, {
-                         ptyp_desc = Ptyp_tuple [ret_op; ret_sto];
-                       })
-                   })
+                 ptyp_desc = Ptyp_arrow (param_label, param_ty, ret_ty)
                };
                pval_prim = [];
                pval_attributes = [];
@@ -1806,15 +1802,32 @@ and translate_signature contract_type_name env acc ast =
       | Nolabel -> "parameter"
       | Optional _ -> error_loc pval_loc "cannot have optional parameter"
       | Labelled p -> p in
-    let storage_name = match stora_label with
-      | Nolabel -> "storage"
-      | Optional _ -> error_loc pval_loc "cannot have optional storage"
-      | Labelled s -> s in
     let parameter = translate_type env param_ty in
-    begin match translate_type env ret_op with
-      | Tlist Toperation -> ()
-      | _ -> error_loc ret_op.ptyp_loc
-               "entry must return operation list as first component"
+    let storage_name, ret_ty = match ret_ty.ptyp_desc with
+      | Ptyp_arrow (Nolabel, stora_ty, ret_ty) ->
+        "storage", ret_ty
+      | Ptyp_arrow (Optional _, stora_ty, _) ->
+        error_loc ret_ty.ptyp_loc "cannot have optional storage"
+      | Ptyp_arrow (Labelled s, stora_ty, ret_ty) ->
+        s, ret_ty
+      | Ptyp_any ->
+        "storage", ret_ty
+      | _ ->
+        error_loc ret_ty.ptyp_loc
+          "must be an arrow type storage -> (operation list * storage)"
+    in
+    begin match ret_ty.ptyp_desc with
+      | Ptyp_any -> ()
+      | Ptyp_tuple [ ret_op ;
+                     { ptyp_desc =
+                         Ptyp_constr ({ txt = Lident "storage" }, []) }] ->
+        begin match translate_type env ret_op with
+          | Tlist Toperation -> ()
+          | _ -> error_loc ret_op.ptyp_loc
+                   "entry must return operation list as first component"
+        end
+      | _ -> error_loc ret_ty.ptyp_loc
+               "entry must return (operation list * storage)"
     end;
     let entry = { entry_name; parameter; parameter_name; storage_name } in
     translate_signature contract_type_name env (entry :: acc) ast
