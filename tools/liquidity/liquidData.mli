@@ -11,6 +11,9 @@ open LiquidTypes
 
 val default_const : datatype -> const
 
+(** same as [default_const] but with empty values for collections *)
+val default_empty_const : datatype -> const
+
 val translate_const_exp : encoded_exp -> const
 
 val translate : env -> full_contract_sig -> string -> datatype -> const

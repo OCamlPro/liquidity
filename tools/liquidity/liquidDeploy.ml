@@ -887,7 +887,7 @@ let init_storage ?source liquid init_params_strings =
     in
     let eval_input_storage =
       try
-        LiquidData.default_const syntax_ast.storage
+        LiquidData.default_empty_const syntax_ast.storage
         |> LiquidEncode.encode_const env contract_sig
       with Not_found -> failwith "could not construct dummy storage for eval"
     in

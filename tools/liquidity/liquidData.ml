@@ -56,6 +56,45 @@ let rec default_const = function
   | Tlambda _
   | Toperation -> raise Not_found
 
+let rec default_empty_const = function
+  | Tunit -> CUnit
+  | Tbool -> CBool false
+  | Tint -> CInt (LiquidPrinter.integer_of_int 0)
+  | Tnat -> CNat (LiquidPrinter.integer_of_int 0)
+  | Ttez -> CTez (LiquidPrinter.tez_of_liq "0")
+  | Tstring -> CString ""
+  | Tbytes -> CBytes "0x"
+  | Ttimestamp -> CTimestamp "1970-01-01T00:00:00Z"
+  | Tkey -> CKey "edpkuit3FiCUhd6pmqf9ztUTdUs1isMTbF9RBGfwKk1ZrdTmeP9ypN"
+  | Tkey_hash -> CKey_hash "tz1YLtLqD1fWHthSVHPD116oYvsd4PTAHUoc"
+  | Tsignature ->
+    CSignature
+      "edsigthTzJ8X7MPmNeEwybRAvdxS1pupqcM5Mk4uCuyZAe7uEk\
+       68YpuGDeViW8wSXMrCi5CwoNgqs8V2w8ayB5dMJzrYCHhD8C7"
+  | Tcontract _ -> CContract "KT1GE2AZhazRxGsAjRVkQccHcB2pvANXQWd7"
+  | Taddress -> CAddress "KT1GE2AZhazRxGsAjRVkQccHcB2pvANXQWd7"
+  | Ttuple l ->
+    CTuple (List.map default_empty_const l)
+  | Toption ty -> CNone
+  | Tlist ty -> CList []
+  | Tset ty -> CSet []
+  | Tmap (ty1, ty2) -> CMap []
+  | Tbigmap  (ty1, ty2) -> CBigMap []
+  | Tor (ty, _) -> CLeft (default_empty_const ty)
+  | Trecord (_, fields) ->
+    CRecord (
+      List.map (fun (name, ty) ->
+          name, default_empty_const ty) fields
+    )
+  | Tsum (_, (c, ty) :: _) ->
+    CConstr (c, default_empty_const ty)
+
+  | Tsum (_, [])
+  | Tfail
+  | Tclosure _
+  | Tlambda _
+  | Toperation -> raise Not_found
+
 let rec translate_const_exp (exp : encoded_exp) =
   let loc = exp.loc in
   match exp.desc with
