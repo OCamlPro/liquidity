@@ -91,7 +91,7 @@ let ident_counter = ref 0
 let minimal_version = 0.4
 
 (* The maximal version of liquidity files that are accepted by this compiler *)
-let maximal_version = 0.4
+let maximal_version = 0.401
 
 
 open Asttypes
@@ -152,7 +152,7 @@ let lift_env rename = function
   | { top_env = None } -> assert false
   | { types; contract_types; labels; constrs;
       filename; contractname = inner_name;
-      top_env = Some top_env } ->
+      top_env = Some top_env } as env ->
     let lift_name n = rename inner_name n in
     let rec lift_type ty = match ty with
       | Tunit | Tbool | Tint | Tnat | Ttez | Tstring | Tbytes | Ttimestamp
@@ -166,12 +166,16 @@ let lift_env rename = function
       | Tor (t1, t2) -> Tor (lift_type t1, lift_type t2)
       | Tlambda (t1, t2) -> Tlambda (lift_type t1, lift_type t2)
       | Tcontract c_sig -> Tcontract (lift_contract_sig c_sig)
-      | Trecord (name, fields) ->
+      | Trecord (name, fields) when StringMap.mem name env.types ->
         Trecord (lift_name name,
                  List.map (fun (f, ty) -> lift_name f, lift_type ty) fields)
-      | Tsum (name, constrs) ->
+      | Trecord (name, fields) ->
+        Trecord (name, List.map (fun (f, ty) -> f, lift_type ty) fields)
+      | Tsum (name, constrs) when StringMap.mem name env.types ->
         Tsum (lift_name name,
               List.map (fun (c, ty) -> lift_name c, lift_type ty) constrs)
+      | Tsum (name, constrs) ->
+        Tsum (name, List.map (fun (c, ty) -> c, lift_type ty) constrs)
       | Tclosure ((t1, t2), t3) ->
         Tclosure ((lift_type t1, lift_type t2), lift_type t3)
     and lift_contract_sig c_sig =
@@ -195,7 +199,8 @@ let lift_env rename = function
     top_env.labels <- lift_to_top labels top_env.labels
         (fun (lab, n, ty) -> lift_name lab, n, lift_type ty);
     top_env.constrs <- lift_to_top constrs top_env.constrs
-        (fun (c, ty) -> lift_name c, lift_type ty)
+        (fun (c, ty) -> lift_name c, lift_type ty);
+    lift_type
 
 let lift_inner_env =
   let lift_name inner_name n = String.concat "." [inner_name; n] in
@@ -1722,7 +1727,7 @@ and renamespace env old_name new_name =
     | None -> s
     | Some s -> String.concat "." [new_name; s] in
   (* Lift to upper level and rename *)
-  lift_env rename env;
+  lift_env rename env |> ignore;
   ()
 
 
@@ -1843,9 +1848,15 @@ and translate_signature contract_type_name env acc ast =
     let inner_env = mk_inner_env env contract_type_name in
     let contract_sig =
       translate_signature contract_type_name inner_env [] signature in
+    let lift_type = lift_inner_env inner_env in
+    let contract_sig =
+      { contract_sig with
+        entries_sig = List.map (fun es ->
+            { es with parameter = lift_type es.parameter }
+          ) contract_sig.entries_sig
+      } in
     env.contract_types <-
       StringMap.add contract_type_name contract_sig env.contract_types;
-    lift_inner_env inner_env;
     translate_signature contract_type_name env acc ast
 
   | { psig_loc } as ast :: _ ->
@@ -2040,9 +2051,15 @@ and translate_structure env acc ast =
     let inner_env = mk_inner_env env contract_type_name in
     let contract_sig =
       translate_signature contract_type_name inner_env [] signature in
+    let lift_type = lift_inner_env inner_env in
+    let contract_sig =
+      { contract_sig with
+        entries_sig = List.map (fun es ->
+            { es with parameter = lift_type es.parameter }
+          ) contract_sig.entries_sig
+      } in
     env.contract_types <-
       StringMap.add contract_type_name contract_sig env.contract_types;
-    lift_inner_env inner_env;
     translate_structure env acc ast
 
   (* Deactivate aliases for signatures *)
@@ -2123,11 +2140,17 @@ and translate_structure env acc ast =
       | Some main when main = contract_name ->
         contract, init, inner_env
       | _ ->
+        let lift_type = lift_inner_env inner_env in
+        let contract_sig = sig_of_contract contract in
+        let contract_sig =
+          { contract_sig with
+            entries_sig = List.map (fun es ->
+                { es with parameter = lift_type es.parameter }
+              ) contract_sig.entries_sig
+          } in
         (* Register contract type (with same name as contract) in environment *)
         env.contract_types <-
-          StringMap.add contract_name (sig_of_contract contract)
-            env.contract_types;
-        lift_inner_env inner_env;
+          StringMap.add contract_name contract_sig env.contract_types;
         translate_structure env (Syn_contract contract :: acc) ast
     end
 
@@ -2328,11 +2351,18 @@ let translate_multi l =
               | _ ->
                 Format.eprintf "Contract %s@." contract.contract_name;
             end;
+            let lift_type = lift_inner_env env in
+            let contract_sig = sig_of_contract contract in
+            let contract_sig =
+              { contract_sig with
+                entries_sig = List.map (fun es ->
+                    { es with parameter = lift_type es.parameter }
+                  ) contract_sig.entries_sig
+              } in
             (* Register contract type (with same name as contract) in environment *)
-            top_env.contract_types <-
-              StringMap.add contract.contract_name (sig_of_contract contract)
+            env.contract_types <-
+              StringMap.add contract.contract_name contract_sig
                 top_env.contract_types;
-            lift_inner_env env;
             Syn_contract contract :: acc
           ) [] (List.rev r_others)
       in
