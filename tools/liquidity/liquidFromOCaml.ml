@@ -943,13 +943,13 @@ let rec translate_code contracts env exp =
     | { pexp_desc =
           Pexp_apply (
             { pexp_desc = Pexp_ident
-                  { txt = Ldot(Lident contract_name, "at") } },
+                  { txt = Ldot(contract_id, "at") } },
             [
               Nolabel, addr_exp;
             ]) }
-      when StringMap.mem contract_name env.contract_types ->
-      let c_sig = StringMap.find contract_name env.contract_types in
-      ContractAt { arg =  translate_code contracts env addr_exp; c_sig }
+      when StringMap.mem (str_of_id contract_id) env.contract_types ->
+      let c_sig = StringMap.find (str_of_id contract_id) env.contract_types in
+      ContractAt { arg = translate_code contracts env addr_exp; c_sig }
 
     | { pexp_desc =
           Pexp_apply (

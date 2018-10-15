@@ -839,9 +839,10 @@ module Liquid = struct
       | Tsum (name, _) ->
         Printf.bprintf b "%s" name;
       | Tcontract { sig_name = Some s } ->
-        Printf.bprintf b "%s" s;
+        Printf.bprintf b "%s.instance" s;
       | Tcontract contract_sig ->
-        bprint_contract_sig expand b indent contract_sig
+        bprint_contract_sig expand b indent contract_sig;
+        Printf.bprintf b ".instance";
       | Tor (ty1, ty2) ->
         Printf.bprintf b "(";
         bprint_type b "" ty1;
