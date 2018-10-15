@@ -230,6 +230,7 @@ let rec convert_code expand expr =
   | COMPARE -> prim "COMPARE" [] name
   | PUSH (Tunit, CUnit) -> prim "UNIT" [] name
   | PUSH (Tlist ty, CList []) -> prim "NIL" [convert_type ty] name
+  | PUSH (Toption ty, CNone) -> prim "NONE" [convert_type ty] name
   | TRANSFER_TOKENS -> prim "TRANSFER_TOKENS" [] name
   | PUSH (ty, cst) -> prim "PUSH" [ convert_type ty;
                                     convert_const cst ] name

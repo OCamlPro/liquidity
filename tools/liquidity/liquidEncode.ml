@@ -571,12 +571,17 @@ let rec encode env ( exp : typed_exp ) : encoded_exp =
                 error (noloc env)  "unknown entry point %s" entry;
               arg
             | e :: entries ->
-              let mk_sums entries =
-                List.map (fun e -> prefix_entry ^ e.entry_name, e.parameter)
-                  entries in
+              let mk_sums entries = match entries with
+                | [ e ] -> e.parameter
+                | _ ->
+                  let cstrs =
+                    List.map (fun e -> prefix_entry ^ e.entry_name, e.parameter)
+                      entries in
+                  Tsum ("", cstrs)
+              in
               let desc =
                 if e.entry_name = entry then
-                  let right_ty = Tsum ("", mk_sums entries) in
+                  let right_ty = mk_sums entries in
                   Apply { prim = Prim_Left;
                           args = [arg; unused env ~loc ~constr right_ty] }
                 else
@@ -589,7 +594,7 @@ let rec encode env ( exp : typed_exp ) : encoded_exp =
                       unused env ~loc ~constr:"_" left_ty in
                   Apply { prim = Prim_Right; args =  [arg; u] }
               in
-              mk ~loc desc (Tsum ("", mk_sums (e :: entries)))
+              mk ~loc desc (mk_sums (e :: entries))
           in
           iter (match contract.ty with
               | Tcontract c_sig -> c_sig.entries_sig
