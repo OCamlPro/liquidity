@@ -13,6 +13,12 @@ module IntMap = Map.Make(struct type t = int let compare = compare end)
 
 exception InvalidFormat of string * string
 
+(** Type of source code locations *)
+type location = {
+  loc_file : string;
+  loc_pos : ((int * int) * (int * int)) option;
+}
+
 (** Tez constants are stored with strings *)
 type tez = { tezzies : string; mutez : string option }
 
@@ -110,6 +116,8 @@ and 'exp contract = {
   values : (string * bool (* inline *) * 'exp) list;
   (** Global constants or functions *)
   entries : 'exp entry list; (** Entry points of the contract *)
+  ty_env : env;
+  c_init : 'exp init option;
 }
 
 and entries_sig = entry_sig list
@@ -124,6 +132,34 @@ and full_contract_sig = {
   f_sig_name : string option;
   f_storage : datatype;
   f_entries_sig : entries_sig;
+}
+
+(** Environment for parsing *)
+and env = {
+  (* name of file being compiled *)
+  filename : string;
+
+  (* name of contract being compiled *)
+  contractname : string;
+  (* fields modified in LiquidFromOCaml *)
+  (* type definitions *)
+  mutable types : datatype StringMap.t;
+  (* contract type definitions *)
+  mutable contract_types : contract_sig StringMap.t;
+  (* labels of records in type definitions *)
+  mutable labels : (string * int * datatype) StringMap.t;
+  (* constructors of sum-types in type definitions *)
+  mutable constrs : (string * datatype) StringMap.t;
+  (* englobing env *)
+  top_env : env option;
+}
+
+
+(** Representation of Liquidity contract initializers *)
+and 'exp init = {
+  init_name : string;
+  init_args : (string * location * datatype) list; (* arguments *)
+  init_body : 'exp; (* init code *)
 }
 
 let size_of_type = function
@@ -243,12 +279,6 @@ let full_sig_of_contract c = {
 let sig_of_full_sig s = {
   sig_name = s.f_sig_name;
   entries_sig = s.f_entries_sig;
-}
-
-(** Type of source code locations *)
-type location = {
-  loc_file : string;
-  loc_pos : ((int * int) * (int * int)) option;
 }
 
 (** Type of located Liquidity errors *)
@@ -1123,26 +1153,6 @@ type closure_env = {
   call_bindings : (string * encoded_exp) list;
 }
 
-(** Environment for parsing *)
-type env = {
-  (* name of file being compiled *)
-  filename : string;
-
-  (* name of contract being compiled *)
-  contractname : string;
-  (* fields modified in LiquidFromOCaml *)
-  (* type definitions *)
-  mutable types : datatype StringMap.t;
-  (* contract type definitions *)
-  mutable contract_types : contract_sig StringMap.t;
-  (* labels of records in type definitions *)
-  mutable labels : (string * int * datatype) StringMap.t;
-  (* constructors of sum-types in type definitions *)
-  mutable constrs : (string * datatype) StringMap.t;
-  (* englobing env *)
-  top_env : env option;
-}
-
 (** Environment for typechecking *)
 type typecheck_env = {
   warnings : bool;
@@ -1255,13 +1265,6 @@ and node_kind =
 
 and node_exp = node * node
 
-(** Representation of Liquidity contract initializers *)
-type syntax_init = {
-  init_name : string;
-  init_args : (string * location * datatype) list; (* arguments *)
-  init_body : syntax_exp; (* init code *)
-}
-
 type syntax_contract = syntax_exp contract
 type typed_contract = typed_exp contract
 type encoded_contract = encoded_exp contract
@@ -1290,13 +1293,6 @@ let dummy_contract_sig = {
   f_sig_name = None;
   f_storage = Tunit;
   f_entries_sig = [];
-}
-
-let dummy_syntax_contract : syntax_contract = {
-  contract_name = "_DUMMY";
-  values = [];
-  storage = Tunit;
-  entries = [];
 }
 
 (** Types of warning *)
@@ -1355,3 +1351,55 @@ let contract_name_of_annot s =
   Scanf.sscanf s
     (Scanf.format_from_string prefix_contract "" ^^ "%s%!")
     (fun x -> x)
+
+
+let lift_name inner_name n = String.concat "." [inner_name; n]
+
+let lift_name env = lift_name env.contractname
+
+let rec lift_type env ty = match ty with
+  | Tunit | Tbool | Tint | Tnat | Ttez | Tstring | Tbytes | Ttimestamp
+  | Tkey | Tkey_hash | Tsignature | Toperation | Taddress | Tfail -> ty
+  | Ttuple l -> Ttuple (List.map (lift_type env) l)
+  | Toption t -> Toption (lift_type env t)
+  | Tlist t -> Tlist (lift_type env t)
+  | Tset t -> Tset (lift_type env t)
+  | Tmap (t1, t2) -> Tmap (lift_type env t1, lift_type env t2)
+  | Tbigmap (t1, t2) -> Tbigmap (lift_type env t1, lift_type env t2)
+  | Tor (t1, t2) -> Tor (lift_type env t1, lift_type env t2)
+  | Tlambda (t1, t2) -> Tlambda (lift_type env t1, lift_type env t2)
+  | Tcontract c_sig -> Tcontract (lift_contract_sig env c_sig)
+  | Trecord (name, fields) when StringMap.mem name env.types ->
+    Trecord (lift_name env name,
+             List.map (fun (f, ty) -> lift_name env f, lift_type env ty) fields)
+  | Trecord (name, fields) ->
+    Trecord (name, List.map (fun (f, ty) -> f, lift_type env ty) fields)
+  | Tsum (name, constrs) when StringMap.mem name env.types ->
+    Tsum (lift_name env name,
+          List.map (fun (c, ty) -> lift_name env c, lift_type env ty) constrs)
+  | Tsum (name, constrs) ->
+    Tsum (name, List.map (fun (c, ty) -> c, lift_type env ty) constrs)
+  | Tclosure ((t1, t2), t3) ->
+    Tclosure ((lift_type env t1, lift_type env t2), lift_type env t3)
+
+and lift_contract_sig env c_sig =
+      { sig_name = (match c_sig.sig_name with
+            | None -> None
+            | Some s -> Some (lift_name env s));
+        entries_sig = List.map (fun es ->
+            { es with parameter = lift_type env es.parameter }
+          ) c_sig.entries_sig
+      }
+
+
+let rec rec_find s env proj =
+  try StringMap.find s (proj env)
+  with Not_found ->
+  match env.top_env with
+  | None -> raise Not_found
+  | Some env -> rec_find s env proj
+
+let find_type s env = rec_find s env (fun env -> env.types)
+let find_contract_type s env = rec_find s env (fun env -> env.contract_types)
+let find_label s env = rec_find s env (fun env -> env.labels)
+let find_constr s env = rec_find s env (fun env -> env.constrs)

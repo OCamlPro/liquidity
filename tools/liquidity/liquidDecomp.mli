@@ -9,4 +9,4 @@
 
 open LiquidTypes
 
-val decompile : node_contract -> syntax_contract
+val decompile : LiquidTezosTypes.env -> node_contract -> syntax_contract

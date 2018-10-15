@@ -336,8 +336,8 @@ let rec encode_const env c = match c with
 
   | CConstr (constr, x) ->
     try
-      let ty_name, _ = StringMap.find constr env.env.constrs in
-      let constr_ty = StringMap.find ty_name env.env.types in
+      let ty_name, _ = find_constr constr env.env in
+      let constr_ty = find_type ty_name env.env in
       match constr_ty with
       | Tsum (_, constrs) ->
         let rec iter constrs =
@@ -848,9 +848,9 @@ let rec encode env ( exp : typed_exp ) : encoded_exp =
     mk ?name:exp.name ~loc desc exp.ty
 
   | Constructor { constr = Constr constr; arg } ->
-    let ty_name, arg_ty = StringMap.find constr env.env.constrs in
+    let ty_name, arg_ty = find_constr constr env.env in
     let arg = encode env arg in
-    let constr_ty = StringMap.find ty_name env.env.types in
+    let constr_ty = find_type ty_name env.env in
     let exp =
       match constr_ty with
       | Tsum (_, constrs) ->
@@ -937,7 +937,7 @@ let rec encode env ( exp : typed_exp ) : encoded_exp =
   | CreateContract { args; contract } ->
     let args = List.map (encode env) args in
     let contract, c_to_inline =
-      encode_contract ~annot:env.annot env.env contract in
+      encode_contract ~annot:env.annot contract in
     (* Performed inlining and simplifications on subcontract at encoding time *)
     let contract =
       LiquidSimplify.simplify_contract ~decompile_annoted:env.decompiling
@@ -1083,7 +1083,7 @@ and encode_entry env entry =
          let s3 = storage in {code_entry_3}
    end
 *)
-and encode_contract ?(annot=false) ?(decompiling=false) env contract =
+and encode_contract ?(annot=false) ?(decompiling=false) contract =
   let env =
     {
       warnings=false;
@@ -1094,7 +1094,7 @@ and encode_contract ?(annot=false) ?(decompiling=false) env contract =
       vars_counts = StringMap.empty;
       to_inline = ref StringMap.empty;
       force_inline = ref StringMap.empty;
-      env;
+      env = contract.ty_env;
       clos_env = None;
       t_contract_sig = full_sig_of_contract contract;
     } in
@@ -1144,6 +1144,17 @@ and encode_contract ?(annot=false) ?(decompiling=false) env contract =
   let code = encode env @@
     values_on_top contract.values @@
     mk_typed ~loc code_desc (Ttuple [Tlist Toperation; contract.storage]) in
+  let c_init = match contract.c_init with
+    | None -> None
+    | Some i ->
+      let env, rargs = List.fold_left (fun (env, acc) (arg, loc, arg_ty) ->
+          let (arg, env, _) = new_binding env arg arg_ty in
+          env, (arg, loc, arg_ty) :: acc
+        ) (env, []) i.init_args in
+      let init_args = List.rev rargs in
+      let init_body = encode env i.init_body in
+      Some { i with init_body; init_args }
+  in
   let contract = {
     contract_name = contract.contract_name;
     values = [];
@@ -1157,6 +1168,8 @@ and encode_contract ?(annot=false) ?(decompiling=false) env contract =
         };
         code;
       }];
+    ty_env = contract.ty_env;
+    c_init;
   } in
   contract, !(env.to_inline)
 

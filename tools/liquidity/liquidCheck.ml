@@ -108,12 +108,12 @@ let error_prim loc prim args expected_args =
 (* Extract signature of contract, use previous name if the same
    signature was generated before otherwise use the same name as the
    contract for its signature *)
-let sig_of_contract env contract =
+let sig_of_contract contract =
   let c_sig = sig_of_contract contract in
   let sig_name = StringMap.fold (fun name c_sig' -> function
       | Some _ as acc -> acc
       | None -> if eq_signature c_sig' c_sig then Some name else None
-    ) env.contract_types None in
+    ) contract.ty_env.contract_types None in
   let sig_name = match sig_name with
     | None -> Some contract.contract_name
     | Some _ -> sig_name in
@@ -121,7 +121,8 @@ let sig_of_contract env contract =
   begin match sig_name with
     | None -> assert false
     | Some n ->
-      env.contract_types <- StringMap.add n c_sig env.contract_types
+      contract.ty_env.contract_types <- StringMap.add n c_sig
+          contract.ty_env.contract_types
   end;
   { f_sig_name = c_sig.sig_name;
     f_storage = contract.storage;
@@ -214,10 +215,10 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
     let record = typecheck env record in
     let exp_ty =
       let ty_name, _, ty =
-        try StringMap.find field env.env.labels
+        try find_label field env.env
         with Not_found -> error loc "unbound record field %S" field
       in
-      let record_ty = StringMap.find ty_name env.env.types in
+      let record_ty = find_type ty_name env.env in
       if not @@ eq_types record.ty record_ty then
         error loc "field %s does not belong to type %s" field
           (LiquidPrinter.Liquid.string_of_type record.ty);
@@ -568,16 +569,16 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
 
   | Record (( (label, _) :: _ ) as lab_x_exp_list) ->
     let ty_name, _, _ =
-      try StringMap.find label env.env.labels
+      try find_label label env.env
       with Not_found -> error loc "unbound label %S" label
     in
-    let record_ty = StringMap.find ty_name env.env.types in
+    let record_ty = find_type ty_name env.env in
     let labels = match record_ty with
       | Trecord (_, rtys) -> List.map fst rtys
       | _ -> assert false in
     let fields = List.map (fun (label, exp) ->
         let ty_name', _, ty = try
-            StringMap.find label env.env.labels
+            find_label label env.env
           with Not_found -> error loc "unbound label %S" label
         in
         if ty_name <> ty_name' then error loc "inconsistent list of labels";
@@ -610,9 +611,9 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
 
   | Constructor { constr = Constr constr; arg } ->
     begin try
-        let ty_name, arg_ty = StringMap.find constr env.env.constrs in
+        let ty_name, arg_ty = find_constr constr env.env in
         let arg = typecheck_expected "construtor argument" env arg_ty arg in
-        let constr_ty = StringMap.find ty_name env.env.types in
+        let constr_ty = find_type ty_name env.env in
         mk ?name:exp.name ~loc (Constructor { constr = Constr constr; arg })
           constr_ty
       with Not_found ->
@@ -739,7 +740,7 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
                 add_vars_env vars var_ty
               | CConstr (constr, vars) ->
                 let ty_name', var_ty =
-                  try StringMap.find constr env.env.constrs
+                  try find_constr constr env.env
                   with Not_found -> error loc "unknown constructor %S" constr
                 in
                 (* if ty_name <> ty_name' then
@@ -788,7 +789,7 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
 
   | CreateContract { args; contract } ->
     let contract = typecheck_contract ~warnings:env.warnings
-        ~decompiling:env.decompiling env.env contract in
+        ~decompiling:env.decompiling contract in
     match args with
     | [manager; delegate; spendable; delegatable; init_balance; init_storage] ->
       let manager = typecheck_expected "manager" env Tkey_hash manager in
@@ -800,7 +801,7 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
       let init_balance =
         typecheck_expected "initial balance" env Ttez init_balance in
       let init_storage = typecheck_expected "initial storage"
-          env contract.storage init_storage in
+          env (lift_type contract.ty_env contract.storage) init_storage in
       let desc = CreateContract {
           args = [manager; delegate; spendable;
                   delegatable; init_balance; init_storage];
@@ -1126,7 +1127,7 @@ and typecheck_entry env entry =
   check_used entry.entry_sig.storage_name count_storage;
   { entry with code }
 
-and typecheck_contract ~warnings ~decompiling env contract =
+and typecheck_contract ~warnings ~decompiling contract =
   let env =
     {
       warnings;
@@ -1137,9 +1138,9 @@ and typecheck_contract ~warnings ~decompiling env contract =
       vars_counts = StringMap.empty;
       to_inline = ref StringMap.empty;
       force_inline = ref StringMap.empty;
-      env = env;
+      env = contract.ty_env;
       clos_env = None;
-      t_contract_sig = sig_of_contract env contract;
+      t_contract_sig = sig_of_contract contract;
     } in
 
   (* Add bindings to the environment for the global values *)
@@ -1155,9 +1156,24 @@ and typecheck_contract ~warnings ~decompiling env contract =
   List.iter (fun (name, count) ->
       check_used env { nname = name; nloc = noloc env } (* TODO *) count
     ) counts;
+  let c_init = match contract.c_init with
+    | None -> None
+    | Some i ->
+      let env, counts = List.fold_left (fun (env, counts) (arg, nloc, arg_ty) ->
+          let (env, count) = new_binding env arg arg_ty in
+          env, ({ nname = arg; nloc}, count) :: counts
+        ) (env, []) i.init_args in
+      let init_body = typecheck_expected "initial storage" env
+          env.t_contract_sig.f_storage i.init_body in
+      List.iter (fun (arg, count) ->
+          check_used env arg count;
+        ) counts;
+      Some { i with init_body }
+  in
   { contract with
     values = List.rev values;
-    entries }
+    entries;
+    c_init }
 
 let typecheck_code env ?expected_ty code =
   match expected_ty with

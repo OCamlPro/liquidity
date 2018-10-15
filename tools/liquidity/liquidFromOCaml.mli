@@ -17,12 +17,10 @@ val predefined_contract_types : contract_sig StringMap.t
 val initial_env : string -> env
 
 val translate :
-  filename:string -> Parsetree.structure ->
-  syntax_contract * syntax_init option * env
+  filename:string -> Parsetree.structure -> syntax_contract
 
 val translate_multi :
-  (string * Parsetree.structure) list ->
-  syntax_contract * syntax_init option * env
+  (string * Parsetree.structure) list -> syntax_contract
 
 val read_file : string -> Parsetree.structure
 

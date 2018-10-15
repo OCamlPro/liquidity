@@ -276,6 +276,9 @@ and untype_contract contract =
         value :: acc, env) ([], empty_env ()) contract.values in
   let values = List.rev values in
   let entries = List.map (untype_entry env) contract.entries in
-  { contract with values; entries }
+  let c_init = match contract.c_init with
+    | None -> None
+    | Some i -> Some { i with init_body = untype env i.init_body } in
+  { contract with values; entries; c_init }
 
 let untype_code code = untype (empty_env ()) code

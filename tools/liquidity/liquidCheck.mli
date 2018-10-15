@@ -20,7 +20,7 @@ val error :
     constructed by the decompiler, in this case typing is more
     permissive *)
 val typecheck_contract :
-  warnings:bool -> decompiling:bool -> env -> syntax_contract -> typed_contract
+  warnings:bool -> decompiling:bool -> syntax_contract -> typed_contract
 
 (** Typecheck a single entry point *)
 val typecheck_entry :

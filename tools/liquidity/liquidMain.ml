@@ -30,8 +30,7 @@ let compile_liquid_files files =
       (filename, ocaml_ast)
     ) files in
   if !LiquidOptions.parseonly then exit 0;
-  let syntax_ast, syntax_init, env =
-    LiquidFromOCaml.translate_multi ocaml_asts in
+  let syntax_ast = LiquidFromOCaml.translate_multi ocaml_asts in
   let outprefix = match List.rev ocaml_asts with
     | [] -> assert false
     | (filename, _) :: _ ->
@@ -43,13 +42,13 @@ let compile_liquid_files files =
       (LiquidPrinter.Liquid.string_of_contract
          syntax_ast);
   let typed_ast = LiquidCheck.typecheck_contract
-      ~warnings:true ~decompiling:false env syntax_ast in
+      ~warnings:true ~decompiling:false syntax_ast in
   if !LiquidOptions.verbosity>0 then
     FileString.write_file (outprefix ^ ".typed")
       (LiquidPrinter.Liquid.string_of_contract_types
          typed_ast);
   let encoded_ast, to_inline =
-    LiquidEncode.encode_contract ~annot:true env typed_ast in
+    LiquidEncode.encode_contract ~annot:true typed_ast in
   if !LiquidOptions.verbosity>0 then
     FileString.write_file (outprefix ^ ".encoded")
       (LiquidPrinter.Liquid.string_of_contract
@@ -73,11 +72,11 @@ let compile_liquid_files files =
   (*  let michelson_ast = LiquidEmit.emit_contract pre_michelson in *)
 
   (* Output initial(izer/value) *)
-  begin match syntax_init with
+  begin match live_ast.c_init with
     | None -> ()
-    | Some syntax_init ->
-      match LiquidInit.compile_liquid_init env
-              (full_sig_of_contract syntax_ast) syntax_init with
+    | Some init ->
+      match LiquidInit.compile_liquid_init live_ast.ty_env
+              (full_sig_of_contract syntax_ast) init with
       | LiquidInit.Init_constant c_init when !LiquidOptions.json ->
         let s = LiquidToTezos.(json_of_const @@ convert_const c_init) in
         let output = outprefix ^ ".init.json" in
@@ -152,19 +151,17 @@ let compile_tezos_file filename =
   end;
   if !LiquidOptions.typeonly then exit 0;
 
-  let c = LiquidDecomp.decompile c in
+  let c = LiquidDecomp.decompile env c in
   if !LiquidOptions.verbosity>0 then
     FileString.write_file  (filename ^ ".liq.pre")
       (LiquidPrinter.Liquid.string_of_contract c);
-  let env = LiquidFromTezos.convert_env env in
-  let c = { c with contract_name = env.contractname } in
   let outprefix =
     Filename.(concat (dirname filename) @@
-              String.uncapitalize_ascii (env.contractname))  ^ ".tz" in
+              String.uncapitalize_ascii c.contract_name)  ^ ".tz" in
   let typed_ast =
-    LiquidCheck.typecheck_contract ~warnings:false ~decompiling:true env c in
+    LiquidCheck.typecheck_contract ~warnings:false ~decompiling:true c in
   let encode_ast, to_inline =
-    LiquidEncode.encode_contract ~decompiling:true env typed_ast in
+    LiquidEncode.encode_contract ~decompiling:true typed_ast in
   let live_ast = LiquidSimplify.simplify_contract
       ~decompile_annoted:annoted_tz encode_ast to_inline in
   let multi_ast = LiquidDecode.decode_contract live_ast in
@@ -279,8 +276,8 @@ let translate () =
   let entry_name = !Data.entry_name in
   let ocaml_asts = List.map (fun f -> f, LiquidFromOCaml.read_file f) files in
   (* first, extract the types *)
-  let contract, _, env = LiquidFromOCaml.translate_multi ocaml_asts in
-  let _ = LiquidCheck.typecheck_contract ~warnings:true env contract in
+  let contract = LiquidFromOCaml.translate_multi ocaml_asts in
+  let _ = LiquidCheck.typecheck_contract ~warnings:true contract in
   let contract_sig = full_sig_of_contract contract in
   let entry =
     try
@@ -289,12 +286,13 @@ let translate () =
     with Not_found ->
       Format.eprintf "Contract has no entry point %s@." entry_name; exit 2
   in
-  let input = LiquidData.translate { env with filename = "parameter" }
+  let input =
+    LiquidData.translate { contract.ty_env with filename = "parameter" }
       contract_sig parameter
       entry.entry_sig.parameter in
   let parameter_const = match contract_sig.f_entries_sig with
     | [_] -> input
-    | _ -> LiquidEncode.encode_const env contract_sig
+    | _ -> LiquidEncode.encode_const contract.ty_env contract_sig
              (CConstr (prefix_entry ^ entry_name, input)) in
   let to_str mic_data =
     if !LiquidOptions.json then
@@ -305,7 +303,8 @@ let translate () =
     (* Only translate parameter *)
     Printf.printf "%s\n%!" (to_str parameter_const)
   else
-    let storage_const = LiquidData.translate { env with filename = "storage" }
+    let storage_const =
+      LiquidData.translate { contract.ty_env with filename = "storage" }
         contract_sig storage contract.storage in
     if !LiquidOptions.json then
       Printf.printf "{\n  \"parameter\": %s; \n  \"storage\": %s\n}\n%!"

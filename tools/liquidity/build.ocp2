@@ -37,7 +37,7 @@ if(with_version){
   version_info = {};
 }
 
-OCaml.library("ocplib-liquidity",
+OCaml.library("ocplib-liquidity-base",
    ocaml + {
      files = [
 
@@ -64,7 +64,6 @@ OCaml.library("ocplib-liquidity",
 
        "liquidClean.ml";
        "liquidInterp.ml";
-       "liquidDecomp.ml";
        "liquidUntype.ml";
      ];
      requires = [
@@ -88,7 +87,7 @@ OCaml.library("ocplib-liquidity-ocaml",
        "liquidData.ml";
      ];
      requires = [
-        "ocplib-liquidity";
+        "ocplib-liquidity-base";
         "compiler-libs.common";
         "compiler-libs.bytecomp";
      ];
@@ -102,9 +101,10 @@ OCaml.library("ocplib-liquidity-with-tezos",
        "with-tezos/liquidTezosTypes.ml";
        "with-tezos/liquidFromTezos.ml";
        "with-tezos/liquidToTezos.ml";
+       "liquidDecomp.ml";
      ];
      requires = [
-        "ocplib-liquidity";
+        "ocplib-liquidity-base";
         "ocplib-liquidity-ocaml";
         "michelson";
      ];
@@ -156,9 +156,11 @@ OCaml.library("ocplib-liquidity-without-tezos",
        "without-tezos/liquidTezosTypes.ml";
        "without-tezos/liquidFromTezos.ml";
        "without-tezos/liquidToTezos.ml";
+       "liquidDecomp.ml";
      ];
      requires = [
-        "ocplib-liquidity";
+        "ocplib-liquidity-base";
+        "ocplib-liquidity-ocaml";
      ];
    });
 
@@ -168,7 +170,7 @@ OCaml.library("ocplib-liquidity-deploy-without-tezos",
        "without-tezos/liquidDeploy.ml";
      ];
      requires = [
-       "ocplib-liquidity";
+       "ocplib-liquidity-base";
        "ocplib-fake-lwt"
      ];
    });

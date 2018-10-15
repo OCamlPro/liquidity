@@ -17,7 +17,7 @@ type 'a ast_elt =
   | Syn_value of string * bool (* inline *) * 'a
   | Syn_contract of 'a contract
   | Syn_entry of 'a entry
-  | Syn_init of syntax_init
+  | Syn_init of 'a init
 
 (* redefined keywords of the modified OCaml lexer *)
 let () =
@@ -205,18 +205,6 @@ let lift_env rename = function
 let lift_inner_env =
   let lift_name inner_name n = String.concat "." [inner_name; n] in
   lift_env lift_name
-
-let rec rec_find s env proj =
-  try StringMap.find s (proj env)
-  with Not_found ->
-  match env.top_env with
-  | None -> raise Not_found
-  | Some env -> rec_find s env proj
-
-let find_type s env = rec_find s env (fun env -> env.types)
-let find_contract_type s env = rec_find s env (fun env -> env.contract_types)
-let find_label s env = rec_find s env (fun env -> env.labels)
-let find_constr s env = rec_find s env (fun env -> env.constrs)
 
 let error_loc loc fmt =
   let loc = loc_of_loc loc in
@@ -589,21 +577,24 @@ let rec translate_const env exp =
   | { pexp_desc = Pexp_record (lab_x_exp_list, None) } ->
     let lab_x_exp_list =
       List.map (fun ({ txt = label; loc }, exp) ->
-          let label = str_of_id label in
-          let loc = loc_of_loc exp.pexp_loc in
-          let _, _, ty' = find_label label env in
-          let c, ty_opt = translate_const env exp in
-          (* begin match ty_opt with
-           * | None -> ()
-           * | Some ty ->
-           *   if ty <> ty' then
-           *     error_loc loc ("wrong type for label "^label)
-           * end; *)
-          let c =
-            LiquidCheck.check_const_type ~to_tez:LiquidPrinter.tez_of_liq
-              loc ty' c
-          in
-          label, c
+          try
+            let label = str_of_id label in
+            let loc = loc_of_loc exp.pexp_loc in
+            let _, _, ty' = find_label label env in
+            let c, ty_opt = translate_const env exp in
+            (* begin match ty_opt with
+             * | None -> ()
+             * | Some ty ->
+             *   if ty <> ty' then
+             *     error_loc loc ("wrong type for label "^label)
+             * end; *)
+            let c =
+              LiquidCheck.check_const_type ~to_tez:LiquidPrinter.tez_of_liq
+                loc ty' c
+            in
+            label, c
+          with Not_found ->
+            error_loc exp.pexp_loc "unknown label %s" (str_of_id label)
         ) lab_x_exp_list in
     let ty = match lab_x_exp_list with
       | [] -> error_loc exp.pexp_loc "empty record"
@@ -906,7 +897,7 @@ let rec translate_code contracts env exp =
           let inner_env = mk_inner_env env "_dummy_" in
           let inner_acc = StringMap.bindings contracts
                           |> List.map (fun (_, c) -> Syn_contract c) in
-          let contract, _, _ =
+          let contract =
             translate_structure inner_env inner_acc structure in
           (d, m, de, s, a, st, contract)
         | _ -> error_loc pexp_loc "wrong arguments for Contract.create" in
@@ -1867,7 +1858,7 @@ and translate_signature contract_type_name env acc ast =
 
 
 
-and translate_structure env acc ast =
+and translate_structure env acc ast : syntax_contract =
   match ast with
   | { pstr_desc =
         Pstr_extension
@@ -2134,13 +2125,13 @@ and translate_structure env acc ast =
       };
     }} :: ast ->
     let inner_env = mk_inner_env env contract_name in
-    let contract, init, inner_env =
+    let contract =
       translate_structure inner_env (filter_non_init acc) structure in
     begin match !LiquidOptions.main with
       | Some main when main = contract_name ->
-        contract, init, inner_env
+        contract
       | _ ->
-        let lift_type = lift_inner_env inner_env in
+        let lift_type = lift_inner_env contract.ty_env in
         let contract_sig = sig_of_contract contract in
         let contract_sig =
           { contract_sig with
@@ -2148,6 +2139,7 @@ and translate_structure env acc ast =
                 { es with parameter = lift_type es.parameter }
               ) contract_sig.entries_sig
           } in
+        (* let contract = { contract with storage = lift_type contract.storage } in *)
         (* Register contract type (with same name as contract) in environment *)
         env.contract_types <-
           StringMap.add contract_name contract_sig env.contract_types;
@@ -2184,9 +2176,8 @@ and pack_contract env toplevels =
     | [] -> (List.rev contracts, List.rev values, List.rev entries, init) in
   let _contracts, values, entries, init =
     partition ([], [], [], None) toplevels in
-  let contract =
-    { contract_name = env.contractname; storage; values; entries } in
-  contract, init, env
+  { contract_name = env.contractname; storage; values; entries;
+    c_init = init; ty_env = env }
 
 
 let predefined_constructors =
@@ -2311,14 +2302,14 @@ let translate_exn exn =
 let translate ~filename ast =
   let env = initial_env filename in
   try
-    let contract, init, env = translate_structure env [] ast in
+    let contract = translate_structure env [] ast in
     begin match !LiquidOptions.main with
       | Some main when main <> contract.contract_name ->
         Format.eprintf "No contract named %s.@." main;
         exit 2;
       | _ -> ()
     end;
-    (contract, init, env)
+    contract
   with exn -> translate_exn exn
 
 let mk_toplevel_env filename top_env =
@@ -2338,16 +2329,16 @@ let translate_multi l =
     exit 2
   | (filename, ast) :: r_others ->
     let top_env = initial_env filename in
-    let exception Stop of syntax_contract * syntax_init option * env in
+    let exception Stop of syntax_contract in
     try
       let acc =
         List.fold_left (fun acc (filename, ast) ->
             let env = mk_toplevel_env filename top_env in
-            let contract, init, env = translate_structure env acc ast in
+            let contract = translate_structure env acc ast in
             begin match !LiquidOptions.main with
               | Some main when main = contract.contract_name ->
                 Format.eprintf "Main contract %s@." contract.contract_name;
-                raise (Stop (contract, init, env))
+                raise (Stop contract)
               | _ ->
                 Format.eprintf "Contract %s@." contract.contract_name;
             end;
@@ -2366,7 +2357,7 @@ let translate_multi l =
             Syn_contract contract :: acc
           ) [] (List.rev r_others)
       in
-      let contract, init, env = translate_structure top_env acc ast in
+      let contract = translate_structure top_env acc ast in
       Format.eprintf "Main contract %s@." contract.contract_name;
       begin match !LiquidOptions.main with
         | Some main when main <> contract.contract_name ->
@@ -2374,9 +2365,9 @@ let translate_multi l =
           exit 2;
         | _ -> ()
       end;
-      (contract, init, env)
+      contract
     with
-    | Stop (contract, init, env) -> (contract, init, env)
+    | Stop contract -> contract
     | exn -> translate_exn exn
 
 let ocaml_of_file parser file =

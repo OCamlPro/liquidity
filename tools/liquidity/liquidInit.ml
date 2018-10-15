@@ -10,19 +10,19 @@ open LiquidTypes
 
 type init =
   | Init_constant of LiquidTypes.const
-  | Init_code of (LiquidTypes.syntax_contract *
+  | Init_code of (LiquidTypes.encoded_contract *
                   LiquidTypes.loc_michelson_contract)
 
 let c_empty_op ~loc =
-  mk ~loc (Const { ty = Tlist Toperation; const = CList []})  ()
+  mk ~loc (Const { ty = Tlist Toperation; const = CList []}) (Tlist Toperation)
 let mk_nat ~loc i =
   mk ~loc
     (Const { ty = Tnat; const = CNat (LiquidPrinter.integer_of_int i) })
-    ()
+    Tnat
 
 let rec subst_empty_big_map code =
   let empty_big_map loc =
-    let storage_var = mk ~loc (Var "_storage") () in
+    let storage_var = mk ~loc (Var "_storage") Tunit (* dummy *) in
     Apply { prim = Prim_tuple_get; args = [storage_var; mk_nat ~loc 0] }
   in
   let desc = code.desc in
@@ -205,20 +205,23 @@ let rec subst_empty_big_map code =
 
 
 
-let tmp_contract_of_init ~loc init storage_ty =
+let tmp_contract_of_init ~loc env (init : encoded_exp LiquidTypes.init) storage_ty =
+  (* let init =
+   *   { init with init_body = (LiquidUntype.untype_code init.init_body : syntax_exp) } in *)
   let storage = storage_ty in
-  let parameter_var = mk ~loc (Var "_parameter") () in
   let parameter, code = match init.init_args with
     | [] -> Tunit, init.init_body
     | [arg, loc, ty] ->
+      let parameter_var = mk ~loc (Var "_parameter") ty in
       let code = mk ~loc
           (Let { bnd_var = { nname = arg; nloc = loc };
                  inline = false;
                  bnd_val = parameter_var;
-                 body = init.init_body }) () in
+                 body = init.init_body }) init.init_body.ty in
       ty, code
     | args ->
       let parameter = Ttuple (List.map (fun (_,_,ty) -> ty) args) in
+      let parameter_var = mk ~loc (Var "_parameter") parameter in
       let code, _ = List.fold_right (fun (arg, loc, ty) (code, i) ->
           let i = i - 1 in
           let code = mk ~loc (
@@ -227,8 +230,8 @@ let tmp_contract_of_init ~loc init storage_ty =
                     bnd_val = mk ~loc (Apply {
                         prim = Prim_tuple_get;
                         args = [parameter_var; mk_nat ~loc i] })
-                        ();
-                    body = code }) ()
+                        ty;
+                    body = code }) code.ty
           in
           (code, i)
         ) args (init.init_body, List.length args)
@@ -239,7 +242,8 @@ let tmp_contract_of_init ~loc init storage_ty =
   let code = subst_empty_big_map code in
   let code =
     mk ~loc (Apply { prim = Prim_tuple;
-                     args = [ c_empty_op ~loc; code ] }) () in
+                     args = [ c_empty_op ~loc; code ] })
+      (Ttuple [(Tlist Toperation); code.ty]) in
   { contract_name = "_dummy_init";
     storage;
     values = [];
@@ -247,20 +251,18 @@ let tmp_contract_of_init ~loc init storage_ty =
                                parameter;
                                parameter_name = "_parameter";
                                storage_name = "_storage" };
-                 code }]
+                 code }];
+    ty_env = env;
+    c_init = None;
   }
 
-let compile_liquid_init env contract_sig init (* ((args, sy_init) as init) *) =
+let compile_liquid_init env contract_sig (init : encoded_exp LiquidTypes.init) (* ((args, sy_init) as init) *) =
   let loc = init.init_body.loc in
   if init.init_body.transfer then
     LiquidLoc.raise_error ~loc
       "No transfer allowed in storage initializer";
   try (* Maybe it is constant *)
-    let tenv = empty_typecheck_env ~warnings:true contract_sig env in
-    let ty_init = LiquidCheck.typecheck_code tenv
-        ~expected_ty:contract_sig.f_storage init.init_body in
-    let enc_init = LiquidEncode.encode_code tenv ty_init in
-    let c_init = LiquidData.translate_const_exp enc_init in
+    let c_init = LiquidData.translate_const_exp init.init_body in
     Init_constant c_init
   (* let s = LiquidPrinter.Michelson.line_of_const c_init in
    * let output = env.filename ^ ".init.tz" in
@@ -268,13 +270,8 @@ let compile_liquid_init env contract_sig init (* ((args, sy_init) as init) *) =
    * Printf.eprintf "Constant initial storage generated in %S\n%!" output *)
   with LiquidError _ ->
     (* non constant initial value *)
-    let init_contract = tmp_contract_of_init ~loc init contract_sig.f_storage in
-    let typed_init = LiquidCheck.typecheck_contract
-        ~warnings:true ~decompiling:false env init_contract in
-    let encoded_init, to_inline =
-      LiquidEncode.encode_contract env typed_init in
-    let live_init = LiquidSimplify.simplify_contract encoded_init to_inline in
-    let pre_init = LiquidMichelson.translate live_init in
+    let init_contract = tmp_contract_of_init ~loc env init contract_sig.f_storage in
+    let pre_init = LiquidMichelson.translate init_contract in
     Init_code (init_contract, pre_init)
 (* let mic_init = LiquidToTezos.convert_contract pre_init in
  * let s = LiquidToTezos.line_of_contract mic_init in

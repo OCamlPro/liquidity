@@ -713,10 +713,17 @@ let rec decompile contract =
                                parameter = contract.mic_parameter;
                                parameter_name = "parameter";
                                storage_name = "storage" };
-                 code }]
+                 code }];
+    c_init = None;
+    ty_env = LiquidFromOCaml.initial_env "dummy_env";
   }
 
 
-let decompile contract =
+let decompile env contract =
   Hashtbl.reset vars_nums;
-  decompile contract
+  let contract = decompile contract in
+  let ty_env = LiquidFromTezos.convert_env env in
+  { contract with
+    ty_env;
+    contract_name = ty_env.contractname;
+  }
