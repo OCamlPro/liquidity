@@ -242,7 +242,12 @@ let rec encode_type ?(decompiling=false) ty =
    sum type *)
 and encode_contract_sig csig =
   match csig.entries_sig with
-  | [] -> assert false (* ? *)
+  | [] ->
+    error (LiquidLoc.noloc)
+      "Contract type %shas no entry points"
+      (match csig.sig_name with
+       | Some s -> Printf.sprintf "%s " s
+       | None -> "")
   | [{ parameter }] -> parameter
   | entries ->
     Tsum ("_entries",

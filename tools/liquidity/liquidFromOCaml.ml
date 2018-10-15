@@ -898,7 +898,7 @@ let rec translate_code contracts env exp =
           let inner_acc = StringMap.bindings contracts
                           |> List.map (fun (_, c) -> Syn_contract c) in
           let contract =
-            translate_structure inner_env inner_acc structure in
+            translate_non_empty_contract inner_env inner_acc structure in
           (d, m, de, s, a, st, contract)
         | _ -> error_loc pexp_loc "wrong arguments for Contract.create" in
       CreateContract
@@ -1834,11 +1834,16 @@ and translate_signature contract_type_name env acc ast =
             pmtd_type = Some {
                 pmty_desc = Pmty_signature signature
               }
-          }
+          };
+      psig_loc;
     } :: ast ->
     let inner_env = mk_inner_env env contract_type_name in
     let contract_sig =
       translate_signature contract_type_name inner_env [] signature in
+    if contract_sig.entries_sig = [] then
+      error_loc psig_loc
+        "Contract type %s has no entry points (use struct to define namespace)"
+        contract_type_name;
     let lift_type = lift_inner_env inner_env in
     let contract_sig =
       { contract_sig with
@@ -1858,7 +1863,7 @@ and translate_signature contract_type_name env acc ast =
 
 
 
-and translate_structure env acc ast : syntax_contract =
+and translate_structure env acc ast : syntax_contract option =
   match ast with
   | { pstr_desc =
         Pstr_extension
@@ -2037,11 +2042,16 @@ and translate_structure env acc ast : syntax_contract =
             pmtd_type = Some {
                 pmty_desc = Pmty_signature signature
               }
-          }
+          };
+      pstr_loc;
     } :: ast ->
     let inner_env = mk_inner_env env contract_type_name in
     let contract_sig =
       translate_signature contract_type_name inner_env [] signature in
+    if contract_sig.entries_sig = [] then
+      error_loc pstr_loc
+        "Contract type %s has no entry points (use struct to define namespace)"
+        contract_type_name;
     let lift_type = lift_inner_env inner_env in
     let contract_sig =
       { contract_sig with
@@ -2125,25 +2135,29 @@ and translate_structure env acc ast : syntax_contract =
       };
     }} :: ast ->
     let inner_env = mk_inner_env env contract_name in
-    let contract =
-      translate_structure inner_env (filter_non_init acc) structure in
-    begin match !LiquidOptions.main with
-      | Some main when main = contract_name ->
-        contract
-      | _ ->
-        let lift_type = lift_inner_env contract.ty_env in
-        let contract_sig = sig_of_contract contract in
-        let contract_sig =
-          { contract_sig with
-            entries_sig = List.map (fun es ->
-                { es with parameter = lift_type es.parameter }
-              ) contract_sig.entries_sig
-          } in
-        (* let contract = { contract with storage = lift_type contract.storage } in *)
-        (* Register contract type (with same name as contract) in environment *)
-        env.contract_types <-
-          StringMap.add contract_name contract_sig env.contract_types;
-        translate_structure env (Syn_contract contract :: acc) ast
+    begin
+      match translate_structure inner_env (filter_non_init acc) structure with
+      | None ->
+        lift_inner_env inner_env |> ignore;
+        translate_structure env acc ast
+      | Some contract ->
+        match !LiquidOptions.main with
+        | Some main when main = contract_name ->
+          Some contract
+        | _ ->
+          let lift_type = lift_inner_env contract.ty_env in
+          let contract_sig = sig_of_contract contract in
+          let contract_sig =
+            { contract_sig with
+              entries_sig = List.map (fun es ->
+                  { es with parameter = lift_type es.parameter }
+                ) contract_sig.entries_sig
+            } in
+          (* let contract = { contract with storage = lift_type contract.storage } in *)
+          (* Register contract type (with same name as contract) in environment *)
+          env.contract_types <-
+            StringMap.add contract_name contract_sig env.contract_types;
+          translate_structure env (Syn_contract contract :: acc) ast
     end
 
   | [] -> pack_contract env (List.rev acc)
@@ -2154,30 +2168,45 @@ and translate_structure env acc ast : syntax_contract =
     else
       error_loc loc "at toplevel"
 
+and translate_non_empty_contract env acc ast =
+  match translate_structure env acc ast with
+  | None ->
+    Location.raise_errorf
+      "No entry point found for contract %s in file %S%!"
+      env.contractname
+      env.filename
+  | Some contract -> contract
 
 and pack_contract env toplevels =
-  let storage =
-    try StringMap.find "storage" env.types
-    with Not_found ->
-      LiquidLoc.raise_error
-        ~loc:(LiquidLoc.loc_in_file env.filename)
-        "type storage is required but not provided"
-  in
   if not (List.exists (function Syn_entry _ -> true | _ -> false) toplevels)
-  then Location.raise_errorf "No entry point found for contract %s in file %S%!"
-      env.contractname
-      env.filename;
-  let rec partition (contracts, values, entries, init) = function
-    | Syn_value (v,i,e) :: r ->
-      partition (contracts, (v,i,e) :: values, entries, init) r
-    | Syn_contract c :: r -> partition (c :: contracts, values, entries, init) r
-    | Syn_entry e :: r -> partition (contracts, values, e :: entries, init) r
-    | Syn_init i :: r -> partition (contracts, values, entries, Some i) r
-    | [] -> (List.rev contracts, List.rev values, List.rev entries, init) in
-  let _contracts, values, entries, init =
-    partition ([], [], [], None) toplevels in
-  { contract_name = env.contractname; storage; values; entries;
-    c_init = init; ty_env = env }
+  then None
+  else
+    let storage =
+      try StringMap.find "storage" env.types
+      with Not_found ->
+        LiquidLoc.raise_error
+          ~loc:(LiquidLoc.loc_in_file env.filename)
+          "type storage is required but not provided"
+    in
+    (* if not (List.exists (function Syn_entry _ -> true | _ -> false) toplevels)
+     * then Location.raise_errorf "No entry point found for contract %s in file %S%!"
+     *     env.contractname
+     *     env.filename; *)
+    let rec partition (contracts, values, entries, init) = function
+      | Syn_value (v,i,e) :: r ->
+        partition (contracts, (v,i,e) :: values, entries, init) r
+      | Syn_contract c :: r -> partition (c :: contracts, values, entries, init) r
+      | Syn_entry e :: r -> partition (contracts, values, e :: entries, init) r
+      | Syn_init i :: r -> partition (contracts, values, entries, Some i) r
+      | [] -> (List.rev contracts, List.rev values, List.rev entries, init) in
+    let _contracts, values, entries, init =
+      partition ([], [], [], None) toplevels in
+    Some { contract_name = env.contractname;
+           storage;
+           values;
+           entries;
+           c_init = init;
+           ty_env = env }
 
 
 let predefined_constructors =
@@ -2302,7 +2331,7 @@ let translate_exn exn =
 let translate ~filename ast =
   let env = initial_env filename in
   try
-    let contract = translate_structure env [] ast in
+    let contract = translate_non_empty_contract env [] ast in
     begin match !LiquidOptions.main with
       | Some main when main <> contract.contract_name ->
         Format.eprintf "No contract named %s.@." main;
@@ -2334,30 +2363,34 @@ let translate_multi l =
       let acc =
         List.fold_left (fun acc (filename, ast) ->
             let env = mk_toplevel_env filename top_env in
-            let contract = translate_structure env acc ast in
-            begin match !LiquidOptions.main with
-              | Some main when main = contract.contract_name ->
-                Format.eprintf "Main contract %s@." contract.contract_name;
-                raise (Stop contract)
-              | _ ->
-                Format.eprintf "Contract %s@." contract.contract_name;
-            end;
-            let lift_type = lift_inner_env env in
-            let contract_sig = sig_of_contract contract in
-            let contract_sig =
-              { contract_sig with
-                entries_sig = List.map (fun es ->
-                    { es with parameter = lift_type es.parameter }
-                  ) contract_sig.entries_sig
-              } in
-            (* Register contract type (with same name as contract) in environment *)
-            env.contract_types <-
-              StringMap.add contract.contract_name contract_sig
-                top_env.contract_types;
-            Syn_contract contract :: acc
+            match translate_structure env acc ast with
+            | None ->
+              lift_inner_env env |> ignore;
+              acc
+            | Some contract ->
+              begin match !LiquidOptions.main with
+                | Some main when main = contract.contract_name ->
+                  Format.eprintf "Main contract %s@." contract.contract_name;
+                  raise (Stop contract)
+                | _ ->
+                  Format.eprintf "Contract %s@." contract.contract_name;
+              end;
+              let lift_type = lift_inner_env env in
+              let contract_sig = sig_of_contract contract in
+              let contract_sig =
+                { contract_sig with
+                  entries_sig = List.map (fun es ->
+                      { es with parameter = lift_type es.parameter }
+                    ) contract_sig.entries_sig
+                } in
+              (* Register contract type (with same name as contract) in environment *)
+              env.contract_types <-
+                StringMap.add contract.contract_name contract_sig
+                  top_env.contract_types;
+              Syn_contract contract :: acc
           ) [] (List.rev r_others)
       in
-      let contract = translate_structure top_env acc ast in
+      let contract = translate_non_empty_contract top_env acc ast in
       Format.eprintf "Main contract %s@." contract.contract_name;
       begin match !LiquidOptions.main with
         | Some main when main <> contract.contract_name ->
