@@ -91,6 +91,9 @@ let rec convert_const ~loc expr =
   | CSignature s when s.[0] = '0' -> Micheline.Bytes (loc, bytes_of_hex s)
   | CSignature s -> Micheline.String (loc, s)
 
+  | CRecord fields ->
+    convert_const ~loc (CTuple (List.map snd fields))
+
   | _ ->
     LiquidLoc.raise_error ~loc:(fst loc) "to-tezos: unimplemented const:\n%s%!"
       (LiquidPrinter.Michelson.string_of_const expr)
