@@ -1540,75 +1540,42 @@ and translate_case contracts env case : (pattern * syntax_exp * location) =
     | { ppat_loc } ->
       error_loc ppat_loc "bad pattern"
 
-and translate_entry name env contracts head_exp parameter storage_name =
+and translate_entry name env contracts head_exp mk_parameter mk_storage =
   match head_exp with
-  | { pexp_desc =
-        Pexp_fun (
-          Nolabel, None,
-          { ppat_desc =
-              Ppat_constraint(
-                { ppat_desc =
-                    Ppat_var { txt = parameter_name } },
-                arg_type)
-          },
-          head_exp) } when parameter = None ->
-    translate_entry name env contracts head_exp
-      (Some (parameter_name, translate_type env arg_type))
-      storage_name
+  | { pexp_desc = Pexp_fun (Nolabel, None, param_pat, head_exp) }
+    when mk_parameter = None ->
+    let mk_param = deconstruct_pat env param_pat in
+    translate_entry name env contracts head_exp (Some mk_param) mk_storage
 
-  | { pexp_desc =
-        Pexp_fun (
-          Nolabel, None,
-          { ppat_desc =
-              Ppat_constraint(
-                { ppat_desc =
-                    Ppat_var { txt = sto_name } },
-                arg_type)
-          },
-          head_exp);
+  | { pexp_desc = Pexp_fun (Nolabel, None, storage_pat, head_exp);
       pexp_loc }
-    when storage_name = None && parameter <> None ->
-    let storage_ty = translate_type env arg_type in
-    begin
-      try
-        let s = find_type "storage" env in
-        if not @@ eq_types s storage_ty then
-          LiquidLoc.raise_error ~loc:(loc_of_loc pexp_loc)
-            "storage argument %s for entry point %s must be the same type \
-             as contract storage" sto_name name;
-        translate_entry name env contracts head_exp parameter (Some sto_name)
-      with Not_found ->
-        error_loc pexp_loc "type storage is required but not provided"
-    end
+    when mk_storage = None && mk_parameter <> None ->
+    let mk_storage code =
+      let storage_name, storage_ty, code =
+        deconstruct_pat env storage_pat code in
+      match storage_pat.ppat_desc with
+      | Ppat_constraint _ ->
+        begin try
+            let s = find_type "storage" env in
+            if not @@ eq_types s storage_ty then
+              LiquidLoc.raise_error ~loc:storage_name.nloc
+                "storage argument %s for entry point %s must be the same type \
+                 as contract storage" storage_name.nname name;
+            (storage_name, code)
+          with Not_found ->
+            error_loc pexp_loc "type storage is required but not provided"
+        end
+      | _ -> (storage_name, code)
+    in
+    translate_entry name env contracts head_exp mk_parameter (Some mk_storage)
 
-  | { pexp_desc =
-        Pexp_fun (
-          Nolabel, None,
-          { ppat_desc = Ppat_var { txt = sto_name } },
-          head_exp);
-      pexp_loc }
-    when storage_name = None && parameter <> None ->
-    translate_entry name env contracts head_exp parameter (Some sto_name)
-
-  | { pexp_desc =
-        Pexp_fun (
-          Nolabel, None,
-          { ppat_desc = Ppat_var { txt = sto_name } },
-          head_exp);
-      pexp_loc }
-    when storage_name = None && parameter <> None ->
-    begin try find_type "storage" env |> ignore
-      with Not_found ->
-        error_loc pexp_loc "type storage is required but not provided"
-    end;
-    translate_entry name env contracts head_exp parameter (Some sto_name)
-
-  | { pexp_desc = Pexp_fun (Nolabel, None, { ppat_desc = _ }, _);
+  | { pexp_desc = Pexp_fun (Nolabel, None, _, _);
       pexp_loc }  ->
     LiquidLoc.raise_error ~loc:(loc_of_loc pexp_loc)
-      "entry point %s accepts two arguments" name
+      "entry point %s accepts only two arguments, \
+       i.e. one parameter, one storage" name
 
-  | { pexp_loc } when parameter = None || storage_name = None ->
+  | { pexp_loc } when mk_parameter = None || mk_storage = None ->
     LiquidLoc.raise_error ~loc:(loc_of_loc pexp_loc)
       "entry point %s needs two arguments" name
 
@@ -1627,48 +1594,22 @@ and translate_entry name env contracts head_exp parameter storage_name =
           "return type must be a product of \"operation list\" \
            and the storage type"
     end;
-    translate_entry name env contracts head_exp parameter storage_name
-
-(*
-  | { pexp_desc =
-        Pexp_fun (
-            Nolabel, None,
-            { ppat_desc =
-                Ppat_extension ({ txt = "invariant"},
-                                PStr [{ pstr_desc = Pstr_eval (exp, [])}])
-            },
-            head_exp) } ->
-    Format.eprintf "invariant@.";
-    translate_entry name env contracts head_exp parameter storage_name
-
-  | { pexp_desc =
-        Pexp_fun (
-            Nolabel, None,
-            { ppat_desc =
-                Ppat_constraint(
-                    { ppat_desc =
-                        Ppat_var { txt } },
-                    arg_type)
-            },
-            head_exp);
-      pexp_loc } ->
-     error_arg pexp_loc txt
-*)
+    translate_entry name env contracts head_exp mk_parameter mk_storage
 
   | exp ->
     let code = translate_code contracts env exp in
-    let parameter_name, parameter = match parameter with
-      | Some p -> p
+    let parameter_name, parameter, code = match mk_parameter with
+      | Some mk -> mk code
       | None -> assert false in
-    let storage_name = match storage_name with
-      | Some s -> s
+    let storage_name, code = match mk_storage with
+      | Some mk -> mk code
       | None -> assert false in
     {
       entry_sig = {
         entry_name = name;
         parameter;
-        parameter_name;
-        storage_name;
+        parameter_name = parameter_name.nname;
+        storage_name = storage_name.nname;
       };
       code;
     }
