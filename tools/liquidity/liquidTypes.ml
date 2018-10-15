@@ -239,8 +239,8 @@ and eq_signature { entries_sig = s1 } { entries_sig = s2 } =
   try
     List.for_all2 (fun e1 e2 ->
         e1.entry_name = e2.entry_name &&
-        e1.parameter_name = e2.parameter_name &&
-        e1.storage_name = e2.storage_name &&
+        (* e1.parameter_name = e2.parameter_name &&
+         * e1.storage_name = e2.storage_name && *)
         eq_types e1.parameter e2.parameter
       ) s1 s2
   with Invalid_argument _ -> false
