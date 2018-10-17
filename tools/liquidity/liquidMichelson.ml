@@ -742,10 +742,14 @@ let rec translate_code ~parameter_name ~storage_name code =
   let loc = LiquidLoc.noloc in
 
   (* replace ( parameter, storage ) with parameter :: storage *)
+  let storage_ins = ii ~loc @@ CDR None in
+  storage_ins.loc_name <- sanitize_opt (Some storage_name);
+  let parameter_ins = ii ~loc @@ CAR None in
+  parameter_ins.loc_name <- sanitize_opt (Some parameter_name);
   let header = [
     dup ~loc 1;
-    dip ~loc 1 [ ii ~loc @@ CDR None ];
-    ii ~loc @@ CAR None;
+    dip ~loc 1 [ storage_ins ];
+    parameter_ins;
   ]
   in
   (* at the end of the code, drop everything excepted for the top-most

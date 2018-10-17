@@ -207,7 +207,7 @@ let%entry setDailyLimit (limit : tez) storage =
   | Execute storage -> no_op, storage.m_daily_limit <- limit
 
 
-let%entry resetSpentToday (_u : unit) storage =
+let%entry resetSpentToday _ storage =
   (* let storage = storage.multi <- *)
   (*     MultiOwned.only_enough_owners *)
   (*       (MultiOwned.ResetSpentToday, storage.multi) in *)
@@ -215,9 +215,9 @@ let%entry resetSpentToday (_u : unit) storage =
   | Confirmations_Needed storage -> no_op, storage
   | Execute storage -> no_op, storage.m_spent_today <- 0tz
 
-let%entry deposit (_u : unit) (storage : storage) =
+let%entry deposit _ (s : storage) =
   if Current.amount () = 0tz then Current.failwith ()
-  else no_op, storage
+  else no_op, s
 
 let%entry kill (dest: UnitContract.instance) storage =
   match confirmAndCheck (Kill dest, storage) with

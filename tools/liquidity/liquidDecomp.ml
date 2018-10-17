@@ -42,13 +42,16 @@ let const_name_of_datatype = function
 
 
 let vars_nums = Hashtbl.create 101
+let vars_names = Hashtbl.create 101
 
 let rec var_of node =
+  try Hashtbl.find vars_names node.num
+  with Not_found ->
   match node.kind with
-  | N_VAR name -> name
+  (* | N_VAR name -> name *)
   | _ -> match node.node_name with
 
-    | Some name -> 
+    | Some name ->
       begin try
           if Hashtbl.find vars_nums name = node.num then name
           else Printf.sprintf "%s%d" name node.num
@@ -56,7 +59,7 @@ let rec var_of node =
       end
     | None -> match node.kind with
 
-      (* | N_VAR name -> name *)
+      | N_VAR name -> name
       | N_PRIM "CAR" ->
         begin match node.args with
           | [n] -> Printf.sprintf "%s_fst%d" (var_of n) node.num
@@ -100,11 +103,11 @@ let rec var_of node =
 let var_of node =
   let name = var_of node in
   Hashtbl.add vars_nums name node.num;
+  Hashtbl.add vars_names node.num name;
   name
 
 let lvar_of node =
   let name = var_of node in
-  Hashtbl.add vars_nums name node.num;
   { nname = name; nloc = node.loc }
 
 
@@ -683,36 +686,29 @@ let rec decompile contract =
       mk ~loc (Apply { prim = Prim_tuple; args = List.map arg_of args })
 
   and mklet node desc =
-    let node_liq = mk ?name:node.node_name ~loc:node.loc desc in
+    let bnd_val = mk ?name:node.node_name ~loc:node.loc desc in
+    let bnd_var = lvar_of node in
+    let body = decompile_next node in
     mk ~loc:node.loc
-      (Let { bnd_var = lvar_of node;
-             inline = false;
-             bnd_val = node_liq;
-             body = decompile_next node })
+      (Let { bnd_var; inline = false; bnd_val; body })
 
   in
   let (begin_node, end_node) = contract.mic_code in
+
+  let parameter_name, storage_name = match begin_node.next with
+    | Some { kind = N_PRIM "PAIR"; args = [p; s] } ->
+      var_of p, var_of s
+    | _ -> "parameter", "storage" in
+
   let code = decompile_next begin_node in
-  (*  let code =
-      mk (Let ("exp1", noloc,
-             mk (Apply(Prim_tuple, noloc,
-                       [
-                         mk (Apply(Prim_tuple, noloc,
-                                   [
-                                     mk (Var ("amount", noloc, []));
-                                     mk (Var ("parameter", noloc, []));
-                            ]));
-                         mk (Var ("storage", noloc, []))
-                ])), code))
-      in
-  *)
+
   { contract_name = "_dummy_";
     storage = contract.mic_storage;
     values = [];
     entries = [{ entry_sig = { entry_name = "main";
                                parameter = contract.mic_parameter;
-                               parameter_name = "parameter";
-                               storage_name = "storage" };
+                               parameter_name ;
+                               storage_name  };
                  code }];
     c_init = None;
     ty_env = LiquidFromOCaml.initial_env "dummy_env";
@@ -721,6 +717,7 @@ let rec decompile contract =
 
 let decompile env contract =
   Hashtbl.reset vars_nums;
+  Hashtbl.reset vars_names;
   let contract = decompile contract in
   let ty_env = LiquidFromTezos.convert_env env in
   { contract with

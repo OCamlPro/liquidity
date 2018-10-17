@@ -23,8 +23,8 @@ contract PlusOne = struct
 
   let%init init_storage (x : bool) (y : int) = if x = false then 0 else y
 
-  let%entry main (_parameter : unit) (storage : storage) =
-    ([] : operation list), storage + 1
+  let%entry main (_ : unit) (s : storage) =
+    ([] : operation list), s + 1
 end
 
 (* contract type PS = sig
@@ -34,7 +34,7 @@ end
  * end *)
 
 let%entry main
-    (parameter : signature)
+    (sign : signature)
     storage =
   let x = PlusOne.A in
   begin match x with
@@ -48,7 +48,7 @@ let%entry main
      Crypto.hash_key edpkuTXkJDGcFd5nh6VvMz8phXxU3Bi7h6hqgywNFi1vZTfQNnS1RV then
     Current.failwith ();
   let delegate = Some key_hash in
-  let spendable = Crypto.check storage.key parameter storage.hash in
+  let spendable = Crypto.check storage.key sign storage.hash in
   let amount = Current.amount () in
   let amount = match amount / 2p with
       None -> Current.failwith () (* not possible *)
@@ -57,7 +57,7 @@ let%entry main
   let delegatable = false in
   let cocococ = (Contract.at storage.c : PlusOne.instance option) in
   let cocococ2 = PlusOne.at storage.c in
-  let op1 = (Contract.self ()).main parameter ~amount:0tz in
+  let op1 = (Contract.self ()).main sign ~amount:0tz in
   let account_op, _account =
     Account.create
       key_hash delegate delegatable

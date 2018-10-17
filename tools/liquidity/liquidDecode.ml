@@ -206,7 +206,7 @@ and entry_of_case param_constrs top_storage (pat, body) =
         entry_name;
         parameter;
         parameter_name;
-        storage_name = "storage/1";
+        storage_name = top_storage ;
       };
       code = decode body;
     }
