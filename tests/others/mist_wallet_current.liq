@@ -6,6 +6,8 @@
 (*                                                                        *)
 (**************************************************************************)
 
+[%%version 0.402]
+
 type pending_state = {
   yetNeeded : nat;
   ownersDone : address set;

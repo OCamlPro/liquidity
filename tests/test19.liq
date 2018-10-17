@@ -1,4 +1,4 @@
-[%%version 0.4]
+[%%version 0.402]
 
 type storage = {
   key : key;
