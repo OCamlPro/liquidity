@@ -20,6 +20,7 @@ auditing purposes.
    installation/index
    usage/index
    tutorial/tutorial
+   tutorial/examples
    reference/liquidity
 
 .. toctree::

@@ -1,0 +1,6 @@
+Examples
+========
+
+.. toctree::
+
+   game
