@@ -378,23 +378,35 @@ let print_program comment_of_loc ppf (c, loc_table) =
 
 
 let string_of_contract c =
-  let ppf = Format.str_formatter in
+  let buf = Buffer.create 10000 in
+  let ppf = Format.formatter_of_buffer buf in
+  Format.pp_set_margin ppf 199999 ;
+  Format.pp_set_max_indent ppf 99999 ;
+  Format.pp_set_max_boxes ppf 99999 ;
   print_program (fun _ -> None) ppf (c, []);
-  Format.flush_str_formatter ()
+  Format.fprintf ppf "@?" ;
+  Buffer.contents buf
+
+let linify s =
+  let len = String.length s in
+  let b = Buffer.create 10000 in
+  let prev_whitespace = ref true in
+  for i = 0 to len - 1 do
+    match s.[i] with
+    | ' ' | '\n' ->
+      if not !prev_whitespace then begin
+        Buffer.add_char b ' ';
+        prev_whitespace := true
+      end
+    | c ->
+      Buffer.add_char b c;
+      prev_whitespace := false
+  done;
+  Buffer.contents b
+
 
 let line_of_contract c =
-  let ppf = Format.str_formatter in
-  let ffs = Format.pp_get_formatter_out_functions ppf () in
-  let new_ffs =
-    { ffs with
-      Format.out_newline = (fun () -> ffs.Format.out_spaces 1);
-      (* Format.out_indent = (fun _ -> ()); *)
-    } in
-  Format.pp_set_formatter_out_functions ppf new_ffs;
-  print_program (fun _ -> None) ppf (c, []);
-  let s = Format.flush_str_formatter () in
-  Format.pp_set_formatter_out_functions ppf ffs;
-  s
+  linify (string_of_contract c)
 
 let contract_encoding =
   Micheline.canonical_encoding

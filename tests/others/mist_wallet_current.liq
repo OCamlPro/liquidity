@@ -28,13 +28,13 @@ type wallet_operation =
   | ResetSpentToday
   | Kill of UnitContract.instance
 
-type operation_hash = bytes
+type operation_bytes = bytes
 
 type storage = {
   m_required : nat;
   m_num_owners : nat;
   m_owners : address set;
-  m_pending : (operation_hash, pending_state) map;
+  m_pending : (operation_bytes, pending_state) map;
   m_daily_limit : tez;
   m_spent_today : tez;
   m_last : timestamp;
@@ -47,7 +47,7 @@ let%init storage (owners : address set) (required : nat) (limit : tez) =
     m_num_owners;
     m_owners = owners;
     m_required = required;
-    m_pending = (Map : (operation_hash, pending_state) map);
+    m_pending = (Map : (operation_bytes, pending_state) map);
     m_daily_limit = limit;
     m_spent_today = 0tz;
     m_last = Current.time ();
@@ -64,7 +64,7 @@ let[@inline] onlyowner (storage:storage) =
   else Current.failwith ()
 
 let[@inline] clearPending (storage : storage) =
-  storage.m_pending <- (Map : (operation_hash, pending_state) map)
+  storage.m_pending <- (Map : (operation_bytes, pending_state) map)
 
 type check_result =
   | Confirmations_Needed of storage
@@ -73,8 +73,8 @@ type check_result =
 let confirmAndCheck ((op : wallet_operation), (storage: storage)) =
   let owner = Current.source () in
   if not (is_owner (owner, storage)) then Current.failwith ();
-  let oph = Crypto.blake2b (Bytes.pack op) in
-  let pending = match Map.find oph storage.m_pending with
+  let op_bytes = Bytes.pack op in
+  let pending = match Map.find op_bytes storage.m_pending with
     | None ->
       (* New operation *)
       { yetNeeded = storage.m_required;
@@ -90,7 +90,7 @@ let confirmAndCheck ((op : wallet_operation), (storage: storage)) =
   (* check if count is enough to go ahead *)
   if pending.yetNeeded <= 1p then
     let storage =
-      storage.m_pending <- (Map : (operation_hash, pending_state) map) in
+      storage.m_pending <- (Map : (operation_bytes, pending_state) map) in
     Execute storage
   else
     let new_yetNeeded = match%nat int pending.yetNeeded - 1 with
@@ -99,7 +99,7 @@ let confirmAndCheck ((op : wallet_operation), (storage: storage)) =
     in
     let pending = pending.yetNeeded <- new_yetNeeded in
     let pending = pending.ownersDone <- Set.add owner pending.ownersDone in
-    let storage = storage.m_pending <- Map.add oph pending storage.m_pending in
+    let storage = storage.m_pending <- Map.add op_bytes pending storage.m_pending in
     Confirmations_Needed storage
 (* [@@inline] *)
 
@@ -124,15 +124,15 @@ let has_confirmed ((op: wallet_operation), (owner: address), (storage:storage)) 
 let%entry revoke (op : wallet_operation) storage =
   onlyowner storage;
   let owner = Current.source () in
-  let oph = Crypto.blake2b (Bytes.pack op) in
-  match Map.find oph storage.m_pending with
+  let op_bytes = Bytes.pack op in
+  match Map.find op_bytes storage.m_pending with
   | None -> Current.failwith ()
   | Some pending ->
     if Set.mem owner pending.ownersDone then
       let pending = pending.yetNeeded <- pending.yetNeeded + 1p in
       let pending =
         pending.ownersDone <- Set.remove owner pending.ownersDone in
-      no_op, storage.m_pending <- Map.add oph pending storage.m_pending
+      no_op, storage.m_pending <- Map.add op_bytes pending storage.m_pending
     else no_op, storage
 
 
