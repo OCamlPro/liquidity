@@ -2164,6 +2164,8 @@ let predefined_constructors =
       "[]", ("'a list", Tunit);
       "Left", ("('a, 'b) variant", Tunit);
       "Right", ("('a, 'b) variant", Tunit);
+      "Map", ("('a, 'b) map", Tunit);
+      "Set", ("'a set", Tunit);
     ]
 
 let predefined_types =
