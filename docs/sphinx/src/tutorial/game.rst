@@ -220,9 +220,8 @@ this random number is quite useless.
 
   match storage.game with
   | None -> failwith "No game already started"
-  | Some game ->
-    let dest = Account.default game.player in
-    ...
+  | Some game -> ...
+
 
 The rest of the code in the entry point decides if the player won or
 lost, and generates the corresponding operations accordingly.
@@ -230,13 +229,12 @@ lost, and generates the corresponding operations accordingly.
 .. code-block:: OCaml
 
       if random_number < game.number then
-        (* Lose, transfer 0 for log *)
-        [ Contract.transfer ~dest ~amount:0tz ]
+        (* Lose *)
+        ([] : operation list)
 
 If the random number is smaller that the chosen number, the player
-lost. In this case, the money is kept by the smart contract. We could
-generate no operation, but we choose to transfer ``0tz`` as a way for
-the user to know she lost.
+lost. In this case no operation is generated and the money is kept by
+the smart contract.
 
 .. code-block:: OCaml
 
@@ -246,6 +244,7 @@ the user to know she lost.
           | None -> 0tz
           | Some (g, _) -> g in
         let reimbursed = game.bet + gain in
+        let dest = Account.default game.player in
         [ Contract.transfer ~dest ~amount:reimbursed ]
 
 Otherwise, if the random number is greater or equal to the previously
@@ -359,11 +358,11 @@ Remarks
 #. If the oracle looks for events in the last baked block (head), then
    it is possible that the current chain will be discarded and that
    the random number transaction appears in another chain. In this
-   case, the player that sees this happen can play another game with a
-   chosen number if he sees the random number in the mempool. To
-   mitigate that it is better to look for transactions in blocks with
-   multiple confirmations (*e.g.*, by looking at blocks 10 blocks in
-   the past).
+   case, the player that sees this happen could potentially play
+   another game with a chosen number if she sees the random number in
+   the mempool. However, in Tezos operations include a block hash to
+   designate a particular branch so the random number transaction
+   would not be valid in this other branch.
 
 
 
