@@ -261,6 +261,16 @@ module Michelson = struct
           | Tbigmap _ -> (":" ^ label) :: annots
           | _ -> ("%" ^ label) :: annots in
         bprint_type fmt b indent ty annots;
+      | [label_bigmap, (Tbigmap _ as ty_b); label_r, ty_r] ->
+        let indent = fmt.increase_indent indent in
+        Printf.bprintf b "(%s" ty_c;
+        let annots = if name = "" then annots else (":" ^ name) :: annots in
+        bprint_annots b annots;
+        Printf.bprintf b "%c%s" fmt.newline indent;
+        bprint_type fmt b indent ty_b [];
+        Printf.bprintf b "%c%s" fmt.newline indent;
+        bprint_type fmt b indent ty_r [];
+        Printf.bprintf b ")"
       | (label, ty) :: labels ->
         let annots = if name = "" then annots else (":" ^ name) :: annots in
         let indent = fmt.increase_indent indent in

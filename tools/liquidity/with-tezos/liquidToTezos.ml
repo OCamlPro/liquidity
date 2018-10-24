@@ -158,6 +158,12 @@ and convert_composed_type ty_c ~loc name labels =
         Micheline.Prim(loc, name, args, annots @ ["%"^l])
       | _ -> assert false
     end
+  | [lb, (Tbigmap _ as ty_b); lr, ty_r] ->
+    (* workaround for { lb : _ big_map; lr : _ } => pair *)
+    let annots = if name = "" then [] else [":"^name] in
+    let ty_b = convert_type ~loc ty_b in
+    let ty_r = convert_type ~loc ty_r in
+    prim_type ~loc ~annots ty_c [ty_b; ty_r]
   | (l, ty) :: labels ->
     let annots = if name = "" then [] else [":"^name] in
     let ty = match convert_type ~loc ty with
