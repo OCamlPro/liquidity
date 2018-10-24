@@ -3,7 +3,7 @@
 type game = {
   number : nat;
   bet : tez;
-  player : UnitContract.instance;
+  player : key_hash;
 }
 
 type storage = {
@@ -15,7 +15,7 @@ let%init storage (oracle_id : address) =
   { game = (None : game option); oracle_id }
 
 (* Start a new game *)
-let%entry play (number : nat) storage =
+let%entry play ((number : nat), (player : key_hash)) storage =
   if number > 100p then failwith "number must be <= 100";
   if 2p * Current.amount () > Current.balance () then
     failwith "I don't have enough money for this bet";
@@ -23,9 +23,6 @@ let%entry play (number : nat) storage =
   | Some g ->
     failwith ("Game already started with", g)
   | None ->
-    let player = match UnitContract.at (Current.sender ()) with
-      | None -> failwith "Sender must call with a UnitContract.instance"
-      | Some c -> c in
     let bet = Current.amount () in
     let storage = storage.game <- Some { number; bet; player } in
     (([] : operation list), storage)
@@ -41,17 +38,18 @@ let%entry finish (random_number : nat) storage =
   match storage.game with
   | None -> failwith "No game already started"
   | Some game ->
+    let dest = Account.default game.player in
     let ops =
       if random_number < game.number then
-        (* Lose *)
-        ([] : operation list)
+        (* Lose, transfer 0 for log *)
+        [ Contract.transfer ~dest ~amount:0tz ]
       else
         (* Win *)
         let gain = match (game.bet * game.number / 100p) with
           | None -> 0tz
           | Some (g, _) -> g in
         let reimbursed = game.bet + gain in
-        [ Contract.transfer ~dest:game.player ~amount:reimbursed ]
+        [ Contract.transfer ~dest ~amount:reimbursed ]
     in
     let storage = storage.game <- (None : game option) in
     (ops, storage)

@@ -83,7 +83,7 @@ The smart contract game manipulates a storage of the following type:
    type game = {
      number : nat;
      bet : tez;
-     player : UnitContract.instance;
+     player : key_hash;
    }
 
    type storage = {
@@ -102,8 +102,8 @@ A game consists in three values, stored in a record:
 #. ``number`` is the number chosen by the player.
 #. ``bet`` is the amount that was sent with the first transaction by
    the player. It constitute the bet amount.
-#. ``player`` is the contract which made the bet, and so the contract
-   that will be payed in the event of a win.
+#. ``player`` is the key hash (tz1...) on which the player who made
+   the bet wishes to be payed in the event of a win.
 
 We also give an initializer function that can be used to deploy the
 contract with an initial value. It takes as argument the address of
@@ -117,9 +117,11 @@ the oracle, which cannot be changed later on.
 The ``play`` entry point
 ~~~~~~~~~~~~~~~~~~~~~~~~
 
-The first entry point, ``play`` takes as argument a natural number
-parameter, which is the number chosen by the player, as well as the
-current storage of the smart contract.
+The first entry point, ``play`` takes as argument a pair composed of:
+- a natural number, which is the number chosen by the player
+- and a key hash, which is the address on which a player wishes to be
+  payed
+as well as the current storage of the smart contract.
 
 .. code-block:: OCaml
 
@@ -165,9 +167,6 @@ transfers.
 
 .. code-block:: OCaml
 
-   let player = match UnitContract.at (Current.sender ()) with
-     | None -> failwith "Sender must call with a UnitContract.instance"
-     | Some c -> c in
    let bet = Current.amount () in
    let storage = storage.game <- Some { number; bet; player } in
    (([] : operation list), storage)
@@ -221,8 +220,9 @@ this random number is quite useless.
 
   match storage.game with
   | None -> failwith "No game already started"
-  | Some game -> ...
-
+  | Some game ->
+    let dest = Account.default game.player in
+    ...
 
 The rest of the code in the entry point decides if the player won or
 lost, and generates the corresponding operations accordingly.
@@ -230,12 +230,13 @@ lost, and generates the corresponding operations accordingly.
 .. code-block:: OCaml
 
       if random_number < game.number then
-        (* Lose *)
-        ([] : operation list)
+        (* Lose, transfer 0 for log *)
+        [ Contract.transfer ~dest ~amount:0tz ]
 
 If the random number is smaller that the chosen number, the player
-lost. In this case no operation is generated and the money is kept by
-the smart contract.
+lost. In this case, the money is kept by the smart contract. We could
+generate no operation, but we choose to transfer ``0tz`` as a way for
+the user to know she lost.
 
 .. code-block:: OCaml
 
@@ -245,7 +246,7 @@ the smart contract.
           | None -> 0tz
           | Some (g, _) -> g in
         let reimbursed = game.bet + gain in
-        [ Contract.transfer ~dest:game.player ~amount:reimbursed ]
+        [ Contract.transfer ~dest ~amount:reimbursed ]
 
 Otherwise, if the random number is greater or equal to the previously
 chosen number, then the player won. We compute her gain and the
