@@ -11,6 +11,19 @@
 
 open LiquidTypes
 
+type env = {
+  vars : int StringMap.t;
+  in_lambda : bool
+}
+
+let empty_env = {
+  vars = StringMap.empty;
+  in_lambda = false
+}
+
+let register_var v depth env =
+  { env with vars = StringMap.add v depth env.vars }
+
 (********************
  * Helper functions *
  ********************)
@@ -84,7 +97,7 @@ let rec translate_code ~parameter_name ~storage_name code =
          of size depth, can be put on top of the stack with
          instruction DU*(depth-pos)P *)
       let pos = try
-          StringMap.find name env
+          StringMap.find name env.vars
         with Not_found ->
           LiquidLoc.raise_error ~loc
             "Internal Error(Michelson): variable %S not found\n%!"
@@ -146,7 +159,7 @@ let rec translate_code ~parameter_name ~storage_name code =
          remembering the depth at which this value can be found on the
          stack, and compiling the body *)
       let bnd_val = compile depth env bnd_val in
-      let env = StringMap.add bnd_var.nname depth env in
+      let env = register_var bnd_var.nname depth env in
       let depth = depth + 1 in
       let body = compile depth env body in
       let cleanup_stack = [ ii ~loc @@ DIP_DROP (1, 1) ] in
@@ -156,8 +169,8 @@ let rec translate_code ~parameter_name ~storage_name code =
       assert false (* encoded *)
 
     | Lambda { arg_name; arg_ty; body; ret_ty; recursive = None } ->
-      let env = StringMap.empty in
-      let env = StringMap.add arg_name.nname 0 env in
+      let env = { empty_env with in_lambda = true } in
+      let env = register_var arg_name.nname 0 env in
       let depth = 1 in
       let arg_type = LiquidEncode.encode_type arg_ty in
       let res_type = LiquidEncode.encode_type ret_ty in
@@ -233,7 +246,7 @@ let rec translate_code ~parameter_name ~storage_name code =
          binding for Some, at the end. *)
       let arg = compile depth env arg in
       let ifnone = compile depth env ifnone in
-      let env = StringMap.add some_name.nname depth env in
+      let env = register_var some_name.nname depth env in
       let depth = depth + 1 in
       let ifsome = compile depth env ifsome in
       let loc2, loc3 = loc_of_many ifnone, loc_of_many ifsome in
@@ -243,9 +256,9 @@ let rec translate_code ~parameter_name ~storage_name code =
     | MatchNat { arg; plus_name; ifplus; minus_name; ifminus } ->
       (* match%nat is compiled with ABS *)
       let arg = compile depth env arg in
-      let env' = StringMap.add plus_name.nname depth env in
+      let env' = register_var plus_name.nname depth env in
       let ifplus = compile (depth + 1) env' ifplus in
-      let env'' = StringMap.add minus_name.nname depth env in
+      let env'' = register_var minus_name.nname depth env in
       let ifminus = compile (depth + 1) env'' ifminus in
       let loc2, loc3 = loc_of_many ifplus, loc_of_many ifminus in
       let (ifplus_end, ifminus_end) =
@@ -260,8 +273,8 @@ let rec translate_code ~parameter_name ~storage_name code =
       (* Pattern matching on lists. Compiled with IF_CONS *)
       let arg = compile depth env arg in
       let ifnil = compile depth env ifnil in
-      let env = StringMap.add tail_name.nname depth env in
-      let env = StringMap.add head_name.nname (depth+1) env in
+      let env = register_var tail_name.nname depth env in
+      let env = register_var head_name.nname (depth+1) env in
       let depth = depth + 2 in
       let ifcons = compile depth env ifcons in
       let loc2, loc3 = loc_of_many ifnil, loc_of_many ifcons in
@@ -280,7 +293,7 @@ let rec translate_code ~parameter_name ~storage_name code =
             | _ :: _ :: _ -> assert false
             | [] -> env, depth, [ii ~loc DROP], []
             | [arg_name] ->
-              let env = StringMap.add arg_name depth env in
+              let env = register_var arg_name depth env in
               let depth = depth + 1 in
               let left_end = [ii ~loc @@ DIP_DROP(1,1)] in
               let arg_annot = compile_arg_name arg_name in
@@ -299,7 +312,7 @@ let rec translate_code ~parameter_name ~storage_name code =
 
     | Loop { arg_name; body; arg } ->
       let arg = compile depth env arg in
-      let env = StringMap.add arg_name.nname depth env in
+      let env = register_var arg_name.nname depth env in
       let depth = depth + 1 in
       let arg_annot = compile_arg_name arg_name.nname in
       let body = compile depth env body in
@@ -318,7 +331,7 @@ let rec translate_code ~parameter_name ~storage_name code =
       let acc = compile depth env acc in
       let depth = depth + 1 in
       let arg = compile depth env arg in
-      let env = StringMap.add arg_name.nname depth env in
+      let env = register_var arg_name.nname depth env in
       let depth = depth + 1 in
       let arg_annot = compile_arg_name arg_name.nname in
       let body = compile depth env body in
@@ -338,7 +351,7 @@ let rec translate_code ~parameter_name ~storage_name code =
         | Tor (_, right_ty) -> right_ty
         | _ -> assert false in
       let arg = compile depth env arg in
-      let env = StringMap.add arg_name.nname depth env in
+      let env = register_var arg_name.nname depth env in
       let depth = depth + 1 in
       let arg_annot = compile_arg_name arg_name.nname in
       let body = compile depth env body in
@@ -350,7 +363,7 @@ let rec translate_code ~parameter_name ~storage_name code =
       let acc = compile depth env acc in
       let depth = depth + 1 in
       let arg = compile depth env arg in
-      let env = StringMap.add arg_name.nname depth env in
+      let env = register_var arg_name.nname depth env in
       let depth = depth + 1 in
       let arg_annot = compile_arg_name arg_name.nname in
       let body = compile depth env body in
@@ -366,7 +379,7 @@ let rec translate_code ~parameter_name ~storage_name code =
 
     | Map { arg_name; body; arg } ->
       let arg = compile depth env arg in
-      let env = StringMap.add arg_name.nname depth env in
+      let env = register_var arg_name.nname depth env in
       let depth = depth + 1 in
       let arg_annot = compile_arg_name arg_name.nname in
       let body = compile depth env body in
@@ -378,7 +391,7 @@ let rec translate_code ~parameter_name ~storage_name code =
       let acc = compile depth env acc in
       let depth = depth + 1 in
       let arg = compile depth env arg in
-      let env = StringMap.add arg_name.nname depth env in
+      let env = register_var arg_name.nname depth env in
       let depth = depth + 1 in
       let arg_annot = compile_arg_name arg_name.nname in
       let body = compile depth env body in
@@ -451,6 +464,11 @@ let rec translate_code ~parameter_name ~storage_name code =
       let set_code = compile_tuple_set ~loc is_last (depth+1) env n y in
       x_code @ set_code
     | Prim_tuple_set, _ -> assert false
+
+    | Prim_self, _ when env.in_lambda ->
+      LiquidLoc.raise_error ~loc
+        "Typing error: \
+         Current.self is not allowed inside non-inlined functions\n%!"
 
     | Prim_self, _ -> [ ii SELF ]
     | Prim_balance, _ -> [ ii BALANCE ]
@@ -733,9 +751,9 @@ let rec translate_code ~parameter_name ~storage_name code =
      storage) to have a stack with parameter :: storage (parameter on
      top). *)
 
-  let env = StringMap.empty in
-  let env = StringMap.add storage_name 0 env in
-  let env = StringMap.add parameter_name 1 env in
+  let env = empty_env in
+  let env = register_var storage_name 0 env in
+  let env = register_var parameter_name 1 env in
   let depth = 2 in
 
   let exprs = compile depth env code in
