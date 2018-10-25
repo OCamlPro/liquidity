@@ -487,6 +487,9 @@ let rec decr_counts_vars env e =
       decr_counts_vars env arg;
       List.iter (fun (_, e) -> decr_counts_vars env e) cases
 
+    | TypeAnnot { e } ->
+      decr_counts_vars env e
+
 
 (* Encode a Liquidity expression *)
 let rec encode env ( exp : typed_exp ) : encoded_exp =
@@ -948,6 +951,10 @@ let rec encode env ( exp : typed_exp ) : encoded_exp =
       LiquidSimplify.simplify_contract ~decompile_annoted:env.decompiling
         contract c_to_inline in
     mk ?name:exp.name ~loc (CreateContract { args; contract }) exp.ty
+
+  | TypeAnnot { e; ty } ->
+    let e = encode env e in
+    mk ?name:exp.name ~loc (TypeAnnot { e; ty }) exp.ty
 
 
 and encode_apply name env prim loc args ty =

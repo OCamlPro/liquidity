@@ -646,6 +646,11 @@ let rec convert_code ~abbrev (expr : (datatype, 'a) exp) =
          [ Nolabel, convert_code ~abbrev arg ])
       (convert_type ~abbrev (Toption ty))
 
+  | TypeAnnot { e; ty } ->
+    Exp.constraint_ ~loc
+      (convert_code ~abbrev e)
+      (convert_type ~abbrev ty)
+
 
 and structure_item_of_entry ~abbrev storage_caml entry =
   (* ignore (convert_type ~abbrev ~name:entry.entry_sig.parameter_name

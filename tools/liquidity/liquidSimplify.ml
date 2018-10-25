@@ -62,6 +62,8 @@ let rec compute decompile code to_inline =
 
     | CreateContract { args }  ->
       List.fold_left (fun acc e -> acc + size e) 1 args
+
+    | TypeAnnot _ -> 0
   in
 
 
@@ -273,6 +275,10 @@ let rec compute decompile code to_inline =
     | Constructor { constr; arg } ->
       let arg = iter arg in
       { exp with desc = Constructor { constr; arg } }
+
+    | TypeAnnot { e; ty } ->
+      let e = iter e in
+      { exp with desc = TypeAnnot { e; ty } }
   in
 
   let rec fixpoint code =

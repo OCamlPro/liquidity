@@ -178,6 +178,10 @@ let rec decode ( exp : encoded_exp ) : typed_exp =
     let contract = decode_contract contract in
     mk ?name:exp.name ~loc (CreateContract { args; contract }) exp.ty
 
+  | TypeAnnot { e; ty } ->
+    let e = decode e in
+    mk ?name:exp.name ~loc (TypeAnnot { e; ty }) exp.ty
+
 (* Recover entry point from a pattern matchin branch *)
 and entry_of_case param_constrs top_storage (pat, body) =
   match pat, body.desc with

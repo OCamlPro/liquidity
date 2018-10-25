@@ -1009,12 +1009,16 @@ let rec translate_code contracts env exp =
       } ], body) } ->
       let bnd_val = translate_code contracts env var_exp in
       let body = translate_code contracts env body in
-      let bnd_var, _, body = deconstruct_pat env pat body in
+      let bnd_var, ty, body = deconstruct_pat env pat body in
       let inline = match attrs with
         | [ { txt = "inline"} , PStr [] ] -> true
         | _ -> false in
+      let bnd_val =
+        match pat.ppat_desc with
+        | Ppat_constraint _ -> mk ~loc (TypeAnnot { e = bnd_val; ty = ty })
+        | _ -> bnd_val
+      in
       Let { bnd_var; inline; bnd_val; body }
-
 
     (* Special (limited) form for recursive functions:
        let rec f = fun ... -> ... f ... *)
@@ -1476,11 +1480,8 @@ let rec translate_code contracts env exp =
           end
 
         | { pexp_desc = Pexp_constraint (exp, ty); pexp_loc } ->
-          (* ignore type constraint for others *)
-          LiquidLoc.warn loc
-            (IgnoredTypeAnnot
-               (Format.asprintf "%a" LiquidOCamlPrinter.core_type ty));
-          (translate_code contracts env exp).desc
+           TypeAnnot { e = translate_code contracts env exp;
+                       ty = translate_type env ty }
 
         | { pexp_loc } ->
           error_loc pexp_loc

@@ -196,6 +196,11 @@ let rec subst_empty_big_map storage_ty code =
       if arg == arg' then desc
       else Unpack { arg = arg'; ty }
 
+    | TypeAnnot { e; ty } ->
+      let e' = subst_empty_big_map storage_ty e in
+      if e == e' then desc
+      else TypeAnnot { e = e'; ty }
+
   in
   if desc == code.desc then
     code

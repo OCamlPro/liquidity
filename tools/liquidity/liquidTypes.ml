@@ -834,6 +834,10 @@ and ('ty, 'a) exp_desc =
   (** Unpacking bytes with type annotation:
       {[ (Bytes.unpack arg : ty option) ]} *)
 
+  | TypeAnnot of { e: ('ty, 'a) exp;
+                   ty: datatype }
+  (** Type annotation: {[ (e : ty) ]} *)
+
 
 (** Ghost type for typed expressions *)
 type typed
@@ -908,6 +912,9 @@ let mk =
       | CreateContract { args } ->
         List.exists (fun e -> e.fail) args,
         true
+
+      | TypeAnnot { e } ->
+        e.fail, false (* e.transfer *)
 
     in
     { desc; name; loc; ty; bv; fail; transfer }
@@ -1018,6 +1025,8 @@ let rec eq_exp_desc eq_ty eq_var e1 e2 = match e1, e2 with
            eq_exp eq_ty eq_var e1.code e2.code
          ) c1.contract.entries c2.contract.entries
      with Invalid_argument _ -> false)
+  | TypeAnnot a1, TypeAnnot a2 ->
+     eq_exp eq_ty eq_var a1.e a2.e && eq_types a1.ty a2.ty
   | _, _ -> false
 
 (** Generic equality between expressions modulo location, renaming, etc. *)
@@ -1299,7 +1308,6 @@ let dummy_contract_sig = {
 type warning =
   | Unused of string
   | UnusedMatched of string
-  | IgnoredTypeAnnot of string
   | NotRecursive of string
 
 (** {2 Reserved symbols in parsing }  *)

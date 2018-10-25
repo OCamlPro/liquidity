@@ -134,6 +134,8 @@ let rec bv code =
   | ContractAt { arg }
   | Unpack { arg } -> bv arg
 
+  | TypeAnnot { e } -> bv e
+
 
 let mk desc exp bv = { exp with desc; bv }
 
@@ -395,6 +397,12 @@ let rec bound code =
     let arg = bound arg in
     let desc = Unpack { arg; ty } in
     mk desc code arg.bv
+
+  | TypeAnnot { e; ty } ->
+    let e = bound e in
+    let bv = e.bv in
+    let desc = TypeAnnot { e; ty } in
+    mk desc code bv
 
 and bound_entry entry =
   let c = bound entry.code in

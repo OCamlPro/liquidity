@@ -1274,7 +1274,13 @@ module Liquid = struct
       Printf.bprintf b " : ";
       bprint_type b (indent ^ "  ") (Toption ty);
       Printf.bprintf b ")"
-
+    | TypeAnnot { e; ty } ->
+      Printf.bprintf b "\n%s(" indent;
+      let indent2 = indent ^ "  " in
+      bprint_code_rec ~debug b indent2 e;
+      Printf.bprintf b " : ";
+      bprint_type b (indent ^ "  ") ty;
+      Printf.bprintf b ")"
 
   let rec bprint_code_types ~debug b indent code =
     bprint_code_base

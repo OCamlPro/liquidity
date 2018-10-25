@@ -434,6 +434,10 @@ let rec translate_code ~parameter_name ~storage_name code =
       (* removed during typechecking, replaced by tuple *)
       assert false
 
+    | TypeAnnot _ ->
+      (* removed during typechecking *)
+      assert false
+
   (* Compile a Liquidity application (prim args) *)
   and compile_prim ~loc depth env prim args =
     let ii = ii ~loc in

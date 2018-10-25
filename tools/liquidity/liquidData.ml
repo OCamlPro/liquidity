@@ -118,6 +118,8 @@ let rec translate_const_exp (exp : encoded_exp) =
   | Apply { prim = Prim_tuple; args } ->
     CTuple (List.map translate_const_exp args)
 
+  | TypeAnnot { e } -> translate_const_exp e
+
   | Apply _
   | Var _
   | SetField _

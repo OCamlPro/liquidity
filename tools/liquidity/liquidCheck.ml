@@ -790,7 +790,7 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
   | CreateContract { args; contract } ->
     let contract = typecheck_contract ~warnings:env.warnings
         ~decompiling:env.decompiling contract in
-    match args with
+    begin match args with
     | [manager; delegate; spendable; delegatable; init_balance; init_storage] ->
       let manager = typecheck_expected "manager" env Tkey_hash manager in
       let delegate =
@@ -810,6 +810,10 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
     | _ ->
       error loc "Contract.create expects 7 arguments, was given %d"
         (List.length args)
+    end
+
+  | TypeAnnot { e; ty } ->
+     typecheck_expected "annotated expression" env ty e
 
 and find_case loc env constr cases =
   match List.find_all (function

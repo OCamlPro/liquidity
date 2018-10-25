@@ -237,6 +237,8 @@ let rec untype (env : env) (code : (datatype, 'a) exp) : (datatype, 'b) exp =
     | Record fields ->
       Record (List.map (fun (l, e) -> l, untype env e) fields)
 
+    | TypeAnnot { e; ty } ->
+      TypeAnnot { e = untype env e; ty }
   (* | _ ->
    *
    *    LiquidLoc.raise_error
