@@ -483,6 +483,9 @@ let main () =
       "--compact", Arg.Set LiquidOptions.singleline,
       " Produce compact Michelson";
 
+      "--no-annot", Arg.Set LiquidOptions.no_annot,
+      " Don't produce any annotations when compiling";
+
       "--json", Arg.Set LiquidOptions.json,
       " Output Michelson in JSON representation";
 

@@ -121,9 +121,10 @@ module Michelson = struct
     Buffer.contents b
 
   let bprint_annots b annots =
-    match annots with
-    | [] -> ()
-    | _ -> Printf.bprintf b "%s" (String.concat " " ("" :: annots))
+    if not !LiquidOptions.no_annot then
+      match annots with
+      | [] -> ()
+      | _ -> Printf.bprintf b "%s" (String.concat " " ("" :: annots))
 
   let bprint_wrap_annots b bprint_type annots =
     match annots with
@@ -382,13 +383,17 @@ module Michelson = struct
       Printf.bprintf b ")";
       ()
 
-  let annot = function
-    | Some s -> " @" ^ s
-    | None -> ""
+  let annot a =
+    if !LiquidOptions.no_annot then ""
+    else match a with
+      | Some s -> " @" ^ s
+      | None -> ""
 
-  let annots_to_string = function
-    | [] -> ""
-    | annots -> " " ^ String.concat " " annots
+  let annots_to_string annots =
+    if !LiquidOptions.no_annot then ""
+    else match annots with
+      | [] -> ""
+      | annots -> " " ^ String.concat " " annots
 
   let rec bprint_code fmt b indent code =
     match code with
@@ -475,13 +480,17 @@ module Michelson = struct
         Printf.bprintf b "%c" fmt.newline;
       ) contract
 
-  let bprint_pre_name b name = match name with
-    | Some name -> Printf.bprintf b " @%s " name
-    | None -> ()
+  let bprint_pre_name b name =
+    if not !LiquidOptions.no_annot then
+      match name with
+      | Some name -> Printf.bprintf b " @%s " name
+      | None -> ()
 
-  let bprint_pre_field b = function
-    | Some field -> Printf.bprintf b " %%%s " field
-    | None -> ()
+  let bprint_pre_field b f =
+    if not !LiquidOptions.no_annot then
+      match f with
+      | Some field -> Printf.bprintf b " %%%s " field
+      | None -> ()
 
   let bprint_pre_michelson fmt bprint_arg b name = function
     | RENAME name ->

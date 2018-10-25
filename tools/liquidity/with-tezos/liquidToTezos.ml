@@ -27,13 +27,15 @@ let prim ~loc ?(fields=[]) name args var_name =
     | Some s -> ("@" ^ s) :: annots
     | None -> annots
   in
-  Micheline.Prim(loc, name, args, annots)
+  Micheline.Prim(loc, name, args,
+                 if !LiquidOptions.no_annot then [] else annots)
 
 let seq ~loc exprs =
   Micheline.Seq(loc, exprs)
 
 let prim_type ~loc ?(annots=[]) name args =
-  Micheline.Prim(loc, name, args, annots)
+  Micheline.Prim(loc, name, args,
+                 if !LiquidOptions.no_annot then [] else annots)
 
 let rec convert_const ~loc expr =
   let bytes_of_hex s =
@@ -153,9 +155,9 @@ and convert_composed_type ty_c ~loc name labels =
   | [l, ty] ->
     begin match convert_type ~loc ty with
       | Micheline.Prim(loc, "big_map", args, annots) ->
-        Micheline.Prim(loc, "big_map", args, [":"^l])
+        prim_type ~loc "big_map" args ~annots:[":"^l]
       | Micheline.Prim(loc, name, args, annots) ->
-        Micheline.Prim(loc, name, args, annots @ ["%"^l])
+        prim_type ~loc name args ~annots:(annots @ ["%"^l])
       | _ -> assert false
     end
   | [lb, (Tbigmap _ as ty_b); lr, ty_r] ->
@@ -168,9 +170,9 @@ and convert_composed_type ty_c ~loc name labels =
     let annots = if name = "" then [] else [":"^name] in
     let ty = match convert_type ~loc ty with
       | Micheline.Prim(loc, "big_map", args, annots) ->
-        Micheline.Prim(loc, "big_map", args, [":"^l])
+        prim_type ~loc "big_map" args ~annots:[":"^l]
       | Micheline.Prim(loc, name, args, annots) ->
-        Micheline.Prim(loc, name, args, annots @ ["%"^l])
+        prim_type ~loc name args ~annots:(annots @ ["%"^l])
       | _ -> assert false in
     prim_type ~loc ~annots ty_c
       [ty; convert_composed_type ty_c ~loc "" labels]

@@ -171,6 +171,11 @@ let add_name stack seq name =
     end;
   | [] -> ()
 
+let remove_name stack =
+  match stack with
+  | x :: _ -> x.node_name <- None
+  | [] -> ()
+
 let add_name_to_ins stack seq ins =
   match ins.loc_name, ins.ins, stack with
   | Some _, FAILWITH, _ -> ()
@@ -317,6 +322,10 @@ let rec interp contract =
     match ins.ins, stack with
     | RENAME (Some name), _ ->
       add_name stack seq name;
+      stack, seq
+
+    | RENAME None, _ ->
+      remove_name stack;
       stack, seq
 
     | SEQ exprs, _ ->

@@ -37,6 +37,9 @@ let json = ref false
 (** Ignore Michelson type annotations ([%c] and [:t]) when decompiling *)
 let ignore_annots = ref false
 
+(** Don't produce any annotations when compiling *)
+let no_annot = ref false
+
 (** Name of main contract when compiling *)
 let main = ref (None : string option)
 
