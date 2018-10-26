@@ -181,17 +181,13 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
   | Let { bnd_var; inline; bnd_val; body } ->
     let bnd_val = typecheck env bnd_val in
     if bnd_val.ty = Tfail then
-      match bnd_val.desc with
-      | Failwith _ -> bnd_val
-      | _ ->
-        mk (Failwith (mk (Const { ty = Tunit; const = CUnit }) ~loc Tunit))
-          ~loc Tfail
-    else
-      let (env, count) = new_binding env bnd_var.nname ~fail:exp.fail bnd_val.ty in
-      let body = typecheck env body in
-      let desc = Let { bnd_var; inline; bnd_val; body } in
-      check_used env bnd_var count;
-      mk ?name:exp.name ~loc desc body.ty
+      LiquidLoc.warn bnd_val.loc AlwaysFails;
+    let (env, count) =
+      new_binding env bnd_var.nname ~fail:exp.fail bnd_val.ty in
+    let body = typecheck env body in
+    let desc = Let { bnd_var; inline; bnd_val; body } in
+    check_used env bnd_var count;
+    mk ?name:exp.name ~loc desc body.ty
 
   | Var v -> find_var env loc v
 
@@ -229,6 +225,7 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
 
   | Seq (exp1, exp2) ->
     let exp1 = typecheck_expected "sequence" env Tunit exp1 in
+    if exp1.ty = Tfail then LiquidLoc.warn exp1.loc AlwaysFails;
     let exp2 = typecheck env exp2 in
     let desc = Seq (exp1, exp2) in
     (* TODO: if not fail1 then remove exp1 *)

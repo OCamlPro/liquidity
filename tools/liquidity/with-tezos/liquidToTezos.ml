@@ -141,7 +141,7 @@ let rec convert_type ~loc expr =
   | Toption x -> prim_type ~loc "option" [convert_type ~loc x]
   | Trecord (name, labels) -> convert_record_type ~loc name labels
   | Tsum (name, constrs) -> convert_sum_type ~loc name constrs
-  | Tfail -> assert false
+  | Tfail -> convert_type ~loc Tunit (* use unit for failures *)
 
 and convert_record_type ~loc name labels =
   convert_composed_type "pair" ~loc name labels

@@ -146,7 +146,7 @@ module Michelson = struct
   let bprint_type_base fmt b indent ty annots =
     let rec bprint_type_rec fmt b indent ty annots =
       match ty with
-      | Tfail -> Printf.bprintf b "failure"
+      | Tfail -> Printf.bprintf b "unit" (* use unit for failure in michelson *)
       | Tunit -> Printf.bprintf b "unit"
       | Tbool -> Printf.bprintf b "bool"
       | Tint -> Printf.bprintf b "int"

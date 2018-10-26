@@ -1309,6 +1309,7 @@ type warning =
   | Unused of string
   | UnusedMatched of string
   | NotRecursive of string
+  | AlwaysFails
 
 (** {2 Reserved symbols in parsing }  *)
 
