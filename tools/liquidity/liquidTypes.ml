@@ -1392,9 +1392,7 @@ let rec lift_type env ty = match ty with
     Tclosure ((lift_type env t1, lift_type env t2), lift_type env t3)
 
 and lift_contract_sig env c_sig =
-      { sig_name = (match c_sig.sig_name with
-            | None -> None
-            | Some s -> Some (lift_name env s));
+      { sig_name = c_sig.sig_name;
         entries_sig = List.map (fun es ->
             { es with parameter = lift_type env es.parameter }
           ) c_sig.entries_sig

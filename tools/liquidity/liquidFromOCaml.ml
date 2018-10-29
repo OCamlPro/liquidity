@@ -179,9 +179,7 @@ let lift_env rename = function
       | Tclosure ((t1, t2), t3) ->
         Tclosure ((lift_type t1, lift_type t2), lift_type t3)
     and lift_contract_sig c_sig =
-      { sig_name = (match c_sig.sig_name with
-            | None -> None
-            | Some s -> Some (lift_name s));
+      { sig_name = c_sig.sig_name;
         entries_sig = List.map (fun es ->
             { es with parameter = lift_type es.parameter }
           ) c_sig.entries_sig
@@ -2090,7 +2088,7 @@ and translate_structure env acc ast : syntax_contract option =
           let lift_type = lift_inner_env contract.ty_env in
           let contract_sig = sig_of_contract contract in
           let contract_sig =
-            { contract_sig with
+            { sig_name = Some contract_name;
               entries_sig = List.map (fun es ->
                   { es with parameter = lift_type es.parameter }
                 ) contract_sig.entries_sig
@@ -2322,7 +2320,7 @@ let translate_multi l =
               let lift_type = lift_inner_env env in
               let contract_sig = sig_of_contract contract in
               let contract_sig =
-                { contract_sig with
+                { sig_name = Some contract.contract_name;
                   entries_sig = List.map (fun es ->
                       { es with parameter = lift_type es.parameter }
                     ) contract_sig.entries_sig
