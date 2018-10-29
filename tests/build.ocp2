@@ -1,3 +1,6 @@
+List = module("ocp-build:List", "1.0");
+
+tezos_test_dir = "../tezos/src/bin_client/test/contracts/";
 
 OCaml.library("ocplib-liquidity-examples",
   ocaml + {
@@ -46,12 +49,14 @@ OCaml.library("ocplib-liquidity-examples",
                   "test_extfun.liq";
                   "test_ifcons.liq";
                   "test_if.liq";
+                  "test_iter.liq";
                   "test_left_constr.liq";
                   "test_left.liq";
                   "test_left_match.liq";
                   "test_loop.liq";
                   "test_option.liq";
                   "test_right_constr.liq";
+                  "test_call.liq";
                   "test_transfer.liq";
                   "test_closure.liq";
                   "test_closure2.liq";
@@ -63,6 +68,9 @@ OCaml.library("ocplib-liquidity-examples",
                   "test_mapreduce_closure.liq";
                   "test_mapmap_closure.liq";
                   "test_setreduce_closure.liq";
+                  "test_inline.liq";
+                  "test_rec_fun.liq";
+                  "test19.liq";
          ];
        };
 
@@ -72,6 +80,9 @@ OCaml.library("ocplib-liquidity-examples",
                   "others/broker.liq";
                   "others/auction.liq";
                   "others/multisig.liq";
+                  "others/game.liq";
+                  "others/mist_wallet_current.liq";
+                  "others/mist_wallet_light.liq";
           ];
        };
 
@@ -83,9 +94,151 @@ OCaml.library("ocplib-liquidity-examples",
                      "reverse/test3.tz";
                      "reverse/test4.tz";
                      "reverse/test5.tz";
+                     "reverse/test6.tz";
+                     "reverse/test7.tz";
+                     "reverse/test8.tz";
+                     "reverse/test9.tz";
           ];
        };
+    ];
+  });
 
+if( with_tezos ) {
+
+  OCaml.library("ocplib-tezos-examples",
+    ocaml + {
+    files = [
+
+       "liquidTestTezos.ml", {
+         file2string = List.map (function (file){
+             return tezos_test_dir + file;
+           }, [ "accounts.tz";
+                "add1_list.tz";
+                "add1.tz";
+                "add_delta_timestamp.tz";
+                "add_timestamp_delta.tz";
+                "after_strategy.tz";
+                "always.tz";
+                "and.tz";
+                "append.tz";
+                "assert_cmpeq.tz";
+                "assert_cmpge.tz";
+                "assert_cmpgt.tz";
+                "assert_cmple.tz";
+                "assert_cmplt.tz";
+                "assert_cmpneq.tz";
+                "assert_eq.tz";
+                "assert_ge.tz";
+                "assert_gt.tz";
+                "assert_le.tz";
+                "assert_lt.tz";
+                "assert_neq.tz";
+                "assert.tz";
+                "at_least.tz";
+                "auction.tz";
+                "bad_lockup.tz";
+                "balance.tz";
+                "big_map_get_add.tz";
+                "big_map_mem.tz";
+                "big_map_union.tz";
+                "build_list.tz";
+                "cadr_annotation.tz";
+                "check_signature.tz";
+                "compare.tz";
+                "concat_list.tz";
+                "concat.tz";
+                "conditionals.tz";
+                "cons_twice.tz";
+                "contains_all.tz";
+                "cps_fact.tz";
+                "create_account.tz";
+                "create_add1_lists.tz";
+                "create_contract.tz";
+                "data_publisher.tz";
+                "default_account.tz";
+                "diff_timestamps.tz";
+                "dispatch.tz";
+                "empty_map.tz";
+                "empty.tz";
+                "exec_concat.tz";
+                "fail_amount.tz";
+                "fail.tz";
+                "faucet.tz";
+                "first.tz";
+                "forward.tz";
+                "get_map_value.tz";
+                "hardlimit.tz";
+                "hash_consistency_checker.tz";
+                "hash_key.tz";
+                "hash_string.tz";
+                "id.tz";
+                "if_some.tz";
+                "if.tz";
+                "infinite_loop.tz";
+                "insertion_sort.tz";
+                "int_publisher.tz";
+                "king_of_tez.tz";
+                "list_id_map.tz";
+                "list_id.tz";
+                "list_iter2.tz";
+                "list_iter.tz";
+                "list_map_block.tz";
+                "list_of_transactions.tz";
+                "lockup.tz";
+                "macro_annotations.tz";
+                "loop_left.tz";
+                "map_caddaadr.tz";
+                "map_car.tz";
+                "map_id.tz";
+                "map_iter.tz";
+                "map_size.tz";
+                "max_in_list.tz";
+                "min.tz";
+                "noop.tz";
+                "not.tz";
+                "originator.tz";
+                "or.tz";
+                "packunpack.tz";
+                "pair_id.tz";
+                "pair_macro.tz";
+                "parameterized_multisig.tz";
+                "queue.tz";
+                "reduce_map.tz";
+                "reentrancy.tz";
+                "replay.tz";
+                "reservoir.tz";
+                "ret_int.tz";
+                "reveal_signed_preimage.tz";
+                "reverse_loop.tz";
+                "reverse.tz";
+                "scrutable_reservoir.tz";
+                "self.tz";
+                "set_caddaadr.tz";
+                "set_car.tz";
+                "set_cdr.tz";
+                "set_id.tz";
+                "set_iter.tz";
+                "set_member.tz";
+                "set_size.tz";
+                "spawn_identities.tz";
+                "steps_to_quota.tz";
+                "store_input.tz";
+                "store_now.tz";
+                "str_id.tz";
+                "subset.tz";
+                "sub_timestamp_delta.tz";
+                "swap_left_right.tz";
+                "take_my_money.tz";
+                "tez_add_sub.tz";
+                "transfer_amount.tz";
+                "transfer_to.tz";
+                "unpair_macro.tz";
+                "vote_for_delegate.tz";
+                "weather_insurance.tz";
+                "xor.tz";
+              ]);
+       };
 
     ];
   });
+}

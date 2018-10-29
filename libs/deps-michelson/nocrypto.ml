@@ -115,18 +115,22 @@ module Hash = struct
     let digest_size = H.digest_size
     let init = H.init
     let feed ctx b = H.feed_bytes ctx (Cstruct.to_bytes b)
-    let get c = Cstruct.of_string ((H.get c) :> string)
+    let get c = Cstruct.of_string (H.to_raw_string (H.get c))
     let digest b =
-      (H.digest_bytes (Cstruct.to_bytes b) :> string)
+      H.digest_bytes (Cstruct.to_bytes b)
+      |> H.to_raw_string
       |> Cstruct.of_string
     let digestv bs =
-      (H.digestv_bytes (List.map Cstruct.to_bytes bs) :> string)
+      H.digestv_bytes (List.map Cstruct.to_bytes bs)
+      |> H.to_raw_string
       |> Cstruct.of_string
     let hmac ~key b =
-      (H.hmac_bytes ~key:(Cstruct.to_bytes key) (Cstruct.to_bytes b) :> string)
+      H.hmac_bytes ~key:(Cstruct.to_bytes key) (Cstruct.to_bytes b)
+      |> H.to_raw_string
       |> Cstruct.of_string
     let hmacv ~key bs =
-      (H.hmacv_bytes ~key:(Cstruct.to_bytes key) (List.map Cstruct.to_bytes bs) :> string)
+      H.hmacv_bytes ~key:(Cstruct.to_bytes key) (List.map Cstruct.to_bytes bs)
+      |> H.to_raw_string
       |> Cstruct.of_string
     let compare = Cstruct.compare
     let eq = Cstruct.equal

@@ -5,7 +5,8 @@
 (*    All rights reserved. No warranty, explicit or implicit, provided.   *)
 (*                                                                        *)
 (**************************************************************************)
-[%%version 0.36]
+
+[%%version 0.402]
 
 type pending_state = {
   yetNeeded : nat;
@@ -13,46 +14,48 @@ type pending_state = {
 }
 
 type transaction = {
-  destination : unit contract;
+  destination : UnitContract.instance;
   amount : tez;
 }
 
 type wallet_operation =
-  | Transaction of transaction
+  | Withdraw of transaction
   | ChangeOwner of address * address
   | AddOwner of address
   | RemoveOwner of address
   | ChangeRequirement of nat
 
-type parameter =
-  | Operation of wallet_operation
-  | Deposit
-  | Revoke of wallet_operation
-
-type operation_hash = bytes
+type operation_bytes = bytes
 
 type storage = {
   m_required : nat;
   m_num_owners : nat;
   m_owners : address set;
-  m_pending : (operation_hash, pending_state) map;
+  m_pending : (operation_bytes, pending_state) map;
 }
 
-let no_op = ([] : operation list) [@@inline]
+let%init storage (owners : address set) (required : nat) =
+  let m_num_owners = Set.size owners in
+  if required > m_num_owners then Current.failwith ();
+  {
+    m_num_owners;
+    m_owners = owners;
+    m_required = required;
+    m_pending = (Map : (operation_bytes, pending_state) map);
+  }
 
-let is_owner ((addr : address), (storage:storage)) =
+let[@inline] no_op = ([] : operation list)
+
+let[@inline] is_owner ((addr : address), (storage:storage)) =
   Set.mem addr storage.m_owners
-[@@inline]
 
-let onlyowner (storage:storage) =
+let[@inline] onlyowner (storage:storage) =
   if is_owner (Current.source (), storage)
   then ()
   else Current.failwith ()
-[@@inline]
 
-let clearPending (storage : storage) =
-  storage.m_pending <- (Map : (operation_hash, pending_state) map)
-[@@inline]
+let[@inline] clearPending (storage : storage) =
+  storage.m_pending <- (Map : (operation_bytes, pending_state) map)
 
 type check_result =
   | Confirmations_Needed of storage
@@ -61,8 +64,8 @@ type check_result =
 let confirmAndCheck ((op : wallet_operation), (storage: storage)) =
   let owner = Current.source () in
   if not (is_owner (owner, storage)) then Current.failwith ();
-  let oph = Crypto.blake2b (Bytes.pack op) in
-  let pending = match Map.find oph storage.m_pending with
+  let op_bytes = Bytes.pack op in
+  let pending = match Map.find op_bytes storage.m_pending with
     | None ->
       (* New operation *)
       { yetNeeded = storage.m_required;
@@ -78,7 +81,7 @@ let confirmAndCheck ((op : wallet_operation), (storage: storage)) =
   (* check if count is enough to go ahead *)
   if pending.yetNeeded <= 1p then
     let storage =
-      storage.m_pending <- (Map : (operation_hash, pending_state) map) in
+      storage.m_pending <- (Map : (operation_bytes, pending_state) map) in
     Execute storage
   else
     let new_yetNeeded = match%nat int pending.yetNeeded - 1 with
@@ -87,50 +90,30 @@ let confirmAndCheck ((op : wallet_operation), (storage: storage)) =
     in
     let pending = pending.yetNeeded <- new_yetNeeded in
     let pending = pending.ownersDone <- Set.add owner pending.ownersDone in
-    let storage = storage.m_pending <- Map.add oph pending storage.m_pending in
+    let storage = storage.m_pending <- Map.add op_bytes pending storage.m_pending in
     Confirmations_Needed storage
-[@@inline]
-
-(*
-let only_enough_owners ((op : wallet_operation), (storage: storage)) =
-  match confirmAndCheck (op, storage) with
-  | Confirmations_Needed _ -> Current.failwith ()
-  | Execute storage -> storage
-[@@inline]
-*)
-
-(*
-let has_confirmed ((op: wallet_operation), (owner: address), (storage:storage)) =
-  match Map.find (Crypto.blake2b (Bytes.pack op)) storage.m_pending with
-  | None -> false
-  | Some pending -> Set.mem owner pending.ownersDone
-[@@inline]
-*)
-
 
 (* Revokes a prior confirmation of the given operation *)
-let revoke
-    ((op : wallet_operation),
-     (storage : storage)) =
+let%entry revoke (op : wallet_operation) storage =
   onlyowner storage;
   let owner = Current.source () in
-  let oph = Crypto.blake2b (Bytes.pack op) in
-  match Map.find oph storage.m_pending with
+  let op_bytes = Bytes.pack op in
+  match Map.find op_bytes storage.m_pending with
   | None -> Current.failwith ()
   | Some pending ->
     if Set.mem owner pending.ownersDone then
       let pending = pending.yetNeeded <- pending.yetNeeded + 1p in
       let pending =
         pending.ownersDone <- Set.remove owner pending.ownersDone in
-      storage.m_pending <- Map.add oph pending storage.m_pending
-    else storage
+      no_op, storage.m_pending <- Map.add op_bytes pending storage.m_pending
+    else no_op, storage
 
 
-let changeOwner
-    ((parameter : address * address),
-     (storage : storage)) =
+
+let%entry changeOwner (parameter : address * address) storage =
+  (* let storage = only_enough_owners (ChangeOwner parameter, storage) in *)
   match confirmAndCheck (ChangeOwner parameter, storage) with
-  | Confirmations_Needed storage -> storage
+  | Confirmations_Needed storage -> no_op, storage
   | Execute storage ->
     let from, _to = parameter in
     if is_owner (_to, storage) || not (is_owner (from, storage))
@@ -138,29 +121,24 @@ let changeOwner
     else
       let storage = clearPending storage in
       let storage = storage.m_owners <- Set.remove from storage.m_owners in
-      storage.m_owners <- Set.add _to storage.m_owners
+      no_op, storage.m_owners <- Set.add _to storage.m_owners
 
 
-let addOwner
-    ((owner : address),
-     (storage : storage)) =
+let%entry addOwner (owner : address) storage =
   (* let storage = only_enough_owners (AddOwner owner, storage) in *)
   match confirmAndCheck (AddOwner owner, storage) with
-  | Confirmations_Needed storage -> storage
+  | Confirmations_Needed storage -> no_op, storage
   | Execute storage ->
     if is_owner (owner, storage) then Current.failwith ();
     let storage = clearPending storage in
     let storage = storage.m_num_owners <- storage.m_num_owners + 1p in
-    storage.m_owners <- Set.add owner storage.m_owners
-[@@inline]
+    no_op, storage.m_owners <- Set.add owner storage.m_owners
 
 
-let removeOwner
-    ((owner : address),
-     (storage : storage)) =
+let%entry removeOwner (owner : address) storage =
   (* let storage = only_enough_owners (RemoveOwner owner, storage) in *)
   match confirmAndCheck (RemoveOwner owner, storage) with
-  | Confirmations_Needed storage -> storage
+  | Confirmations_Needed storage -> no_op, storage
   | Execute storage ->
     if not (is_owner (owner,storage)) then Current.failwith ();
     if storage.m_required >= storage.m_num_owners then Current.failwith ();
@@ -170,56 +148,26 @@ let removeOwner
     in
     let storage = storage.m_num_owners <- new_num_owners in
     let storage = storage.m_owners <- Set.remove owner storage.m_owners in
-    clearPending storage
-[@@inline]
+    no_op, clearPending storage
 
 
-let changeRequirement
-    ((required : nat),
-     (storage : storage)) =
+let%entry changeRequirement (required : nat) storage =
   (* let storage = only_enough_owners (ChangeRequirement required, storage) in *)
   match confirmAndCheck (ChangeRequirement required, storage) with
-  | Confirmations_Needed storage -> storage
+  | Confirmations_Needed storage -> no_op, storage
   | Execute storage ->
     if required > storage.m_num_owners then Current.failwith ();
     let storage = clearPending storage in
-    storage.m_required <- required
+    no_op, storage.m_required <- required
 
-let deposit (storage : storage) =
+let%entry deposit _ storage =
   if Current.amount () = 0tz then Current.failwith ()
-  else storage
+  else no_op, storage
 
-let transaction
-    ((t: transaction),
-     (storage: storage)) =
+let%entry withdraw (t: transaction) storage =
   onlyowner storage;
-  match confirmAndCheck (Transaction t, storage) with
+  match confirmAndCheck (Withdraw t, storage) with
   | Confirmations_Needed storage -> no_op, storage
   | Execute storage ->
     let op = Contract.call t.destination t.amount () in
     [op], storage
-
-
-let%init storage (owners : address set) (required : nat) =
-  let m_owners = owners in
-  let m_num_owners = Set.size m_owners in
-  if required > m_num_owners then Current.failwith ();
-  {
-    m_num_owners;
-    m_owners;
-    m_required = required;
-    m_pending = (Map : (operation_hash, pending_state) map);
-  }
-
-let%entry main
-    (parameter : parameter)
-    (storage : storage) =
-  match parameter with
-  | Deposit -> no_op, deposit storage
-  | Revoke op -> no_op, revoke (op, storage)
-  | Operation op -> match op with
-    | ChangeOwner from_to -> no_op, changeOwner (from_to, storage)
-    | AddOwner owner -> no_op, addOwner (owner, storage)
-    | RemoveOwner owner -> no_op, removeOwner (owner, storage)
-    | ChangeRequirement req -> no_op, changeRequirement (req, storage)
-    | Transaction t -> transaction (t, storage)
