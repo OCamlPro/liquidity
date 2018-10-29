@@ -8,7 +8,7 @@
 (**************************************************************************)
 
 (* The version that will be required to compile the generated files. *)
-let output_version = "0.402"
+let output_version = "0.403"
 
 open Asttypes
 open Longident
@@ -422,15 +422,14 @@ let rec convert_code ~abbrev (expr : (datatype, 'a) exp) =
           (convert_code ~abbrev ifcons);
       ]
 
-  | Transfer { contract; amount; entry = None;
-               arg = { desc = Const { const = CUnit }} } ->
-    Exp.apply ~loc (Exp.ident (lid "Contract.transfer"))
+  | Transfer { dest; amount } ->
+    Exp.apply ~loc (Exp.ident (lid "Account.transfer"))
       [
-        Labelled "dest", convert_code ~abbrev contract;
+        Labelled "dest", convert_code ~abbrev dest;
         Labelled "amount", convert_code ~abbrev amount;
       ]
 
-  | Transfer { contract; amount; entry = None; arg } ->
+  | Call { contract; amount; entry = None; arg } ->
     Exp.apply ~loc (Exp.ident (lid "Contract.call"))
       [
         Labelled "dest", convert_code ~abbrev contract;
@@ -438,7 +437,7 @@ let rec convert_code ~abbrev (expr : (datatype, 'a) exp) =
         Labelled "parameter", convert_code ~abbrev arg;
       ]
 
-  | Transfer { contract; amount; entry = Some entry; arg } ->
+  | Call { contract; amount; entry = Some entry; arg } ->
     let contract_exp = convert_code ~abbrev contract in
     Exp.apply ~loc
       (Exp.field contract_exp (lid entry))

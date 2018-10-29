@@ -91,7 +91,7 @@ let ident_counter = ref 0
 let minimal_version = 0.4
 
 (* The maximal version of liquidity files that are accepted by this compiler *)
-let maximal_version = 0.402
+let maximal_version = 0.403
 
 
 open Asttypes
@@ -820,17 +820,15 @@ let rec translate_code contracts env exp =
     | { pexp_desc =
           Pexp_apply (
             { pexp_desc = Pexp_ident
-                  { txt = Ldot(Lident "Contract", "transfer") } },
+                  { txt = Ldot(Lident "Account", "transfer") } },
             ([_; _] as args));
         pexp_loc } ->
-      let contract, amount =
+      let dest, amount =
         match order_labelled_args pexp_loc ["dest"; "amount"] args with
-        | [c; a] -> c, a
+        | [d; a] -> d, a
         | _ -> assert false in
-      Transfer { contract = translate_code contracts env contract;
-                 amount = translate_code contracts env amount;
-                 entry = None;
-                 arg = mk ~loc (Const { ty = Tunit; const = CUnit }) }
+      Transfer { dest = translate_code contracts env dest;
+                 amount = translate_code contracts env amount }
 
     | { pexp_desc =
           Pexp_apply (
@@ -844,10 +842,10 @@ let rec translate_code contracts env exp =
         with
         | [c; t; a] -> c, t, a
         | _ -> assert false in
-      Transfer { contract = translate_code contracts env contract;
-                 amount = translate_code contracts env amount;
-                 entry = None;
-                 arg = translate_code contracts env arg }
+      Call { contract = translate_code contracts env contract;
+             amount = translate_code contracts env amount;
+             entry = None;
+             arg = translate_code contracts env arg }
 
     | { pexp_desc =
           Pexp_apply (
@@ -862,10 +860,10 @@ let rec translate_code contracts env exp =
         | [c; t; { pexp_desc = Pexp_ident { txt = e }}; a] ->
           c, t, str_of_id e, a
         | _ -> error_loc pexp_loc "wrong arguments" in
-      Transfer { contract = translate_code contracts env contract;
-                 amount = translate_code contracts env amount;
-                 entry = Some entry;
-                 arg = translate_code contracts env arg }
+      Call { contract = translate_code contracts env contract;
+             amount = translate_code contracts env amount;
+             entry = Some entry;
+             arg = translate_code contracts env arg }
 
     | { pexp_desc =
           Pexp_apply (
@@ -1276,10 +1274,10 @@ let rec translate_code contracts env exp =
         ( [Nolabel, param; Labelled "amount", amount]
         | [Labelled "amount", amount; Nolabel, param] )
       ) } ->
-      Transfer { contract = translate_code contracts env contract;
-                 amount = translate_code contracts env amount;
-                 entry = Some entry;
-                 arg = translate_code contracts env param }
+      Call { contract = translate_code contracts env contract;
+             amount = translate_code contracts env amount;
+             entry = Some entry;
+             arg = translate_code contracts env param }
 
     | { pexp_desc = Pexp_apply (exp, args) } ->
       let exp = translate_code contracts env exp in

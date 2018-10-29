@@ -203,10 +203,18 @@ let rec translate_code ~parameter_name ~storage_name code =
       let loc = loc_of_many cond in
       cond @ [ ii ~loc @@ IF (seq ifthen, seq ifelse)]
 
-    | Transfer { entry = Some _ } ->
+    | Transfer { dest; amount } ->
+      (* Contract.transfer compiled to IMPLICIT_ACCOUNT + TRANSFER_TOKENS *)
+      let dest = compile depth env dest in
+      let amount = compile (depth+1) env amount in
+      dest @ [ ii ~loc IMPLICIT_ACCOUNT ] @
+      amount @
+      [ push ~loc Tunit CUnit; ii ~loc TRANSFER_TOKENS ]
+
+    | Call { entry = Some _ } ->
       assert false (* should have been encoded *)
 
-    | Transfer { contract; amount; entry = None; arg } ->
+    | Call { contract; amount; entry = None; arg } ->
       (* Contract.call (encoded) compiled to TRANSFER_TOKENS *)
       let contract = compile depth env contract in
       let amount = compile (depth+1) env amount in

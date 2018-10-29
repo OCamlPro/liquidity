@@ -37,7 +37,7 @@ doc:
 NTESTS=42
 NREVTESTS=9
 SIMPLE_TESTS= `seq -f 'test%.0f' 0 $(NTESTS)`
-MORE_TESTS=test_ifcons test_if test_loop test_option test_transfer test_left \
+MORE_TESTS=test_ifcons test_if test_loop test_option test_transfer test_call test_left \
   test_extfun test_left_constr test_closure test_closure2 test_closure3 \
   test_map test_rev test_reduce_closure test_map_closure test_mapreduce_closure \
   test_mapmap_closure test_setreduce_closure test_left_match test_loop_left \

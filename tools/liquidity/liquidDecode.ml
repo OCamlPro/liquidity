@@ -45,17 +45,23 @@ let rec decode ( exp : encoded_exp ) : typed_exp =
     let ifelse = decode ifelse in
     mk ?name:exp.name ~loc (If { cond; ifthen; ifelse }) exp.ty
 
-  | Transfer { contract; amount; entry; arg } ->
+  | Transfer { dest; amount } ->
+    let dest = decode dest in
+    let amount = decode amount in
+    let desc = Transfer { dest; amount } in
+    mk ?name:exp.name ~loc desc exp.ty
+
+  | Call { contract; amount; entry; arg } ->
     let amount = decode amount in
     let contract = decode contract in
     let desc = match entry, arg.desc with
       | None, Constructor { constr = Constr c; arg } when is_entry_case c ->
         let entry = Some (entry_name_of_case c) in
         let arg = decode arg in
-        Transfer { contract; amount; entry; arg }
+        Call { contract; amount; entry; arg }
       | _, _ ->
         let arg = decode arg in
-        Transfer { contract; amount; entry; arg }
+        Call { contract; amount; entry; arg }
     in
     mk ?name:exp.name ~loc desc exp.ty
 

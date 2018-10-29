@@ -456,7 +456,8 @@ let rec decr_counts_vars env e =
     | Let { bnd_val = e1; body = e2 }
     | Loop { body = e1; arg = e2 }
     | LoopLeft { body = e1; arg = e2; acc = None }
-    | Map { body = e1; arg = e2 } ->
+    | Map { body = e1; arg = e2 }
+    | Transfer { dest = e1; amount = e2 } ->
       decr_counts_vars env e1;
       decr_counts_vars env e2;
 
@@ -467,7 +468,7 @@ let rec decr_counts_vars env e =
     | Fold { body = e1; arg = e2; acc = e3 }
     | MapFold { body = e1; arg = e2; acc = e3 }
     | LoopLeft { body = e1; arg = e2; acc = Some e3 }
-    | Transfer { contract = e1; amount = e2; arg = e3 } ->
+    | Call { contract = e1; amount = e2; arg = e3 } ->
       decr_counts_vars env e1;
       decr_counts_vars env e2;
       decr_counts_vars env e3;
@@ -556,7 +557,12 @@ let rec encode env ( exp : typed_exp ) : encoded_exp =
     let ifelse = encode env ifelse in
     mk ?name:exp.name ~loc (If { cond; ifthen; ifelse }) exp.ty
 
-  | Transfer { contract; amount; entry; arg } ->
+  | Transfer { dest; amount } ->
+    let dest = encode env dest in
+    let amount = encode env amount in
+    mk ?name:exp.name ~loc (Transfer { dest; amount }) exp.ty
+
+  | Call { contract; amount; entry; arg } ->
     let amount = encode env amount in
     let contract = encode env contract in
     let arg = encode env arg in
@@ -610,7 +616,7 @@ let rec encode env ( exp : typed_exp ) : encoded_exp =
     in
     let entry = if env.decompiling then entry else None in
     mk ?name:exp.name ~loc
-      (Transfer { contract; amount; entry; arg }) Toperation
+      (Call { contract; amount; entry; arg }) Toperation
 
   | Failwith arg ->
     let arg = encode env arg in

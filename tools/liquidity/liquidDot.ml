@@ -87,6 +87,7 @@ let rec to_dot ~sub_contract_of contract =
         | N_RIGHT _
         | N_ABS
         | N_TRANSFER
+        | N_CALL
         | N_CONTRACT _
         | N_UNPACK _
         | N_PROJ _

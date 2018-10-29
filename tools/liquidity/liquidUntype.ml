@@ -205,11 +205,15 @@ let rec untype (env : env) (code : (datatype, 'a) exp) : (datatype, 'b) exp =
       let ifcons = untype env ifcons in
       MatchList { arg; head_name; tail_name; ifcons; ifnil }
 
-    | Transfer { contract; amount; entry; arg } ->
-      Transfer { contract = untype env contract;
-                 amount = untype env amount;
-                 entry;
-                 arg = untype env arg }
+    | Transfer { dest; amount } ->
+      Transfer { dest = untype env dest;
+                 amount = untype env amount }
+
+    | Call { contract; amount; entry; arg } ->
+      Call { contract = untype env contract;
+             amount = untype env amount;
+             entry;
+             arg = untype env arg }
 
     | MatchVariant { arg; cases } ->
       let arg = untype env arg in

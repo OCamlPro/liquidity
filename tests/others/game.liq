@@ -1,4 +1,4 @@
-[%%version 0.402]
+[%%version 0.403]
 
 type game = {
   number : nat;
@@ -49,8 +49,7 @@ let%entry finish (random_number : nat) storage =
           | None -> 0tz
           | Some (g, _) -> g in
         let reimbursed = game.bet + gain in
-        let dest = Account.default game.player in
-        [ Contract.transfer ~dest ~amount:reimbursed ]
+        [ Account.transfer ~dest:game.player ~amount:reimbursed ]
     in
     let storage = storage.game <- (None : game option) in
     (ops, storage)

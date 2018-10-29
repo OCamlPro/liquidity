@@ -602,16 +602,21 @@ let rec decompile contract =
         mklet node desc
       | N_LAMBDA_END _, [arg] -> arg_of arg
 
-      | N_TRANSFER, [contract; amount; arg] ->
+      | N_TRANSFER, [dest; amount] ->
+        mklet node
+          (Transfer { dest = arg_of dest;
+                      amount = arg_of amount })
+
+      | N_CALL, [contract; amount; arg] ->
         let entry, arg = match arg.kind, arg.args with
           | N_CONSTR c, [arg] when is_entry_case c ->
             Some (entry_name_of_case c), arg
           | _ -> None, arg in
         mklet node
-          (Transfer { contract = arg_of contract;
-                      amount = arg_of amount;
-                      entry;
-                      arg = arg_of arg })
+          (Call { contract = arg_of contract;
+                  amount = arg_of amount;
+                  entry;
+                  arg = arg_of arg })
       (* TODO *)
 
       | N_CREATE_CONTRACT contract, args ->
@@ -630,6 +635,7 @@ let rec decompile contract =
         N_LAMBDA_END _
       | N_LAMBDA _
       | N_TRANSFER
+      | N_CALL
       | N_LOOP _
       | N_LOOP_LEFT _
       | N_FOLD _

@@ -1085,14 +1085,20 @@ module Liquid = struct
       bprint_code_rec ~debug b indent exp1;
       Printf.bprintf b ";";
       bprint_code_rec ~debug b indent exp2
-    | Transfer { contract; amount; entry = None; arg } ->
+    | Transfer { dest; amount } ->
+      Printf.bprintf b "\n%s(Account.transfer" indent;
+      let indent2 = indent ^ "  " in
+      bprint_code_rec ~debug b indent2 dest;
+      bprint_code_rec ~debug b indent2 amount;
+      Printf.bprintf b ")"
+    | Call { contract; amount; entry = None; arg } ->
       Printf.bprintf b "\n%s(Contract.call" indent;
       let indent2 = indent ^ "  " in
       bprint_code_rec ~debug b indent2 contract;
       bprint_code_rec ~debug b indent2 amount;
       bprint_code_rec ~debug b indent2 arg;
       Printf.bprintf b ")"
-    | Transfer { contract; amount; entry = Some entry; arg } ->
+    | Call { contract; amount; entry = Some entry; arg } ->
       Printf.bprintf b "\n%s(" indent;
       bprint_code_rec ~debug b indent contract;
       Printf.bprintf b ".%s" entry;
@@ -1346,6 +1352,7 @@ let string_of_node node =
   | N_IF_PLUS _ -> "N_IF_PLUS"
   | N_IF_MINUS _ -> "N_IF_MINUS"
   | N_TRANSFER -> "N_TRANSFER"
+  | N_CALL -> "N_CALL"
   | N_CONST (ty, cst) -> "N_CONST " ^ Liquid.string_of_const cst
   | N_PRIM string ->
     Printf.sprintf "N_PRIM %s" string

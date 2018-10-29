@@ -22,7 +22,7 @@ let%entry main
   match m with
   | A _ ->
     let amount = 0tz in
-    let op = Contract.transfer ~dest:c ~amount in
+    let op = Contract.call ~dest:c ~entry:main ~amount () in
     [op], storage
   | B ->
     let op = Contract.call c 0tz main ~parameter:() in

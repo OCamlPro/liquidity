@@ -81,7 +81,10 @@ let rec bv code =
          (StringSet.remove head_name.nname
             (StringSet.remove tail_name.nname
                (bv ifcons))))
-  | Transfer { contract; amount; entry; arg } ->
+
+  | Transfer { dest; amount } -> StringSet.union (bv dest) (bv amount)
+
+  | Call { contract; amount; entry; arg } ->
     List.fold_left (fun set exp ->
         StringSet.union set (bv exp)
       ) StringSet.empty [contract; amount; arg]
@@ -280,7 +283,14 @@ let rec bound code =
     let desc = MatchList { arg; head_name; tail_name; ifcons; ifnil } in
     mk desc code bv
 
-  | Transfer { contract; amount; entry; arg } ->
+  | Transfer { dest; amount } ->
+    let dest = bound dest in
+    let amount = bound amount in
+    let bv = StringSet.union dest.bv amount.bv in
+    let desc = Transfer { dest; amount } in
+    mk desc code bv
+
+  | Call { contract; amount; entry; arg } ->
     let contract = bound contract in
     let amount = bound amount in
     let arg = bound arg in
@@ -289,7 +299,7 @@ let rec bound code =
           StringSet.union set (exp.bv)
         ) StringSet.empty [contract; amount; arg]
     in
-    let desc = Transfer {contract; amount; entry; arg } in
+    let desc = Call {contract; amount; entry; arg } in
     mk desc code bv
 
   | Loop { arg_name; body; arg }

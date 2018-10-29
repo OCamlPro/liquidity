@@ -707,13 +707,17 @@ and ('ty, 'a) exp_desc =
   | Seq of ('ty, 'a) exp * ('ty, 'a) exp
   (** Sequences: {[ e1; e2 ]} *)
 
-  | Transfer of { contract: ('ty, 'a) exp;
-                  amount: ('ty, 'a) exp;
-                  entry: string option;
-                  arg: ('ty, 'a) exp }
-  (** Transfers, or contract calls:
-      - {[ contract.entry arg ~amount ]}
-      - {[ Contract.transfer ~dest:contract ~amount ]} *)
+  | Transfer of { dest: ('ty, 'a) exp;
+                  amount: ('ty, 'a) exp }
+  (** Transfers:
+      - {[ Account.transfer ~dest ~amount ]} *)
+
+  | Call of { contract: ('ty, 'a) exp;
+              amount: ('ty, 'a) exp;
+              entry: string option;
+              arg: ('ty, 'a) exp }
+  (** Contract calls:
+      - {[ contract.entry arg ~amount ]} *)
 
   | MatchOption of { arg : ('ty, 'a) exp;
                      ifnone: ('ty, 'a) exp;
@@ -877,7 +881,11 @@ let mk =
       | Map { body = e1; arg = e2 } ->
         e1.fail || e2.fail, false (* e1.transfer || e2.transfer *)
 
-      | Transfer { contract; amount; arg } ->
+      | Transfer { dest; amount } ->
+        dest.fail || amount.fail,
+        true
+
+      | Call { contract; amount; arg } ->
         contract.fail || amount.fail || arg.fail,
         true
 
@@ -965,11 +973,14 @@ let rec eq_exp_desc eq_ty eq_var e1 e2 = match e1, e2 with
     f1.prim = f2.prim && f1.arg_name.nname = f2.arg_name.nname &&
     eq_exp eq_ty eq_var f1.arg f2.arg && eq_exp eq_ty eq_var f1.acc f2.acc &&
     eq_exp eq_ty eq_var f1.body f2.body
-  | Transfer t1, Transfer t2 ->
+  | Call t1, Call t2 ->
     t1.entry = t2.entry &&
     eq_exp eq_ty eq_var t1.contract t2.contract &&
     eq_exp eq_ty eq_var t1.amount t2.amount &&
     eq_exp eq_ty eq_var t1.arg t2.arg
+  | Transfer t1, Transfer t2 ->
+    eq_exp eq_ty eq_var t1.dest t2.dest &&
+    eq_exp eq_ty eq_var t1.amount t2.amount
   | If ite1, If ite2 ->
     eq_exp eq_ty eq_var ite1.cond ite2.cond &&
     eq_exp eq_ty eq_var ite1.ifthen ite2.ifthen &&
@@ -1226,6 +1237,7 @@ and node_kind =
   | N_IF_PLUS of node * node
   | N_IF_MINUS of node * node
   | N_TRANSFER
+  | N_CALL
   | N_CREATE_CONTRACT of node_exp mic_contract
   | N_CONST of datatype * const
   | N_PRIM of string

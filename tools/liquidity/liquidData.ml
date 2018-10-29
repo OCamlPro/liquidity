@@ -127,6 +127,7 @@ let rec translate_const_exp (exp : encoded_exp) =
   | If _
   | Seq _
   | Transfer _
+  | Call _
   | MatchOption _
   | MatchNat _
   | MatchList _

@@ -45,8 +45,10 @@ let rec compute decompile code to_inline =
     | Map { arg; body } -> 30 + size arg + size body
     | Fold { body; arg; acc }
     | MapFold { body; arg; acc } -> 30 + size body + size arg + size acc
-    | Transfer { contract; amount; arg } ->
+    | Call { contract; amount; arg } ->
       1 + size contract + size amount + size arg
+    | Transfer { dest; amount } ->
+      1 + size dest + size amount
 
     | Apply { args } ->
       List.fold_left (fun acc e -> acc + size e) 1 args
@@ -235,11 +237,16 @@ let rec compute decompile code to_inline =
       let args = List.map iter args in
       { exp with desc = Apply { prim; args } }
 
-    | Transfer { contract; amount; entry; arg } ->
+    | Transfer { dest; amount } ->
+      let dest = iter dest in
+      let amount = iter amount in
+      { exp with desc = Transfer { dest; amount } }
+
+    | Call { contract; amount; entry; arg } ->
       let contract = iter contract in
       let amount = iter amount in
       let arg = iter arg in
-      { exp with desc = Transfer { contract; amount; entry; arg } }
+      { exp with desc = Call { contract; amount; entry; arg } }
 
     | Lambda { arg_name; arg_ty; body; ret_ty; recursive } ->
       let body = iter body in

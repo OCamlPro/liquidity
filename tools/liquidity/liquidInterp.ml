@@ -748,8 +748,14 @@ let rec interp contract =
       let x = node ins.loc N_FAILWITH [arg] [seq] in
       [x], x
 
+    | TRANSFER_TOKENS,
+      { kind = N_CONST (Tunit, CUnit) } :: amount ::
+      { kind = N_PRIM "IMPLICIT_ACCOUNT"; args = [ key ] } :: stack ->
+      let x = node ins.loc N_TRANSFER [ key; amount ] [seq] in
+      x :: stack, x
+
     | TRANSFER_TOKENS, arg :: amount :: contract :: stack ->
-      let x = node ins.loc N_TRANSFER [contract; amount; arg] [seq] in
+      let x = node ins.loc N_CALL [contract; amount; arg] [seq] in
       x :: stack, x
 
     | SOURCE, stack ->

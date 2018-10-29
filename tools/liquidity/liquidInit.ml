@@ -34,8 +34,9 @@ let rec subst_empty_big_map storage_ty code =
       LiquidLoc.raise_error ~loc
         "Only use empty big map constants in storage initializer"
     | Const _ -> desc
-    | Transfer _ -> assert false
     | Var _ -> desc
+
+    | Transfer _ | Call _ -> assert false
 
     | Failwith arg ->
       let arg' = subst_empty_big_map storage_ty arg in

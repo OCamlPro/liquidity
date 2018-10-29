@@ -247,7 +247,13 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
     let desc = If { cond; ifthen; ifelse } in
     mk ?name:exp.name ~loc desc ty
 
-  | Transfer { contract; amount; entry; arg } ->
+  | Transfer { dest; amount } ->
+    let amount = typecheck_expected "transfer amount" env Ttez amount in
+    let dest = typecheck_expected "transfer destination" env Tkey_hash dest in
+    let desc = Transfer { dest; amount } in
+    mk ?name:exp.name ~loc desc Toperation
+
+  | Call { contract; amount; entry; arg } ->
     let amount = typecheck_expected "call amount" env Ttez amount in
     let contract = typecheck env contract in
     let entry' = match entry with None -> "main" | Some e -> e in
@@ -261,7 +267,7 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
             let arg = typecheck_expected "call argument" env arg_ty arg in
             if amount.transfer || contract.transfer || arg.transfer then
               error loc "transfer within transfer arguments";
-            let desc = Transfer { contract; amount; entry; arg } in
+            let desc = Call { contract; amount; entry; arg } in
             mk ?name:exp.name ~loc desc Toperation
           with Not_found ->
             error loc "contract has no entry point %s" entry';
@@ -282,7 +288,7 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
       | _ -> false
     ->
     typecheck env
-      (mk (Transfer { contract; amount; entry = Some entry; arg = param })
+      (mk (Call { contract; amount; entry = Some entry; arg = param })
          ~loc ())
 
   | Apply { prim = Prim_unknown;
