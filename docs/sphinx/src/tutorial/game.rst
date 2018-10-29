@@ -103,7 +103,8 @@ A game consists in three values, stored in a record:
 #. ``bet`` is the amount that was sent with the first transaction by
    the player. It constitute the bet amount.
 #. ``player`` is the key hash (tz1...) on which the player who made
-   the bet wishes to be payed in the event of a win.
+   the bet wishes to be payed in the event of a win (we ask for a
+   ``key_hash`` so that the payout operation cannot fail).
 
 We also give an initializer function that can be used to deploy the
 contract with an initial value. It takes as argument the address of
@@ -244,8 +245,7 @@ the smart contract.
           | None -> 0tz
           | Some (g, _) -> g in
         let reimbursed = game.bet + gain in
-        let dest = Account.default game.player in
-        [ Contract.transfer ~dest ~amount:reimbursed ]
+        [ Account.transfer ~dest:game.player ~amount:reimbursed ]
 
 Otherwise, if the random number is greater or equal to the previously
 chosen number, then the player won. We compute her gain and the

@@ -54,8 +54,7 @@ be given a unique name within the same contract.
 
 If there is an entry point named ``main``, it will be the default
 entry point for the contract, *i.e.* the one that is called when the
-entry point is not specified in ``Contract.call`` and
-``Contract.transfer``.
+entry point is not specified in ``Contract.call``.
 
 An entry point always returns a pair ``(operations, storage)``, where
 ``operations`` is a list of internal operations to perform after
@@ -492,8 +491,8 @@ Operations on numeric values
 Operations on contracts
 ~~~~~~~~~~~~~~~~~~~~~~~
 
-* ``Contract.call: ~dest:'S.instance -> ~amount:tez ->
-  ?entry:<entry_name> ~parameter:'a -> operation``. Forge an internal
+* ``Contract.call: dest:'S.instance -> amount:tez ->
+  ?entry:<entry_name> parameter:'a -> operation``. Forge an internal
   contract call. It is translated to ``TRANSFER_TOKENS`` in Michelson.
   Arguments can be labeled, in which case they can be given
   in any order. The entry point name is optional (``main`` by default).
@@ -505,21 +504,26 @@ Operations on contracts
     ...
     ([op], storage)
 
-* ``Contract.transfer: ~dest:'S.instance -> ~amount:tez ->
-  operation``. Forge an internal transaction. It is translated to
-  ``TRANSFER_TOKENS`` in Michelson.  Arguments can be labeled, in
-  which case they can be given in any order.
-
-  ``Contract.transfer ~dest:c ~amount:a`` is syntactic sugar for
-  ``Contract.call ~dest:c ~entry:main ~parameter:() ~amount:a``.
-
-* ``<c.entry>: 'parameter -> ~amount:tez -> operation``. Forge an
+* ``<c.entry>: 'parameter -> amount:tez -> operation``. Forge an
   internal contract call. It is translated to ``TRANSFER_TOKENS`` in
   Michelson.  The amount argument can be labeled, in which case it can
   appear before the parameter.
 
   ``c.my_entry p ~amount:a`` is syntactic sugar for
   ``Contract.call ~dest:c ~entry:my_entry ~parameter:p ~amount:a``.
+
+* ``Account.transfer: dest:key_hash -> amount:tez ->
+  operation``. Forge an internal transaction to the implicit (_i.e._
+  default) account contract of ``dest``. Arguments can be labeled, in
+  which case they can be given in any order. *The resulting operation
+  cannot fail.*
+
+  Example::
+
+    let op =
+      Account.transfer ~dest:tz1YLtLqD1fWHthSVHPD116oYvsd4PTAHUoc ~amount:1tz in
+    ...
+    ([op], storage)
 
 * ``Account.create: manager:key_hash -> delegate:key_hash option ->
   delegatable:bool -> amount:tez -> operation * address``. Forge an
@@ -1258,15 +1262,13 @@ Contracts can also be used as first class values::
     ~storage:0
     (contract C)
 
-**Instances** of contracts can be called with four different syntaxes:
+**Instances** of contracts can be called with three different syntaxes:
 
-- ``Contract.transfer c 1tz``
 - ``Contract.call ~dest:c ~amount:1tz ~parameter:"hello"``
 - ``Contract.call ~dest:c ~amount:1tz ~entry:main ~parameter:"hello"``
 - ``c.main "hello" ~amount:1tz``
 
-The last three ones are equivalent, while the first one is simply
-syntactic sugar for ``c.main () ~amount:1tz``.
+These calls are all equivalent.
 
 Toplevel Contracts
 ~~~~~~~~~~~~~~~~~~
