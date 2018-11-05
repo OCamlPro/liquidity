@@ -142,7 +142,12 @@ let rec subst_empty_big_map storage_ty code =
       if e1 == e1' && e2 == e2' && e3 == e3' then desc
       else MapFold { prim; arg_name; body = e1'; arg = e2'; acc = e3' }
 
-    | Apply { prim = (Prim_sender | Prim_source) as p } ->
+    | Apply { prim = ( Prim_sender
+                     | Prim_source
+                     | Prim_self
+                     | Prim_balance
+                     | Prim_gas
+                     | Prim_create_account ) as p } ->
       LiquidLoc.raise_error ~loc
         "%s forbidden in initializer (for this version of Tezos)"
         (string_of_primitive p)
