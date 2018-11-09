@@ -33,23 +33,23 @@ let%init storage
     owner;
   }
 
-let get_account ((a : address), (storage : storage)) =
-  match Map.find a storage.accounts with
+let get_account ((a : address), (accounts : (address, account) big_map)) =
+  match Map.find a accounts with
   | None -> { balance = 0p; allowances = (Map : (address, nat) map) }
   | Some account -> account
 
 let perform_transfer
     ((from : address), (dest : address), (tokens : nat), (storage : storage)) =
-  let account_sender = get_account (from, storage) in
-  let account_dest = get_account (dest, storage) in
+  let accounts = storage.accounts in
+  let account_sender = get_account (from, accounts) in
   let new_account_sender = match is_nat (account_sender.balance - tokens) with
     | None ->
       failwith ("Not enough tokens for transfer", account_sender.balance)
     | Some b -> account_sender.balance <- b in
+  let accounts = Map.add from new_account_sender accounts in
+  let account_dest = get_account (dest, accounts) in
   let new_account_dest =
     account_dest.balance <- account_dest.balance + tokens in
-  let accounts = storage.accounts in
-  let accounts = Map.add from new_account_sender accounts in
   let accounts = Map.add dest new_account_dest accounts in
   ([] : operation list), storage.accounts <- accounts
 
@@ -57,7 +57,7 @@ let%entry transfer ((dest : address), (tokens : nat)) storage =
   perform_transfer (Current.sender (), dest, tokens, storage)
 
 let%entry approve ((spender : address), (tokens : nat)) storage =
-  let account_sender = get_account (Current.sender (), storage) in
+  let account_sender = get_account (Current.sender (), storage.accounts) in
   let account_sender =
     account_sender.allowances <-
       Map.add spender tokens account_sender.allowances in
@@ -70,7 +70,7 @@ let%entry approve ((spender : address), (tokens : nat)) storage =
 
 let%entry transferFrom
     ((from : address), (dest : address), (tokens : nat)) storage =
-  let account_from = get_account (from, storage) in
+  let account_from = get_account (from, storage.accounts) in
   let new_allowances_from =
     match Map.find (Current.sender ()) account_from.allowances with
     | None -> failwith ("Not allowed to spend from", from)
