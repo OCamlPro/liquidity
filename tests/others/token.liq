@@ -60,12 +60,12 @@ let%entry approve ((spender : address), (tokens : nat)) storage =
   let account_sender = get_account (Current.sender (), storage.accounts) in
   let account_sender =
     account_sender.allowances <-
-      Map.add spender tokens account_sender.allowances in
-  let storage = storage.accounts <-
       if tokens = 0p then
-        Map.remove (Current.sender ()) storage.accounts
+        Map.remove spender account_sender.allowances
       else
-        Map.add (Current.sender ()) account_sender storage.accounts in
+        Map.add spender tokens account_sender.allowances in
+  let storage = storage.accounts <-
+      Map.add (Current.sender ()) account_sender storage.accounts in
   ([] : operation list), storage
 
 let%entry transferFrom
