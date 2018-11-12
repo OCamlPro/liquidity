@@ -35,7 +35,7 @@ let () =
       "else", ELSE;
       "end", END;
       (* "exception", EXCEPTION; *)
-      (* "external", EXTERNAL; *)
+      "external", EXTERNAL;
       "false", FALSE;
       "for", FOR;
       "fun", FUN;
@@ -123,6 +123,7 @@ let mk_inner_env env contractname =
     contract_types = StringMap.empty;
     labels = StringMap.empty;
     constrs = StringMap.empty;
+    ext_prims = StringMap.empty;
     filename = env.filename;
     top_env = Some env;
     contractname;
@@ -178,6 +179,7 @@ let lift_env rename = function
         Tsum (name, List.map (fun (c, ty) -> c, lift_type ty) constrs)
       | Tclosure ((t1, t2), t3) ->
         Tclosure ((lift_type t1, lift_type t2), lift_type t3)
+      | Tvar _ -> ty
     and lift_contract_sig c_sig =
       { sig_name = c_sig.sig_name;
         entries_sig = List.map (fun es ->
@@ -232,7 +234,18 @@ let todo_loc loc msg =
   let loc = loc_of_loc loc in
   LiquidLoc.raise_error ~loc "Syntax %S not yet implemented%!" msg
 
-let rec translate_type env ?expected typ = match typ with
+let has_stack typ = match typ.ptyp_desc with
+  | Ptyp_extension ( { txt = "stack" }, _ ) -> true
+  | _ -> false
+
+let remove_stack typ = match typ.ptyp_desc with
+  | Ptyp_extension ( { txt = "stack" }, PTyp  t ) -> t
+  | _ -> typ
+
+let rec translate_type env ?expected typ =
+  if has_stack typ then
+    error_loc typ.ptyp_loc "Attribute [%%stack] forbidden in this context";
+  match typ with
   | { ptyp_desc = Ptyp_constr ({ txt = Lident "unit" }, []) } -> Tunit
   | { ptyp_desc = Ptyp_constr ({ txt = Lident "bool" }, []) } -> Tbool
   | { ptyp_desc = Ptyp_constr ({ txt = Lident "int" }, []) } -> Tint
@@ -350,6 +363,8 @@ let rec translate_type env ?expected typ = match typ with
       with Not_found -> unbound_type typ.ptyp_loc ty_name
     end
 
+  | { ptyp_desc = Ptyp_var tv; ptyp_loc } -> Tvar tv
+
   | { ptyp_desc = Ptyp_any; ptyp_loc } ->
     begin match expected with
       | Some ty -> ty
@@ -357,6 +372,56 @@ let rec translate_type env ?expected typ = match typ with
     end
 
   | { ptyp_loc } -> error_loc ptyp_loc "in type"
+
+let translate_ext_type env typ =
+  let rec aux noargs tvs atys typ = match typ with
+  (* Type argument *)
+  | { ptyp_desc = Ptyp_arrow (_, { ptyp_desc =
+        Ptyp_extension ( { txt = "type" }, PTyp { ptyp_desc = Ptyp_var tv })
+      }, return_type); ptyp_loc } ->
+    if atys <> [] || noargs then
+      error_loc ptyp_loc "Type arguments must come first";
+    if List.mem tv tvs then
+      error_loc ptyp_loc "Type variable '%s already used in this primitive" tv;
+    aux false (tv :: tvs) atys return_type
+
+  (* Argument *)
+  | { ptyp_desc = Ptyp_arrow (_, parameter_type, return_type); ptyp_loc } ->
+    let ty = translate_type env (remove_stack parameter_type) in
+    let stack = has_stack parameter_type in
+    if noargs then
+      error_loc ptyp_loc "This primitive does not expect any argument"
+    else if stack then
+      aux false tvs (ty :: atys) return_type
+    else if ty = Tunit && atys = [] then
+      aux true tvs [] return_type
+    else
+      error_loc ptyp_loc "Attribute [%%stack] expected";
+
+  (* Result : tuple *)
+  | { ptyp_desc = Ptyp_tuple types; ptyp_loc } when atys <> [] || noargs ->
+    let tys = List.map (fun ty -> translate_type env (remove_stack ty)) types in
+    let stack = has_stack typ in
+    if List.exists (fun t -> has_stack t = stack) types then
+      error_loc ptyp_loc
+        "[%%stack] must be either on the whole tuple or on ALL its components";
+    let rtys = if not stack then tys else [Ttuple tys] in
+    List.rev tvs, List.rev atys, rtys
+
+  (* Result : any other type *)
+  | { ptyp_loc } when atys <> [] || noargs ->
+    let ty = translate_type env (remove_stack typ) in
+    let stack = has_stack typ in
+    if ty <> Tunit && not stack then
+      error_loc ptyp_loc "Attribute [%%stack] expected on return value";
+    let rtys = if not stack then [] else [ty] in
+    List.rev tvs, List.rev atys, rtys
+
+  (* Non-function type *)
+  | { ptyp_loc } ->
+    error_loc ptyp_loc "Primitives must be functions"
+  in
+  aux false [] [] typ
 
 
 exception NotAConstant
@@ -788,6 +853,10 @@ let rec translate_code contracts env exp =
   let loc = loc_of_loc exp.pexp_loc in
   let desc =
     match exp with
+    | { pexp_desc = Pexp_extension ( { txt = "type" }, PTyp pty ) } ->
+      let ty = translate_type env pty in
+      Type ty
+
     | { pexp_desc = Pexp_ident ( { txt = var } ) } ->
       Var (str_of_id var)
 
@@ -1803,6 +1872,41 @@ and translate_signature contract_type_name env acc ast =
 
 and translate_structure env acc ast : syntax_contract option =
   match ast with
+  | { pstr_desc = Pstr_primitive {
+          pval_name = { txt = prim_name; loc = prim_loc };
+          pval_type = prim_type; pval_prim = [minst];
+          pval_attributes = prim_attr } } :: ast ->
+     if List.mem prim_name reserved_keywords then
+       error_loc prim_loc "Primitive name %S forbidden" prim_name;
+     if StringMap.mem prim_name env.ext_prims then
+       error_loc prim_loc "Primitive %S already defined" prim_name;
+     if List.exists (function
+       | Syn_value (n, _, _) -> n = prim_name
+       | _ -> false) acc
+     then
+       error_loc prim_loc "Top-level identifier %S already defined" prim_name;
+     let tvs, atys, rtys = translate_ext_type env prim_type in
+     let valid_in_external = function
+       | Trecord _ | Tsum _ | Tclosure _ | Tfail | Ttuple (_ :: _ :: _ :: _) ->
+         error_loc prim_loc
+           "Primitive %S can only use standard Michelson types" prim_name
+       | _ -> ()
+     in
+     List.iter valid_in_external atys;
+     List.iter valid_in_external rtys;
+     let effect =  List.exists (fun (a, _) -> a.txt = "effect") prim_attr in
+     let nb_arg = List.length atys in
+     let nb_ret = List.length rtys in
+     let atys = if atys = [] then [Tunit] else atys in
+     let rty = match rtys with
+       | [] -> Tunit
+       | [ty] -> ty
+       | _ -> Ttuple rtys
+     in
+     env.ext_prims <- StringMap.add prim_name
+         { tvs; atys; rty; effect; nb_arg; nb_ret; minst } env.ext_prims;
+     translate_structure env acc ast
+
   | { pstr_desc =
         Pstr_extension
           (({ Asttypes.txt = "version" },
@@ -1875,6 +1979,8 @@ and translate_structure env acc ast : syntax_contract option =
       | _ -> false in
     if List.mem var_name reserved_keywords then
       error_loc name_loc "top-level value %S forbidden" var_name;
+    if StringMap.mem var_name env.ext_prims then
+      error_loc name_loc "Top-level identifier %S already defined" var_name;
     if List.exists (function
         | Syn_value (n, _, _) -> n = var_name
         | _ -> false) acc
@@ -1914,6 +2020,8 @@ and translate_structure env acc ast : syntax_contract option =
       | _ -> false in
     if List.mem fun_name reserved_keywords then
       error_loc name_loc "top-level value %S forbidden" fun_name;
+    if StringMap.mem fun_name env.ext_prims then
+      error_loc name_loc "Top-level identifier %S already defined" fun_name;
     if List.exists (function
         | Syn_value (n, _, _) -> n = fun_name
         | _ -> false) acc
@@ -2213,6 +2321,7 @@ let initial_env filename =
     contract_types = predefined_contract_types;
     labels = StringMap.empty;
     constrs = predefined_constructors;
+    ext_prims = StringMap.empty;
     filename;
     top_env = None;
     contractname = filename_to_contract filename;
@@ -2286,6 +2395,7 @@ let mk_toplevel_env filename top_env =
     contract_types = StringMap.empty;
     labels = StringMap.empty;
     constrs = StringMap.empty;
+    ext_prims = StringMap.empty;
     filename;
     top_env = Some top_env;
     contractname = filename_to_contract filename;

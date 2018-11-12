@@ -93,6 +93,8 @@ and datatype =
   | Tclosure of (datatype * datatype) * datatype
   | Tfail
 
+  | Tvar of string
+
 (** A signature for an entry point *)
 and entry_sig = {
   entry_name : string;     (** name of the entry point *)
@@ -134,6 +136,16 @@ and full_contract_sig = {
   f_entries_sig : entries_sig;
 }
 
+and extprim = {
+  tvs : string list;
+  atys : datatype list;
+  rty : datatype;
+  effect : bool;
+  nb_arg : int;
+  nb_ret : int;
+  minst : string;
+}
+
 (** Environment for parsing *)
 and env = {
   (* name of file being compiled *)
@@ -150,6 +162,8 @@ and env = {
   mutable labels : (string * int * datatype) StringMap.t;
   (* constructors of sum-types in type definitions *)
   mutable constrs : (string * datatype) StringMap.t;
+  (* extended primitives definitions *)
+  mutable ext_prims : extprim StringMap.t;
   (* englobing env *)
   top_env : env option;
 }
@@ -262,6 +276,7 @@ let rec type_contains_nonlambda_operation = function
     List.exists (fun e -> type_contains_nonlambda_operation e.parameter)
       s.entries_sig
   | Tlambda _ | Tclosure _ -> false
+  | Tvar _ -> false
 
 (** Extract the signature of a contract *)
 let sig_of_contract c = {
@@ -302,6 +317,9 @@ type primitive =
   | Prim_coll_update
   | Prim_coll_mem
   | Prim_coll_size
+
+  (* extended primitives *)
+  | Prim_extension of string * bool * (datatype list) * int * int * string
 
   (* generated in LiquidCheck *)
   | Prim_unused of string option
@@ -538,15 +556,18 @@ let () =
 
       "<unknown>", Prim_unknown;
       "<unused>", Prim_unused None;
+      "<extension>", Prim_extension ("", false, [], 0, 0, "");
 
     ]
 
 let primitive_of_string s = Hashtbl.find primitive_of_string s
 
+
 let string_of_primitive prim =
   try
     match prim with
     | Prim_unused (Some s) -> Printf.sprintf "<unused:%s>" s
+    | Prim_extension (l, _, _, _, _, _) -> Printf.sprintf "<extension:%s>" l
     | _ ->
       Hashtbl.find string_of_primitive prim
   with Not_found ->
@@ -664,9 +685,9 @@ type ('ty, 'a) exp = {
   loc : location;            (** Source location *)
   ty : 'ty;                  (** Type of expression *)
   bv : StringSet.t;          (** Set of bound variable in the expression *)
-  fail : bool;               (** Fail flag, [true] if evaluation of
-                                 the expression can fail *)
-  transfer : bool;           (** Transfer flas, [true] if the
+  effect : bool;             (** Effect flag, [true] if evaluation of
+                                 the expression has side effects *)
+  transfer : bool;           (** Transfer flag, [true] if the
                                  expression can contain an operation
                                  (these should not be duplicated) *)
 }
@@ -842,6 +863,9 @@ and ('ty, 'a) exp_desc =
                    ty: datatype }
   (** Type annotation: {[ (e : ty) ]} *)
 
+  | Type of datatype
+  (** Type, for use with extended primitives : [ty] *)
+
 
 (** Ghost type for typed expressions *)
 type typed
@@ -861,7 +885,7 @@ type live_exp = (datatype * datatype StringMap.t, encoded) exp
 let mk =
   let bv = StringSet.empty in
   fun ?name ~loc desc ty ->
-    let fail, transfer = match desc with
+    let effect, transfer = match desc with
       | Const _
       | Var _ -> false, false
 
@@ -871,7 +895,7 @@ let mk =
       | Constructor { arg = e}
       | ContractAt { arg = e}
       | Unpack { arg = e }
-      | Lambda { body = e } -> e.fail, false (* e.transfer *)
+      | Lambda { body = e } -> e.effect, false (* e.transfer *)
 
       | SetField { record = e1; set_val = e2 }
       | Seq (e1, e2)
@@ -879,14 +903,14 @@ let mk =
       | Loop { body = e1; arg = e2 }
       | LoopLeft { body = e1; arg = e2 ; acc = None }
       | Map { body = e1; arg = e2 } ->
-        e1.fail || e2.fail, false (* e1.transfer || e2.transfer *)
+        e1.effect || e2.effect, false (* e1.transfer || e2.transfer *)
 
       | Transfer { dest; amount } ->
-        dest.fail || amount.fail,
+        dest.effect || amount.effect,
         true
 
       | Call { contract; amount; arg } ->
-        contract.fail || amount.fail || arg.fail,
+        contract.effect || amount.effect || arg.effect,
         true
 
       | If { cond = e1; ifthen = e2; ifelse = e3 }
@@ -896,36 +920,41 @@ let mk =
       | LoopLeft { body = e1; arg = e2 ; acc = Some e3 }
       | Fold { body = e1;  arg = e2; acc = e3 }
       | MapFold { body = e1;  arg = e2; acc = e3 } ->
-        e1.fail || e2.fail || e3.fail,
+        e1.effect || e2.effect || e3.effect,
         false (* e1.transfer || e2.transfer || e3.transfer *)
 
       | Apply { prim; args } ->
-        List.exists (fun e -> e.fail) args,
+        let prim_eff = match prim with
+          | Prim_extension (_, eff, _, _, _, _) -> eff
+          | _ -> false in
+        prim_eff || List.exists (fun e -> e.effect) args,
         prim = Prim_set_delegate
         || prim = Prim_create_account
       (* || List.exists (fun e -> e.transfer) args *)
 
       | Closure { call_env; body } ->
-        body.fail || List.exists (fun (_, e) -> e.fail) call_env,
+        body.effect || List.exists (fun (_, e) -> e.effect) call_env,
         false (* e.transfer || List.exists (fun (_, e) -> e.transfer) env *)
 
       | Record fields ->
-        List.exists (fun (_, e) -> e.fail) fields,
+        List.exists (fun (_, e) -> e.effect) fields,
         false (* List.exists (fun (_, e) -> e.transfer) labels *)
 
       | MatchVariant { arg; cases } ->
-        arg.fail || List.exists (fun (_, e) -> e.fail) cases,
+        arg.effect || List.exists (fun (_, e) -> e.effect) cases,
         false (* e.transfer || List.exists (fun (_, e) -> e.transfer) cases *)
 
       | CreateContract { args } ->
-        List.exists (fun e -> e.fail) args,
+        List.exists (fun e -> e.effect) args,
         true
 
       | TypeAnnot { e } ->
-        e.fail, false (* e.transfer *)
+        e.effect, false (* e.transfer *)
 
+      | Type _ ->
+        false, false
     in
-    { desc; name; loc; ty; bv; fail; transfer }
+    { desc; name; loc; ty; bv; effect; transfer }
 
 let rec eq_exp_desc eq_ty eq_var e1 e2 = match e1, e2 with
   | Const c1, Const c2 -> c1.const = c2.const && eq_types c1.ty c2.ty
@@ -1142,6 +1171,8 @@ type 'a pre_michelson =
 
   | PACK
   | UNPACK of datatype
+
+  | EXTENSION of string * datatype list
 
   (* obsolete *)
   | MOD
@@ -1402,6 +1433,7 @@ let rec lift_type env ty = match ty with
     Tsum (name, List.map (fun (c, ty) -> c, lift_type env ty) constrs)
   | Tclosure ((t1, t2), t3) ->
     Tclosure ((lift_type env t1, lift_type env t2), lift_type env t3)
+  | Tvar _ -> ty
 
 and lift_contract_sig env c_sig =
       { sig_name = c_sig.sig_name;
@@ -1422,3 +1454,29 @@ let find_type s env = rec_find s env (fun env -> env.types)
 let find_contract_type s env = rec_find s env (fun env -> env.contract_types)
 let find_label s env = rec_find s env (fun env -> env.labels)
 let find_constr s env = rec_find s env (fun env -> env.constrs)
+
+let tv_subst s ty =
+  let rec aux = function
+  | Ttuple tyl -> Ttuple (List.map aux tyl)
+  | Toption ty -> Toption (aux ty)
+  | Tlist ty -> Tlist (aux ty)
+  | Tset ty -> Tset (aux ty)
+  | Tmap (ty1, ty2) -> Tmap (aux ty1, aux ty2)
+  | Tbigmap (ty1, ty2) -> Tbigmap (aux ty1, aux ty2)
+  | Tcontract c ->
+      Tcontract { c with entries_sig =
+        List.map (fun es ->
+          { es with parameter = aux es.parameter }
+        ) c.entries_sig }
+  | Tor (ty1, ty2) -> Tor (aux ty1, aux ty2)
+  | Tlambda (ty1, ty2) -> Tlambda (aux ty1, aux ty2)
+  | Trecord (rn, fl) ->
+      Trecord (rn, List.map (fun (fn, fty) -> (fn, aux fty)) fl)
+  | Tsum (sn, cl) ->
+      Tsum (sn, List.map (fun (cn, cty) -> (cn, aux cty)) cl)
+  | Tclosure ((ty1, ty2), ty3) ->
+      Tclosure ((aux ty1, aux ty2), aux ty3)
+  | Tvar tv -> List.assoc tv s
+  | ty -> ty
+  in
+  aux ty

@@ -127,6 +127,7 @@ let rec convert_type ~abbrev ?name ty =
   | Trecord (name, _) -> typ_constr name []
   | Tcontract contract_sig -> convert_contract_sig ~abbrev contract_sig
   | Tfail -> assert false
+  | Tvar _ -> assert false
   | _ ->
     try get_abbrev ty
     with Not_found ->
@@ -152,6 +153,7 @@ let rec convert_type ~abbrev ?name ty =
           typ_constr "list" [convert_type ~abbrev x], "list_t"
         | Toption x ->
           typ_constr "option" [convert_type ~abbrev x], "option_t"
+        | Tvar _ -> assert false
       in
       let name = match name with
         | Some name -> name
@@ -649,6 +651,10 @@ let rec convert_code ~abbrev (expr : (datatype, 'a) exp) =
     Exp.constraint_ ~loc
       (convert_code ~abbrev e)
       (convert_type ~abbrev ty)
+
+  | Type ty ->
+    Exp.extension ~loc
+      ({ txt = "type"; loc }, PTyp (convert_type ~abbrev ty))
 
 
 and structure_item_of_entry ~abbrev storage_caml entry =

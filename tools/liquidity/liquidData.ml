@@ -55,6 +55,7 @@ let rec default_const = function
   | Tclosure _
   | Tlambda _
   | Toperation -> raise Not_found
+  | Tvar _ -> raise Not_found
 
 let rec default_empty_const = function
   | Tunit -> CUnit
@@ -94,6 +95,7 @@ let rec default_empty_const = function
   | Tclosure _
   | Tlambda _
   | Toperation -> raise Not_found
+  | Tvar _ -> raise Not_found
 
 let rec translate_const_exp (exp : encoded_exp) =
   let loc = exp.loc in
@@ -143,6 +145,7 @@ let rec translate_const_exp (exp : encoded_exp) =
   | CreateContract _
   | ContractAt _
   | Unpack _
+  | Type _
     ->
     LiquidLoc.raise_error ~loc "non-constant expression"
 

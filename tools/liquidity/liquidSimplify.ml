@@ -66,6 +66,7 @@ let rec compute decompile code to_inline =
       List.fold_left (fun acc e -> acc + size e) 1 args
 
     | TypeAnnot _ -> 0
+    | Type _ -> 0
   in
 
 
@@ -140,7 +141,7 @@ let rec compute decompile code to_inline =
           try
             if StringSet.mem bnd_var.nname (LiquidBoundVariables.bv body) then
               raise Exit;
-            if not bnd_val.fail then
+            if not bnd_val.effect then
               body
             else
             if bnd_val.ty <> Tunit then raise Exit
@@ -208,7 +209,7 @@ let rec compute decompile code to_inline =
       let e2 = iter e2 in
       if e1.ty = Tfail (* e1 always fails *)
       then e1
-      else if not e1.fail && not e1.transfer (* no side-effects *)
+      else if not e1.effect && not e1.transfer (* no side-effects *)
       then e2
       else { exp with desc = Seq(e1,e2) }
 
@@ -286,6 +287,8 @@ let rec compute decompile code to_inline =
     | TypeAnnot { e; ty } ->
       let e = iter e in
       { exp with desc = TypeAnnot { e; ty } }
+
+    | Type _ -> exp
   in
 
   let rec fixpoint code =

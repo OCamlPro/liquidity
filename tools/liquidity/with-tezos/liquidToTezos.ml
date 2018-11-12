@@ -142,6 +142,7 @@ let rec convert_type ~loc expr =
   | Trecord (name, labels) -> convert_record_type ~loc name labels
   | Tsum (name, constrs) -> convert_sum_type ~loc name constrs
   | Tfail -> convert_type ~loc Tunit (* use unit for failures *)
+  | Tvar _ -> assert false
 
 and convert_record_type ~loc name labels =
   convert_composed_type "pair" ~loc name labels
@@ -342,6 +343,8 @@ let rec convert_code expand expr =
   | SIZE -> prim "SIZE" [] name
   | IMPLICIT_ACCOUNT -> prim "IMPLICIT_ACCOUNT" [] name
   | SET_DELEGATE -> prim "SET_DELEGATE" [] name
+
+  | EXTENSION (minst, tys) -> prim minst (List.map convert_type tys) name
 
 and convert_contract_raw expand c =
   let loc = LiquidLoc.noloc in

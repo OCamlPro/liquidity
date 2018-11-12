@@ -446,6 +446,10 @@ let rec translate_code ~parameter_name ~storage_name code =
       (* removed during typechecking *)
       assert false
 
+    | Type _ ->
+      (* removed during typechecking *)
+      assert false
+
   (* Compile a Liquidity application (prim args) *)
   and compile_prim ~loc depth env prim args =
     let ii = ii ~loc in
@@ -519,6 +523,29 @@ let rec translate_code ~parameter_name ~storage_name code =
     | Prim_unused _, _ -> assert false
     | (Prim_coll_find|Prim_coll_update|Prim_coll_mem|Prim_coll_size), _ ->
       assert false
+
+    (* Extended primitives *)
+    | Prim_extension (_, _, targs, nb_arg, nb_ret, minst), _ ->
+      let _depth, args_code = compile_args depth env args in
+      let args_code =
+        if nb_arg = 0 then args_code @ [ ii DROP ]
+        else args_code
+      in
+      let res_code =
+        let dip d exprs =
+          if d > 0 then dip ~loc d exprs
+          else seq exprs
+        in
+        let rec mk_ret d = function
+          | 0 -> [ push ~loc Tunit CUnit ]
+          | 1 -> []
+          | 2 -> [ dip d [ ii PAIR ] ]
+          | n -> mk_ret (d + 1) (n - 1) @ [ dip d [ ii PAIR ] ]
+        in
+        mk_ret 0 nb_ret
+      in
+      let tys = List.map LiquidEncode.encode_type targs in
+      args_code @ [ ii (EXTENSION (minst, tys)) ] @ res_code
 
     | ( Prim_eq|Prim_neq|Prim_lt|Prim_le|Prim_gt|Prim_ge
       | Prim_compare|Prim_add|Prim_sub|Prim_mul|Prim_ediv|Prim_map_find
@@ -623,7 +650,7 @@ let rec translate_code ~parameter_name ~storage_name code =
           assert false
         (*                           | prim, args -> *)
 
-        | (Prim_unknown|Prim_tuple_get
+        | (Prim_unknown|Prim_extension _|Prim_tuple_get
           | Prim_tuple_set|Prim_tuple
           | Prim_self|Prim_balance|Prim_now|Prim_amount|Prim_gas
           | Prim_Left|Prim_Right|Prim_source|Prim_sender|Prim_unused _

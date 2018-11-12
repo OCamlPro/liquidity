@@ -174,6 +174,7 @@ let rec emit_code ~expand code =
     M_INS_EXP ("CREATE_CONTRACT", [], [
         M_INS_EXP ("SEQ", [], emit_contract ~expand contract , [])
       ], var_annot name)
+  | EXTENSION (minst, tys) -> M_INS_EXP (minst, tys, [], var_annot name)
 
 and emit_contract ~expand (contract : loc_michelson_contract) =
   [
