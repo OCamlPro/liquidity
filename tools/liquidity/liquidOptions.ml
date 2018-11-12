@@ -17,6 +17,12 @@ let verbosity =
      | _ -> 1 (* LIQUID_DEBUG not a number *)
     )
 
+(** Perform inlining *)
+let inline = ref true
+
+(** Perform simplifications *)
+let simplify = ref true
+
 (** Do peephole optimiztions *)
 let peephole = ref true
 

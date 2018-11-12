@@ -55,11 +55,17 @@ let compile_liquid_files files =
          encoded_ast);
   if !LiquidOptions.typeonly then exit 0;
 
-  let live_ast = LiquidSimplify.simplify_contract encoded_ast to_inline in
-  if !LiquidOptions.verbosity>0 then
-    FileString.write_file (outprefix ^ ".simple")
-      (LiquidPrinter.Liquid.string_of_contract
-         live_ast);
+  let live_ast =
+    if !LiquidOptions.simplify then begin
+      let to_inline = if !LiquidOptions.inline then to_inline
+                      else StringMap.empty in
+      let live_ast = LiquidSimplify.simplify_contract encoded_ast to_inline in
+      if !LiquidOptions.verbosity>0 then
+        FileString.write_file (outprefix ^ ".simple")
+          (LiquidPrinter.Liquid.string_of_contract
+             live_ast);
+      live_ast end
+    else encoded_ast in
 
   let pre_michelson = LiquidMichelson.translate live_ast in
 
@@ -470,6 +476,12 @@ let main () =
 
       "--main", Arg.String (fun main -> LiquidOptions.main := Some main),
       "<ContractName> Produce code for contract named <ContractName>";
+
+      "--no-inline", Arg.Clear LiquidOptions.inline,
+      " Disable inlining";
+
+      "--no-simplify", Arg.Clear LiquidOptions.simplify,
+      " Disable simplifications";
 
       "--no-peephole", Arg.Clear LiquidOptions.peephole,
       " Disable peephole optimizations";
