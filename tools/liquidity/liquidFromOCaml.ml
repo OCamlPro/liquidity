@@ -180,7 +180,9 @@ let lift_env rename = function
         Tsum (name, List.map (fun (c, ty) -> c, lift_type ty) constrs)
       | Tclosure ((t1, t2), t3) ->
         Tclosure ((lift_type t1, lift_type t2), lift_type t3)
-      | Tvar _ -> ty
+      | Tvar { tyr } when Ref.isnull tyr -> ty
+      | Tvar { tyr } -> lift_type (Ref.get tyr)
+      | Tpartial _ -> failwith "lift_type partial TODO"
     and lift_contract_sig c_sig =
       { sig_name = c_sig.sig_name;
         entries_sig = List.map (fun es ->
@@ -295,6 +297,7 @@ let rec translate_type env ?expected typ =
     let expected1, expected2 = match expected with
       | Some (Tor (ty1, ty2)) -> Some ty1, Some ty2
       | _ -> None, None
+      (* | _ -> Some (Tvar (fresh ())), Some (Tvar (fresh ())) *)
     in
     Tor (translate_type env ?expected:expected1 left_type,
          translate_type env ?expected:expected2 right_type)
@@ -367,13 +370,13 @@ let rec translate_type env ?expected typ =
       with Not_found -> unbound_type typ.ptyp_loc ty_name
     end
 
-  | { ptyp_desc = Ptyp_var tv; ptyp_loc } -> Tvar tv
-
   | { ptyp_desc = Ptyp_any; ptyp_loc } ->
     begin match expected with
       | Some ty -> ty
       | None -> error_loc ptyp_loc "cannot infer type"
     end
+
+  | { ptyp_desc = Ptyp_var tv; ptyp_loc } -> Tvar { tv; tyr = Ref.null () }
 
   | { ptyp_loc } -> error_loc ptyp_loc "in type"
 
@@ -441,7 +444,7 @@ let rec translate_const env exp =
   | { pexp_desc = Pexp_construct ( { txt = Lident "false" }, None ) } ->
     CBool false, Some Tbool
   | { pexp_desc = Pexp_construct ( { txt = Lident "None" }, None ) } ->
-    CNone, None
+    CNone, Some (Toption (fresh_tvar ())) (*None*)
   | { pexp_desc = Pexp_constant (Pconst_integer (s,None)) } ->
     CInt (LiquidPrinter.integer_of_liq s), Some Tint
   | { pexp_desc = Pexp_constant (Pconst_integer (s, Some 'p')) } ->
@@ -492,7 +495,7 @@ let rec translate_const env exp =
 
   | { pexp_desc = Pexp_construct (
       { txt = Lident "[]" }, None) } ->
-    CList [], None
+    CList [], Some (Tlist (fresh_tvar ())) (*None*)
 
   | { pexp_desc = Pexp_construct (
       { txt = Lident "::" },
@@ -506,7 +509,8 @@ let rec translate_const env exp =
         let ty =
           match head_ty, tail_ty with
           | Some head_ty, Some (Tlist tail_ty) ->
-            if not @@ eq_types head_ty tail_ty then
+            let is_var = match tail_ty with Tvar _ -> true | _ -> false in
+            if not (is_var) && not @@ eq_types head_ty tail_ty then
               error_loc exp.pexp_loc "inconsistent types in list";
             Some (Tlist head_ty)
           | Some head_ty, None ->
@@ -520,10 +524,10 @@ let rec translate_const env exp =
     end
 
   | { pexp_desc = Pexp_construct ({ txt = Lident "Map" }, None) } ->
-    CMap [], None
+    CMap [], Some (Tmap (fresh_tvar (), fresh_tvar ())) (*None*)
 
   | { pexp_desc = Pexp_construct ({ txt = Lident "BigMap" }, None) } ->
-    CBigMap [], None
+    CBigMap [], Some (Tbigmap (fresh_tvar (), fresh_tvar ())) (*None*)
 
   | { pexp_desc = Pexp_construct (
       { txt = Lident ("Map" | "BigMap" as map_kind) },
@@ -562,7 +566,7 @@ let rec translate_const env exp =
 
   | { pexp_desc = Pexp_construct (
       { txt = Lident "Set" }, None) } ->
-    CSet [], None
+    CSet [], Some (Tset (fresh_tvar ())) (*None*)
 
   | { pexp_desc = Pexp_construct (
       { txt = Lident "Set" }, Some pair_list) } ->
@@ -601,7 +605,8 @@ let rec translate_const env exp =
     let arg, ty = translate_const env arg in
     let ty = match ty with
       | None -> None
-      | Some ty -> Some (Tor (ty, Tunit (* dummy *)))
+      | Some ty -> Some (Tor (ty, fresh_tvar () (*Tunit*) (* dummy *)))
+      (* | Some ty -> Some (Tor (ty, Tunit (\* dummy *\))) *)
     in
     CLeft arg, ty
 
@@ -610,7 +615,8 @@ let rec translate_const env exp =
     let arg, ty = translate_const env arg in
     let ty = match ty with
       | None -> None
-      | Some ty -> Some (Tor (Tunit (* dummy *), ty))
+      | Some ty -> Some (Tor (fresh_tvar () (*Tunit*) (* dummy *), ty))
+      (* | Some ty -> Some (Tor (Tunit (\* dummy *\), ty)) *)
     in
     CRight arg, ty
 
@@ -712,10 +718,10 @@ let vars_info_pat env pat =
       acc, translate_type env ty
 
     | { ppat_desc = Ppat_var { txt = var; loc } } ->
-      (var, loc_of_loc loc, indexes) :: acc, Tunit (* Dummy type value *)
+      (var, loc_of_loc loc, indexes) :: acc, fresh_tvar () (*Tunit*) (* Dummy type value *)
 
     | { ppat_desc = Ppat_any; ppat_loc } ->
-      ("_", loc_of_loc ppat_loc, indexes) :: acc, Tunit (* Dummy type value *)
+      ("_", loc_of_loc ppat_loc, indexes) :: acc, fresh_tvar () (*Tunit*) (* Dummy type value *)
 
     | { ppat_desc = Ppat_tuple pats } ->
       let _, acc, tys =
@@ -1068,8 +1074,9 @@ let rec translate_code contracts env exp =
               Nolabel, addr_exp;
             ]);
         pexp_loc } ->
-      error_loc pexp_loc
-        "Bytes.unpack must be annotated by the resulting type (option)"
+    (* let ty = Toption (Tvar (fresh ())) in *)
+       let ty = fresh_tvar () in
+       Unpack { arg = translate_code contracts env exp; ty }
 
     | { pexp_desc = Pexp_let (Nonrecursive, [ {
         pvb_pat = pat;
@@ -1093,13 +1100,17 @@ let rec translate_code contracts env exp =
        let rec f = fun ... -> ... f ... *)
     | { pexp_desc = Pexp_let (Recursive, [ {
         pvb_pat = { ppat_desc = Ppat_var { txt = fun_name; loc = name_loc } };
-        pvb_expr = { pexp_desc = Pexp_fun (Nolabel, None, pat, {
-            pexp_desc = Pexp_constraint (fun_body, ret_ty) });
+        pvb_expr = { pexp_desc = Pexp_fun (Nolabel, None, pat, ({
+            pexp_desc = fun_expr_desc } as fun_expr));
             pexp_loc = fun_loc;
           };
         pvb_attributes = attrs;
       } ], body) } ->
-      let ret_ty = translate_type env ret_ty in
+      let fun_body, ret_ty = match fun_expr_desc with
+        | Pexp_constraint (fun_body, ret_ty) ->
+           fun_body, translate_type env ret_ty
+        | _ -> fun_expr, fresh_tvar ()
+      in
       let fun_body = translate_code contracts env fun_body in
       let arg_name, arg_ty, fun_body = deconstruct_pat env pat fun_body in
       let is_rec =
@@ -1463,7 +1474,7 @@ let rec translate_code contracts env exp =
           ->
           Apply { prim = Prim_Cons;
                   args = [translate_code contracts env a;
-                          mk ~loc (Const { ty = Tunit; const =  CList [] }) (* XXX ? *)
+                          mk ~loc (Const { ty = fresh_tvar () (*Tunit*); const =  CList [] }) (* XXX ? *)
                          ] }
 
         | { pexp_desc = Pexp_construct (
@@ -1472,6 +1483,21 @@ let rec translate_code contracts env exp =
           Apply { prim = Prim_Cons;
                   args = [translate_code contracts env a;
                           translate_code contracts env b] }
+
+
+        | { pexp_desc = Pexp_construct ({ txt = Lident "Left" }, args) } ->
+          Constructor { constr = Left (fresh_tvar ());
+                        arg = match args with
+                          | None ->
+                            mk ~loc (Const { ty = Tunit; const = CUnit })
+                          | Some arg -> translate_code contracts env arg }
+
+        | { pexp_desc = Pexp_construct ({ txt = Lident "Right" }, args) } ->
+          Constructor { constr = Right (fresh_tvar ());
+                        arg = match args with
+                          | None ->
+                            mk ~loc (Const { ty = Tunit; const = CUnit })
+                          | Some arg -> translate_code contracts env arg }
 
 
         | { pexp_desc = Pexp_construct ({ txt = lid }, args) } ->
@@ -1705,6 +1731,13 @@ and translate_initial_storage env init_name contracts exp args =
           exp) } ->
     translate_initial_storage env init_name contracts exp
       ((arg, loc_of_loc loc, translate_type env arg_type) :: args)
+
+  | { pexp_desc =
+        Pexp_fun (
+          Nolabel, None,
+          { ppat_desc = Ppat_var { txt = arg; loc } }, exp) } ->
+    translate_initial_storage env init_name contracts exp
+      ((arg, loc_of_loc loc, (fresh_tvar ())) :: args)
 
   | _ ->
     let init_body = translate_code contracts env exp in
@@ -2007,15 +2040,20 @@ and translate_structure env acc ast : syntax_contract option =
         Recursive,
         [ {
           pvb_pat = { ppat_desc = Ppat_var { txt = fun_name; loc = name_loc } };
-          pvb_expr = { pexp_desc = Pexp_fun (Nolabel, None, pat, {
-              pexp_desc = Pexp_constraint (fun_body, ret_ty) });
+          pvb_expr = { pexp_desc = Pexp_fun (Nolabel, None, pat, ({
+              pexp_desc = fun_expr_desc } as fun_expr));
               pexp_loc = fun_loc;
             };
           pvb_attributes = attrs;
         }
         ])); pstr_loc = f_loc } :: ast ->
     let contracts = filter_contracts acc in
-    let ret_ty = translate_type env ret_ty in
+    let fun_body, ret_ty = match fun_expr_desc with
+      | Pexp_constraint (fun_body, ret_ty) ->
+         fun_body, translate_type env ret_ty
+      | _ -> fun_expr, fresh_tvar ()
+    in
+    (* let ret_ty = translate_type env ret_ty in *)
     let fun_body = translate_code contracts env fun_body in
     let arg_name, arg_ty, fun_body = deconstruct_pat env pat fun_body in
     let is_rec =

@@ -1,0 +1,14 @@
+*.liq.typed
+*.liq.normal
+*.liq.syntax
+*.pdf
+*.liq.tz
+*.init.tz
+*.initializer.tz
+*.tz.liq
+*.mic
+*.dot
+*.pre
+*.simple
+*.encoded
+*.ocaml

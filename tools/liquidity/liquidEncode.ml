@@ -237,7 +237,8 @@ let rec encode_type ?(decompiling=false) ty =
         storage_name = "storage";
         parameter;
       }] }
-  | Tvar _ -> ty
+  | Tvar _ -> assert false
+  | Tpartial _ -> assert false
 
 (* encode a contract signature to the corresponding single entry form
    sum type *)
@@ -275,7 +276,8 @@ let rec has_big_map = function
     List.exists (fun (_, ty) -> has_big_map ty) cstys
   | Tcontract { entries_sig } ->
     List.exists (fun { parameter } -> has_big_map parameter) entries_sig
-  | Tvar _ -> false
+  | Tvar _ -> assert false
+  | Tpartial _ -> assert false
 
 (* Encode storage type. This checks that big maps appear only as the
    first component of the toplevel tuple or record storage. *)
@@ -515,11 +517,13 @@ let rec encode env ( exp : typed_exp ) : encoded_exp =
     in
     let (new_name, env, count) =
       new_binding env bnd_var.nname ~effect:bnd_val.effect bnd_val.ty in
-    if inline then (* indication for closure encoding *)
+    if inline then
+      (* indication for closure encoding *)
       env.force_inline :=
         StringMap.add bnd_var.nname bnd_val !(env.force_inline);
     let body = encode env body in
-    if not bnd_val.transfer (* no inlining of values with transfer *) then begin
+    if not bnd_val.transfer then begin
+      (* no inlining of values with transfer *)
       match !count with
       | c when c <= 0 ->
         if bnd_val.effect then

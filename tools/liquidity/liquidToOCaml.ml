@@ -154,6 +154,7 @@ let rec convert_type ~abbrev ?name ty =
         | Toption x ->
           typ_constr "option" [convert_type ~abbrev x], "option_t"
         | Tvar _ -> assert false
+        | Tpartial _ -> assert false
       in
       let name = match name with
         | Some name -> name

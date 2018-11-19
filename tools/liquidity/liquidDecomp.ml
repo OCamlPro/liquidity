@@ -40,6 +40,7 @@ let const_name_of_datatype = function
   | Toperation -> "op"
   | Taddress -> "addr"
   | Tvar _ -> assert false
+  | Tpartial _ -> assert false
 
 
 let vars_nums = Hashtbl.create 101

@@ -143,6 +143,7 @@ let rec convert_type ~loc expr =
   | Tsum (name, constrs) -> convert_sum_type ~loc name constrs
   | Tfail -> convert_type ~loc Tunit (* use unit for failures *)
   | Tvar _ -> assert false
+  | Tpartial _ -> assert false
 
 and convert_record_type ~loc name labels =
   convert_composed_type "pair" ~loc name labels

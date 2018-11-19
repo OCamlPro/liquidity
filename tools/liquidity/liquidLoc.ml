@@ -55,6 +55,15 @@ let default_warning_printer loc w =
          Format.fprintf fmt "%s is not recursive but was defined with rec" f
        | AlwaysFails ->
          Format.fprintf fmt "This expression always fails"
+       | ChangeToUnit tv ->
+         Format.fprintf fmt
+           "type var %s is unknown, changing to unit" tv
+       | ChangeToTuple tv ->
+         Format.fprintf fmt
+           "type var %s is an incomplete tuple, completing with unit" tv
+       | ChangeToMap tv ->
+         Format.fprintf fmt
+           "type var %s can be either map or bigmap, choosing map" tv
     ) w
 
 let warning_printer = ref default_warning_printer

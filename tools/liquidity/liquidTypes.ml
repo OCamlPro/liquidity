@@ -11,6 +11,25 @@ module StringMap = Map.Make(String)
 module StringSet = Set.Make(String)
 module IntMap = Map.Make(struct type t = int let compare = compare end)
 
+module Ref = struct
+  exception NullRef
+  type 'a t = { mutable contents : 'a option ref;
+                mutable aliases : ('a t) list }
+  let null () = let rec r = { contents = ref None; aliases = [r] } in r
+  let create x = let rec r = { contents = ref (Some x); aliases = [r] } in r
+  let isnull r = match !(r.contents) with Some _ -> false | None -> true
+  let get r = match !(r.contents) with Some c -> c | None -> raise NullRef
+  let set r x = r.contents := Some x
+  let merge r1 r2 x =
+    r1.contents := x;
+    if r1 != r2 && r1.aliases != r2.aliases then
+      List.iter (fun r2a ->
+        r2a.contents <- r1.contents;
+        r2a.aliases <- r1.aliases
+      ) r2.aliases
+end
+
+
 exception InvalidFormat of string * string
 
 (** Type of source code locations *)
@@ -93,7 +112,14 @@ and datatype =
   | Tclosure of (datatype * datatype) * datatype
   | Tfail
 
-  | Tvar of string
+  | Tvar of { tv: string; tyr: datatype Ref.t }
+  | Tpartial of partial_type
+
+and partial_type =
+  | Peqn of ((datatype * datatype) list * datatype) list * location (* overload *)
+  | Ptup of (int * datatype) list (* partial tuple *)
+  | Pmap of datatype * datatype (* map or bigmap *)
+  | Pcont of (string * datatype) list (* unknown contract *)
 
 (** A signature for an entry point *)
 and entry_sig = {
@@ -176,9 +202,15 @@ and 'exp init = {
   init_body : 'exp; (* init code *)
 }
 
+let rec expand ty = match ty with
+  | Tvar { tyr } when Ref.isnull tyr -> ty
+  | Tvar tvar -> let ty = expand (Ref.get tvar.tyr) in
+                 Ref.set tvar.tyr ty; ty
+  | _ -> ty
+
 let size_of_type = function
-  | Ttuple l -> List.length l
-  | Trecord (_, l) -> List.length l
+  | Ttuple tyl -> List.length tyl
+  | Trecord (_, fl) -> List.length fl
   | _ -> raise (Invalid_argument "size_of_type")
 
 (** Comparable types can be used as, e.g., keys in a map. This
@@ -193,12 +225,13 @@ let comparable_type = function
   | Ttimestamp
   | Tkey_hash
   | Taddress -> true
+  | Tvar _ | Tpartial _ -> raise (Invalid_argument "comparable_type")
   | _ -> false
 
 (** Equality between types. Contract signatures are first order values
     in types, and equality between those is modulo renaming (of
     signatures). *)
-let rec eq_types ty1 ty2 = match ty1, ty2 with
+let rec eq_types ty1 ty2 = match expand ty1, expand ty2 with
   | Tunit, Tunit
   | Tbool, Tbool
   | Tint, Tint
@@ -245,6 +278,8 @@ let rec eq_types ty1 ty2 = match ty1, ty2 with
 
   | Tcontract csig1, Tcontract csig2 -> eq_signature csig1 csig2
 
+  | Tvar tv1, Tvar tv2 -> tv1.tv = tv2.tv
+
   | _, _ -> false
 
 
@@ -277,6 +312,7 @@ let rec type_contains_nonlambda_operation = function
       s.entries_sig
   | Tlambda _ | Tclosure _ -> false
   | Tvar _ -> false
+  | Tpartial _ -> failwith "nonlambda Tpartial TODO"
 
 (** Extract the signature of a contract *)
 let sig_of_contract c = {
@@ -1074,7 +1110,7 @@ and eq_exp eq_ty eq_var e1 e2 =
   eq_exp_desc eq_ty eq_var e1.desc e2.desc
 
 (** Instances of above function {!eq_exp} *)
-let eq_typed_exp eq_var e1 e2 = eq_exp eq_types eq_var e1 e2
+(* let eq_typed_exp eq_var e1 e2 = eq_exp eq_types eq_var e1 e2 *)
 let eq_syntax_exp e1 e2 = eq_exp (fun _ _ -> true) (=) e1 e2
 
 
@@ -1352,6 +1388,9 @@ type warning =
   | UnusedMatched of string
   | NotRecursive of string
   | AlwaysFails
+  | ChangeToUnit of string
+  | ChangeToTuple of string
+  | ChangeToMap of string
 
 (** {2 Reserved symbols in parsing }  *)
 
@@ -1432,7 +1471,8 @@ let rec lift_type env ty = match ty with
     Tsum (name, List.map (fun (c, ty) -> c, lift_type env ty) constrs)
   | Tclosure ((t1, t2), t3) ->
     Tclosure ((lift_type env t1, lift_type env t2), lift_type env t3)
-  | Tvar _ -> ty
+  | Tvar _ -> failwith "lift_type Tvar TODO"
+  | _ -> failwith "lift_type other TODO"
 
 and lift_contract_sig env c_sig =
       { sig_name = c_sig.sig_name;
@@ -1475,7 +1515,21 @@ let tv_subst s ty =
       Tsum (sn, List.map (fun (cn, cty) -> (cn, aux cty)) cl)
   | Tclosure ((ty1, ty2), ty3) ->
       Tclosure ((aux ty1, aux ty2), aux ty3)
-  | Tvar tv -> List.assoc tv s
+  | Tvar tv -> List.assoc tv.tv s
   | ty -> ty
   in
   aux ty
+
+(* Make a fresh type variable *)
+let fresh_tv =
+  let cnt = ref 0 in
+  let a = Char.code 'a' in
+  fun () ->
+    let q = !cnt / 26 in
+    let r = !cnt mod 26 in
+    cnt := !cnt + 1;
+    "_" ^ (Char.escaped (Char.chr (a + r)))
+    ^ (if q > 0 then string_of_int q else "")
+
+let fresh_tvar () =
+  Tvar { tv = fresh_tv (); tyr = Ref.null () }

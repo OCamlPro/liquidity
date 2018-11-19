@@ -221,7 +221,8 @@ let rec constrlabel_is_in_type c = function
         c = prefix_entry ^ e.entry_name ||
         constrlabel_is_in_type c e.parameter)
       s.entries_sig
-  | Tvar _ -> false
+  | Tvar _ -> assert false
+  | Tpartial _ -> assert false
 
 let rec constrlabel_is_in_code c code =
   match code.ins with
