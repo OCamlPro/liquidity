@@ -63,9 +63,10 @@ contract after the call. The type of the pair must match the type of a
 pair where the first component is a list of opertations and the second
 is the type of the storage argument.
 
-``<... local declarations ...>`` is an optional set of optional type and
-function declarations. Type declarations can be used to define records
-and variants (sum-types), described later in this documentation.
+``<... local declarations ...>`` is an optional set of optional type,
+function and extended primitives declarations. Type declarations can be
+used to define records and variants (sum-types), described later in this
+documentation.
 
 An optional initial storage or storage initializer can be given with
 ``let%init storage``. When deploying a Liquidity contract, if the
@@ -234,6 +235,58 @@ functions like this:
 
 Whereas functions can only take one argument in Liquidity/Michelson
 (possibly a tuple), primitives can take multiple arguments.
+
+Extended Primitives
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Additional prefix Michelson primitives can be added to the language
+through a local declaration as follows:
+
+``external prim_name : TYPE1 -> ... -> TYPE_ARG1 -> ... -> TYPE_RESULT = "MINST" FLAGS``
+
+Such declaration takes as input an arbitrary number of type arguments
+(``TYPE1 -> ...``) of the form ``[%type: 'a]``, where ``'a`` is the
+variable bound to the type.
+
+Then follows an arbitrary (but non-null) number of typed arguments
+(``TYPE_ARG1 -> ...``) of the form ``[%stack: TYPE]``, where ``TYPE``
+corresponds to any Michelson type, possibly containing one or more of
+the type variables introduced previously. Here, ``%stack`` means the
+argument resides on the stack. It is mandatory for all arguments,
+except when declaring a primitive that takes no argument, in which
+case it takes a single argument of type ``unit``, without the
+``%stack`` specifier (``[%stack: unit]`` would instead mean
+that the primitive takes a unit value from the stack).
+
+The result type (``TYPE_RESULT``) is specified using the same form as
+arguments, i.e. ``[%stack: TYPE]``, where a bare ``unit`` indicates
+a primitive that does not produce any value on the stack. It is
+also possible to specify that the primitive returns several
+values on the stack using a tuple notation :
+``[%stack: TYPE1] * [%stack: TYPE2] * ...``. In this case, every
+component of the tuple must have a ``%stack`` specifier and will
+occupy a different stack cell. All the values will be assembled
+into an actual tuple before being returned to Liquidity.
+
+``MINST`` is the actual Michelson instruction to generate and will
+be written as-is in the output file, followed by the given type
+arguments, if any.
+
+``FLAGS`` allows to give additional information about the primitive.
+Currently, the only supported flag is ``[@@effect]``, which specifies
+that the primitive may have side-effects. This prevents calls to
+this primitive from being inlined or eliminated when the return
+value is not used.
+
+A call to an extended primitive is then performed as follows:
+
+``prim_name TYPE1 ... ARG1 ...``
+
+After the primitive name, a number of type arguments (``TYPE1 ...``)
+of the form ``[%type: TYPE]`` may be given (if the primitive has
+been declared to take type arguments), where ``TYPE`` is any
+Michelson type. Then follow the actual arguments (``ARG1 ...``).
+
 
 Comparison between values
 ~~~~~~~~~~~~~~~~~~~~~~~~~

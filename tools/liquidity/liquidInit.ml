@@ -202,6 +202,8 @@ let rec subst_empty_big_map storage_ty code =
       if e == e' then desc
       else TypeAnnot { e = e'; ty }
 
+    | Type _ -> desc
+
   in
   if desc == code.desc then
     code

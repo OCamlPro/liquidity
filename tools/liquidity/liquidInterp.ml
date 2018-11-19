@@ -221,10 +221,11 @@ let rec constrlabel_is_in_type c = function
         c = prefix_entry ^ e.entry_name ||
         constrlabel_is_in_type c e.parameter)
       s.entries_sig
+  | Tvar _ -> false
 
 let rec constrlabel_is_in_code c code =
   match code.ins with
-  | RENAME _
+  | RENAME _ | EXTENSION _
   | EXEC | DUP _ | DIP_DROP _ | DROP | CAR _ | CDR _ | CDAR _ | CDDR _
   | PAIR | RECORD _ | COMPARE | LE | LT | GE | GT | NEQ | EQ | FAILWITH
   | NOW | TRANSFER_TOKENS | ADD | SUB | BALANCE | SWAP | GET | UPDATE | SOME

@@ -31,10 +31,10 @@ let check_comparable loc prim ty1 ty2 =
       (LiquidPrinter.Liquid.string_of_type ty1)
       (LiquidPrinter.Liquid.string_of_type ty2)
 
-let new_binding env name ?(fail=false) ty =
+let new_binding env name ?(effect=false) ty =
   let count = ref 0 in
   let env = { env with
-              vars = StringMap.add name (name, ty, fail) env.vars;
+              vars = StringMap.add name (name, ty, effect) env.vars;
               vars_counts = StringMap.add name count env.vars_counts;
             } in
   (env, count)
@@ -61,10 +61,10 @@ let check_used_in_env env name =
 (* Find variable name in either the global environment *)
 let find_var ?(count_used=true) env loc name =
   try
-    let (name, ty, fail) = StringMap.find name env.vars in
+    let (name, ty, effect) = StringMap.find name env.vars in
     let count = StringMap.find name env.vars_counts in
     if count_used then incr count;
-    { (mk (Var name) ~loc ty) with fail }
+    { (mk (Var name) ~loc ty) with effect }
   with Not_found ->
     error loc "unbound variable %S" name
 
@@ -183,7 +183,7 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
     if bnd_val.ty = Tfail then
       LiquidLoc.warn bnd_val.loc AlwaysFails;
     let (env, count) =
-      new_binding env bnd_var.nname ~fail:exp.fail bnd_val.ty in
+      new_binding env bnd_var.nname ~effect:exp.effect bnd_val.ty in
     let body = typecheck env body in
     let desc = Let { bnd_var; inline; bnd_val; body } in
     check_used env bnd_var count;
@@ -300,6 +300,40 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
         nb_args
     else
       error loc "Bad syntax for Contract.call."
+
+  (* Extended primitives *)
+  | Apply { prim = Prim_unknown;
+            args = { desc = Var prim_name } :: args }
+    when StringMap.mem prim_name env.env.ext_prims ->
+    let eprim = StringMap.find prim_name env.env.ext_prims in
+    let targs, args = List.fold_left (fun (targs, args) a ->
+        match a.desc, targs with
+        | Type ty, _ -> (ty :: targs, args)
+        | _, [] -> (targs, (typecheck env a) :: args)
+        | _, _ -> error loc "Type arguments must come first"
+      ) ([], []) (List.rev args) in
+    let tsubst =
+      try List.combine eprim.tvs targs
+      with Invalid_argument _ ->
+        error loc "Expecting %d type arguments, got %d\n"
+          (List.length eprim.tvs) (List.length targs) in
+    let atys = List.map (tv_subst tsubst) eprim.atys in
+    let rty = tv_subst tsubst eprim.rty in
+    let prim = Prim_extension (prim_name, eprim.effect, targs,
+                               eprim.nb_arg, eprim.nb_ret, eprim.minst) in
+    begin try List.iter2 (fun a aty ->
+      if not (eq_types a.ty aty) then
+        error loc "Bad %d args for primitive %S:\n    %s\n"
+          (List.length args) (LiquidTypes.string_of_primitive prim)
+          (String.concat "\n    " (List.map (fun arg ->
+            LiquidPrinter.Liquid.string_of_type arg.ty) args))
+      ) args atys
+    with Invalid_argument _ ->
+      error loc "Primitive %S expects %d arguments, was given %d"
+        (LiquidTypes.string_of_primitive prim)
+        (List.length eprim.atys) (List.length args)
+    end;
+    mk ?name:exp.name ~loc (Apply { prim; args }) rty
 
   (* <unknown> (prim, args) -> prim args *)
   | Apply { prim = Prim_unknown;
@@ -818,6 +852,8 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
   | TypeAnnot { e; ty } ->
      typecheck_expected "annotated expression" env ty e
 
+  | Type ty -> assert false (* Not supposed to be typechecked *)
+
 and find_case loc env constr cases =
   match List.find_all (function
       | CAny, _ -> true
@@ -1154,7 +1190,7 @@ and typecheck_contract ~warnings ~decompiling contract =
   let env, values, counts =
     List.fold_left (fun (env, values, counts) (name, inline, exp) ->
         let exp = typecheck env exp in
-        let (env, count) = new_binding env name ~fail:exp.fail exp.ty in
+        let (env, count) = new_binding env name ~effect:exp.effect exp.ty in
         env, ((name, inline, exp) :: values), ((name, count) :: counts)
       ) (env, [], []) contract.values in
   (* Typecheck entries *)

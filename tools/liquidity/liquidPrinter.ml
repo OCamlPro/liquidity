@@ -142,6 +142,7 @@ module Michelson = struct
     | Ttuple _ | Trecord _ | Tsum _ | Tcontract _ | Tor _ | Toption _ | Tlist _
     | Tset _ | Tmap _ | Tbigmap _ | Tlambda _ | Tclosure _ ->
       false
+    | Tvar _ -> true
 
   let bprint_type_base fmt b indent ty annots =
     let rec bprint_type_rec fmt b indent ty annots =
@@ -238,6 +239,7 @@ module Michelson = struct
         bprint_type fmt b indent
           (Ttuple [Tlambda (Ttuple [ty_arg; ty_env], ty_r);
                    ty_env ]) annots;
+      | Tvar tv -> Printf.bprintf b "'%s" tv
 
     and bprint_type_pairs fmt b indent tys annots =
       match tys with
@@ -772,6 +774,10 @@ module Michelson = struct
     | DIV ->
       Printf.bprintf b "DIV";
       bprint_pre_name b name
+    | EXTENSION (minst, tys) ->
+      Printf.bprintf b "%S" minst;
+      bprint_pre_name b name;
+      List.iter (fun ty -> bprint_type fmt b " " ty) tys
 
   let rec bprint_loc_michelson fmt b m =
     bprint_pre_michelson fmt bprint_loc_michelson b m.loc_name m.ins
@@ -899,6 +905,7 @@ module Liquid = struct
         bprint_type b "" ty_env;
         Printf.bprintf b "}-> ";
         bprint_type b "" ty_r;
+      | Tvar tv -> Printf.bprintf b "'%s" tv
     in
     bprint_type b indent ty
 
@@ -1287,6 +1294,9 @@ module Liquid = struct
       Printf.bprintf b " : ";
       bprint_type b (indent ^ "  ") ty;
       Printf.bprintf b ")"
+    | Type ty ->
+      Printf.bprintf b "\n%s" indent;
+      bprint_type b (indent ^ "  ") ty
 
   let rec bprint_code_types ~debug b indent code =
     bprint_code_base

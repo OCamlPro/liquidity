@@ -243,6 +243,8 @@ let rec untype (env : env) (code : (datatype, 'a) exp) : (datatype, 'b) exp =
 
     | TypeAnnot { e; ty } ->
       TypeAnnot { e = untype env e; ty }
+
+    | Type ty -> Type ty
   (* | _ ->
    *
    *    LiquidLoc.raise_error

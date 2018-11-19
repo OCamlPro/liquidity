@@ -65,11 +65,11 @@ let uniq_ident env name =
 
 (* Create a new binding in the typechecing environment to uniquely
    rename variable for alpha-renaming (prevents capture). *)
-let new_binding env name ?(fail=false) ty =
+let new_binding env name ?(effect=false) ty =
   let new_name = uniq_ident env name in
   let count = ref 0 in
   let env = { env with
-              vars = StringMap.add name (new_name, ty, fail) env.vars;
+              vars = StringMap.add name (new_name, ty, effect) env.vars;
               vars_counts = StringMap.add new_name count env.vars_counts;
             } in
   (new_name, env, count)
@@ -79,14 +79,14 @@ let new_binding env name ?(fail=false) ty =
 let find_var ?(count_used=true) env loc name =
   try
     let vname = name in
-    let (name, ty, fail) = StringMap.find name env.vars in
+    let (name, ty, effect) = StringMap.find name env.vars in
     let count = StringMap.find name env.vars_counts in
     if count_used then incr count;
     let aname =
       if env.annot then Some vname
       else None in
     let exp = mk ?name:aname ~loc (Var name) ty in
-    { exp with fail }
+    { exp with effect }
   with Not_found ->
   match env.clos_env with
   | None -> error loc "unbound variable %S" name
@@ -237,6 +237,7 @@ let rec encode_type ?(decompiling=false) ty =
         storage_name = "storage";
         parameter;
       }] }
+  | Tvar _ -> ty
 
 (* encode a contract signature to the corresponding single entry form
    sum type *)
@@ -274,6 +275,7 @@ let rec has_big_map = function
     List.exists (fun (_, ty) -> has_big_map ty) cstys
   | Tcontract { entries_sig } ->
     List.exists (fun { parameter } -> has_big_map parameter) entries_sig
+  | Tvar _ -> false
 
 (* Encode storage type. This checks that big maps appear only as the
    first component of the toplevel tuple or record storage. *)
@@ -433,7 +435,7 @@ let rec deconstify env loc ty c =
 
 (* Decrement counters for variables that they appear in an expression *)
 let rec decr_counts_vars env e =
-  if e.fail then () else
+  if e.effect then () else
     match e.desc with
     | Var name ->
       begin try
@@ -491,6 +493,8 @@ let rec decr_counts_vars env e =
     | TypeAnnot { e } ->
       decr_counts_vars env e
 
+    | Type _ -> ()
+
 
 (* Encode a Liquidity expression *)
 let rec encode env ( exp : typed_exp ) : encoded_exp =
@@ -510,7 +514,7 @@ let rec encode env ( exp : typed_exp ) : encoded_exp =
       else bnd_val
     in
     let (new_name, env, count) =
-      new_binding env bnd_var.nname ~fail:bnd_val.fail bnd_val.ty in
+      new_binding env bnd_var.nname ~effect:bnd_val.effect bnd_val.ty in
     if inline then (* indication for closure encoding *)
       env.force_inline :=
         StringMap.add bnd_var.nname bnd_val !(env.force_inline);
@@ -518,7 +522,7 @@ let rec encode env ( exp : typed_exp ) : encoded_exp =
     if not bnd_val.transfer (* no inlining of values with transfer *) then begin
       match !count with
       | c when c <= 0 ->
-        if bnd_val.fail then
+        if bnd_val.effect then
           () (* No inling of values with side effects which don't
                 appear later on *)
         else begin
@@ -527,7 +531,10 @@ let rec encode env ( exp : typed_exp ) : encoded_exp =
             StringMap.add new_name (const_unit ~loc) !(env.to_inline)
         end
       | c when c = 1 || inline ->
-        env.to_inline := StringMap.add new_name bnd_val !(env.to_inline)
+        (* if bnd_val.effect then
+         *   ()
+         * else *)
+          env.to_inline := StringMap.add new_name bnd_val !(env.to_inline)
       | _ -> ()
     end;
     mk ?name:exp.name ~loc
@@ -546,7 +553,7 @@ let rec encode env ( exp : typed_exp ) : encoded_exp =
     mk ?name:exp.name ~loc (SetField { record; field; set_val }) exp.ty
 
   | Seq (exp1, exp2) ->
-    (* TODO: if not exp.fail then remove exp1 *)
+    (* TODO: if not exp.effect then remove exp1 *)
     let exp1 = encode env exp1 in
     let exp2 = encode env exp2 in
     mk ?name:exp.name ~loc (Seq (exp1, exp2)) exp.ty
@@ -961,6 +968,9 @@ let rec encode env ( exp : typed_exp ) : encoded_exp =
   | TypeAnnot { e; ty } ->
     let e = encode env e in
     mk ?name:exp.name ~loc (TypeAnnot { e; ty }) exp.ty
+
+  | Type ty ->
+    mk ?name:exp.name ~loc (Type ty) exp.ty
 
 
 and encode_apply name env prim loc args ty =

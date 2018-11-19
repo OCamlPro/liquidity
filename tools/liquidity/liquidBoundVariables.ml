@@ -139,6 +139,8 @@ let rec bv code =
 
   | TypeAnnot { e } -> bv e
 
+  | Type _ -> StringSet.empty
+
 
 let mk desc exp bv = { exp with desc; bv }
 
@@ -413,6 +415,9 @@ let rec bound code =
     let bv = e.bv in
     let desc = TypeAnnot { e; ty } in
     mk desc code bv
+
+  | Type _ ->
+    mk code.desc code StringSet.empty
 
 and bound_entry entry =
   let c = bound entry.code in
