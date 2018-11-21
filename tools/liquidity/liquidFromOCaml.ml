@@ -151,7 +151,7 @@ let rec shadow name env =
 
 let lift_env rename = function
   | { top_env = None } -> assert false
-  | { types; contract_types; labels; constrs;
+  | { types; contract_types; labels; constrs; ext_prims;
       filename; contractname = inner_name;
       top_env = Some top_env } as env ->
     let lift_name n = rename inner_name n in
@@ -200,6 +200,9 @@ let lift_env rename = function
         (fun (lab, n, ty) -> lift_name lab, n, lift_type ty);
     top_env.constrs <- lift_to_top constrs top_env.constrs
         (fun (c, ty) -> lift_name c, lift_type ty);
+    top_env.ext_prims <- lift_to_top ext_prims top_env.ext_prims
+        (fun e -> { e with atys = List.map lift_type e.atys;
+                           rty = lift_type e.rty });
     lift_type
 
 let lift_inner_env =
