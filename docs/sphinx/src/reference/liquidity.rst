@@ -783,14 +783,16 @@ Operations on bytes
   
 * ``Bytes.slice`` or ``Bytes.sub" of type ``nat -> nat -> bytes ->
   bytes option``. Extract a sequence of bytes within another sequence
-  of bytes. ``None`` means that the position or length was invalid. It
+  of bytes. ``Bytes.slice start len b`` extracts the bytes subsequence
+  of ``b`` starting at index ``start`` and of length ``len``. A return
+  value ``None`` means that the position or length was invalid. It
   is translated to ``SLICE`` in Michelson.
 
   Example::
 
     let b = 0x616161 in
     let s = Bytes.concat [ b; b ] in
-    let b' = Bytes.sub 3p 3p in
+    let b' = Bytes.sub 3p 3p b in
     match b' with
     | None -> failwith "Bad concat or sub !"
     | Some b' ->
@@ -805,7 +807,7 @@ Operations on bytes
 
     let b = 0x616161 in
     let s = b @ b in
-    let b' = Bytes.sub 3p 3p in
+    let b' = Bytes.sub 3p 3p b in
     ...
 
 Operations on strings
@@ -827,8 +829,9 @@ printable subset of 7-bit ASCII, plus some escaped characters (``\n``,
     ...
   
 * ``String.slice`` or ``String.sub`` with type ``nat -> nat -> string
-  -> string option``. Return a substring of a string at the given
-  position with the specified length, or ``None`` if invalid. It is
+  -> string option``. ``String.sub start len s`` returns a substring
+  of a string ``s`` at the given starting at position ``len`` with the
+  specified length ``len``, or ``None`` if invalid. It is
   translated to ``SLICE`` in Michelson.
 
   Example::
@@ -915,7 +918,7 @@ list given in argument is unmodified.
       list;
     ...
   
-* ``List.fold: ('elt * 'acc -> unit) -> 'elt list -> 'acc ->
+* ``List.fold: ('elt * 'acc -> 'acc) -> 'elt list -> 'acc ->
   'acc``. Iter on all elements of a list, while modifying an
   accumulator. It is translated to ``ITER`` in Michelson.
 
@@ -1018,7 +1021,7 @@ unmodified.
       if ele < 0 then failwith "negative integer") my_set;
     ...
   
-* ``Set.fold: ('ele * 'acc -> unit) -> 'ele set -> 'acc ->
+* ``Set.fold: ('ele * 'acc -> 'acc) -> 'ele set -> 'acc ->
   'acc``. Apply a function on all elements of the set, updating an
   accumulator and returning it at the end. It is translated to
   ``ITER`` in Michelson.
@@ -1148,7 +1151,7 @@ and the map given in argument is unmodified.
       ) map;
     ...
 
-* ``Map.fold: (('key * 'val) * 'acc -> unit) -> ('key,'val) map ->
+* ``Map.fold: (('key * 'val) * 'acc -> 'acc) -> ('key,'val) map ->
   'acc -> 'acc``. Apply a function on all associations of the map,
   updating and returning an accumulator. It is translated to ``ITER``
   in Michelson.
