@@ -423,7 +423,10 @@ Operations on tuples
     let x = (1,2,3,4) in
     let x0 = x.(0) <- 10 in
     let x1 = x0.(1) <- 11 in
-    if x1 <> (10, 11, 3, 4) then failwith "Error !";
+    if x1.(0) <> 10
+       || x1.(1) <> 11
+       || x1.(2) <> 3
+       || x1.(3) <> 4 then failwith "Error !";
 
   
 Operations on numeric values
@@ -479,7 +482,9 @@ Operations on numeric values
 
       (* conversion from tez to nat *)
       let v = 1000tz in
-      let (nat, rem_tez) = v / 1tz in
+      let (nat, rem_tez) = match v / 1tz with
+        | Some qr -> qr
+        | None -> failwith "division by 0 impossible" in
       ...
     
 * ``~-``: Negation. Type: ``int|nat -> int``
@@ -604,7 +609,7 @@ Operations on contracts
 
     let key = edpk... in
     let key_hash = Crypto.hash_key key in
-    let contract = Account.default key_hash in
+    let my_contract = Account.default key_hash in
     ...
   
 * ``Contract.set_delegate: key_hash option -> operation``. Forge a
@@ -617,7 +622,7 @@ Operations on contracts
   Example::
 
     let op1 = Contract.set_delegate (Some tz1...) in
-    let op2 = Contract.set_delegate None in
+    let op2 = Contract.set_delegate (None : key_hash) in
     ...
     ([op1;op2], storage)
   
@@ -627,7 +632,7 @@ Operations on contracts
   Example::
 
     let addr = Contract.address (Contract.self ()) in
-    let map = Map.add addr contract map in
+    let map = Map.add addr my_contract map in
     ...
   
 * ``Contract.at: address -> _.instance option``. Returns the contract
@@ -639,7 +644,7 @@ Operations on contracts
 
     match (Contract.at addr : BoolContract.instance option) with
     | None -> failwith ("Cannot recover bool contract from:", addr)
-    | Some contract -> ...
+    | Some my_contract -> ...
   
     
 * ``Contract.self: unit -> _.instance``. Returns the current
@@ -647,7 +652,7 @@ Operations on contracts
 
   Example::
 
-    let contract = Contract.self () in
+    let my_contract = Contract.self () in
     ...
   
 * ``Contract.create: manager:key_hash -> delegate:key_hash option ->
@@ -670,9 +675,9 @@ Operations on contracts
 
     let delegatable = true in
     let spendable = false in
-    let contract_storage = (10tz,"Hello") in
+    let initial_storage = (10tz,"Hello") in
     let (op, addr) =
-       Contract.create ~initial_storage ~manager ~spendable
+       Contract.create ~storage:initial_storage ~manager ~spendable
          ~delegatable ~delegate:(Some delegate) ~amount:10tz
          (contract struct ... end)
     in
@@ -718,7 +723,7 @@ Cryptographic operations
   Example::
 
     let key_hash = Crypto.hash_key edpk1234... in
-    let contract = Account.default key_hash in
+    let my_contract = Account.default key_hash in
     ...
 
   
@@ -756,7 +761,7 @@ Operations on bytes
     let s = Bytes.pack (1, 2, 3, 4) in
     let t = (Bytes.unpack s : (int * int * int * int) option) in
     match t with
-    | None -> then failwith "bad unpack"
+    | None -> failwith "bad unpack"
     | Some t ->
       if t.(0) <> 1 then failwith "bad unpack";
       ...
@@ -778,7 +783,7 @@ Operations on bytes
   Example::
 
     let s = Bytes.concat [ 0x616161; 0x616161 ] in
-    if Bytes.length s <> 6 then failwith "bad concat !";
+    if Bytes.length s <> 6p then failwith "bad concat !";
     ...
   
 * ``Bytes.slice`` or ``Bytes.sub" of type ``nat -> nat -> bytes ->
@@ -925,7 +930,7 @@ list given in argument is unmodified.
   Example::
 
     let sum = List.fold (fun (elt, acc) ->
-       ele + acc
+       elt + acc
        ) [1; 2; 3; 4; 5] 0
     in
     ...
@@ -949,7 +954,7 @@ list given in argument is unmodified.
   Example::
 
     let (list, acc) = List.map_fold (fun (elt, acc) ->
-       ( ele+1, ele+acc )
+       ( elt + 1, elt + acc )
        ) [1; 2; 3; 4; 5] 0 in
     ...
   
@@ -1031,7 +1036,7 @@ unmodified.
     (* compute the sum of elements *)
     let sum = Set.fold (fun (ele, acc) ->
       ele + acc
-      ) my_set
+      ) my_set 0
     in
     ...
   
@@ -1060,7 +1065,7 @@ unmodified.
        in
        let negated_ele = - ele in
        (negated_ele, acc)
-       ) my_set None
+       ) my_set (None : int option)
     in
     ...
     
@@ -1113,7 +1118,7 @@ and the map given in argument is unmodified.
 
   Example::
 
-    let new_map = Map.update key None old_map in (* removed *)
+    let new_map = Map.update key (None : int option) old_map in (* removed *)
     let new_map = Map.update key (Some v) new_map in (* added *)
     ...
   
@@ -1145,8 +1150,8 @@ and the map given in argument is unmodified.
 
   Example::
 
-    Map.iter (fun (_, val) ->
-      if val < 0 then
+    Map.iter (fun (_, v) ->
+      if v < 0 then
         failwith "No option should be negative"
       ) map;
     ...
@@ -1171,8 +1176,8 @@ and the map given in argument is unmodified.
 
   Example::
 
-    let negated_values = Map.map (fun (_key, val) ->
-      - val
+    let negated_values = Map.map (fun (_key, v) ->
+      - v
       ) map
     in
     ...
@@ -1184,8 +1189,7 @@ and the map given in argument is unmodified.
 
   Example::
 
-    let negated_values, min_key = Map.map_fold (fun x ->
-      let ( (key, val) , acc ) = x in
+    let negated_values, min_key = Map.map_fold (fun ( (key, v) , acc ) ->
       let acc = match acc with
         | None -> Some key
         | Some v -> if v < key then Some key else acc
@@ -1212,7 +1216,7 @@ storage. Big maps cannot be iterated.
 
   Example::
 
-    let v = match Map.find param my_map with
+    let v = match Map.find param my_big_map with
       | None -> failwith ("param is not in the map", param)
       | Some v -> v
     in
@@ -1225,7 +1229,7 @@ storage. Big maps cannot be iterated.
 
   Example::
 
-    let new_map = Map.update key None old_map in (* removed *)
+    let new_map = Map.update key (None : string option) old_map in (* removed *)
     let new_map = Map.update key (Some v) new_map in (* added *)
     ...
   

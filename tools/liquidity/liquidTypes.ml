@@ -698,7 +698,7 @@ and ('ty, 'a) exp_desc =
              inline: bool;
              bnd_val: ('ty, 'a) exp;
              body: ('ty, 'a) exp }
-  (** Let binding: {[let@@inline bnd_var = bnd_val in body ]} *)
+  (** Let binding: {[let\@\@inline bnd_var = bnd_val in body ]} *)
 
   | Var of string (** Simple variable : [x] *)
 
@@ -829,7 +829,7 @@ and ('ty, 'a) exp_desc =
       {[ match arg with
         | C1 (a1, a2) -> exp1
         | C2 (x1, x2, x3) -> exp2
-        | _ -> exp3 *)
+        | _ -> exp3 ]} *)
 
   | MatchNat of { arg: ('ty, 'a) exp;
                   plus_name: loc_name;
