@@ -327,42 +327,32 @@ The ``Current`` module
   contract. The balance contains the amount of tez that was sent by
   the current operation. It is translated to ``BALANCE`` in Michelson.
 
-  Example::
+  .. tryliquidity:: ../../../../tests/doc/doc1.liq
+  .. literalinclude:: ../../../../tests/doc/doc1.liq
 
-    let bal = Current.balance() in
-    ...
-    
 * ``Current.time: unit -> timestamp``: returns the timestamp of the
   block in which the transaction is included. This value is chosen by
   the baker that is including the transaction, so it should not be
   used as a reliable source of alea.  It is translated to ``NOW`` in
   Michelson.
 
-  Example::
-    
-    let now = Current.time () in
-    ...
-    
+  .. tryliquidity:: ../../../../tests/doc/doc2.liq
+  .. literalinclude:: ../../../../tests/doc/doc2.liq
+
 * ``Current.amount: unit -> tez``: returns the amount of tez
   transferred by the current operation (standard or internal
   transaction). It is translated to ``AMOUNT`` in Michelson.
 
-  Example::
+  .. tryliquidity:: ../../../../tests/doc/doc3.liq
+  .. literalinclude:: ../../../../tests/doc/doc3.liq
 
-    let received = Current.amount() in
-    ...
-    
 * ``Current.gas: unit -> nat``: returns the amount of gas available to
   execute the rest of the transaction. It is translated to
   ``STEPS_TO_QUOTA`` in Michelson.
 
-  Example::
+  .. tryliquidity:: ../../../../tests/doc/doc4.liq
+  .. literalinclude:: ../../../../tests/doc/doc4.liq
 
-    let remaining_gas = Current.gas () in
-    if remaining_gas < 1000p then
-      Current.failwith ("Not enough gas", remaining_gas);
-    ...
-  
 * ``Current.source: unit -> address``: returns the address that
   initiated the current top-level transaction in the blockchain. It is
   the same one for all the transactions resulting from the top-level
@@ -370,34 +360,26 @@ The ``Current`` module
   fees and storage cost, and signed the operation on the
   blockchain. It is translated to ``SOURCE`` in Michelson.
 
-  Example::
+  .. tryliquidity:: ../../../../tests/doc/doc5.liq
+  .. literalinclude:: ../../../../tests/doc/doc5.liq
 
-    let addr = Current.source () in
-    ...
-    
 * ``Current.sender: unit -> address``: returns the address that
   initiated the current transaction. It is the same as the source for
   the top-level transaction, but it is the originating contract for
   internal operations. It is translated to ``SENDER`` in Michelson.
 
-  Example::
+  .. tryliquidity:: ../../../../tests/doc/doc6.liq
+  .. literalinclude:: ../../../../tests/doc/doc6.liq
 
-    let addr = Current.sender () in
-    ...
-    
 * ``failwith`` or ``Current.failwith: 'a -> 'b``: makes the current
   transaction and all its internal transactions fail. No modification
   is done to the context. The argument can be any value (often a
   string and some argument), the system will display it to explain why
   the transaction failed.
 
-  Example::
+  .. tryliquidity:: ../../../../tests/doc/doc7.liq
+  .. literalinclude:: ../../../../tests/doc/doc7.liq
 
-    let remaining_gas = Current.gas () in
-    if remaining_gas < 1000p then
-      Current.failwith ("Not enough gas", remaining_gas);
-    ...
-  
 Operations on tuples
 ~~~~~~~~~~~~~~~~~~~~
 
@@ -407,28 +389,16 @@ Operations on tuples
   right, i.e. ``(a,b,c,d)`` becomes ``(a, (b, (c, d)))``. In this
   example, ``a`` is the ``0``-th element.
 
-  Example::
+  .. tryliquidity:: ../../../../tests/doc/doc8.liq
+  .. literalinclude:: ../../../../tests/doc/doc8.liq
 
-    let x = (1, 2, 3, 4) in
-    let car = x.(0) in
-    let cdr = x.(1) in
-    if car <> 1 || car <> 2 then failwith "Error !";
-  
 * ``set t n x``, ``Array.set t n x`` and ``t.(n) <- x`` where ``n`` is
   constant positive-or-nul int: returns the tuple where the ``n``-th element
   has been replaced by ``x``.
 
-  Example::
+  .. tryliquidity:: ../../../../tests/doc/doc9.liq
+  .. literalinclude:: ../../../../tests/doc/doc9.liq
 
-    let x = (1,2,3,4) in
-    let x0 = x.(0) <- 10 in
-    let x1 = x0.(1) <- 11 in
-    if x1.(0) <> 10
-       || x1.(1) <> 11
-       || x1.(2) <> 3
-       || x1.(3) <> 4 then failwith "Error !";
-
-  
 Operations on numeric values
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -462,12 +432,9 @@ Operations on numeric values
 
     It is translated to ``MUL`` in Michelson.
 
-    Example::
+    .. tryliquidity:: ../../../../tests/doc/doc10.liq
+    .. literalinclude:: ../../../../tests/doc/doc10.liq
 
-      (* conversion from nat to tez *)
-      let v = 1000p in
-      let amount = v * 1tz in
-      ...
 
 * ``/``: Euclidian division. With the following types:
 
@@ -478,15 +445,9 @@ Operations on numeric values
   
     It is translated to ``EDIV`` in Michelson.
 
-    Example::
+    .. tryliquidity:: ../../../../tests/doc/doc11.liq
+    .. literalinclude:: ../../../../tests/doc/doc11.liq
 
-      (* conversion from tez to nat *)
-      let v = 1000tz in
-      let (nat, rem_tez) = match v / 1tz with
-        | Some qr -> qr
-        | None -> failwith "division by 0 impossible" in
-      ...
-    
 * ``~-``: Negation. Type: ``int|nat -> int``
   
     It is translated to ``NEG`` in Michelson.
@@ -527,11 +488,10 @@ Operations on numeric values
   translated to ``IS_NAT`` in Michelson.
 
     Instead of using ``is_nat``, it is recommended to use a specific form
-    of pattern matching::
+    of pattern matching:
 
-      match%nat x with
-      | Plus x -> ...
-      | Minus x -> ...
+    .. tryliquidity:: ../../../../tests/doc/doc12.liq
+    .. literalinclude:: ../../../../tests/doc/doc12.liq
 
 * ``int``: To integer. Type ``nat -> int``
 
@@ -555,33 +515,26 @@ Operations on contracts
   Arguments can be labeled, in which case they can be given
   in any order. The entry point name is optional (``main`` by default).
 
-  Example::
-
-    let dest = (tz1... : UnitContract.instance) in
-    let op = Contract.call ~dest ~amount:1000tz () in
-    ...
-    ([op], storage)
+  .. tryliquidity:: ../../../../tests/doc/doc13.liq
+  .. literalinclude:: ../../../../tests/doc/doc13.liq
 
 * ``<c.entry>: 'parameter -> amount:tez -> operation``. Forge an
   internal contract call. It is translated to ``TRANSFER_TOKENS`` in
   Michelson.  The amount argument can be labeled, in which case it can
   appear before the parameter.
 
-  ``c.my_entry p ~amount:a`` is syntactic sugar for
-  ``Contract.call ~dest:c ~entry:my_entry ~parameter:p ~amount:a``.
+  .. tryliquidity:: ../../../../tests/doc/doc14.liq
+  .. literalinclude:: ../../../../tests/doc/doc14.liq
 
 * ``Account.transfer: dest:key_hash -> amount:tez ->
   operation``. Forge an internal transaction to the implicit (_i.e._
   default) account contract of ``dest``. Arguments can be labeled, in
   which case they can be given in any order. *The resulting operation
-  cannot fail.*
+  cannot fail (if the transfer amount leaves more than 0.257tz on both
+  contracts).*
 
-  Example::
-
-    let op =
-      Account.transfer ~dest:tz1YLtLqD1fWHthSVHPD116oYvsd4PTAHUoc ~amount:1tz in
-    ...
-    ([op], storage)
+  .. tryliquidity:: ../../../../tests/doc/doc15.liq
+  .. literalinclude:: ../../../../tests/doc/doc15.liq
 
 * ``Account.create: manager:key_hash -> delegate:key_hash option ->
   delegatable:bool -> amount:tez -> operation * address``. Forge an
@@ -590,28 +543,18 @@ Operations on contracts
   Michelson. Arguments can be labeled, in which case they can be given
   in any order.
 
-  Example::
+  .. tryliquidity:: ../../../../tests/doc/doc16.liq
+  .. literalinclude:: ../../../../tests/doc/doc16.liq
 
-    let not_delegatable = false in
-    let (op, addr) =
-      Account.create manager (Some delegate) not_delegatable 100tz
-    in
-    ...
-    ([op], storage)
-  
 * ``Account.default: key_hash -> UnitContract.instance``. Returns
   the contract associated to the given ``key_hash``. Since this
   contract is not originated, it cannot contains code, so transfers to
   it cannot fail. It is translated to ``IMPLICIT_ACCOUNT`` in
   Michelson.
 
-  Example::
+  .. tryliquidity:: ../../../../tests/doc/doc17.liq
+  .. literalinclude:: ../../../../tests/doc/doc17.liq
 
-    let key = edpk... in
-    let key_hash = Crypto.hash_key key in
-    let my_contract = Account.default key_hash in
-    ...
-  
 * ``Contract.set_delegate: key_hash option -> operation``. Forge a
   delegation operation for the current contract. A ``None`` argument
   means that the contract should have no delegate (it falls back to
@@ -619,42 +562,30 @@ Operations on contracts
   internal operation if it is returned at the end of the ``%entry``
   function. It is translated to ``SET_DELEGATE`` in Michelson.
 
-  Example::
+  .. tryliquidity:: ../../../../tests/doc/doc18.liq
+  .. literalinclude:: ../../../../tests/doc/doc18.liq
 
-    let op1 = Contract.set_delegate (Some tz1...) in
-    let op2 = Contract.set_delegate (None : key_hash) in
-    ...
-    ([op1;op2], storage)
-  
 * ``Contract.address: _.instance -> address`` . Returns the address of
   a contract. It is translated to ``ADDRESS`` in Michelson.
 
-  Example::
+  .. tryliquidity:: ../../../../tests/doc/doc19.liq
+  .. literalinclude:: ../../../../tests/doc/doc19.liq
 
-    let addr = Contract.address (Contract.self ()) in
-    let map = Map.add addr my_contract map in
-    ...
-  
 * ``Contract.at: address -> _.instance option``. Returns the contract
   associated with the address and type annotation, if any. Must be
   annotated with the type of the contract. It is translated to
   ``CREATE_CONTRACT`` in Michelson.
 
-  Example::
+  .. tryliquidity:: ../../../../tests/doc/doc20.liq
+  .. literalinclude:: ../../../../tests/doc/doc20.liq
 
-    match (Contract.at addr : BoolContract.instance option) with
-    | None -> failwith ("Cannot recover bool contract from:", addr)
-    | Some my_contract -> ...
-  
     
 * ``Contract.self: unit -> _.instance``. Returns the current
   executing contract. It is translated to ``SELF`` in Michelson.
 
-  Example::
+  .. tryliquidity:: ../../../../tests/doc/doc21.liq
+  .. literalinclude:: ../../../../tests/doc/doc21.liq
 
-    let my_contract = Contract.self () in
-    ...
-  
 * ``Contract.create: manager:key_hash -> delegate:key_hash option ->
   spendable:bool -> delegatable:bool -> amount:tez -> storage:'storage
   -> code:(contract _) -> (operation, address)``. Forge an operation
@@ -670,22 +601,16 @@ Operations on contracts
   balance ``initial_amount`` and initial storage
   ``initial_storage``. Arguments can be named and put in any order.
 
+  .. tryliquidity:: ../../../../tests/doc/doc22.liq
+  .. literalinclude:: ../../../../tests/doc/doc22.liq
 
-  Example::
+  The contract code parameter is a *first class* value, it can be
+  written inlined as above, or equivalently the contract code can be
+  referred to by its name (in scope) as below:
 
-    let delegatable = true in
-    let spendable = false in
-    let initial_storage = (10tz,"Hello") in
-    let (op, addr) =
-       Contract.create ~storage:initial_storage ~manager ~spendable
-         ~delegatable ~delegate:(Some delegate) ~amount:10tz
-         (contract struct ... end)
-    in
+  .. tryliquidity:: ../../../../tests/doc/doc23.liq
+  .. literalinclude:: ../../../../tests/doc/doc23.liq
 
-    (* THIS WILL FAIL UNTIL THE OPERATION IS EXECUTED *)
-    let new_contract = (Contract.at addr : StringContract.instance option) in
-    ...
-    ( [op], storage )
     
 Cryptographic operations
 ~~~~~~~~~~~~~~~~~~~~~~~~
@@ -694,49 +619,36 @@ Cryptographic operations
   a bytes with the cryptographic Blake2b function. It is translated to
   ``BLAKE2B`` in Michelson.
 
-  Example::
+  .. tryliquidity:: ../../../../tests/doc/doc24.liq
+  .. literalinclude:: ../../../../tests/doc/doc24.liq
 
-    let hash = Crypto.blake2b (Bytes.pack map) in
-    ...
-  
 * ``Crypto.sha256: bytes -> bytes``. Computes the cryptographic hash
   of a bytes with the cryptographic Sha256 function. It is translated
   to ``SHA256`` in Michelson.
 
-  Example::
+  .. tryliquidity:: ../../../../tests/doc/doc25.liq
+  .. literalinclude:: ../../../../tests/doc/doc25.liq
 
-    let hash = Crypto.sha256 (Bytes.pack map) in
-    ...
-  
 * ``Crypto.sha512: bytes -> bytes``. Computes the cryptographic hash of
   a bytes with the cryptographic Sha512 function. It is translated to ``SHA512`` in Michelson.
 
-  Example::
-
-    let hash = Crypto.sha512 (Bytes.pack map) in
-    ...
-
+  .. tryliquidity:: ../../../../tests/doc/doc26.liq
+  .. literalinclude:: ../../../../tests/doc/doc26.liq
   
 * ``Crypto.hash_key: key -> key_hash``. Hash a public key and encode
   the hash in B58check. It is translated to ``HASH_KEY`` in Michelson.
 
-  Example::
+  .. tryliquidity:: ../../../../tests/doc/doc27.liq
+  .. literalinclude:: ../../../../tests/doc/doc27.liq
 
-    let key_hash = Crypto.hash_key edpk1234... in
-    let my_contract = Account.default key_hash in
-    ...
-
-  
 * ``Crypto.check: key -> signature -> bytes -> bool``. Check that the
-  signature corresponds to signing the sequence of bytes with the
-  public key. It is translated to ``CHECK_SIGNATURE`` in Michelson.
+  signature corresponds to signing the (Blake2b hash of the) sequence
+  of bytes with the public key. It is translated to
+  ``CHECK_SIGNATURE`` in Michelson. Signatures generated by
+  ``tezos-client sign bytes ...`` can be checked this way.
 
-  Example::
-
-    let bytes = Crypto.blake2b (Bytes.pack param) in
-    if not (Crypto.check key signature bytes) then
-      failwith "You are not allowed to do that";
-    ...
+  .. tryliquidity:: ../../../../tests/doc/doc28.liq
+  .. literalinclude:: ../../../../tests/doc/doc28.liq
   
 Operations on bytes
 ~~~~~~~~~~~~~~~~~~~
@@ -745,47 +657,30 @@ Operations on bytes
   representation in a sequence of bytes. It is translated to ``PACK``
   in Michelson.
 
-  Example::
+  .. tryliquidity:: ../../../../tests/doc/doc29.liq
+  .. literalinclude:: ../../../../tests/doc/doc29.liq
 
-    let s = Bytes.pack [1; 2; 3; 4; 5] in
-    let hash = Crypto.sha256 s in
-    ...
-  
 * ``Bytes.unpack: bytes -> 'a option``. Deserialize a sequence of
   bytes to a value from which it was serialized. The expression must
   be annotated with the (option) type that it should return. It is
   translated to ``UNPACK`` in Michelson.
 
-  Example::
+  .. tryliquidity:: ../../../../tests/doc/doc30.liq
+  .. literalinclude:: ../../../../tests/doc/doc30.liq
 
-    let s = Bytes.pack (1, 2, 3, 4) in
-    let t = (Bytes.unpack s : (int * int * int * int) option) in
-    match t with
-    | None -> failwith "bad unpack"
-    | Some t ->
-      if t.(0) <> 1 then failwith "bad unpack";
-      ...
-  
 * ``Bytes.length`` or ``Bytes.size: bytes -> nat``. Return the size of
   the sequence of bytes. It is translated to ``SIZE`` in Michelson.
 
-  Example::
+  .. tryliquidity:: ../../../../tests/doc/doc31.liq
+  .. literalinclude:: ../../../../tests/doc/doc31.liq
 
-    let s = Bytes.pack (1, 2, 3, 4) in
-    let n = Bytes.length s in
-    if n > 10p then failwith "serialization too long";
-    ...
-    
 * ``Bytes.concat: bytes list -> bytes``. Append all the sequences of
   bytes of a list into a single sequence of bytes. It is translated to
   ``CONCAT`` in Michelson.
 
-  Example::
+  .. tryliquidity:: ../../../../tests/doc/doc32.liq
+  .. literalinclude:: ../../../../tests/doc/doc32.liq
 
-    let s = Bytes.concat [ 0x616161; 0x616161 ] in
-    if Bytes.length s <> 6p then failwith "bad concat !";
-    ...
-  
 * ``Bytes.slice`` or ``Bytes.sub" of type ``nat -> nat -> bytes ->
   bytes option``. Extract a sequence of bytes within another sequence
   of bytes. ``Bytes.slice start len b`` extracts the bytes subsequence
@@ -793,27 +688,15 @@ Operations on bytes
   value ``None`` means that the position or length was invalid. It
   is translated to ``SLICE`` in Michelson.
 
-  Example::
+  .. tryliquidity:: ../../../../tests/doc/doc33.liq
+  .. literalinclude:: ../../../../tests/doc/doc33.liq
 
-    let b = 0x616161 in
-    let s = Bytes.concat [ b; b ] in
-    let b' = Bytes.sub 3p 3p b in
-    match b' with
-    | None -> failwith "Bad concat or sub !"
-    | Some b' ->
-      if b <> b' then failwith "Bad concat or sub !";
-      ...
-  
 * ``( @ ) : bytes -> bytes -> bytes``. Append two sequences of bytes into a
   single sequence of bytes. ``b1 @ b2`` is syntactic sugar for ``Bytes.concat
   [b1; b2]``.
 
-  Example::
-
-    let b = 0x616161 in
-    let s = b @ b in
-    let b' = Bytes.sub 3p 3p b in
-    ...
+  .. tryliquidity:: ../../../../tests/doc/doc34.liq
+  .. literalinclude:: ../../../../tests/doc/doc34.liq
 
 Operations on strings
 ~~~~~~~~~~~~~~~~~~~~~
@@ -827,41 +710,32 @@ printable subset of 7-bit ASCII, plus some escaped characters (``\n``,
   nat``. Return the size of the string in characters. It is translated
   to ``SIZE`` in Michelson.
 
-  Example::
+  .. tryliquidity:: ../../../../tests/doc/doc35.liq
+  .. literalinclude:: ../../../../tests/doc/doc35.liq
 
-    let s = "Hello world" in
-    let len = String.length s in
-    ...
-  
 * ``String.slice`` or ``String.sub`` with type ``nat -> nat -> string
   -> string option``. ``String.sub start len s`` returns a substring
   of a string ``s`` at the given starting at position ``len`` with the
   specified length ``len``, or ``None`` if invalid. It is
   translated to ``SLICE`` in Michelson.
 
-  Example::
-
-    let s = "Hello world" in
-    let world = String.sub 6p 5p s in
-    ...
+  .. tryliquidity:: ../../../../tests/doc/doc36.liq
+  .. literalinclude:: ../../../../tests/doc/doc36.liq
 
 * ``String.concat: string list -> string``. Append all strings of a
   list into a single string. It is translated to ``CONCAT`` in
   Michelson.
 
-  Example::
+  .. tryliquidity:: ../../../../tests/doc/doc37.liq
+  .. literalinclude:: ../../../../tests/doc/doc37.liq
 
-    let s = String.concat [ "Hello"; " "; "World" ] in
-    ...
-  
 * ``( @ ) : string -> string -> string``. Append two strings into a single
   string. ``s1 @ s2`` is syntactic sugar for ``String.concat
   [s1; s2]``.
 
-  Example::
+  .. tryliquidity:: ../../../../tests/doc/doc38.liq
+  .. literalinclude:: ../../../../tests/doc/doc38.liq
 
-    let s = "Hello " @ "World" in
-    ...
 
 Operations on lambdas
 ~~~~~~~~~~~~~~~~~~~~~
@@ -870,12 +744,8 @@ Operations on lambdas
   -> ('a,'b) closure -> 'b``. Applies a function or closure to its
   argument.
 
-   Example::
-     
-     let square (x : int) = x * x in
-     let x = 23 |> square in
-     let y = square 23 in (* this is the same as x *)
-     ...
+  .. tryliquidity:: ../../../../tests/doc/doc39.liq
+  .. literalinclude:: ../../../../tests/doc/doc39.liq
 
 Operations on lists              
 ~~~~~~~~~~~~~~~~~~~
@@ -889,79 +759,54 @@ list given in argument is unmodified.
   of the list. The previous list becomes the tail of the new list.  It
   is translated to ``CONS`` in Michelson.
 
-  Example::
-
-    let new_list = "Hello" :: old_list in
-    ...
+  .. tryliquidity:: ../../../../tests/doc/doc40.liq
+  .. literalinclude:: ../../../../tests/doc/doc40.liq
 
 * ``List.rev : 'a list -> 'a list`` Return the list in the reverse order.
 
-  Example::
+  .. tryliquidity:: ../../../../tests/doc/doc41.liq
+  .. literalinclude:: ../../../../tests/doc/doc41.liq
 
-    let list = List.rev [7; 5; 10] in
-    (* list = [10; 5; 7] *)
-    ...
-  
 * ``List.length`` or ``List.size: 'a list -> nat``. Return the length
   of the list. It is translated to ``SIZE`` in Michelson.
 
-  Example::
+  .. tryliquidity:: ../../../../tests/doc/doc42.liq
+  .. literalinclude:: ../../../../tests/doc/doc42.liq
 
-    let size = List.length [10; 20; 30; 40] in
-    (* size = 4 *)
-    ...
-  
 * ``List.iter: ('a -> unit) -> 'a list -> unit``. Iter the function on
   all the elements of a list. Since no value can be returned, it can
   only be used for side effects, i.e. to fail the transaction.  It is
   translated to ``ITER`` in Michelson.
 
-  Example::
+  .. tryliquidity:: ../../../../tests/doc/doc43.liq
+  .. literalinclude:: ../../../../tests/doc/doc43.liq
 
-    List.iter (fun x ->
-      if x < 10tz then failwith "error, element two small")
-      list;
-    ...
-  
 * ``List.fold: ('elt * 'acc -> 'acc) -> 'elt list -> 'acc ->
   'acc``. Iter on all elements of a list, while modifying an
   accumulator. It is translated to ``ITER`` in Michelson.
 
-  Example::
-
-    let sum = List.fold (fun (elt, acc) ->
-       elt + acc
-       ) [1; 2; 3; 4; 5] 0
-    in
-    ...
+  .. tryliquidity:: ../../../../tests/doc/doc44.liq
+  .. literalinclude:: ../../../../tests/doc/doc44.liq
 
 * ``List.map: ('a -> 'b) -> 'a list -> 'b list``. Return a
   list with the result of applying the function on each element of the
   list. It is translated to ``MAP`` in Michelson.
 
-  Example::
+  .. tryliquidity:: ../../../../tests/doc/doc45.liq
+  .. literalinclude:: ../../../../tests/doc/doc45.liq
 
-    let list = List.map (fun x ->
-      x + 1
-      ) list in
-    ...
-  
 * ``List.map_fold: ('a * 'acc -> 'b * 'acc) -> 'a list -> 'acc
   -> 'b list * 'acc``.  Return a list with the result of applying the
   function on each element of the list, plus an accumulator. It is
   translated to ``MAP`` in Michelson.
 
-  Example::
+  .. tryliquidity:: ../../../../tests/doc/doc46.liq
+  .. literalinclude:: ../../../../tests/doc/doc46.liq
 
-    let (list, acc) = List.map_fold (fun (elt, acc) ->
-       ( elt + 1, elt + acc )
-       ) [1; 2; 3; 4; 5] 0 in
-    ...
-  
 Operations on sets
 ~~~~~~~~~~~~~~~~~~
 
-Sets are immutable data structures containing uniq values (a
+Sets are immutable data structures containing unique values (a
 comparable type). Since they are immutable, all **modification**
 primitives return a new updated set, and the set given in argument is
 unmodified.
@@ -971,104 +816,45 @@ unmodified.
   added. If the boolean is ``false``, the element is removed. It is
   translated to ``UPDATE`` in Michelson.
 
-  Example::
+  .. tryliquidity:: ../../../../tests/doc/doc47.liq
+  .. literalinclude:: ../../../../tests/doc/doc47.liq
 
-    let my_set = Set.update 3 true my_set in (* add 3 *)
-    let my_set = Set.update 10 false my_set in (* remove 10 *)
-    ...
-  
 * ``Set.add: 'a -> 'a set -> 'a set`` . Add an element to a set, if
   not present. ``Set.add x s`` is syntactic sugar for ``Set.update
   x true s``.
 
-  Example::
+  .. tryliquidity:: ../../../../tests/doc/doc48.liq
+  .. literalinclude:: ../../../../tests/doc/doc48.liq
 
-    let my_set = Set.add 3 my_set in
-    ...
-  
 * ``Set.remove: 'a -> 'a set -> 'a set``. Remove an element to a
   set, if present. ``Set.remove x s`` is syntactic sugar for ``Set.update
   x false s``.
 
-  Example::
+  .. tryliquidity:: ../../../../tests/doc/doc49.liq
+  .. literalinclude:: ../../../../tests/doc/doc49.liq
 
-    let my_set = Set.remove 10 my_set in
-    ...
-  
 * ``Set.mem: 'a -> 'a set -> bool``. Return ``true`` if the element is
   in the set, ``false`` otherwise. It is translated to ``MEM`` in
   Michelson.
 
-  Example::
+  .. tryliquidity:: ../../../../tests/doc/doc50.liq
+  .. literalinclude:: ../../../../tests/doc/doc50.liq
 
-    if not ( Set.mem 3 my_set ) then
-      failwith "Missing integer 3 in int set";
-    ...
-  
 * ``Set.cardinal`` or ``Set.size`` with type ``'a set -> nat``. Return
   the number of elements in the set. It is translated to ``SIZE`` in
   Michelson.
 
-  Example::
+  .. tryliquidity:: ../../../../tests/doc/doc51.liq
+  .. literalinclude:: ../../../../tests/doc/doc51.liq
 
-    let cardinal = Set.size my_set in
-    if cardinal < 10p then failwith "too few elements";
-    ...
-  
 * ``Set.iter: ('ele -> unit) -> 'ele set -> unit``. Apply a function
   on all elements of the set. Since no value can be returned, it can
   only be used for side effects, i.e. to fail the transaction.  It is
   translated to ``ITER`` in Michelson.
   
-  Example::
+  .. tryliquidity:: ../../../../tests/doc/doc52.liq
+  .. literalinclude:: ../../../../tests/doc/doc52.liq
 
-    Set.iter (fun ele ->
-      if ele < 0 then failwith "negative integer") my_set;
-    ...
-  
-* ``Set.fold: ('ele * 'acc -> 'acc) -> 'ele set -> 'acc ->
-  'acc``. Apply a function on all elements of the set, updating an
-  accumulator and returning it at the end. It is translated to
-  ``ITER`` in Michelson.
-
-  Example::
-
-    (* compute the sum of elements *)
-    let sum = Set.fold (fun (ele, acc) ->
-      ele + acc
-      ) my_set 0
-    in
-    ...
-  
-* ``Set.map: ('src -> 'dst) -> 'src set -> 'dst set``. Return a set
-  where all elements are the result of applying the function on the
-  elements of the former set. It is translated to ``MAP`` in
-  Michelson.
-
-  Example::
-    
-    let set_plus_one = Set.map (fun x -> x + 1) my_set in
-    ...
-  
-* ``Set.map_fold: ('src * 'acc -> 'dst * 'acc) -> 'src set -> 'acc ->
-  'dst set * 'acc``.  Apply a function on all the elements of a set,
-  return a new set with the results of the function, and an
-  accumulator updated at each step. It is translated to ``MAP``
-  in Michelson.
-
-  Example::
-
-    let (negated_set, min_elt) = Set.map_fold (fun (ele, acc) ->
-       let acc = match acc with
-         | None -> Some ele
-         | Some acc -> Some (if acc > ele then ele else acc)
-       in
-       let negated_ele = - ele in
-       (negated_ele, acc)
-       ) my_set (None : int option)
-    in
-    ...
-    
 Operations on maps
 ~~~~~~~~~~~~~~~~~~
 
@@ -1083,121 +869,76 @@ and the map given in argument is unmodified.
   not present in the new map. It is translated with ``UPDATE`` in
   Michelson.
 
-  Example::
-
-    let map = ( Map : (int, string) map ) in
-    let map = Map.add 1 "Hello" map in
-    let map = Map.add 2 "World" map in
-    ...
+  .. tryliquidity:: ../../../../tests/doc/doc56.liq
+  .. literalinclude:: ../../../../tests/doc/doc56.liq
 
 * ``Map.remove: 'key -> ('key,'val) map -> ('key,'val) map``. Return a
   map where any associated with the key has been removed. It is
   translated with ``UPDATE`` in Michelson.
 
-  Example::
-
-    let new_map = Map.remove param old_map in
-    ...
+  .. tryliquidity:: ../../../../tests/doc/doc57.liq
+  .. literalinclude:: ../../../../tests/doc/doc57.liq
 
 * ``Map.find: 'key -> ('key,'val) map -> 'val option``. Return the
   value associated with a key in the map. It is translated to ``GET``
   in Michelson.
 
-  Example::
-
-    let v = match Map.find param my_map with
-      | None -> failwith ("param is not in the map", param)
-      | Some v -> v
-    in
-    ...
+  .. tryliquidity:: ../../../../tests/doc/doc58.liq
+  .. literalinclude:: ../../../../tests/doc/doc58.liq
 
 * ``Map.update: 'key -> 'val option -> ('key,'val) map -> ('key,'val)
   map``. Return a new map where the association between the key and
   the value has been removed (case ``None``) or added/updated (case
   ``Some v``). It is translated to ``UPDATE`` in Michelson.
 
-  Example::
+  .. tryliquidity:: ../../../../tests/doc/doc59.liq
+  .. literalinclude:: ../../../../tests/doc/doc59.liq
 
-    let new_map = Map.update key (None : int option) old_map in (* removed *)
-    let new_map = Map.update key (Some v) new_map in (* added *)
-    ...
-  
 * ``Map.mem: 'key -> ('key, 'val) map -> bool``. Return ``true`` if an
   association exists in the map for the key, ``false`` otherwise. It
   is translated to ``MEM`` in Michelson.
 
-  Example::
-
-    let sender = Current.sender () in
-    if not ( Map.mem sender owners_map ) then
-      failwith ("not allowed", sender);
-    ...
+  .. tryliquidity:: ../../../../tests/doc/doc60.liq
+  .. literalinclude:: ../../../../tests/doc/doc60.liq
 
 * ``Map.cardinal`` or ``Map.size`` with type ``('key,'val) map ->
   nat``. Return the number of associations (i.e. uniq keys) in the
   map. It is translated to ``SIZE`` in Michelson.
 
-  Example::
+  .. tryliquidity:: ../../../../tests/doc/doc61.liq
+  .. literalinclude:: ../../../../tests/doc/doc61.liq
 
-    if Map.size owners = 0p then
-      failwith "you cannot remove all owners";
-    ...
-  
 * ``Map.iter: ('key * 'val -> unit) -> ('key,'val) map ->
   unit``. Apply a function on all associations in the map. Since no
-  value can be returned, it can only be used for side effects, i.e. to
+  value can be returned, it can only be used for side effects, *i.e.* to
   fail the transaction. It is translated to ``ITER`` in Michelson.
 
-  Example::
-
-    Map.iter (fun (_, v) ->
-      if v < 0 then
-        failwith "No option should be negative"
-      ) map;
-    ...
+  .. tryliquidity:: ../../../../tests/doc/doc62.liq
+  .. literalinclude:: ../../../../tests/doc/doc62.liq
 
 * ``Map.fold: (('key * 'val) * 'acc -> 'acc) -> ('key,'val) map ->
   'acc -> 'acc``. Apply a function on all associations of the map,
   updating and returning an accumulator. It is translated to ``ITER``
   in Michelson.
 
-  Example::
-
-    let sum_vals = Map.fold (fun ((key, _), acc) ->
-      acc + key
-      ) map 0p
-    in
-    ...
+  .. tryliquidity:: ../../../../tests/doc/doc63.liq
+  .. literalinclude:: ../../../../tests/doc/doc63.liq
 
 * ``Map.map: ('key * 'src -> 'dst) -> ('key,'src) map -> ('key,'dst)
   map``. Apply a function on all associations of a map, and return a
   new map where keys are now associated with the return values of the
   function. It is translated to ``MAP`` in Michelson.
 
-  Example::
-
-    let negated_values = Map.map (fun (_key, v) ->
-      - v
-      ) map
-    in
-    ...
+  .. tryliquidity:: ../../../../tests/doc/doc64.liq
+  .. literalinclude:: ../../../../tests/doc/doc64.liq
 
 * ``Map.map_fold: (('key * 'src) * 'acc -> 'dst * 'acc) -> ('key,'src)
   map -> 'acc -> ('key,'dst) map * 'acc``.  Apply a function on all
   associations of a map, returning both a new map and an updated
   accumulator. It is translated to ``MAP`` in Michelson.
 
-  Example::
-
-    let negated_values, min_key = Map.map_fold (fun ( (key, v) , acc ) ->
-      let acc = match acc with
-        | None -> Some key
-        | Some v -> if v < key then Some key else acc
-      in
-      ( - key, acc )
-      ) map None
-    in
-    ...
+  .. tryliquidity:: ../../../../tests/doc/doc65.liq
+  .. literalinclude:: ../../../../tests/doc/doc65.liq
 
   
 Operations on Big maps
@@ -1214,41 +955,29 @@ storage. Big maps cannot be iterated.
   value associated with a key in the map. It is translated to ``GET``
   in Michelson.
 
-  Example::
+  .. tryliquidity:: ../../../../tests/doc/doc66.liq
+  .. literalinclude:: ../../../../tests/doc/doc66.liq
 
-    let v = match Map.find param my_big_map with
-      | None -> failwith ("param is not in the map", param)
-      | Some v -> v
-    in
-    ...
+* ``Map.mem: 'key -> ('key, 'val) big_map -> bool``. Return ``true`` if an
+  association exists in the map for the key, ``false`` otherwise. It
+  is translated to ``MEM`` in Michelson.
+
+  .. tryliquidity:: ../../../../tests/doc/doc67.liq
+  .. literalinclude:: ../../../../tests/doc/doc67.liq
 
 * ``Map.update: 'key -> 'val option -> ('key,'val) big_map -> ('key,'val)
   big_map``. Return a new map where the association between the key and
   the value has been removed (case ``None``) or added/updated (case
   ``Some v``). It is translated to ``UPDATE`` in Michelson.
 
-  Example::
-
-    let new_map = Map.update key (None : string option) old_map in (* removed *)
-    let new_map = Map.update key (Some v) new_map in (* added *)
-    ...
-  
-* ``Map.mem: 'key -> ('key, 'val) big_map -> bool``. Return ``true`` if an
-  association exists in the map for the key, ``false`` otherwise. It
-  is translated to ``MEM`` in Michelson.
-
-  Example::
-
-    let sender = Current.sender () in
-    if not ( Map.mem sender owners_map ) then
-      failwith ("not allowed", sender);
-    ...
-
 * ``Map.add: 'key -> 'val -> ('key, 'val) big_map -> ('key, 'val)
   big_map``. Syntactic sugar for ``Map.update (Some ...)``.
 
 * ``Map.remove: 'key -> ('key,'val) big_map -> ('key,'val) big_map``.
    Syntactic sugar for ``Map.update None``.
+
+  .. tryliquidity:: ../../../../tests/doc/doc68.liq
+  .. literalinclude:: ../../../../tests/doc/doc68.liq
 
 Operations on generic collections
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -1290,20 +1019,11 @@ to define contracts (see `Contract Format`_). These contract
 structures are given names with the keyword ``contract``.
 
 For instance the following structure defines a contract named ``C``
-with a single entry point ``main``::
+with a single entry point ``main``:
 
-  contract C = struct
-
-    type storage = int
-
-    let succ (x : int) = x + 1 [@@inline]
-
-    let%init storage = 0
-
-    let%entry main (u : unit) storage =
-      ([] : operation list), succ storage
-
-  end
+.. tryliquidity:: ../../../../tests/doc/doc69.liq
+.. literalinclude:: ../../../../tests/doc/doc69.liq
+   :end-at: end
 
 Components of ``C`` can later be referred to using identifiers
 qualified (with a dot ``.``) by the contract name ``C``:
@@ -1311,16 +1031,10 @@ qualified (with a dot ``.``) by the contract name ``C``:
 - ``C.storage`` can be used as a type
 - ``succ`` cannot be called from outside the contract
 
-Contracts can also be used as first class values::
+Contracts can also be used as first class values:
 
-  Contract.create
-    ~manager:key_hash
-    ~delegate:None
-    ~spendable:false
-    ~delegatable:true
-    ~amount:0tz
-    ~storage:0
-    (contract C)
+.. tryliquidity:: ../../../../tests/doc/doc23.liq
+.. literalinclude:: ../../../../tests/doc/doc23.liq
 
 **Instances** of contracts can be called with three different syntaxes:
 
@@ -1378,12 +1092,10 @@ Predefined Contract Signatures
 
 The contract signature ``UnitContract`` is built-in, in Liquidity, and
 stands for contracts with a single entry point ``main`` whose
-parameter is of type ``unit``::
+parameter is of type ``unit``:
 
-  contract type UnitContract = sig
-    type storage
-    val%entry main : unit -> storage -> operation list * storage
-  end
+.. tryliquidity:: ../../../../tests/doc/doc70.liq
+.. literalinclude:: ../../../../tests/doc/doc70.liq
 
 
 From Michelson to Liquidity
@@ -1430,7 +1142,7 @@ Here is a table of how Michelson instructions translate to Liquidity:
 * ``INT``: ``int x``
 * ``ISNAT``:``is_nat x`` or ``match%int x with Plus x -> ... | Minus y -> ...``
 * ``ITER``: ``List.iter``, ``Set.iter``, ``Map.iter``,
-            ``List.fold``, ``Set.fold``, ``Map.fold``
+            ``List.fold``, ``Map.fold``
 * ``LAMBDA``: ``fun x -> ...``
 * ``LE``: ``x <= y``
 * ``LEFT``: ``Left x``
@@ -1439,8 +1151,8 @@ Here is a table of how Michelson instructions translate to Liquidity:
 * ``LSL``: ``x lsl y`` or ``x << y``
 * ``LSR``: ``x lsr y`` or ``x >> y``
 * ``LT``: ``x < y``
-* ``MAP``: ``List.map``, ``Set.map``, ``Map.map``,
-           ``List.map_fold``, ``Set.map_fold``, ``Map.map_fold``
+* ``MAP``: ``List.map``, ``Map.map``,
+           ``List.map_fold``, ``Map.map_fold``
 * ``MEM``: ``Set.mem ele set``, ``Map.mem key map``
 * ``MUL``: ``x * y``
 * ``NEG``: ``~- x``
@@ -1551,7 +1263,6 @@ Type:
 * ``address``
 * Type ``option``
 * Type ``list``
-* Type ``contract``
 * Type ``set``
 * ``(`` Type ``,`` Type ``) variant``
 * ``(`` Type ``,`` Type ``) map``

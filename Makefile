@@ -36,7 +36,7 @@ doc:
 
 NTESTS=42
 NREVTESTS=9
-SIMPLE_TESTS= `seq -f 'test%.0f' 0 $(NTESTS)`
+SIMPLE_TESTS=`seq -f 'test%.0f' 0 $(NTESTS)`
 MORE_TESTS=test_ifcons test_if test_loop test_option test_transfer test_call test_left \
   test_extfun test_left_constr test_closure test_closure2 test_closure3 \
   test_map test_rev test_reduce_closure test_map_closure test_mapreduce_closure \
@@ -44,6 +44,7 @@ MORE_TESTS=test_ifcons test_if test_loop test_option test_transfer test_call tes
   test_fold test_iter test_big_map test_map_fold_closure test_inline test_rec_fun \
   bug_annot0 inline_fail bug_annot1
 OTHER_TESTS=others/broker others/demo others/auction others/multisig others/alias others/game others/mist_wallet_current others/token
+DOC_TESTS=`cd tests; find doc -regex "[^\.]+.liq" -exec sh -c "echo {} | cut -d '.' -f 1" \; | sort -V`
 REV_TESTS=`seq -f 'test%.0f' 0 $(NREVTESTS)`
 
 NEW_TEZOS_TESTS= fail weather_insurance
@@ -53,13 +54,13 @@ TEZOS_TESTS=accounts add1_list add1 add_delta_timestamp add_timestamp_delta afte
 EXIT_ON_ERROR= || exit 2
 #EXIT_ON_ERROR= || echo Test $$i failed
 tests: build
-	for i in $(SIMPLE_TESTS) \
+	for i in $(DOC_TESTS) $(SIMPLE_TESTS) \
 		$(MORE_TESTS) $(OTHER_TESTS); do \
 		./check.sh $$i $(EXIT_ON_ERROR); \
 	done
 
 tests-mini: build
-	for i in $(SIMPLE_TESTS) \
+	for i in $(DOC_TESTS) $(SIMPLE_TESTS) \
 		$(MORE_TESTS) $(OTHER_TESTS); do \
 		./check-mini.sh $$i $(EXIT_ON_ERROR); \
 	done

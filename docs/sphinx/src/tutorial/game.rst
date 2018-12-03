@@ -121,8 +121,7 @@ The ``play`` entry point
 The first entry point, ``play`` takes as argument a pair composed of:
 - a natural number, which is the number chosen by the player
 - and a key hash, which is the address on which a player wishes to be
-  payed
-as well as the current storage of the smart contract.
+  payed as well as the current storage of the smart contract.
 
 .. code-block:: OCaml
 
@@ -281,6 +280,7 @@ This code does nothing, excepted accepting transfers with amounts.
 Full Liquidity Code of the Game Smart Contract
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
+.. tryliquidity:: ../../../../tests/others/game.liq
 .. literalinclude:: ../../../../tests/others/game.liq
   :language: OCaml
 
