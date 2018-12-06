@@ -82,6 +82,15 @@ let type_error loc msg actual expected =
     (LiquidPrinter.Liquid.string_of_type expected)
     (LiquidPrinter.Liquid.string_of_type actual)
 
+let fail_neq ?info ?more ~loc ~expected_ty ty =
+  if not @@ eq_types ty expected_ty then
+    let msg = match info with
+      | None -> "Unexpected type"
+      | Some info -> "Unexpected type " ^ info in
+    let msg = match more with
+      | None -> msg
+      | Some more -> Printf.sprintf "%s (%s)" msg more in
+    type_error loc msg ty expected_ty
 
 let error_prim loc prim args expected_args =
   let prim = LiquidTypes.string_of_primitive prim in
@@ -92,14 +101,9 @@ let error_prim loc prim args expected_args =
       prim nargs nexpected
   else
     let args = List.map (fun { ty } -> ty) args in
-    List.iteri (fun i (arg, expected) ->
-        if arg <> expected then
-          error loc
-            "Primitive %s, argument %d:\nExpected type:%s\nProvided type:%s"
-            prim (i+1)
-            (LiquidPrinter.Liquid.string_of_type expected)
-            (LiquidPrinter.Liquid.string_of_type arg)
-
+    List.iteri (fun i (arg, expected_ty) ->
+        let info = Printf.sprintf "Primitive %s, argument %d" prim (i+1) in
+        fail_neq ~info ~loc ~expected_ty arg
       ) (List.combine args expected_args);
     Printf.eprintf "Fatal error on typechecking primitive %S\n%!" prim;
     assert false
@@ -215,9 +219,10 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
         with Not_found -> error loc "unbound record field %S" field
       in
       let record_ty = find_type ty_name env.env in
-      if not @@ eq_types record.ty record_ty then
-        error loc "field %s does not belong to type %s" field
-          (LiquidPrinter.Liquid.string_of_type record.ty);
+      fail_neq ~loc ~info:"in record update" ~expected_ty:record.ty record_ty
+        ~more:(Printf.sprintf
+                 "field %s does not belong to type %s" field
+                 (LiquidPrinter.Liquid.string_of_type record.ty));
       ty
     in
     let set_val = typecheck_expected "field update" env exp_ty set_val in
@@ -274,7 +279,7 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
         end
       | ty ->
         error contract.loc
-          "Bad contract type.\nExpected type:\n  'a contract\n\
+          "Bad contract type.\nExpected type:\n  <Contract>.instance\n\
            Actual type:\n  %s"
           (LiquidPrinter.Liquid.string_of_type ty)
     end
@@ -323,7 +328,7 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
                                eprim.nb_arg, eprim.nb_ret, eprim.minst) in
     begin try List.iter2 (fun a aty ->
       if not (eq_types a.ty aty) then
-        error loc "Bad %d args for primitive %S:\n    %s\n"
+        error a.loc "Bad %d args for primitive %S:\n    %s\n"
           (List.length args) (LiquidTypes.string_of_primitive prim)
           (String.concat "\n    " (List.map (fun arg ->
             LiquidPrinter.Liquid.string_of_type arg.ty) args))
@@ -379,8 +384,8 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
       match ifnone.ty, ifsome.ty with
       | ty, Tfail | Tfail, ty -> ty
       | ty1, ty2 ->
-        if not @@ eq_types ty1 ty2 then
-          type_error loc "branches of match have different types" ty2 ty1;
+        fail_neq ~loc:ifsome.loc ~expected_ty:ty1 ty2
+          ~info:"in branches of match";
         ty1
     in
     mk ?name:exp.name ~loc desc ty
@@ -398,9 +403,8 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
       match ifplus.ty, ifminus.ty with
       | ty, Tfail | Tfail, ty -> ty
       | ty1, ty2 ->
-        if not @@ eq_types ty1 ty2 then
-          type_error loc "branches of match%nat must have the same type"
-            ty2 ty1;
+        fail_neq ~loc:ifminus.loc ~expected_ty:ty1 ty2
+          ~info:"in branches of match%nat";
         ty1
     in
     mk ?name:exp.name ~loc desc ty
@@ -422,16 +426,10 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
     let body = typecheck env body in
     let res_ty = match body.ty with
       | Ttuple [Tor (left_ty, right_ty); acc_ty] ->
-        if not @@ eq_types acc_ty acc.ty then
-          error acc.loc
-            "Loop.left accumulator must be %s, got %s"
-            (LiquidPrinter.Liquid.string_of_type acc_ty)
-            (LiquidPrinter.Liquid.string_of_type acc.ty);
-        if not @@ eq_types left_ty arg.ty then
-          error arg.loc
-            "Loop.left argument must be %s, got %s"
-            (LiquidPrinter.Liquid.string_of_type left_ty)
-            (LiquidPrinter.Liquid.string_of_type arg.ty);
+        fail_neq ~loc:acc.loc ~expected_ty:acc_ty acc.ty
+          ~info:"in Loop.left accumulator";
+        fail_neq ~loc:arg.loc ~expected_ty:left_ty arg.ty
+          ~info:"in Loop.left argument";
         right_ty
       | _ ->
         error loc
@@ -447,11 +445,8 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
     let body = typecheck env body in
     let res_ty = match body.ty with
       | Tor (left_ty, right_ty) ->
-        if not @@ eq_types left_ty arg.ty then
-          error arg.loc
-            "Loop.left argument must be %s, got %s"
-            (LiquidPrinter.Liquid.string_of_type left_ty)
-            (LiquidPrinter.Liquid.string_of_type arg.ty);
+        fail_neq ~loc:arg.loc ~expected_ty:left_ty arg.ty
+          ~info:"in Loop.left argument";
         right_ty
       | _ ->
         error loc
@@ -570,9 +565,8 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
       match ifnil.ty, ifcons.ty with
       | ty, Tfail | Tfail, ty -> ty
       | ty1, ty2 ->
-        if not @@ eq_types ty1 ty2 then
-          type_error loc "branches of match must have the same type"
-            ty2 ty1;
+        fail_neq ~loc:ifcons.loc ~expected_ty:ty1 ty2
+          ~info:"in branches of match";
         ty1
     in
     mk ?name:exp.name ~loc desc ty
@@ -886,23 +880,23 @@ and typecheck_prim1 env prim loc args =
     let ty = List.nth tuple n in
     prim, ty
 
-  | Prim_tuple_set, [{ ty = tuple_ty };
+  | Prim_tuple_set, [{ ty = tuple_ty ; loc = tuple_loc };
                      { desc = Const { const = CInt n | CNat n }};
-                     { ty }] ->
+                     { ty ; loc = val_loc }] ->
     let tuple = match tuple_ty with
       | Ttuple tuple -> tuple
       | Trecord (_, rtys) -> List.map snd rtys
-      | _ -> error loc "set takes a tuple as first argument, got:\n%s"
+      | _ -> error tuple_loc "set takes a tuple as first argument, got:\n%s"
                (LiquidPrinter.Liquid.string_of_type tuple_ty)
     in
     let n = LiquidPrinter.int_of_integer n in
     let expected_ty = List.nth tuple n in
     let size = List.length tuple in
     if size <= n then error loc "set outside tuple";
-    let ty = if not (eq_types ty expected_ty || ty = Tfail) then
-        error loc "prim set bad type"
-      else tuple_ty
-    in
+    if ty <> Tfail then
+      fail_neq ~loc:val_loc ~expected_ty ty
+        ~info:"in tuple update";
+    let ty = tuple_ty in
     prim, ty
 
   | _ ->
@@ -989,8 +983,8 @@ and typecheck_prim2 env prim loc args =
     [ key_ty;
       (Tmap (expected_key_ty, value_ty) | Tbigmap (expected_key_ty, value_ty)) ]
     ->
-    if not @@ eq_types expected_key_ty key_ty then
-      error loc "bad Map.find key type";
+    fail_neq ~loc ~expected_ty:expected_key_ty key_ty
+      ~info:"in Map.find (key)";
     Toption value_ty
   | Prim_map_update,
     [ key_ty;
@@ -998,10 +992,10 @@ and typecheck_prim2 env prim loc args =
       ( Tmap (expected_key_ty, expected_value_ty)
       | Tbigmap (expected_key_ty, expected_value_ty)) as m]
     ->
-    if not @@ eq_types expected_key_ty key_ty then
-      error loc "bad Map.update key type";
-    if not @@ eq_types expected_value_ty value_ty then
-      error loc "bad Map.update value type";
+    fail_neq ~loc ~expected_ty:expected_key_ty key_ty
+      ~info:"in Map.update (key)";
+    fail_neq ~loc ~expected_ty:expected_value_ty value_ty
+      ~info:"in Map.update (value)";
     begin match m with
       | Tmap _ -> Tmap (key_ty, value_ty)
       | Tbigmap _ -> Tbigmap (key_ty, value_ty)
@@ -1013,10 +1007,10 @@ and typecheck_prim2 env prim loc args =
       ( Tmap (expected_key_ty, expected_value_ty)
       | Tbigmap (expected_key_ty, expected_value_ty)) as m]
     ->
-    if not @@ eq_types expected_key_ty key_ty then
-      error loc "bad Map.add key type";
-    if not @@ eq_types expected_value_ty value_ty then
-      error loc "bad Map.add value type";
+    fail_neq ~loc ~expected_ty:expected_key_ty key_ty
+      ~info:"in Map.add (key)";
+    fail_neq ~loc ~expected_ty:expected_value_ty value_ty
+      ~info:"in Map.add (value)";
     begin match m with
       | Tmap _ -> Tmap (key_ty, value_ty)
       | Tbigmap _ -> Tbigmap (key_ty, value_ty)
@@ -1027,8 +1021,8 @@ and typecheck_prim2 env prim loc args =
       ( Tmap (expected_key_ty, value_ty)
       | Tbigmap (expected_key_ty, value_ty)) as m]
     ->
-    if not @@ eq_types expected_key_ty key_ty then
-      error loc "bad Map.remove key type";
+    fail_neq ~loc ~expected_ty:expected_key_ty key_ty
+      ~info:"in Map.remove (key)";
     begin match m with
       | Tmap _ -> Tmap (key_ty, value_ty)
       | Tbigmap _ -> Tbigmap (key_ty, value_ty)
@@ -1039,14 +1033,14 @@ and typecheck_prim2 env prim loc args =
     [ key_ty;
       (Tmap (expected_key_ty,_) | Tbigmap (expected_key_ty,_)) ]
     ->
-    if not @@ eq_types expected_key_ty key_ty then
-      error loc "bad Mem.mem key type";
+    fail_neq ~loc ~expected_ty:expected_key_ty key_ty
+      ~info:"in Map.mem (key)";
     Tbool
 
   | Prim_set_mem,[ key_ty; Tset expected_key_ty]
     ->
-    if not @@ eq_types expected_key_ty key_ty then
-      error loc "bad Set.mem key type";
+    fail_neq ~loc ~expected_ty:expected_key_ty key_ty
+      ~info:"in Set.mem";
     Tbool
 
   | Prim_list_size, [ Tlist _]  ->  Tnat
@@ -1055,18 +1049,18 @@ and typecheck_prim2 env prim loc args =
 
   | Prim_set_update, [ key_ty; Tbool; Tset expected_key_ty]
     ->
-    if not @@ eq_types expected_key_ty key_ty then
-      error loc "bad Set.update key type";
+    fail_neq ~loc ~expected_ty:expected_key_ty key_ty
+      ~info:"in Set.update";
     Tset key_ty
   | Prim_set_add, [ key_ty; Tset expected_key_ty]
     ->
-    if not @@ eq_types expected_key_ty key_ty then
-      error loc "bad Set.add key type";
+    fail_neq ~loc ~expected_ty:expected_key_ty key_ty
+      ~info:"in Set.add";
     Tset key_ty
   | Prim_set_remove, [ key_ty; Tset expected_key_ty]
     ->
-    if not @@ eq_types expected_key_ty key_ty then
-      error loc "bad Set.remove key type";
+    fail_neq ~loc ~expected_ty:expected_key_ty key_ty
+      ~info:"in Set.remove";
     Tset key_ty
 
   | Prim_Some, [ ty ] -> Toption ty
@@ -1082,6 +1076,7 @@ and typecheck_prim2 env prim loc args =
   | Prim_sha256, [ Tbytes ] -> Tbytes
   | Prim_sha512, [ Tbytes ] -> Tbytes
   | Prim_hash_key, [ Tkey ] -> Tkey_hash
+
   | Prim_check, [ Tkey; Tsignature; Tbytes ] ->
     Tbool
   | Prim_check, _ ->
@@ -1105,8 +1100,9 @@ and typecheck_prim2 env prim loc args =
   | Prim_exec, [ ty;
                  ( Tlambda(from_ty, to_ty)
                  | Tclosure((from_ty, _), to_ty))] ->
-    if not @@ eq_types ty from_ty then
-      type_error loc "Bad argument type in function application" ty from_ty;
+
+    fail_neq ~loc ~expected_ty:from_ty ty
+      ~info:"in argument of function application";
     to_ty
 
   | Prim_list_rev, [ Tlist ty ] -> Tlist ty
@@ -1119,8 +1115,8 @@ and typecheck_prim2 env prim loc args =
   | Prim_Cons, [ head_ty; Tunit ] ->
     Tlist head_ty
   | Prim_Cons, [ head_ty; Tlist tail_ty ] ->
-    if not @@ eq_types head_ty tail_ty then
-      type_error loc "Bad types for list" head_ty tail_ty;
+    fail_neq ~loc ~expected_ty:head_ty tail_ty
+      ~info:"in list construction";
     Tlist tail_ty
 
   | Prim_string_size, [ Tstring ] -> Tnat
@@ -1129,21 +1125,154 @@ and typecheck_prim2 env prim loc args =
   | Prim_string_sub, [ Tnat; Tnat; Tstring ] -> Toption Tstring
   | Prim_bytes_sub, [ Tnat; Tnat; Tbytes ] -> Toption Tbytes
 
-  | prim, _ ->
-    error loc "Bad %d args for primitive %S:\n    %s\n" (List.length args)
-      (LiquidTypes.string_of_primitive prim)
-      (String.concat "\n    "
-         (List.map
-            (fun arg ->
-               LiquidPrinter.Liquid.string_of_type arg.ty)
-            args))
-    ;
+  | prim, args_tys ->
+    let nb_args, str_types = expected_prim_types prim in
+    if List.length args <> nb_args then
+      error loc "Wrong number of arguments for primitive %S: \
+                 expected %d, got %d\n"
+        (LiquidTypes.string_of_primitive prim)
+        nb_args
+        (List.length args_tys)
+    else
+      error loc "Wrong arguments types for for primitive %S.\n\
+                 Expected: %s\n\
+                 Got:%s\n"
+        (LiquidTypes.string_of_primitive prim)
+        str_types
+        (String.concat ", "
+           (List.map LiquidPrinter.Liquid.string_of_type args_tys))
+
+and expected_prim_types = function
+  | Prim_neq | Prim_lt | Prim_gt | Prim_eq | Prim_le | Prim_ge | Prim_compare ->
+    2, "'a, 'a"
+  | Prim_neg ->
+    1, "int | nat"
+  | Prim_add | Prim_sub ->
+    2, "(nat | int | tez | timestamp), (nat | int | tez | timestamp)"
+  | Prim_mul | Prim_ediv ->
+    2, "(nat | int | tez), (nat | int | tez)"
+
+  | Prim_xor | Prim_or ->
+    2, "(bool | nat), (bool | nat)"
+  | Prim_and ->
+    2, "(bool | nat | int), (bool | nat)"
+  | Prim_not ->
+    1, "(bool | nat | int)"
+
+  | Prim_abs | Prim_is_nat ->
+    1, "int"
+  | Prim_int ->
+    1, "nat"
+
+  | Prim_lsl | Prim_lsr ->
+    2, "nat, nat"
+
+  | Prim_map_update ->
+    3, "'k, 'v option, (('k, 'v) map | ('k, 'v) big_map)"
+  | Prim_map_add ->
+    3, "'k, 'v, (('k, 'v) map | ('k, 'v) big_map)"
+  | Prim_map_remove | Prim_map_mem | Prim_map_find ->
+    2, "'k, (('k, 'v) map | ('k, 'v) big_map)"
+
+  | Prim_set_mem ->
+    2, "'a, 'a set"
+
+  | Prim_list_size ->
+    1, "'a list"
+  | Prim_set_size ->
+    1, "'a set"
+  | Prim_map_size ->
+    1, "('k, 'v) map"
+
+  | Prim_set_update ->
+    3, "'a, bool, 'a set"
+  | Prim_set_add | Prim_set_remove ->
+    2, "'a, 'a set"
+
+  | Prim_Some | Prim_pack ->
+    1, "'a"
+
+  | Prim_self
+  | Prim_now
+  | Prim_balance
+  | Prim_source
+  | Prim_sender
+  | Prim_amount
+  | Prim_gas ->
+    1, "unit"
+
+  | Prim_blake2b
+  | Prim_sha256
+  | Prim_sha512 ->
+    1, "bytes"
+
+  | Prim_hash_key ->
+    1, "key"
+
+  | Prim_check ->
+    3, "key, signature, bytes"
+
+  | Prim_address ->
+    1, "<Contract>.instance"
+
+  | Prim_create_account ->
+    4, "manager:key_hash, delegate:(key_hash option), \
+        delegatable:bool, amount:tez"
+
+  | Prim_default_account ->
+    1, "key_hash"
+
+  | Prim_set_delegate ->
+    1, "key_hash option"
+
+  | Prim_exec ->
+    2, "'a, ('a -> 'b)"
+
+  | Prim_list_rev ->
+    1, "'a list"
+
+  | Prim_concat_two ->
+    2, "(string, string) | (bytes, bytes)"
+  | Prim_string_concat ->
+    1, "string list"
+  | Prim_bytes_concat ->
+    1, "bytes list"
+
+  | Prim_Cons ->
+    2, "'a, 'a list"
+
+  | Prim_string_size ->
+    1, "string"
+  | Prim_bytes_size ->
+    1, "bytes"
+
+  | Prim_string_sub ->
+    3, "nat, nat, string"
+  | Prim_bytes_sub ->
+    3, "nat, nat, bytes"
+
+  | Prim_tuple -> assert false (* any types *)
+
+  | Prim_tuple_get
+  | Prim_tuple_set
+  | Prim_unknown
+  | Prim_coll_mem
+  | Prim_coll_find
+  | Prim_coll_update
+  | Prim_coll_size
+  | Prim_Left
+  | Prim_Right
+  | Prim_extension _
+  | Prim_slice
+  | Prim_concat
+  | Prim_unused _
+    -> assert false (* already handled *)
+
 
 and typecheck_expected info env expected_ty exp =
   let exp = typecheck env exp in
-  if not @@ eq_types exp.ty expected_ty && exp.ty <> Tfail then
-    type_error exp.loc
-      ("Unexpected type for "^info) exp.ty expected_ty;
+  if exp.ty <> Tfail then
+    fail_neq ~info:("in "^info) ~loc:exp.loc ~expected_ty exp.ty;
   exp
 
 and typecheck_apply ?name env prim loc args =
