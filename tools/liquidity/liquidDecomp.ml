@@ -298,7 +298,7 @@ let rec decompile contract =
 
       (* UPDATE Some -> Map.add *)
       | N_PRIM "UPDATE", [arg1;
-                          { kind = N_CONST (cty, CSome c) };
+                          { kind = N_CONST (Toption cty, CSome c) };
                           arg3] ->
         let arg1, arg3 = arg_of arg1, arg_of arg3 in
         let v = mk ~loc (Const { ty = cty; const = c }) in
