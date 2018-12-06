@@ -341,7 +341,9 @@ let raise_error_from_l ?loc_table err_msg l =
             match String.rindex_opt id '.' with
             | None -> false
             | Some i ->
-              String.sub id i (String.length id - i) = ".script_rejected"
+              match String.sub id i (String.length id - i) with
+              | ".script_rejected" | ".scriptRejectedRuntimeError" -> true
+              | _ -> false
           in
           match loc, kind, is_rejected with
           | Some loc, "temporary", true ->
