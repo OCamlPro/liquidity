@@ -413,21 +413,18 @@ type prim_fold =
   | Prim_map_fold
   | Prim_set_fold
   | Prim_list_fold
-
   | Prim_coll_iter
   | Prim_coll_fold
 
 (** Allowed built-in primities for map applications *)
 type prim_map =
   | Prim_map_map
-  | Prim_set_map
   | Prim_list_map
   | Prim_coll_map
 
 (** Allowed built-in primities for map-fold applications *)
 type prim_map_fold =
   | Prim_map_map_fold
-  | Prim_set_map_fold
   | Prim_list_map_fold
   | Prim_coll_map_fold
 
@@ -560,6 +557,7 @@ let () =
 
     ]
 
+let is_primitive s = Hashtbl.mem primitive_of_string s
 let primitive_of_string s = Hashtbl.find primitive_of_string s
 
 
@@ -594,6 +592,7 @@ let () =
       "Coll.fold", Prim_coll_fold;
     ]
 
+let is_fold_primitive s = Hashtbl.mem fold_primitive_of_string s
 let fold_primitive_of_string s = Hashtbl.find fold_primitive_of_string s
 
 let string_of_fold_primitive prim =
@@ -614,11 +613,11 @@ let () =
     )
     [
       "Map.map", Prim_map_map;
-      "Set.map", Prim_set_map;
       "List.map", Prim_list_map;
       "Coll.map", Prim_coll_map;
     ]
 
+let is_map_primitive s = Hashtbl.mem map_primitive_of_string s
 let map_primitive_of_string s = Hashtbl.find map_primitive_of_string s
 
 let string_of_map_primitive prim =
@@ -639,11 +638,11 @@ let () =
     )
     [
       "Map.map_fold", Prim_map_map_fold;
-      "Set.map_fold", Prim_set_map_fold;
       "List.map_fold", Prim_list_map_fold;
       "Coll.map_fold", Prim_coll_map_fold;
     ]
 
+let is_map_fold_primitive s = Hashtbl.mem map_fold_primitive_of_string s
 let map_fold_primitive_of_string s = Hashtbl.find map_fold_primitive_of_string s
 
 let string_of_map_fold_primitive prim =

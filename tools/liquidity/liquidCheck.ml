@@ -491,8 +491,6 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
     let prim, arg_ty = match prim, arg.ty with
       | (Prim_map_map|Prim_coll_map), Tmap (k_ty, v_ty) ->
         Prim_map_map, Ttuple [k_ty; v_ty]
-      | (Prim_set_map|Prim_coll_map), Tset elt_ty ->
-        Prim_set_map, elt_ty
       | (Prim_list_map|Prim_coll_map), Tlist elt_ty ->
         Prim_list_map, elt_ty
       | _ ->
@@ -517,8 +515,6 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
     let prim, arg_ty = match prim, arg.ty, acc.ty with
       | (Prim_map_map_fold|Prim_coll_map_fold), Tmap (k_ty, v_ty), acc_ty ->
         Prim_map_map_fold, Ttuple[Ttuple [k_ty; v_ty]; acc_ty]
-      | (Prim_set_map_fold|Prim_coll_map_fold), Tset elt_ty, acc_ty ->
-        Prim_set_map_fold, Ttuple[elt_ty; acc_ty]
       | (Prim_list_map_fold|Prim_coll_map_fold), Tlist elt_ty, acc_ty ->
         Prim_list_map_fold, Ttuple[elt_ty; acc_ty]
       | _ ->

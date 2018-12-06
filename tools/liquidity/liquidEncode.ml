@@ -756,7 +756,6 @@ let rec encode env ( exp : typed_exp ) : encoded_exp =
     let arg = encode env arg in
     let name_ty = match prim, arg.ty with
       | Prim_map_map, Tmap (k_ty, v_ty) -> Ttuple [k_ty; v_ty]
-      | Prim_set_map, Tset elt_ty -> elt_ty
       | Prim_list_map, Tlist elt_ty -> elt_ty
       | _ -> assert false
     in
@@ -771,8 +770,6 @@ let rec encode env ( exp : typed_exp ) : encoded_exp =
     let name_ty = match prim, arg.ty with
       | Prim_map_map_fold, Tmap (k_ty, v_ty) ->
         Ttuple [Ttuple [k_ty; v_ty]; acc.ty]
-      | Prim_set_map_fold, Tset elt_ty ->
-        Ttuple [elt_ty; acc.ty]
       | Prim_list_map_fold, Tlist elt_ty ->
         Ttuple [elt_ty; acc.ty]
       | _ -> assert false

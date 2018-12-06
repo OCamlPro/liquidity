@@ -1189,7 +1189,8 @@ let rec translate_code contracts env exp =
             [
               Nolabel, { pexp_desc = Pexp_fun (Nolabel,None, pat, body) };
               Nolabel, arg
-            ]) } ->
+            ]) }
+      when LiquidTypes.is_fold_primitive (iter_coll^".iter") ->
       let body = translate_code contracts env body in
       let arg = translate_code contracts env arg in
       let arg_name, _, body = deconstruct_pat env pat body in
@@ -1204,7 +1205,8 @@ let rec translate_code contracts env exp =
             [ Nolabel, { pexp_desc = Pexp_fun (Nolabel,None, pat, body) };
               Nolabel, arg;
               Nolabel, acc;
-            ]) } ->
+            ]) }
+      when LiquidTypes.is_fold_primitive (iter_coll^".fold") ->
       let arg = translate_code contracts env arg in
       let acc = translate_code contracts env acc in
       let body = translate_code contracts env body in
@@ -1218,7 +1220,8 @@ let rec translate_code contracts env exp =
                                                     "map") } ) },
             [ Nolabel, { pexp_desc = Pexp_fun (Nolabel,None, pat, body) };
               Nolabel, arg;
-            ]) } ->
+            ]) }
+      when LiquidTypes.is_map_primitive (map_coll^".map") ->
       let arg = translate_code contracts env arg in
       let body = translate_code contracts env body in
       let arg_name, _, body = deconstruct_pat env pat body in
@@ -1232,7 +1235,8 @@ let rec translate_code contracts env exp =
             [ Nolabel, { pexp_desc = Pexp_fun (Nolabel,None, pat, body) };
               Nolabel, arg;
               Nolabel, acc;
-            ]) } ->
+            ]) }
+      when LiquidTypes.is_map_fold_primitive (map_fold_coll^".map_fold") ->
       let arg = translate_code contracts env arg in
       let acc = translate_code contracts env acc in
       let body = translate_code contracts env body in
@@ -1248,7 +1252,8 @@ let rec translate_code contracts env exp =
             [
               Nolabel, f_exp;
               Nolabel, arg
-            ]) } ->
+            ]) }
+      when LiquidTypes.is_fold_primitive (iter_coll^".iter") ->
       let f = translate_code contracts env f_exp in
       let vloc = loc_of_loc vloc in
       let arg_name = "_iter_arg" in
@@ -1269,7 +1274,8 @@ let rec translate_code contracts env exp =
               Nolabel, f_exp;
               Nolabel, arg;
               Nolabel, acc;
-            ]) } ->
+            ]) }
+      when LiquidTypes.is_fold_primitive (iter_coll^".fold") ->
       let f = translate_code contracts env f_exp in
       let arg_name = "_fold_arg" in
       let vloc = loc_of_loc vloc in
@@ -1289,7 +1295,8 @@ let rec translate_code contracts env exp =
             [
               Nolabel, f_exp;
               Nolabel, arg;
-            ]) } ->
+            ]) }
+      when LiquidTypes.is_map_primitive (map_coll^".map") ->
       let f = translate_code contracts env f_exp in
       let arg_name = "_map_arg" in
       let vloc = loc_of_loc vloc in
@@ -1309,7 +1316,8 @@ let rec translate_code contracts env exp =
               Nolabel, f_exp;
               Nolabel, arg;
               Nolabel, acc;
-            ]) } ->
+            ]) }
+      when LiquidTypes.is_map_fold_primitive (map_fold_coll^".map_fold") ->
       let f = translate_code contracts env f_exp in
       let arg_name = "_map_fold_arg" in
       let vloc = loc_of_loc vloc in
