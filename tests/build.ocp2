@@ -83,6 +83,7 @@ OCaml.library("ocplib-liquidity-examples",
                   "others/game.liq";
                   "others/mist_wallet_current.liq";
                   "others/mist_wallet_light.liq";
+                  "others/token.liq";
           ];
        };
 
