@@ -9,15 +9,15 @@ end
 
 let%entry main
     (parameter : N.instance)
-    (storage : bool) =
+    _storage =
 
   let b =
    if
-    let op = Contract.call parameter 0tz 1p in
+    let _op = Contract.call parameter 0tz 1p in
     true
    then
     false
    else
     true
   in
-  ([]:operation list), b
+  [], b

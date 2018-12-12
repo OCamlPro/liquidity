@@ -21,5 +21,5 @@ let%entry main
         ) (parameter, storage)
       in
       let storage = Array.get x 1 in
-      ( ([] : operation list), storage )
+      ( [], storage )
 

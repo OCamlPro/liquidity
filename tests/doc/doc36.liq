@@ -4,4 +4,4 @@ let%entry main _ _ =
   let world = match String.sub 6p 5p s with
     | Some s -> s
     | None -> failwith () in
-  ([] : operation list), world
+  [], world

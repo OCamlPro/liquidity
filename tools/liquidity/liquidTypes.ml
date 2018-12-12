@@ -11,22 +11,22 @@ module StringMap = Map.Make(String)
 module StringSet = Set.Make(String)
 module IntMap = Map.Make(struct type t = int let compare = compare end)
 
+(** A module to handle aliased references **)
 module Ref = struct
-  exception NullRef
-  type 'a t = { mutable contents : 'a option ref;
-                mutable aliases : ('a t) list }
-  let null () = let rec r = { contents = ref None; aliases = [r] } in r
-  let create x = let rec r = { contents = ref (Some x); aliases = [r] } in r
-  let isnull r = match !(r.contents) with Some _ -> false | None -> true
-  let get r = match !(r.contents) with Some c -> c | None -> raise NullRef
-  let set r x = r.contents := Some x
-  let merge r1 r2 x =
+  type 'a t = { mutable contents : 'a ref;
+                mutable aliases : ('a t) list ref }
+  let create x = let rec r = { contents = ref x; aliases = ref [r] } in r
+  let get r = !(r.contents)
+  let set r x = r.contents := x
+  let merge_set r1 r2 x =
     r1.contents := x;
-    if r1 != r2 && r1.aliases != r2.aliases then
+    if r1.contents != r2.contents then begin
+      r1.aliases := !(r1.aliases) @ !(r2.aliases);
       List.iter (fun r2a ->
         r2a.contents <- r1.contents;
         r2a.aliases <- r1.aliases
-      ) r2.aliases
+      ) !(r2.aliases)
+    end
 end
 
 
@@ -112,14 +112,17 @@ and datatype =
   | Tclosure of (datatype * datatype) * datatype
   | Tfail
 
-  | Tvar of { tv: string; tyr: datatype Ref.t }
+  | Tvar of tv Ref.t
   | Tpartial of partial_type
 
+and tv = { id: string; tyo: datatype option }
+
 and partial_type =
-  | Peqn of ((datatype * datatype) list * datatype) list * location (* overload *)
+  | Peqn of ((datatype * datatype) list * datatype) list * location (*overload*)
   | Ptup of (int * datatype) list (* partial tuple *)
   | Pmap of datatype * datatype (* map or bigmap *)
   | Pcont of (string * datatype) list (* unknown contract *)
+  | Ppar (* equation parameter *)
 
 (** A signature for an entry point *)
 and entry_sig = {
@@ -162,6 +165,7 @@ and full_contract_sig = {
   f_entries_sig : entries_sig;
 }
 
+(** Extended primitive **)
 and extprim = {
   tvs : string list;
   atys : datatype list;
@@ -203,14 +207,18 @@ and 'exp init = {
 }
 
 let rec expand ty = match ty with
-  | Tvar { tyr } when Ref.isnull tyr -> ty
-  | Tvar tvar -> let ty = expand (Ref.get tvar.tyr) in
-                 Ref.set tvar.tyr ty; ty
+  | Tvar tvr ->
+    begin match Ref.get tvr with
+      | { id; tyo = Some ty } ->
+        let ty = expand ty in
+        Ref.set tvr { id; tyo = Some ty }; ty
+      | { id; tyo = None } -> ty
+    end
   | _ -> ty
 
 let size_of_type = function
-  | Ttuple tyl -> List.length tyl
-  | Trecord (_, fl) -> List.length fl
+  | Ttuple l -> List.length l
+  | Trecord (_, l) -> List.length l
   | _ -> raise (Invalid_argument "size_of_type")
 
 (** Comparable types can be used as, e.g., keys in a map. This
@@ -278,7 +286,7 @@ let rec eq_types ty1 ty2 = match expand ty1, expand ty2 with
 
   | Tcontract csig1, Tcontract csig2 -> eq_signature csig1 csig2
 
-  | Tvar tv1, Tvar tv2 -> tv1.tv = tv2.tv
+  | Tvar tvr1, Tvar tvr2 -> (Ref.get tvr1).id = (Ref.get tvr2).id
 
   | _, _ -> false
 
@@ -296,7 +304,7 @@ and eq_signature { entries_sig = s1 } { entries_sig = s2 } =
 
 (** Returns true if a type contains an operation (excepted in lambda's
     where they are allowed in Michelson). *)
-let rec type_contains_nonlambda_operation = function
+let rec type_contains_nonlambda_operation ty = match expand ty with
   | Toperation -> true
   | Tunit | Tbool | Tint | Tnat | Ttez | Tstring | Tbytes
   | Ttimestamp | Tkey | Tkey_hash | Tsignature | Taddress | Tfail -> false
@@ -311,8 +319,8 @@ let rec type_contains_nonlambda_operation = function
     List.exists (fun e -> type_contains_nonlambda_operation e.parameter)
       s.entries_sig
   | Tlambda _ | Tclosure _ -> false
-  | Tvar _ -> false
-  | Tpartial _ -> failwith "nonlambda Tpartial TODO"
+  | Tvar _ | Tpartial _ ->
+    raise (Invalid_argument "type_contains_nonlambda_operation")
 
 (** Extract the signature of a contract *)
 let sig_of_contract c = {
@@ -1110,7 +1118,7 @@ and eq_exp eq_ty eq_var e1 e2 =
   eq_exp_desc eq_ty eq_var e1.desc e2.desc
 
 (** Instances of above function {!eq_exp} *)
-(* let eq_typed_exp eq_var e1 e2 = eq_exp eq_types eq_var e1 e2 *)
+let eq_typed_exp eq_var e1 e2 = eq_exp eq_types eq_var e1 e2
 let eq_syntax_exp e1 e2 = eq_exp (fun _ _ -> true) (=) e1 e2
 
 
@@ -1227,7 +1235,7 @@ type loc_michelson = {
 (** Type of closure environment used to typechecking *)
 type closure_env = {
   env_vars :  (string (* name outside closure *)
-               * datatype
+               * (StringSet.t * datatype)
                * int (* index *)
                * (int ref * (* usage counter inside closure *)
                   int ref (* usage counter outside closure *)
@@ -1245,13 +1253,14 @@ type typecheck_env = {
   annot : bool;
   decompiling : bool;
   counter : int ref;
-  vars : (string * datatype * bool (* fails *) ) StringMap.t;
+  vars : (string * (StringSet.t * datatype) * bool (* fails *) ) StringMap.t;
   vars_counts : int ref StringMap.t;
   env : env;
   to_inline : encoded_exp StringMap.t ref;
   force_inline : encoded_exp StringMap.t ref;
   t_contract_sig : full_contract_sig;
   clos_env : closure_env option;
+  ftvars : StringSet.t
 }
 
 let empty_typecheck_env ~warnings t_contract_sig env = {
@@ -1266,6 +1275,7 @@ let empty_typecheck_env ~warnings t_contract_sig env = {
   env = env;
   clos_env = None;
   t_contract_sig;
+  ftvars = StringSet.empty
 }
 
 
@@ -1388,9 +1398,6 @@ type warning =
   | UnusedMatched of string
   | NotRecursive of string
   | AlwaysFails
-  | ChangeToUnit of string
-  | ChangeToTuple of string
-  | ChangeToMap of string
 
 (** {2 Reserved symbols in parsing }  *)
 
@@ -1471,8 +1478,13 @@ let rec lift_type env ty = match ty with
     Tsum (name, List.map (fun (c, ty) -> c, lift_type env ty) constrs)
   | Tclosure ((t1, t2), t3) ->
     Tclosure ((lift_type env t1, lift_type env t2), lift_type env t3)
-  | Tvar _ -> failwith "lift_type Tvar TODO"
-  | _ -> failwith "lift_type other TODO"
+  | Tvar tvr ->
+    let tv = Ref.get tvr in
+    begin match tv.tyo with
+      | None -> ty
+      | Some ty -> (Ref.set tvr) { tv with tyo = Some (lift_type env ty) }; ty
+    end
+  | Tpartial _ -> raise (Invalid_argument "lift_type")
 
 and lift_contract_sig env c_sig =
       { sig_name = c_sig.sig_name;
@@ -1493,43 +1505,3 @@ let find_type s env = rec_find s env (fun env -> env.types)
 let find_contract_type s env = rec_find s env (fun env -> env.contract_types)
 let find_label s env = rec_find s env (fun env -> env.labels)
 let find_constr s env = rec_find s env (fun env -> env.constrs)
-
-let tv_subst s ty =
-  let rec aux = function
-  | Ttuple tyl -> Ttuple (List.map aux tyl)
-  | Toption ty -> Toption (aux ty)
-  | Tlist ty -> Tlist (aux ty)
-  | Tset ty -> Tset (aux ty)
-  | Tmap (ty1, ty2) -> Tmap (aux ty1, aux ty2)
-  | Tbigmap (ty1, ty2) -> Tbigmap (aux ty1, aux ty2)
-  | Tcontract c ->
-      Tcontract { c with entries_sig =
-        List.map (fun es ->
-          { es with parameter = aux es.parameter }
-        ) c.entries_sig }
-  | Tor (ty1, ty2) -> Tor (aux ty1, aux ty2)
-  | Tlambda (ty1, ty2) -> Tlambda (aux ty1, aux ty2)
-  | Trecord (rn, fl) ->
-      Trecord (rn, List.map (fun (fn, fty) -> (fn, aux fty)) fl)
-  | Tsum (sn, cl) ->
-      Tsum (sn, List.map (fun (cn, cty) -> (cn, aux cty)) cl)
-  | Tclosure ((ty1, ty2), ty3) ->
-      Tclosure ((aux ty1, aux ty2), aux ty3)
-  | Tvar tv -> List.assoc tv.tv s
-  | ty -> ty
-  in
-  aux ty
-
-(* Make a fresh type variable *)
-let fresh_tv =
-  let cnt = ref 0 in
-  let a = Char.code 'a' in
-  fun () ->
-    let q = !cnt / 26 in
-    let r = !cnt mod 26 in
-    cnt := !cnt + 1;
-    "_" ^ (Char.escaped (Char.chr (a + r)))
-    ^ (if q > 0 then string_of_int q else "")
-
-let fresh_tvar () =
-  Tvar { tv = fresh_tv (); tyr = Ref.null () }

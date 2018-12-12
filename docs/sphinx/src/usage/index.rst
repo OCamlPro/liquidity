@@ -75,7 +75,7 @@ Let's take a very simple Liquidity contract, stored in a file ``simple.liq``::
   type storage = int
 
   let%entry main (parameter : int) storage =
-    ( ([] : operation list), storage + parameter )
+    ( [], storage + parameter )
 
 This contract will add its argument to the storage, and do nothing else.
 

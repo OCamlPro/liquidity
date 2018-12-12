@@ -7,4 +7,4 @@ let%entry main _ _ =
     | Some t ->
       if t.(0) <> 1 then failwith "bad unpack"
   end;
-  ([] : operation list), ()
+  [], ()

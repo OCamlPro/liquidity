@@ -7,11 +7,11 @@ end
 
 type storage = bool * NatContract.instance
 
-let%entry main (parameter : NatContract.instance) storage =
+let%entry main (_parameter : NatContract.instance) storage =
 
   let (b, c) = storage in
   if b then
-    ([]:operation list), set storage 0 false
+    [], set storage 0 false
   else
     let op = c.thisisit ~amount:0tz 0p in
     [op], set storage 0 true

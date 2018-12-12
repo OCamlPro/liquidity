@@ -9,8 +9,8 @@ type storage =  string * (* 0: S *)
                 UnitContract.instance  (* 5: B *)
 
 let%entry main
-      (parameter : timestamp)
-      (storage : storage) =
+      (_parameter : timestamp)
+      storage =
    let pn = get storage 2 in
    let storage = set storage 2 pn in
-   ( ([] : operation list), storage )
+   ( [], storage )

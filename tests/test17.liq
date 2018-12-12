@@ -5,8 +5,8 @@ type storage =
 | String of string * int
 
 let%entry main
-      (parameter : int)
-      (storage : storage) =
+      (_parameter : int)
+      storage =
   let _a = Nothing in
   let b = Int 3 in
   let c = String ("toto",0) in
@@ -17,7 +17,7 @@ let%entry main
   | Nothing -> b
   in
 
-  ( ([] : operation list), storage )
+  ( [], storage )
 
 
 

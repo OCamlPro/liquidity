@@ -3,6 +3,6 @@ type storage = (int, string) variant
 
 let%entry main
       (parameter : int)
-      (storage : (int, string) variant)=
-  let a = (Left parameter : (_, string) variant) in
-  ( ([]:operation list), a )
+      _storage =
+  let a = Left parameter in
+  ( [], a )

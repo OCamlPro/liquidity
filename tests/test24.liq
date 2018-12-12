@@ -16,7 +16,7 @@ end
 
 let%entry main
     (parameter : UnitContract.U.instance * t)
-    (storage : int)  =
+    storage =
 
   let (c, m) = parameter in
   match m with

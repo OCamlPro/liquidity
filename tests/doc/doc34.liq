@@ -5,4 +5,4 @@ let%entry main _ _ =
   let b' = match Bytes.sub 3p 3p s with
     | Some b -> b
     | None -> failwith () in
-  ([] : operation list), b'
+  [], b'

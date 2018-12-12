@@ -5,6 +5,6 @@ let%entry main _ map =
         | None -> Some key
         | Some min -> if key < min then Some key else min_key in
       ( - v, min_key )
-    ) map (None : string option)
+    ) map None
   in
-  ([] : operation list), negated_values
+  [], negated_values

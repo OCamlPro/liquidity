@@ -28,22 +28,22 @@ let%init storage (owners : address set) (min_agree : nat) =
     owners;
     owners_length;
     min_agree;
-    actions = (Map : (address, proposition) map);
+    actions = Map;
   }
 
 (* fails if the proposition is not a valid one *)
-let[@inline] check_proposition (p:proposition) =
+let[@inline] check_proposition p =
   if p.amount > Current.balance () then
     Current.failwith "Balance to low for withdrawal"
   else ()
 
 (* returns true if two proositions are identical *)
-let[@inline] equal_props ((p1:proposition), (p2:proposition)) =
+let[@inline] equal_props (p1, p2) =
   p1.destination = p2.destination &&
   p1.amount = p2.amount
 
 (* returns true if a proposition p should be executed immediately *)
-let should_execute ((p : proposition), (storage : storage)) =
+let should_execute (p, storage) =
   let nb_agree =
     Map.fold (fun ((_, p'), cpt) ->
         if equal_props (p, p') then cpt + 1p else cpt
@@ -53,7 +53,7 @@ let should_execute ((p : proposition), (storage : storage)) =
 
 let%entry pay (parameter : unit) storage =
   (* Simple payment, nothing to do *)
-  ([] : operation list), storage
+  [], storage
 
 let%entry manage (action : action) storage =
   (* Owner wants to perform an action *)
@@ -67,7 +67,7 @@ let%entry manage (action : action) storage =
   (* Register the desired action in the storage *)
   let storage =
     storage.actions <- Map.update owner action storage.actions in
-  let do_nothing = ([] : operation list), storage in
+  let do_nothing = [], storage in
   match action with
   | None ->
     (* action is to remove previous proposition: nothing to do *)
@@ -80,6 +80,6 @@ let%entry manage (action : action) storage =
       let c_dest = Account.default p.destination in
       let op = Contract.call c_dest p.amount () in
       (* reset the map of actions *)
-      [op], storage.actions <- (Map [] : (address, proposition) map)
+      [op], storage.actions <- Map []
     else
       do_nothing

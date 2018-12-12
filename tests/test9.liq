@@ -11,8 +11,7 @@ type storage = bool *
 
 let%entry main
       (parameter : bool)
-      (storage : storage)
-      : operation list * storage =
+      storage =
 
 (* booleans *)
       let bool =
@@ -23,7 +22,7 @@ let%entry main
 (* options *)
       let option =
         if parameter then
-           (None : int option)
+           None
         else
            Some 3
       in
@@ -32,7 +31,7 @@ let%entry main
 (* maps *)
       let map =
         if parameter then
-           (Map : (string,int) map)
+           Map
         else 
         if parameter then
            Map [ "string", 1 ]
@@ -44,7 +43,7 @@ let%entry main
 (* sets *)
       let set =
         if parameter then
-          (Set : int set)
+          Set
         else
           Set [1;2;3;4]
       in
@@ -53,10 +52,10 @@ let%entry main
 (* lists *)
       let list =
         if parameter or parameter then
-          ([] : int list)
+          []
         else
           [1;2;3;4;5]
       in
       let storage = Array.set storage 4 list in
 
-      ( ([] : operation list), storage )
+      ( [], storage )

@@ -4,7 +4,7 @@ type storage = int
 
 let%entry main
     (parameter : int)
-    (storage : int) =
+    storage =
 
   let inc0 = 1 in
   let inc1 = 1 in
@@ -15,8 +15,8 @@ let%entry main
   let storage, rien =
     Loop.left (fun (acc, rien) ->
         let rien = rien + 1 in
-        if acc > 10 then ((Right acc : (int, int) variant), rien) (* stop *)
-        else ((Left (acc + inc) : (int, int) variant), rien) (* re-loop *)
+        if acc > 10 then (Right acc, rien) (* stop *)
+        else (Left (acc + inc), rien) (* re-loop *)
       ) parameter 0
   in
 
@@ -24,9 +24,9 @@ let%entry main
 
   let storage =
     Loop.left (fun acc ->
-        if acc > 10 then (Right acc : (int, int) variant) (* stop *)
-        else (Left (acc + inc) : (int, int) variant) (* re-loop *)
+        if acc > 10 then Right acc (* stop *)
+        else Left (acc + inc) (* re-loop *)
       ) storage
   in
 
-  ( ([] : operation list), storage )
+  ( [], storage )

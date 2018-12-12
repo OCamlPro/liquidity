@@ -5,10 +5,10 @@ type storage = int
 
 let%entry main
       (parameter : int)
-      (storage : int) =
-  let x = parameter + 10 in
-  let f ( arg : int * int ) (y : int) =
+      storage =
+  let _x = parameter + 10 in
+  let f _arg _y =
     0
   in
   let storage = f (parameter, storage) 199 in
-  ( ([] : operation list), storage )
+  ( [], storage )

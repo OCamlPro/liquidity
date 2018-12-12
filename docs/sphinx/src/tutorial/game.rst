@@ -113,7 +113,7 @@ the oracle, which cannot be changed later on.
 .. code-block:: OCaml
 
    let%init storage (oracle_id : address) =
-     { game = (None : game option); oracle_id }
+     { game = None; oracle_id }
 
 The ``play`` entry point
 ~~~~~~~~~~~~~~~~~~~~~~~~
@@ -169,7 +169,7 @@ transfers.
 
    let bet = Current.amount () in
    let storage = storage.game <- Some { number; bet; player } in
-   (([] : operation list), storage)
+   ([], storage)
 
 
 The new storage is returned and the execution stops at this point,
@@ -230,7 +230,7 @@ lost, and generates the corresponding operations accordingly.
 
       if random_number < game.number then
         (* Lose *)
-        ([] : operation list)
+        []
 
 If the random number is smaller that the chosen number, the player
 lost. In this case no operation is generated and the money is kept by
@@ -253,7 +253,7 @@ generate a transfer operation with this amount.
 
 .. code-block:: OCaml
 
-    let storage = storage.game <- (None : game option) in
+    let storage = storage.game <- None in
     (ops, storage)
 
 Finally, the storage of the smart contract is reset, meaning that the
@@ -272,7 +272,7 @@ depleted, by simply adding more funds to it.
 .. code-block:: OCaml
 
    let%entry fund _ storage =
-     ([] : operation list), storage
+     [], storage
 
 This code does nothing, excepted accepting transfers with amounts.
 

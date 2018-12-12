@@ -177,16 +177,9 @@ maps. Constants collections can be created directly:
 * Maps: ``Map [1, "x"; 2, "y"; 3, "z"]`` for a ``(int, string) map``;
 * Big maps: ``BigMap [1, "x"; 2, "y"; 3, "z"]`` for a ``(int, string) big_map``
 
-In the case of an empty collection, whose type cannot be inferred, the type must be specified:
-
-* Lists: ``([] : int list)``
-* Sets: ``(Set : int set)``
-* Maps: ``(Map : (int, string) map)``
-* Big maps: ``(BigMap : (int, string) big_map)``
-
 Options (``option``) can be defined with:
 
-* An empty option: ``(None : int option)``
+* An empty option: ``None``
 * A valued option: ``Some 3``
 
 Variants (``variant``) can be defined with:
@@ -661,7 +654,7 @@ Operations on bytes
   .. literalinclude:: ../../../../tests/doc/doc29.liq
 
 * ``Bytes.unpack: bytes -> 'a option``. Deserialize a sequence of
-  bytes to a value from which it was serialized. The expression must
+  bytes to a value from which it was serialized. The expression should
   be annotated with the (option) type that it should return. It is
   translated to ``UNPACK`` in Michelson.
 

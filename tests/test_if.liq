@@ -12,7 +12,7 @@ type storage =
 
 let%entry main
       (parameter : bool)
-      (storage : storage) =
+      storage =
 
 (* booleans *)
       let bool =
@@ -20,4 +20,4 @@ let%entry main
       in
       let storage  = set storage 0 bool in
 
-      ( ([] : operation list), storage )
+      ( [], storage )

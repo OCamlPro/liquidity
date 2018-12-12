@@ -16,4 +16,4 @@ let%entry main
            storage @ parameter
        in
 
-      ( ([] : operation list), storage )
+      ( [], storage )

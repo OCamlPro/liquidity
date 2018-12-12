@@ -19,13 +19,13 @@ type storage = {
 }
 
 let%init storage = {
-  map = (BigMap : alias_map);
+  map = BigMap;
   min_fees = 0tz;
   owners = Set [ ( tz1ZLyEcFfXyu75ASsjAt5hgaR4sU5PSbLkg : address )  ];
-  update = ( None : ( alias_operation -> operation ) option );
+  update = None;
 }
 
-let return = ( [] : operation list ) [@@inline]
+let return = [] [@@inline]
 
 let sender = Current.sender () [@@inline]
 

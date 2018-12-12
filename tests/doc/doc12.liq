@@ -5,4 +5,4 @@ let%entry main ( x : int ) _ =
   let n = match%nat x with
     | Plus n -> n
     | Minus _ -> failwith "x shound not be negative" in
-  ([] : operation list), n
+  [], n

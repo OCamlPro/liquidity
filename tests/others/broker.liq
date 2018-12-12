@@ -24,7 +24,7 @@ let%entry main
       if cost < b then
         (* # Not enough cash, we just accept the transaction
            # and leave the global untouched *)
-        ( ([]: operation list), storage )
+        ( [], storage )
       else
         (* # Enough cash, successful ending
                    # We update the global*)

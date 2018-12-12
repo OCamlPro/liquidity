@@ -7,4 +7,4 @@ let%entry main _ _ =
 
 let%entry other (x : int) _ =
   if x < 0 then failwith ();
-  ([] : operation list), ()
+  [], ()

@@ -20,9 +20,9 @@ let%init storage
     (name : string) (symbol : string) =
   let owner_account  =
     { balance = totalSupply;
-      allowances = (Map : (address, nat) map) } in
+      allowances = Map } in
   let accounts =
-    Map.add owner owner_account (BigMap : (address, account) big_map) in
+    Map.add owner owner_account BigMap in
   {
     accounts;
     version = 1p;
@@ -33,13 +33,13 @@ let%init storage
     owner;
   }
 
-let get_account ((a : address), (accounts : (address, account) big_map)) =
+let get_account (a, accounts) =
   match Map.find a accounts with
-  | None -> { balance = 0p; allowances = (Map : (address, nat) map) }
+  | None -> { balance = 0p; allowances = Map }
   | Some account -> account
 
 let perform_transfer
-    ((from : address), (dest : address), (tokens : nat), (storage : storage)) =
+    (from, dest, tokens, storage) =
   let accounts = storage.accounts in
   let account_sender = get_account (from, accounts) in
   let new_account_sender = match is_nat (account_sender.balance - tokens) with
@@ -51,7 +51,7 @@ let perform_transfer
   let new_account_dest =
     account_dest.balance <- account_dest.balance + tokens in
   let accounts = Map.add dest new_account_dest accounts in
-  ([] : operation list), storage.accounts <- accounts
+  [], storage.accounts <- accounts
 
 let%entry transfer ((dest : address), (tokens : nat)) storage =
   perform_transfer (Current.sender (), dest, tokens, storage)
@@ -66,7 +66,7 @@ let%entry approve ((spender : address), (tokens : nat)) storage =
         Map.add spender tokens account_sender.allowances in
   let storage = storage.accounts <-
       Map.add (Current.sender ()) account_sender storage.accounts in
-  ([] : operation list), storage
+  [], storage
 
 let%entry transferFrom
     ((from : address), (dest : address), (tokens : nat)) storage =
@@ -132,4 +132,4 @@ let%entry createAccounts (new_accounts : (address * nat) list) storage =
     failwith "Only owner can create accounts";
   List.fold (fun ((dest, tokens), (_ops, storage)) ->
       perform_transfer (storage.owner, dest, tokens, storage)
-    ) new_accounts (([] : operation list), storage)
+    ) new_accounts ([], storage)

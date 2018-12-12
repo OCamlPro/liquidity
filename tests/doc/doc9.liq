@@ -8,4 +8,4 @@ let%entry main _ _ =
   || x1.(1) <> 11
   || x1.(2) <> 3
   || x1.(3) <> 4 then failwith "Error !";
-  ([] : operation list), ()
+  [], ()

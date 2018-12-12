@@ -12,7 +12,7 @@ type storage = {
 }
 
 let%init storage (oracle_id : address) =
-  { game = (None : game option); oracle_id }
+  { game = None; oracle_id }
 
 (* Start a new game *)
 let%entry play ((number : nat), (player : key_hash)) storage =
@@ -26,7 +26,7 @@ let%entry play ((number : nat), (player : key_hash)) storage =
   | None ->
     let bet = Current.amount () in
     let storage = storage.game <- Some { number; bet; player } in
-    (([] : operation list), storage)
+    ([], storage)
 
 (* Receive a random number from the oracle and compute outcome of the
    game *)
@@ -42,7 +42,7 @@ let%entry finish (random_number : nat) storage =
     let ops =
       if random_number < game.number then
         (* Lose *)
-        ([] : operation list)
+        []
       else
         (* Win *)
         let gain = match (game.bet * game.number / 100p) with
@@ -51,9 +51,9 @@ let%entry finish (random_number : nat) storage =
         let reimbursed = game.bet + gain in
         [ Account.transfer ~dest:game.player ~amount:reimbursed ]
     in
-    let storage = storage.game <- (None : game option) in
+    let storage = storage.game <- None in
     (ops, storage)
 
 (* accept funds *)
 let%entry fund _ storage =
-  ([] : operation list), storage
+  [], storage

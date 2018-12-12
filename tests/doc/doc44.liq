@@ -5,4 +5,4 @@ let%entry main _ _ =
     ) [1; 2; 3; 4; 5] 0
   in
   if sum <> 15 then failwith sum;
-  ([] : operation list), ()
+  [], ()

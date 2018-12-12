@@ -9,4 +9,4 @@ let%entry main (addr : address) _ =
     | None -> failwith ("Cannot recover bool contract from:", addr)
     | Some _my_contract -> ()
   end;
-  ([] : operation list), ()
+  [], ()

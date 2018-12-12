@@ -8,6 +8,7 @@
 (**************************************************************************)
 
 open LiquidTypes
+open LiquidInfer
 
 let noloc env = LiquidLoc.loc_in_file env.env.filename
 
@@ -63,13 +64,14 @@ let uniq_ident env name =
 (*     Printf.sprintf "tmp#%d" !cpt *)
 
 
-(* Create a new binding in the typechecing environment to uniquely
+(* Create a new binding in the typechecking environment to uniquely
    rename variable for alpha-renaming (prevents capture). *)
 let new_binding env name ?(effect=false) ty =
   let new_name = uniq_ident env name in
   let count = ref 0 in
+  let tys = (StringSet.empty, ty) in
   let env = { env with
-              vars = StringMap.add name (new_name, ty, effect) env.vars;
+              vars = StringMap.add name (new_name, tys, effect) env.vars;
               vars_counts = StringMap.add new_name count env.vars_counts;
             } in
   (new_name, env, count)
@@ -79,7 +81,7 @@ let new_binding env name ?(effect=false) ty =
 let find_var ?(count_used=true) env loc name =
   try
     let vname = name in
-    let (name, ty, effect) = StringMap.find name env.vars in
+    let (name, (_, ty), effect) = StringMap.find name env.vars in
     let count = StringMap.find name env.vars_counts in
     if count_used then incr count;
     let aname =
@@ -143,15 +145,16 @@ let env_for_clos env bvs arg_name arg_type =
     let loc = arg_name.nloc in
     let env_arg_name = uniq_ident env "closure_env" in
     let env_arg_type =
-      Ttuple (arg_type :: List.map (fun (_, (_,ty,_,_)) -> ty) free_vars_l) in
+      Ttuple (arg_type :: List.map (fun (_, (_, (_, ty), _, _)) ->
+                                      ty) free_vars_l) in
     let env_arg_var = mk ~loc (Var env_arg_name) env_arg_type in
     let new_name = uniq_ident env arg_name.nname in
     let env_vars =
       StringMap.add arg_name.nname
-        (new_name, arg_type, 0, (ref 0, ref 0)) free_vars in
+        (new_name, (StringSet.empty, arg_type), 0, (ref 0, ref 0)) free_vars in
     (* let size = StringMap.cardinal env_vars in *)
     let env_bindings =
-      StringMap.map (fun (name, ty, index, count) ->
+      StringMap.map (fun (name, (_, ty), index, count) ->
           let ei = mk_nat ~loc index in
           let exp = mk ~name ~loc
               (Apply { prim = Prim_tuple_get; args = [env_arg_var; ei] })
@@ -237,8 +240,7 @@ let rec encode_type ?(decompiling=false) ty =
         storage_name = "storage";
         parameter;
       }] }
-  | Tvar _ -> assert false
-  | Tpartial _ -> assert false
+  | Tvar _ | Tpartial _ -> assert false (* Removed during typechecking *)
 
 (* encode a contract signature to the corresponding single entry form
    sum type *)
@@ -276,8 +278,7 @@ let rec has_big_map = function
     List.exists (fun (_, ty) -> has_big_map ty) cstys
   | Tcontract { entries_sig } ->
     List.exists (fun { parameter } -> has_big_map parameter) entries_sig
-  | Tvar _ -> assert false
-  | Tpartial _ -> assert false
+  | Tvar _ | Tpartial _ -> assert false (* Removed during typechecking *)
 
 (* Encode storage type. This checks that big maps appear only as the
    first component of the toplevel tuple or record storage. *)
@@ -517,13 +518,11 @@ let rec encode env ( exp : typed_exp ) : encoded_exp =
     in
     let (new_name, env, count) =
       new_binding env bnd_var.nname ~effect:bnd_val.effect bnd_val.ty in
-    if inline then
-      (* indication for closure encoding *)
+    if inline then (* indication for closure encoding *)
       env.force_inline :=
         StringMap.add bnd_var.nname bnd_val !(env.force_inline);
     let body = encode env body in
-    if not bnd_val.transfer then begin
-      (* no inlining of values with transfer *)
+    if not bnd_val.transfer (* no inlining of values with transfer *) then begin
       match !count with
       | c when c <= 0 ->
         if bnd_val.effect then
@@ -966,12 +965,7 @@ let rec encode env ( exp : typed_exp ) : encoded_exp =
         contract c_to_inline in
     mk ?name:exp.name ~loc (CreateContract { args; contract }) exp.ty
 
-  | TypeAnnot { e; ty } ->
-    let e = encode env e in
-    mk ?name:exp.name ~loc (TypeAnnot { e; ty }) exp.ty
-
-  | Type ty ->
-    mk ?name:exp.name ~loc (Type ty) exp.ty
+  | TypeAnnot _ | Type _ -> assert false (* Removed during typechecking *)
 
 
 and encode_apply name env prim loc args ty =
@@ -1126,6 +1120,7 @@ and encode_contract ?(annot=false) ?(decompiling=false) contract =
       env = contract.ty_env;
       clos_env = None;
       t_contract_sig = full_sig_of_contract contract;
+      ftvars = StringSet.empty
     } in
 
   let parameter = encode_contract_sig (sig_of_full_sig env.t_contract_sig) in
@@ -1221,6 +1216,7 @@ let encode_const env t_contract_sig const =
       env = env;
       clos_env = None;
       t_contract_sig;
+      ftvars = StringSet.empty;
     } in
 
   encode_const env const

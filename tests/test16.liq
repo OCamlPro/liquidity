@@ -4,11 +4,11 @@ type storage = unit
 let%entry main
       (parameter : int)
       (storage : unit) =
-  let f = fun ( arg : unit * int ) ->
+  let f = fun arg ->
     arg.(0)
   in
   let storage = Lambda.pipe (storage, parameter) f in
-  ( ([] : operation list), storage )
+  ( [], storage )
 
 
 

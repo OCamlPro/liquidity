@@ -7,7 +7,7 @@ type storage = tez
 
 let%entry main
       (dest : key_hash)
-      (storage : tez) =
+      storage =
 
       let storage = storage + Current.amount () in
       let amount = storage in

@@ -8,6 +8,6 @@ type storage = string * (* 0: S *)
                UnitContract.instance * (* 4: A *)
                UnitContract.instance  (* 5: B *)
 let%entry main
-      (parameter : timestamp)
+      (_parameter : timestamp)
       (storage : storage) =
-   ( ([] : operation list), storage )
+   ( [], storage )

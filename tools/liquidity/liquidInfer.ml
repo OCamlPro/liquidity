@@ -1,0 +1,737 @@
+
+open LiquidTypes
+
+let error loc msg =
+  LiquidLoc.raise_error ~loc ("Type error:  " ^^ msg ^^ "%!")
+
+let fresh_tv =
+  let cnt = ref 0 in
+  let a = Char.code 'a' in
+  fun () ->
+    let q = !cnt / 26 in
+    let r = !cnt mod 26 in
+    cnt := !cnt + 1;
+    (Char.escaped (Char.chr (a + r)))
+    ^ (if q > 0 then string_of_int q else "")
+
+let fresh_tvar () =
+  Tvar (Ref.create { id = fresh_tv (); tyo = None })
+
+let rec has_tvar = function
+  | Ttuple tyl -> List.exists has_tvar tyl
+  | Toption ty | Tlist ty | Tset ty -> has_tvar ty
+  | Tmap (ty1, ty2) | Tbigmap (ty1, ty2) | Tor (ty1, ty2)
+  | Tlambda (ty1, ty2) -> has_tvar ty1 || has_tvar ty2
+  | Tclosure ((ty1, ty2), ty3) -> has_tvar ty1 || has_tvar ty2 || has_tvar ty3
+  | Trecord (_, fl) | Tsum (_, fl) ->List.exists (fun (_, ty) -> has_tvar ty) fl
+  | Tcontract c -> List.exists (fun e -> has_tvar e.parameter) c.entries_sig
+  | Tvar _ -> true
+  | Tpartial _ -> failwith "Anomaly : has_tvar Tpartial should not happen"
+  | _ -> false
+
+let rec occurs id = function
+  | Ttuple tyl -> List.exists (fun ty -> occurs id ty) tyl
+  | Toption ty | Tlist ty | Tset ty -> occurs id ty
+  | Tmap (ty1, ty2) | Tbigmap (ty1, ty2) | Tor (ty1, ty2)
+  | Tlambda (ty1, ty2) -> occurs id ty1 || occurs id ty2
+  | Tclosure ((ty1, ty2), ty3) -> occurs id ty1 || occurs id ty2 ||occurs id ty3
+  | Trecord (_, fl) | Tsum (_, fl)->List.exists (fun (_, ty) -> occurs id ty) fl
+  | Tcontract c -> List.exists (fun e -> occurs id e.parameter) c.entries_sig
+  | Tvar tvr ->
+    let tv = Ref.get tvr in
+    tv.id = id || (match tv.tyo with Some ty -> occurs id ty | _ -> false)
+  | Tpartial (Peqn (el,_)) ->
+    List.exists (fun (cl, rty) -> occurs id rty ||
+      List.exists (fun (ty1, ty2) -> occurs id ty1 || occurs id ty2) cl) el
+  | Tpartial (Ptup al) -> List.exists (fun (_, ty) -> occurs id ty) al
+  | Tpartial (Pmap (ty1, ty2)) -> occurs id ty1 || occurs id ty2
+  | Tpartial (Pcont el) -> List.exists (fun (_, ty) -> occurs id ty) el
+  | _ -> false
+
+let merge_lists l1 l2 =
+  List.fold_left (fun l e ->
+    if List.mem e l then l else e :: l
+  ) l1 l2
+
+(* let print_loc loc =
+ *   match loc.loc_pos with
+ *   | Some ( (begin_line, begin_char) , (end_line, end_char) ) ->
+ *     Printf.printf "%d.%d-%d.%d"
+ *       begin_line begin_char
+ *       end_line end_char
+ *   | None ->
+ *     Printf.printf "%s" loc.loc_file *)
+
+let rec unify loc ty1 ty2 =
+
+  match ty1, ty2 with
+  | Tpartial _, Tpartial _ ->
+    failwith "Anomaly : both Tpartial outside Tvar"
+  | _, _ -> ();
+
+  let uu = unify loc in
+
+  (* Expand tvars *)
+  let tyx1 = expand ty1 in
+  let tyx2 = expand ty2 in
+
+  (* print_loc loc;
+   * Printf.printf ": Unify %s " (LiquidPrinter.Liquid.string_of_type ty1);
+   * Printf.printf "| %s\n" (LiquidPrinter.Liquid.string_of_type ty2); *)
+
+  (* Unify the types *)
+  let tyx, to_unify = match tyx1, tyx2 with
+
+    | Tvar tvr1, Tvar tvr2 when (Ref.get tvr1).id = (Ref.get tvr2).id ->
+      tyx1, []
+
+    | Tvar tvr, tyx | tyx, Tvar tvr -> (* (Ref.get tvr).tyo = None *)
+      if occurs (Ref.get tvr).id tyx then failwith "Cyclic vars";
+      tyx, []
+
+
+    | Tpartial Peqn (el1, l1), Tpartial Peqn (el2, l2) ->
+      let el = List.fold_left (fun el (cl1, rty1) ->
+        List.fold_left (fun el (cl2, rty2) ->
+          if not (eq_types rty1 rty2) then el (* eqn do not contain tvars *)
+          else (merge_lists cl1 cl2, rty1) :: el (*might duplicate constraints*)
+        ) el el2
+      ) [] el1 in
+      Tpartial (Peqn (el, l1)) |> finalize_eqn
+
+    | Tpartial Peqn (el, l), ty | ty, Tpartial Peqn (el, l) ->
+      let el = List.filter (fun (_, rty) -> eq_types ty rty) el in
+      Tpartial (Peqn (el, l)) |> finalize_eqn
+
+
+    | Tpartial Ptup pl1, Tpartial Ptup pl2 ->
+      let pl = List.fold_left (fun pl (n, ty2) ->
+                 try let ty1 = List.assoc n pl in uu ty1 ty2; pl
+                 with Not_found -> (n, ty2) :: pl
+               ) pl1 pl2 in
+      Tpartial (Ptup pl), []
+
+    | Tpartial (Ptup pl), ty | ty, Tpartial (Ptup pl) ->
+      begin match ty with
+        | Ttuple tuple ->
+          begin try
+              List.iter (fun (n, ty) -> uu (List.nth tuple n) ty) pl;
+              Ttuple tuple, []
+            with
+            | Invalid_argument _ ->
+              error loc "Index must be positive or zero"
+            | Failure _ ->
+              error loc "Expecting a tuple of arity >= %d" (List.length tuple)
+          end
+        | Trecord (rn, fl) ->
+          begin try
+              List.iter (fun (n, ty) -> uu (snd (List.nth fl n)) ty) pl;
+              Trecord (rn, fl), []
+            with
+            | Invalid_argument _ ->
+              error loc "Index must be positive or zero"
+            | Failure _ ->
+              error loc "Expecting a record of arity >= %d" (List.length fl)
+          end
+        | _ ->
+          error loc "Partial tuple incompatible with %S"
+            (LiquidPrinter.Liquid.string_of_type ty)
+      end
+
+
+    | Tpartial (Pmap (k_ty1, v_ty1)), Tpartial (Pmap (k_ty2, v_ty2)) ->
+      uu k_ty1 k_ty2; uu v_ty1 v_ty2;
+      Tpartial (Pmap (k_ty1, v_ty1)), []
+
+    | Tpartial (Pmap (k_ty1, v_ty1)), ty
+    | ty, Tpartial (Pmap (k_ty1, v_ty1)) ->
+      begin match ty with
+        | Tmap (k_ty2, v_ty2) | Tbigmap (k_ty2, v_ty2) ->
+          uu k_ty1 k_ty2; uu v_ty1 v_ty2;
+          ty, []
+        | _ -> error loc "Undetermined map incompatible with %S"
+                 (LiquidPrinter.Liquid.string_of_type ty)
+      end
+
+
+    | Tpartial (Pcont el1), Tpartial (Pcont el2) ->
+      let el = List.fold_left (fun el (ep1, pty1) ->
+        try let pty2 = List.assoc ep1 el in uu pty1 pty2; el
+        with Not_found -> (ep1, pty1) :: el
+      ) el1 el2 in
+      Tpartial (Pcont el), []
+
+    | Tpartial (Pcont el), ty | ty, Tpartial (Pcont el) ->
+      begin match ty with
+      | Tcontract { entries_sig } ->
+        List.iter (fun (ep, pty) ->
+          let entry = try
+              List.find (fun e -> e.entry_name = ep) entries_sig
+            with Not_found ->
+              error loc "Contract has no entry point named %S"  ep in
+          uu pty entry.parameter
+        ) el;
+        ty, []
+      | _ -> error loc "Partial contract incompatible with %S"
+             (LiquidPrinter.Liquid.string_of_type ty)
+      end
+
+
+    | Tpartial (Ppar), Tpartial (Ppar) ->
+      Tpartial (Ppar), []
+
+    | Tpartial (Ppar), ty | ty, Tpartial (Ppar) ->
+      ty, []
+
+
+    | Ttuple tl1, Ttuple tl2 ->
+      begin try List.iter2 uu tl1 tl2;
+        with Invalid_argument _ ->
+          error loc "Tuples %S and %S have different arities"
+            (LiquidPrinter.Liquid.string_of_type ty1)
+            (LiquidPrinter.Liquid.string_of_type ty2)
+      end;
+      tyx1, []
+
+    | Toption ty1, Toption ty2
+    | Tlist ty1, Tlist ty2
+    | Tset ty1, Tset ty2 ->
+      uu ty1 ty2; tyx1, []
+
+    | Tmap (k_ty1, v_ty1), Tmap (k_ty2, v_ty2)
+    | Tbigmap (k_ty1, v_ty1), Tbigmap (k_ty2, v_ty2) ->
+      uu k_ty1 k_ty2; uu v_ty1 v_ty2; tyx1, []
+
+    | Tor (l_ty1, r_ty1), Tor (l_ty2, r_ty2) ->
+      uu l_ty1 l_ty2; uu r_ty1 r_ty2; tyx1, []
+
+    | Tlambda (from_ty1, to_ty1), Tlambda (from_ty2, to_ty2) ->
+      uu from_ty1 from_ty2; uu to_ty1 to_ty2; tyx1, []
+
+    | Tclosure ((from_ty1, env_ty1), to_ty1),
+      Tclosure ((from_ty2, env_ty2), to_ty2) ->
+      uu from_ty1 from_ty2; uu env_ty1 env_ty2; uu to_ty1 to_ty2; tyx1, []
+
+    | Trecord (_, fl1), Trecord (_, fl2)
+    | Tsum (_, fl1), Tsum (_, fl2) ->
+      begin try
+          List.iter2 (fun (_, ty1) (_, ty2) -> uu ty1 ty2) fl1 fl2;
+        with Invalid_argument _ ->
+          error loc "Types %S and %S have different arities"
+            (LiquidPrinter.Liquid.string_of_type ty1)
+            (LiquidPrinter.Liquid.string_of_type ty2)
+      end;
+      tyx1, []
+
+    | Tcontract c1, Tcontract c2 ->
+      let ok = try List.for_all2 (fun e1 e2 ->
+        uu e1.parameter e2.parameter;
+        e1.entry_name = e2.entry_name
+      ) c1.entries_sig c2.entries_sig
+      with Invalid_argument _ -> false in
+      if not ok then
+        error loc "Contracts signatures %S and %S are different"
+          (LiquidPrinter.Liquid.string_of_type ty1)
+          (LiquidPrinter.Liquid.string_of_type ty2)
+      else
+        tyx1, []
+
+    | _, _ ->
+      if not (eq_types tyx1 tyx2) then
+        error loc "Types %s and %s are not compatible\n"
+          (LiquidPrinter.Liquid.string_of_type tyx1)
+          (LiquidPrinter.Liquid.string_of_type tyx2);
+      tyx1, []
+  in
+
+  (* Update the type variables *)
+  begin match ty1, ty2, tyx with
+  | Tvar tvr1, Tvar tvr2, Tvar tvr ->
+    if (Ref.get tvr).tyo <> None then failwith "Tvar after unify"
+    else Ref.merge_set tvr1 tvr2 { (Ref.get tvr1) with tyo = None }
+  | Tvar tvr1, Tvar tvr2, _ ->
+      Ref.merge_set tvr1 tvr2 { (Ref.get tvr1) with tyo = Some tyx }
+  | Tvar tvr, _, _ | _, Tvar tvr, _ ->
+      Ref.set tvr { (Ref.get tvr) with tyo = Some tyx }
+  | _ -> () end;
+
+    (* Printf.printf "After unify %s | %s\n\n"
+     *   (LiquidPrinter.Liquid.string_of_type ty1)
+     *   (LiquidPrinter.Liquid.string_of_type ty2); *)
+
+  (* Unify LHS of equations *)
+  unify_list loc to_unify
+
+and unify_list loc to_unify =
+  List.iter (fun (ty1, ty2) ->
+    unify loc ty1 ty2) to_unify
+
+and finalize_eqn = function
+  | Tpartial (Peqn ([], loc)) -> error loc "No suitable overload\n"
+  | Tpartial (Peqn ([(cl, rty)], _)) -> rty, cl
+  | tyx -> tyx, []
+
+and resolve loc ty =
+  let rec aux ty = match ty with
+  | Tpartial (Peqn (el, l)) ->
+     let el = List.fold_left (fun el (cl, rty) ->
+       let cl, unsat = List.fold_left (fun (cl, unsat) (tv, ty) ->
+         if unsat then (cl, unsat) else
+         let tv, to_unify = match expand tv with
+           | Tpartial (Peqn _) as ty -> aux ty
+           | _ -> tv, [] in
+         unify_list loc to_unify;
+         match expand tv with
+         | Tpartial _ | Tvar _ -> ((tv, ty) :: cl, unsat)
+         | ty' -> if eq_types ty ty' then (cl, unsat) else ([], true)
+       ) ([], false) cl in
+       if unsat then el else (cl, rty) :: el
+     ) [] el in
+     Tpartial (Peqn (el, l)) |> finalize_eqn
+  | _ -> ty, []
+  in
+  aux ty
+
+let rec compat_types ty1 ty2 =
+  match expand ty1, expand ty2 with
+  | Tvar _, _ | _, Tvar _ -> true
+  | Tpartial Ppar, _ | _, Tpartial Ppar -> true
+  | Tpartial (Peqn (el1, _)), Tpartial (Peqn (el2, _)) ->
+    List.exists (fun (_, rty1) ->
+      List.exists (fun (_, rty2) ->
+        compat_types rty1 rty2) el2
+    ) el1
+  | Tpartial (Peqn (el, _)), ty | ty, Tpartial (Peqn (el, _)) ->
+    List.exists (fun (_, rty) -> compat_types rty ty) el
+  | _, _ -> eq_types ty1 ty2
+
+let make_type_eqn loc env overloads params =
+  let el = List.fold_left (fun eqn (opl, ort) ->
+    let cl, unsat = List.fold_left2 (fun (cl, unsat) op p ->
+      if unsat || eq_types op p then (cl, unsat)
+      else match p with (* if expand, then Tvar below does not work*)
+        | Tvar _ when compat_types op p -> ((p, op) :: cl, unsat)
+        | _ -> ([], true)
+    ) ([], false) opl params in
+    if unsat then eqn else (cl, ort) :: eqn
+  ) [] overloads in
+  let ty = Tpartial (Peqn (el, loc)) in
+  let ty, to_unify = resolve loc ty in
+  let ty = match ty with
+  | Tpartial (Peqn (el, _)) ->
+    List.iter (fun (cl, _) -> List.iter (fun (p, _) ->
+        match expand p with Tvar _ ->
+          unify loc p (Tpartial Ppar) | _ -> ()) cl) el;
+    Tvar (Ref.create { id = fresh_tv (); tyo = Some ty })
+  | Tpartial _ -> failwith "Bad return type"
+  | _ -> ty (* what if compound ? *)
+  in
+  unify_list loc to_unify;
+  ty
+
+let rec find_variant_type env = function
+  | [] -> None
+  | (CAny, _) :: cases -> find_variant_type env cases
+  | (CConstr (("Left"|"Right"), _), _) :: _ ->
+    Some (Tor (fresh_tvar (), fresh_tvar ()))
+  | (CConstr (c, _), _) :: _ ->
+    try let n, _ = find_constr c env.env in Some (find_type n env.env)
+    with Not_found -> None
+
+
+
+
+
+(* Monomorphisation *)
+
+let free_tvars ty =
+  let rec aux fv ty = match expand ty with
+  | Ttuple tyl -> List.fold_left aux fv tyl
+  | Toption ty | Tlist ty | Tset ty -> aux fv ty
+  | Tmap (ty1, ty2) | Tbigmap (ty1, ty2) | Tor (ty1, ty2)
+  | Tlambda (ty1, ty2) -> aux (aux fv ty1) ty2
+  | Tclosure ((ty1, ty2), ty3) -> aux (aux (aux fv ty1) ty2) ty3
+  | Trecord (_, fl) | Tsum (_, fl) ->
+    List.fold_left (fun fv (_, ty) -> aux fv ty) fv fl
+  | Tcontract c ->
+    List.fold_left (fun fv { parameter = ty } -> aux fv ty) fv c.entries_sig
+  | Tvar tvr when (Ref.get tvr).tyo <> None -> assert false
+  | Tvar tvr -> StringSet.add (Ref.get tvr).id fv
+  | Tpartial (Peqn (el, _)) ->
+    List.fold_left (fun fv (cl, rty) ->
+      List.fold_left (fun fv (ty1, ty2) ->
+        aux (aux fv ty1) ty2
+      ) (aux fv rty) cl
+    ) fv el
+  | Tpartial (Ptup pl) -> List.fold_left (fun fv (_, ty) -> aux fv ty) fv pl
+  | Tpartial (Pmap (ty1, ty2)) -> aux (aux fv ty1) ty2
+  | Tpartial (Pcont el) -> List.fold_left (fun fv (_, ty) -> aux fv ty) fv el
+  | _ -> fv
+  in
+  aux StringSet.empty ty
+
+let instantiate_to s ty =
+  let rec aux ty = match ty with
+  | Ttuple tyl -> Ttuple (List.map aux tyl)
+  | Toption ty -> Toption (aux ty)
+  | Tlist ty -> Tlist (aux ty)
+  | Tset ty -> Tset (aux ty)
+  | Tmap (ty1, ty2) -> Tmap (aux ty1, aux ty2)
+  | Tbigmap (ty1, ty2) -> Tbigmap (aux ty1, aux ty2)
+  | Tor (ty1, ty2) -> Tor (aux ty1, aux ty2)
+  | Tlambda (ty1, ty2) -> Tlambda (aux ty1, aux ty2)
+  | Tclosure ((ty1, ty2), ty3) -> Tclosure ((aux ty1, aux ty2), aux ty3)
+  | Trecord (rn, fl) ->
+    Trecord (rn, List.map (fun (fn, fty) -> (fn, aux fty)) fl)
+  | Tsum (sn, cl) ->
+    Tsum (sn, List.map (fun (cn, cty) -> (cn, aux cty)) cl)
+  | Tcontract c ->
+    Tcontract { c with entries_sig =
+      List.map (fun es ->
+        { es with parameter = aux es.parameter }
+      ) c.entries_sig }
+  | Tvar tvr ->
+    let tv = Ref.get tvr in
+    begin match tv.tyo with
+      | None -> begin try List.assoc tv.id s with Not_found -> ty end
+      | Some (Tpartial _ as ty') ->
+        Ref.set tvr { tv with tyo = Some (aux ty') }; ty
+      | Some ty -> aux ty (* a substitution should not exist for tv.id *)
+    end
+  | _ -> ty
+  in
+  aux ty
+
+let instantiate (tvars, ty) =
+  let s = StringSet.fold (fun id s ->
+            StringMap.add id (fresh_tvar ()) s
+          ) tvars StringMap.empty in
+  instantiate_to (StringMap.bindings s) ty
+
+let get_type env loc ty =
+  let rec aux ty = match ty with
+  | Ttuple tyl -> Ttuple (List.map aux tyl)
+  | Toption ty -> Toption (aux ty)
+  | Tlist ty -> Tlist (aux ty)
+  | Tset ty -> Tset (aux ty)
+  | Tmap (ty1, ty2) -> Tmap (aux ty1, aux ty2)
+  | Tbigmap (ty1, ty2) -> Tbigmap (aux ty1, aux ty2)
+  | Tor (ty1, ty2) -> Tor (aux ty1, aux ty2)
+  | Tlambda (ty1, ty2) -> Tlambda (aux ty1, aux ty2)
+  | Tclosure ((ty1, ty2), ty3) ->
+    Tclosure ((aux ty1, aux ty2), aux ty3)
+  | Trecord (rn, fl) ->
+    Trecord (rn, List.map (fun (f, ty) -> (f, aux ty)) fl)
+  | Tsum (sn, cl) ->
+    Tsum (sn, List.map (fun (c, ty) -> (c, aux ty)) cl)
+  | Tcontract c -> Tcontract { c with entries_sig =
+                     List.map (fun es ->
+                       { es with parameter = aux es.parameter }
+                     ) c.entries_sig }
+  | Tvar tvr when (Ref.get tvr).tyo = None -> ty
+  | Tvar tvr ->
+     let tv = Ref.get tvr in
+     let ty = match tv.tyo with Some ty -> ty | _ -> assert false in
+     begin match ty with
+     | Tpartial (Ptup pl) ->
+       let pl = List.sort (fun (i1, p1) (i2, p2) ->
+                  Pervasives.compare i1 i2) pl in
+       let _, pl = List.fold_left (fun (l, pl) (i, p) ->
+                     if l = i then (l + 1, (aux p) :: pl)
+                     else begin
+                       let plr = ref pl in
+                       for c = l to i-1 do
+                         plr := Tunit :: !plr
+                       done;
+                       l, !plr
+                     end
+                   ) (0, []) pl in
+       let ty = Ttuple (List.rev pl) in
+       Ref.set tvr { tv with tyo = Some ty }; ty
+     | Tpartial (Pmap (k_ty, v_ty)) ->
+       let ty = Tmap (aux k_ty, aux v_ty) in
+       Ref.set tvr { tv with tyo = Some ty }; ty
+     | Tpartial (Pcont []) ->
+       let ty = Tcontract unit_contract_sig in
+       Ref.set tvr { tv with tyo = Some ty }; ty
+     | Tpartial (Pcont el) ->
+       let csm = StringMap.filter (fun cn cs ->
+         List.for_all (fun e1 ->
+           List.exists (fun e2 ->
+             fst e1 = e2.entry_name &&
+             eq_types (aux (snd e1)) e2.parameter
+           ) cs.entries_sig
+         ) el
+       ) env.env.contract_types in
+       if StringMap.cardinal csm < 1 then
+         error loc "No compatible contract signature found"
+       else if StringMap.cardinal csm > 1 then
+         error loc "Different compatible contract signature may match"
+       else begin
+         let ty = aux (Tcontract (snd (StringMap.choose csm))) in
+         Ref.set tvr { tv with tyo = Some ty }; ty
+       end
+     | Tpartial (Peqn _) as ty ->
+       let ty, to_unify = resolve loc ty in
+       begin match ty with
+         | Tpartial (Peqn (el, l)) -> (* pick first ?*)
+           error l "Unresolved overload, add annotations"
+         | _ ->
+           Ref.set tvr { tv with tyo = Some ty };
+           unify_list loc to_unify;
+           ty
+       end
+     | Tpartial (Ppar) ->
+       error loc "Parameter type can't be infered, add an annotation"
+     | ty -> aux ty
+     end
+  | _ -> ty
+  in
+  aux ty
+
+let rec type_name = function
+  | Tfail -> "f" | Tunit -> "u" | Tbool -> "b" | Tint -> "i"
+  | Tnat -> "n" | Ttez -> "z" | Tstring -> "s" | Tbytes -> "x"
+  | Ttimestamp -> "t" | Tkey -> "k" | Tkey_hash -> "h"
+  | Tsignature -> "g" | Toperation -> "o" | Taddress -> "a"
+  | Ttuple tyl -> List.fold_left (fun s ty -> s ^ (type_name ty))
+                    ("T" ^ string_of_int (List.length tyl)) tyl
+  | Toption ty -> "O" ^ (type_name ty)
+  | Tlist ty -> "L" ^ (type_name ty)
+  | Tset ty -> "S" ^ (type_name ty)
+  | Tmap (ty1, ty2) -> "M" ^ (type_name ty1) ^ (type_name ty2)
+  | Tbigmap (ty1, ty2) -> "B" ^ (type_name ty1) ^ (type_name ty2)
+  | Tor (ty1, ty2) -> "X" ^ (type_name ty1) ^ (type_name ty2)
+  | Tlambda (ty1, ty2) -> (type_name ty1) ^ (type_name ty2)
+  | Tclosure ((ty1, ty2), ty3) ->
+    "C" ^ (type_name ty1) ^ (type_name ty2) ^ (type_name ty3)
+  | Trecord (rn, _) -> "R" ^ rn
+  | Tsum (sn, _) -> "A" ^ sn
+  | Tcontract c ->
+    begin match c.sig_name with Some n -> "CN" ^ n | None -> "CU" end
+  | Tvar _ | Tpartial _ -> assert false (* Removed beforehand *)
+
+let rec vars_to_unit = function
+  | Ttuple tyl -> Ttuple (List.map vars_to_unit tyl)
+  | Toption ty -> Toption (vars_to_unit ty)
+  | Tlist ty -> Tlist (vars_to_unit ty)
+  | Tset ty -> Tset (vars_to_unit ty)
+  | Tmap (ty1, ty2) -> Tmap (vars_to_unit ty1, vars_to_unit ty2)
+  | Tbigmap (ty1, ty2) -> Tbigmap (vars_to_unit ty1, vars_to_unit ty2)
+  | Tor (ty1, ty2) -> Tor (vars_to_unit ty1, vars_to_unit ty2)
+  | Tlambda (ty1, ty2) -> Tlambda (vars_to_unit ty1, vars_to_unit ty2)
+  | Tclosure ((ty1, ty2), ty3) ->
+    Tclosure ((vars_to_unit ty1, vars_to_unit ty2), vars_to_unit ty3)
+  | Trecord (rn, fl) ->
+    Trecord (rn, List.map (fun (fn, fty) -> (fn, vars_to_unit fty)) fl)
+  | Tsum (sn, cl) ->
+    Tsum (sn, List.map (fun (cn, cty) -> (cn, vars_to_unit cty)) cl)
+  | Tcontract c -> Tcontract { c with entries_sig =
+                     List.map (fun es ->
+                       { es with parameter = vars_to_unit es.parameter }
+                     ) c.entries_sig }
+  | Tvar _ -> Tunit (* Remaining vars correspond to unused arguments *)
+  | Tpartial _ -> assert false (* Changed to an actual type beforehand *)
+  | ty -> ty
+
+let build_subst aty cty =
+  let rec aux s aty cty = match aty, cty with
+  | Ttuple tyl1, Ttuple tyl2 ->
+    List.fold_left2 (fun s ty1 ty2 -> aux s ty1 ty2) s tyl1 tyl2
+  | Toption ty1, Toption ty2 -> aux s ty1 ty2
+  | Tlist ty1, Tlist ty2 -> aux s ty1 ty2
+  | Tset ty1, Tset ty2 -> aux s ty1 ty2
+  | Tmap (tyk1, tyv1), Tmap (tyk2, tyv2) ->
+    aux (aux s tyk1 tyk2) tyv1 tyv2
+  | Tbigmap (tyk1, tyv1), Tbigmap (tyk2, tyv2) ->
+    aux (aux s tyk1 tyk2) tyv1 tyv2
+  | Tor (tyl1, tyr1), Tmap (tyl2, tyr2) ->
+    aux (aux s tyl1 tyl2) tyr1 tyr2
+  | Tlambda (tyf1, tyt1), Tlambda (tyf2, tyt2) ->
+    aux (aux s tyf1 tyf2) tyt1 tyt2
+  | Tclosure ((tyf1, tye1), tyt1), Tclosure ((tyf2, tye2), tyt2) ->
+    aux (aux (aux s tyf1 tyf2) tyt1 tyt2) tye1 tye2
+  | Trecord (_, fl1), Trecord (_, fl2) ->
+    List.fold_left2 (fun s (_, ty1) (_, ty2) -> aux s ty1 ty2) s fl1 fl2
+  | Tsum (_, cl1), Tsum (_, cl2) ->
+    List.fold_left2 (fun s (_, ty1) (_, ty2) -> aux s ty1 ty2) s cl1 cl2
+  | Tcontract c1, Tcontract c2 ->
+    List.fold_left2 (fun s e1 e2 ->
+        aux s e1.parameter e2.parameter
+      ) s c1.entries_sig c2.entries_sig
+  | Tvar tvr, _ ->
+    let tv = Ref.get tvr in
+    begin match tv.tyo with
+      | None -> begin try StringMap.add tv.id cty s with Not_found -> s end
+      | Some ty -> aux s ty cty (* a substitution should not exist for tv.id *)
+    end
+  | _ -> s
+  in
+  aux StringMap.empty aty cty
+
+let rec mono_exp env subst vtys (e:typed_exp) =
+  let mono_exp = mono_exp env in
+  let instantiate ty =
+    vars_to_unit (instantiate_to subst (get_type env e.loc ty)) in
+  (* Printf.printf "Exp %s : %s ->>" (LiquidPrinter.Liquid.string_of_code e) (LiquidPrinter.Liquid.string_of_type e.ty); *)
+  let ty = instantiate e.ty in
+  (* Printf.printf " %s\n" (LiquidPrinter.Liquid.string_of_type ty); *)
+  let desc = match e.desc with
+    | Let lb when not (StringSet.is_empty (free_tvars lb.bnd_val.ty)) ->
+    (* Printf.printf "let %s = ... in E\n" lb.bnd_var.nname; *)
+    let vtys' = StringMap.add lb.bnd_var.nname (ref []) vtys in
+    let body = mono_exp subst vtys' lb.body in
+    let vty = StringMap.find lb.bnd_var.nname vtys' in
+    let substs = List.fold_left (fun ss (tn, ty) ->
+        (tn, ty, build_subst lb.bnd_val.ty ty) :: ss) [] !vty in
+    (* Printf.printf "Raw type of %s : %s\n" lb.bnd_var.nname
+     *   (LiquidPrinter.Liquid.string_of_type lb.bnd_val.ty);
+     * List.iter (fun (tn, ty, s) ->
+     *   Printf.printf "%s\n%s\n" tn (LiquidPrinter.Liquid.string_of_type ty);
+     *   StringMap.iter (fun id ty ->
+     *     Printf.printf "%s -> %s  " id
+     *       (LiquidPrinter.Liquid.string_of_type ty)
+     *     ) s;
+     *   Printf.printf "\n"
+     * ) substs;
+     * Printf.printf "   let %s = E in ...\n" lb.bnd_var.nname; *)
+    if substs = [] then begin (* when the bound var is unused *)
+      let bnd_val = mono_exp subst vtys lb.bnd_val in
+      Let { lb with bnd_val; body }
+    end else begin
+      List.fold_left (fun body (tn, ty, s) ->
+        let bnd_var = { lb.bnd_var with nname = lb.bnd_var.nname ^ "_" ^ tn } in
+        let bnd_val =
+          mono_exp ((StringMap.bindings s) @ subst) vtys lb.bnd_val in
+        { e with desc = Let { lb with bnd_var; bnd_val; body } }
+      ) body substs
+    end.desc
+  | Var s ->
+    begin try
+        let tn = type_name ty in
+        let vty = StringMap.find s vtys in
+        if not (List.exists (fun (_, ty') -> eq_types ty ty') !vty)
+        then vty := (tn, ty) :: !vty;
+        Var (s ^ "_" ^ tn)
+      with Not_found -> Var s
+    end
+  | Lambda ({ recursive = Some f } as l) ->
+    let recursive =
+      if StringMap.mem f vtys then Some (f ^ "_" ^ type_name ty)
+      else Some f in
+    Lambda { l with arg_ty = instantiate l.arg_ty ;
+                    body = mono_exp subst vtys l.body;
+                    ret_ty = instantiate l.ret_ty;
+                    recursive }
+  | Let lb ->
+    Let { lb with bnd_val = mono_exp subst vtys lb.bnd_val;
+                  body = mono_exp subst vtys lb.body }
+  | SetField sf -> SetField { sf with record = mono_exp subst vtys sf.record;
+                                      set_val = mono_exp subst vtys sf.set_val }
+  | Project p -> Project { p with record = mono_exp subst vtys p.record }
+  | Const c -> Const { c with ty = instantiate c.ty }
+  | Apply app ->
+    Apply { app with args = List.map (mono_exp subst vtys) app.args }
+  | If ite -> If { cond = mono_exp subst vtys ite.cond;
+                   ifthen = mono_exp subst vtys ite.ifthen;
+                   ifelse = mono_exp subst vtys ite.ifelse }
+  | Seq (e1, e2) -> Seq (mono_exp subst vtys e1, mono_exp subst vtys e2)
+  | Transfer tr -> Transfer { dest = mono_exp subst vtys tr.dest;
+                              amount = mono_exp subst vtys tr.amount }
+  | Call c -> Call { c with contract = mono_exp subst vtys c.contract;
+                            amount = mono_exp subst vtys c.amount;
+                            arg = mono_exp subst vtys c.arg }
+  | MatchOption mo -> MatchOption { mo with arg = mono_exp subst vtys mo.arg;
+                                       ifnone = mono_exp subst vtys mo.ifnone;
+                                       ifsome = mono_exp subst vtys mo.ifsome }
+  | MatchList ml -> MatchList { ml with arg = mono_exp subst vtys ml.arg;
+                                        ifcons = mono_exp subst vtys ml.ifcons;
+                                        ifnil = mono_exp subst vtys ml.ifnil }
+  | Loop l -> Loop { l with body = mono_exp subst vtys l.body;
+                            arg = mono_exp subst vtys l.arg  }
+  | LoopLeft ll -> LoopLeft { ll with body = mono_exp subst vtys ll.body;
+                                      arg = mono_exp subst vtys ll.arg;
+                                      acc = match ll.acc with
+                                        | Some e -> Some (mono_exp subst vtys e)
+                                        | _ -> ll.acc }
+  | Fold f -> Fold { f with body = mono_exp subst vtys f.body;
+                            arg = mono_exp subst vtys f.arg;
+                            acc = mono_exp subst vtys f.acc }
+  | Map m -> Map { m with body = mono_exp subst vtys m.body ;
+                          arg = mono_exp subst vtys m.arg }
+  | MapFold mf -> MapFold { mf with body = mono_exp subst vtys mf.body;
+                                    arg = mono_exp subst vtys mf.arg;
+                                    acc = mono_exp subst vtys mf.acc }
+  | Lambda l -> Lambda { l with arg_ty = instantiate l.arg_ty ;
+                                body = mono_exp subst vtys l.body;
+                                ret_ty = instantiate l.ret_ty }
+  | Closure c -> Closure { c with arg_ty = instantiate c.arg_ty ;
+                                  call_env = List.map (fun (s, e) ->
+                                      s, mono_exp subst vtys e) c.call_env ;
+                                  body = mono_exp subst vtys c.body;
+                                  ret_ty = instantiate c.ret_ty }
+  | Record r -> Record (List.map (fun (s, e) -> s, mono_exp subst vtys e) r)
+  | Constructor c ->
+    Constructor {
+      constr = begin match c.constr with
+        | Left ty -> Left (instantiate ty)
+        | Right ty -> Right (instantiate ty)
+        | _ -> c.constr end;
+      arg = mono_exp subst vtys c.arg }
+  | MatchVariant mv -> MatchVariant { arg = mono_exp subst vtys mv.arg;
+                                      cases = List.map (fun (p, e) ->
+                                          p, mono_exp subst vtys e) mv.cases }
+  | MatchNat mn -> MatchNat { mn with arg = mono_exp subst vtys mn.arg;
+                                      ifplus = mono_exp subst vtys mn.ifplus;
+                                      ifminus = mono_exp subst vtys mn.ifminus }
+  | Failwith e -> Failwith (mono_exp subst vtys e)
+  | CreateContract cc ->
+    CreateContract { args = List.map (mono_exp subst vtys) cc.args;
+                     contract = mono_contract env e.loc cc.contract }
+  | ContractAt ca -> ContractAt { arg = mono_exp subst vtys ca.arg;
+                                  c_sig = ca.c_sig }
+  | Unpack up -> Unpack { arg = mono_exp subst vtys up.arg;
+                          ty = instantiate up.ty }
+  | TypeAnnot _ -> assert false (* Removed during typechecking *)
+  | Type _ -> assert false (* Removed during typechecking*)
+  in
+  { e with desc; ty }
+
+and mono_contract env loc c =
+  let cval, vtys = List.fold_left (fun (cval, vtys) (n, b, e) ->
+      if (StringSet.is_empty (free_tvars e.ty)) then ((n, b, e) :: cval, vtys)
+      else ((n, b, e) :: cval, StringMap.add n (ref []) vtys)
+  ) ([], StringMap.empty) c.values in
+  let entries = List.map (fun e ->
+    begin match expand e.entry_sig.parameter with
+      | Tpartial Ppar ->
+        error loc
+          "Type of parameter \"%s\" can't be infered, please add an annotation"
+          e.entry_sig.parameter_name
+      | _ -> () end;
+    let pty = vars_to_unit (get_type env loc e.entry_sig.parameter) in
+    { code = mono_exp env [] vtys e.code;
+      entry_sig = { e.entry_sig with parameter = pty } }
+    ) c.entries in
+  let c_init = match c.c_init with
+    | Some init ->
+      let init_body = mono_exp env [] vtys init.init_body in
+      Some { init with init_body }
+    | None -> None
+  in
+  let values = List.fold_left (fun cval (n, b, e) ->
+    let vty = try StringMap.find n vtys with Not_found -> ref [] in
+    let substs = List.fold_left (fun ss (tn, ty) ->
+        (tn, ty, build_subst e.ty ty) :: ss) [] !vty in
+    if substs = [] then begin
+      let e = mono_exp env [] vtys e in
+      (n, b, e) :: cval
+    end else begin
+      List.fold_left (fun cval (tn, ty, s) ->
+        let n = n ^ "_" ^ tn in
+        let e = mono_exp env (StringMap.bindings s) vtys e in
+        (n, b, e) :: cval
+      ) cval substs
+    end
+  ) [] cval in
+  { c with values; entries; c_init } (* ty_env *)

@@ -143,7 +143,7 @@ module Michelson = struct
     | Tset _ | Tmap _ | Tbigmap _ | Tlambda _ | Tclosure _ ->
       false
     | Tvar _ -> true
-    | Tpartial _ -> failwith "word_type Tpartial TODO"
+    | Tpartial _ -> false
 
   let bprint_type_base fmt b indent ty annots =
     let rec bprint_type_rec fmt b indent ty annots =
@@ -240,8 +240,22 @@ module Michelson = struct
         bprint_type fmt b indent
           (Ttuple [Tlambda (Ttuple [ty_arg; ty_env], ty_r);
                    ty_env ]) annots;
-      | Tvar { tv } -> Printf.bprintf b "'%s" tv
-      | Tpartial _ -> Printf.bprintf b "partial"
+      | Tvar tvr ->
+        Printf.bprintf b "'%s (" (Ref.get tvr).id;
+        begin match (Ref.get tvr).tyo with
+        | Some ty -> bprint_type fmt b indent (LiquidTypes.expand ty) []
+        | None -> Printf.bprintf b "-" end;
+        Printf.bprintf b ")"
+      | Tpartial (Peqn _) -> Printf.bprintf b "peqn"
+      | Tpartial (Ptup pl) ->
+        Printf.bprintf b "(ptup:";
+        List.iter (fun (n,t) ->
+          let id = match t with Tvar tvr -> (Ref.get tvr).id | _ -> "-" in
+          Printf.bprintf b " %d:%s" n id) pl;
+        Printf.bprintf b ")";
+      | Tpartial (Pmap _) -> Printf.bprintf b "pmap"
+      | Tpartial (Pcont _) -> Printf.bprintf b "pcont"
+      | Tpartial (Ppar) -> Printf.bprintf b "ppar"
 
     and bprint_type_pairs fmt b indent tys annots =
       match tys with
@@ -914,16 +928,22 @@ module Liquid = struct
         bprint_type b "" ty_env;
         Printf.bprintf b "}-> ";
         bprint_type b "" ty_r;
-      | Tvar { tv } -> Printf.bprintf b "'%s" tv
+      | Tvar tvr ->
+        Printf.bprintf b "'%s (" (Ref.get tvr).id;
+        begin match (Ref.get tvr).tyo with
+        | Some ty -> bprint_type b indent (LiquidTypes.expand ty)
+        | None -> Printf.bprintf b "-" end;
+        Printf.bprintf b ")"
       | Tpartial (Peqn _) -> Printf.bprintf b "peqn"
       | Tpartial (Ptup pl) ->
         Printf.bprintf b "(ptup:";
         List.iter (fun (n,t) ->
-            let tv = match t with Tvar { tv } -> tv | _ -> "-" in
-            Printf.bprintf b " %d:%s" n tv) pl;
+          let id = match t with Tvar tvr -> (Ref.get tvr).id | _ -> "-" in
+          Printf.bprintf b " %d:%s" n id) pl;
         Printf.bprintf b ")";
       | Tpartial (Pmap _) -> Printf.bprintf b "pmap"
       | Tpartial (Pcont _) -> Printf.bprintf b "pcont"
+      | Tpartial (Ppar) -> Printf.bprintf b "ppar"
     in
     bprint_type b indent ty
 

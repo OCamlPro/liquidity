@@ -3,7 +3,7 @@ type storage = nat
 
 let%entry main
     (parameter : int)
-    (storage : nat) =
+    storage =
 
   let r = match%nat (parameter + 1)  with
     | Plus x -> x + 2p
@@ -12,4 +12,4 @@ let%entry main
   let x = r + 10p in
   let w = abs parameter in
   let storage = if w > 0 then x else r in
-  (([] : operation list), storage)
+  ([], storage)

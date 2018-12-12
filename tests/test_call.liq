@@ -7,7 +7,7 @@ type storage = tez
 
 let%entry main
       (parameter : UnitContract.instance)
-      (storage : tez) =
+      storage =
 
       let amount = Current.amount () in
       let storage = storage + amount in

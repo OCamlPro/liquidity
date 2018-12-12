@@ -13,7 +13,7 @@ external many : unit -> [%stack: int] * [%stack: nat]
 
 type storage = (nat * int) * (int * nat * int * nat)
 
-let%entry main (parameter : nat) (storage : storage) =
+let%entry main (parameter : nat) _storage =
 
   let _ = ignore 42 in
   let x = random () in
@@ -21,4 +21,4 @@ let%entry main (parameter : nat) (storage : storage) =
   let q = swap [%type: int] [%type: nat] p.(0) p.(1) in
   let r = many () in
 
-  (([] : operation list), (q, r))
+  ([], (q, r))

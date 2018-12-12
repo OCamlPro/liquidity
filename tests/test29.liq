@@ -10,12 +10,12 @@ end
 
 let%entry main
     (parameter : I.instance * int list)
-    (storage : int) =
+    storage =
 
   let (c, l) = parameter in
   match l with
   | [] ->
-    (([]:operation list), storage)
+    ([], storage)
   | x :: _ ->
     let op = Contract.call c 0tz x in
     [op], storage

@@ -5,12 +5,12 @@ type storage = int
 
 let%entry main
     (parameter : UnitContract.instance * t)
-    (storage : int) =
+    _storage =
 
   let (c, m) = parameter in
   match m with
   | A i ->
-    ([]:operation list), i
+    [], i
   | B ->
     let op = Contract.call c 0tz () in
     [op], 0

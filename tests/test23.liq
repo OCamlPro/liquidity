@@ -9,10 +9,10 @@ end
 
 let%entry main
     (parameter : N.instance)
-    (storage : int) =
+    storage =
 
   let r, ops = match%nat (storage + 1)  with
-    | Plus x -> x + 2p, ([]:operation list)
+    | Plus x -> x + 2p, []
     | Minus y ->
       let op = Contract.call parameter 0tz y in
       0p, [op]

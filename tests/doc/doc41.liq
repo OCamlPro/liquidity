@@ -6,4 +6,4 @@ let%entry main _ _ =
     | x :: _ -> if x <> 10 then failwith ()
     | _ -> ()
   end;
-  ([] : operation list), ()
+  [], ()

@@ -8,5 +8,5 @@ let%init storage = {
   b = ();
 }
 
-let%entry main (parameter : unit) storage = 
+let%entry main (_parameter : unit) storage = 
   Current.failwith storage.b

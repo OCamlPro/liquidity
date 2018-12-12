@@ -8,4 +8,4 @@ let%entry main
     | None -> (0, 0p)
     | Some res ->
       ( res.(0), res.(1) ) in
-  ( ([] : operation list), s )
+  ( [], s )

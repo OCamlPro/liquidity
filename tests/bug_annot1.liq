@@ -26,7 +26,7 @@ end
 
 type storage = C1.C2.C.instance * C.instance
 
-let%entry main (k : key_hash) storage =
+let%entry main (_k : key_hash) storage =
   let x = 1 + 1 in
   let op = storage.(0).main x ~amount:0tz in
   [op], storage

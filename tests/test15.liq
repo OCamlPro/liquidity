@@ -15,4 +15,4 @@ let%entry main
 
 (*      let storage = storage.v.dest.z <- parameter in *)
       let storage = storage.v.orig <- { x="0"; y=true; z = Some parameter } in
-      ( ([] : operation list), storage )
+      ( [], storage )

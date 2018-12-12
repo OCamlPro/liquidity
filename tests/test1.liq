@@ -16,4 +16,4 @@ let%entry main
    let ap = (amount, parameter) in
    let s, t, n, x, a, b, _, _ = storage in
    let storage = s, t, n, x, a, b, pa, ap in
-   ( ([] : operation list), storage )
+   ( [], storage )

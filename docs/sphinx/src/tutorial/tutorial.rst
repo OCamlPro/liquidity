@@ -102,7 +102,7 @@ called ``variant``::
  | Right of ``right
 
 
-All occurrences of these variants should be constrained with type
+Occurrences of these variants may optionally be constrained with type
 annotations::
 
  let x = (Left 3 : (int, string) variant) in
@@ -116,7 +116,7 @@ the contract that called the current contract::
  let s = (Source : (unit, unit) contract) in
  ...
 
-As for ``Left`` and ``Right``, ``Source`` occurrences should be constrained by
+As for ``Left`` and ``Right``, ``Source`` occurrences may be constrained by
 type annotations.
 
 Functions and Closures
@@ -124,21 +124,21 @@ Functions and Closures
 
 Unlike Michelson, functions in Liquidity can also be closures. They can take
 multiple arguments and are curryfied. Because closures are lambda-lifted, it is
-however recommended to use a single tuple argument when possible.  Arguments
-must be annotated with their (monomorphic) type, while the return type
-is inferred.
+however recommended to use a single tuple argument when possible. Arguments
+and return types are inferred, which enables to write polymorphic functions.
+Type annotations may optionally be used to constrain their type.
 
 Function applications are often done using the ``Lambda.pipe`` function
 or the ``|>`` operator::
 
-  let succ = fun (x : int) -> x + 1 in
+  let succ = fun x -> x + 1 in
   let one = 0 |> succ in
   ...
 
 but they can also be done directly::
 
   ...
-  let succ (x : int) = x + 1 in
+  let succ x = x + 1 in
   let one = succ 0 in
   ...
 
@@ -146,7 +146,7 @@ A toplevel function can also be defined before the main entry point::
 
  [%%version 0.2]
  
- let succ (x : int) = x + 1
+ let succ x = x + 1
  
  let%entry main ... =
    ...
@@ -156,7 +156,7 @@ A toplevel function can also be defined before the main entry point::
 Closures can be created with the same syntax::
 
  let p = 10 in
- let sum_and_add_p (x : int) (y : int) = x + y + p in
+ let sum_and_add_p x y = x + y + p in
  let r = add_p 3 4 in
  ...
 
@@ -164,8 +164,8 @@ This is equivalent to::
 
  let p = 10 in
  let sum_and_add_p =
-   fun (x : int) ->
-     fun (y : int) ->
+   fun x ->
+     fun y ->
        x + y + p
  in
  let r = 4 |> (3 |> add_p) in
@@ -177,7 +177,7 @@ curried versions will generate larger code and should be avoided
 unless partial application is important. The previous function should
 be written as::
 
- let sum_and_add_p ((x : int), (y : int)) =
+ let sum_and_add_p (x, y) =
    let p = 10 in
    x + y + p
  in
@@ -185,6 +185,11 @@ be written as::
  ...
 
 
+Also note that polymorphic functions will be monomorphised in Michelson,
+which will duplicate the function for each of its type and thus generate
+larger code.
+ 
+ 
 Loops
 -----
 

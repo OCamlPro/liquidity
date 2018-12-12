@@ -4,4 +4,4 @@ let%entry main _ map =
       if v < 0 then
         failwith "No option should be negative"
     ) map;
-  ([] : operation list), map
+  [], map

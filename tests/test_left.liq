@@ -2,10 +2,10 @@
 type storage = int
 
 let%entry main
-      (parameter : int)
-      (storage : int) =
-  let a = (Left 3 : (_, string) variant) in
-  let b = (Right a : (int, _) variant) in
+      (_parameter : int)
+      storage =
+  let a = Left 3 in
+  let b = Right a in
 
   let storage = match b with
   | Left x -> x
@@ -15,4 +15,4 @@ let%entry main
      | Right _ -> storage
   in
 
-  ( ([] : operation list), storage )
+  ( [], storage )

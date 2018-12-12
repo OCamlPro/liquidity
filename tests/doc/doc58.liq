@@ -4,4 +4,4 @@ let%entry main (id : int) map =
     | None -> failwith ("id is not in the map", id)
     | Some v -> v
   in
-  ([] : operation list), map
+  [], map

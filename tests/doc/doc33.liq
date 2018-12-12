@@ -8,4 +8,4 @@ let%entry main _ _ =
     | Some b' ->
         if b <> b' then failwith "Bad concat or sub !";
   end;
-  ([] : operation list), ()
+  [], ()

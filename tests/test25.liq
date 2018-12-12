@@ -9,7 +9,7 @@ end
 
 let%entry main
     (parameter : N.instance)
-    (storage : int) =
+    storage =
 
   let r, op = match%nat (storage + 1)  with
     | Plus x ->

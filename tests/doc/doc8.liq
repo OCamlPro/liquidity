@@ -5,4 +5,4 @@ let%entry main _ _ =
   let car = x.(0) in
   let cdr = x.(1) in
   if car <> 1 || cdr <> 2 then failwith "Error !";
-  ([] : operation list), ()
+  [], ()

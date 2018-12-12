@@ -6,4 +6,4 @@ type storage = {
 let%entry main (param : int) storage =
   if not (Map.mem param storage.big) then
     failwith ("param is not in the map", param);
-  ([] : operation list), storage
+  [], storage

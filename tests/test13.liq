@@ -6,10 +6,10 @@
 type storage = string list
 
 let%entry main
-      (parameter : string)
+      (_parameter : string)
       (storage : string list) =
       
-      let set = ([] : string list) in
+      let set = [] in
       let set = "a" :: set in
       let set = "b" :: set in
       let a = "1" in
@@ -22,4 +22,4 @@ let%entry main
         | _ :: z -> z
        in
 
-      ( ([] : operation list), storage )
+      ( [], storage )

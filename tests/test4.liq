@@ -9,7 +9,6 @@ type storage =  string * (* 0: S *)
 
 let%entry main
       (parameter : timestamp)
-      (storage : storage)
-      : (operation list * storage) =
+      storage =
    let storage = set storage 1 parameter in
-   ( ([] : operation list), storage )
+   ( [], storage )

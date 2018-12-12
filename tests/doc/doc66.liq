@@ -8,4 +8,4 @@ let%entry main (param : int) storage =
     | None -> failwith ("param is not in the map", param)
     | Some v -> v
   in
-  ([] : operation list), storage
+  [], storage

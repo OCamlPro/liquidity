@@ -2,12 +2,12 @@
 
 [%%version 0.4]
 
-let succ (x : int) = x + 1
+let succ x = x + 1
 
 type storage = int list
 
 let%entry main
-      (parameter : int)
-      (storage : int list) =
+      (_parameter : int)
+      storage =
   let l = List.map succ storage in
-  ( ([] : operation list), l)
+  ( [], l)

@@ -47,30 +47,30 @@ let%init storage (owners : address set) (required : nat) (limit : tez) =
     m_num_owners;
     m_owners = owners;
     m_required = required;
-    m_pending = (Map : (operation_bytes, pending_state) map);
+    m_pending = Map;
     m_daily_limit = limit;
     m_spent_today = 0tz;
     m_last = Current.time ();
   }
 
-let[@inline] no_op = ([] : operation list)
+let[@inline] no_op = []
 
-let[@inline] is_owner ((addr : address), (storage:storage)) =
+let[@inline] is_owner (addr, storage) =
   Set.mem addr storage.m_owners
 
-let[@inline] onlyowner (storage:storage) =
+let[@inline] onlyowner storage =
   if is_owner (Current.source (), storage)
   then ()
   else Current.failwith ()
 
-let[@inline] clearPending (storage : storage) =
-  storage.m_pending <- (Map : (operation_bytes, pending_state) map)
+let[@inline] clearPending storage =
+  storage.m_pending <- Map
 
 type check_result =
   | Confirmations_Needed of storage
   | Execute of storage
 
-let confirmAndCheck ((op : wallet_operation), (storage: storage)) =
+let confirmAndCheck (op, storage) =
   let owner = Current.source () in
   if not (is_owner (owner, storage)) then Current.failwith ();
   let op_bytes = Bytes.pack op in
@@ -78,7 +78,7 @@ let confirmAndCheck ((op : wallet_operation), (storage: storage)) =
     | None ->
       (* New operation *)
       { yetNeeded = storage.m_required;
-        ownersDone = (Set : address set);
+        ownersDone = Set;
       }
     | Some pending ->
       (* Operation already registered but not executed *)
@@ -90,7 +90,7 @@ let confirmAndCheck ((op : wallet_operation), (storage: storage)) =
   (* check if count is enough to go ahead *)
   if pending.yetNeeded <= 1p then
     let storage =
-      storage.m_pending <- (Map : (operation_bytes, pending_state) map) in
+      storage.m_pending <- Map in
     Execute storage
   else
     let new_yetNeeded = match%nat int pending.yetNeeded - 1 with
@@ -187,7 +187,7 @@ let%entry changeRequirement (required : nat) storage =
     let storage = clearPending storage in
     no_op, storage.m_required <- required
 
-let underLimit ((value: tez), (storage: storage)) =
+let underLimit (value, storage) =
   onlyowner storage;
   let storage =
     if Current.time () >= storage.m_last + 86400 (* 24h *) then
