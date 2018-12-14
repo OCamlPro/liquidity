@@ -52,6 +52,7 @@ OCaml.library("michelson-deps", ocaml + {
        "lwt";
        (* "cstruct"; *)
        "bigstring";
+       "ocplib-endian";
        "uutf";
        "ocplib-ezjsonm-js";
        "ocp-libsodium-js";
@@ -86,6 +87,7 @@ OCaml.library("michelson-deps", ocaml + {
        "zarith";
        (* "cstruct"; *)
        "bigstring";
+       "ocplib-endian";
        "lwt";
        "digestif.ocaml";
        "sodium";
