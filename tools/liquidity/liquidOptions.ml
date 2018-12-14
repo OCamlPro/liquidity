@@ -96,4 +96,4 @@ type proto =
 let protocol = ref (None : proto option)
 
 let main_id = "NetXdQprcVkpaWU"
-let zeronet_id = "NetXw7kCvfAKjhj"
+let zeronet_id = "NetXSzLHKwSumh7"

@@ -974,7 +974,7 @@ let forge_deploy ?head ?source ?public_key
         "source", Printf.sprintf "%S" source;
         "fee", "\"0\"";
         "counter", Printf.sprintf "\"%d\"" counter;
-        "gas_limit", "\"20\"";
+        "gas_limit", "\"10000\"";
         "storage_limit", "\"0\"";
         "public_key", Printf.sprintf "%S" edpk;
       ] |> mk_json_obj
@@ -1070,9 +1070,6 @@ let inject_operation ?loc_table ?sk ~head json_op op =
              | _ -> return_error (Failure status)
          with Not_found -> return_error (Failure "operation_result")
        ) contents
-     >>= function
-     | x :: _ -> return x
-     | [] -> return_error (Failure "no contents")
    with Not_found ->
      raise_response_error ?loc_table "inject (preapply/operations)" r
   ) >>= fun result ->
@@ -1106,8 +1103,9 @@ let deploy ?(delegatable=false) ?(spendable=false) liquid init_params_strings =
     liquid init_params_strings
   >>= fun (op, op_json, loc_table) ->
   inject_operation ~loc_table ~sk ~head op_json (`Hex op) >>= function
-  | op_h, Ok [c] -> return (op_h, Ok c)
-  | op_h, Error e -> return (op_h, Error e)
+  | op_h, [Ok [c]] -> return (op_h, Ok c)
+  | op_h, [Ok _; Ok [c]] -> return (op_h, Ok c) (* with revelation *)
+  | op_h, (Error e :: _ | _ :: Error e :: _) -> return (op_h, Error e)
   | _ -> raise (ResponseError "deploy (inject)")
 
 
@@ -1163,7 +1161,7 @@ let forge_call ?head ?source ?public_key
         "source", Printf.sprintf "%S" source;
         "fee", "\"0\"";
         "counter", Printf.sprintf "\"%d\"" counter;
-        "gas_limit", "\"20\"";
+        "gas_limit", "\"10000\"";
         "storage_limit", "\"0\"";
         "public_key", Printf.sprintf "%S" edpk;
       ] |> mk_json_obj
@@ -1202,8 +1200,9 @@ let call liquid address entry_name parameter_string =
     liquid address entry_name parameter_string
   >>= fun (op, op_json, loc_table) ->
   inject_operation ~loc_table ~sk ~head op_json (`Hex op) >>= function
-  | op_h, Ok [] -> return (op_h, Ok ())
-  | op_h, Error e -> return (op_h, Error e)
+  | op_h, [Ok []] -> return (op_h, Ok ())
+  | op_h, [Ok _; Ok []] -> return (op_h, Ok ()) (* with revelation *)
+  | op_h, (Error e :: _ | _ :: Error e :: _) -> return (op_h, Error e)
   | _ -> raise (ResponseError "call (inject)")
 
 
@@ -1217,7 +1216,7 @@ let reveal sk =
     "source", Printf.sprintf "%S" source;
     "fee", "\"0\"";
     "counter", Printf.sprintf "\"%d\"" counter;
-    "gas_limit", "\"20\"";
+    "gas_limit", "\"10000\"";
     "storage_limit", "\"0\"";
     "public_key", Printf.sprintf "%S" public_key;
   ] |> mk_json_obj
@@ -1274,7 +1273,7 @@ let activate ~secret =
      raise_response_error "forge activation" (Ezjsonm.from_string r)
   ) >>= fun op ->
   inject_operation ~sk ~head operations_json (`Hex op) >>= function
-  | op_h, Ok [] -> return op_h
+  | op_h, [Ok []] -> return op_h
   | _, _ -> raise (ResponseError "activation (inject)")
 
 
