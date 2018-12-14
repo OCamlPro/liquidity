@@ -2,7 +2,7 @@
 all: build
 
 clone-tezos:
-	git clone -b mainnet https://gitlab.com/tezos/tezos.git # clone with https
+	git submodule update --init
 
 build: _obuild
 	ocp-build build

@@ -1,5 +1,4 @@
 *~
 _obuild
-/tezos
 /tests/*.cm?
 /tests/*/*.cm?
