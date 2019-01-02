@@ -2499,7 +2499,11 @@ let ocaml_of_string ?(filename = "buffer") parser content =
 
 let structure_of_string ?filename impl =
   ocaml_of_string ?filename LiquidOCamlParse.implementation impl
+
 let expression_of_string ?filename s =
   ocaml_of_string ?filename LiquidOCamlParse.expression s
 
 let translate_type env ty = translate_type env ty
+
+let type_of_string ?filename s =
+  ocaml_of_string ?filename LiquidOCamlParse.core_type s

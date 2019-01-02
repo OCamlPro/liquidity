@@ -488,6 +488,10 @@ let read_tezos_json filename =
 let convert_const c =
   convert_const ~loc:(LiquidLoc.noloc, None) c |> Micheline.strip_locations
 
+let convert_type ty =
+  convert_type ~loc:(LiquidLoc.noloc, None) ty |> Micheline.strip_locations
+
+
     (*
 
 let contract_amount = ref "1000.00"

@@ -86,6 +86,7 @@ module type S = sig
     (string * (unit, exn) result) t
   val activate : secret:string -> string t
   val inject : operation:string -> signature:string -> string t
+  val pack : ?liquid:from -> const:string -> ty:string -> string t
 end
 
 module Dummy = struct
@@ -119,6 +120,9 @@ module Dummy = struct
 
   let inject ~operation ~signature =
     failwith "mini version cannot inject"
+
+  let pack ?liquid ~const ~ty =
+    failwith "mini version cannot pack"
 end
 
 module Async = struct include Dummy type 'a t = 'a Lwt.t end

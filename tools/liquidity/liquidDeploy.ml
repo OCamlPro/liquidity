@@ -81,6 +81,7 @@ module type S = sig
     (string * (unit, exn) result) t
   val activate : secret:string -> string t
   val inject : operation:string -> signature:string -> string t
+  val pack : ?liquid:from -> const:string -> ty:string -> string t
 end
 
 open Lwt
@@ -1309,6 +1310,43 @@ let inject ~operation ~signature =
       (Ezjsonm.from_string r)
 
 
+let pack ?liquid ~const ~ty =
+  let env, csig = match liquid with
+    | Some liquid ->
+      let syntax_ast, _, _ = compile_liquid liquid in
+      { syntax_ast.ty_env with filename = "input" },
+      full_sig_of_contract syntax_ast
+    | None ->
+      LiquidFromOCaml.initial_env "input",
+      LiquidTypes.dummy_contract_sig
+  in
+  let ty =
+    LiquidFromOCaml.translate_type env (LiquidFromOCaml.type_of_string ty) in
+  let const = LiquidData.translate env csig const ty in
+    (* LiquidCheck.check_const_type ~to_tez:LiquidPrinter.tez_of_liq noloc
+     *   ty const in *)
+  let const = LiquidEncode.encode_const env csig const in
+  let const_m = LiquidToTezos.convert_const const in
+  let const_json = LiquidToTezos.json_of_const const_m in
+  let ty_m = LiquidToTezos.convert_type (LiquidEncode.encode_type ty) in
+  (* same syntax for const and types*)
+  let ty_json = LiquidToTezos.json_of_const ty_m in
+  let pack_fields = [
+    "data", const_json;
+    "type", ty_json;
+    "gas", "\"400000\"";
+  ] in
+  let pack_json = mk_json_obj pack_fields in
+  send_post ~data:pack_json "/chains/main/blocks/head/helpers/scripts/pack_data"
+  >>= fun r ->
+  try
+    let r = Ezjsonm.from_string r in
+    let bytes = Ezjsonm.find r ["packed"] |> Ezjsonm.get_string in
+    return ("0x" ^ bytes)
+  with Not_found ->
+     raise_response_error "pack" (Ezjsonm.from_string r)
+
+
 (* Withoud optional argument head *)
 module Async = struct
   type 'a t = 'a Lwt.t
@@ -1346,6 +1384,9 @@ module Async = struct
 
   let inject ~operation ~signature =
     inject ~operation ~signature
+
+  let pack ?liquid ~const ~ty =
+    pack ?liquid ~const ~ty
 
 end
 
@@ -1385,5 +1426,8 @@ module Sync = struct
 
   let inject ~operation ~signature =
     Lwt_main.run (inject ~operation ~signature)
+
+  let pack ?liquid ~const ~ty =
+    Lwt_main.run (pack ?liquid ~const ~ty)
 
 end

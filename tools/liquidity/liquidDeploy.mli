@@ -109,6 +109,9 @@ module type S = sig
   (** Inject an operation in hexa with its signature, and returns an
       operation hash *)
   val inject : operation:string -> signature:string -> string t
+
+  (** Packs data as bytes *)
+  val pack : ?liquid:from -> const:string -> ty:string -> string t
 end
 
 module Async : S with type 'a t = 'a Lwt.t

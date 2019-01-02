@@ -33,3 +33,5 @@ val translate_type : env -> Parsetree.core_type -> datatype
 val structure_of_string : ?filename:string -> string -> Parsetree.structure
 
 val expression_of_string : ?filename:string -> string -> Parsetree.expression
+
+val type_of_string : ?filename:string -> string -> Parsetree.core_type

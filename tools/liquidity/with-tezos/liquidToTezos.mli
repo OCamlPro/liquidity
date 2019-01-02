@@ -23,6 +23,9 @@ val convert_contract :
 (** Convert a Michelson constant to Micheline one *)
 val convert_const : LiquidTypes.const -> LiquidTezosTypes.expr
 
+(** Convert a Michelson type to Micheline one *)
+val convert_type : LiquidTypes.datatype -> LiquidTezosTypes.expr
+
 (** {2 Pretty printing Micheline } *)
 
 (** {3 Pretty printing Micheline to string } *)

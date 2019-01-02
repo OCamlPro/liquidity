@@ -446,6 +446,14 @@ let forge_call () =
   Printf.eprintf "Raw operation:\n--------------\n%!";
   Printf.printf "%s\n%!" op
 
+let pack const ty =
+  let liquid =
+    try Some (LiquidDeploy.From_files (Data.get_files ()))
+    with Bad_arg -> None in
+  let bytes =
+    LiquidDeploy.Sync.pack ?liquid ~const ~ty in
+  Printf.printf "%s\n%!" bytes
+
 let parse_tez_to_string expl amount =
   match LiquidData.translate (LiquidFromOCaml.initial_env expl)
           dummy_contract_sig amount Ttez
@@ -623,6 +631,18 @@ let main () =
              translate ());
        ]),
       "ENTRY PARAMETER [STORAGE] Translate to Michelson";
+
+      "--pack",
+      (let const = ref "" in
+       let ty = ref "" in
+       Arg.Tuple [
+         Arg.String (fun s -> const := s);
+         Arg.String (fun s -> ty := s);
+         Arg.Unit (fun () ->
+             work_done := true;
+             pack !const !ty);
+       ]),
+      "DATA TYPE Pack (serialize) data of type TYPE";
 
       "--signature", Arg.String (fun s -> LiquidOptions.signature := Some s),
       "SIGNATURE Set the signature for an operation";
