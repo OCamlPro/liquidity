@@ -307,7 +307,7 @@ module Michelson = struct
   let rec bprint_type fmt b indent ty =
     bprint_type_base fmt b indent ty []
 
-  let rec bprint_const fmt b indent cst =
+  let rec bprint_const fmt b ?(inseq=false) indent cst =
     match cst with
     | CString s -> Printf.bprintf b "%S" s
     | CBytes s -> Printf.bprintf b "%s" s
@@ -326,20 +326,23 @@ module Michelson = struct
     | CNone -> Printf.bprintf b "None"
     | CSome cst ->
       let indent = fmt.increase_indent indent in
-      Printf.bprintf b "(Some%c%s" fmt.newline indent;
+      if not inseq then Printf.bprintf b "(";
+      Printf.bprintf b "Some%c%s" fmt.newline indent;
       bprint_const fmt b indent cst;
-      Printf.bprintf b ")";
+      if not inseq then Printf.bprintf b ")";
     | CLeft cst ->
       let indent = fmt.increase_indent indent in
-      Printf.bprintf b "(Left%c%s" fmt.newline indent;
+      if not inseq then Printf.bprintf b "(";
+      Printf.bprintf b "Left%c%s" fmt.newline indent;
       bprint_const fmt b indent cst;
-      Printf.bprintf b ")";
+      if not inseq then Printf.bprintf b ")";
     | CRight cst ->
       let indent = fmt.increase_indent indent in
-      Printf.bprintf b "(Right%c%s" fmt.newline indent;
+      if not inseq then Printf.bprintf b "(";
+      Printf.bprintf b "Right%c%s" fmt.newline indent;
       bprint_const fmt b indent cst;
-      Printf.bprintf b ")";
-    | CTuple tys -> bprint_const_pairs fmt b indent tys
+      if not inseq then Printf.bprintf b ")";
+    | CTuple tys -> bprint_const_pairs fmt b ~inseq indent tys
     | CMap pairs | CBigMap pairs ->
       let indent = fmt.increase_indent indent in
       Printf.bprintf b "{";
@@ -362,7 +365,7 @@ module Michelson = struct
       let _ = List.fold_left (fun first cst ->
           if not first then Printf.bprintf b " ;";
           Printf.bprintf b "%c%s" fmt.newline indent;
-          bprint_const fmt b indent cst;
+          bprint_const fmt b ~inseq:true indent cst;
           false
         ) true csts
       in
@@ -372,18 +375,22 @@ module Michelson = struct
       |> bprint_const_pairs fmt b indent
     | CConstr _ -> assert false
 
-  and bprint_const_pairs fmt b indent tys =
+  and bprint_const_pairs fmt b ?(inseq=false) indent tys =
     match tys with
     | [] -> assert false
-    | [ty] -> bprint_const fmt b indent ty
+    | [ty] -> bprint_const fmt b ~inseq indent ty
     | ty :: tys ->
       let indent = fmt.increase_indent indent in
-      Printf.bprintf b "(Pair%c%s" fmt.newline indent;
+      if not inseq then Printf.bprintf b "(";
+      Printf.bprintf b "Pair%c%s" fmt.newline indent;
       bprint_const fmt b indent ty;
       Printf.bprintf b "%c%s" fmt.newline indent;
-      bprint_const_pairs fmt b indent tys;
-      Printf.bprintf b ")";
+      bprint_const_pairs fmt b ~inseq:false indent tys;
+      if not inseq then Printf.bprintf b ")";
       ()
+
+  (* remove optional argument inseq *)
+  let bprint_const fmt b indent cst = bprint_const fmt b indent cst
 
   let annot a =
     if !LiquidOptions.no_annot then ""
