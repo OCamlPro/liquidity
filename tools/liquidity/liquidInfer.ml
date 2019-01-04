@@ -1,3 +1,11 @@
+(**************************************************************************)
+(*                                                                        *)
+(*    Copyright (c) 2017-2019                                             *)
+(*    OCamlPro SAS <contact@ocamlpro.com>                                 *)
+(*                                                                        *)
+(*    All rights reserved. No warranty, explicit or implicit, provided.   *)
+(*                                                                        *)
+(**************************************************************************)
 
 open LiquidTypes
 
@@ -69,7 +77,7 @@ let rec unify loc ty1 ty2 =
     failwith "Anomaly : both Tpartial outside Tvar"
   | _, _ -> ();
 
-  let uu = unify loc in
+  let unify = unify loc in
 
   (* Expand tvars *)
   let tyx1 = expand ty1 in
@@ -77,7 +85,7 @@ let rec unify loc ty1 ty2 =
 
   (* print_loc loc;
    * Printf.printf ": Unify %s " (LiquidPrinter.Liquid.string_of_type ty1);
-   * Printf.printf "| %s\n" (LiquidPrinter.Liquid.string_of_type ty2); *)
+   * Printf.printf "| %s\n%!" (LiquidPrinter.Liquid.string_of_type ty2); *)
 
   (* Unify the types *)
   let tyx, to_unify = match tyx1, tyx2 with
@@ -106,7 +114,7 @@ let rec unify loc ty1 ty2 =
 
     | Tpartial Ptup pl1, Tpartial Ptup pl2 ->
       let pl = List.fold_left (fun pl (n, ty2) ->
-                 try let ty1 = List.assoc n pl in uu ty1 ty2; pl
+                 try let ty1 = List.assoc n pl in unify ty1 ty2; pl
                  with Not_found -> (n, ty2) :: pl
                ) pl1 pl2 in
       Tpartial (Ptup pl), []
@@ -115,7 +123,7 @@ let rec unify loc ty1 ty2 =
       begin match ty with
         | Ttuple tuple ->
           begin try
-              List.iter (fun (n, ty) -> uu (List.nth tuple n) ty) pl;
+              List.iter (fun (n, ty) -> unify (List.nth tuple n) ty) pl;
               Ttuple tuple, []
             with
             | Invalid_argument _ ->
@@ -125,7 +133,7 @@ let rec unify loc ty1 ty2 =
           end
         | Trecord (rn, fl) ->
           begin try
-              List.iter (fun (n, ty) -> uu (snd (List.nth fl n)) ty) pl;
+              List.iter (fun (n, ty) -> unify (snd (List.nth fl n)) ty) pl;
               Trecord (rn, fl), []
             with
             | Invalid_argument _ ->
@@ -140,14 +148,14 @@ let rec unify loc ty1 ty2 =
 
 
     | Tpartial (Pmap (k_ty1, v_ty1)), Tpartial (Pmap (k_ty2, v_ty2)) ->
-      uu k_ty1 k_ty2; uu v_ty1 v_ty2;
+      unify k_ty1 k_ty2; unify v_ty1 v_ty2;
       Tpartial (Pmap (k_ty1, v_ty1)), []
 
     | Tpartial (Pmap (k_ty1, v_ty1)), ty
     | ty, Tpartial (Pmap (k_ty1, v_ty1)) ->
       begin match ty with
         | Tmap (k_ty2, v_ty2) | Tbigmap (k_ty2, v_ty2) ->
-          uu k_ty1 k_ty2; uu v_ty1 v_ty2;
+          unify k_ty1 k_ty2; unify v_ty1 v_ty2;
           ty, []
         | _ -> error loc "Undetermined map incompatible with %S"
                  (LiquidPrinter.Liquid.string_of_type ty)
@@ -156,7 +164,7 @@ let rec unify loc ty1 ty2 =
 
     | Tpartial (Pcont el1), Tpartial (Pcont el2) ->
       let el = List.fold_left (fun el (ep1, pty1) ->
-        try let pty2 = List.assoc ep1 el in uu pty1 pty2; el
+        try let pty2 = List.assoc ep1 el in unify pty1 pty2; el
         with Not_found -> (ep1, pty1) :: el
       ) el1 el2 in
       Tpartial (Pcont el), []
@@ -169,7 +177,7 @@ let rec unify loc ty1 ty2 =
               List.find (fun e -> e.entry_name = ep) entries_sig
             with Not_found ->
               error loc "Contract has no entry point named %S"  ep in
-          uu pty entry.parameter
+          unify pty entry.parameter
         ) el;
         ty, []
       | _ -> error loc "Partial contract incompatible with %S"
@@ -185,7 +193,7 @@ let rec unify loc ty1 ty2 =
 
 
     | Ttuple tl1, Ttuple tl2 ->
-      begin try List.iter2 uu tl1 tl2;
+      begin try List.iter2 unify tl1 tl2;
         with Invalid_argument _ ->
           error loc "Tuples %S and %S have different arities"
             (LiquidPrinter.Liquid.string_of_type ty1)
@@ -196,26 +204,29 @@ let rec unify loc ty1 ty2 =
     | Toption ty1, Toption ty2
     | Tlist ty1, Tlist ty2
     | Tset ty1, Tset ty2 ->
-      uu ty1 ty2; tyx1, []
+      unify ty1 ty2; tyx1, []
 
     | Tmap (k_ty1, v_ty1), Tmap (k_ty2, v_ty2)
     | Tbigmap (k_ty1, v_ty1), Tbigmap (k_ty2, v_ty2) ->
-      uu k_ty1 k_ty2; uu v_ty1 v_ty2; tyx1, []
+      unify k_ty1 k_ty2; unify v_ty1 v_ty2; tyx1, []
 
     | Tor (l_ty1, r_ty1), Tor (l_ty2, r_ty2) ->
-      uu l_ty1 l_ty2; uu r_ty1 r_ty2; tyx1, []
+      unify l_ty1 l_ty2; unify r_ty1 r_ty2; tyx1, []
 
     | Tlambda (from_ty1, to_ty1), Tlambda (from_ty2, to_ty2) ->
-      uu from_ty1 from_ty2; uu to_ty1 to_ty2; tyx1, []
+      unify from_ty1 from_ty2; unify to_ty1 to_ty2; tyx1, []
 
     | Tclosure ((from_ty1, env_ty1), to_ty1),
       Tclosure ((from_ty2, env_ty2), to_ty2) ->
-      uu from_ty1 from_ty2; uu env_ty1 env_ty2; uu to_ty1 to_ty2; tyx1, []
+      unify from_ty1 from_ty2;
+      unify env_ty1 env_ty2;
+      unify to_ty1 to_ty2;
+      tyx1, []
 
     | Trecord (_, fl1), Trecord (_, fl2)
     | Tsum (_, fl1), Tsum (_, fl2) ->
       begin try
-          List.iter2 (fun (_, ty1) (_, ty2) -> uu ty1 ty2) fl1 fl2;
+          List.iter2 (fun (_, ty1) (_, ty2) -> unify ty1 ty2) fl1 fl2;
         with Invalid_argument _ ->
           error loc "Types %S and %S have different arities"
             (LiquidPrinter.Liquid.string_of_type ty1)
@@ -225,7 +236,7 @@ let rec unify loc ty1 ty2 =
 
     | Tcontract c1, Tcontract c2 ->
       let ok = try List.for_all2 (fun e1 e2 ->
-        uu e1.parameter e2.parameter;
+        unify e1.parameter e2.parameter;
         e1.entry_name = e2.entry_name
       ) c1.entries_sig c2.entries_sig
       with Invalid_argument _ -> false in
@@ -305,7 +316,7 @@ let rec compat_types ty1 ty2 =
     List.exists (fun (_, rty) -> compat_types rty ty) el
   | _, _ -> eq_types ty1 ty2
 
-let make_type_eqn loc env overloads params =
+let make_type_eqn loc overloads params =
   let el = List.fold_left (fun eqn (opl, ort) ->
     let cl, unsat = List.fold_left2 (fun (cl, unsat) op p ->
       if unsat || eq_types op p then (cl, unsat)
@@ -441,12 +452,14 @@ let get_type env loc ty =
                      else begin
                        let plr = ref pl in
                        for c = l to i-1 do
-                         plr := Tunit :: !plr
+                         plr := (fresh_tvar ()) :: !plr
                        done;
-                       l, !plr
+                       i + 1, (aux p) :: !plr
                      end
                    ) (0, []) pl in
-       let ty = Ttuple (List.rev pl) in
+       let ty = match List.rev pl with
+         | [ty] -> Ttuple [ty; fresh_tvar ()]
+         | l -> Ttuple l in
        Ref.set tvr { tv with tyo = Some ty }; ty
      | Tpartial (Pmap (k_ty, v_ty)) ->
        let ty = Tmap (aux k_ty, aux v_ty) in
@@ -482,7 +495,7 @@ let get_type env loc ty =
            ty
        end
      | Tpartial (Ppar) ->
-       error loc "Parameter type can't be infered, add an annotation"
+       error loc "Parameter type can't be inferred, add an annotation"
      | ty -> aux ty
      end
   | _ -> ty
@@ -509,30 +522,171 @@ let rec type_name = function
   | Tsum (sn, _) -> "A" ^ sn
   | Tcontract c ->
     begin match c.sig_name with Some n -> "CN" ^ n | None -> "CU" end
-  | Tvar _ | Tpartial _ -> assert false (* Removed beforehand *)
+  | Tvar { contents = a }  -> "v" ^ !a.id
+  | Tpartial _ -> assert false (* Removed beforehand *)
 
-let rec vars_to_unit = function
-  | Ttuple tyl -> Ttuple (List.map vars_to_unit tyl)
-  | Toption ty -> Toption (vars_to_unit ty)
-  | Tlist ty -> Tlist (vars_to_unit ty)
-  | Tset ty -> Tset (vars_to_unit ty)
-  | Tmap (ty1, ty2) -> Tmap (vars_to_unit ty1, vars_to_unit ty2)
-  | Tbigmap (ty1, ty2) -> Tbigmap (vars_to_unit ty1, vars_to_unit ty2)
-  | Tor (ty1, ty2) -> Tor (vars_to_unit ty1, vars_to_unit ty2)
-  | Tlambda (ty1, ty2) -> Tlambda (vars_to_unit ty1, vars_to_unit ty2)
+let rec vars_to_unit ?loc ty = match ty with
+  | Ttuple tyl -> Ttuple (List.map (vars_to_unit ?loc) tyl)
+  | Toption ty -> Toption (vars_to_unit ?loc ty)
+  | Tlist ty -> Tlist (vars_to_unit ?loc ty)
+  | Tset ty -> Tset (vars_to_unit ?loc ty)
+  | Tmap (ty1, ty2) -> Tmap (vars_to_unit ?loc ty1, vars_to_unit ?loc ty2)
+  | Tbigmap (ty1, ty2) -> Tbigmap (vars_to_unit ?loc ty1, vars_to_unit ?loc ty2)
+  | Tor (ty1, ty2) -> Tor (vars_to_unit ?loc ty1, vars_to_unit ?loc ty2)
+  | Tlambda (ty1, ty2) -> Tlambda (vars_to_unit ?loc ty1, vars_to_unit ?loc ty2)
   | Tclosure ((ty1, ty2), ty3) ->
-    Tclosure ((vars_to_unit ty1, vars_to_unit ty2), vars_to_unit ty3)
+    Tclosure ((vars_to_unit ?loc ty1, vars_to_unit ?loc ty2),
+              vars_to_unit ?loc ty3)
   | Trecord (rn, fl) ->
-    Trecord (rn, List.map (fun (fn, fty) -> (fn, vars_to_unit fty)) fl)
+    Trecord (rn, List.map (fun (fn, fty) -> (fn, vars_to_unit ?loc fty)) fl)
   | Tsum (sn, cl) ->
-    Tsum (sn, List.map (fun (cn, cty) -> (cn, vars_to_unit cty)) cl)
-  | Tcontract c -> Tcontract { c with entries_sig =
-                     List.map (fun es ->
-                       { es with parameter = vars_to_unit es.parameter }
-                     ) c.entries_sig }
+    Tsum (sn, List.map (fun (cn, cty) -> (cn, vars_to_unit ?loc cty)) cl)
+  | Tcontract c -> Tcontract (sig_vars_to_unit ?loc c)
   | Tvar _ -> Tunit (* Remaining vars correspond to unused arguments *)
-  | Tpartial _ -> assert false (* Changed to an actual type beforehand *)
-  | ty -> ty
+  | Tpartial _ ->
+    error (match loc with None -> noloc | Some loc -> loc)
+      "Type cannot be inferred, please add an annotation"
+    (* assert false (\* Changed to an actual type beforehand *\) *)
+  | Tunit | Tbool | Tint | Tnat | Ttez | Tstring | Tbytes | Ttimestamp | Tkey
+  | Tkey_hash | Tsignature | Toperation | Taddress | Tfail -> ty
+
+and sig_vars_to_unit ?loc c =
+  { c with entries_sig =
+             List.map (fun es ->
+                 { es with parameter = vars_to_unit ?loc es.parameter }
+               ) c.entries_sig
+  }
+
+let rec tvars_to_unit ({ desc; ty; loc } as e) =
+  let desc = match desc with
+    | Var _ -> desc
+    | Let { bnd_var; inline; bnd_val; body } ->
+      Let { bnd_var; inline;
+            bnd_val = tvars_to_unit bnd_val;
+            body = tvars_to_unit body }
+    | SetField { record; field; set_val } ->
+      SetField { field;
+                 record = tvars_to_unit record;
+                 set_val = tvars_to_unit set_val }
+    | Project { field; record } ->
+      Project { field; record = tvars_to_unit record }
+    | Const { ty; const } ->
+      Const { ty = vars_to_unit ~loc ty; const }
+    | Apply { prim; args } ->
+      Apply { prim; args = List.map tvars_to_unit args }
+    | If { cond; ifthen; ifelse } ->
+      If { cond = tvars_to_unit cond;
+           ifthen = tvars_to_unit ifthen;
+           ifelse = tvars_to_unit ifelse }
+    | Seq (e1, e2) ->
+      Seq (tvars_to_unit e1, tvars_to_unit e2)
+    | Transfer { dest; amount } ->
+      Transfer { dest = tvars_to_unit dest;
+                 amount = tvars_to_unit amount }
+    | Call { contract; amount; entry; arg } ->
+      Call { contract = tvars_to_unit contract;
+             amount = tvars_to_unit amount;
+             entry;
+             arg = tvars_to_unit arg }
+    | MatchOption { arg; ifnone; some_name; ifsome } ->
+      MatchOption { arg = tvars_to_unit arg;
+                    ifnone = tvars_to_unit ifnone;
+                    some_name;
+                    ifsome = tvars_to_unit ifsome }
+    | MatchList { arg; head_name; tail_name; ifcons; ifnil } ->
+      MatchList { arg = tvars_to_unit arg;
+                  head_name; tail_name;
+                  ifcons = tvars_to_unit ifcons;
+                  ifnil = tvars_to_unit ifnil }
+    | Loop { arg_name; body; arg } ->
+      Loop { arg_name;
+             body = tvars_to_unit body;
+             arg = tvars_to_unit arg }
+    | LoopLeft { arg_name; body; arg; acc } ->
+      LoopLeft { arg_name;
+                 body = tvars_to_unit body;
+                 arg = tvars_to_unit arg;
+                 acc = match acc with
+                   | None -> None
+                   | Some acc -> Some (tvars_to_unit acc) }
+    | Fold { prim; arg_name; body; arg; acc } ->
+      Fold { prim; arg_name;
+             body = tvars_to_unit body;
+             arg = tvars_to_unit arg;
+             acc = tvars_to_unit acc }
+    | Map { prim; arg_name; body; arg } ->
+      Map { prim; arg_name;
+            body = tvars_to_unit body;
+            arg = tvars_to_unit arg }
+    | MapFold { prim; arg_name; body; arg; acc } ->
+      MapFold { prim; arg_name;
+                body = tvars_to_unit body;
+                arg = tvars_to_unit arg;
+                acc = tvars_to_unit acc }
+    | Lambda { arg_name; recursive; arg_ty; body; ret_ty } ->
+      Lambda { arg_name; recursive;
+               arg_ty = vars_to_unit ~loc:arg_name.nloc arg_ty ;
+               body = tvars_to_unit body;
+               ret_ty = vars_to_unit ~loc:body.loc ret_ty }
+    | Closure { arg_name; arg_ty; call_env; body; ret_ty } ->
+      Closure { arg_name;
+                arg_ty = vars_to_unit ~loc:arg_name.nloc arg_ty;
+                call_env =
+                  List.map (fun (v, e) -> (v, tvars_to_unit e)) call_env;
+                body = tvars_to_unit body;
+                ret_ty = vars_to_unit ~loc:arg_name.nloc ret_ty }
+    | Record l ->
+      Record (List.map (fun (f, e) -> (f, tvars_to_unit e)) l)
+    | Constructor { constr; arg } ->
+      let constr = match constr with
+        | Constr _ -> constr
+        | Left ty -> Left (vars_to_unit ~loc ty)
+        | Right ty -> Right (vars_to_unit ~loc ty) in
+      Constructor { constr; arg = tvars_to_unit arg }
+    | MatchVariant { arg; cases } ->
+      MatchVariant { arg = tvars_to_unit arg;
+                     cases =
+                       List.map (fun (p, e) -> (p, tvars_to_unit e)) cases }
+    | MatchNat { plus_name; minus_name; arg; ifplus; ifminus } ->
+      MatchNat { plus_name; minus_name;
+                 arg = tvars_to_unit arg;
+                 ifplus = tvars_to_unit ifplus;
+                 ifminus = tvars_to_unit ifminus }
+    | Failwith e -> Failwith (tvars_to_unit e)
+    | CreateContract { args; contract } ->
+      CreateContract { args = List.map tvars_to_unit args;
+                       contract = contract_tvars_to_unit contract }
+    | ContractAt { arg; c_sig } ->
+      ContractAt { arg = tvars_to_unit arg;
+                   c_sig = sig_vars_to_unit c_sig }
+    | Unpack { arg; ty } ->
+      if has_tvar ty then
+        error loc "Unresolved unpack type %S, add annotation"
+          (LiquidPrinter.Liquid.string_of_type ty) ;
+      Unpack { arg = tvars_to_unit arg;
+               ty = vars_to_unit ~loc:arg.loc ty }
+    | TypeAnnot _ -> assert false (* Removed during typechecking *)
+    | Type _ -> assert false (* Removed during typechecking*)
+  in
+  { e with desc; ty = vars_to_unit ~loc ty }
+
+and contract_tvars_to_unit (contract : typed_contract) =
+  let values = List.map (fun (v, inline, e) ->
+      v, inline, tvars_to_unit e) contract.values in
+  let c_init = match contract.c_init with
+    | None -> None
+    | Some { init_name; init_args; init_body } ->
+      Some { init_name;
+             init_args = List.map (fun (x, loc, ty) ->
+                 x, loc, vars_to_unit ~loc ty) init_args;
+             init_body = tvars_to_unit init_body } in
+  let entries = List.map (fun { entry_sig; code } ->
+      { entry_sig = { entry_sig with
+                      parameter =
+                        vars_to_unit ~loc:(code : typed_exp).loc
+                          entry_sig.parameter };
+        code = tvars_to_unit code }) contract.entries in
+  { contract with values; c_init; entries }
 
 let build_subst aty cty =
   let rec aux s aty cty = match aty, cty with
@@ -571,30 +725,33 @@ let build_subst aty cty =
 
 let rec mono_exp env subst vtys (e:typed_exp) =
   let mono_exp = mono_exp env in
-  let instantiate ty =
-    vars_to_unit (instantiate_to subst (get_type env e.loc ty)) in
+  let instantiate ty = instantiate_to subst (get_type env e.loc ty) in
   (* Printf.printf "Exp %s : %s ->>" (LiquidPrinter.Liquid.string_of_code e) (LiquidPrinter.Liquid.string_of_type e.ty); *)
   let ty = instantiate e.ty in
   (* Printf.printf " %s\n" (LiquidPrinter.Liquid.string_of_type ty); *)
   let desc = match e.desc with
-    | Let lb when not (StringSet.is_empty (free_tvars lb.bnd_val.ty)) ->
+    (* TODO check with tests if this is needed *)
+    (*
+    | Let lb
+      when not (StringSet.is_empty (free_tvars lb.bnd_val.ty))
+      && (match ty with Tlambda _ | Tclosure _ -> true |_ -> false) ->
     (* Printf.printf "let %s = ... in E\n" lb.bnd_var.nname; *)
     let vtys' = StringMap.add lb.bnd_var.nname (ref []) vtys in
     let body = mono_exp subst vtys' lb.body in
     let vty = StringMap.find lb.bnd_var.nname vtys' in
     let substs = List.fold_left (fun ss (tn, ty) ->
         (tn, ty, build_subst lb.bnd_val.ty ty) :: ss) [] !vty in
-    (* Printf.printf "Raw type of %s : %s\n" lb.bnd_var.nname
-     *   (LiquidPrinter.Liquid.string_of_type lb.bnd_val.ty);
-     * List.iter (fun (tn, ty, s) ->
-     *   Printf.printf "%s\n%s\n" tn (LiquidPrinter.Liquid.string_of_type ty);
-     *   StringMap.iter (fun id ty ->
-     *     Printf.printf "%s -> %s  " id
-     *       (LiquidPrinter.Liquid.string_of_type ty)
-     *     ) s;
-     *   Printf.printf "\n"
-     * ) substs;
-     * Printf.printf "   let %s = E in ...\n" lb.bnd_var.nname; *)
+    Printf.printf "Raw type of %s : %s\n" lb.bnd_var.nname
+      (LiquidPrinter.Liquid.string_of_type lb.bnd_val.ty);
+    List.iter (fun (tn, ty, s) ->
+      Printf.printf "%s\n%s\n" tn (LiquidPrinter.Liquid.string_of_type ty);
+      StringMap.iter (fun id ty ->
+        Printf.printf "%s -> %s  " id
+          (LiquidPrinter.Liquid.string_of_type ty)
+        ) s;
+      Printf.printf "\n"
+    ) substs;
+    Printf.printf "   let %s = E in ...\n" lb.bnd_var.nname;
     if substs = [] then begin (* when the bound var is unused *)
       let bnd_val = mono_exp subst vtys lb.bnd_val in
       Let { lb with bnd_val; body }
@@ -606,6 +763,7 @@ let rec mono_exp env subst vtys (e:typed_exp) =
         { e with desc = Let { lb with bnd_var; bnd_val; body } }
       ) body substs
     end.desc
+  *)
   | Var s ->
     begin try
         let tn = type_name ty in
@@ -619,57 +777,73 @@ let rec mono_exp env subst vtys (e:typed_exp) =
     let recursive =
       if StringMap.mem f vtys then Some (f ^ "_" ^ type_name ty)
       else Some f in
-    Lambda { l with arg_ty = instantiate l.arg_ty ;
-                    body = mono_exp subst vtys l.body;
-                    ret_ty = instantiate l.ret_ty;
-                    recursive }
+    let arg_ty = instantiate l.arg_ty in
+    let ret_ty = instantiate l.ret_ty in
+    let body = mono_exp subst vtys l.body in
+    Lambda { arg_name = l.arg_name; arg_ty; body; ret_ty; recursive }
   | Let lb ->
-    Let { lb with bnd_val = mono_exp subst vtys lb.bnd_val;
-                  body = mono_exp subst vtys lb.body }
-  | SetField sf -> SetField { sf with record = mono_exp subst vtys sf.record;
-                                      set_val = mono_exp subst vtys sf.set_val }
-  | Project p -> Project { p with record = mono_exp subst vtys p.record }
-  | Const c -> Const { c with ty = instantiate c.ty }
+    let bnd_val = mono_exp subst vtys lb.bnd_val in
+    let body = mono_exp subst vtys lb.body in
+    Let { bnd_var = lb.bnd_var; inline = lb.inline; bnd_val; body }
+  | SetField sf -> SetField { field = sf.field;
+                              record = mono_exp subst vtys sf.record;
+                              set_val = mono_exp subst vtys sf.set_val }
+  | Project p -> Project { field = p.field;
+                           record = mono_exp subst vtys p.record }
+  | Const c -> Const { const = c.const;
+                       ty = instantiate c.ty }
   | Apply app ->
-    Apply { app with args = List.map (mono_exp subst vtys) app.args }
+    Apply { prim = app.prim;
+            args = List.map (mono_exp subst vtys) app.args }
   | If ite -> If { cond = mono_exp subst vtys ite.cond;
                    ifthen = mono_exp subst vtys ite.ifthen;
                    ifelse = mono_exp subst vtys ite.ifelse }
   | Seq (e1, e2) -> Seq (mono_exp subst vtys e1, mono_exp subst vtys e2)
   | Transfer tr -> Transfer { dest = mono_exp subst vtys tr.dest;
                               amount = mono_exp subst vtys tr.amount }
-  | Call c -> Call { c with contract = mono_exp subst vtys c.contract;
-                            amount = mono_exp subst vtys c.amount;
-                            arg = mono_exp subst vtys c.arg }
-  | MatchOption mo -> MatchOption { mo with arg = mono_exp subst vtys mo.arg;
-                                       ifnone = mono_exp subst vtys mo.ifnone;
-                                       ifsome = mono_exp subst vtys mo.ifsome }
-  | MatchList ml -> MatchList { ml with arg = mono_exp subst vtys ml.arg;
-                                        ifcons = mono_exp subst vtys ml.ifcons;
-                                        ifnil = mono_exp subst vtys ml.ifnil }
-  | Loop l -> Loop { l with body = mono_exp subst vtys l.body;
-                            arg = mono_exp subst vtys l.arg  }
-  | LoopLeft ll -> LoopLeft { ll with body = mono_exp subst vtys ll.body;
-                                      arg = mono_exp subst vtys ll.arg;
-                                      acc = match ll.acc with
-                                        | Some e -> Some (mono_exp subst vtys e)
-                                        | _ -> ll.acc }
-  | Fold f -> Fold { f with body = mono_exp subst vtys f.body;
-                            arg = mono_exp subst vtys f.arg;
-                            acc = mono_exp subst vtys f.acc }
-  | Map m -> Map { m with body = mono_exp subst vtys m.body ;
-                          arg = mono_exp subst vtys m.arg }
+  | Call c -> Call { entry = c.entry;
+                     contract = mono_exp subst vtys c.contract;
+                     amount = mono_exp subst vtys c.amount;
+                     arg = mono_exp subst vtys c.arg }
+  | MatchOption mo -> MatchOption { some_name = mo.some_name;
+                                    arg = mono_exp subst vtys mo.arg;
+                                    ifnone = mono_exp subst vtys mo.ifnone;
+                                    ifsome = mono_exp subst vtys mo.ifsome }
+  | MatchList ml -> MatchList { head_name = ml.head_name;
+                                tail_name = ml.tail_name;
+                                arg = mono_exp subst vtys ml.arg;
+                                ifcons = mono_exp subst vtys ml.ifcons;
+                                ifnil = mono_exp subst vtys ml.ifnil }
+  | Loop l -> Loop { arg_name = l.arg_name;
+                     body = mono_exp subst vtys l.body;
+                     arg = mono_exp subst vtys l.arg  }
+  | LoopLeft ll -> LoopLeft { arg_name = ll.arg_name;
+                              body = mono_exp subst vtys ll.body;
+                              arg = mono_exp subst vtys ll.arg;
+                              acc = match ll.acc with
+                                | Some e -> Some (mono_exp subst vtys e)
+                                | _ -> ll.acc }
+  | Fold f -> Fold { prim = f.prim; arg_name = f.arg_name;
+                     body = mono_exp subst vtys f.body;
+                     arg = mono_exp subst vtys f.arg;
+                     acc = mono_exp subst vtys f.acc }
+  | Map m -> Map { prim = m.prim; arg_name = m.arg_name;
+                   body = mono_exp subst vtys m.body ;
+                   arg = mono_exp subst vtys m.arg }
   | MapFold mf -> MapFold { mf with body = mono_exp subst vtys mf.body;
                                     arg = mono_exp subst vtys mf.arg;
                                     acc = mono_exp subst vtys mf.acc }
-  | Lambda l -> Lambda { l with arg_ty = instantiate l.arg_ty ;
-                                body = mono_exp subst vtys l.body;
-                                ret_ty = instantiate l.ret_ty }
-  | Closure c -> Closure { c with arg_ty = instantiate c.arg_ty ;
-                                  call_env = List.map (fun (s, e) ->
-                                      s, mono_exp subst vtys e) c.call_env ;
-                                  body = mono_exp subst vtys c.body;
-                                  ret_ty = instantiate c.ret_ty }
+  | Lambda l -> Lambda { recursive = l.recursive;
+                         arg_name = l.arg_name;
+                         arg_ty = instantiate l.arg_ty ;
+                         body = mono_exp subst vtys l.body;
+                         ret_ty = instantiate l.ret_ty }
+  | Closure c -> Closure { arg_name = c.arg_name;
+                           arg_ty = instantiate c.arg_ty ;
+                           call_env = List.map (fun (s, e) ->
+                               s, mono_exp subst vtys e) c.call_env ;
+                           body = mono_exp subst vtys c.body;
+                           ret_ty = instantiate c.ret_ty }
   | Record r -> Record (List.map (fun (s, e) -> s, mono_exp subst vtys e) r)
   | Constructor c ->
     Constructor {
@@ -690,8 +864,9 @@ let rec mono_exp env subst vtys (e:typed_exp) =
                      contract = mono_contract env e.loc cc.contract }
   | ContractAt ca -> ContractAt { arg = mono_exp subst vtys ca.arg;
                                   c_sig = ca.c_sig }
-  | Unpack up -> Unpack { arg = mono_exp subst vtys up.arg;
-                          ty = instantiate up.ty }
+  | Unpack up ->
+    Unpack { arg = mono_exp subst vtys up.arg;
+             ty = instantiate up.ty }
   | TypeAnnot _ -> assert false (* Removed during typechecking *)
   | Type _ -> assert false (* Removed during typechecking*)
   in
@@ -709,7 +884,7 @@ and mono_contract env loc c =
           "Type of parameter \"%s\" can't be infered, please add an annotation"
           e.entry_sig.parameter_name
       | _ -> () end;
-    let pty = vars_to_unit (get_type env loc e.entry_sig.parameter) in
+    let pty = get_type env loc e.entry_sig.parameter in
     { code = mono_exp env [] vtys e.code;
       entry_sig = { e.entry_sig with parameter = pty } }
     ) c.entries in
@@ -733,5 +908,6 @@ and mono_contract env loc c =
         (n, b, e) :: cval
       ) cval substs
     end
-  ) [] cval in
-  { c with values; entries; c_init } (* ty_env *)
+    ) [] cval in
+  let contract = { c with values; entries; c_init } (* ty_env *) in
+  contract_tvars_to_unit contract

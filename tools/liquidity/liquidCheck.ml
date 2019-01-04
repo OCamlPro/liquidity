@@ -190,7 +190,7 @@ let rec merge_matches acc loc cases constrs =
 (* Typecheck an expression. Returns a typed expression *)
 let rec typecheck env ( exp : syntax_exp ) : typed_exp =
   let loc = exp.loc in
-  let uu = unify loc in
+  let unify = unify loc in
   match exp.desc with
 
   | Const { ty; const } ->
@@ -226,7 +226,7 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
            with Not_found -> error loc "unbound record field %S" field
          in
          let record_ty = find_type ty_name env.env in
-         uu record.ty record_ty; ty
+         unify record.ty record_ty; ty
       | rty -> error loc "not a record type: %s, has no field %s"
                  (LiquidPrinter.Liquid.string_of_type rty)
                  field
@@ -242,7 +242,7 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
       in
       let record_ty = find_type ty_name env.env in
       begin match expand record.ty with
-        | Tvar _ | Tpartial _ -> uu record.ty record_ty
+        | Tvar _ | Tpartial _ -> unify record.ty record_ty
         | _ ->
           fail_neq ~loc ~info:"in record update" ~expected_ty:record.ty record_ty
             ~more:(Printf.sprintf
@@ -307,7 +307,7 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
         let arg = typecheck env arg in
         if amount.transfer || contract.transfer || arg.transfer then
           error loc "transfer within transfer arguments";
-        uu contract.ty (Tpartial (Pcont [(entry', arg.ty)]));
+        unify contract.ty (Tpartial (Pcont [(entry', arg.ty)]));
         let desc = Call { contract; amount; entry; arg } in
         mk ?name:exp.name ~loc desc Toperation
       | ty ->
@@ -361,7 +361,7 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
                                eprim.nb_arg, eprim.nb_ret, eprim.minst) in
     begin try List.iter2 (fun a aty ->
       match expand a.ty with
-        | Tvar _ | Tpartial _ -> uu a.ty aty
+        | Tvar _ | Tpartial _ -> unify a.ty aty
         | _ ->
           if not (eq_types a.ty aty) then
             error a.loc "Bad %d args for primitive %S:\n    %s\n"
@@ -411,7 +411,7 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
       | Toption ty -> ty
       | Tvar _ | Tpartial _ ->
          let ty = fresh_tvar () in
-         uu arg.ty (Toption ty); ty
+         unify arg.ty (Toption ty); ty
       | _ -> error loc "not an option type : %s"
                (LiquidPrinter.Liquid.string_of_type (expand arg.ty))
     in
@@ -424,7 +424,7 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
       match ifnone.ty, ifsome.ty with
       | ty, Tfail | Tfail, ty -> ty
       | ty1, ty2 when has_tvar ty1 || has_tvar ty2 ->
-         uu ty1 ty2; ty1
+         unify ty1 ty2; ty1
       | ty1, ty2 ->
         fail_neq ~loc:ifsome.loc ~expected_ty:ty1 ty2
           ~info:"in branches of match";
@@ -445,7 +445,7 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
       match ifplus.ty, ifminus.ty with
       | ty, Tfail | Tfail, ty -> ty
       | ty1, ty2 when has_tvar ty1 || has_tvar ty2 ->
-         uu ty1 ty2; ty1
+         unify ty1 ty2; ty1
       | ty1, ty2 ->
         fail_neq ~loc:ifminus.loc ~expected_ty:ty1 ty2
           ~info:"in branches of match%nat";
@@ -472,8 +472,8 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
       | ty when has_tvar ty || has_tvar arg_ty ->
          let left_ty = fresh_tvar () in
          let right_ty = fresh_tvar () in
-         uu arg.ty left_ty;
-         uu body.ty (Ttuple [Tor (left_ty, right_ty); acc.ty]);
+         unify arg.ty left_ty;
+         unify body.ty (Ttuple [Tor (left_ty, right_ty); acc.ty]);
          right_ty
       | Ttuple [Tor (left_ty, right_ty); acc_ty] ->
         fail_neq ~loc:acc.loc ~expected_ty:acc_ty acc.ty
@@ -497,8 +497,8 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
       | ty when has_tvar ty || has_tvar arg.ty ->
          let left_ty = fresh_tvar () in
          let right_ty = fresh_tvar () in
-         uu arg.ty left_ty;
-         uu body.ty (Tor (left_ty, right_ty));
+         unify arg.ty left_ty;
+         unify body.ty (Tor (left_ty, right_ty));
          right_ty
       | Tor (left_ty, right_ty) ->
         fail_neq ~loc:arg.loc ~expected_ty:left_ty arg.ty
@@ -521,35 +521,35 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
       | Prim_map_iter, ty, Tunit when has_tvar ty ->
          let k_ty = fresh_tvar () in
          let v_ty = fresh_tvar () in
-         uu ty (Tmap (k_ty, v_ty));
+         unify ty (Tmap (k_ty, v_ty));
          Prim_map_iter, Ttuple [k_ty; v_ty]
       | Prim_set_iter, ty, Tunit when has_tvar ty ->
          let elt_ty = fresh_tvar () in
-         uu ty (Tset elt_ty);
+         unify ty (Tset elt_ty);
          Prim_set_iter, elt_ty
       | Prim_list_iter, ty, Tunit when has_tvar ty ->
          let elt_ty = fresh_tvar () in
-         uu ty (Tlist elt_ty);
+         unify ty (Tlist elt_ty);
          Prim_list_iter, elt_ty
 
       | Prim_map_fold, ty, acc_ty when (has_tvar ty || has_tvar acc_ty) ->
          let k_ty = fresh_tvar () in
          let v_ty = fresh_tvar () in
          let a_ty = fresh_tvar () in
-         uu ty (Tmap (k_ty, v_ty));
-         uu a_ty acc_ty;
+         unify ty (Tmap (k_ty, v_ty));
+         unify a_ty acc_ty;
          Prim_map_fold, Ttuple[Ttuple [k_ty; v_ty]; acc_ty]
       | Prim_set_fold, ty, acc_ty when (has_tvar ty || has_tvar acc_ty) ->
          let elt_ty = fresh_tvar () in
          let a_ty = fresh_tvar () in
-         uu ty (Tset elt_ty);
-         uu a_ty acc_ty;
+         unify ty (Tset elt_ty);
+         unify a_ty acc_ty;
          Prim_set_fold, Ttuple[elt_ty; acc_ty]
       | Prim_list_fold, ty, acc_ty when (has_tvar ty || has_tvar acc_ty) ->
          let elt_ty = fresh_tvar () in
          let a_ty = fresh_tvar () in
-         uu ty (Tlist elt_ty);
-         uu a_ty acc_ty;
+         unify ty (Tlist elt_ty);
+         unify a_ty acc_ty;
          Prim_list_fold, Ttuple[elt_ty; acc_ty]
 
       | (Prim_coll_iter|Prim_map_iter), Tmap (k_ty, v_ty), Tunit ->
@@ -584,11 +584,11 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
       | Prim_map_map, ty when has_tvar ty ->
          let k_ty = fresh_tvar () in
          let v_ty = fresh_tvar () in
-         uu ty (Tmap (k_ty, v_ty));
+         unify ty (Tmap (k_ty, v_ty));
          Prim_map_map, Ttuple [k_ty; v_ty], Some k_ty
       | Prim_list_map, ty when has_tvar ty ->
          let elt_ty = fresh_tvar () in
-         uu ty (Tlist elt_ty);
+         unify ty (Tlist elt_ty);
          Prim_list_map, elt_ty, None
 
       | (Prim_map_map|Prim_coll_map), Tmap (k_ty, v_ty) ->
@@ -625,11 +625,11 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
       | Prim_map_map_fold, ty, acc_ty when has_tvar ty ->
          let k_ty = fresh_tvar () in
          let v_ty = fresh_tvar () in
-         uu ty (Tmap (k_ty, v_ty));
+         unify ty (Tmap (k_ty, v_ty));
          Prim_map_map_fold, Ttuple[Ttuple [k_ty; v_ty]; acc_ty], Some k_ty
       | Prim_list_map_fold, ty, acc_ty when has_tvar ty ->
          let elt_ty = fresh_tvar () in
-         uu ty (Tlist elt_ty);
+         unify ty (Tlist elt_ty);
          Prim_list_map_fold, Ttuple[elt_ty; acc_ty], None
 
       | (Prim_map_map_fold|Prim_coll_map_fold), Tmap (k_ty, v_ty), acc_ty ->
@@ -645,7 +645,7 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
     let body = typecheck env body in
     let body_r = match body.ty with
       | Ttuple [r; baccty] when has_tvar baccty || has_tvar acc.ty ->
-         uu baccty acc.ty; r
+         unify baccty acc.ty; r
       | Ttuple [r; baccty] when eq_types baccty acc.ty -> r
       | _ ->
         error body.loc
@@ -677,7 +677,7 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
       | Tlist ty -> ty
       | Tvar _ | Tpartial _ ->
          let ty = fresh_tvar () in
-         uu arg.ty (Tlist ty); ty
+         unify arg.ty (Tlist ty); ty
       | _ -> error loc "not a list type"
     in
     let ifnil = typecheck env ifnil in
@@ -691,7 +691,7 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
       match ifnil.ty, ifcons.ty with
       | ty, Tfail | Tfail, ty -> ty
       | ty1, ty2 when has_tvar ty1 || has_tvar ty2 ->
-         uu ty1 ty2; ty1
+         unify ty1 ty2; ty1
       | ty1, ty2 ->
         fail_neq ~loc:ifcons.loc ~expected_ty:ty1 ty2
           ~info:"in branches of match";
@@ -831,9 +831,9 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
             | Tvar _ (* | Tpartial _ *) ->
               begin match find_variant_type env cases with
                 | Some (Tsum (_, constrs) as ty) ->
-                  uu arg.ty ty; (List.map fst constrs, None)
+                  unify arg.ty ty; (List.map fst constrs, None)
                 | Some (Tor (left_ty, right_ty) as ty) ->
-                  uu arg.ty ty; (["Left"; "Right"], Some (left_ty, right_ty))
+                  unify arg.ty ty; (["Left"; "Right"], Some (left_ty, right_ty))
                 | _ -> error loc "not a variant type: %s"
                          (LiquidPrinter.Liquid.string_of_type arg.ty)
               end
@@ -1092,7 +1092,7 @@ and typecheck_prim2 env prim loc args =
     typecheck_prim2t env prim loc args
 
 and typecheck_prim2i env prim loc args =
-  let uu = unify loc in
+  let unify = unify loc in
   match prim, List.map (fun a -> a.ty) args with
   | (Prim_neq | Prim_lt | Prim_gt | Prim_eq | Prim_le | Prim_ge),
     [ ty1; ty2 ] ->
@@ -1105,7 +1105,7 @@ and typecheck_prim2i env prim loc args =
                       ([ Ttimestamp; Ttimestamp ], Tbool) ;
                       ([ Tkey_hash; Tkey_hash ], Tbool) ;
                       ([ Taddress; Taddress ], Tbool) ] in
-    make_type_eqn loc env overloads [ ty1; ty2 ]
+    make_type_eqn loc overloads [ ty1; ty2 ]
 
   | Prim_compare, [ ty1; ty2 ] ->
     let overloads = [ ([ Tbool; Tbool ], Tint) ;
@@ -1117,12 +1117,12 @@ and typecheck_prim2i env prim loc args =
                       ([ Ttimestamp; Ttimestamp ], Tint) ;
                       ([ Tkey_hash; Tkey_hash ], Tint) ;
                       ([ Taddress; Taddress ], Tint) ] in
-    make_type_eqn loc env overloads [ ty1; ty2 ]
+    make_type_eqn loc overloads [ ty1; ty2 ]
 
   | Prim_neg, [ ty ] ->
     let overloads = [ ([ Tnat ], Tnat) ;
                       ([ Tint ], Tint)  ] in
-    make_type_eqn loc env overloads [ ty ]
+    make_type_eqn loc overloads [ ty ]
 
   | Prim_add, [ ty1; ty2 ] ->
     let overloads = [ ([ Ttez; Ttez ], Ttez) ;
@@ -1134,7 +1134,7 @@ and typecheck_prim2i env prim loc args =
                       ([ Tnat; Ttimestamp ], Ttimestamp) ;
                       ([ Ttimestamp; Tint ], Ttimestamp) ;
                       ([ Ttimestamp; Tnat ], Ttimestamp) ] in
-    make_type_eqn loc env overloads [ ty1; ty2 ]
+    make_type_eqn loc overloads [ ty1; ty2 ]
 
   | Prim_sub, [ ty1; ty2 ] ->
     let overloads = [ ([ Ttez; Ttez ], Ttez) ;
@@ -1145,7 +1145,7 @@ and typecheck_prim2i env prim loc args =
                       ([ Ttimestamp; Tint ], Ttimestamp) ;
                       ([ Ttimestamp; Tnat ], Ttimestamp) ;
                       ([ Ttimestamp; Ttimestamp ], Ttimestamp) ] in
-    make_type_eqn loc env overloads [ ty1; ty2 ]
+    make_type_eqn loc overloads [ ty1; ty2 ]
 
   | Prim_mul, [ ty1; ty2 ] ->
     let overloads = [ ([ Tnat; Ttez ], Ttez) ;
@@ -1154,7 +1154,7 @@ and typecheck_prim2i env prim loc args =
                       ([ Tint; Tint ], Tint) ;
                       ([ Tnat; Tint ], Tint) ;
                       ([ Tint; Tnat ], Tint) ] in
-    make_type_eqn loc env overloads [ ty1; ty2 ]
+    make_type_eqn loc overloads [ ty1; ty2 ]
 
   | Prim_ediv, [ ty1; ty2 ] -> (*
      let overloads = [ ([ Ttez; Ttez ], Toption (Ttuple [Tnat; Ttez])) ;
@@ -1163,68 +1163,68 @@ and typecheck_prim2i env prim loc args =
                        ([ Tint; Tint ], Toption (Ttuple [Tint; Tnat])) ;
                        ([ Tnat; Tint ], Toption (Ttuple [Tint; Tnat])) ;
                        ([ Tint; Tnat ], Toption (Ttuple [Tint; Tnat])) ] in
-     make_type_eqn loc env overloads [ ty1; ty2 ] *)
+     make_type_eqn loc overloads [ ty1; ty2 ] *)
     let overloads = [ ([ Ttez; Ttez ], Tnat) ;
                       ([ Ttez; Tnat ], Ttez) ;
                       ([ Tnat; Tnat ], Tnat) ;
                       ([ Tint; Tint ], Tint) ;
                       ([ Tnat; Tint ], Tint) ;
                       ([ Tint; Tnat ], Tint) ] in
-    let t1 = make_type_eqn loc env overloads [ ty1; ty2 ] in
+    let t1 = make_type_eqn loc overloads [ ty1; ty2 ] in
     let overloads = [ ([ Ttez; Ttez ], Ttez) ;
                       ([ Ttez; Tnat ], Ttez) ;
                       ([ Tnat; Tnat ], Tnat) ;
                       ([ Tint; Tint ], Tnat) ;
                       ([ Tnat; Tint ], Tnat) ;
                       ([ Tint; Tnat ], Tnat) ] in
-    let t2 = make_type_eqn loc env overloads [ ty1; ty2 ] in
+    let t2 = make_type_eqn loc overloads [ ty1; ty2 ] in
     Toption (Ttuple [t1; t2])
 
   | (Prim_xor | Prim_or), [ ty1; ty2] ->
     let overloads = [ ([ Tbool; Tbool ], Tbool) ;
                       ([ Tnat; Tnat ], Tnat) ] in
-    make_type_eqn loc env overloads [ ty1; ty2 ]
+    make_type_eqn loc overloads [ ty1; ty2 ]
 
   | Prim_and, [ ty1; ty2 ] ->
     let overloads = [ ([ Tbool; Tbool ], Tbool) ;
                       ([ Tint; Tnat ], Tnat) ;
                       ([ Tnat; Tnat ], Tnat) ] in
-    make_type_eqn loc env overloads [ ty1; ty2 ]
+    make_type_eqn loc overloads [ ty1; ty2 ]
 
   | Prim_not, [ ty ] ->
     let overloads = [ ([ Tbool ], Tbool) ;
                       ([ Tint ], Tint) ;
                       ([ Tnat ], Tint) ] in
-    make_type_eqn loc env overloads [ty]
+    make_type_eqn loc overloads [ty]
 
-  | Prim_abs, [ ty ] -> uu ty Tint; Tint
-  | Prim_is_nat, [ ty ] -> uu ty Tint; Toption Tnat
-  | Prim_int, [ ty ] -> uu ty Tnat; Tint
+  | Prim_abs, [ ty ] -> unify ty Tint; Tint
+  | Prim_is_nat, [ ty ] -> unify ty Tint; Toption Tnat
+  | Prim_int, [ ty ] -> unify ty Tnat; Tint
 
   | Prim_sub, [ ty ] ->
     let overloads = [ ([ Tint ], Tint) ;
                       ([ Tnat ], Tint) ] in
-    make_type_eqn loc env overloads [ty]
+    make_type_eqn loc overloads [ty]
 
-  | (Prim_lsl | Prim_lsr), [ ty1; ty2 ] -> uu ty1 Tnat; uu ty2 Tnat; Tnat
+  | (Prim_lsl | Prim_lsr), [ ty1; ty2 ] -> unify ty1 Tnat; unify ty2 Tnat; Tnat
 
   | Prim_tuple, ty_args -> Ttuple (List.map (fun e -> e.ty) args)
 
   | Prim_map_add, [ key_ty; value_ty; map_ty ] ->
-    uu map_ty (Tpartial (Pmap (key_ty, value_ty)));
+    unify map_ty (Tpartial (Pmap (key_ty, value_ty)));
     map_ty
 
   | Prim_map_update, [ key_ty; value_tyo; map_ty ] ->
     let value_ty = fresh_tvar () in
-    uu value_tyo (Toption value_ty);
-    uu map_ty (Tpartial (Pmap (key_ty, value_ty)));
+    unify value_tyo (Toption value_ty);
+    unify map_ty (Tpartial (Pmap (key_ty, value_ty)));
     map_ty
 
   | Prim_map_remove, [ key_ty; map_ty ]
   | Prim_map_find, [ key_ty; map_ty ]
   | Prim_map_mem, [ key_ty; map_ty ] ->
     let value_ty = fresh_tvar () in
-    uu map_ty (Tpartial (Pmap (key_ty, value_ty)));
+    unify map_ty (Tpartial (Pmap (key_ty, value_ty)));
     begin match prim with
       | Prim_map_remove -> map_ty
       | Prim_map_find -> Toption value_ty
@@ -1234,82 +1234,82 @@ and typecheck_prim2i env prim loc args =
 
   | (Prim_set_add | Prim_set_remove), [ key_ty; set_ty ]
   | Prim_set_update, [ key_ty; Tbool; set_ty ] -> (* should Tbool be unified ?*)
-    uu set_ty (Tset key_ty); Tset key_ty
+    unify set_ty (Tset key_ty); Tset key_ty
 
   | Prim_set_mem, [ key_ty; set_ty ] ->
-    uu set_ty (Tset key_ty); Tbool
+    unify set_ty (Tset key_ty); Tbool
 
-  | Prim_list_size, [ ty ] -> uu ty (Tlist (fresh_tvar ())); Tnat
-  | Prim_set_size, [ ty ] -> uu ty (Tset (fresh_tvar ())); Tnat
+  | Prim_list_size, [ ty ] -> unify ty (Tlist (fresh_tvar ())); Tnat
+  | Prim_set_size, [ ty ] -> unify ty (Tset (fresh_tvar ())); Tnat
   | Prim_map_size, [ ty ] ->
-    uu ty (Tmap (fresh_tvar (), fresh_tvar ())); Tnat
+    unify ty (Tmap (fresh_tvar (), fresh_tvar ())); Tnat
 
   | Prim_Some, [ ty ] -> Toption ty
 
   | Prim_self, [ ty ] ->
-    uu ty Tunit; Tcontract (sig_of_full_sig env.t_contract_sig)
+    unify ty Tunit; Tcontract (sig_of_full_sig env.t_contract_sig)
 
-  | Prim_now, [ ty ] -> uu ty Tunit; Ttimestamp
-  | ( Prim_balance | Prim_amount ), [ ty ] -> uu ty Tunit; Ttez
-  | ( Prim_source | Prim_sender ), [ ty ] -> uu ty Tunit; Taddress
-  | Prim_gas, [ ty ] -> uu ty Tunit; Tnat
+  | Prim_now, [ ty ] -> unify ty Tunit; Ttimestamp
+  | ( Prim_balance | Prim_amount ), [ ty ] -> unify ty Tunit; Ttez
+  | ( Prim_source | Prim_sender ), [ ty ] -> unify ty Tunit; Taddress
+  | Prim_gas, [ ty ] -> unify ty Tunit; Tnat
 
   | Prim_pack, [ ty ] ->
-    uu ty (Tpartial Ppar); (* Prevent argument from being generalized *)
+    unify ty (Tpartial Ppar); (* Prevent argument from being generalized *)
     Tbytes
 
   | (Prim_blake2b | Prim_sha256 | Prim_sha512), [ ty ] ->
-    uu ty Tbytes; Tbytes
+    unify ty Tbytes; Tbytes
 
-  | Prim_hash_key, [ ty ] -> uu ty Tkey; Tkey_hash
+  | Prim_hash_key, [ ty ] -> unify ty Tkey; Tkey_hash
 
   | Prim_check, [ ty1; ty2; ty3 ] ->
-    uu ty1 Tkey; uu ty2 Tsignature; uu ty3 Tbytes; Tbool
+    unify ty1 Tkey; unify ty2 Tsignature; unify ty3 Tbytes; Tbool
 
   | Prim_address, [ ty ] ->
-    uu ty (Tpartial (Pcont []));
+    unify ty (Tpartial (Pcont []));
     Taddress
 
   | Prim_create_account, [ ty1; ty2; ty3; ty4 ] ->
-    uu ty1 Tkey_hash; uu ty2 (Toption Tkey_hash);
-    uu ty3 Tbool; uu ty4 Ttez;
+    unify ty1 Tkey_hash; unify ty2 (Toption Tkey_hash);
+    unify ty3 Tbool; unify ty4 Ttez;
     Ttuple [Toperation; Taddress]
 
   | Prim_default_account, [ ty ] ->
-    uu ty Tkey_hash; Tcontract unit_contract_sig
+    unify ty Tkey_hash; Tcontract unit_contract_sig
 
   | Prim_set_delegate, [ ty ] ->
-    uu ty (Toption Tkey_hash); Toperation
+    unify ty (Toption Tkey_hash); Toperation
 
   | Prim_exec,
     [ ty; (Tlambda (from_ty, to_ty) | Tclosure ((from_ty, _), to_ty)) ] ->
-    uu ty from_ty; to_ty
+    unify ty from_ty; to_ty
 
   | Prim_exec, [ aty; lty ] ->
     let to_ty = fresh_tvar () in
-    uu lty (Tlambda (aty, to_ty)); to_ty
+    unify lty (Tlambda (aty, to_ty)); to_ty
 
-  | Prim_list_rev, [ ty ] -> uu ty (Tlist (fresh_tvar ())); ty
+  | Prim_list_rev, [ ty ] -> unify ty (Tlist (fresh_tvar ())); ty
 
   | Prim_concat_two, [ ty1; ty2 ] ->
     let overloads = [ ([ Tstring; Tstring ], Tstring) ;
                       ([ Tbytes; Tbytes ], Tbytes) ] in
-    make_type_eqn loc env overloads [ty1;ty2]
+    make_type_eqn loc overloads [ty1;ty2]
 
-  | Prim_string_concat, [ ty ] -> uu ty (Tlist Tstring); Tstring
-  | Prim_bytes_concat, [ ty ] -> uu ty (Tlist Tbytes); Tbytes
+  | Prim_string_concat, [ ty ] -> unify ty (Tlist Tstring); Tstring
+  | Prim_bytes_concat, [ ty ] -> unify ty (Tlist Tbytes); Tbytes
 
   | Prim_Cons, [ head_ty; list_ty ] ->
-    uu list_ty (Tlist head_ty); Tlist head_ty
+    unify list_ty (Tlist head_ty); Tlist head_ty
 
-  | Prim_string_size, [ ty ] -> uu ty Tstring; Tnat
-  | Prim_bytes_size, [ ty ] -> uu ty Tbytes; Tnat
+  | Prim_string_size, [ ty ] -> unify ty Tstring; Tnat
+  | Prim_bytes_size, [ ty ] -> unify ty Tbytes; Tnat
 
   | Prim_string_sub, [ ty1; ty2; ty3 ] ->
-    uu ty1 Tnat; uu ty2 Tnat; uu ty3 Tstring; Toption Tstring
+    unify ty1 Tnat; unify ty2 Tnat; unify ty3 Tstring; Toption Tstring
 
   | Prim_bytes_sub, [ ty1; ty2; ty3 ] ->
-    uu ty1 Tnat; uu ty2 Tnat; uu ty3 Tbytes; Toption Tbytes
+    unify ty1 Tnat; unify ty2 Tnat; unify ty3 Tbytes; Toption Tbytes
 
   | _ -> failwith ("typecheck_prim2i " ^
            (LiquidTypes.string_of_primitive prim) ^ " TODO")

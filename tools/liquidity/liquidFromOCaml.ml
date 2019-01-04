@@ -185,7 +185,7 @@ let lift_env rename = function
         let tv = Ref.get tvr in
         begin match tv.tyo with
           | None -> ty
-          | Some ty -> (Ref.set tvr) { tv with tyo = Some (lift_type ty) }; ty
+          | Some ty -> Ref.set tvr { tv with tyo = Some (lift_type ty) }; ty
         end
       | Tpartial _ -> raise (Invalid_argument "lift_type")
     and lift_contract_sig c_sig =
@@ -515,7 +515,7 @@ let rec translate_const env exp =
           match head_ty, tail_ty with
           | Some head_ty, Some (Tlist tail_ty) ->
             let is_var = match tail_ty with Tvar _ -> true | _ -> false in
-            if not (is_var) && not @@ eq_types head_ty tail_ty then
+            if not is_var && not @@ eq_types head_ty tail_ty then
               error_loc exp.pexp_loc "inconsistent types in list";
             Some (Tlist head_ty)
           | Some head_ty, None ->
@@ -1084,10 +1084,9 @@ let rec translate_code contracts env exp =
             { pexp_desc = Pexp_ident
                   { txt = Ldot(Lident "Bytes", "unpack") } },
             [
-              Nolabel, addr_exp;
+              Nolabel, exp;
             ]);
         pexp_loc } ->
-    (* let ty = Toption (Tvar (fresh ())) in *)
        let ty = fresh_tvar () in
        Unpack { arg = translate_code contracts env exp; ty }
 
