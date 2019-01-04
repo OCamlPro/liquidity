@@ -719,7 +719,7 @@ and translate_pair exp =
 
 let mk ~loc desc = mk ~loc desc ()
 
-let vars_info_pat ?(entry=false) env pat =
+let vars_info_pat env pat =
   let rec vars_info_pat_aux acc indexes = function
     | { ppat_desc = Ppat_constraint (pat, ty) } ->
       let acc, _ = vars_info_pat_aux acc indexes pat in
@@ -727,11 +727,11 @@ let vars_info_pat ?(entry=false) env pat =
 
     | { ppat_desc = Ppat_var { txt = var; loc } } ->
       (var, loc_of_loc loc, indexes) :: acc,
-        if entry then Tunit else fresh_tvar ()
+      fresh_tvar ()
 
     | { ppat_desc = Ppat_any; ppat_loc } ->
       ("_", loc_of_loc ppat_loc, indexes) :: acc,
-        if entry then Tunit else fresh_tvar ()
+      fresh_tvar ()
 
     | { ppat_desc = Ppat_tuple pats } ->
       let _, acc, tys =
@@ -759,8 +759,8 @@ let access_of_deconstruct var_name loc indexes =
           ] })
     ) indexes a
 
-let deconstruct_pat ?(entry=false) env pat e =
-  let vars_infos, ty = vars_info_pat ~entry env pat in
+let deconstruct_pat env pat e =
+  let vars_infos, ty = vars_info_pat env pat in
   match vars_infos with
   | [] -> assert false
   | [nname, nloc, []] -> { nname; nloc }, ty, e
@@ -1658,7 +1658,7 @@ and translate_entry name env contracts head_exp mk_parameter mk_storage =
   match head_exp with
   | { pexp_desc = Pexp_fun (Nolabel, None, param_pat, head_exp) }
     when mk_parameter = None ->
-    let mk_param = deconstruct_pat ~entry:true env param_pat in
+    let mk_param = deconstruct_pat env param_pat in
     translate_entry name env contracts head_exp (Some mk_param) mk_storage
 
   | { pexp_desc = Pexp_fun (Nolabel, None, storage_pat, head_exp);

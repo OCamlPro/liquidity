@@ -23,5 +23,4 @@ val find_variant_type : typecheck_env -> (pattern * 'a) list -> datatype option
 val make_type_eqn :
   location -> (datatype list * datatype) list -> datatype list -> datatype
 
-val mono_contract :
-  typecheck_env -> location -> typed_contract -> typed_contract
+val mono_contract : typecheck_env -> typed_contract -> typed_contract

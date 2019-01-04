@@ -53,10 +53,10 @@ let perform_transfer
   let accounts = Map.add dest new_account_dest accounts in
   [], storage.accounts <- accounts
 
-let%entry transfer ((dest : address), (tokens : nat)) storage =
+let%entry transfer (dest, tokens) storage =
   perform_transfer (Current.sender (), dest, tokens, storage)
 
-let%entry approve ((spender : address), (tokens : nat)) storage =
+let%entry approve (spender, tokens) storage =
   let account_sender = get_account (Current.sender (), storage.accounts) in
   let account_sender =
     account_sender.allowances <-
@@ -68,8 +68,7 @@ let%entry approve ((spender : address), (tokens : nat)) storage =
       Map.add (Current.sender ()) account_sender storage.accounts in
   [], storage
 
-let%entry transferFrom
-    ((from : address), (dest : address), (tokens : nat)) storage =
+let%entry transferFrom (from, dest, tokens) storage =
   let account_from = get_account (from, storage.accounts) in
   let new_allowances_from =
     match Map.find (Current.sender ()) account_from.allowances with
@@ -102,15 +101,13 @@ contract type NatNatContract = sig
   val%entry main : nat * nat -> _
 end
 
-let%entry balanceOf
-    ((spender : address), (forward : NatContract.instance)) storage =
+let%entry balanceOf (spender, forward) storage =
   let spender_balance = match Map.find spender storage.accounts with
     | None -> 0p
     | Some account -> account.balance in
   [ forward.main spender_balance ~amount:0tz ], storage
 
-let%entry allowance
-    ((from : address), (spender : address), (forward : NatNatContract.instance))
+let%entry allowance (from, spender, forward)
     storage =
   let spender_allowance = match Map.find from storage.accounts with
     | None -> 0p, 0p
@@ -122,12 +119,12 @@ let%entry allowance
 
 (* -------------- Creating accounts ------------------------ *)
 
-let%entry createAccount ((dest : address), (tokens :nat)) storage =
+let%entry createAccount (dest, tokens) storage =
   if Current.sender () <> storage.owner then
     failwith "Only owner can create accounts";
   perform_transfer (storage.owner, dest, tokens, storage)
 
-let%entry createAccounts (new_accounts : (address * nat) list) storage =
+let%entry createAccounts new_accounts storage =
   if Current.sender () <> storage.owner then
     failwith "Only owner can create accounts";
   List.fold (fun ((dest, tokens), (_ops, storage)) ->

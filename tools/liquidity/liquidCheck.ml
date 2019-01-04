@@ -1719,10 +1719,6 @@ and typecheck_contract ~warnings ~decompiling contract =
         env, ((name, inline, exp) :: values), ((name, count) :: counts)
       ) (env, [], []) contract.values in
   (* Typecheck entries *)
-  List.iter (fun e -> match e.entry_sig.parameter with
-      | Tvar _ ->
-        error (e.code:syntax_exp).loc "Entry point argument type must be provided"
-      | _ -> ()) contract.entries;
   let entries = List.map (typecheck_entry env) contract.entries in
   (* Report unused global values *)
   List.iter (fun (name, count) ->
@@ -1742,7 +1738,7 @@ and typecheck_contract ~warnings ~decompiling contract =
         ) counts;
       Some { i with init_body }
   in
-  mono_contract env (List.hd contract.entries).code.loc
+  mono_contract env
   { contract with
     values = List.rev values;
     entries;

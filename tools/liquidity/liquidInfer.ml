@@ -542,11 +542,14 @@ let rec vars_to_unit ?loc ty = match ty with
   | Tsum (sn, cl) ->
     Tsum (sn, List.map (fun (cn, cty) -> (cn, vars_to_unit ?loc cty)) cl)
   | Tcontract c -> Tcontract (sig_vars_to_unit ?loc c)
-  | Tvar _ -> Tunit (* Remaining vars correspond to unused arguments *)
+  | Tvar _ ->
+    (* Remaining vars correspond to unused arguments *)
+    (* unify (match loc with None -> noloc | Some loc -> loc)
+     *   ty Tunit; *)
+    Tunit
   | Tpartial _ ->
     error (match loc with None -> noloc | Some loc -> loc)
       "Type cannot be inferred, please add an annotation"
-    (* assert false (\* Changed to an actual type beforehand *\) *)
   | Tunit | Tbool | Tint | Tnat | Ttez | Tstring | Tbytes | Ttimestamp | Tkey
   | Tkey_hash | Tsignature | Toperation | Taddress | Tfail -> ty
 
@@ -686,7 +689,20 @@ and contract_tvars_to_unit (contract : typed_contract) =
                         vars_to_unit ~loc:(code : typed_exp).loc
                           entry_sig.parameter };
         code = tvars_to_unit code }) contract.entries in
-  { contract with values; c_init; entries }
+  let rec env_tvars_to_unit ty_env = {
+    ty_env with
+    types = StringMap.map vars_to_unit ty_env.types;
+    contract_types = StringMap.map sig_vars_to_unit ty_env.contract_types;
+    labels = StringMap.map (fun (x, i, ty) ->
+        x, i, vars_to_unit ty) ty_env.labels;
+    constrs = StringMap.map (fun (c, ty) ->
+        c, vars_to_unit ty) ty_env.constrs;
+    top_env = match ty_env.top_env with
+      | None -> None
+      | Some env -> Some (env_tvars_to_unit env);
+  } in
+  let ty_env = env_tvars_to_unit contract.ty_env in
+  { contract with values; c_init; entries; ty_env }
 
 let build_subst aty cty =
   let rec aux s aty cty = match aty, cty with
@@ -861,7 +877,7 @@ let rec mono_exp env subst vtys (e:typed_exp) =
   | Failwith e -> Failwith (mono_exp subst vtys e)
   | CreateContract cc ->
     CreateContract { args = List.map (mono_exp subst vtys) cc.args;
-                     contract = mono_contract env e.loc cc.contract }
+                     contract = mono_contract env cc.contract }
   | ContractAt ca -> ContractAt { arg = mono_exp subst vtys ca.arg;
                                   c_sig = ca.c_sig }
   | Unpack up ->
@@ -872,21 +888,22 @@ let rec mono_exp env subst vtys (e:typed_exp) =
   in
   { e with desc; ty }
 
-and mono_contract env loc c =
+and mono_contract env c =
   let cval, vtys = List.fold_left (fun (cval, vtys) (n, b, e) ->
       if (StringSet.is_empty (free_tvars e.ty)) then ((n, b, e) :: cval, vtys)
       else ((n, b, e) :: cval, StringMap.add n (ref []) vtys)
-  ) ([], StringMap.empty) c.values in
+    ) ([], StringMap.empty) c.values in
   let entries = List.map (fun e ->
-    begin match expand e.entry_sig.parameter with
-      | Tpartial Ppar ->
-        error loc
-          "Type of parameter \"%s\" can't be infered, please add an annotation"
-          e.entry_sig.parameter_name
-      | _ -> () end;
-    let pty = get_type env loc e.entry_sig.parameter in
-    { code = mono_exp env [] vtys e.code;
-      entry_sig = { e.entry_sig with parameter = pty } }
+      let code = mono_exp env [] vtys e.code in
+      let pty = get_type env code.loc e.entry_sig.parameter in
+      if not @@ StringSet.is_empty @@ free_tvars pty then
+        error e.code.loc
+          "Parameter type for entry %s can't be inferred (%s), \
+           add an annotation"
+          e.entry_sig.entry_name
+          (LiquidPrinter.Liquid.string_of_type pty);
+      { code;
+        entry_sig = { e.entry_sig with parameter = pty } }
     ) c.entries in
   let c_init = match c.c_init with
     | Some init ->
@@ -895,19 +912,26 @@ and mono_contract env loc c =
     | None -> None
   in
   let values = List.fold_left (fun cval (n, b, e) ->
-    let vty = try StringMap.find n vtys with Not_found -> ref [] in
-    let substs = List.fold_left (fun ss (tn, ty) ->
-        (tn, ty, build_subst e.ty ty) :: ss) [] !vty in
-    if substs = [] then begin
-      let e = mono_exp env [] vtys e in
-      (n, b, e) :: cval
-    end else begin
-      List.fold_left (fun cval (tn, ty, s) ->
-        let n = n ^ "_" ^ tn in
-        let e = mono_exp env (StringMap.bindings s) vtys e in
+      let vty = try StringMap.find n vtys with Not_found -> ref [] in
+      let substs = List.fold_left (fun ss (tn, ty) ->
+          (tn, ty, build_subst e.ty ty) :: ss) [] !vty in
+      if substs = [] then begin
+        let e = mono_exp env [] vtys e in
         (n, b, e) :: cval
-      ) cval substs
-    end
+      end else begin
+        List.fold_left (fun cval (tn, ty, s) ->
+            let n = n ^ "_" ^ tn in
+            let e = mono_exp env (StringMap.bindings s) vtys e in
+            (n, b, e) :: cval
+          ) cval substs
+      end
     ) [] cval in
-  let contract = { c with values; entries; c_init } (* ty_env *) in
+  let loc = LiquidLoc.loc_in_file env.env.filename in
+  let storage = get_type env loc c.storage in
+  if not @@ StringSet.is_empty @@ free_tvars storage then
+    error loc
+      "Storage type cannot be inferred (%s), \
+       add an annotation or specialize type"
+      (LiquidPrinter.Liquid.string_of_type storage);
+  let contract = { c with storage; values; entries; c_init } (* ty_env *) in
   contract_tvars_to_unit contract

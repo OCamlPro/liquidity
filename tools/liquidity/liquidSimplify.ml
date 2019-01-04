@@ -98,7 +98,7 @@ let rec compute decompile code to_inline =
     | Project { field; record } ->
       let record = iter record in
       { exp with desc = Project { field; record } }
-    | Let { bnd_val } when bnd_val.ty = Tfail ->
+    | Let { bnd_val = ({ ty = Tfail } as bnd_val) } ->
       iter bnd_val
     | Let { bnd_var; bnd_val; body = { desc = Var name }}
       when name = bnd_var.nname -> (* special case for let x = e in x *)
@@ -293,6 +293,7 @@ let rec compute decompile code to_inline =
 
   let rec fixpoint code =
     let c = iter code in
+    (* Polymorphic comparison can fail in the presence of type variables *)
     if c <> code then fixpoint c else c
   in
 
