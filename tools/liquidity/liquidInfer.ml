@@ -908,7 +908,11 @@ and mono_contract env c =
   let c_init = match c.c_init with
     | Some init ->
       let init_body = mono_exp env [] vtys init.init_body in
-      Some { init with init_body }
+      let init_args = List.map (fun (arg, loc, arg_ty) ->
+          (arg, loc, get_type env loc arg_ty)) init.init_args in
+      Some { init_name = init.init_name;
+             init_body;
+             init_args }
     | None -> None
   in
   let values = List.fold_left (fun cval (n, b, e) ->

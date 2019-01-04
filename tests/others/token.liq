@@ -15,9 +15,7 @@ type storage = {
   owner : address;
 }
 
-let%init storage
-    (owner : address) (totalSupply : nat) (decimals : nat)
-    (name : string) (symbol : string) =
+let%init storage owner totalSupply decimals name symbol =
   let owner_account  =
     { balance = totalSupply;
       allowances = Map } in

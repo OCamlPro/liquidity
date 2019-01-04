@@ -1746,10 +1746,8 @@ and translate_initial_storage env init_name contracts exp args =
         Pexp_fun (
           Nolabel, None,
           { ppat_desc = Ppat_var { txt = arg; loc } }, exp) } ->
-    error_loc loc "Initial storage argument types must be specified"
-  (* This would allow storage initializer arguments types to be inferred *)
-    (* translate_initial_storage env init_name contracts exp
-     *   ((arg, loc_of_loc loc, (fresh_tvar ())) :: args) *)
+    translate_initial_storage env init_name contracts exp
+      ((arg, loc_of_loc loc, (fresh_tvar ())) :: args)
 
   | _ ->
     let init_body = translate_code contracts env exp in
