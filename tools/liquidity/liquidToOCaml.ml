@@ -46,12 +46,13 @@ let lid s = id (Longident.parse s)
 
 let typ_constr s args = Typ.constr (lid s) args
 
-let pat_of_name ?loc = function
-  | "_" -> Pat.any ()
-  | name -> Pat.var (id ?loc name)
+let pat_of_name ?loc ?ty name = match name, ty with
+  | "_", Some Tunit -> Pat.construct ?loc (id ?loc (Lident "()")) None
+  | "_", _ -> Pat.any () (* unused pattern *)
+  | _, _ -> Pat.var (id ?loc name)
 
-let pat_of_lname n =
-  pat_of_name ~loc:(loc_of_loc n.nloc) n.nname
+let pat_of_lname ?ty n =
+  pat_of_name ~loc:(loc_of_loc n.nloc) ?ty n.nname
 
 type abbrev_kind =
   | TypeName of core_type
@@ -336,14 +337,14 @@ let rec convert_code ~abbrev (expr : (datatype, 'a) exp) =
 
   | Let { bnd_var; bnd_val; body } ->
     Exp.let_ ~loc Nonrecursive
-      [ Vb.mk (pat_of_lname bnd_var)
+      [ Vb.mk (pat_of_lname bnd_var ~ty:bnd_val.ty)
           (convert_code ~abbrev bnd_val)]
       (convert_code ~abbrev body)
 
   | Lambda { arg_name; arg_ty; body } ->
     Exp.fun_ ~loc Nolabel None
       (Pat.constraint_
-         (pat_of_lname arg_name)
+         (pat_of_lname arg_name ~ty:arg_ty)
          (convert_type ~abbrev ~name:(arg_name.nname ^ "_t") arg_ty))
       (convert_code ~abbrev body)
 
@@ -387,12 +388,15 @@ let rec convert_code ~abbrev (expr : (datatype, 'a) exp) =
       [Nolabel, convert_code ~abbrev arg]
 
   | MatchOption { arg; ifnone; some_name; ifsome } ->
+    let some_ty = match arg.ty with
+      | Toption ty -> ty
+      | _ -> assert false in
     Exp.match_ ~loc (convert_code ~abbrev arg)
       [
         Exp.case (Pat.construct (lid "None") None)
           (convert_code ~abbrev ifnone);
         Exp.case (Pat.construct (lid "Some")
-                    (Some (pat_of_lname some_name)))
+                    (Some (pat_of_lname some_name ~ty:some_ty)))
           (convert_code ~abbrev ifsome);
       ]
 
@@ -411,6 +415,9 @@ let rec convert_code ~abbrev (expr : (datatype, 'a) exp) =
       ])
 
   | MatchList { arg; head_name; tail_name; ifcons; ifnil } ->
+    let elt_ty = match arg.ty with
+      | Tlist ty -> ty
+      | _ -> assert false in
     Exp.match_ ~loc (convert_code ~abbrev arg)
       [
         Exp.case (Pat.construct (lid "[]") None)
@@ -418,8 +425,8 @@ let rec convert_code ~abbrev (expr : (datatype, 'a) exp) =
         Exp.case (Pat.construct (lid "::")
                     (Some (
                         Pat.tuple
-                          [pat_of_lname head_name;
-                           pat_of_lname tail_name]
+                          [pat_of_lname head_name ~ty:elt_ty;
+                           pat_of_lname tail_name ~ty:arg.ty]
                       )))
           (convert_code ~abbrev ifcons);
       ]
@@ -453,7 +460,7 @@ let rec convert_code ~abbrev (expr : (datatype, 'a) exp) =
       (Exp.ident (lid "Loop.loop"))
       [
         Nolabel, Exp.fun_ Nolabel None
-          (pat_of_lname arg_name)
+          (pat_of_lname arg_name ~ty:arg.ty)
           (convert_code ~abbrev body);
         Nolabel, convert_code ~abbrev arg
       ]
@@ -576,13 +583,25 @@ let rec convert_code ~abbrev (expr : (datatype, 'a) exp) =
                   (match var_args with
                    | [] -> None
                    | [var_arg] ->
-                     Some (pat_of_name ~loc var_arg)
+                     let var_ty = match arg.ty with
+                       | Tsum (_, l) -> List.assoc constr l
+                       | Tor (l, _) when constr = "Left" -> l
+                       | Tor (_, r) when constr = "Right" -> r
+                       | _ -> assert false in
+                     Some (pat_of_name ~loc var_arg ~ty:var_ty)
                    | var_args ->
+                     let tuple_tys = match arg.ty with
+                       | Tsum (_, l) ->
+                         begin match List.assoc constr l with
+                           | Ttuple ts -> ts
+                           | _ -> assert false
+                         end
+                       | _ -> assert false in
                      Some
-                       (Pat.tuple (List.map
-                                     (fun var_arg ->
-                                        pat_of_name ~loc var_arg
-                                     ) var_args))
+                       (Pat.tuple (List.map2
+                                     (fun var_arg var_ty->
+                                        pat_of_name ~loc var_arg ~ty:var_ty
+                                     ) var_args tuple_tys))
                   ))
                (convert_code ~abbrev exp)
          ) cases)
@@ -657,7 +676,7 @@ let rec convert_code ~abbrev (expr : (datatype, 'a) exp) =
       ({ txt = "type"; loc }, PTyp (convert_type ~abbrev ty))
 
 
-and structure_item_of_entry ~abbrev storage_caml entry =
+and structure_item_of_entry ~abbrev storage_ty storage_caml entry =
   (* ignore (convert_type ~abbrev ~name:entry.entry_sig.parameter_name
    *           entry.entry_sig.parameter); *)
   let code = convert_code ~abbrev entry.code in
@@ -669,12 +688,13 @@ and structure_item_of_entry ~abbrev storage_caml entry =
           Vb.mk (pat_of_name entry.entry_sig.entry_name)
             (Exp.fun_ Nolabel None
                (Pat.constraint_
-                  (pat_of_name entry.entry_sig.parameter_name)
+                  (pat_of_name entry.entry_sig.parameter_name
+                     ~ty:entry.entry_sig.parameter)
                   (convert_type ~abbrev entry.entry_sig.parameter)
                )
                (Exp.fun_ Nolabel None
                   (Pat.constraint_
-                     (pat_of_name entry.entry_sig.storage_name)
+                     (pat_of_name entry.entry_sig.storage_name ~ty:storage_ty)
                      storage_caml
                   )
                   code
@@ -713,11 +733,12 @@ and structure_of_contract
   in
   let values = List.map (fun (v, _inline, body) ->
       Str.value Nonrecursive [
-        Vb.mk (pat_of_name v) (convert_code ~abbrev body)
+        Vb.mk (pat_of_name v ~ty:body.ty) (convert_code ~abbrev body)
       ]
     ) contract.values in
   let entries =
-    List.map (structure_item_of_entry ~abbrev storage_caml) contract.entries in
+    List.map (structure_item_of_entry ~abbrev contract.storage storage_caml)
+      contract.entries in
   let types_caml =
     let seen = ref StringSet.empty in
     list_caml_abbrevs_in_order ()

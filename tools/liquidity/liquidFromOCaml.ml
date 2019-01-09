@@ -733,6 +733,10 @@ let vars_info_pat env pat =
       ("_", loc_of_loc ppat_loc, indexes) :: acc,
       fresh_tvar ()
 
+    | { ppat_desc = Ppat_construct ({ txt = Lident "()" }, None); ppat_loc } ->
+      ("_", loc_of_loc ppat_loc, indexes) :: acc,
+      Tunit
+
     | { ppat_desc = Ppat_tuple pats } ->
       let _, acc, tys =
         List.fold_left (fun (i, acc, tys) pat ->
@@ -1668,7 +1672,7 @@ and translate_entry name env contracts head_exp mk_parameter mk_storage =
       let storage_name, storage_ty, code =
         deconstruct_pat env storage_pat code in
       match storage_pat.ppat_desc with
-      | Ppat_constraint _ ->
+      | Ppat_constraint _ | Ppat_construct _ ->
         begin try
             let s = find_type "storage" env in
             if not @@ eq_types s storage_ty then

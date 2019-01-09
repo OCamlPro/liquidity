@@ -160,7 +160,7 @@ let%entry changeRequirement (required : nat) storage =
     let storage = clearPending storage in
     no_op, storage.m_required <- required
 
-let%entry deposit _ storage =
+let%entry deposit () storage =
   if Current.amount () = 0tz then Current.failwith ()
   else no_op, storage
 

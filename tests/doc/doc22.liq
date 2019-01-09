@@ -9,7 +9,7 @@ let%entry main ((delegate : key_hash), (manager : key_hash)) _ =
       ~delegatable ~delegate:(Some delegate) ~amount:10tz
       (contract struct
         type storage = tez * string
-        let%entry main _ s  = [], s
+        let%entry main () s  = [], s
       end)
   in
   [op], addr

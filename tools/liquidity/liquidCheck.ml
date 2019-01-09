@@ -1693,6 +1693,20 @@ and typecheck_entry env entry =
   { entry with code }
 
 and typecheck_contract ~warnings ~decompiling contract =
+  let t_contract_sig = sig_of_contract contract in
+  let t_contract_sig =
+    (* when decompiling recover signature of encoded Contract.self *)
+    if not decompiling then t_contract_sig
+    else match t_contract_sig.f_entries_sig with
+      | [{ entry_name = "main"; parameter = Tsum ("_entries", l) }] ->
+        let f_entries_sig = List.map (fun (c, parameter) ->
+            { entry_name = entry_name_of_case c;
+              parameter;
+              parameter_name = "parameter";
+              storage_name = "storage";
+            }) l in
+        { t_contract_sig with f_entries_sig }
+      | _ -> t_contract_sig in
   let env =
     {
       warnings;
@@ -1705,7 +1719,7 @@ and typecheck_contract ~warnings ~decompiling contract =
       force_inline = ref StringMap.empty;
       env = contract.ty_env;
       clos_env = None;
-      t_contract_sig = sig_of_contract contract;
+      t_contract_sig;
       ftvars = StringSet.empty
     } in
 

@@ -2,7 +2,7 @@ type storage = address
 
 contract S = struct
   type storage = tez * string
-  let%entry main _ s  = [], s
+  let%entry main () s  = [], s
 end
 
 let%entry main ((delegate : key_hash), (manager : key_hash)) _ =

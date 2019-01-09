@@ -61,7 +61,7 @@ let find_free env var_arg bv =
   let var_arg' = base_of_var var_arg in
   if not (StringSet.mem var_arg bv) then
     if var_arg' <> "_" then
-      ("_" ^ var_arg', env)
+      ("_" (* ^ var_arg' *), env)
     else
       (var_arg', env)
   else
@@ -264,8 +264,9 @@ and untype_case env vars arg =
   (List.rev vars', arg')
 
 and untype_entry env (entry : (datatype, 'a) exp entry) =
-  let base_parameter = base_of_var entry.entry_sig.parameter_name in
-  let base_storage = base_of_var entry.entry_sig.storage_name in
+  let bv = entry.code.bv in
+  let base_parameter, env = find_free env entry.entry_sig.parameter_name bv in
+  let base_storage, env = find_free env entry.entry_sig.storage_name bv in
   let env = new_binding entry.entry_sig.parameter_name base_parameter env in
   let env = new_binding entry.entry_sig.storage_name base_storage env in
   { entry_sig = { entry.entry_sig with

@@ -1,6 +1,6 @@
 [%%version 0.4]
 type storage = tez * string
-let%entry main _ s  = [], s
+let%entry main () s  = [], s
 
 (* type storage = int
  *
