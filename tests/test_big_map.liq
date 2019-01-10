@@ -1,4 +1,4 @@
-[%%version 0.4]
+[%%version 0.5]
 
 type bm = (string, int) big_map
 type bm1 = bm

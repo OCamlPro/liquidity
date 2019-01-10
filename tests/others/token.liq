@@ -1,4 +1,4 @@
-[%%version 0.402]
+[%%version 0.5]
 
 type account = {
   balance : nat;

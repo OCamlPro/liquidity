@@ -1,7 +1,7 @@
 
 (* transfers *)
 
-[%%version 0.403]
+[%%version 0.5]
 
 type storage = tez
 

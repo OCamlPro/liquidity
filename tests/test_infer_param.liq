@@ -1,4 +1,4 @@
-[%%version 0.4]
+[%%version 0.5]
 type storage = tez * string
 let%entry main () s  = [], s
 

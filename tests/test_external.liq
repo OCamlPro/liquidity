@@ -1,5 +1,5 @@
 
-[%%version 0.4]
+[%%version 0.5]
 
 external ignore : [%stack: int] -> unit = "DROP" [@@effect]
 external random : unit -> [%stack: int] = "RANDOM"
