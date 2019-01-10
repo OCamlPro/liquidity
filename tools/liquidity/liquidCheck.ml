@@ -221,12 +221,12 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
               field record_name;
         end
       | Tvar _ | Tpartial _ ->
-         let ty_name, _, ty =
-           try find_label field env.env
-           with Not_found -> error loc "unbound record field %S" field
-         in
-         let record_ty = find_type ty_name env.env in
-         unify record.ty record_ty; ty
+        let ty_name, _, ty =
+          try find_label field env.env
+          with Not_found -> error loc "unbound record field %S" field
+        in
+        let record_ty = find_type ty_name env.env in
+        unify record.ty record_ty; ty
       | rty -> error loc "not a record type: %s, has no field %s"
                  (LiquidPrinter.Liquid.string_of_type rty)
                  field
@@ -360,7 +360,7 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
     let prim = Prim_extension (prim_name, eprim.effect, targs,
                                eprim.nb_arg, eprim.nb_ret, eprim.minst) in
     begin try List.iter2 (fun a aty ->
-      match expand a.ty with
+        match expand a.ty with
         | Tvar _ | Tpartial _ -> unify a.ty aty
         | _ ->
           if not (eq_types a.ty aty) then
@@ -369,10 +369,10 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
               (String.concat "\n    " (List.map (fun arg ->
                    LiquidPrinter.Liquid.string_of_type arg.ty) args))
       ) args atys
-    with Invalid_argument _ ->
-      error loc "Primitive %S expects %d arguments, was given %d"
-        (LiquidTypes.string_of_primitive prim)
-        (List.length eprim.atys) (List.length args)
+      with Invalid_argument _ ->
+        error loc "Primitive %S expects %d arguments, was given %d"
+          (LiquidTypes.string_of_primitive prim)
+          (List.length eprim.atys) (List.length args)
     end;
     mk ?name:exp.name ~loc (Apply { prim; args }) rty
 
@@ -410,8 +410,8 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
       | Tfail -> error loc "cannot match failure"
       | Toption ty -> ty
       | Tvar _ | Tpartial _ ->
-         let ty = fresh_tvar () in
-         unify arg.ty (Toption ty); ty
+        let ty = fresh_tvar () in
+        unify arg.ty (Toption ty); ty
       | _ -> error loc "not an option type : %s"
                (LiquidPrinter.Liquid.string_of_type (expand arg.ty))
     in
@@ -424,7 +424,7 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
       match ifnone.ty, ifsome.ty with
       | ty, Tfail | Tfail, ty -> ty
       | ty1, ty2 when has_tvar ty1 || has_tvar ty2 ->
-         unify ty1 ty2; ty1
+        unify ty1 ty2; ty1
       | ty1, ty2 ->
         fail_neq ~loc:ifsome.loc ~expected_ty:ty1 ty2
           ~info:"in branches of match";
@@ -445,7 +445,7 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
       match ifplus.ty, ifminus.ty with
       | ty, Tfail | Tfail, ty -> ty
       | ty1, ty2 when has_tvar ty1 || has_tvar ty2 ->
-         unify ty1 ty2; ty1
+        unify ty1 ty2; ty1
       | ty1, ty2 ->
         fail_neq ~loc:ifminus.loc ~expected_ty:ty1 ty2
           ~info:"in branches of match%nat";
@@ -470,11 +470,11 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
     let body = typecheck env body in
     let res_ty = match body.ty with
       | ty when has_tvar ty || has_tvar arg_ty ->
-         let left_ty = fresh_tvar () in
-         let right_ty = fresh_tvar () in
-         unify arg.ty left_ty;
-         unify body.ty (Ttuple [Tor (left_ty, right_ty); acc.ty]);
-         right_ty
+        let left_ty = fresh_tvar () in
+        let right_ty = fresh_tvar () in
+        unify arg.ty left_ty;
+        unify body.ty (Ttuple [Tor (left_ty, right_ty); acc.ty]);
+        right_ty
       | Ttuple [Tor (left_ty, right_ty); acc_ty] ->
         fail_neq ~loc:acc.loc ~expected_ty:acc_ty acc.ty
           ~info:"in Loop.left accumulator";
@@ -495,11 +495,11 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
     let body = typecheck env body in
     let res_ty = match body.ty with
       | ty when has_tvar ty || has_tvar arg.ty ->
-         let left_ty = fresh_tvar () in
-         let right_ty = fresh_tvar () in
-         unify arg.ty left_ty;
-         unify body.ty (Tor (left_ty, right_ty));
-         right_ty
+        let left_ty = fresh_tvar () in
+        let right_ty = fresh_tvar () in
+        unify arg.ty left_ty;
+        unify body.ty (Tor (left_ty, right_ty));
+        right_ty
       | Tor (left_ty, right_ty) ->
         fail_neq ~loc:arg.loc ~expected_ty:left_ty arg.ty
           ~info:"in Loop.left argument";
@@ -519,38 +519,38 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
     let prim, arg_ty = match prim, arg.ty, acc.ty with
 
       | Prim_map_iter, ty, Tunit when has_tvar ty ->
-         let k_ty = fresh_tvar () in
-         let v_ty = fresh_tvar () in
-         unify ty (Tmap (k_ty, v_ty));
-         Prim_map_iter, Ttuple [k_ty; v_ty]
+        let k_ty = fresh_tvar () in
+        let v_ty = fresh_tvar () in
+        unify ty (Tmap (k_ty, v_ty));
+        Prim_map_iter, Ttuple [k_ty; v_ty]
       | Prim_set_iter, ty, Tunit when has_tvar ty ->
-         let elt_ty = fresh_tvar () in
-         unify ty (Tset elt_ty);
-         Prim_set_iter, elt_ty
+        let elt_ty = fresh_tvar () in
+        unify ty (Tset elt_ty);
+        Prim_set_iter, elt_ty
       | Prim_list_iter, ty, Tunit when has_tvar ty ->
-         let elt_ty = fresh_tvar () in
-         unify ty (Tlist elt_ty);
-         Prim_list_iter, elt_ty
+        let elt_ty = fresh_tvar () in
+        unify ty (Tlist elt_ty);
+        Prim_list_iter, elt_ty
 
       | Prim_map_fold, ty, acc_ty when (has_tvar ty || has_tvar acc_ty) ->
-         let k_ty = fresh_tvar () in
-         let v_ty = fresh_tvar () in
-         let a_ty = fresh_tvar () in
-         unify ty (Tmap (k_ty, v_ty));
-         unify a_ty acc_ty;
-         Prim_map_fold, Ttuple[Ttuple [k_ty; v_ty]; acc_ty]
+        let k_ty = fresh_tvar () in
+        let v_ty = fresh_tvar () in
+        let a_ty = fresh_tvar () in
+        unify ty (Tmap (k_ty, v_ty));
+        unify a_ty acc_ty;
+        Prim_map_fold, Ttuple[Ttuple [k_ty; v_ty]; acc_ty]
       | Prim_set_fold, ty, acc_ty when (has_tvar ty || has_tvar acc_ty) ->
-         let elt_ty = fresh_tvar () in
-         let a_ty = fresh_tvar () in
-         unify ty (Tset elt_ty);
-         unify a_ty acc_ty;
-         Prim_set_fold, Ttuple[elt_ty; acc_ty]
+        let elt_ty = fresh_tvar () in
+        let a_ty = fresh_tvar () in
+        unify ty (Tset elt_ty);
+        unify a_ty acc_ty;
+        Prim_set_fold, Ttuple[elt_ty; acc_ty]
       | Prim_list_fold, ty, acc_ty when (has_tvar ty || has_tvar acc_ty) ->
-         let elt_ty = fresh_tvar () in
-         let a_ty = fresh_tvar () in
-         unify ty (Tlist elt_ty);
-         unify a_ty acc_ty;
-         Prim_list_fold, Ttuple[elt_ty; acc_ty]
+        let elt_ty = fresh_tvar () in
+        let a_ty = fresh_tvar () in
+        unify ty (Tlist elt_ty);
+        unify a_ty acc_ty;
+        Prim_list_fold, Ttuple[elt_ty; acc_ty]
 
       | (Prim_coll_iter|Prim_map_iter), Tmap (k_ty, v_ty), Tunit ->
         Prim_map_iter, Ttuple [k_ty; v_ty]
@@ -582,14 +582,14 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
     let prim, arg_ty, k_ty = match prim, arg.ty with
 
       | Prim_map_map, ty when has_tvar ty ->
-         let k_ty = fresh_tvar () in
-         let v_ty = fresh_tvar () in
-         unify ty (Tmap (k_ty, v_ty));
-         Prim_map_map, Ttuple [k_ty; v_ty], Some k_ty
+        let k_ty = fresh_tvar () in
+        let v_ty = fresh_tvar () in
+        unify ty (Tmap (k_ty, v_ty));
+        Prim_map_map, Ttuple [k_ty; v_ty], Some k_ty
       | Prim_list_map, ty when has_tvar ty ->
-         let elt_ty = fresh_tvar () in
-         unify ty (Tlist elt_ty);
-         Prim_list_map, elt_ty, None
+        let elt_ty = fresh_tvar () in
+        unify ty (Tlist elt_ty);
+        Prim_list_map, elt_ty, None
 
       | (Prim_map_map|Prim_coll_map), Tmap (k_ty, v_ty) ->
         Prim_map_map, Ttuple [k_ty; v_ty], Some k_ty
@@ -607,11 +607,11 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
       | Tset _ -> Tset body.ty
       | Tlist _ -> Tlist body.ty
       | Tvar _ | Tpartial _ ->
-         begin match prim, k_ty with
-         | Prim_map_map, Some k_ty -> Tmap (k_ty, body.ty)
-         | Prim_list_map, None -> Tlist body.ty
-         | _ -> assert false
-         end
+        begin match prim, k_ty with
+          | Prim_map_map, Some k_ty -> Tmap (k_ty, body.ty)
+          | Prim_list_map, None -> Tlist body.ty
+          | _ -> assert false
+        end
       | _ -> assert false
     in
     check_used env arg_name count;
@@ -623,14 +623,14 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
     let prim, arg_ty, k_ty = match prim, arg.ty, acc.ty with
 
       | Prim_map_map_fold, ty, acc_ty when has_tvar ty ->
-         let k_ty = fresh_tvar () in
-         let v_ty = fresh_tvar () in
-         unify ty (Tmap (k_ty, v_ty));
-         Prim_map_map_fold, Ttuple[Ttuple [k_ty; v_ty]; acc_ty], Some k_ty
+        let k_ty = fresh_tvar () in
+        let v_ty = fresh_tvar () in
+        unify ty (Tmap (k_ty, v_ty));
+        Prim_map_map_fold, Ttuple[Ttuple [k_ty; v_ty]; acc_ty], Some k_ty
       | Prim_list_map_fold, ty, acc_ty when has_tvar ty ->
-         let elt_ty = fresh_tvar () in
-         unify ty (Tlist elt_ty);
-         Prim_list_map_fold, Ttuple[elt_ty; acc_ty], None
+        let elt_ty = fresh_tvar () in
+        unify ty (Tlist elt_ty);
+        Prim_list_map_fold, Ttuple[elt_ty; acc_ty], None
 
       | (Prim_map_map_fold|Prim_coll_map_fold), Tmap (k_ty, v_ty), acc_ty ->
         Prim_map_map_fold, Ttuple[Ttuple [k_ty; v_ty]; acc_ty], Some k_ty
@@ -645,7 +645,7 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
     let body = typecheck env body in
     let body_r = match body.ty with
       | Ttuple [r; baccty] when has_tvar baccty || has_tvar acc.ty ->
-         unify baccty acc.ty; r
+        unify baccty acc.ty; r
       | Ttuple [r; baccty] when eq_types baccty acc.ty -> r
       | _ ->
         error body.loc
@@ -659,11 +659,11 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
       | Tset _ -> Tset body_r
       | Tlist _ -> Tlist body_r
       | Tvar _ | Tpartial _ ->
-         begin match prim, k_ty with
-         | Prim_map_map_fold, Some k_ty -> Tmap (k_ty, body_r)
-         | Prim_list_map_fold, None -> Tlist body_r
-         | _ -> assert false
-         end
+        begin match prim, k_ty with
+          | Prim_map_map_fold, Some k_ty -> Tmap (k_ty, body_r)
+          | Prim_list_map_fold, None -> Tlist body_r
+          | _ -> assert false
+        end
       | _ -> assert false
     in
     check_used env arg_name count;
@@ -676,8 +676,8 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
       | Tfail -> error loc "cannot match failure"
       | Tlist ty -> ty
       | Tvar _ | Tpartial _ ->
-         let ty = fresh_tvar () in
-         unify arg.ty (Tlist ty); ty
+        let ty = fresh_tvar () in
+        unify arg.ty (Tlist ty); ty
       | _ -> error loc "not a list type"
     in
     let ifnil = typecheck env ifnil in
@@ -691,7 +691,7 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
       match ifnil.ty, ifcons.ty with
       | ty, Tfail | Tfail, ty -> ty
       | ty1, ty2 when has_tvar ty1 || has_tvar ty2 ->
-         unify ty1 ty2; ty1
+        unify ty1 ty2; ty1
       | ty1, ty2 ->
         fail_neq ~loc:ifcons.loc ~expected_ty:ty1 ty2
           ~info:"in branches of match";
@@ -967,29 +967,29 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
     let contract = typecheck_contract ~warnings:env.warnings
         ~decompiling:env.decompiling contract in
     begin match args with
-    | [manager; delegate; spendable; delegatable; init_balance; init_storage] ->
-      let manager = typecheck_expected "manager" env Tkey_hash manager in
-      let delegate =
-        typecheck_expected "delegate" env (Toption Tkey_hash) delegate in
-      let spendable = typecheck_expected "spendable" env Tbool spendable in
-      let delegatable =
-        typecheck_expected "delegatable" env Tbool delegatable in
-      let init_balance =
-        typecheck_expected "initial balance" env Ttez init_balance in
-      let init_storage = typecheck_expected "initial storage"
-          env (lift_type contract.ty_env contract.storage) init_storage in
-      let desc = CreateContract {
-          args = [manager; delegate; spendable;
-                  delegatable; init_balance; init_storage];
-          contract } in
-      mk ?name:exp.name ~loc desc (Ttuple [Toperation; Taddress])
-    | _ ->
-      error loc "Contract.create expects 7 arguments, was given %d"
-        (List.length args)
+      | [manager; delegate; spendable; delegatable; init_balance; init_storage] ->
+        let manager = typecheck_expected "manager" env Tkey_hash manager in
+        let delegate =
+          typecheck_expected "delegate" env (Toption Tkey_hash) delegate in
+        let spendable = typecheck_expected "spendable" env Tbool spendable in
+        let delegatable =
+          typecheck_expected "delegatable" env Tbool delegatable in
+        let init_balance =
+          typecheck_expected "initial balance" env Ttez init_balance in
+        let init_storage = typecheck_expected "initial storage"
+            env (lift_type contract.ty_env contract.storage) init_storage in
+        let desc = CreateContract {
+            args = [manager; delegate; spendable;
+                    delegatable; init_balance; init_storage];
+            contract } in
+        mk ?name:exp.name ~loc desc (Ttuple [Toperation; Taddress])
+      | _ ->
+        error loc "Contract.create expects 7 arguments, was given %d"
+          (List.length args)
     end
 
   | TypeAnnot { e; ty } ->
-     typecheck_expected "annotated expression" env ty e
+    typecheck_expected "annotated expression" env ty e
 
   | Type ty -> assert false (* Not supposed to be typechecked *)
 
@@ -1042,22 +1042,22 @@ and typecheck_prim1 env prim loc args =
         unify loc tuple_ty (Tpartial (Ptup [(n, ty)]));
         prim, tuple_ty
       | _ ->
-       let tuple = match expand tuple_ty with
-         | Ttuple tuple -> tuple
-         | Trecord (_, rtys) -> List.map snd rtys
-         | _ -> error loc "set takes a tuple as first argument, got:\n%s"
-                  (LiquidPrinter.Liquid.string_of_type tuple_ty)
-       in
-       let n = LiquidPrinter.int_of_integer n in
-       let expected_ty = List.nth tuple n in
-       let size = List.length tuple in
-       if size <= n then error loc "set outside tuple";
-       unify loc ty expected_ty;
-       (* if ty <> Tfail then
-        *   fail_neq ~loc:val_loc ~expected_ty ty
-        *     ~info:"in tuple update"; *)
-       let ty = tuple_ty in
-       prim, ty
+        let tuple = match expand tuple_ty with
+          | Ttuple tuple -> tuple
+          | Trecord (_, rtys) -> List.map snd rtys
+          | _ -> error loc "set takes a tuple as first argument, got:\n%s"
+                   (LiquidPrinter.Liquid.string_of_type tuple_ty)
+        in
+        let n = LiquidPrinter.int_of_integer n in
+        let expected_ty = List.nth tuple n in
+        let size = List.length tuple in
+        if size <= n then error loc "set outside tuple";
+        unify loc ty expected_ty;
+        (* if ty <> Tfail then
+         *   fail_neq ~loc:val_loc ~expected_ty ty
+         *     ~info:"in tuple update"; *)
+        let ty = tuple_ty in
+        prim, ty
     end
 
   | _ ->
@@ -1312,7 +1312,7 @@ and typecheck_prim2i env prim loc args =
     unify ty1 Tnat; unify ty2 Tnat; unify ty3 Tbytes; Toption Tbytes
 
   | _ -> failwith ("typecheck_prim2i " ^
-           (LiquidTypes.string_of_primitive prim) ^ " TODO")
+                   (LiquidTypes.string_of_primitive prim) ^ " TODO")
 
 and typecheck_prim2t env prim loc args =
   match prim, List.map (fun a -> a.ty) args with
@@ -1753,10 +1753,10 @@ and typecheck_contract ~warnings ~decompiling contract =
       Some { i with init_body }
   in
   mono_contract env
-  { contract with
-    values = List.rev values;
-    entries;
-    c_init }
+    { contract with
+      values = List.rev values;
+      entries;
+      c_init }
 
 let typecheck_code env ?expected_ty code =
   match expected_ty with

@@ -243,15 +243,15 @@ module Michelson = struct
       | Tvar tvr ->
         Printf.bprintf b "'%s (" (Ref.get tvr).id;
         begin match (Ref.get tvr).tyo with
-        | Some ty -> bprint_type fmt b indent (LiquidTypes.expand ty) []
-        | None -> Printf.bprintf b "-" end;
+          | Some ty -> bprint_type fmt b indent (LiquidTypes.expand ty) []
+          | None -> Printf.bprintf b "-" end;
         Printf.bprintf b ")"
       | Tpartial (Peqn _) -> Printf.bprintf b "peqn"
       | Tpartial (Ptup pl) ->
         Printf.bprintf b "(ptup:";
         List.iter (fun (n,t) ->
-          let id = match t with Tvar tvr -> (Ref.get tvr).id | _ -> "-" in
-          Printf.bprintf b " %d:%s" n id) pl;
+            let id = match t with Tvar tvr -> (Ref.get tvr).id | _ -> "-" in
+            Printf.bprintf b " %d:%s" n id) pl;
         Printf.bprintf b ")";
       | Tpartial (Pmap _) -> Printf.bprintf b "pmap"
       | Tpartial (Pcont _) -> Printf.bprintf b "pcont"
@@ -931,15 +931,15 @@ module Liquid = struct
       | Tvar tvr ->
         Printf.bprintf b "'%s (" (Ref.get tvr).id;
         begin match (Ref.get tvr).tyo with
-        | Some ty -> bprint_type b indent (LiquidTypes.expand ty)
-        | None -> Printf.bprintf b "-" end;
+          | Some ty -> bprint_type b indent (LiquidTypes.expand ty)
+          | None -> Printf.bprintf b "-" end;
         Printf.bprintf b ")"
       | Tpartial (Peqn _) -> Printf.bprintf b "peqn"
       | Tpartial (Ptup pl) ->
         Printf.bprintf b "(ptup:";
         List.iter (fun (n,t) ->
-          let id = match t with Tvar tvr -> (Ref.get tvr).id | _ -> "-" in
-          Printf.bprintf b " %d:%s" n id) pl;
+            let id = match t with Tvar tvr -> (Ref.get tvr).id | _ -> "-" in
+            Printf.bprintf b " %d:%s" n id) pl;
         Printf.bprintf b ")";
       | Tpartial (Pmap _) -> Printf.bprintf b "pmap"
       | Tpartial (Pcont _) -> Printf.bprintf b "pcont"

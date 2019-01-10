@@ -23,9 +23,9 @@ module Ref = struct
     if r1.contents != r2.contents then begin
       r1.aliases := !(r1.aliases) @ !(r2.aliases);
       List.iter (fun r2a ->
-        r2a.contents <- r1.contents;
-        r2a.aliases <- r1.aliases
-      ) !(r2.aliases)
+          r2a.contents <- r1.contents;
+          r2a.aliases <- r1.aliases
+        ) !(r2.aliases)
     end
 end
 
@@ -1109,7 +1109,7 @@ let rec eq_exp_desc eq_ty eq_var e1 e2 = match e1, e2 with
          ) c1.contract.entries c2.contract.entries
      with Invalid_argument _ -> false)
   | TypeAnnot a1, TypeAnnot a2 ->
-     eq_exp eq_ty eq_var a1.e a2.e && eq_types a1.ty a2.ty
+    eq_exp eq_ty eq_var a1.e a2.e && eq_types a1.ty a2.ty
   | _, _ -> false
 
 (** Generic equality between expressions modulo location, renaming, etc. *)
@@ -1487,11 +1487,11 @@ let rec lift_type env ty = match ty with
   | Tpartial _ -> raise (Invalid_argument "lift_type")
 
 and lift_contract_sig env c_sig =
-      { sig_name = c_sig.sig_name;
-        entries_sig = List.map (fun es ->
-            { es with parameter = lift_type env es.parameter }
-          ) c_sig.entries_sig
-      }
+  { sig_name = c_sig.sig_name;
+    entries_sig = List.map (fun es ->
+        { es with parameter = lift_type env es.parameter }
+      ) c_sig.entries_sig
+  }
 
 
 let rec rec_find s env proj =

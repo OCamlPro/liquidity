@@ -245,11 +245,11 @@ let rec untype (env : env) (code : (datatype, 'a) exp) : (datatype, 'b) exp =
       TypeAnnot { e = untype env e; ty }
 
     | Type ty -> Type ty
-  (* | _ ->
-   *
-   *    LiquidLoc.raise_error
-   *      "untype: unimplemented code:\n%s%!"
-   *      (LiquidPrinter.Liquid.string_of_code code) *)
+    (* | _ ->
+     *
+     *    LiquidLoc.raise_error
+     *      "untype: unimplemented code:\n%s%!"
+     *      (LiquidPrinter.Liquid.string_of_code code) *)
 
   in
   mk ~loc:code.loc desc code.ty

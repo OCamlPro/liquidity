@@ -295,5 +295,5 @@ and decode_contract contract =
       values = List.map (fun (v, i, e) -> (v, i, decode e)) contract.values;
       entries =
         List.map (fun e -> { e with code = decode e.code }) contract.entries;
-        c_init;
+      c_init;
     }

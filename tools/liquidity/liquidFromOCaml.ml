@@ -387,51 +387,51 @@ let rec translate_type env ?expected typ =
 
 let translate_ext_type env typ =
   let rec aux noargs tvs atys typ = match typ with
-  (* Type argument *)
-  | { ptyp_desc = Ptyp_arrow (_, { ptyp_desc =
-        Ptyp_extension ( { txt = "type" }, PTyp { ptyp_desc = Ptyp_var tv })
-      }, return_type); ptyp_loc } ->
-    if atys <> [] || noargs then
-      error_loc ptyp_loc "Type arguments must come first";
-    if List.mem tv tvs then
-      error_loc ptyp_loc "Type variable '%s already used in this primitive" tv;
-    aux false (tv :: tvs) atys return_type
+    (* Type argument *)
+    | { ptyp_desc = Ptyp_arrow (_, { ptyp_desc =
+                                       Ptyp_extension ( { txt = "type" }, PTyp { ptyp_desc = Ptyp_var tv })
+                                   }, return_type); ptyp_loc } ->
+      if atys <> [] || noargs then
+        error_loc ptyp_loc "Type arguments must come first";
+      if List.mem tv tvs then
+        error_loc ptyp_loc "Type variable '%s already used in this primitive" tv;
+      aux false (tv :: tvs) atys return_type
 
-  (* Argument *)
-  | { ptyp_desc = Ptyp_arrow (_, parameter_type, return_type); ptyp_loc } ->
-    let ty = translate_type env (remove_stack parameter_type) in
-    let stack = has_stack parameter_type in
-    if noargs then
-      error_loc ptyp_loc "This primitive does not expect any argument"
-    else if stack then
-      aux false tvs (ty :: atys) return_type
-    else if ty = Tunit && atys = [] then
-      aux true tvs [] return_type
-    else
-      error_loc ptyp_loc "Attribute [%%stack] expected";
+    (* Argument *)
+    | { ptyp_desc = Ptyp_arrow (_, parameter_type, return_type); ptyp_loc } ->
+      let ty = translate_type env (remove_stack parameter_type) in
+      let stack = has_stack parameter_type in
+      if noargs then
+        error_loc ptyp_loc "This primitive does not expect any argument"
+      else if stack then
+        aux false tvs (ty :: atys) return_type
+      else if ty = Tunit && atys = [] then
+        aux true tvs [] return_type
+      else
+        error_loc ptyp_loc "Attribute [%%stack] expected";
 
-  (* Result : tuple *)
-  | { ptyp_desc = Ptyp_tuple types; ptyp_loc } when atys <> [] || noargs ->
-    let tys = List.map (fun ty -> translate_type env (remove_stack ty)) types in
-    let stack = has_stack typ in
-    if List.exists (fun t -> has_stack t = stack) types then
-      error_loc ptyp_loc
-        "[%%stack] must be either on the whole tuple or on ALL its components";
-    let rtys = if not stack then tys else [Ttuple tys] in
-    List.rev tvs, List.rev atys, rtys
+      (* Result : tuple *)
+    | { ptyp_desc = Ptyp_tuple types; ptyp_loc } when atys <> [] || noargs ->
+      let tys = List.map (fun ty -> translate_type env (remove_stack ty)) types in
+      let stack = has_stack typ in
+      if List.exists (fun t -> has_stack t = stack) types then
+        error_loc ptyp_loc
+          "[%%stack] must be either on the whole tuple or on ALL its components";
+      let rtys = if not stack then tys else [Ttuple tys] in
+      List.rev tvs, List.rev atys, rtys
 
-  (* Result : any other type *)
-  | { ptyp_loc } when atys <> [] || noargs ->
-    let ty = translate_type env (remove_stack typ) in
-    let stack = has_stack typ in
-    if ty <> Tunit && not stack then
-      error_loc ptyp_loc "Attribute [%%stack] expected on return value";
-    let rtys = if not stack then [] else [ty] in
-    List.rev tvs, List.rev atys, rtys
+    (* Result : any other type *)
+    | { ptyp_loc } when atys <> [] || noargs ->
+      let ty = translate_type env (remove_stack typ) in
+      let stack = has_stack typ in
+      if ty <> Tunit && not stack then
+        error_loc ptyp_loc "Attribute [%%stack] expected on return value";
+      let rtys = if not stack then [] else [ty] in
+      List.rev tvs, List.rev atys, rtys
 
-  (* Non-function type *)
-  | { ptyp_loc } ->
-    error_loc ptyp_loc "Primitives must be functions"
+    (* Non-function type *)
+    | { ptyp_loc } ->
+      error_loc ptyp_loc "Primitives must be functions"
   in
   aux false [] [] typ
 
@@ -1091,8 +1091,8 @@ let rec translate_code contracts env exp =
               Nolabel, exp;
             ]);
         pexp_loc } ->
-       let ty = fresh_tvar () in
-       Unpack { arg = translate_code contracts env exp; ty }
+      let ty = fresh_tvar () in
+      Unpack { arg = translate_code contracts env exp; ty }
 
     | { pexp_desc = Pexp_let (Nonrecursive, [ {
         pvb_pat = pat;
@@ -1124,7 +1124,7 @@ let rec translate_code contracts env exp =
       } ], body) } ->
       let fun_body, ret_ty = match fun_expr_desc with
         | Pexp_constraint (fun_body, ret_ty) ->
-           fun_body, translate_type env ret_ty
+          fun_body, translate_type env ret_ty
         | _ -> fun_expr, fresh_tvar ()
       in
       let fun_body = translate_code contracts env fun_body in
@@ -1504,14 +1504,14 @@ let rec translate_code contracts env exp =
         | { pexp_desc = Pexp_construct ({ txt = Lident "Left" }, args) } ->
           Constructor { constr = Left (fresh_tvar ());
                         arg = match args with
-                         | None -> mk ~loc (Const { ty = Tunit; const = CUnit })
-                         | Some arg -> translate_code contracts env arg }
+                          | None -> mk ~loc (Const { ty = Tunit; const = CUnit })
+                          | Some arg -> translate_code contracts env arg }
 
         | { pexp_desc = Pexp_construct ({ txt = Lident "Right" }, args) } ->
           Constructor { constr = Right (fresh_tvar ());
                         arg = match args with
-                         | None -> mk ~loc (Const { ty = Tunit; const = CUnit })
-                         | Some arg -> translate_code contracts env arg }
+                          | None -> mk ~loc (Const { ty = Tunit; const = CUnit })
+                          | Some arg -> translate_code contracts env arg }
 
 
         | { pexp_desc = Pexp_construct ({ txt = lid }, args) } ->
@@ -1597,8 +1597,8 @@ let rec translate_code contracts env exp =
           end
 
         | { pexp_desc = Pexp_constraint (exp, ty); pexp_loc } ->
-           TypeAnnot { e = translate_code contracts env exp;
-                       ty = translate_type env ty }
+          TypeAnnot { e = translate_code contracts env exp;
+                      ty = translate_type env ty }
 
         | { pexp_loc } ->
           error_loc pexp_loc
@@ -1932,39 +1932,39 @@ and translate_signature contract_type_name env acc ast =
 and translate_structure env acc ast : syntax_contract option =
   match ast with
   | { pstr_desc = Pstr_primitive {
-          pval_name = { txt = prim_name; loc = prim_loc };
-          pval_type = prim_type; pval_prim = [minst];
-          pval_attributes = prim_attr } } :: ast ->
-     if List.mem prim_name reserved_keywords then
-       error_loc prim_loc "Primitive name %S forbidden" prim_name;
-     if StringMap.mem prim_name env.ext_prims then
-       error_loc prim_loc "Primitive %S already defined" prim_name;
-     if List.exists (function
-       | Syn_value (n, _, _) -> n = prim_name
-       | _ -> false) acc
-     then
-       error_loc prim_loc "Top-level identifier %S already defined" prim_name;
-     let tvs, atys, rtys = translate_ext_type env prim_type in
-     let valid_in_external = function
-       | Trecord _ | Tsum _ | Tclosure _ | Tfail | Ttuple (_ :: _ :: _ :: _) ->
-         error_loc prim_loc
-           "Primitive %S can only use standard Michelson types" prim_name
-       | _ -> ()
-     in
-     List.iter valid_in_external atys;
-     List.iter valid_in_external rtys;
-     let effect =  List.exists (fun (a, _) -> a.txt = "effect") prim_attr in
-     let nb_arg = List.length atys in
-     let nb_ret = List.length rtys in
-     let atys = if atys = [] then [Tunit] else atys in
-     let rty = match rtys with
-       | [] -> Tunit
-       | [ty] -> ty
-       | _ -> Ttuple rtys
-     in
-     env.ext_prims <- StringMap.add prim_name
-         { tvs; atys; rty; effect; nb_arg; nb_ret; minst } env.ext_prims;
-     translate_structure env acc ast
+      pval_name = { txt = prim_name; loc = prim_loc };
+      pval_type = prim_type; pval_prim = [minst];
+      pval_attributes = prim_attr } } :: ast ->
+    if List.mem prim_name reserved_keywords then
+      error_loc prim_loc "Primitive name %S forbidden" prim_name;
+    if StringMap.mem prim_name env.ext_prims then
+      error_loc prim_loc "Primitive %S already defined" prim_name;
+    if List.exists (function
+        | Syn_value (n, _, _) -> n = prim_name
+        | _ -> false) acc
+    then
+      error_loc prim_loc "Top-level identifier %S already defined" prim_name;
+    let tvs, atys, rtys = translate_ext_type env prim_type in
+    let valid_in_external = function
+      | Trecord _ | Tsum _ | Tclosure _ | Tfail | Ttuple (_ :: _ :: _ :: _) ->
+        error_loc prim_loc
+          "Primitive %S can only use standard Michelson types" prim_name
+      | _ -> ()
+    in
+    List.iter valid_in_external atys;
+    List.iter valid_in_external rtys;
+    let effect =  List.exists (fun (a, _) -> a.txt = "effect") prim_attr in
+    let nb_arg = List.length atys in
+    let nb_ret = List.length rtys in
+    let atys = if atys = [] then [Tunit] else atys in
+    let rty = match rtys with
+      | [] -> Tunit
+      | [ty] -> ty
+      | _ -> Ttuple rtys
+    in
+    env.ext_prims <- StringMap.add prim_name
+        { tvs; atys; rty; effect; nb_arg; nb_ret; minst } env.ext_prims;
+    translate_structure env acc ast
 
   | { pstr_desc =
         Pstr_extension
@@ -2064,7 +2064,7 @@ and translate_structure env acc ast : syntax_contract option =
     let contracts = filter_contracts acc in
     let fun_body, ret_ty = match fun_expr_desc with
       | Pexp_constraint (fun_body, ret_ty) ->
-         fun_body, translate_type env ret_ty
+        fun_body, translate_type env ret_ty
       | _ -> fun_expr, fresh_tvar ()
     in
     (* let ret_ty = translate_type env ret_ty in *)

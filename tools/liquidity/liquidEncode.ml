@@ -146,7 +146,7 @@ let env_for_clos env bvs arg_name arg_type =
     let env_arg_name = uniq_ident env "closure_env" in
     let env_arg_type =
       Ttuple (arg_type :: List.map (fun (_, (_, (_, ty), _, _)) ->
-                                      ty) free_vars_l) in
+          ty) free_vars_l) in
     let env_arg_var = mk ~loc (Var env_arg_name) env_arg_type in
     let new_name = uniq_ident env arg_name.nname in
     let env_vars =
@@ -537,7 +537,7 @@ let rec encode env ( exp : typed_exp ) : encoded_exp =
         (* if bnd_val.effect then
          *   ()
          * else *)
-          env.to_inline := StringMap.add new_name bnd_val !(env.to_inline)
+        env.to_inline := StringMap.add new_name bnd_val !(env.to_inline)
       | _ -> ()
     end;
     mk ?name:exp.name ~loc

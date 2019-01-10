@@ -556,8 +556,8 @@ let get_json_int s =
 
 let get_counter source =
   send_get
-      (Printf.sprintf "/chains/main/blocks/head/context/contracts/%s/counter"
-         source)
+    (Printf.sprintf "/chains/main/blocks/head/context/contracts/%s/counter"
+       source)
   >>= fun r ->
   try
     get_json_int r |> return
@@ -1323,8 +1323,8 @@ let pack ?liquid ~const ~ty =
   let ty =
     LiquidFromOCaml.translate_type env (LiquidFromOCaml.type_of_string ty) in
   let const = LiquidData.translate env csig const ty in
-    (* LiquidCheck.check_const_type ~to_tez:LiquidPrinter.tez_of_liq noloc
-     *   ty const in *)
+  (* LiquidCheck.check_const_type ~to_tez:LiquidPrinter.tez_of_liq noloc
+   *   ty const in *)
   let const = LiquidEncode.encode_const env csig const in
   let const_m = LiquidToTezos.convert_const const in
   let const_json = LiquidToTezos.json_of_const const_m in
@@ -1344,7 +1344,7 @@ let pack ?liquid ~const ~ty =
     let bytes = Ezjsonm.find r ["packed"] |> Ezjsonm.get_string in
     return ("0x" ^ bytes)
   with Not_found ->
-     raise_response_error "pack" (Ezjsonm.from_string r)
+    raise_response_error "pack" (Ezjsonm.from_string r)
 
 
 (* Withoud optional argument head *)
