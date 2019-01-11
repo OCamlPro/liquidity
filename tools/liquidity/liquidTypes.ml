@@ -185,13 +185,13 @@ and env = {
   contractname : string;
   (* fields modified in LiquidFromOCaml *)
   (* type definitions *)
-  mutable types : datatype StringMap.t;
+  mutable types : (datatype list -> datatype) StringMap.t;
   (* contract type definitions *)
   mutable contract_types : contract_sig StringMap.t;
   (* labels of records in type definitions *)
-  mutable labels : (string * int * datatype) StringMap.t;
+  mutable labels : (string * int) StringMap.t;
   (* constructors of sum-types in type definitions *)
-  mutable constrs : (string * datatype) StringMap.t;
+  mutable constrs : string StringMap.t;
   (* extended primitives definitions *)
   mutable ext_prims : extprim StringMap.t;
   (* englobing env *)
@@ -1398,6 +1398,7 @@ type warning =
   | UnusedMatched of string
   | NotRecursive of string
   | AlwaysFails
+  | WeakParam of string
 
 (** {2 Reserved symbols in parsing }  *)
 
@@ -1505,3 +1506,17 @@ let find_type s env = rec_find s env (fun env -> env.types)
 let find_contract_type s env = rec_find s env (fun env -> env.contract_types)
 let find_label s env = rec_find s env (fun env -> env.labels)
 let find_constr s env = rec_find s env (fun env -> env.constrs)
+
+let label_type s ty = match ty with
+  | Trecord (_, l) ->
+    begin try List.assoc s l
+      with Not_found -> invalid_arg ("label_type " ^ s)
+    end
+  | _ -> invalid_arg ("label_type")
+
+let constr_type s ty = match ty with
+  | Tsum (_, l) ->
+    begin try List.assoc s l
+      with Not_found -> invalid_arg ("constr_type " ^ s)
+    end
+  | _ -> invalid_arg ("constr_type")

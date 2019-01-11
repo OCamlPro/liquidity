@@ -323,6 +323,9 @@ let rec encode_const env c = match c with
   | CBigMap l ->
     CBigMap (List.map (fun (x,y) -> encode_const env x, encode_const env y) l)
 
+  | CRecord labels when env.decompiling ->
+    CRecord (List.map (fun (f, x) -> f, encode_const env x) labels)
+
   | CRecord labels ->
     CTuple (List.map (fun (_, x) -> encode_const env x) labels)
 
@@ -346,8 +349,10 @@ let rec encode_const env c = match c with
 
   | CConstr (constr, x) ->
     try
-      let ty_name, _ = find_constr constr env.env in
-      let constr_ty = find_type ty_name env.env in
+      let ty_name = find_constr constr env.env in
+      let constr_ty = find_type ty_name env.env [] in
+      (* This is a new instance of the type but we just look at the
+         constructors *)
       match constr_ty with
       | Tsum (_, constrs) ->
         let rec iter constrs =
@@ -869,11 +874,9 @@ let rec encode env ( exp : typed_exp ) : encoded_exp =
     mk ?name:exp.name ~loc desc exp.ty
 
   | Constructor { constr = Constr constr; arg } ->
-    let ty_name, arg_ty = find_constr constr env.env in
     let arg = encode env arg in
-    let constr_ty = find_type ty_name env.env in
     let exp =
-      match constr_ty with
+      match exp.ty with
       | Tsum (_, constrs) ->
         let rec iter constrs orty =
           match constrs, orty with
@@ -907,10 +910,10 @@ let rec encode env ( exp : typed_exp ) : encoded_exp =
             in
             mk ~loc desc orty
         in
-        iter constrs (encode_type ~decompiling:env.decompiling constr_ty)
+        iter constrs (encode_type ~decompiling:env.decompiling exp.ty)
       | _ -> assert false
     in
-    mk ?name:exp.name ~loc exp.desc constr_ty
+    mk ?name:exp.name ~loc exp.desc exp.ty
 
   | Constructor { constr = Left right_ty; arg } ->
     let arg = encode env arg in
@@ -1139,9 +1142,7 @@ and encode_contract ?(annot=false) ?(decompiling=false) contract =
         arg = parameter;
         cases = List.map (fun e ->
             let constr = prefix_entry ^ e.entry_sig.entry_name in
-            env.env.constrs <-
-              StringMap.add constr ("_entries", e.entry_sig.parameter)
-                env.env.constrs;
+            env.env.constrs <- StringMap.add constr "_entries" env.env.constrs;
             let pat =
               CConstr (constr, [e.entry_sig.parameter_name]) in
             let body =

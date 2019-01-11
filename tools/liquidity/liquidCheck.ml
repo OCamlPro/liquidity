@@ -187,6 +187,227 @@ let rec merge_matches acc loc cases constrs =
     end
   | _ -> raise Exit
 
+
+
+let rec type_of_const env = function
+  | CUnit -> Tunit
+  | CBool _ -> Tbool
+  | CInt _ -> Tint
+  | CNat _ -> Tnat
+  | CTez _ -> Ttez
+  | CTimestamp _ -> Ttimestamp
+  | CString _ -> Tstring
+  | CBytes _ -> Tbytes
+  | CKey _ -> Tkey
+  | CSignature _ -> Tsignature
+  | CAddress _ -> Taddress
+  | CTuple l ->
+    Ttuple (List.map (type_of_const env) l)
+  | CNone -> Toption (fresh_tvar ())
+  | CSome c -> Toption (type_of_const env c)
+  | CMap [] -> Tmap (fresh_tvar (), fresh_tvar ())
+  | CMap ((k,e) :: _) -> Tmap (type_of_const env k, type_of_const env e)
+
+  | CBigMap [] -> Tbigmap (fresh_tvar (), fresh_tvar ())
+  | CBigMap ((k,e) :: _) -> Tbigmap (type_of_const env k, type_of_const env e)
+
+  | CList [] -> Tlist (fresh_tvar ())
+  | CList (e :: _) -> Tlist (type_of_const env e)
+
+  | CSet [] -> Tset (fresh_tvar ())
+  | CSet (e :: _) -> Tset (type_of_const env e)
+
+  | CLeft c -> Tor (type_of_const env c, fresh_tvar ())
+  | CRight c -> Tor (fresh_tvar (), type_of_const env c)
+
+  | CKey_hash _ -> Tkey_hash
+  | CContract _ -> Tcontract (contract_sig_of_param (fresh_tvar ()))
+
+  | CRecord [] -> assert false
+  | CRecord ((label, _) :: _ as fields) ->
+    let ty_name, _ = find_label label env in
+    let ty = find_type ty_name env [] in
+    begin match ty with
+      | Trecord (n, l) ->
+        let l = List.map2 (fun (lab, c) (lab', t) ->
+            assert (lab = lab');
+            lab, type_of_const env c
+          ) fields l in
+        Trecord (n, l)
+      | _ -> assert false
+    end
+  | CConstr (constr, c) ->
+    let ty_name = find_constr constr env in
+    let ty = find_type ty_name env [] in
+    begin match ty with
+      | Tsum (n, l) ->
+        let l = List.map (fun ((constr', t) as ct) ->
+          if constr = constr' then (constr, type_of_const env c)
+          else ct
+          ) l in
+        Tsum (n, l)
+      | _ -> assert false
+    end
+
+
+let rec typecheck_const ~loc env cst ty =
+  match ty, cst with
+  (* No implicit conversions *)
+  | Tunit, CUnit
+  | Tbool, CBool _
+  | Tint, CInt _
+  | Tstring, CString _
+  | Tbytes, CBytes _
+  | Tnat, CNat _
+  | Ttez, CTez _
+  | Tkey, CKey _
+  | Tkey_hash, CKey_hash _
+  | Tcontract _, CContract _
+  | Taddress, CAddress _
+  | Ttimestamp, CTimestamp _
+  | Tsignature, CSignature _
+  | Toption _, CNone
+    -> (ty, cst)
+
+  (* Implicit conversions *)
+  | Tint, CNat s -> ty, CInt s
+  | Tnat, CInt s -> ty, CNat s
+  | Tkey, CBytes s -> ty, CKey s
+  | Tkey_hash, CBytes s -> ty, CKey_hash s
+  | Tcontract _, CAddress s -> ty, CAddress s
+  | Tcontract { entries_sig = [{ parameter = (Tunit  | Tvar _  as p)}] },
+    CKey_hash s ->
+    unify loc p Tunit;
+    ty, CKey_hash s
+  | Tcontract _, CBytes s -> ty, CContract s
+  | Taddress, CContract s -> ty, CContract s
+  | Taddress, CKey_hash s -> ty, CKey_hash s
+  | Taddress, CBytes s -> ty, CContract s
+  | Tsignature, CBytes s -> ty, CSignature s
+
+  (* Structures *)
+  | Ttuple tys, CTuple csts ->
+    begin
+      try
+        let ltys = List.map2 (typecheck_const ~loc env) csts tys in
+        let tys, csts = List.split ltys in
+        Ttuple tys, CTuple csts
+      with Invalid_argument _ ->
+        error loc "constant type mismatch (tuple length differs from type)"
+    end
+
+  | Toption ty, CSome cst ->
+    let ty, cst = typecheck_const ~loc env cst ty in
+    Toption ty, CSome cst
+
+  | Tor (left_ty, right_ty), CLeft cst ->
+    let left_ty, cst = typecheck_const ~loc env cst left_ty in
+    Tor (left_ty, right_ty), CLeft cst
+
+  | Tor (left_ty, right_ty), CRight cst ->
+    let right_ty, cst = typecheck_const ~loc env cst right_ty in
+    Tor (left_ty, right_ty), CLeft cst
+
+  | Tmap (ty1, ty2), CMap csts ->
+    let (ty1, ty2), csts = List.fold_left (fun ((ty1, ty2), acc) (cst1, cst2) ->
+        let ty1, cst1 = typecheck_const ~loc env cst1 ty1 in
+        let ty2, cst2 = typecheck_const ~loc env cst2 ty2 in
+        (ty1, ty2), (cst1, cst2) :: acc
+      ) ((ty1, ty2), []) csts in
+    let csts = List.rev csts in
+    Tmap (ty1, ty2), CMap csts
+
+  | Tbigmap (ty1, ty2), (CMap csts | CBigMap csts) -> (* allow map *)
+    let (ty1, ty2), csts = List.fold_left (fun ((ty1, ty2), acc) (cst1, cst2) ->
+        let ty1, cst1 = typecheck_const ~loc env cst1 ty1 in
+        let ty2, cst2 = typecheck_const ~loc env cst2 ty2 in
+        (ty1, ty2), (cst1, cst2) :: acc
+      ) ((ty1, ty2), []) csts in
+    let csts = List.rev csts in
+    Tbigmap (ty1, ty2), CBigMap csts
+
+  | Tlist ty, CList csts ->
+    let ty, csts = List.fold_left (fun (ty, acc) cst ->
+        let ty, cst = typecheck_const ~loc env cst ty in
+        ty, cst :: acc
+      ) (ty, []) csts in
+    let csts = List.rev csts in
+    Tlist ty, CList csts
+
+  | Tset ty, CSet csts ->
+    let ty, csts = List.fold_left (fun (ty, acc) cst ->
+        let ty, cst = typecheck_const ~loc env cst ty in
+        ty, cst :: acc
+      ) (ty, []) csts in
+    let csts = List.rev csts in
+    Tset ty, CSet csts
+
+  | Trecord (rname, labels), CRecord fields ->
+    (* order record fields wrt type *)
+    List.iter (fun (f, _) ->
+        if not @@ List.mem_assoc f labels then
+          error loc "Record field %s is not in type %s" f rname
+      ) fields;
+    let fields, labels = List.map (fun (f, ty) ->
+        try
+          let cst = List.assoc f fields in
+          let ty, cst = typecheck_const ~loc env cst ty in
+          (f, cst), (f, ty)
+        with Not_found ->
+          error loc "Record field %s is missing" f
+      ) labels |> List.split in
+    Trecord (rname, labels), CRecord fields
+
+  | Trecord (rname, labels), CTuple csts when env.decompiling ->
+    (* Allow pairs when decompiling *)
+    let rec mk labels csts = match labels, csts with
+      | (f, ty) :: labels, cst :: csts ->
+        let ty, cst = typecheck_const ~loc env cst ty in
+        ((f, ty), (f, cst)) :: mk labels csts
+      | [], _ -> []
+      | (f, _) :: _ , [] -> error loc "Record field %s is missing" f
+    in
+    let labels, fields = List.split (mk labels csts) in
+    Trecord (rname, labels), CRecord fields
+
+  | Tsum (sname, constrs), CConstr (c, cst) ->
+    let ty =
+      try List.assoc c constrs
+      with Not_found ->
+        error loc "Constructor %s does not belong to type %s" c sname in
+    let ty, cst = typecheck_const ~loc env cst ty in
+    let constrs =
+      List.map (fun (c, t) -> if t = ty then (c, ty) else (c, t)) constrs in
+    Tsum (sname, constrs), CConstr (c, cst)
+
+  | Tsum (sname, constrs), (CLeft _ | CRight _) when env.decompiling ->
+    (* Allow Left/Right constants for sum type when decompiling *)
+    let rec seek constrs cst = match constrs, cst with
+      | (c, ty) :: _, CLeft cst ->
+        let ty, cst = typecheck_const ~loc env cst ty in
+        (c, ty, cst)
+      | _ :: constrs, CRight cst -> seek constrs cst
+      | _, _ ->
+        error loc "Constant cannot be converted to type %s" sname
+    in
+    let c, ty, cst = seek constrs cst in
+    let constrs =
+      List.map (fun (c, t) -> if t = ty then (c, ty) else (c, t)) constrs in
+    Tsum (sname, constrs), CConstr (c, cst)
+
+  | Tvar tv, c ->
+    unify loc ty (type_of_const env.env c);
+    let ty = match (Ref.get tv).tyo with
+      | None -> ty
+      | Some ty -> ty in
+    typecheck_const ~loc env c ty
+
+  | _ ->
+    error loc "constant type mismatch, expected %s, got %s"
+      (LiquidPrinter.Liquid.string_of_type ty)
+      (LiquidPrinter.Liquid.string_of_type (type_of_const env.env cst))
+
+
 (* Typecheck an expression. Returns a typed expression *)
 let rec typecheck env ( exp : syntax_exp ) : typed_exp =
   let loc = exp.loc in
@@ -194,6 +415,7 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
   match exp.desc with
 
   | Const { ty; const } ->
+    let ty, const = typecheck_const ~loc env const ty in
     mk ?name:exp.name ~loc (Const { ty; const }) (ty:datatype)
 
   | Let { bnd_var; inline; bnd_val; body } ->
@@ -221,11 +443,12 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
               field record_name;
         end
       | Tvar _ | Tpartial _ ->
-        let ty_name, _, ty =
+        let ty_name, _ =
           try find_label field env.env
           with Not_found -> error loc "unbound record field %S" field
         in
-        let record_ty = find_type ty_name env.env in
+        let record_ty = find_type ty_name env.env [] in
+        let ty = label_type field record_ty in
         unify record.ty record_ty; ty
       | rty -> error loc "not a record type: %s, has no field %s"
                  (LiquidPrinter.Liquid.string_of_type rty)
@@ -234,24 +457,14 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
     mk ?name:exp.name ~loc (Project { field; record }) ty
 
   | SetField { record; field; set_val } ->
-    let record = typecheck env record in
-    let exp_ty =
-      let ty_name, _, ty =
-        try find_label field env.env
-        with Not_found -> error loc "unbound record field %S" field
-      in
-      let record_ty = find_type ty_name env.env in
-      begin match expand record.ty with
-        | Tvar _ | Tpartial _ -> unify record.ty record_ty
-        | _ ->
-          fail_neq ~loc ~info:"in record update" ~expected_ty:record.ty record_ty
-            ~more:(Printf.sprintf
-                     "field %s does not belong to type %s" field
-                     (LiquidPrinter.Liquid.string_of_type record.ty));
-      end;
-      ty
+    let ty_name, _ =
+      try find_label field env.env
+      with Not_found -> error loc "unbound record field %S" field
     in
-    let set_val = typecheck_expected "field update" env exp_ty set_val in
+    let record_ty = find_type ty_name env.env [] in
+    let record = typecheck_expected "record update" env record_ty record in
+    let exp_ty = label_type field record_ty in
+    let set_val = typecheck_expected "field update value" env exp_ty set_val in
     mk ?name:exp.name ~loc (SetField { record; field; set_val }) record.ty
 
   | Seq (exp1, exp2) ->
@@ -735,19 +948,20 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
   | Record [] -> assert false
 
   | Record (( (label, _) :: _ ) as lab_x_exp_list) ->
-    let ty_name, _, _ =
+    let ty_name, _ =
       try find_label label env.env
       with Not_found -> error loc "unbound label %S" label
     in
-    let record_ty = find_type ty_name env.env in
+    let record_ty = find_type ty_name env.env [] in
     let labels = match record_ty with
-      | Trecord (_, rtys) -> List.map fst rtys
+      | Trecord (rname, rtys) -> List.map fst rtys
       | _ -> assert false in
     let fields = List.map (fun (label, exp) ->
-        let ty_name', _, ty = try
+        let ty_name', _ = try
             find_label label env.env
           with Not_found -> error loc "unbound label %S" label
         in
+        let ty = label_type label record_ty in
         if ty_name <> ty_name' then error loc "inconsistent list of labels";
         let exp = typecheck_expected ("label "^ label) env ty exp in
         (label, exp)
@@ -759,28 +973,12 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
       ) labels in
     mk ?name:exp.name ~loc (Record fields) record_ty
 
-  (* TODO
-     | Constructor(loc, Constr constr, arg)
-      when env.decompiling && not @@ StringMap.mem constr env.env.constrs ->
-      (* intermediate unknown constructor, add it *)
-      let ty_name = "unknown_constructors" in
-      let arg = typecheck env arg in
-      let constr_ty = match StringMap.find_opt ty_name env.env.types with
-        | Some (Tsum (n, constrs)) -> Tsum (n, (constr, arg.ty) :: constrs)
-        | Some _ -> assert false
-        | None -> Tsum (ty_name, [constr, arg.ty])
-      in
-      env.env.constrs <-
-        StringMap.add constr (ty_name, arg.ty) env.env.constrs;
-      env.env.types <- StringMap.add ty_name constr_ty env.env.types;
-      mk ?name:exp.name ~loc (Constructor(loc, Constr constr, arg)) constr_ty
-  *)
-
   | Constructor { constr = Constr constr; arg } ->
     begin try
-        let ty_name, arg_ty = find_constr constr env.env in
+        let ty_name = find_constr constr env.env in
+        let constr_ty = find_type ty_name env.env [] in
+        let arg_ty = constr_type constr constr_ty in
         let arg = typecheck_expected "construtor argument" env arg_ty arg in
-        let constr_ty = find_type ty_name env.env in
         mk ?name:exp.name ~loc (Constructor { constr = Constr constr; arg })
           constr_ty
       with Not_found ->
@@ -915,10 +1113,11 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
                               (LiquidPrinter.Liquid.string_of_type arg.ty) in
                 add_vars_env vars var_ty
               | CConstr (constr, vars) ->
-                let ty_name', var_ty =
+                let _ty_name' =
                   try find_constr constr env.env
                   with Not_found -> error loc "unknown constructor %S" constr
                 in
+                let var_ty = constr_type constr arg.ty in
                 (* if ty_name <> ty_name' then
                    error loc "inconsistent constructors"; *)
                 add_vars_env vars var_ty
@@ -1698,14 +1897,19 @@ and typecheck_contract ~warnings ~decompiling contract =
     (* when decompiling recover signature of encoded Contract.self *)
     if not decompiling then t_contract_sig
     else match t_contract_sig.f_entries_sig with
-      | [{ entry_name = "main"; parameter = Tsum ("_entries", l) }] ->
-        let f_entries_sig = List.map (fun (c, parameter) ->
-            { entry_name = entry_name_of_case c;
-              parameter;
-              parameter_name = "parameter";
-              storage_name = "storage";
-            }) l in
-        { t_contract_sig with f_entries_sig }
+      | [{ entry_name = "main" } as e] ->
+        begin match expand e.parameter with
+          | Tsum ("_entries", l) ->
+            let f_entries_sig = List.map (fun (c, parameter) ->
+                { entry_name = entry_name_of_case c;
+                  parameter;
+                  parameter_name = "parameter";
+                  storage_name = "storage";
+                }) l in
+            { t_contract_sig with f_entries_sig }
+
+          | _ -> t_contract_sig
+        end
       | _ -> t_contract_sig in
   let env =
     {
@@ -1902,6 +2106,8 @@ let check_const_type ?(from_mic=false) ~to_tez loc ty cst =
                  error loc "Constructor %s does not belong to type %s" c sname
               )
 
+    | Tvar _, c -> c
+
     | _ ->
       if from_mic then
         match ty, cst with
@@ -1928,6 +2134,8 @@ let check_const_type ?(from_mic=false) ~to_tez loc ty cst =
         | Tcontract _, CString s -> CContract s
         | Tkey, CString s -> CKey s
         | Tsignature, CString s -> CSignature s
+
+        | Tvar _, c -> c
 
         | _ ->
           error loc "constant type mismatch, expected %s, got %s"

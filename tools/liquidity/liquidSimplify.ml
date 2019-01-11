@@ -293,8 +293,7 @@ let rec compute decompile code to_inline =
 
   let rec fixpoint code =
     let c = iter code in
-    (* Polymorphic comparison can fail in the presence of type variables *)
-    if c <> code then fixpoint c else c
+    if eq_syntax_exp c code then c else fixpoint c
   in
 
   fixpoint code

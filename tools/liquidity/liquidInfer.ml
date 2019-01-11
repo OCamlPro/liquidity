@@ -25,6 +25,9 @@ let fresh_tv =
 let fresh_tvar () =
   Tvar (Ref.create { id = fresh_tv (); tyo = None })
 
+let wrap_tvar ty =
+  Tvar (Ref.create { id = fresh_tv (); tyo = Some ty })
+
 let rec has_tvar = function
   | Ttuple tyl -> List.exists has_tvar tyl
   | Toption ty | Tlist ty | Tset ty -> has_tvar ty
@@ -61,6 +64,12 @@ let merge_lists l1 l2 =
       if List.mem e l then l else e :: l
     ) l1 l2
 
+let rec make_subst l1 l2 = match l1, l2 with
+  | [], [] -> []
+  | _, [] -> List.map (fun v -> v, fresh_tvar ()) l1
+  | [], _ -> invalid_arg "too many type arguments"
+  | x1 :: l1, x2 :: l2 -> (x1, x2) :: make_subst l1 l2
+
 (* let print_loc loc =
  *   match loc.loc_pos with
  *   | Some ( (begin_line, begin_char) , (end_line, end_char) ) ->
@@ -69,6 +78,80 @@ let merge_lists l1 l2 =
  *       end_line end_char
  *   | None ->
  *     Printf.printf "%s" loc.loc_file *)
+
+let rec generalize tyx1 tyx2 =
+
+  (* Generalize the types wrt one another *)
+  match tyx1, tyx2 with
+
+  | Tvar tvr1, Tvar tvr2 when (Ref.get tvr1).id = (Ref.get tvr2).id -> ()
+
+  | Tvar ({ contents = { contents = { tyo = Some tyz1 }}} as tvr1),
+    Tvar ({ contents = { contents = { tyo = Some tyz2 }}} as tvr2) ->
+    if not @@ eq_types tyz1 tyz2 then begin
+      Ref.set tvr1 { id = fresh_tv (); tyo = None };
+      Ref.set tvr2 { id = fresh_tv (); tyo = None };
+    end
+
+  | Tvar tvr, tyx | tyx, Tvar tvr ->
+    begin match (Ref.get tvr).tyo with
+      | None -> ()
+      | Some ty ->
+        generalize ty tyx;
+        if not @@ eq_types ty tyx then
+          Ref.set tvr { id = fresh_tv (); tyo = None }
+    end
+
+  | Tpartial _, Tpartial _ ->
+    failwith "Anomaly : cannot generalize Tpartial"
+
+
+  | Ttuple tl1, Ttuple tl2 when List.compare_lengths tl1 tl2 = 0 ->
+    List.iter2 generalize tl1 tl2
+
+  | Toption ty1, Toption ty2
+  | Tlist ty1, Tlist ty2
+  | Tset ty1, Tset ty2 ->
+    generalize ty1 ty2
+
+  | Tmap (k_ty1, v_ty1), Tmap (k_ty2, v_ty2)
+  | Tbigmap (k_ty1, v_ty1), Tbigmap (k_ty2, v_ty2) ->
+    generalize k_ty1 k_ty2;
+    generalize v_ty1 v_ty2
+
+  | Tor (l_ty1, r_ty1), Tor (l_ty2, r_ty2) ->
+    generalize l_ty1 l_ty2;
+    generalize r_ty1 r_ty2
+
+  | Tlambda (from_ty1, to_ty1), Tlambda (from_ty2, to_ty2) ->
+    generalize from_ty1 from_ty2;
+    generalize to_ty1 to_ty2
+
+  | Tclosure ((from_ty1, env_ty1), to_ty1),
+    Tclosure ((from_ty2, env_ty2), to_ty2) ->
+    generalize from_ty1 from_ty2;
+    generalize env_ty1 env_ty2;
+    generalize to_ty1 to_ty2
+
+  | Trecord (_, fl1), Trecord (_, fl2)
+  | Tsum (_, fl1), Tsum (_, fl2)
+    when List.compare_lengths fl1 fl2 = 0 ->
+    List.iter2 (fun (_, ty1) (_, ty2) ->
+        generalize ty1 ty2;
+      ) fl1 fl2
+
+  | Tcontract c1, Tcontract c2
+    when List.compare_lengths c1.entries_sig c2.entries_sig = 0 ->
+    List.iter2 (fun e1 e2 ->
+        generalize e1.parameter e2.parameter
+      ) c1.entries_sig c2.entries_sig
+
+  | _ , _ ->
+    if not (eq_types tyx1 tyx2) then
+      error noloc "Types %s and %s are not compatible\n"
+        (LiquidPrinter.Liquid.string_of_type tyx1)
+        (LiquidPrinter.Liquid.string_of_type tyx2)
+
 
 let rec unify loc ty1 ty2 =
 
@@ -346,7 +429,7 @@ let rec find_variant_type env = function
   | (CConstr (("Left"|"Right"), _), _) :: _ ->
     Some (Tor (fresh_tvar (), fresh_tvar ()))
   | (CConstr (c, _), _) :: _ ->
-    try let n, _ = find_constr c env.env in Some (find_type n env.env)
+    try let n = find_constr c env.env in Some (find_type n env.env [])
     with Not_found -> None
 
 
@@ -366,8 +449,10 @@ let free_tvars ty =
       List.fold_left (fun fv (_, ty) -> aux fv ty) fv fl
     | Tcontract c ->
       List.fold_left (fun fv { parameter = ty } -> aux fv ty) fv c.entries_sig
-    | Tvar tvr when (Ref.get tvr).tyo <> None -> assert false
-    | Tvar tvr -> StringSet.add (Ref.get tvr).id fv
+    | Tvar tvr -> begin match (Ref.get tvr).tyo with
+        | None -> StringSet.add (Ref.get tvr).id fv
+        | Some ty -> aux fv ty
+      end
     | Tpartial (Peqn (el, _)) ->
       List.fold_left (fun fv (cl, rty) ->
           List.fold_left (fun fv (ty1, ty2) ->
@@ -691,12 +776,8 @@ and contract_tvars_to_unit (contract : typed_contract) =
         code = tvars_to_unit code }) contract.entries in
   let rec env_tvars_to_unit ty_env = {
     ty_env with
-    types = StringMap.map vars_to_unit ty_env.types;
+    types = StringMap.map (fun mk -> fun p -> vars_to_unit (mk p)) ty_env.types;
     contract_types = StringMap.map sig_vars_to_unit ty_env.contract_types;
-    labels = StringMap.map (fun (x, i, ty) ->
-        x, i, vars_to_unit ty) ty_env.labels;
-    constrs = StringMap.map (fun (c, ty) ->
-        c, vars_to_unit ty) ty_env.constrs;
     top_env = match ty_env.top_env with
       | None -> None
       | Some env -> Some (env_tvars_to_unit env);
@@ -878,8 +959,14 @@ let rec mono_exp env subst vtys (e:typed_exp) =
     | CreateContract cc ->
       CreateContract { args = List.map (mono_exp subst vtys) cc.args;
                        contract = mono_contract env cc.contract }
-    | ContractAt ca -> ContractAt { arg = mono_exp subst vtys ca.arg;
-                                    c_sig = ca.c_sig }
+    | ContractAt ca ->
+      let c_sig = { ca.c_sig with
+                    entries_sig = List.map (fun e ->
+                        { e with parameter = instantiate e.parameter }
+                      ) ca.c_sig.entries_sig
+                  } in
+      ContractAt { arg = mono_exp subst vtys ca.arg;
+                   c_sig }
     | Unpack up ->
       Unpack { arg = mono_exp subst vtys up.arg;
                ty = instantiate up.ty }

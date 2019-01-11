@@ -434,11 +434,7 @@ let rec decompile contract =
       | N_FAILWITH, [ arg ] ->
         mk ~loc (Failwith (arg_of arg))
 
-      | N_CONST (ty, cst), [] ->
-        let to_tez s = LiquidPrinter.tez_of_mic_mutez @@ Z.of_string s in
-        let const = LiquidCheck.check_const_type ~from_mic:true ~to_tez
-            loc ty cst
-        in
+      | N_CONST (ty, const), [] ->
         mklet node (Const { ty; const })
 
       | N_IF ({ kind = N_IF_END (_, then_node) },

@@ -12,3 +12,4 @@ type expr = LiquidTypes.michelson_exp
 type contract = LiquidTypes.michelson_contract
 type json
 let empty_env _ = ()
+let set_generalize_types _ _ = ()

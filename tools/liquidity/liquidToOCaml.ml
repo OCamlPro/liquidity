@@ -67,6 +67,7 @@ let get_abbrev ty =
   match Hashtbl.find abbrevs ty with
   | s, TypeName _, _ -> typ_constr s []
   | s, ContractType _, _ -> typ_constr (s ^ ".instance") []
+
 let add_abbrev s ty kind =
   try
     match Hashtbl.find abbrevs ty with
@@ -76,10 +77,11 @@ let add_abbrev s ty kind =
   with Not_found ->
     incr cpt_abbrev;
     let s =
-      try Hashtbl.find rev_abbrevs s; s ^ string_of_int !cpt_abbrev
-      with Not_found -> s in
+      if Hashtbl.mem rev_abbrevs s then
+        s ^ string_of_int !cpt_abbrev
+      else s in
     Hashtbl.add abbrevs ty (s, kind, !cpt_abbrev);
-    Hashtbl.replace rev_abbrevs s ();
+    Hashtbl.replace rev_abbrevs s ty;
     match kind with
     | TypeName _ -> typ_constr s []
     | ContractType _ -> typ_constr (s ^ ".instance") []
@@ -125,10 +127,20 @@ let rec convert_type ~abbrev ?name ty =
   | Toperation -> typ_constr "operation" []
   | Taddress -> typ_constr "address" []
   | Tsum (name, _)
-  | Trecord (name, _) -> typ_constr name []
+  | Trecord (name, _) ->
+    let args =
+      try
+        let known_ty = Hashtbl.find rev_abbrevs name in
+        let subst = LiquidInfer.build_subst known_ty ty in
+        List.map (fun (_, t) -> convert_type ~abbrev t)
+          (StringMap.bindings subst)
+      with Not_found -> [] in
+    typ_constr name args
   | Tcontract contract_sig -> convert_contract_sig ~abbrev contract_sig
+  | Tvar { contents = { contents = { tyo = Some ty }}} -> convert_type ~abbrev ?name ty
+  | Tvar v -> Typ.var (Ref.get v).id
   | Tfail -> assert false
-  | Tvar _ | Tpartial _ -> assert false
+  | Tpartial _ -> assert false
   | _ ->
     try get_abbrev ty
     with Not_found ->
@@ -384,7 +396,7 @@ let rec convert_code ~abbrev (expr : (datatype, 'a) exp) =
 
   | Failwith arg  ->
     Exp.apply ~loc
-      (Exp.ident (lid "Current.failwith"))
+      (Exp.ident (lid "failwith"))
       [Nolabel, convert_code ~abbrev arg]
 
   | MatchOption { arg; ifnone; some_name; ifsome } ->
@@ -722,7 +734,8 @@ and structure_of_contract
           | _ -> ()
         ) type_annots
     | None -> () end;
-  let storage_caml = add_abbrev "storage" contract.storage
+  let storage_caml =
+    add_abbrev "storage" contract.storage
       (TypeName (convert_type ~abbrev contract.storage)) in
   let version_caml = Str.extension (
       id "version",
@@ -743,6 +756,10 @@ and structure_of_contract
     let seen = ref StringSet.empty in
     list_caml_abbrevs_in_order ()
     |> List.map (fun (txt, kind, liq_ty) ->
+        let params =
+          LiquidInfer.free_tvars liq_ty
+          |> StringSet.elements
+          |> List.map (fun v -> Typ.var v, Invariant) in
         match kind with
         | TypeName manifest ->
           Str.type_ Recursive [
@@ -750,6 +767,7 @@ and structure_of_contract
             | Trecord (name, fields) when not @@ StringSet.mem name !seen ->
               seen := StringSet.add name !seen;
               Type.mk (id txt)
+                ~params
                 ~kind:(Ptype_record (
                     List.map (fun (label, ty) ->
                         Type.field (id label) (convert_type ~abbrev:false ty)
@@ -757,13 +775,14 @@ and structure_of_contract
             | Tsum (name, cstrs) when not @@ StringSet.mem name !seen ->
               seen := StringSet.add name !seen;
               Type.mk (id txt)
+                ~params
                 ~kind:(Ptype_variant (
                     List.map (fun (cstr, ty) ->
                         Type.constructor (id cstr)
                           ~args:(Pcstr_tuple [(convert_type ~abbrev:false ty)])
                       ) cstrs))
             | _ ->
-              Type.mk (id txt) ~manifest
+              Type.mk (id txt) ~params ~manifest
           ]
         | ContractType typ -> Str.modtype (Mtd.mk (id txt) ~typ)
       )

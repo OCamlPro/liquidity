@@ -143,7 +143,6 @@ let compile_tezos_file filename =
     else LiquidToTezos.read_tezos_file filename
   in
   let c = LiquidFromTezos.convert_contract env code in
-  let annoted_tz, type_annots, types = LiquidFromTezos.infos_env env in
   let c = LiquidClean.clean_contract c in
   (* let c = if !LiquidOptions.peephole then LiquidPeephole.simplify c else c in *)
   let c = LiquidInterp.interp c in
@@ -157,15 +156,28 @@ let compile_tezos_file filename =
   end;
   if !LiquidOptions.typeonly then exit 0;
 
-  let c = LiquidDecomp.decompile env c in
-  if !LiquidOptions.verbosity>0 then
-    FileString.write_file  (filename ^ ".liq.pre")
-      (LiquidPrinter.Liquid.string_of_contract c);
+  let c1 = LiquidDecomp.decompile env c in
   let outprefix =
     Filename.(concat (dirname filename) @@
-              String.uncapitalize_ascii c.contract_name)  ^ ".tz" in
+              String.uncapitalize_ascii c1.contract_name)  ^ ".tz" in
+  if !LiquidOptions.verbosity>0 then
+    FileString.write_file  (filename ^ ".liq.pre")
+      (LiquidPrinter.Liquid.string_of_contract c1);
   let typed_ast =
-    LiquidCheck.typecheck_contract ~warnings:false ~decompiling:true c in
+    try
+      LiquidCheck.typecheck_contract ~warnings:false ~decompiling:true c1
+    with LiquidError _ ->
+      (* Retry with generalization of types *)
+      LiquidTezosTypes.set_generalize_types env true;
+      ignore (LiquidFromTezos.convert_contract env code);
+      (* for side effects in generalized type definitions *)
+      let c2 = LiquidDecomp.decompile env c in
+      if !LiquidOptions.verbosity>0 then
+        FileString.write_file  (filename ^ ".liq.pre")
+          (LiquidPrinter.Liquid.string_of_contract c2);
+      LiquidCheck.typecheck_contract ~warnings:false ~decompiling:true c2
+  in
+  let annoted_tz, type_annots, types = LiquidFromTezos.infos_env env in
   let encode_ast, to_inline =
     LiquidEncode.encode_contract ~decompiling:true typed_ast in
   let live_ast = LiquidSimplify.simplify_contract

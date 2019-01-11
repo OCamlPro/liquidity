@@ -119,7 +119,16 @@ let wrong_type env expr ty =
     )
     (LiquidPrinter.Liquid.string_of_type ty)
 
+let rec get_type ty = (* expand ty *) match ty with
+  | Tvar { contents = { contents = { tyo = Some ty }}} -> get_type ty
+  | _ -> ty
+
+let rec get_tyo ty = match ty with
+  | None -> None
+  | Some ty -> Some (get_type ty)
+
 let rec convert_const env ?ty expr =
+  let ty = get_tyo ty in
   match expr with
   | Int (_loc, n) ->
     begin match ty with
@@ -313,9 +322,23 @@ let type_constr_of_annots annots =
 let type_label_of_annots annots =
   type_constr_or_label_of_annots ~allow_capital:false annots
 
+let add_generalize_to_env =
+  let cpt = ref 0 in
+  fun name ty env ->
+    match StringMap.find_opt name env.types with
+    | None ->
+      env.types <- StringMap.add name ([ty], !cpt) env.types;
+      incr cpt
+    | Some (l, i) ->
+      List.iter (LiquidInfer.generalize ty) l;
+      env.types <- StringMap.add name (ty :: l, i) env.types
+
 let rec convert_type env expr =
   let name = match expr with
-    | Prim(_, _, _, a) -> type_name_of_annots a
+    | Prim(_, _, _, a) -> begin match type_name_of_annots a with
+        | Some "storage" -> Some "storage_"
+        | n -> n
+      end
     | _ -> None
   in
   let ty = match expr with
@@ -338,9 +361,9 @@ let rec convert_type env expr =
         | None -> Ttuple [convert_type env x; convert_type env y]
         | Some name ->
           try
-            let ty = Trecord (name, type_labels env expr) in
-            if not @@ List.mem_assoc name env.types then
-              env.types <- (name, ty) :: env.types;
+            let ty = Trecord (name, type_labels ~gen:false env expr) in
+            let ty_gen = Trecord (name, type_labels ~gen:true env expr) in (* copy *)
+            add_generalize_to_env name ty_gen env;
             ty
           with Exit -> Ttuple [convert_type env x; convert_type env y]
       end
@@ -350,9 +373,9 @@ let rec convert_type env expr =
         | None -> Tor (convert_type env x, convert_type env y)
         | Some name ->
           try
-            let ty = Tsum (name, type_constrs env expr) in
-            if not @@ List.mem_assoc name env.types then
-              env.types <- (name, ty) :: env.types;
+            let ty = Tsum (name, type_constrs ~gen:false env expr) in
+            let ty_gen = Tsum (name, type_constrs ~gen:true env expr) in
+            add_generalize_to_env name ty_gen env;
             ty
           with Exit -> Tor (convert_type env x, convert_type env y)
       end
@@ -404,10 +427,19 @@ let rec convert_type env expr =
     | None -> ()
     | Some name -> Hashtbl.add env.type_annots ty name
   end;
-  ty
+  (* Wrap in type variable with type eq for generalization *)
+  LiquidInfer.wrap_tvar ty
 
 
-and type_components ~allow_capital env t =
+and type_components ~allow_capital ~gen env t =
+  let mk_ty_comp ty =
+    if gen && env.generalize_types then begin
+      ignore (convert_type env ty); (* for side effects in env *)
+      LiquidInfer.fresh_tvar ()
+    end
+    else
+      convert_type env ty
+  in
   match t with
   | Prim(_, _, [x;y], annots) ->
     let label_of_annot = function
@@ -423,14 +455,14 @@ and type_components ~allow_capital env t =
       match x_label, y_label with
       | None, _ -> raise Exit
       | Some x_label, Some y_label ->
-        [x_label, convert_type env x; y_label, convert_type env y]
+        [x_label, mk_ty_comp x; y_label, mk_ty_comp y]
       | Some x_label, None ->
-        (x_label, convert_type env x) :: type_components ~allow_capital env y
+        (x_label, mk_ty_comp x) :: type_components ~allow_capital ~gen env y
     end
   | _ -> raise Exit
 
-and type_constrs env t = type_components ~allow_capital:true env t
-and type_labels env t = type_components ~allow_capital:false env t
+and type_constrs ~gen env t = type_components ~allow_capital:true ~gen env t
+and type_labels ~gen env t = type_components ~allow_capital:false ~gen env t
 
 
 (*
@@ -566,7 +598,7 @@ let rec convert_code env expr =
     mic_loc env index annot (TRANSFER_TOKENS)
   | Prim(index, "PUSH", [ ty; cst ], annot) ->
     let ty = convert_type env ty in
-    begin match ty, convert_const env ~ty cst with
+    begin match get_type ty, convert_const env ~ty cst with
       | Tnat, CInt n ->
         mic_loc env index annot (PUSH (Tnat, CNat n))
       | ty, cst ->
@@ -746,26 +778,44 @@ let const_of_string filename s =
 
 let convert_env env =
   let ty_env = LiquidFromOCaml.initial_env env.filename in
-  let types = List.rev env.types in
-  List.iter (fun (_, ty) -> match ty with
-      | Trecord (name, labels) ->
-        List.iteri (fun i (label, l_ty) ->
-            ty_env.labels <- StringMap.add label (name, i, l_ty) ty_env.labels;
-          ) labels;
-      | Tsum (name, constrs) ->
-        List.iter (fun (constr, c_ty) ->
-            ty_env.constrs <-
-              StringMap.add constr (name, c_ty) ty_env.constrs;
-          ) constrs;
-      | _ -> ()
-    ) types;
-  ty_env.types <-
-    List.fold_left (fun acc (n, ty) -> StringMap.add n ty acc)
-      ty_env.types types;
+  let new_types_map =
+    StringMap.map (fun (tys, _i) ->
+        let ty = match tys with
+          | [] -> assert false
+          | ty :: _ -> LiquidInfer.instantiate (LiquidInfer.free_tvars ty, ty)
+        in
+        begin match ty with
+          | Trecord (name, labels) ->
+            List.iteri (fun i (label, l_ty) ->
+                ty_env.labels <- StringMap.add label (name, i) ty_env.labels;
+              ) labels;
+          | Tsum (name, constrs) ->
+            List.iter (fun (constr, c_ty) ->
+                ty_env.constrs <-
+                  StringMap.add constr name ty_env.constrs;
+              ) constrs;
+          | _ -> ()
+        end;
+        let params = LiquidInfer.free_tvars ty |> StringSet.elements in
+        (fun pvals ->
+           let subst = LiquidInfer.make_subst params pvals in
+           LiquidInfer.instantiate_to subst ty
+           )
+    ) env.types in
+    ty_env.types <- StringMap.union (fun _ t1 _ -> Some t1) new_types_map ty_env.types;
   ty_env.contract_types <-
     List.fold_right (fun (n, c_sig) -> StringMap.add n c_sig)
       env.contract_types ty_env.contract_types;
   ty_env
 
 
-let infos_env env = env.annoted, env.type_annots, List.rev env.types
+let infos_env env =
+  let types =
+    [] |> StringMap.fold (fun n (tys, i) acc ->
+        match tys with
+        | [] -> assert false
+        | ty :: _ -> ((n, ty), i) :: acc
+      ) env.types
+    |> List.sort (fun (_, i1) (_, i2) -> Pervasives.compare i1 i2)
+    |> List.map fst in
+  env.annoted, env.type_annots, types

@@ -55,6 +55,8 @@ let default_warning_printer loc w =
          Format.fprintf fmt "%s is not recursive but was defined with rec" f
        | AlwaysFails ->
          Format.fprintf fmt "This expression always fails"
+       | WeakParam a ->
+         Format.fprintf fmt "Type parameter '%s is weak" a
     ) w
 
 let warning_printer = ref default_warning_printer

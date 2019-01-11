@@ -201,13 +201,14 @@ let lift_env rename = function
         ) map top in
     (* shadow previous definitions of inner_name *)
     shadow inner_name top_env;
-    top_env.types <- lift_to_top types top_env.types lift_type ;
+    top_env.types <- lift_to_top types top_env.types
+        (fun mk p -> lift_type (mk p));
     top_env.contract_types <-
       lift_to_top contract_types top_env.contract_types lift_contract_sig;
     top_env.labels <- lift_to_top labels top_env.labels
-        (fun (lab, n, ty) -> lift_name lab, n, lift_type ty);
+        (fun (lab, n) -> lift_name lab, n);
     top_env.constrs <- lift_to_top constrs top_env.constrs
-        (fun (c, ty) -> lift_name c, lift_type ty);
+        (fun c -> lift_name c);
     top_env.ext_prims <- lift_to_top ext_prims top_env.ext_prims
         (fun e -> { e with atys = List.map lift_type e.atys;
                            rty = lift_type e.rty });
@@ -367,11 +368,14 @@ let rec translate_type env ?expected typ =
         unbound_contract_type typ.ptyp_loc contract_type_name
     end
 
-  | { ptyp_desc = Ptyp_constr ({ txt = ty_name }, []) } ->
+  | { ptyp_desc = Ptyp_constr ({ txt = ty_name }, params); ptyp_loc } ->
     let ty_name = str_of_id ty_name in
     begin
-      try find_type ty_name env
-      with Not_found -> unbound_type typ.ptyp_loc ty_name
+      try
+        find_type ty_name env (List.map (translate_type env) params)
+      with
+      | Invalid_argument _ -> error_loc ptyp_loc "too many type arguments"
+      | Not_found -> unbound_type typ.ptyp_loc ty_name
     end
 
   | { ptyp_desc = Ptyp_any; ptyp_loc } ->
@@ -632,25 +636,15 @@ let rec translate_const env exp =
     let lid = str_of_id lid in
     begin
       try
-        let ty_name, tya = find_constr lid env in
         let c =
           match args with
           | None -> CUnit
           | Some args ->
             let c, ty_opt = translate_const env args in
-            let loc = loc_of_loc args.pexp_loc in
-            LiquidCheck.check_const_type ~to_tez:LiquidPrinter.tez_of_liq
-              loc tya c
-              (* begin match ty_opt with
-               *   | None -> ()
-               *   | Some ty ->
-               *     if ty <> tya then
-               *       error_loc exp.pexp_loc
-               *         ("wrong type for argument of constructor "^lid)
-               * end;
-               * c *)
+            c
         in
-        let ty = find_type ty_name env in
+        let ty_name = find_constr lid env in
+        let ty = find_type ty_name env [] in
         CConstr (lid, c), Some ty
       with Not_found -> raise NotAConstant
     end
@@ -660,19 +654,7 @@ let rec translate_const env exp =
       List.map (fun ({ txt = label; loc }, exp) ->
           try
             let label = str_of_id label in
-            let loc = loc_of_loc exp.pexp_loc in
-            let _, _, ty' = find_label label env in
             let c, ty_opt = translate_const env exp in
-            (* begin match ty_opt with
-             * | None -> ()
-             * | Some ty ->
-             *   if ty <> ty' then
-             *     error_loc loc ("wrong type for label "^label)
-             * end; *)
-            let c =
-              LiquidCheck.check_const_type ~to_tez:LiquidPrinter.tez_of_liq
-                loc ty' c
-            in
             label, c
           with Not_found ->
             error_loc exp.pexp_loc "unknown label %s" (str_of_id label)
@@ -681,8 +663,8 @@ let rec translate_const env exp =
       | [] -> error_loc exp.pexp_loc "empty record"
       | (label, _) :: _ ->
         try
-          let ty_name, _, _ = find_label label env in
-          find_type ty_name env
+          let ty_name, _ = find_label label env in
+          find_type ty_name env []
         with Not_found -> error_loc exp.pexp_loc "unknown label %s" label
     in
     CRecord lab_x_exp_list, Some ty
@@ -690,14 +672,7 @@ let rec translate_const env exp =
   | { pexp_desc = Pexp_constraint (cst, ty) } ->
     let cst, tyo = translate_const env cst in
     let ty = translate_type env ?expected:tyo ty in
-    begin
-      let loc = loc_of_loc exp.pexp_loc in
-      match tyo with
-      | None ->
-        LiquidCheck.check_const_type ~to_tez:LiquidPrinter.tez_of_liq loc ty cst, Some ty
-      | Some ty_infer ->
-        LiquidCheck.check_const_type ~to_tez:LiquidPrinter.tez_of_liq loc ty cst, Some ty
-    end
+    cst, Some ty
 
   | _ -> raise NotAConstant
 
@@ -812,7 +787,31 @@ let order_labelled_args loc labels args =
   | [] -> List.rev args
   | _ -> error_loc loc "too many arguments"
 
-let translate_record ty_name labels env =
+let add_type_alias ~loc ty_name params ty env =
+  let pset, params = List.fold_left (fun (acc, params) -> function
+      | { ptyp_desc = Ptyp_var alpha; ptyp_loc }, Invariant ->
+        if StringSet.mem alpha acc then
+          error_loc ptyp_loc "Type parameter '%s occurs several times" alpha;
+          if ty_name = "storage" && alpha.[0] <> '_' then
+            LiquidLoc.warn (loc_of_loc ptyp_loc) (WeakParam alpha);
+        StringSet.add alpha acc, alpha :: params
+      | { ptyp_loc }, _ ->
+        error_loc ptyp_loc "Type parameter not allowed";
+    ) (StringSet.empty, []) params in
+  let params = List.rev params in
+  if StringMap.mem ty_name env.types then
+    error_loc loc "type %s already defined" ty_name;
+  let tvars = free_tvars ty in
+  StringSet.iter (fun v ->
+      if not @@ StringSet.mem v pset then
+        error_loc loc "Unbound type parameter '%s" v) tvars;
+  let mk_ty pvals =
+    let subst = make_subst params pvals in
+    instantiate_to subst ty
+  in
+  env.types <- StringMap.add ty_name mk_ty env.types
+
+let translate_record ~loc ty_name params labels env =
   let rtys = List.mapi
       (fun i pld ->
          let label = pld.pld_name.txt in
@@ -821,14 +820,14 @@ let translate_record ty_name labels env =
            error_loc pld.pld_loc "label %s already defined" label;
          with Not_found ->
            let ty = translate_type env pld.pld_type in
-           env.labels <- StringMap.add label (ty_name, i, ty) env.labels;
+           env.labels <- StringMap.add label (ty_name, i) env.labels;
            (label, ty)
       ) labels
   in
   let ty = Trecord (ty_name, rtys) in
-  env.types <- StringMap.add ty_name ty env.types
+  add_type_alias ~loc ty_name params ty env
 
-let translate_variant ty_name constrs env =
+let translate_variant ~loc ty_name params constrs env =
   let constrs = List.map
       (fun pcd ->
          let constr = pcd.pcd_name.txt in
@@ -842,12 +841,12 @@ let translate_variant ty_name constrs env =
              | Pcstr_tuple tys -> Ttuple (List.map (translate_type env) tys)
              | Pcstr_record _ -> error_loc pcd.pcd_loc "syntax error"
            in
-           env.constrs <- StringMap.add constr (ty_name, ty) env.constrs;
+           env.constrs <- StringMap.add constr ty_name env.constrs;
            (constr, ty)
       ) constrs
   in
   let ty = Tsum (ty_name, constrs) in
-  env.types <- StringMap.add ty_name ty env.types
+  add_type_alias ~loc ty_name params ty env
 
 let check_version = function
   | { pexp_desc = Pexp_constant (Pconst_float (s, None)); pexp_loc } ->
@@ -1518,7 +1517,7 @@ let rec translate_code contracts env exp =
           let lid = str_of_id lid in
           begin
             try
-              let (_ty_name, _ty) = find_constr lid env in
+              let _ty_name = find_constr lid env in
               Constructor { constr = Constr lid;
                             arg = match args with
                               | None ->
@@ -1674,7 +1673,7 @@ and translate_entry name env contracts head_exp mk_parameter mk_storage =
       match storage_pat.ppat_desc with
       | Ppat_constraint _ | Ppat_construct _ ->
         begin try
-            let s = find_type "storage" env in
+            let s = find_type "storage" env [] in
             if not @@ eq_types s storage_ty then
               LiquidLoc.raise_error ~loc:storage_name.nloc
                 "storage argument %s for entry point %s must be the same type \
@@ -1700,7 +1699,7 @@ and translate_entry name env contracts head_exp mk_parameter mk_storage =
   | { pexp_desc = Pexp_constraint (head_exp, return_type); pexp_loc } ->
     begin match translate_type env return_type with
       | Ttuple [ ret_ty; sto_ty ] ->
-        let storage = find_type "storage" env in
+        let storage = find_type "storage" env [] in
         if not @@ eq_types sto_ty storage then
           error_loc pexp_loc
             "Second component of return type must be identical to storage type";
@@ -1797,7 +1796,7 @@ and translate_signature contract_type_name env acc ast =
   | { psig_desc = Psig_type (
       Recursive, [
         { ptype_name = { txt = ty_name; loc=name_loc };
-          ptype_params = [];
+          ptype_params = params;
           ptype_cstrs = [];
           ptype_private = Public;
           ptype_manifest = None;
@@ -1813,14 +1812,14 @@ and translate_signature contract_type_name env acc ast =
         if List.length labels < 2 then begin
           error_loc ptype_loc "record must have at least two fields"
         end;
-        translate_record ty_name labels env;
+        translate_record ~loc:ptype_loc ty_name params labels env;
       | Ptype_abstract -> ()
       | Ptype_open -> error_loc ptype_loc "bad type definition"
       | Ptype_variant constrs ->
         if List.length constrs < 2 then begin
           error_loc ptype_loc "variant type must have at least two constructors"
         end;
-        translate_variant ty_name constrs env;
+        translate_variant ~loc:ptype_loc ty_name params constrs env;
     end;
     translate_signature contract_type_name env acc ast
 
@@ -1829,7 +1828,7 @@ and translate_signature contract_type_name env acc ast =
       Recursive,
       [
         { ptype_name = { txt = ty_name; loc=name_loc };
-          ptype_params = [];
+          ptype_params = params;
           ptype_cstrs = [];
           ptype_private = Public;
           ptype_manifest = Some ct;
@@ -1839,9 +1838,7 @@ and translate_signature contract_type_name env acc ast =
         }
       ]) } :: ast ->
     let ty = translate_type env ct in
-    if StringMap.mem ty_name env.types then
-      error_loc name_loc "type %s already defined" ty_name;
-    env.types <- StringMap.add ty_name ty env.types;
+    add_type_alias ~loc:ptype_loc ty_name params ty env;
     translate_signature contract_type_name env acc ast
 
   | { psig_desc = Psig_extension (
@@ -2098,7 +2095,7 @@ and translate_structure env acc ast : syntax_contract option =
   | { pstr_desc = Pstr_type (Recursive,
                              [
                                { ptype_name = { txt = ty_name; loc=name_loc };
-                                 ptype_params = [];
+                                 ptype_params = params;
                                  ptype_cstrs = [];
                                  ptype_private = Public;
                                  ptype_manifest = None;
@@ -2114,14 +2111,14 @@ and translate_structure env acc ast : syntax_contract option =
         if List.length labels < 2 then begin
           error_loc ptype_loc "record must have at least two fields"
         end;
-        translate_record ty_name labels env;
+        translate_record ~loc:ptype_loc ty_name params labels env;
       | Ptype_abstract
       | Ptype_open -> error_loc ptype_loc "bad type definition"
       | Ptype_variant constrs ->
         if List.length constrs < 2 then begin
           error_loc ptype_loc "variant type must have at least two constructors"
         end;
-        translate_variant ty_name constrs env;
+        translate_variant ~loc:ptype_loc ty_name params constrs env;
     end;
     translate_structure env acc ast
 
@@ -2129,7 +2126,7 @@ and translate_structure env acc ast : syntax_contract option =
   | { pstr_desc = Pstr_type (Recursive,
                              [
                                { ptype_name = { txt = ty_name; loc=name_loc };
-                                 ptype_params = [];
+                                 ptype_params = params;
                                  ptype_cstrs = [];
                                  ptype_private = Public;
                                  ptype_manifest = Some ct;
@@ -2139,9 +2136,7 @@ and translate_structure env acc ast : syntax_contract option =
                                }
                              ]) } :: ast ->
     let ty = translate_type env ct in
-    if StringMap.mem ty_name env.types then
-      error_loc name_loc "type %s is already defined" ty_name;
-    env.types <- StringMap.add ty_name ty env.types;
+    add_type_alias ~loc:ptype_loc ty_name params ty env;
     translate_structure env acc ast
 
   (* contract types *)
@@ -2292,7 +2287,7 @@ and pack_contract env toplevels =
   then None
   else
     let storage =
-      try StringMap.find "storage" env.types
+      try StringMap.find "storage" env.types []
       with Not_found ->
         LiquidLoc.raise_error
           ~loc:(LiquidLoc.loc_in_file env.filename)
@@ -2327,14 +2322,14 @@ let predefined_constructors =
        need to be there to prevent the user from overriding
        them. *)
     [
-      "Some", ("'a option", Tunit);
-      "None", ("'a option", Tunit);
-      "::", ("'a list", Tunit);
-      "[]", ("'a list", Tunit);
-      "Left", ("('a, 'b) variant", Tunit);
-      "Right", ("('a, 'b) variant", Tunit);
-      "Map", ("('a, 'b) map", Tunit);
-      "Set", ("'a set", Tunit);
+      "Some", "'a option";
+      "None", "'a option";
+      "::", "'a list";
+      "[]", "'a list";
+      "Left", "('a, 'b) variant";
+      "Right", "('a, 'b) variant";
+      "Map", "('a, 'b) map";
+      "Set", "'a set";
     ]
 
 let predefined_types =
@@ -2381,7 +2376,7 @@ let filename_to_contract filename =
 
 let initial_env filename =
   {
-    types = predefined_types;
+    types = StringMap.map (fun ty -> fun _ -> ty) predefined_types;
     contract_types = predefined_contract_types;
     labels = StringMap.empty;
     constrs = predefined_constructors;
