@@ -135,13 +135,16 @@ htmlhelp_basename = 'Liqdoc'
 latex_elements = {
     'inputenc':'',
     'utf8extra': '',
-    'preamble': '''
-
-\usepackage{fontspec}
-\setsansfont{Arial}
-    \setromanfont{Times New Roman}
-\setmonofont{Courier 10 Pitch}
-''',
+    'preamble': r'''
+      \usepackage{fontspec}
+      \IfFontExistsTF{Lato}{\setsansfont{Lato}}{\setsansfont{Arial}}
+      \IfFontExistsTF{Linux Libertine O}{
+        \setromanfont[Scale=1.1]{Linux Libertine O}
+      }{\setromanfont{Times New Roman}}
+      \IfFontExistsTF{DejaVu Sans Mono}{
+        \setmonofont[Scale=MatchLowercase]{DejaVu Sans Mono}
+      }{\setmonofont[Scale=MatchLowercase]{Courier}}
+    ''',
 
     # The paper size ('letterpaper' or 'a4paper').
     #

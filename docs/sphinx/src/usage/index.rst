@@ -207,7 +207,7 @@ Deploying a contract
 ~~~~~~~~~~~~~~~~~~~~
 
 To deploy a contract you need to forge a deployment operation, sign
-this operation ans inject it to a Tezos node. This can be performed
+this operation and inject it to a Tezos node. This can be performed
 separately or all at once with the command ``--deploy``.
 
 

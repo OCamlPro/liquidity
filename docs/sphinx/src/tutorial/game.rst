@@ -271,7 +271,7 @@ depleted, by simply adding more funds to it.
 
 .. code-block:: OCaml
 
-   let%entry fund _ storage =
+   let%entry fund () storage =
      [], storage
 
 This code does nothing, excepted accepting transfers with amounts.

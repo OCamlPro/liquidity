@@ -35,11 +35,10 @@ All the contracts have the following form::
 
   ...
 
-The ``version`` statement tells the compiler in which version of
-Liquidity the contract is written. The compiler will reject any
+The optional ``version`` statement tells the compiler in which version
+of Liquidity the contract is written. The compiler will reject any
 contract that has a version that it does not understand (too old, more
-recent). We expect to reach version 1.0 at the launch of the Tezos
-network.
+recent).
 
 A contract is composed of type declarations, local values definitions,
 an initializer, and a set of entry points. The type ``storage`` must
@@ -127,9 +126,12 @@ and the predefined algebraic data types:
 Record and variant types must be declared beforehand and are referred
 to by their names.
 
+User defined types can be parameterized by type variables. See
+`Polymorphism`_ for the specifics and limitations.
 
-Constants Values
-~~~~~~~~~~~~~~~~
+
+Constant Values
+~~~~~~~~~~~~~~~
 
 The unique constructor of type ``unit`` is ``()``.
 
@@ -201,11 +203,14 @@ type and another compatible type, using the notation
   integer in mutez à la Michelson), ``timestamp``, ``key``,
   ``address``, ``_ contract``, ``key_hash`` and ``signature``.
 * A ``bytes`` can be coerced to ``address``, ``_.instance``, ``key``,
-   ``key_hash`` and ``signature``.
+  ``key_hash`` and ``signature``.
 * An ``address`` can be coerced to ``_.instance``.
 * A ``_.instance`` can be coerced to ``address``.
 * A ``key_hash`` can be coerced to ``UnitContract.instance`` and ``address``.
 
+Starting with version ``0.5``, constant values such as ``[]``,
+``Map``, ``Set``, ``None`` do not need to be annotated with their type
+anymore. It will be inferred (when possible), see `Type inference`_).
 
 Predefined Primitives
 ---------------------
@@ -230,7 +235,7 @@ Whereas functions can only take one argument in Liquidity/Michelson
 (possibly a tuple), primitives can take multiple arguments.
 
 Extended Primitives
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~
 
 Additional prefix Michelson primitives can be added to the language
 through a local declaration as follows:
@@ -967,7 +972,7 @@ storage. Big maps cannot be iterated.
   big_map``. Syntactic sugar for ``Map.update (Some ...)``.
 
 * ``Map.remove: 'key -> ('key,'val) big_map -> ('key,'val) big_map``.
-   Syntactic sugar for ``Map.update None``.
+  Syntactic sugar for ``Map.update None``.
 
   .. tryliquidity:: ../../../../tests/doc/doc68.liq
   .. literalinclude:: ../../../../tests/doc/doc68.liq
@@ -1090,6 +1095,64 @@ parameter is of type ``unit``:
 .. tryliquidity:: ../../../../tests/doc/doc70.liq
 .. literalinclude:: ../../../../tests/doc/doc70.liq
 
+
+Type inference and Polymorphism
+-------------------------------
+
+A new addition of version ``0.5`` of the Liquidity compiler is a type
+inference algorithm (a variant of Hindley-Milner type inference) which
+works in the presence of parametric types and polymorphic values
+(functions) and can infer parametric types.
+
+Type inference
+~~~~~~~~~~~~~~
+
+A consequence of this addition is that most type annotations in
+Liquidity are now unnecessary, but can be used to restrict types or to
+enforce a constraint. This makes programs more readable by removing
+superfluous noise.
+
+In particular, types of entry point parameters, storage initializer
+parameters, constant values (like ``[]``, ``None``, *etc.*) and
+functions are not necessary anymore.
+
+The following example shows type inference at work.
+
+.. tryliquidity:: ../../../../tests/doc/doc71.liq
+.. literalinclude:: ../../../../tests/doc/doc71.liq
+
+Polymorphism
+~~~~~~~~~~~~
+
+In general, values in Liquidity cannot be polymorphic: type variables
+must (and will) be instantiated (by inference and
+monomorphization). This restriction is inherited from
+Michelson. However there is still a way to write *polymorphic
+functions*. This is especially useful to write reusable
+code. Polymorphic functions are transformed into several monomorphized
+versions. For instance a function ``f : 'a option -> int`` will be
+transformed into two functions ``f_i : int option`` and
+``f_Ln : nat list option`` if it is used with both an integer argument
+and a list of naturals argument in the code.
+
+To make this extension even more useful, Liquidity allows user
+declared type to be *parameterized* by one or more type
+variables. Every type variable that appears in the type definition
+must also appear in the type name declaration (on the left hand side).
+
+The following example defines a record type ``('a, 'b) t`` with two
+fields whose type are parameters. The function ``mk_t`` builds values
+of type ``t`` with it argument. ``mk_t`` has the polymorphic type
+``mk_t : ('a * 'b) -> ('a, b') t``.
+
+.. tryliquidity:: ../../../../tests/doc/doc72.liq
+.. literalinclude:: ../../../../tests/doc/doc72.liq
+
+The type of storage cannot be polymorphic, however it can contain
+*weak type variables* (like ``'_a``), which means they must be the
+same for every instance (*i.e.* there can only be one instance of type
+``storage``). For example writing ``type '_a storage = '_a`` allows
+type storage to be inferred.
 
 From Michelson to Liquidity
 ---------------------------

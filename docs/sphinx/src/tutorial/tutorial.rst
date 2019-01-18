@@ -8,7 +8,7 @@ TODO
 Tuples
 ------
 
-Tuples in Liquidity are compiled to pairs in Michelson::
+Tuples in Liquidity are compiled to nested pairs in Michelson::
 
  (x, y, z) <=> Pair x (Pair y z)
 
@@ -128,18 +128,17 @@ however recommended to use a single tuple argument when possible. Arguments
 and return types are inferred, which enables to write polymorphic functions.
 Type annotations may optionally be used to constrain their type.
 
-Function applications are often done using the ``Lambda.pipe`` function
+Function applications are written by juxtaposing the function and its argument::
+
+  let succ x = x + 1 in
+  let one = succ 0 in
+  ...
+
+but they can also be written using the ``Lambda.pipe`` function
 or the ``|>`` operator::
 
   let succ = fun x -> x + 1 in
   let one = 0 |> succ in
-  ...
-
-but they can also be done directly::
-
-  ...
-  let succ x = x + 1 in
-  let one = succ 0 in
   ...
 
 A toplevel function can also be defined before the main entry point::
@@ -157,7 +156,7 @@ Closures can be created with the same syntax::
 
  let p = 10 in
  let sum_and_add_p x y = x + y + p in
- let r = add_p 3 4 in
+ let r = sum_and_add_p 3 4 in
  ...
 
 This is equivalent to::
@@ -168,7 +167,7 @@ This is equivalent to::
      fun y ->
        x + y + p
  in
- let r = 4 |> (3 |> add_p) in
+ let r = (sum_and_add_p 3) 4 in
  ...
 
 
@@ -181,7 +180,7 @@ be written as::
    let p = 10 in
    x + y + p
  in
- let r = add_p (3, 4) in
+ let r = sum_and_add_p (3, 4) in
  ...
 
 
