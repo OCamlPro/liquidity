@@ -345,6 +345,9 @@ let rec translate_type env ?expected typ =
     Tlambda (translate_type env (* ?expected:expected *) parameter_type,
              translate_type env return_type)
 
+  | { ptyp_desc = Ptyp_tuple [ty] } ->
+    translate_type env ?expected ty
+
   | { ptyp_desc = Ptyp_tuple types } ->
     let expecteds = match expected with
       | Some (Ttuple tys) when List.length types = List.length tys ->
@@ -486,6 +489,9 @@ let rec translate_const env exp =
 
   | { pexp_desc = Pexp_constant (Pconst_string (s, None)) } ->
     CString s, Some Tstring
+
+  | { pexp_desc = Pexp_tuple [exp] } ->
+    translate_const env exp
 
   | { pexp_desc = Pexp_tuple exps } ->
     let csts, tys = List.split (List.map (translate_const env) exps) in
@@ -703,6 +709,7 @@ let rec translate_const env exp =
 
 and translate_list exp =
   match exp.pexp_desc with
+  | Pexp_tuple [exp] -> translate_list exp
   | Pexp_construct({ txt = Lident "[]" }, None) -> []
 
   | Pexp_construct({ txt = Lident "::" },
@@ -713,6 +720,7 @@ and translate_list exp =
 
 and translate_pair exp =
   match exp.pexp_desc with
+  | Pexp_tuple [exp] -> translate_pair exp
   | Pexp_tuple [e1; e2] -> (e1, e2)
   | _ -> error_loc exp.pexp_loc "pair expected"
 
@@ -736,6 +744,9 @@ let vars_info_pat env pat =
     | { ppat_desc = Ppat_construct ({ txt = Lident "()" }, None); ppat_loc } ->
       ("_", loc_of_loc ppat_loc, indexes) :: acc,
       Tunit
+
+    | { ppat_desc = Ppat_tuple [pat] } ->
+      vars_info_pat_aux acc indexes pat
 
     | { ppat_desc = Ppat_tuple pats } ->
       let _, acc, tys =
@@ -1580,6 +1591,9 @@ let rec translate_code contracts env exp =
                           | Some arg -> translate_code contracts env arg }
 
         (* TODO *)
+        | { pexp_desc = Pexp_tuple [exp] } ->
+          (translate_code contracts env exp).desc
+
         | { pexp_desc = Pexp_tuple exps } ->
           let exps = List.map (translate_code contracts env) exps in
           begin

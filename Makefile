@@ -24,7 +24,7 @@ clean: _obuild clean-tests clean-sources
 
 build-deps:
 	opam install ocp-build ocplib-endian zarith calendar digestif.0.7 hex ocurl lwt \
-	       lwt_log uri sodium bigstring ezjsonm
+	       lwt_log uri sodium bigstring ezjsonm menhir
 
 distclean: clean
 	rm -rf _obuild
