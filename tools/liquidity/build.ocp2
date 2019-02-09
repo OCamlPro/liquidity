@@ -90,7 +90,6 @@ OCaml.library("ocplib-liquidity-ocaml",
      requires = [
         "ocplib-liquidity-base";
         "compiler-libs.common";
-        "compiler-libs.bytecomp";
      ];
 
    });

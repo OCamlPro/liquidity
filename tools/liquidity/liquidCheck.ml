@@ -285,6 +285,13 @@ let rec typecheck_const ~loc env cst ty =
   | Taddress, CBytes s -> ty, CContract s
   | Tsignature, CBytes s -> ty, CSignature s
 
+  | Ttimestamp, CString s -> ty, CTimestamp (ISO8601.of_string s)
+  | Ttez, CString s -> ty, CTez (LiquidPrinter.tez_of_liq s)
+  | Tkey_hash, CString s -> ty, CKey_hash s
+  | Tcontract _, CString s -> ty, CContract s
+  | Tkey, CString s -> ty, CKey s
+  | Tsignature, CString s -> ty, CSignature s
+
   (* Structures *)
   | Ttuple tys, CTuple csts ->
     begin
@@ -2006,145 +2013,3 @@ let rec type_of_const = function
   (* XXX just for printing *)
   | CRecord _ -> Trecord ("<record>", [])
   | CConstr _ -> Tsum ("<sum>", [])
-
-
-let check_const_type ?(from_mic=false) ~to_tez loc ty cst =
-  let top_ty, top_cst = ty, cst in
-  let rec check_const_type ty cst =
-    match ty, cst with
-    | Tunit, CUnit -> CUnit
-    | Tbool, CBool b -> CBool b
-
-    | Tint, CInt s
-    | Tint, CNat s -> CInt s
-
-    | Tnat, CInt s
-    | Tnat, CNat s -> CNat s
-
-    | Tstring, CString s -> CString s
-
-    | Tbytes, CBytes s -> CBytes s
-
-    | Ttez, CTez s -> CTez s
-
-    | Tkey, CKey s -> CKey s
-    | Tkey, CBytes s -> CKey s
-
-    | Tkey_hash, CKey_hash s -> CKey_hash s
-    | Tkey_hash, CBytes s -> CKey_hash s
-
-    | Tcontract _, CContract s -> CContract s
-    | Tcontract _, CAddress s -> CAddress s
-    | Tcontract { entries_sig = [{ parameter= Tunit }] } , CKey_hash s ->
-      CKey_hash s
-    | Tcontract _, CBytes s -> CContract s
-
-    | Taddress, CAddress s -> CAddress s
-    | Taddress, CContract s -> CContract s
-    | Taddress, CKey_hash s -> CKey_hash s
-    | Taddress, CBytes s -> CContract s
-
-    | Ttimestamp, CTimestamp s -> CTimestamp s
-
-    | Tsignature, CSignature s -> CSignature s
-    | Tsignature, CBytes s -> CSignature s
-
-    | Ttuple tys, CTuple csts ->
-      begin
-        try
-          CTuple (List.map2 check_const_type tys csts)
-        with Invalid_argument _ ->
-          error loc "constant type mismatch (tuple length differs from type)"
-      end
-
-    | Toption _, CNone -> CNone
-    | Toption ty, CSome cst -> CSome (check_const_type ty cst)
-
-    | Tor (left_ty, _), CLeft cst ->
-      CLeft (check_const_type left_ty cst)
-
-    | Tor (_, right_ty), CRight cst ->
-      CRight (check_const_type right_ty cst)
-
-    | Tmap (ty1, ty2), CMap csts ->
-      CMap (List.map (fun (cst1, cst2) ->
-          check_const_type ty1 cst1,
-          check_const_type ty2 cst2) csts)
-
-    | Tbigmap (ty1, ty2), (CMap csts | CBigMap csts) -> (* allow map *)
-      CBigMap (List.map (fun (cst1, cst2) ->
-          check_const_type ty1 cst1,
-          check_const_type ty2 cst2) csts)
-
-    | Tlist ty, CList csts ->
-      CList (List.map (check_const_type ty) csts)
-
-    | Tset ty, CSet csts ->
-      CSet (List.map (check_const_type ty) csts)
-
-    | Trecord (rname, labels), CRecord fields ->
-      (* order record fields wrt type *)
-      List.iter (fun (f, _) ->
-          if not @@ List.mem_assoc f labels then
-            error loc "Record field %s is not in type %s" f rname
-        ) fields;
-      let fields = List.map (fun (f, ty) ->
-          try
-            let cst = List.assoc f fields in
-            f, check_const_type ty cst
-          with Not_found ->
-            error loc "Record field %s is missing" f
-        ) labels in
-      CRecord fields
-
-    | Tsum (sname, constrs), CConstr (c, cst) ->
-      CConstr (c,
-               try
-                 let ty = List.assoc c constrs in
-                 check_const_type ty cst
-               with Not_found ->
-                 error loc "Constructor %s does not belong to type %s" c sname
-              )
-
-    | Tvar _, c -> c
-
-    | _ ->
-      if from_mic then
-        match ty, cst with
-        | Ttimestamp, CString s ->
-          begin (* approximation of correct tezos timestamp *)
-            try Scanf.sscanf s "%_d-%_d-%_dT%_d:%_d:%_dZ%!" ()
-            with _ ->
-            try Scanf.sscanf s "%_d-%_d-%_d %_d:%_d:%_dZ%!" ()
-            with _ ->
-            try Scanf.sscanf s "%_d-%_d-%_dT%_d:%_d:%_d-%_d:%_d%!" ()
-            with _ ->
-            try Scanf.sscanf s "%_d-%_d-%_dT%_d:%_d:%_d+%_d:%_d%!" ()
-            with _ ->
-            try Scanf.sscanf s "%_d-%_d-%_d %_d:%_d:%_d-%_d:%_d%!" ()
-            with _ ->
-            try Scanf.sscanf s "%_d-%_d-%_d %_d:%_d:%_d+%_d:%_d%!" ()
-            with _ ->
-              error loc "Bad format for timestamp"
-          end;
-          CTimestamp s
-
-        | Ttez, CString s -> CTez (to_tez s)
-        | Tkey_hash, CString s -> CKey_hash s
-        | Tcontract _, CString s -> CContract s
-        | Tkey, CString s -> CKey s
-        | Tsignature, CString s -> CSignature s
-
-        | Tvar _, c -> c
-
-        | _ ->
-          error loc "constant type mismatch, expected %s, got %s"
-            (LiquidPrinter.Liquid.string_of_type top_ty)
-            (LiquidPrinter.Liquid.string_of_type (type_of_const top_cst))
-      else
-        error loc "constant type mismatch, expected %s, got %s"
-          (LiquidPrinter.Liquid.string_of_type top_ty)
-          (LiquidPrinter.Liquid.string_of_type (type_of_const top_cst))
-
-  in
-  check_const_type ty cst

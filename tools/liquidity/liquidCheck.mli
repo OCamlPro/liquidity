@@ -34,9 +34,3 @@ val typecheck_code :
   ?expected_ty:LiquidTypes.datatype ->
   syntax_exp ->
   typed_exp
-
-val check_const_type :
-  ?from_mic:bool ->
-  to_tez:(string -> LiquidTypes.tez) ->
-  LiquidTypes.location ->
-  LiquidTypes.datatype -> LiquidTypes.const -> LiquidTypes.const
