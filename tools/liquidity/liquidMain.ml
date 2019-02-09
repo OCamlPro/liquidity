@@ -262,6 +262,18 @@ module Data = struct
 
   let get_inputs () = List.rev !init_inputs
 
+  let validate_contract_addr s =
+    if String.length s <> 36 || String.sub s 0 3 <> "KT1" then
+      failwith (s ^ " is not a valid contract address")
+
+  let validate_key_hash s =
+    if String.length s <> 36 || String.sub s 0 2 <> "tz" then
+      failwith (s ^ " is not a valid key hash")
+
+  let validate_private_key s =
+    if (String.length s <> 54 || let p = String.sub s 0 4 in
+        p <> "edpk" || p <> "sppk" || p <> "p2pk") then
+      failwith (s ^ " is not a valid private key")
 end
 
 let compile_files () =
@@ -531,10 +543,14 @@ let main () =
         ),
       "<0.05tz> Set fee for deploying a contract (default: 0.05tz)";
 
-      "--source", Arg.String (fun s -> LiquidOptions.source := Some s),
+      "--source", Arg.String (fun s ->
+          Data.validate_key_hash s;
+          LiquidOptions.source := Some s),
       "<tz1...> Set the source for deploying or running a contract (default: none)";
 
-      "--private-key", Arg.String (fun s -> LiquidOptions.private_key := Some s),
+      "--private-key", Arg.String (fun s ->
+          Data.validate_private_key s;
+          LiquidOptions.private_key := Some s),
       "<edsk...> Set the private key for deploying a contract (default: none)";
 
       "--counter", Arg.Int (fun n -> LiquidOptions.counter := Some n),
@@ -601,7 +617,9 @@ let main () =
       " [INPUT1 INPUT2 ...] Deploy contract";
 
       "--get-storage", Arg.Tuple [
-        Arg.String (fun s -> Data.contract_address := s);
+        Arg.String (fun s ->
+            Data.validate_contract_addr s;
+            Data.contract_address := s);
         Arg.Unit (fun () ->
             work_done := true;
             get_storage ());
@@ -609,7 +627,9 @@ let main () =
       "<KT1...> Get deployed contract storage";
 
       "--call", Arg.Tuple [
-        Arg.String (fun s -> Data.contract_address := s);
+        Arg.String (fun s ->
+            Data.validate_contract_addr s;
+            Data.contract_address := s);
         Arg.String (fun s -> Data.entry_name := s);
         Arg.String (fun s -> Data.parameter := s);
         Arg.Unit (fun () ->
@@ -619,7 +639,9 @@ let main () =
       "<KT1...> ENTRY PARAMETER Call deployed contract";
 
       "--forge-call", Arg.Tuple [
-        Arg.String (fun s -> Data.contract_address := s);
+        Arg.String (fun s ->
+            Data.validate_contract_addr s;
+            Data.contract_address := s);
         Arg.String (fun s -> Data.entry_name := s);
         Arg.String (fun s -> Data.parameter := s);
         Arg.Unit (fun () ->
