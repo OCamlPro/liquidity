@@ -2,3 +2,4 @@
 _obuild
 /tests/*.cm?
 /tests/*/*.cm?
+*-orig
