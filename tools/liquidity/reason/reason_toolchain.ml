@@ -729,7 +729,7 @@ module Reason_syntax = struct
 
   let custom_error supplier env =
     let loc = last_token_loc supplier in
-    let token = match supplier.last_token with
+    let _token = match supplier.last_token with
       | Some token -> token
       | None -> assert false
     in
@@ -767,7 +767,7 @@ module Reason_syntax = struct
       begin match Reason_syntax_util.findMenhirErrorMessage loc with
         | Reason_syntax_util.MenhirMessagesError _ -> ()
         | Reason_syntax_util.NoMenhirMessagesError ->
-          let token = match supplier.last_token with
+          let _token = match supplier.last_token with
             | Some token -> token
             | None -> assert false
           in

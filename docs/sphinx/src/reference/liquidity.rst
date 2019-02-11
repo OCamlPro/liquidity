@@ -1154,6 +1154,130 @@ same for every instance (*i.e.* there can only be one instance of type
 ``storage``). For example writing ``type '_a storage = '_a`` allows
 type storage to be inferred.
 
+ReasonML Syntax
+---------------
+
+Liquidity supports two syntaxes:
+
+* OCaml syntax (OCaml with Tezos-specific changes)
+* `ReasonML syntax <https://reasonml.github.io/>`_ (with Tezos-specific changes)
+
+ReasonML Compiler Arguments
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+By default, the compiler uses expects the OCaml syntax, and outputs
+files in OCaml syntax. This behavior can be changed using the ``--re``
+argument. When this argument is provided, the compiler will expect files
+in ReasonML syntax and output files in ReasonML syntax. If your file
+is ``test-re.liq``, you can compile it using::
+
+  liquidity --re test-re.liq
+
+You can also convert a file from one syntax to another, using the
+``--convert FILE`` argument. For example, a file in OCaml-syntax can
+be converted to ReasonML syntax::
+
+  $ liquidity --convert test19.liq
+  %version
+  0.5;
+  
+  type storage = {
+    key,
+    hash: bytes,
+    c: address,
+  };
+  
+  let%init storage: storage = {
+    key: 0x0085b1e4560f47f089d7b97aabcf46937a4c137a9c3f96f73f20c83621694e36d5,
+    hash: 0xabcdef,
+    c: KT1LLcCCB9Fr1hrkGzfdiJ9u3ZajbdckBFrF,
+  };
+  
+  contract PlusOne = {
+    type storage = int;
+  
+    type t =
+      | A
+      | B;
+  
+    let%init init_storage = (x: bool, y: int) =>
+      if (x == false) {
+        0;
+      } else {
+        y;
+      };
+  
+    let%entry main = (_: unit, s) => ([], s + 1);
+  };
+  
+  let%entry main = (sign: signature, storage) => {
+    let x = PlusOne.A;
+    switch (x) {
+    | PlusOne.B => failwith()
+    | _ => ()
+    };
+  
+    let key_hash = Crypto.hash_key(storage.key);
+    if (key_hash == tz1KqTpEZ7Yob7QbPE4Hy4Wo8fHG8LhKxZSx) {
+      Current.failwith();
+    };
+    if (key_hash
+        == Crypto.hash_key(
+             edpkuTXkJDGcFd5nh6VvMz8phXxU3Bi7h6hqgywNFi1vZTfQNnS1RV,
+           )) {
+      Current.failwith();
+    };
+    let delegate = Some(key_hash);
+    let spendable = Crypto.check(storage.key, sign, storage.hash);
+    let amount = Current.amount();
+    let amount =
+      switch (amount / 2p) {
+      | None => Current.failwith()
+      | Some(qr) => qr
+      };
+  
+    let delegatable = false;
+    let _cocococ: option(PlusOne.instance) = Contract.at(storage.c);
+    let _cocococ2 = PlusOne.at(storage.c);
+    let _op1 = Contract.self().main(sign, ~amount=0tz);
+    let (account_op, _account) =
+      Account.create(key_hash, delegate, delegatable, amount[0] + amount[1]);
+    let (c_op, c_addr) =
+      Contract.create(
+        ~manager=key_hash,
+        ~delegate,
+        ~spendable,
+        ~delegatable=true,
+        ~amount=amount[0],
+        ~storage=9,
+        (contract PlusOne),
+      );
+  
+    let storage = storage.c = c_addr;
+    ([account_op, c_op], storage);
+  };
+
+The same file can be converted back and forth::
+
+  $ liquidity --convert test19.liq > test19-re.liq
+  $ liquidity --re --convert test19-re.liq > test19.liq
+
+Beware however that the conversion loses the comments.
+
+ReasonML Syntax Extensions
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Liquidity borrows most of ReasonML syntax, with a few changes, similar to
+the changes in the OCaml syntax:
+
+* The ``module`` keyword is replaced by the ``contract`` keyword, to define
+  contracts and contract signatures
+* Tezos-specific literals are available, such as ``12.2tz``,
+  ``tz1KqTpEZ7Yob7QbPE4Hy4Wo8fHG8LhKxZSx``, etc.
+
+A good way to learn this syntax is to use the syntax conversion
+argument of the compiler (``--convert FILE``).
+  
 From Michelson to Liquidity
 ---------------------------
 

@@ -3,3 +3,7 @@ _obuild
 /tests/*.cm?
 /tests/*/*.cm?
 *-orig
+/liquidity
+/liquidity-mini
+/docs/sphinx/src/_extensions/__pycache__/
+

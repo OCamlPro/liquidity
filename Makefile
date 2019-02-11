@@ -5,7 +5,9 @@ clone-tezos:
 	git submodule update --init
 
 build: _obuild
-	ocp-build build
+	ocp-build build 
+	cp -f _obuild/liquidity/liquidity.asm ./liquidity
+	cp -f _obuild/liquidity-mini/liquidity-mini.asm ./liquidity-mini
 
 install: _obuild
 	ocp-build install liquidity
@@ -21,6 +23,7 @@ clean-sources:
 
 clean: _obuild clean-tests clean-sources
 	ocp-build clean
+	rm -f liquidity
 
 build-deps:
 	opam install ocp-build ocplib-endian zarith calendar digestif.0.7 hex ocurl lwt \
