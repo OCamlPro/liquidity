@@ -1567,10 +1567,14 @@ let string_of_expression x =
   expression f x;
   flush_str_formatter ()
 
-let string_of_structure x =
+let string_of_structure str =
   ignore (flush_str_formatter ());
-  let f = str_formatter in
-  structure reset_ctxt f x;
+  let ppf = str_formatter in
+  if !LiquidOptions.ocaml_syntax then
+    structure reset_ctxt ppf str
+  else
+    Reason_toolchain.RE.print_implementation_with_comments ppf
+      (Reason_toolchain.From_current.copy_structure str,[]);
   flush_str_formatter ()
 
 let top_phrase f x =

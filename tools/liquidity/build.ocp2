@@ -78,6 +78,21 @@ OCaml.library("ocplib-liquidity-base",
 OCaml.library("ocplib-liquidity-ocaml",
    ocaml + {
      files = [
+       "reason/reason_string.ml";
+       "reason/reason_attributes.ml";
+       "reason/reason_syntax_util.mli";
+       "reason/reason_syntax_util.ml";
+       "reason/reason_config.ml";
+       "reason/reason_parser.mly", { ocamlyacc= [ "menhir"; "--table"] };
+       "reason/reason_comment.ml";
+       "reason/lexer_warning.ml";
+       "reason/reason_lexer.mll";
+       "reason/reason_location.ml";
+       "reason/reason_layout.ml";
+       "reason/reason_heuristics.ml";
+       "reason/reason_pprint_ast.ml"; 
+       "reason/reason_toolchain.ml";
+
        "ocaml/liquidOCamlParser.mly";
        "ocaml/liquidOCamlLexer.mll";
        "ocaml/liquidOCamlParse.ml";
@@ -88,11 +103,18 @@ OCaml.library("ocplib-liquidity-ocaml",
        "liquidData.ml";
      ];
      requires = [
+        "easy-format";
+        "ocaml-migrate-parsetree";
+        "menhirLib";
+        
         "ocplib-liquidity-base";
         "compiler-libs.common";
      ];
 
    });
+
+
+
 
 if ( with_tezos ) {
 OCaml.library("ocplib-liquidity-with-tezos",

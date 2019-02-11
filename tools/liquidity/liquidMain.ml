@@ -285,19 +285,22 @@ let compile_files () =
     List.partition (fun filename ->
         Filename.check_suffix filename ".tz" ||
         Filename.check_suffix filename ".json") others in
-  match liq_files, tz_files, unknown with
-  | _, _, _ :: _ ->
+  match unknown with
+    [] ->
+    begin match liq_files, tz_files with
+      | [], [] ->
+        Format.eprintf "No files given as arguments@.";
+        raise Bad_arg
+      | [], _ ->
+        compile_tezos_files tz_files
+      | _, _ ->
+        compile_liquid_files liq_files;
+        compile_tezos_files tz_files
+    end
+  | _ ->
     Format.eprintf "Error: unknown extension for files: %a@."
       (Format.pp_print_list Format.pp_print_string) unknown;
     exit 2
-  | [], [], _ ->
-    Format.eprintf "No files given as arguments@.";
-    raise Bad_arg
-  | [], _, _ ->
-    compile_tezos_files tz_files
-  | _, _, _ ->
-    compile_liquid_files liq_files;
-    compile_tezos_files tz_files
 
 let translate () =
   let files = Data.get_files () in
@@ -491,11 +494,32 @@ let parse_tez_to_string expl amount =
   | _ -> assert false
 
 
+let convert_file filename =
+  if not (Filename.check_suffix filename ".liq") then
+    Printf.kprintf
+      failwith "Error: don't know what to do with filename %S" filename;
+
+  let syntax = !LiquidOptions.ocaml_syntax in
+  let ic = open_in filename in
+  let lexbuf = Lexing.from_channel ic in
+  let str = LiquidOCamlParse.implementation lexbuf in
+
+  LiquidOptions.ocaml_syntax := not syntax;
+  let s = LiquidOCamlPrinter.string_of_structure str in
+  LiquidOptions.ocaml_syntax := syntax;
+  Printf.printf "%s%!" s;
+  ()
+
 let main () =
   let work_done = ref false in
   let arg_list = Arg.align [
       "--verbose", Arg.Unit (fun () -> incr LiquidOptions.verbosity),
       " Increment verbosity";
+
+      "--re", Arg.Clear LiquidOptions.ocaml_syntax, " Use ReasonML syntax";
+      "--convert", Arg.String (fun s ->
+          convert_file s;
+          work_done := true), " Switch between OCaml and ReasonML syntax (stdout)";
 
       "--version", Arg.Unit (fun () ->
           Format.printf "%s@." LiquidToOCaml.output_version;
