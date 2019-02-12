@@ -18,9 +18,9 @@ open LiquidTypes
 let rec default_const = function
   | Tunit -> CUnit
   | Tbool -> CBool false
-  | Tint -> CInt (LiquidPrinter.integer_of_int 0)
-  | Tnat -> CNat (LiquidPrinter.integer_of_int 0)
-  | Ttez -> CTez (LiquidPrinter.tez_of_liq "0")
+  | Tint -> CInt (LiquidInteger.integer_of_int 0)
+  | Tnat -> CNat (LiquidInteger.integer_of_int 0)
+  | Ttez -> CTez (LiquidInteger.tez_of_liq "0")
   | Tstring -> CString ""
   | Tbytes -> CBytes "0x"
   | Ttimestamp -> CTimestamp "1970-01-01T00:00:00Z"
@@ -60,9 +60,9 @@ let rec default_const = function
 let rec default_empty_const = function
   | Tunit -> CUnit
   | Tbool -> CBool false
-  | Tint -> CInt (LiquidPrinter.integer_of_int 0)
-  | Tnat -> CNat (LiquidPrinter.integer_of_int 0)
-  | Ttez -> CTez (LiquidPrinter.tez_of_liq "0")
+  | Tint -> CInt (LiquidInteger.integer_of_int 0)
+  | Tnat -> CNat (LiquidInteger.integer_of_int 0)
+  | Ttez -> CTez (LiquidInteger.tez_of_liq "0")
   | Tstring -> CString ""
   | Tbytes -> CBytes "0x"
   | Ttimestamp -> CTimestamp "1970-01-01T00:00:00Z"
@@ -164,11 +164,11 @@ let translate env contract_sig s ty =
   translate_const_exp enc_exp
 
 
-let string_of_const ?ty c =
-  let e = LiquidToOCaml.convert_const c in
-  let e = match ty with
-    | None -> e
-    | Some ty ->
-      Ast_helper.Exp.constraint_ e (LiquidToOCaml.convert_type ty)
-  in
-  LiquidToOCaml.string_of_expression e
+(* let string_of_const ?ty c =
+ *   let e = LiquidToOCaml.convert_const c in
+ *   let e = match ty with
+ *     | None -> e
+ *     | Some ty ->
+ *       Ast_helper.Exp.constraint_ e (LiquidToOCaml.convert_type ty)
+ *   in
+ *   LiquidToOCaml.string_of_expression e *)

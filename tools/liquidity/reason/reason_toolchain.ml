@@ -124,6 +124,7 @@ module type Toolchain = sig
   val print_interface_with_comments: Format.formatter -> (Parsetree.signature * Reason_comment.t list) -> unit
   val print_implementation_with_comments: Format.formatter -> (Parsetree.structure * Reason_comment.t list) -> unit
   val print_expression: Format.formatter -> Parsetree.expression -> unit
+  val print_core_type: Format.formatter -> Parsetree.core_type -> unit
 
 end
 
@@ -149,6 +150,7 @@ module type Toolchain_spec = sig
   val format_interface_with_comments: (Parsetree.signature * Reason_comment.t list) -> Format.formatter -> unit
   val format_implementation_with_comments: (Parsetree.structure * Reason_comment.t list) -> Format.formatter -> unit
   val format_expression: Parsetree.expression -> Format.formatter -> unit
+  val format_core_type: Parsetree.core_type -> Format.formatter -> unit
 end
 
 let rec left_expand_comment should_scan_prev_line source loc_start =
@@ -378,9 +380,17 @@ module Create_parse_entrypoint (Toolchain_impl: Toolchain_spec) :Toolchain = str
 
   let print_expression formatter expression =
     Toolchain_impl.format_expression expression formatter
+
+  let print_core_type formatter core_type =
+    Toolchain_impl.format_core_type core_type formatter
 end
 
 module OCaml_syntax = struct
+
+  module Parser = LiquidOCamlParser
+  module Lexer = LiquidOCamlLexer
+  module Pprintast = LiquidOCamlPrinter
+
   (* The OCaml parser keep doc strings in the comment list.
      To avoid duplicating comments, we need to filter comments that appear
      as doc strings is the AST out of the comment list. *)
@@ -528,6 +538,9 @@ module OCaml_syntax = struct
   let format_expression expression formatter =
     Pprintast.expression formatter
       (To_current.copy_expression expression)
+  let format_core_type core_type formatter =
+    Pprintast.core_type formatter
+      (To_current.copy_core_type core_type)
 end
 
 let insert_completion_ident : Lexing.position option ref = ref None
@@ -1004,6 +1017,9 @@ module Reason_syntax = struct
   let format_expression expression formatter =
     let reason_formatter = Reason_pprint_ast.createFormatter () in
     reason_formatter#expression formatter expression
+  let format_core_type core_type formatter =
+    let reason_formatter = Reason_pprint_ast.createFormatter () in
+    reason_formatter#core_type formatter core_type
 end
 
 module ML = Create_parse_entrypoint (OCaml_syntax)

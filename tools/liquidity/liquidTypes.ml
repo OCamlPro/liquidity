@@ -340,6 +340,74 @@ let sig_of_full_sig s = {
   entries_sig = s.f_entries_sig;
 }
 
+
+(** Free type variables of a type *)
+let free_tvars ty =
+  let rec aux fv ty = match expand ty with
+    | Ttuple tyl -> List.fold_left aux fv tyl
+    | Toption ty | Tlist ty | Tset ty -> aux fv ty
+    | Tmap (ty1, ty2) | Tbigmap (ty1, ty2) | Tor (ty1, ty2)
+    | Tlambda (ty1, ty2) -> aux (aux fv ty1) ty2
+    | Tclosure ((ty1, ty2), ty3) -> aux (aux (aux fv ty1) ty2) ty3
+    | Trecord (_, fl) | Tsum (_, fl) ->
+      List.fold_left (fun fv (_, ty) -> aux fv ty) fv fl
+    | Tcontract c ->
+      List.fold_left (fun fv { parameter = ty } -> aux fv ty) fv c.entries_sig
+    | Tvar tvr -> begin match (Ref.get tvr).tyo with
+        | None -> StringSet.add (Ref.get tvr).id fv
+        | Some ty -> aux fv ty
+      end
+    | Tpartial (Peqn (el, _)) ->
+      List.fold_left (fun fv (cl, rty) ->
+          List.fold_left (fun fv (ty1, ty2) ->
+              aux (aux fv ty1) ty2
+            ) (aux fv rty) cl
+        ) fv el
+    | Tpartial (Ptup pl) -> List.fold_left (fun fv (_, ty) -> aux fv ty) fv pl
+    | Tpartial (Pmap (ty1, ty2)) -> aux (aux fv ty1) ty2
+    | Tpartial (Pcont el) -> List.fold_left (fun fv (_, ty) -> aux fv ty) fv el
+    | _ -> fv
+  in
+  aux StringSet.empty ty
+
+(** Build a type substitution *)
+let build_subst aty cty =
+  let rec aux s aty cty = match aty, cty with
+    | Ttuple tyl1, Ttuple tyl2 ->
+      List.fold_left2 (fun s ty1 ty2 -> aux s ty1 ty2) s tyl1 tyl2
+    | Toption ty1, Toption ty2 -> aux s ty1 ty2
+    | Tlist ty1, Tlist ty2 -> aux s ty1 ty2
+    | Tset ty1, Tset ty2 -> aux s ty1 ty2
+    | Tmap (tyk1, tyv1), Tmap (tyk2, tyv2) ->
+      aux (aux s tyk1 tyk2) tyv1 tyv2
+    | Tbigmap (tyk1, tyv1), Tbigmap (tyk2, tyv2) ->
+      aux (aux s tyk1 tyk2) tyv1 tyv2
+    | Tor (tyl1, tyr1), Tmap (tyl2, tyr2) ->
+      aux (aux s tyl1 tyl2) tyr1 tyr2
+    | Tlambda (tyf1, tyt1), Tlambda (tyf2, tyt2) ->
+      aux (aux s tyf1 tyf2) tyt1 tyt2
+    | Tclosure ((tyf1, tye1), tyt1), Tclosure ((tyf2, tye2), tyt2) ->
+      aux (aux (aux s tyf1 tyf2) tyt1 tyt2) tye1 tye2
+    | Trecord (_, fl1), Trecord (_, fl2) ->
+      List.fold_left2 (fun s (_, ty1) (_, ty2) -> aux s ty1 ty2) s fl1 fl2
+    | Tsum (_, cl1), Tsum (_, cl2) ->
+      List.fold_left2 (fun s (_, ty1) (_, ty2) -> aux s ty1 ty2) s cl1 cl2
+    | Tcontract c1, Tcontract c2 ->
+      List.fold_left2 (fun s e1 e2 ->
+          aux s e1.parameter e2.parameter
+        ) s c1.entries_sig c2.entries_sig
+    | Tvar tvr, _ ->
+      let tv = Ref.get tvr in
+      begin match tv.tyo with
+        | None -> begin try StringMap.add tv.id cty s with Not_found -> s end
+        | Some ty -> aux s ty cty (* a substitution should not exist for tv.id *)
+      end
+    | _ -> s
+  in
+  aux StringMap.empty aty cty
+
+
+
 (** Type of located Liquidity errors *)
 type error = { err_loc: location; err_msg: string }
 
@@ -1383,9 +1451,6 @@ let contract_sig_of_param ?sig_name parameter = {
     }];
 }
 
-(** Predefined signature for contract with unit parameter *)
-let unit_contract_sig = contract_sig_of_param ~sig_name:"UnitContract" Tunit
-
 let dummy_contract_sig = {
   f_sig_name = None;
   f_storage = Tunit;
@@ -1401,6 +1466,44 @@ type warning =
   | WeakParam of string
 
 (** {2 Reserved symbols in parsing }  *)
+
+let predefined_types =
+  List.fold_left (fun acc (constr, info) ->
+      StringMap.add constr info acc) StringMap.empty
+    (* Enter predefined types with dummy-info to prevent
+       the user from overriding them *)
+    [
+      "int", Tunit;
+      "unit", Tunit;
+      "bool", Tunit;
+      "nat", Tunit;
+      "tez", Tunit;
+      "string", Tunit;
+      "bytes", Tunit;
+      "timestamp", Tunit;
+      "key", Tunit;
+      "key_hash", Tunit;
+      "signature", Tunit;
+      "operation", Tunit;
+      "address", Tunit;
+      "option", Tunit;
+      "list", Tunit;
+      "map", Tunit;
+      "set", Tunit;
+      "big_map", Tunit;
+      "variant", Tunit;
+      "instance", Tunit;
+    ]
+
+(** Predefined signature for contract with unit parameter *)
+let unit_contract_sig = contract_sig_of_param ~sig_name:"UnitContract" Tunit
+
+let predefined_contract_types =
+  List.fold_left (fun acc (name, cty) ->
+      StringMap.add name cty acc
+    ) StringMap.empty [
+    "UnitContract", unit_contract_sig;
+  ]
 
 let reserved_keywords = [
   "let"; "in"; "match" ; "int"; "bool"; "string"; "bytes";

@@ -132,16 +132,16 @@ let rec convert_const env ?ty expr =
   match expr with
   | Int (_loc, n) ->
     begin match ty with
-      | Some Tnat -> CNat (LiquidPrinter.integer_of_mic n)
-      | Some Tint | None -> CInt (LiquidPrinter.integer_of_mic n)
-      | Some Ttez -> CTez (LiquidPrinter.tez_of_mic_mutez n)
+      | Some Tnat -> CNat (LiquidInteger.integer_of_mic n)
+      | Some Tint | None -> CInt (LiquidInteger.integer_of_mic n)
+      | Some Ttez -> CTez (LiquidInteger.tez_of_mic_mutez n)
       | Some ty -> wrong_type env expr ty
     end
 
   | String (_loc, s) ->
     begin match ty with
       | Some Ttez ->
-        CTez (LiquidPrinter.tez_of_mic_mutez (Z.of_string s))
+        CTez (LiquidInteger.tez_of_mic_mutez (Z.of_string s))
       | Some Ttimestamp -> CTimestamp s
       | Some Tkey -> CKey s
       | Some Tkey_hash -> CKey_hash s
@@ -782,7 +782,7 @@ let convert_env env =
     StringMap.map (fun (tys, _i) ->
         let ty = match tys with
           | [] -> assert false
-          | ty :: _ -> LiquidInfer.instantiate (LiquidInfer.free_tvars ty, ty)
+          | ty :: _ -> LiquidInfer.instantiate (LiquidTypes.free_tvars ty, ty)
         in
         begin match ty with
           | Trecord (name, labels) ->
@@ -796,7 +796,7 @@ let convert_env env =
               ) constrs;
           | _ -> ()
         end;
-        let params = LiquidInfer.free_tvars ty |> StringSet.elements in
+        let params = LiquidTypes.free_tvars ty |> StringSet.elements in
         (fun pvals ->
            let subst = LiquidInfer.make_subst params pvals in
            LiquidInfer.instantiate_to subst ty

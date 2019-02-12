@@ -14,6 +14,8 @@
 
 open LiquidTypes
 
+module DebugPrint = LiquidPrinter.LiquidDebug
+
 exception Bad_arg
 
 (* We use the parser of the OCaml compiler parser to parse the file,
@@ -39,19 +41,19 @@ let compile_liquid_files files =
       ^ ".liq" in
   if !LiquidOptions.verbosity>0 then
     FileString.write_file (outprefix ^ ".syntax")
-      (LiquidPrinter.Liquid.string_of_contract
+      (DebugPrint.string_of_contract
          syntax_ast);
   let typed_ast = LiquidCheck.typecheck_contract
       ~warnings:true ~decompiling:false syntax_ast in
   if !LiquidOptions.verbosity>0 then
     FileString.write_file (outprefix ^ ".typed")
-      (LiquidPrinter.Liquid.string_of_contract_types
+      (DebugPrint.string_of_contract_types
          typed_ast);
   let encoded_ast, to_inline =
     LiquidEncode.encode_contract ~annot:true typed_ast in
   if !LiquidOptions.verbosity>0 then
     FileString.write_file (outprefix ^ ".encoded")
-      (LiquidPrinter.Liquid.string_of_contract
+      (DebugPrint.string_of_contract
          encoded_ast);
   if !LiquidOptions.typeonly then exit 0;
 
@@ -62,7 +64,7 @@ let compile_liquid_files files =
       let live_ast = LiquidSimplify.simplify_contract encoded_ast to_inline in
       if !LiquidOptions.verbosity>0 then
         FileString.write_file (outprefix ^ ".simple")
-          (LiquidPrinter.Liquid.string_of_contract
+          (DebugPrint.string_of_contract
              live_ast);
       live_ast end
     else encoded_ast in
@@ -166,7 +168,7 @@ let compile_tezos_file filename =
               String.uncapitalize_ascii c1.contract_name)  ^ ".tz" in
   if !LiquidOptions.verbosity>0 then
     FileString.write_file  (filename ^ ".liq.pre")
-      (LiquidPrinter.Liquid.string_of_contract c1);
+      (DebugPrint.string_of_contract c1);
   let typed_ast =
     try
       LiquidCheck.typecheck_contract ~warnings:false ~decompiling:true c1
@@ -178,7 +180,7 @@ let compile_tezos_file filename =
       let c2 = LiquidDecomp.decompile env c in
       if !LiquidOptions.verbosity>0 then
         FileString.write_file  (filename ^ ".liq.pre")
-          (LiquidPrinter.Liquid.string_of_contract c2);
+          (DebugPrint.string_of_contract c2);
       LiquidCheck.typecheck_contract ~warnings:false ~decompiling:true c2
   in
   let annoted_tz, type_annots, types = LiquidFromTezos.infos_env env in
@@ -194,13 +196,14 @@ let compile_tezos_file filename =
     | None -> outprefix ^ ".liq" in
   FileString.write_file  output
     (try
-       LiquidToOCaml.string_of_structure
+       LiquidPrinter.Syntax.string_of_structure
          (LiquidToOCaml.structure_of_contract
             ~type_annots
             ~types
             untyped_ast)
+         []
      with LiquidError _ ->
-       LiquidPrinter.Liquid.string_of_contract
+       DebugPrint.string_of_contract
          untyped_ast);
   Printf.eprintf "File %S generated\n%!" output;
   ()
@@ -225,6 +228,9 @@ let report_error = function
     Format.eprintf "Failed with %s@." s;
   | Failure f ->
     Format.eprintf "Failure: %s@." f
+  | Syntaxerr.Error (Syntaxerr.Other loc) ->
+    LiquidLoc.report_error ~kind:"Syntax error" Format.err_formatter
+      { err_loc = LiquidLoc.loc_of_location loc; err_msg = "unknown" };
   | exn ->
     let backtrace = Printexc.get_backtrace () in
     Format.eprintf "Error: %s\nBacktrace:\n%s@."
@@ -369,7 +375,7 @@ let run () =
       !Data.entry_name !Data.parameter !Data.storage
   in
   Printf.printf "%s\n# Internal operations: %d\n%!"
-    (LiquidData.string_of_const r_storage)
+    (LiquidPrinter.Liquid.string_of_const r_storage)
     (List.length ops);
   match big_map_diff with
   | None -> ()
@@ -380,13 +386,13 @@ let run () =
           Printf.printf "+  %s --> %s\n"
             (match k with
              | DiffKeyHash h -> h
-             | DiffKey k -> LiquidData.string_of_const k)
-            (LiquidData.string_of_const v)
+             | DiffKey k -> LiquidPrinter.Liquid.string_of_const k)
+            (LiquidPrinter.Liquid.string_of_const v)
         | Big_map_remove k ->
           Printf.printf "-  %s\n"
             (match k with
              | DiffKeyHash h -> h
-             | DiffKey k -> LiquidData.string_of_const k)
+             | DiffKey k -> LiquidPrinter.Liquid.string_of_const k)
       ) diff;
     Printf.printf "%!"
 
@@ -449,7 +455,7 @@ let get_storage () =
       !Data.contract_address
   in
   Printf.printf "%s\n%!"
-    (LiquidData.string_of_const r_storage)
+    (LiquidPrinter.Liquid.string_of_const r_storage)
 
 let call_arg () =
   let s =
@@ -521,10 +527,10 @@ let convert_file filename =
   let syntax = !LiquidOptions.ocaml_syntax in
   let ic = open_in filename in
   let lexbuf = Lexing.from_channel ic in
-  let str, comments = LiquidOCamlParse.implementation lexbuf in
+  let str, comments = LiquidParse.implementation lexbuf in
 
   LiquidOptions.ocaml_syntax := not syntax;
-  let s = LiquidOCamlPrinter.string_of_structure str comments in
+  let s = LiquidPrinter.Syntax.string_of_structure str comments in
   LiquidOptions.ocaml_syntax := syntax;
   Printf.printf "%s%!" s;
   ()

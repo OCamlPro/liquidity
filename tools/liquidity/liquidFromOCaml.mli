@@ -13,9 +13,6 @@ open LiquidTypes
 
 val liquidity_keywords : (string * LiquidOCamlParser.token) list
 
-val predefined_types : datatype StringMap.t
-val predefined_contract_types : contract_sig StringMap.t
-
 val initial_env : string -> env
 
 val translate :

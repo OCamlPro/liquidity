@@ -8,6 +8,7 @@
 (**************************************************************************)
 
 open LiquidTypes
+open LiquidPrinter.Liquid
 
 let error loc msg =
   LiquidLoc.raise_error ~loc ("Type error:  " ^^ msg ^^ "%!")
@@ -149,8 +150,8 @@ let rec generalize tyx1 tyx2 =
   | _ , _ ->
     if not (eq_types tyx1 tyx2) then
       error noloc "Types %s and %s are not compatible\n"
-        (LiquidPrinter.Liquid.string_of_type tyx1)
-        (LiquidPrinter.Liquid.string_of_type tyx2)
+        (string_of_type tyx1)
+        (string_of_type tyx2)
 
 
 let rec unify loc ty1 ty2 =
@@ -167,8 +168,8 @@ let rec unify loc ty1 ty2 =
     let tyx2 = expand ty2 in
 
     (* print_loc loc;
-     * Printf.printf ": Unify %s " (LiquidPrinter.Liquid.string_of_type ty1);
-     * Printf.printf "| %s\n%!" (LiquidPrinter.Liquid.string_of_type ty2); *)
+     * Printf.printf ": Unify %s " (string_of_type ty1);
+     * Printf.printf "| %s\n%!" (string_of_type ty2); *)
 
     (* Unify the types *)
     let tyx, to_unify = match tyx1, tyx2 with
@@ -226,7 +227,7 @@ let rec unify loc ty1 ty2 =
             end
           | _ ->
             error loc "Partial tuple incompatible with %S"
-              (LiquidPrinter.Liquid.string_of_type ty)
+              (string_of_type ty)
         end
 
 
@@ -241,7 +242,7 @@ let rec unify loc ty1 ty2 =
             unify k_ty1 k_ty2; unify v_ty1 v_ty2;
             ty, []
           | _ -> error loc "Undetermined map incompatible with %S"
-                   (LiquidPrinter.Liquid.string_of_type ty)
+                   (string_of_type ty)
         end
 
 
@@ -264,7 +265,7 @@ let rec unify loc ty1 ty2 =
               ) el;
             ty, []
           | _ -> error loc "Partial contract incompatible with %S"
-                   (LiquidPrinter.Liquid.string_of_type ty)
+                   (string_of_type ty)
         end
 
 
@@ -279,8 +280,8 @@ let rec unify loc ty1 ty2 =
         begin try List.iter2 unify tl1 tl2;
           with Invalid_argument _ ->
             error loc "Tuples %S and %S have different arities"
-              (LiquidPrinter.Liquid.string_of_type ty1)
-              (LiquidPrinter.Liquid.string_of_type ty2)
+              (string_of_type ty1)
+              (string_of_type ty2)
         end;
         tyx1, []
 
@@ -312,8 +313,8 @@ let rec unify loc ty1 ty2 =
             List.iter2 (fun (_, ty1) (_, ty2) -> unify ty1 ty2) fl1 fl2;
           with Invalid_argument _ ->
             error loc "Types %S and %S have different arities"
-              (LiquidPrinter.Liquid.string_of_type ty1)
-              (LiquidPrinter.Liquid.string_of_type ty2)
+              (string_of_type ty1)
+              (string_of_type ty2)
         end;
         tyx1, []
 
@@ -325,16 +326,16 @@ let rec unify loc ty1 ty2 =
           with Invalid_argument _ -> false in
         if not ok then
           error loc "Contracts signatures %S and %S are different"
-            (LiquidPrinter.Liquid.string_of_type ty1)
-            (LiquidPrinter.Liquid.string_of_type ty2)
+            (string_of_type ty1)
+            (string_of_type ty2)
         else
           tyx1, []
 
       | _, _ ->
         if not (eq_types tyx1 tyx2) then
           error loc "Types %s and %s are not compatible\n"
-            (LiquidPrinter.Liquid.string_of_type tyx1)
-            (LiquidPrinter.Liquid.string_of_type tyx2);
+            (string_of_type tyx1)
+            (string_of_type tyx2);
         tyx1, []
     in
 
@@ -350,8 +351,8 @@ let rec unify loc ty1 ty2 =
       | _ -> () end;
 
     (* Printf.printf "After unify %s | %s\n\n"
-     *   (LiquidPrinter.Liquid.string_of_type ty1)
-     *   (LiquidPrinter.Liquid.string_of_type ty2); *)
+     *   (string_of_type ty1)
+     *   (string_of_type ty2); *)
 
     (* Unify LHS of equations *)
     unify_list loc to_unify
@@ -437,34 +438,6 @@ let rec find_variant_type env = function
 
 
 (* Monomorphisation *)
-
-let free_tvars ty =
-  let rec aux fv ty = match expand ty with
-    | Ttuple tyl -> List.fold_left aux fv tyl
-    | Toption ty | Tlist ty | Tset ty -> aux fv ty
-    | Tmap (ty1, ty2) | Tbigmap (ty1, ty2) | Tor (ty1, ty2)
-    | Tlambda (ty1, ty2) -> aux (aux fv ty1) ty2
-    | Tclosure ((ty1, ty2), ty3) -> aux (aux (aux fv ty1) ty2) ty3
-    | Trecord (_, fl) | Tsum (_, fl) ->
-      List.fold_left (fun fv (_, ty) -> aux fv ty) fv fl
-    | Tcontract c ->
-      List.fold_left (fun fv { parameter = ty } -> aux fv ty) fv c.entries_sig
-    | Tvar tvr -> begin match (Ref.get tvr).tyo with
-        | None -> StringSet.add (Ref.get tvr).id fv
-        | Some ty -> aux fv ty
-      end
-    | Tpartial (Peqn (el, _)) ->
-      List.fold_left (fun fv (cl, rty) ->
-          List.fold_left (fun fv (ty1, ty2) ->
-              aux (aux fv ty1) ty2
-            ) (aux fv rty) cl
-        ) fv el
-    | Tpartial (Ptup pl) -> List.fold_left (fun fv (_, ty) -> aux fv ty) fv pl
-    | Tpartial (Pmap (ty1, ty2)) -> aux (aux fv ty1) ty2
-    | Tpartial (Pcont el) -> List.fold_left (fun fv (_, ty) -> aux fv ty) fv el
-    | _ -> fv
-  in
-  aux StringSet.empty ty
 
 let instantiate_to s ty =
   let rec aux ty = match ty with
@@ -750,7 +723,7 @@ let rec tvars_to_unit ({ desc; ty; loc } as e) =
     | Unpack { arg; ty } ->
       if has_tvar ty then
         error loc "Unresolved unpack type %S, add annotation"
-          (LiquidPrinter.Liquid.string_of_type ty) ;
+          (string_of_type ty) ;
       Unpack { arg = tvars_to_unit arg;
                ty = vars_to_unit ~loc:arg.loc ty }
     | TypeAnnot _ -> assert false (* Removed during typechecking *)
@@ -785,47 +758,12 @@ and contract_tvars_to_unit (contract : typed_contract) =
   let ty_env = env_tvars_to_unit contract.ty_env in
   { contract with values; c_init; entries; ty_env }
 
-let build_subst aty cty =
-  let rec aux s aty cty = match aty, cty with
-    | Ttuple tyl1, Ttuple tyl2 ->
-      List.fold_left2 (fun s ty1 ty2 -> aux s ty1 ty2) s tyl1 tyl2
-    | Toption ty1, Toption ty2 -> aux s ty1 ty2
-    | Tlist ty1, Tlist ty2 -> aux s ty1 ty2
-    | Tset ty1, Tset ty2 -> aux s ty1 ty2
-    | Tmap (tyk1, tyv1), Tmap (tyk2, tyv2) ->
-      aux (aux s tyk1 tyk2) tyv1 tyv2
-    | Tbigmap (tyk1, tyv1), Tbigmap (tyk2, tyv2) ->
-      aux (aux s tyk1 tyk2) tyv1 tyv2
-    | Tor (tyl1, tyr1), Tmap (tyl2, tyr2) ->
-      aux (aux s tyl1 tyl2) tyr1 tyr2
-    | Tlambda (tyf1, tyt1), Tlambda (tyf2, tyt2) ->
-      aux (aux s tyf1 tyf2) tyt1 tyt2
-    | Tclosure ((tyf1, tye1), tyt1), Tclosure ((tyf2, tye2), tyt2) ->
-      aux (aux (aux s tyf1 tyf2) tyt1 tyt2) tye1 tye2
-    | Trecord (_, fl1), Trecord (_, fl2) ->
-      List.fold_left2 (fun s (_, ty1) (_, ty2) -> aux s ty1 ty2) s fl1 fl2
-    | Tsum (_, cl1), Tsum (_, cl2) ->
-      List.fold_left2 (fun s (_, ty1) (_, ty2) -> aux s ty1 ty2) s cl1 cl2
-    | Tcontract c1, Tcontract c2 ->
-      List.fold_left2 (fun s e1 e2 ->
-          aux s e1.parameter e2.parameter
-        ) s c1.entries_sig c2.entries_sig
-    | Tvar tvr, _ ->
-      let tv = Ref.get tvr in
-      begin match tv.tyo with
-        | None -> begin try StringMap.add tv.id cty s with Not_found -> s end
-        | Some ty -> aux s ty cty (* a substitution should not exist for tv.id *)
-      end
-    | _ -> s
-  in
-  aux StringMap.empty aty cty
-
 let rec mono_exp env subst vtys (e:typed_exp) =
   let mono_exp = mono_exp env in
   let instantiate ty = instantiate_to subst (get_type env e.loc ty) in
-  (* Printf.printf "Exp %s : %s ->>" (LiquidPrinter.Liquid.string_of_code e) (LiquidPrinter.Liquid.string_of_type e.ty); *)
+  (* Printf.printf "Exp %s : %s ->>" (string_of_code e) (string_of_type e.ty); *)
   let ty = instantiate e.ty in
-  (* Printf.printf " %s\n" (LiquidPrinter.Liquid.string_of_type ty); *)
+  (* Printf.printf " %s\n" (string_of_type ty); *)
   let desc = match e.desc with
     (* TODO check with tests if this is needed *)
     (*
@@ -839,12 +777,12 @@ let rec mono_exp env subst vtys (e:typed_exp) =
     let substs = List.fold_left (fun ss (tn, ty) ->
         (tn, ty, build_subst lb.bnd_val.ty ty) :: ss) [] !vty in
     Printf.printf "Raw type of %s : %s\n" lb.bnd_var.nname
-      (LiquidPrinter.Liquid.string_of_type lb.bnd_val.ty);
+      (string_of_type lb.bnd_val.ty);
     List.iter (fun (tn, ty, s) ->
-      Printf.printf "%s\n%s\n" tn (LiquidPrinter.Liquid.string_of_type ty);
+      Printf.printf "%s\n%s\n" tn (string_of_type ty);
       StringMap.iter (fun id ty ->
         Printf.printf "%s -> %s  " id
-          (LiquidPrinter.Liquid.string_of_type ty)
+          (string_of_type ty)
         ) s;
       Printf.printf "\n"
     ) substs;
@@ -988,7 +926,7 @@ and mono_contract env c =
           "Parameter type for entry %s can't be inferred (%s), \
            add an annotation"
           e.entry_sig.entry_name
-          (LiquidPrinter.Liquid.string_of_type pty);
+          (string_of_type pty);
       { code;
         entry_sig = { e.entry_sig with parameter = pty } }
     ) c.entries in
@@ -1023,6 +961,6 @@ and mono_contract env c =
     error loc
       "Storage type cannot be inferred (%s), \
        add an annotation or specialize type"
-      (LiquidPrinter.Liquid.string_of_type storage);
+      (string_of_type storage);
   let contract = { c with storage; values; entries; c_init } (* ty_env *) in
   contract_tvars_to_unit contract

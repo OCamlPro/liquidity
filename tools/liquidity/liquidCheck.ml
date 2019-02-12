@@ -18,6 +18,7 @@
 
 open LiquidTypes
 open LiquidInfer
+open LiquidPrinter.Liquid
 
 let noloc env = LiquidLoc.loc_in_file env.env.filename
 
@@ -29,8 +30,8 @@ let check_comparable loc prim ty1 ty2 =
   if not (comparable_type ty1 && eq_types ty1 ty2) then
     error loc "arguments of %s not comparable: %s\nwith\n%s\n"
       (LiquidTypes.string_of_primitive prim)
-      (LiquidPrinter.Liquid.string_of_type ty1)
-      (LiquidPrinter.Liquid.string_of_type ty2)
+      (string_of_type ty1)
+      (string_of_type ty2)
 
 let new_binding env name ?(effect=false) ?(gen=false) ty =
   let count = ref 0 in
@@ -92,8 +93,8 @@ let eq_exp env (e1 : typed_exp) (e2 : typed_exp) =
 let type_error loc msg actual expected =
   error loc "%s.\nExpected type:\n  %s\nActual type:\n  %s"
     msg
-    (LiquidPrinter.Liquid.string_of_type expected)
-    (LiquidPrinter.Liquid.string_of_type actual)
+    (string_of_type expected)
+    (string_of_type actual)
 
 let fail_neq ?info ?more ~loc ~expected_ty ty =
   if not @@ eq_types ty expected_ty then
@@ -286,7 +287,7 @@ let rec typecheck_const ~loc env cst ty =
   | Tsignature, CBytes s -> ty, CSignature s
 
   | Ttimestamp, CString s -> ty, CTimestamp (ISO8601.of_string s)
-  | Ttez, CString s -> ty, CTez (LiquidPrinter.tez_of_liq s)
+  | Ttez, CString s -> ty, CTez (LiquidInteger.tez_of_liq s)
   | Tkey_hash, CString s -> ty, CKey_hash s
   | Tcontract _, CString s -> ty, CContract s
   | Tkey, CString s -> ty, CKey s
@@ -411,8 +412,8 @@ let rec typecheck_const ~loc env cst ty =
 
   | _ ->
     error loc "constant type mismatch, expected %s, got %s"
-      (LiquidPrinter.Liquid.string_of_type ty)
-      (LiquidPrinter.Liquid.string_of_type (type_of_const env.env cst))
+      (string_of_type ty)
+      (string_of_type (type_of_const env.env cst))
 
 
 (* Typecheck an expression. Returns a typed expression *)
@@ -458,7 +459,7 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
         let ty = label_type field record_ty in
         unify record.ty record_ty; ty
       | rty -> error loc "not a record type: %s, has no field %s"
-                 (LiquidPrinter.Liquid.string_of_type rty)
+                 (string_of_type rty)
                  field
     in
     mk ?name:exp.name ~loc (Project { field; record }) ty
@@ -534,7 +535,7 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
         error contract.loc
           "Bad contract type.\nExpected type:\n  <Contract>.instance\n\
            Actual type:\n  %s"
-          (LiquidPrinter.Liquid.string_of_type ty)
+          (string_of_type ty)
     end
 
   (* contract.main (param) amount *)
@@ -587,7 +588,7 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
             error a.loc "Bad %d args for primitive %S:\n    %s\n"
               (List.length args) (LiquidTypes.string_of_primitive prim)
               (String.concat "\n    " (List.map (fun arg ->
-                   LiquidPrinter.Liquid.string_of_type arg.ty) args))
+                   string_of_type arg.ty) args))
       ) args atys
       with Invalid_argument _ ->
         error loc "Primitive %S expects %d arguments, was given %d"
@@ -633,7 +634,7 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
         let ty = fresh_tvar () in
         unify arg.ty (Toption ty); ty
       | _ -> error loc "not an option type : %s"
-               (LiquidPrinter.Liquid.string_of_type (expand arg.ty))
+               (string_of_type (expand arg.ty))
     in
     let ifnone = typecheck env ifnone in
     let (env, count) = new_binding env some_name.nname arg_ty in
@@ -704,7 +705,7 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
       | _ ->
         error loc
           "Loop.left body must be of type (('a, 'b) variant * 'c), \
-           got %s instead" (LiquidPrinter.Liquid.string_of_type body.ty) in
+           got %s instead" (string_of_type body.ty) in
     check_used env arg_name count;
     mk ?name:exp.name ~loc (LoopLeft { arg_name; body; arg; acc = Some acc })
       (Ttuple [res_ty; acc.ty])
@@ -727,7 +728,7 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
       | _ ->
         error loc
           "Loop.left body must be of type ('a, 'b) variant, \
-           got %s instead" (LiquidPrinter.Liquid.string_of_type body.ty) in
+           got %s instead" (string_of_type body.ty) in
     check_used env arg_name count;
     mk ?name:exp.name ~loc (LoopLeft { arg_name; body; arg; acc = None }) res_ty
 
@@ -789,7 +790,7 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
       | _ ->
         error arg.loc "%s expects a collection, got %s"
           (LiquidTypes.string_of_fold_primitive prim)
-          (LiquidPrinter.Liquid.string_of_type arg.ty)
+          (string_of_type arg.ty)
     in
     let (env, count) = new_binding env arg_name.nname arg_ty in
     let body = typecheck_expected
@@ -818,7 +819,7 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
       | _ ->
         error arg.loc "%s expects a collection, got %s"
           (LiquidTypes.string_of_map_primitive prim)
-          (LiquidPrinter.Liquid.string_of_type arg.ty)
+          (string_of_type arg.ty)
     in
     let (env, count) = new_binding env arg_name.nname arg_ty in
     let body = typecheck env body in
@@ -859,7 +860,7 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
       | _ ->
         error arg.loc "%s expects a collection, got %s"
           (LiquidTypes.string_of_map_fold_primitive prim)
-          (LiquidPrinter.Liquid.string_of_type arg.ty)
+          (string_of_type arg.ty)
     in
     let (env, count) = new_binding env arg_name.nname arg_ty in
     let body = typecheck env body in
@@ -871,8 +872,8 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
         error body.loc
           "body of %s must be of type 'a * %s, but has type %s"
           (LiquidTypes.string_of_map_fold_primitive prim)
-          (LiquidPrinter.Liquid.string_of_type acc.ty)
-          (LiquidPrinter.Liquid.string_of_type body.ty)
+          (string_of_type acc.ty)
+          (string_of_type body.ty)
     in
     let ret_ty = match expand arg.ty with
       | Tmap (k_ty, _) -> Tmap (k_ty, body_r)
@@ -921,7 +922,7 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
 
   | Lambda { arg_name; arg_ty; body; ret_ty; recursive = None } ->
     (* allow closures at typechecking, do not reset env *)
-    (* Printf.printf "Lambda arg %s : %s\n" arg_name.nname (LiquidPrinter.Liquid.string_of_type arg_ty);
+    (* Printf.printf "Lambda arg %s : %s\n" arg_name.nname (string_of_type arg_ty);
      * begin match arg_ty with
      *   | Tcontract c ->
      *     let n = (match c.sig_name with Some n -> n | _ -> "") in
@@ -1040,12 +1041,12 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
                 | Some (Tor (left_ty, right_ty) as ty) ->
                   unify arg.ty ty; (["Left"; "Right"], Some (left_ty, right_ty))
                 | _ -> error loc "not a variant type: %s"
-                         (LiquidPrinter.Liquid.string_of_type arg.ty)
+                         (string_of_type arg.ty)
               end
             | _ -> raise Not_found
           with Not_found ->
             error loc "not a variant type: %s"
-              (LiquidPrinter.Liquid.string_of_type arg.ty)
+              (string_of_type arg.ty)
         in
         let expected_type = ref None in
         let cases_extra_constrs =
@@ -1093,7 +1094,7 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
         if not (StringSet.is_empty !cases_extra_constrs) then
           error loc "constructors %s do not belong to type %s"
             (String.concat ", " (StringSet.elements !cases_extra_constrs))
-            (LiquidPrinter.Liquid.string_of_type arg.ty);
+            (string_of_type arg.ty);
 
         let cases = List.map (fun (pat, e) ->
             let add_vars_env vars var_ty =
@@ -1111,13 +1112,13 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
                 let var_ty = match is_left_right with
                   | Some (left_ty, _) -> left_ty
                   | None -> error loc "expected variant, got %s"
-                              (LiquidPrinter.Liquid.string_of_type arg.ty) in
+                              (string_of_type arg.ty) in
                 add_vars_env vars var_ty
               | CConstr ("Right", vars) ->
                 let var_ty = match is_left_right with
                   | Some (_, right_ty) -> right_ty
                   | None -> error loc "expected variant, got %s"
-                              (LiquidPrinter.Liquid.string_of_type arg.ty) in
+                              (string_of_type arg.ty) in
                 add_vars_env vars var_ty
               | CConstr (constr, vars) ->
                 let _ty_name' =
@@ -1222,7 +1223,7 @@ and typecheck_prim1 env prim loc args =
     begin match expand tuple_ty with
       | Tpartial (Ptup _) | Tvar _ ->
         let ty = fresh_tvar () in
-        let n = LiquidPrinter.int_of_integer n in
+        let n = LiquidInteger.int_of_integer n in
         unify loc tuple_ty (Tpartial (Ptup [(n, ty)]));
         prim, ty
       | _ ->
@@ -1230,9 +1231,9 @@ and typecheck_prim1 env prim loc args =
           | Ttuple tuple -> tuple
           | Trecord (_, rtys) -> List.map snd rtys
           | _ -> error loc "get takes a tuple as first argument, got:\n%s"
-                   (LiquidPrinter.Liquid.string_of_type tuple_ty)
+                   (string_of_type tuple_ty)
         in
-        let n = LiquidPrinter.int_of_integer n in
+        let n = LiquidInteger.int_of_integer n in
         let size = List.length tuple in
         if size <= n then error loc "get outside tuple";
         let ty = List.nth tuple n in
@@ -1244,7 +1245,7 @@ and typecheck_prim1 env prim loc args =
                      { ty ; loc = val_loc }] ->
     begin match expand tuple_ty with
       | Tpartial (Ptup _) | Tvar _ ->
-        let n = LiquidPrinter.int_of_integer n in
+        let n = LiquidInteger.int_of_integer n in
         unify loc tuple_ty (Tpartial (Ptup [(n, ty)]));
         prim, tuple_ty
       | _ ->
@@ -1252,9 +1253,9 @@ and typecheck_prim1 env prim loc args =
           | Ttuple tuple -> tuple
           | Trecord (_, rtys) -> List.map snd rtys
           | _ -> error loc "set takes a tuple as first argument, got:\n%s"
-                   (LiquidPrinter.Liquid.string_of_type tuple_ty)
+                   (string_of_type tuple_ty)
         in
-        let n = LiquidPrinter.int_of_integer n in
+        let n = LiquidInteger.int_of_integer n in
         let expected_ty = List.nth tuple n in
         let size = List.length tuple in
         if size <= n then error loc "set outside tuple";
@@ -1736,7 +1737,7 @@ and typecheck_prim2t env prim loc args =
         (LiquidTypes.string_of_primitive prim)
         str_types
         (String.concat ", "
-           (List.map LiquidPrinter.Liquid.string_of_type args_tys))
+           (List.map string_of_type args_tys))
 
 and expected_prim_types = function
   | Prim_neq | Prim_lt | Prim_gt | Prim_eq | Prim_le | Prim_ge | Prim_compare ->

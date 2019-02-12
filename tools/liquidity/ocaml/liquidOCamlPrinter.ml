@@ -1561,32 +1561,6 @@ let toplevel_phrase f x =
 let expression f x =
   pp f "@[%a@]" (expression reset_ctxt) x
 
-let string_of_expression x =
-  ignore (flush_str_formatter ()) ;
-  let f = str_formatter in
-  if !LiquidOptions.ocaml_syntax then
-    expression f x
-  else
-    Reason_toolchain.RE.print_expression f
-      (Reason_toolchain.From_current.copy_expression x);
-  flush_str_formatter ()
-
-let string_of_structure str coms =
-  ignore (flush_str_formatter ());
-  let ppf = str_formatter in
-  begin
-    if !LiquidOptions.ocaml_syntax then
-      structure reset_ctxt ppf str
-    else
-      let reason_comments = List.map (fun (text, location) ->
-          Reason_comment.make ~location Regular text
-        ) coms in
-      Reason_toolchain.RE.print_implementation_with_comments ppf
-        (Reason_toolchain.From_current.copy_structure str,
-         reason_comments)
-  end;
-  flush_str_formatter ()
-
 let top_phrase f x =
   pp_print_newline f ();
   toplevel_phrase f x;

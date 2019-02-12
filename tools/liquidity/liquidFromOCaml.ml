@@ -103,18 +103,7 @@ open LiquidTypes
 
 let str_of_id id = String.concat "." (Longident.flatten id)
 
-let loc_of_loc loc =
-  let open Lexing in
-  {
-    loc_file =
-      loc.Location.loc_start.pos_fname;
-    loc_pos = Some (
-        (loc.Location.loc_start.pos_lnum,
-         loc.Location.loc_start.pos_cnum - loc.Location.loc_start.pos_bol),
-        (loc.Location.loc_end.pos_lnum,
-         loc.Location.loc_end.pos_cnum - loc.Location.loc_end.pos_bol)
-      )
-  }
+let loc_of_loc = LiquidLoc.loc_of_location
 
 
 let ppf = Format.err_formatter
@@ -458,14 +447,14 @@ let rec translate_const env exp =
   | { pexp_desc = Pexp_construct ( { txt = Lident "None" }, None ) } ->
     CNone, Some (Toption (fresh_tvar ()))
   | { pexp_desc = Pexp_constant (Pconst_integer (s,None)) } ->
-    CInt (LiquidPrinter.integer_of_liq s), Some Tint
+    CInt (LiquidInteger.integer_of_liq s), Some Tint
   | { pexp_desc = Pexp_constant (Pconst_integer (s, Some 'p')) } ->
-    CNat (LiquidPrinter.integer_of_liq s), Some Tnat
+    CNat (LiquidInteger.integer_of_liq s), Some Tnat
 
   | { pexp_desc = Pexp_constant (Pconst_integer (s, Some '\231')) } ->
-    CTez (LiquidPrinter.tez_of_liq s), Some Ttez
+    CTez (LiquidInteger.tez_of_liq s), Some Ttez
   | { pexp_desc = Pexp_constant (Pconst_float (s, Some '\231')) } ->
-    CTez (LiquidPrinter.tez_of_liq s), Some Ttez
+    CTez (LiquidInteger.tez_of_liq s), Some Ttez
 
   (* Timestamps *)
   | { pexp_desc = Pexp_constant (Pconst_integer (s, Some '\232')) } ->
@@ -745,7 +734,7 @@ let access_of_deconstruct var_name loc indexes =
           args = [
             a;
             mk ~loc (Const { ty = Tnat;
-                             const = CNat (LiquidPrinter.integer_of_int i) })
+                             const = CNat (LiquidInteger.integer_of_int i) })
           ] })
     ) indexes a
 
@@ -1616,7 +1605,7 @@ let rec translate_code contracts env exp =
         | { pexp_loc } ->
           error_loc pexp_loc
             "in expression %s"
-            (LiquidOCamlPrinter.string_of_expression exp)
+            (LiquidPrinter.Syntax.string_of_expression exp)
 
 
   (*
@@ -2346,41 +2335,6 @@ let predefined_constructors =
       "Set", "'a set";
     ]
 
-let predefined_types =
-  List.fold_left (fun acc (constr, info) ->
-      StringMap.add constr info acc) StringMap.empty
-    (* Enter predefined types with dummy-info to prevent
-       the user from overriding them *)
-    [
-      "int", Tunit;
-      "unit", Tunit;
-      "bool", Tunit;
-      "nat", Tunit;
-      "tez", Tunit;
-      "string", Tunit;
-      "bytes", Tunit;
-      "timestamp", Tunit;
-      "key", Tunit;
-      "key_hash", Tunit;
-      "signature", Tunit;
-      "operation", Tunit;
-      "address", Tunit;
-      "option", Tunit;
-      "list", Tunit;
-      "map", Tunit;
-      "set", Tunit;
-      "big_map", Tunit;
-      "variant", Tunit;
-      "instance", Tunit;
-    ]
-
-let predefined_contract_types =
-  List.fold_left (fun acc (name, cty) ->
-      StringMap.add name cty acc
-    ) StringMap.empty [
-    "UnitContract", unit_contract_sig;
-  ]
-
 
 let filename_to_contract filename =
   String.capitalize_ascii
@@ -2542,7 +2496,7 @@ let ocaml_of_file parser file =
 let read_file filename =
   try
     let ast, _comments =
-      ocaml_of_file LiquidOCamlParse.implementation filename in
+      ocaml_of_file LiquidParse.implementation filename in
     ast
   with exn -> translate_exn exn
 
@@ -2562,13 +2516,13 @@ let ocaml_of_string ?(filename = "buffer") parser content =
 
 let structure_of_string ?filename impl =
   let str, _comments =
-    ocaml_of_string ?filename LiquidOCamlParse.implementation impl in
+    ocaml_of_string ?filename LiquidParse.implementation impl in
   str
 
 let expression_of_string ?filename s =
-  ocaml_of_string ?filename LiquidOCamlParse.expression s
+  ocaml_of_string ?filename LiquidParse.expression s
 
 let translate_type env ty = translate_type env ty
 
 let type_of_string ?filename s =
-  ocaml_of_string ?filename LiquidOCamlParse.core_type s
+  ocaml_of_string ?filename LiquidParse.core_type s

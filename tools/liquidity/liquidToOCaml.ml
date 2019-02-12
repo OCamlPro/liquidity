@@ -131,7 +131,7 @@ let rec convert_type ~abbrev ?name ty =
     let args =
       try
         let known_ty = Hashtbl.find rev_abbrevs name in
-        let subst = LiquidInfer.build_subst known_ty ty in
+        let subst = LiquidTypes.build_subst known_ty ty in
         List.map (fun (_, t) -> convert_type ~abbrev t)
           (StringMap.bindings subst)
       with Not_found -> [] in
@@ -206,16 +206,16 @@ and convert_contract_sig ~abbrev csig =
         | Some name when eq_types (Tcontract csig') (Tcontract csig) ->
           Some (typ_constr (name ^ ".instance") [])
         | _ -> None
-    ) LiquidFromOCaml.predefined_contract_types None in
+    ) predefined_contract_types None in
   match typ with
   | Some typ -> typ
   | None -> add_abbrev name (Tcontract csig) (ContractType signature)
 
 let rec convert_const expr =
   match expr with
-  | CInt n -> Exp.constant (Const.integer (LiquidPrinter.liq_of_integer n))
+  | CInt n -> Exp.constant (Const.integer (LiquidInteger.liq_of_integer n))
   | CNat n -> Exp.constant (Const.integer ~suffix:'p'
-                              (LiquidPrinter.liq_of_integer n))
+                              (LiquidInteger.liq_of_integer n))
   | CString s -> Exp.constant (Const.string s)
   | CUnit -> Exp.construct (lid "()") None
   | CBool false -> Exp.construct (lid "false") None
@@ -234,9 +234,9 @@ let rec convert_const expr =
   | CTez n ->
     begin match n.mutez with
       | None ->
-        Exp.constant (Const.integer ~suffix:'\231' (LiquidPrinter.liq_of_tez n))
+        Exp.constant (Const.integer ~suffix:'\231' (LiquidInteger.liq_of_tez n))
       | Some _ ->
-        Exp.constant (Const.float ~suffix:'\231' (LiquidPrinter.liq_of_tez n))
+        Exp.constant (Const.float ~suffix:'\231' (LiquidInteger.liq_of_tez n))
     end
   | CTimestamp s -> Exp.constant (Pconst_integer (s, Some '\232'))
   | CKey_hash n -> Exp.constant (Pconst_integer (n, Some '\233'))
@@ -718,7 +718,7 @@ and structure_of_contract
     ?(abbrev=true) ?type_annots ?(types=[]) contract =
   reset_env ();
   let ignore_type s =
-    StringMap.mem s LiquidFromOCaml.predefined_types
+    StringMap.mem s predefined_types
     || s = "_entries" in
   List.iter (fun (s, ty) ->
       if not (ignore_type s) then
@@ -757,7 +757,7 @@ and structure_of_contract
     list_caml_abbrevs_in_order ()
     |> List.map (fun (txt, kind, liq_ty) ->
         let params =
-          LiquidInfer.free_tvars liq_ty
+          LiquidTypes.free_tvars liq_ty
           |> StringSet.elements
           |> List.map (fun v -> Typ.var v, Invariant) in
         match kind with
@@ -795,12 +795,7 @@ let structure_of_contract ?(abbrev=false) ?type_annots ?(types=[]) contract =
   reset_env ();
   structure_of_contract ~abbrev ?type_annots ~types contract
 
-let string_of_structure str =
-  LiquidOCamlPrinter.string_of_structure str []
-
 let translate_expression = convert_code ~abbrev:false
-
-let string_of_expression = LiquidOCamlPrinter.string_of_expression
 
 let convert_type ?(abbrev=false) ty = convert_type ~abbrev ty
 

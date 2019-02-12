@@ -37,47 +37,32 @@ if(with_version){
   version_info = {};
 }
 
-OCaml.library("ocplib-liquidity-base",
+OCaml.library("ocplib-liquidity-bare",
    ocaml + {
      files = [
-
-       "iSO8601.ml";
 
        "liquidOptions.ml";
        "liquidVersion.ml", version_info;
        "liquidMisc.ml";
 
        "liquidTypes.ml";
-       "liquidLoc.ml";
-
-       "liquidBoundVariables.ml";
-       "liquidPrinter.ml";
-       "liquidDot.ml";
-
-       "liquidEmit.ml";
-       "liquidPeephole.ml";
-       "liquidInfer.ml";
-       "liquidCheck.ml";
-       "liquidSimplify.ml";
-       "liquidEncode.ml";
-       "liquidDecode.ml";
-       "liquidMichelson.ml";
-
-       "liquidClean.ml";
-       "liquidInterp.ml";
-       "liquidUntype.ml";
+       "liquidInteger.ml";
      ];
      requires = [
-       "ocplib-dot";
        "zarith";
      ];
 
    });
 
 
-OCaml.library("ocplib-liquidity-ocaml",
+OCaml.library("ocplib-liquidity-parser",
    ocaml + {
      files = [
+       "ocaml/liquidOCamlParser.mly";
+       "ocaml/liquidOCamlLexer.mll";
+       "ocaml/liquidOCamlParse.ml";
+       "ocaml/liquidOCamlPrinter.ml";
+
        "reason/reason_string.ml";
        "reason/reason_attributes.ml";
        "reason/reason_syntax_util.mli";
@@ -92,28 +77,53 @@ OCaml.library("ocplib-liquidity-ocaml",
        "reason/reason_heuristics.ml";
        "reason/reason_pprint_ast.ml"; 
        "reason/reason_toolchain.ml";
+       "reason/liquidReasonParse.ml";
 
-       "ocaml/liquidOCamlParser.mly";
-       "ocaml/liquidOCamlLexer.mll";
-       "ocaml/liquidOCamlParse.ml";
-       "ocaml/liquidOCamlPrinter.ml";
-
-       "liquidFromOCaml.ml";
-       "liquidToOCaml.ml";
-       "liquidData.ml";
+       "liquidLoc.ml";
+       "liquidParse.ml";
      ];
      requires = [
         "easy-format";
         "ocaml-migrate-parsetree";
         "menhirLib";
-        
-        "ocplib-liquidity-base";
+        "ocplib-liquidity-bare";
         "compiler-libs.common";
      ];
 
    });
 
 
+
+OCaml.library("ocplib-liquidity-base",
+   ocaml + {
+     files = [
+
+       "iSO8601.ml";
+
+       "liquidBoundVariables.ml";
+
+       "liquidEmit.ml";
+       "liquidPeephole.ml";
+       "liquidToOCaml.ml";
+       "liquidPrinter.ml";
+       "liquidInfer.ml";
+       "liquidCheck.ml";
+       "liquidSimplify.ml";
+       "liquidEncode.ml";
+       "liquidDecode.ml";
+       "liquidMichelson.ml";
+       "liquidFromOCaml.ml";
+       "liquidData.ml";
+
+       "liquidClean.ml";
+       "liquidInterp.ml";
+       "liquidUntype.ml";
+     ];
+     requires = [
+       "ocplib-liquidity-parser";
+     ];
+
+   });
 
 
 if ( with_tezos ) {
@@ -127,7 +137,7 @@ OCaml.library("ocplib-liquidity-with-tezos",
      ];
      requires = [
         "ocplib-liquidity-base";
-        "ocplib-liquidity-ocaml";
+        "ocplib-liquidity-parser";
         "michelson";
      ];
    });
@@ -140,7 +150,7 @@ OCaml.library("ocplib-liquidity-deploy",
      ];
      requires = [
        "ocplib-liquidity-with-tezos";
-       "ocplib-liquidity-ocaml";
+       "ocplib-liquidity-parser";
        "curl";
        "curl.lwt";
      ];
@@ -150,9 +160,11 @@ if (for_javascript) {
 OCaml.program("liquidity",
    ocaml + {
      files = [
+       "liquidDot.ml";
        "liquidMain.ml";
      ];
      requires = [
+       "ocplib-dot";
        "ocplib-liquidity-deploy";
        "ocplib-file";
      ];
@@ -162,9 +174,11 @@ OCaml.program("liquidity",
    ocaml + {
      bytelink = ["-cclib"; "-lsodium_stubs -lsodium"];
      files = [
+       "liquidDot.ml";
        "liquidMain.ml";
      ];
      requires = [
+       "ocplib-dot";
        "ocplib-liquidity-deploy";
        "ocplib-file";
      ];
@@ -182,7 +196,7 @@ OCaml.library("ocplib-liquidity-without-tezos",
      ];
      requires = [
         "ocplib-liquidity-base";
-        "ocplib-liquidity-ocaml";
+        "ocplib-liquidity-parser";
      ];
    });
 
@@ -201,12 +215,14 @@ OCaml.program("liquidity-mini",
    ocaml + {
      files = [
        "liquidInit.ml";
+       "liquidDot.ml";
        "liquidMain.ml";
      ];
      requires = [
+       "ocplib-dot";
        "ocplib-liquidity-deploy-without-tezos";
        "ocplib-liquidity-without-tezos";
-       "ocplib-liquidity-ocaml";
+       "ocplib-liquidity-base";
        "ocplib-file";
      ];
 

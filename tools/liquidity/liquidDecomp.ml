@@ -113,12 +113,12 @@ let lvar_of node =
 
 
 let nat_n ~loc n =
-  mk ~loc (Const { ty = Tnat; const = CNat (LiquidPrinter.integer_of_int n) })
+  mk ~loc (Const { ty = Tnat; const = CNat (LiquidInteger.integer_of_int n) })
 let nat_zero = nat_n 0
 let nat_one = nat_n 1
 
 let int_n ~loc n =
-  mk ~loc (Const { ty = Tint; const = CInt (LiquidPrinter.integer_of_int n) })
+  mk ~loc (Const { ty = Tint; const = CInt (LiquidInteger.integer_of_int n) })
 let int_zero = int_n 0
 let int_one = int_n 1
 

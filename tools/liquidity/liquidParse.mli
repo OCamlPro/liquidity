@@ -1,19 +1,13 @@
 (**************************************************************************)
 (*                                                                        *)
-(*    Copyright (c) 2017       .                                          *)
-(*    Fabrice Le Fessant, OCamlPro SAS <fabrice@lefessant.net>            *)
+(*    Copyright (c) 2017-2019                                             *)
+(*    OCamlPro SAS <contact@ocamlpro.com>                                 *)
 (*                                                                        *)
 (*    All rights reserved. No warranty, explicit or implicit, provided.   *)
 (*                                                                        *)
 (**************************************************************************)
 
-open LiquidTypes
-
-val default_const : datatype -> const
-
-(** same as [default_const] but with empty values for collections *)
-val default_empty_const : datatype -> const
-
-val translate_const_exp : encoded_exp -> const
-
-val translate : env -> full_contract_sig -> string -> datatype -> const
+val implementation :
+  Lexing.lexbuf -> Parsetree.structure * (string * Location.t) list
+val expression : Lexing.lexbuf -> Parsetree.expression
+val core_type :  Lexing.lexbuf -> Parsetree.core_type

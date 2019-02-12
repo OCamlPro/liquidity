@@ -304,7 +304,7 @@ let fail_msg_of_err loc ~loc_table err =
   let failed_with_expr = LiquidToTezos.const_of_ezjson json in
   let failed_with =
     LiquidFromTezos.convert_const_notype env failed_with_expr in
-  err_loc, Some (LiquidData.string_of_const failed_with)
+  err_loc, Some (LiquidPrinter.Liquid.string_of_const failed_with)
 
 let error_trace_of_err loc ~loc_table err =
   let err_loc, _ = List.assoc loc loc_table in
@@ -923,7 +923,7 @@ let init_storage ?source liquid init_params_strings =
       | _ -> eval_init_storage
     in
     Printf.eprintf "Evaluated initial storage: %s\n%!"
-      (LiquidData.string_of_const eval_init_storage);
+      (LiquidPrinter.Liquid.string_of_const eval_init_storage);
     return (LiquidEncode.encode_const
               syntax_ast.ty_env contract_sig eval_init_storage)
 
@@ -1449,7 +1449,5 @@ let forge_call_arg ?(entry_name="main") liquid input_string =
     | [_] -> input
     | _ -> LiquidEncode.encode_const contract.ty_env contract_sig
              (CConstr (prefix_entry ^ entry_name, input)) in
-  let _, _loc_table =
-    LiquidToTezos.convert_contract ~expand:true pre_michelson in
   LiquidToTezos.string_of_expression
     (LiquidToTezos.convert_const parameter)

@@ -9,6 +9,8 @@
 
 open LiquidTypes
 
+val loc_of_location : Location.t -> location
+
 val warning_printer : (location -> warning -> unit) ref
 
 val warn : location -> warning -> unit

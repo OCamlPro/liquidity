@@ -990,7 +990,7 @@ let rec interp contract =
       x :: stack, x
 
     | COMPARE, x ::  { kind = N_CONST (Tint,CInt n)} :: stack
-      when LiquidPrinter.int_of_integer n = 0
+      when LiquidInteger.int_of_integer n = 0
       ->
       x :: stack, seq
 
