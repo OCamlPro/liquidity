@@ -454,7 +454,13 @@ let call_arg () =
       ~entry_name:!Data.entry_name
       !Data.parameter
   in
-  Printf.printf "Use --arg '%s'\n%!" s
+  match !LiquidOptions.output with
+  | None ->
+    Printf.printf "Use --arg '%s'\n%!" s
+  | Some "-" ->
+    Printf.printf "'%s'%!" s
+  | Some file ->
+    FileString.write_file file s
 
 let call () =
   match
