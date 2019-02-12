@@ -123,17 +123,21 @@ let compile_liquid_files files =
                     \"Content-Type:application/json\" \
                     -d '{\"program\":'$(cat %s)'}'\n" output
   else
-    let output = match !LiquidOptions.output with
-      | Some output -> output
-      | None -> outprefix ^ ".tz" in
     let s =
       if !LiquidOptions.singleline
       then LiquidToTezos.line_of_contract c
       else LiquidToTezos.string_of_contract c in
-    FileString.write_file output s;
-    Printf.eprintf "File %S generated\n%!" output;
-    Printf.eprintf "If tezos is compiled, you may want to typecheck with:\n";
-    Printf.eprintf "  tezos-client typecheck script %s\n" output
+    match
+      match !LiquidOptions.output with
+      | Some output -> output
+      | None -> outprefix ^ ".tz"
+    with
+    | "-" -> Printf.printf "%s%!" s
+    | output ->
+      FileString.write_file output s;
+      Printf.eprintf "File %S generated\n%!" output;
+      Printf.eprintf "If tezos is compiled, you may want to typecheck with:\n";
+      Printf.eprintf "  tezos-client typecheck script %s\n" output
 
 
 let compile_tezos_file filename =
