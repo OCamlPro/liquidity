@@ -32,6 +32,7 @@ val convert_type : LiquidTypes.datatype -> LiquidTezosTypes.expr
 
 val line_of_contract : LiquidTezosTypes.contract -> string
 val string_of_contract : LiquidTezosTypes.contract -> string
+val string_of_expression : LiquidTezosTypes.expr -> string
 val json_of_contract : LiquidTezosTypes.contract -> string
 
 (** {3 Pretty printing/parsing Micheline to/from Json } *)

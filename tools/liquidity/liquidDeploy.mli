@@ -117,3 +117,5 @@ end
 module Async : S with type 'a t = 'a Lwt.t
 
 module Sync : S with type 'a t = 'a
+
+val forge_call_arg : ?entry_name:string ->  from -> string -> string

@@ -123,17 +123,21 @@ let compile_liquid_files files =
                     \"Content-Type:application/json\" \
                     -d '{\"program\":'$(cat %s)'}'\n" output
   else
-    let output = match !LiquidOptions.output with
-      | Some output -> output
-      | None -> outprefix ^ ".tz" in
     let s =
       if !LiquidOptions.singleline
       then LiquidToTezos.line_of_contract c
       else LiquidToTezos.string_of_contract c in
-    FileString.write_file output s;
-    Printf.eprintf "File %S generated\n%!" output;
-    Printf.eprintf "If tezos is compiled, you may want to typecheck with:\n";
-    Printf.eprintf "  tezos-client typecheck script %s\n" output
+    match
+      match !LiquidOptions.output with
+      | Some output -> output
+      | None -> outprefix ^ ".tz"
+    with
+    | "-" -> Printf.printf "%s%!" s
+    | output ->
+      FileString.write_file output s;
+      Printf.eprintf "File %S generated\n%!" output;
+      Printf.eprintf "If tezos is compiled, you may want to typecheck with:\n";
+      Printf.eprintf "  tezos-client typecheck script %s\n" output
 
 
 let compile_tezos_file filename =
@@ -447,6 +451,21 @@ let get_storage () =
   Printf.printf "%s\n%!"
     (LiquidData.string_of_const r_storage)
 
+let call_arg () =
+  let s =
+    LiquidDeploy.forge_call_arg
+      (LiquidDeploy.From_files (Data.get_files ()))
+      ~entry_name:!Data.entry_name
+      !Data.parameter
+  in
+  match !LiquidOptions.output with
+  | None ->
+    Printf.printf "Use --arg '%s'\n%!" s
+  | Some "-" ->
+    Printf.printf "'%s'%!" s
+  | Some file ->
+    FileString.write_file file s
+
 let call () =
   match
     LiquidDeploy.Sync.call
@@ -661,6 +680,15 @@ let main () =
             call ());
       ],
       "<KT1...> ENTRY PARAMETER Call deployed contract";
+
+      "--call-arg", Arg.Tuple [
+        Arg.String (fun s -> Data.entry_name := s);
+        Arg.String (fun s -> Data.parameter := s);
+        Arg.Unit (fun () ->
+            work_done := true;
+            call_arg ());
+      ],
+      "ENTRY PARAMETER Call deployed contract";
 
       "--forge-call", Arg.Tuple [
         Arg.String (fun s ->

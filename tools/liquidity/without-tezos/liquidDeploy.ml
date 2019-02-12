@@ -128,3 +128,5 @@ end
 module Async = struct include Dummy type 'a t = 'a Lwt.t end
 
 module Sync = struct include Dummy type 'a t = 'a end
+
+let forge_call_arg ?entry_name liquid arg = ""
