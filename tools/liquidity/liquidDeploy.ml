@@ -1449,7 +1449,7 @@ let forge_call_arg ?(entry_name="main") liquid input_string =
     | [_] -> input
     | _ -> LiquidEncode.encode_const contract.ty_env contract_sig
              (CConstr (prefix_entry ^ entry_name, input)) in
-  let _, loc_table =
+  let _, _loc_table =
     LiquidToTezos.convert_contract ~expand:true pre_michelson in
   LiquidToTezos.string_of_expression
     (LiquidToTezos.convert_const parameter)

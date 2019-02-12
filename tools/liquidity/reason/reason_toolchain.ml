@@ -115,6 +115,7 @@ module type Toolchain = sig
 
   val core_type: Lexing.lexbuf -> Parsetree.core_type
   val implementation: Lexing.lexbuf -> Parsetree.structure
+  val expression: Lexing.lexbuf -> Parsetree.expression
   val interface: Lexing.lexbuf -> Parsetree.signature
   val toplevel_phrase: Lexing.lexbuf -> Parsetree.toplevel_phrase
   val use_file: Lexing.lexbuf -> Parsetree.toplevel_phrase list
@@ -122,6 +123,7 @@ module type Toolchain = sig
   (* Printing *)
   val print_interface_with_comments: Format.formatter -> (Parsetree.signature * Reason_comment.t list) -> unit
   val print_implementation_with_comments: Format.formatter -> (Parsetree.structure * Reason_comment.t list) -> unit
+  val print_expression: Format.formatter -> Parsetree.expression -> unit
 
 end
 
@@ -139,12 +141,14 @@ module type Toolchain_spec = sig
 
   val core_type: Lexing.lexbuf -> Parsetree.core_type
   val implementation: Lexing.lexbuf -> Parsetree.structure
+  val expression: Lexing.lexbuf -> Parsetree.expression
   val interface: Lexing.lexbuf -> Parsetree.signature
   val toplevel_phrase: Lexing.lexbuf -> Parsetree.toplevel_phrase
   val use_file: Lexing.lexbuf -> Parsetree.toplevel_phrase list
 
   val format_interface_with_comments: (Parsetree.signature * Reason_comment.t list) -> Format.formatter -> unit
   val format_implementation_with_comments: (Parsetree.structure * Reason_comment.t list) -> Format.formatter -> unit
+  val format_expression: Parsetree.expression -> Format.formatter -> unit
 end
 
 let rec left_expand_comment should_scan_prev_line source loc_start =
@@ -322,6 +326,16 @@ module Create_parse_entrypoint (Toolchain_impl: Toolchain_spec) :Toolchain = str
       let error = Reason_syntax_util.syntax_error_extension_node loc msg in
       (Ast_helper.Typ.mk ~loc (Parsetree.Ptyp_extension error), [])
 
+  let expression_with_comments lexbuf =
+    try wrap_with_comments Toolchain_impl.expression lexbuf
+    with err when !Reason_config.recoverable ->
+      let loc, msg = match err with
+        | Location.Error err -> (err.loc, err.msg)
+        | _ -> (Location.curr lexbuf, invalidLex)
+      in
+      let error = Reason_syntax_util.syntax_error_extension_node loc msg in
+      (Ast_helper.Exp.mk ~loc (Parsetree.Pexp_extension error), [])
+
   let interface_with_comments lexbuf =
     try wrap_with_comments Toolchain_impl.interface lexbuf
     with err when !Reason_config.recoverable ->
@@ -347,6 +361,8 @@ module Create_parse_entrypoint (Toolchain_impl: Toolchain_spec) :Toolchain = str
 
   let core_type = ast_only core_type_with_comments
 
+  let expression = ast_only expression_with_comments
+
   let interface = ast_only interface_with_comments
 
   let toplevel_phrase = ast_only toplevel_phrase_with_comments
@@ -359,6 +375,9 @@ module Create_parse_entrypoint (Toolchain_impl: Toolchain_spec) :Toolchain = str
 
   let print_implementation_with_comments formatter implementation =
     Toolchain_impl.format_implementation_with_comments implementation formatter
+
+  let print_expression formatter expression =
+    Toolchain_impl.format_expression expression formatter
 end
 
 module OCaml_syntax = struct
@@ -418,6 +437,13 @@ module OCaml_syntax = struct
       (fun it -> it.Ast_mapper.typ it)
       (fun lexbuf -> From_current.copy_core_type
                        (Parser.parse_core_type Lexer.token lexbuf))
+      lexbuf
+
+  let expression lexbuf =
+    parse_and_filter_doc_comments
+      (fun it -> it.Ast_mapper.expr it)
+      (fun lexbuf -> From_current.copy_expression
+                       (Parser.parse_expression Lexer.token lexbuf))
       lexbuf
 
   let interface lexbuf =
@@ -499,6 +525,9 @@ module OCaml_syntax = struct
     in
     Pprintast.structure formatter
       (To_current.copy_structure structure)
+  let format_expression expression formatter =
+    Pprintast.expression formatter
+      (To_current.copy_expression expression)
 end
 
 let insert_completion_ident : Lexing.position option ref = ref None
@@ -909,6 +938,9 @@ module Reason_syntax = struct
   let interface lexbuf =
     initial_run Reason_parser.Incremental.interface lexbuf
 
+  let expression lexbuf =
+    initial_run Reason_parser.Incremental.parse_expression lexbuf
+
   let core_type lexbuf =
     initial_run Reason_parser.Incremental.parse_core_type lexbuf
 
@@ -969,6 +1001,9 @@ module Reason_syntax = struct
   let format_implementation_with_comments (implementation, comments) formatter =
     let reason_formatter = Reason_pprint_ast.createFormatter () in
     reason_formatter#structure comments formatter implementation
+  let format_expression expression formatter =
+    let reason_formatter = Reason_pprint_ast.createFormatter () in
+    reason_formatter#expression formatter expression
 end
 
 module ML = Create_parse_entrypoint (OCaml_syntax)

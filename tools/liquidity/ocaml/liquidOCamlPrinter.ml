@@ -1564,7 +1564,11 @@ let expression f x =
 let string_of_expression x =
   ignore (flush_str_formatter ()) ;
   let f = str_formatter in
-  expression f x;
+  if !LiquidOptions.ocaml_syntax then
+    expression f x
+  else
+    Reason_toolchain.RE.print_expression f
+      (Reason_toolchain.From_current.copy_expression x);
   flush_str_formatter ()
 
 let string_of_structure str coms =

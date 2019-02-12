@@ -94,20 +94,26 @@ module RE = struct
   let core_type lexbuf =
     To_current.copy_core_type (RE.core_type lexbuf)
 
+  let expression lexbuf =
+    To_current.copy_expression (RE.expression lexbuf)
 
 end
 
 
 let implementation buf =
-  if  !LiquidOptions.ocaml_syntax then
+  if !LiquidOptions.ocaml_syntax then
     OCAML.implementation_with_comments buf
   else
     RE.implementation buf
 
 let core_type buf =
-  if  !LiquidOptions.ocaml_syntax then
+  if !LiquidOptions.ocaml_syntax then
     OCAML.core_type buf
   else
     RE.core_type buf
 
-let expression = OCAML.expression
+let expression buf =
+  if !LiquidOptions.ocaml_syntax then
+    OCAML.expression buf
+  else
+    RE.expression buf
