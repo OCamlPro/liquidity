@@ -64,6 +64,14 @@ and simplify_step e exprs =
   | DIP (0, e), exprs -> simplify_step e exprs
   | DUP _, {ins=DROP} :: exprs -> exprs
   | DUP 1, {ins=SWAP} :: {ins=DROP} :: exprs -> exprs
+  | SWAP, {ins=SWAP} :: exprs -> exprs
+  | SWAP, ({ins= (ADD|MUL|AND|OR|XOR)} as e) :: exprs -> simplify_step e exprs
+  | EQ, { ins = NOT } :: exprs -> simplify_step { e with ins = NEQ } exprs
+  | NEQ, { ins = NOT } :: exprs -> simplify_step { e with ins = EQ } exprs
+  | GT, { ins = NOT }:: exprs -> simplify_step { e with ins = LE } exprs
+  | LT, { ins = NOT }:: exprs -> simplify_step { e with ins = GE } exprs
+  | LE, { ins = NOT }:: exprs -> simplify_step { e with ins = GT } exprs
+  | GE, { ins = NOT }:: exprs -> simplify_step { e with ins = LT } exprs
   | FAILWITH, _ -> [e]
 
   | IF(i1,i2), exprs ->
