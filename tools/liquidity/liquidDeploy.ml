@@ -1431,3 +1431,25 @@ module Sync = struct
     Lwt_main.run (pack ?liquid ~const ~ty)
 
 end
+
+let forge_call_arg ?(entry_name="main") liquid input_string =
+  let contract, pre_michelson, pre_init_infos = compile_liquid liquid in
+  let contract_sig = full_sig_of_contract contract in
+  let entry =
+    try
+      List.find (fun e -> e.entry_sig.entry_name = entry_name) contract.entries
+    with Not_found ->
+      invalid_arg @@ "Contract has no entry point " ^ entry_name
+  in
+  let input =
+    LiquidData.translate { contract.ty_env with filename = "call_parameter" }
+      contract_sig input_string entry.entry_sig.parameter
+  in
+  let parameter = match contract_sig.f_entries_sig with
+    | [_] -> input
+    | _ -> LiquidEncode.encode_const contract.ty_env contract_sig
+             (CConstr (prefix_entry ^ entry_name, input)) in
+  let _, loc_table =
+    LiquidToTezos.convert_contract ~expand:true pre_michelson in
+  LiquidToTezos.string_of_expression
+    (LiquidToTezos.convert_const parameter)

@@ -387,6 +387,21 @@ let print_program comment_of_loc ppf (c, loc_table) =
         Micheline_printer.print_expr_unwrapped node
     ) c
 
+let string_of_expression exp =
+  let buf = Buffer.create 10000 in
+  let ppf = Format.formatter_of_buffer buf in
+  Format.pp_set_margin ppf 199999 ;
+  Format.pp_set_max_indent ppf 99999 ;
+  Format.pp_set_max_boxes ppf 99999 ;
+  let exp = Micheline.inject_locations (fun l ->
+           (* { Micheline_printer.comment = Some (string_of_int l) } *)
+           { Micheline_printer.comment = None }
+    ) exp
+  in
+  Format.fprintf ppf "%a"
+    Micheline_printer.print_expr_unwrapped exp;
+  Format.fprintf ppf "@?" ;
+  Buffer.contents buf
 
 let string_of_contract c =
   let buf = Buffer.create 10000 in

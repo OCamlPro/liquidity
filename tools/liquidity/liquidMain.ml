@@ -447,6 +447,15 @@ let get_storage () =
   Printf.printf "%s\n%!"
     (LiquidData.string_of_const r_storage)
 
+let call_arg () =
+  let s =
+    LiquidDeploy.forge_call_arg
+      (LiquidDeploy.From_files (Data.get_files ()))
+      ~entry_name:!Data.entry_name
+      !Data.parameter
+  in
+  Printf.printf "Use --arg '%s'\n%!" s
+
 let call () =
   match
     LiquidDeploy.Sync.call
@@ -661,6 +670,15 @@ let main () =
             call ());
       ],
       "<KT1...> ENTRY PARAMETER Call deployed contract";
+
+      "--call-arg", Arg.Tuple [
+        Arg.String (fun s -> Data.entry_name := s);
+        Arg.String (fun s -> Data.parameter := s);
+        Arg.Unit (fun () ->
+            work_done := true;
+            call_arg ());
+      ],
+      "ENTRY PARAMETER Call deployed contract";
 
       "--forge-call", Arg.Tuple [
         Arg.String (fun s ->
