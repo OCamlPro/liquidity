@@ -2541,7 +2541,9 @@ let ocaml_of_file parser file =
 
 let read_file filename =
   try
-    ocaml_of_file LiquidOCamlParse.implementation filename
+    let ast, _comments =
+      ocaml_of_file LiquidOCamlParse.implementation filename in
+    ast
   with exn -> translate_exn exn
 
 let translate_expression env expression =
@@ -2559,7 +2561,9 @@ let ocaml_of_string ?(filename = "buffer") parser content =
     translate_exn exn
 
 let structure_of_string ?filename impl =
-  ocaml_of_string ?filename LiquidOCamlParse.implementation impl
+  let str, _comments =
+    ocaml_of_string ?filename LiquidOCamlParse.implementation impl in
+  str
 
 let expression_of_string ?filename s =
   ocaml_of_string ?filename LiquidOCamlParse.expression s

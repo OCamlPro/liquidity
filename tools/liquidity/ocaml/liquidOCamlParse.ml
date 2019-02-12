@@ -69,6 +69,11 @@ module OCAML = struct
   and core_type = wrap Parser.parse_core_type
   and expression = wrap Parser.parse_expression
   and pattern = wrap Parser.parse_pattern
+
+  let comments () = LiquidOCamlLexer.comments ()
+  let implementation_with_comments buf =
+    let str = implementation buf in
+    str, comments ()
 end
 
 module RE = struct
@@ -77,7 +82,11 @@ module RE = struct
 
   let implementation lexbuf =
     try
-      To_current.copy_structure (RE.implementation lexbuf)
+      let str, comments = RE.implementation_with_comments lexbuf in
+      let comments = List.map (fun {Reason_comment.text; location; _ } ->
+          (text, location)
+        ) comments in
+      To_current.copy_structure str, comments
     with
     | Reason_syntax_util.Error (loc, err) ->
       raise (Syntaxerr.Error(Syntaxerr.Other loc))
@@ -91,7 +100,7 @@ end
 
 let implementation buf =
   if  !LiquidOptions.ocaml_syntax then
-    OCAML.implementation buf
+    OCAML.implementation_with_comments buf
   else
     RE.implementation buf
 

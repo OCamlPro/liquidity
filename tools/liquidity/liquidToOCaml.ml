@@ -795,7 +795,8 @@ let structure_of_contract ?(abbrev=false) ?type_annots ?(types=[]) contract =
   reset_env ();
   structure_of_contract ~abbrev ?type_annots ~types contract
 
-let string_of_structure = LiquidOCamlPrinter.string_of_structure
+let string_of_structure str =
+  LiquidOCamlPrinter.string_of_structure str []
 
 let translate_expression = convert_code ~abbrev:false
 

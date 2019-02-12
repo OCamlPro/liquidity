@@ -521,10 +521,10 @@ let convert_file filename =
   let syntax = !LiquidOptions.ocaml_syntax in
   let ic = open_in filename in
   let lexbuf = Lexing.from_channel ic in
-  let str = LiquidOCamlParse.implementation lexbuf in
+  let str, comments = LiquidOCamlParse.implementation lexbuf in
 
   LiquidOptions.ocaml_syntax := not syntax;
-  let s = LiquidOCamlPrinter.string_of_structure str in
+  let s = LiquidOCamlPrinter.string_of_structure str comments in
   LiquidOptions.ocaml_syntax := syntax;
   Printf.printf "%s%!" s;
   ()

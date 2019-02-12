@@ -1567,14 +1567,20 @@ let string_of_expression x =
   expression f x;
   flush_str_formatter ()
 
-let string_of_structure str =
+let string_of_structure str coms =
   ignore (flush_str_formatter ());
   let ppf = str_formatter in
-  if !LiquidOptions.ocaml_syntax then
-    structure reset_ctxt ppf str
-  else
-    Reason_toolchain.RE.print_implementation_with_comments ppf
-      (Reason_toolchain.From_current.copy_structure str,[]);
+  begin
+    if !LiquidOptions.ocaml_syntax then
+      structure reset_ctxt ppf str
+    else
+      let reason_comments = List.map (fun (text, location) ->
+          Reason_comment.make ~location Regular text
+        ) coms in
+      Reason_toolchain.RE.print_implementation_with_comments ppf
+        (Reason_toolchain.From_current.copy_structure str,
+         reason_comments)
+  end;
   flush_str_formatter ()
 
 let top_phrase f x =

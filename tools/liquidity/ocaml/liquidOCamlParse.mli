@@ -13,6 +13,7 @@
 (*                                                                        *)
 (**************************************************************************)
 
-val implementation : Lexing.lexbuf -> Parsetree.structure
+val implementation :
+  Lexing.lexbuf -> Parsetree.structure * (string * Location.t) list
 val expression : Lexing.lexbuf -> Parsetree.expression
 val core_type :  Lexing.lexbuf -> Parsetree.core_type
