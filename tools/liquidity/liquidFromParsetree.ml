@@ -447,14 +447,14 @@ let rec translate_const env exp =
   | { pexp_desc = Pexp_construct ( { txt = Lident "None" }, None ) } ->
     CNone, Some (Toption (fresh_tvar ()))
   | { pexp_desc = Pexp_constant (Pconst_integer (s,None)) } ->
-    CInt (LiquidInteger.integer_of_liq s), Some Tint
+    CInt (LiquidNumber.integer_of_liq s), Some Tint
   | { pexp_desc = Pexp_constant (Pconst_integer (s, Some 'p')) } ->
-    CNat (LiquidInteger.integer_of_liq s), Some Tnat
+    CNat (LiquidNumber.integer_of_liq s), Some Tnat
 
   | { pexp_desc = Pexp_constant (Pconst_integer (s, Some '\231')) } ->
-    CTez (LiquidInteger.tez_of_liq s), Some Ttez
+    CTez (LiquidNumber.tez_of_liq s), Some Ttez
   | { pexp_desc = Pexp_constant (Pconst_float (s, Some '\231')) } ->
-    CTez (LiquidInteger.tez_of_liq s), Some Ttez
+    CTez (LiquidNumber.tez_of_liq s), Some Ttez
 
   (* Timestamps *)
   | { pexp_desc = Pexp_constant (Pconst_integer (s, Some '\232')) } ->
@@ -734,7 +734,7 @@ let access_of_deconstruct var_name loc indexes =
           args = [
             a;
             mk ~loc (Const { ty = Tnat;
-                             const = CNat (LiquidInteger.integer_of_int i) })
+                             const = CNat (LiquidNumber.integer_of_int i) })
           ] })
     ) indexes a
 

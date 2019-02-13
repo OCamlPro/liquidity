@@ -461,7 +461,7 @@ let rec translate_code ~parameter_name ~storage_name code =
       [arg; { desc = Const { const = CInt n | CNat n }}] ->
       let size = size_of_type arg.ty in
       let arg = compile depth env arg in
-      let n = LiquidInteger.int_of_integer n in
+      let n = LiquidNumber.int_of_integer n in
       let ins =
         if size = n + 1 then
           ii @@ CDDR (n-1, None)
@@ -474,7 +474,7 @@ let rec translate_code ~parameter_name ~storage_name code =
     | Prim_tuple_set,
       [x; { desc = Const { const = CInt n | CNat n }}; y ] ->
       let x_code = compile depth env x in
-      let n = LiquidInteger.int_of_integer n in
+      let n = LiquidNumber.int_of_integer n in
       let size = size_of_type x.ty in
       let is_last = size = n + 1 in
       let set_code = compile_tuple_set ~loc is_last (depth+1) env n y in

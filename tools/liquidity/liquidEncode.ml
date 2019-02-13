@@ -26,12 +26,12 @@ let mk ?name ~loc (desc: (datatype, encoded) exp_desc) ty =
 
 let mk_typed_nat ~loc i =
   mk_typed ~loc
-    (Const { ty = Tnat; const = CNat (LiquidInteger.integer_of_int i) })
+    (Const { ty = Tnat; const = CNat (LiquidNumber.integer_of_int i) })
     Tnat
 
 let mk_nat ~loc i =
   mk ~loc
-    (Const { ty = Tnat; const = CNat (LiquidInteger.integer_of_int i) })
+    (Const { ty = Tnat; const = CNat (LiquidNumber.integer_of_int i) })
     Tnat
 
 let mk_nil ~loc list_ty =

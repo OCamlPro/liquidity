@@ -113,7 +113,7 @@ let rec compute decompile code to_inline =
                           { desc = Var name };
                           { desc = Const { const = CInt n | CNat n } }] } ->
                 let ok = ok && name = bnd_var.nname &&
-                         LiquidInteger.int_of_integer n = i in
+                         LiquidNumber.int_of_integer n = i in
                 (i + 1, ok)
               | _ -> (i + 1, false)
             ) (0, true) tuple in

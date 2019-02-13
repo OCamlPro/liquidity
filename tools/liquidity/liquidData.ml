@@ -18,9 +18,9 @@ open LiquidTypes
 let rec default_const = function
   | Tunit -> CUnit
   | Tbool -> CBool false
-  | Tint -> CInt (LiquidInteger.integer_of_int 0)
-  | Tnat -> CNat (LiquidInteger.integer_of_int 0)
-  | Ttez -> CTez (LiquidInteger.tez_of_liq "0")
+  | Tint -> CInt (LiquidNumber.integer_of_int 0)
+  | Tnat -> CNat (LiquidNumber.integer_of_int 0)
+  | Ttez -> CTez (LiquidNumber.tez_of_liq "0")
   | Tstring -> CString ""
   | Tbytes -> CBytes "0x"
   | Ttimestamp -> CTimestamp "1970-01-01T00:00:00Z"
@@ -60,9 +60,9 @@ let rec default_const = function
 let rec default_empty_const = function
   | Tunit -> CUnit
   | Tbool -> CBool false
-  | Tint -> CInt (LiquidInteger.integer_of_int 0)
-  | Tnat -> CNat (LiquidInteger.integer_of_int 0)
-  | Ttez -> CTez (LiquidInteger.tez_of_liq "0")
+  | Tint -> CInt (LiquidNumber.integer_of_int 0)
+  | Tnat -> CNat (LiquidNumber.integer_of_int 0)
+  | Ttez -> CTez (LiquidNumber.tez_of_liq "0")
   | Tstring -> CString ""
   | Tbytes -> CBytes "0x"
   | Ttimestamp -> CTimestamp "1970-01-01T00:00:00Z"
@@ -152,23 +152,13 @@ let rec translate_const_exp (exp : encoded_exp) =
 
 let translate env contract_sig s ty =
   let ml_exp =
-    LiquidFromOCaml.expression_of_string ~filename:env.filename s in
+    LiquidFromParsetree.expression_of_string ~filename:env.filename s in
   (* hackish: add type annotation for constants *)
-  let ml_ty = LiquidToOCaml.convert_type ~abbrev:false ty in
+  let ml_ty = LiquidToParsetree.convert_type ~abbrev:false ty in
   let ml_exp = Ast_helper.Exp.constraint_
       ~loc:(Location.in_file env.filename) ml_exp ml_ty in
-  let sy_exp = LiquidFromOCaml.translate_expression env ml_exp in
+  let sy_exp = LiquidFromParsetree.translate_expression env ml_exp in
   let tenv = empty_typecheck_env ~warnings:true contract_sig env in
   let ty_exp = LiquidCheck.typecheck_code tenv ~expected_ty:ty sy_exp in
   let enc_exp = LiquidEncode.encode_code tenv ty_exp in
   translate_const_exp enc_exp
-
-
-(* let string_of_const ?ty c =
- *   let e = LiquidToOCaml.convert_const c in
- *   let e = match ty with
- *     | None -> e
- *     | Some ty ->
- *       Ast_helper.Exp.constraint_ e (LiquidToOCaml.convert_type ty)
- *   in
- *   LiquidToOCaml.string_of_expression e *)

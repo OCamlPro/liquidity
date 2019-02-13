@@ -287,7 +287,7 @@ let rec typecheck_const ~loc env cst ty =
   | Tsignature, CBytes s -> ty, CSignature s
 
   | Ttimestamp, CString s -> ty, CTimestamp (ISO8601.of_string s)
-  | Ttez, CString s -> ty, CTez (LiquidInteger.tez_of_liq s)
+  | Ttez, CString s -> ty, CTez (LiquidNumber.tez_of_liq s)
   | Tkey_hash, CString s -> ty, CKey_hash s
   | Tcontract _, CString s -> ty, CContract s
   | Tkey, CString s -> ty, CKey s
@@ -1223,7 +1223,7 @@ and typecheck_prim1 env prim loc args =
     begin match expand tuple_ty with
       | Tpartial (Ptup _) | Tvar _ ->
         let ty = fresh_tvar () in
-        let n = LiquidInteger.int_of_integer n in
+        let n = LiquidNumber.int_of_integer n in
         unify loc tuple_ty (Tpartial (Ptup [(n, ty)]));
         prim, ty
       | _ ->
@@ -1233,7 +1233,7 @@ and typecheck_prim1 env prim loc args =
           | _ -> error loc "get takes a tuple as first argument, got:\n%s"
                    (string_of_type tuple_ty)
         in
-        let n = LiquidInteger.int_of_integer n in
+        let n = LiquidNumber.int_of_integer n in
         let size = List.length tuple in
         if size <= n then error loc "get outside tuple";
         let ty = List.nth tuple n in
@@ -1245,7 +1245,7 @@ and typecheck_prim1 env prim loc args =
                      { ty ; loc = val_loc }] ->
     begin match expand tuple_ty with
       | Tpartial (Ptup _) | Tvar _ ->
-        let n = LiquidInteger.int_of_integer n in
+        let n = LiquidNumber.int_of_integer n in
         unify loc tuple_ty (Tpartial (Ptup [(n, ty)]));
         prim, tuple_ty
       | _ ->
@@ -1255,7 +1255,7 @@ and typecheck_prim1 env prim loc args =
           | _ -> error loc "set takes a tuple as first argument, got:\n%s"
                    (string_of_type tuple_ty)
         in
-        let n = LiquidInteger.int_of_integer n in
+        let n = LiquidNumber.int_of_integer n in
         let expected_ty = List.nth tuple n in
         let size = List.length tuple in
         if size <= n then error loc "set outside tuple";

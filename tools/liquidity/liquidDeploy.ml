@@ -499,12 +499,12 @@ let compile_liquid liquid =
     | From_strings ss ->
       List.map (fun s ->
           "liquidity_buffer",
-          LiquidFromOCaml.structure_of_string ~filename:"liquidity_buffer"
+          LiquidFromParsetree.structure_of_string ~filename:"liquidity_buffer"
             s) ss
     | From_files files ->
-      List.map (fun f -> f, LiquidFromOCaml.read_file f) files
+      List.map (fun f -> f, LiquidFromParsetree.read_file f) files
   in
-  let syntax_ast = LiquidFromOCaml.translate_multi ocaml_asts in
+  let syntax_ast = LiquidFromParsetree.translate_multi ocaml_asts in
   let contract_sig = full_sig_of_contract syntax_ast in
   let typed_ast = LiquidCheck.typecheck_contract
       ~warnings:true ~decompiling:false syntax_ast in
@@ -1317,11 +1317,11 @@ let pack ?liquid ~const ~ty =
       { syntax_ast.ty_env with filename = "input" },
       full_sig_of_contract syntax_ast
     | None ->
-      LiquidFromOCaml.initial_env "input",
+      LiquidFromParsetree.initial_env "input",
       LiquidTypes.dummy_contract_sig
   in
   let ty =
-    LiquidFromOCaml.translate_type env (LiquidFromOCaml.type_of_string ty) in
+    LiquidFromParsetree.translate_type env (LiquidFromParsetree.type_of_string ty) in
   let const = LiquidData.translate env csig const ty in
   (* LiquidCheck.check_const_type ~to_tez:LiquidPrinter.tez_of_liq noloc
    *   ty const in *)

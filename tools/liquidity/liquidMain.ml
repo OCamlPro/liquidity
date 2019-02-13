@@ -25,14 +25,14 @@ exception Bad_arg
 
 let compile_liquid_files files =
   let ocaml_asts = List.map (fun filename ->
-      let ocaml_ast = LiquidFromOCaml.read_file filename in
+      let ocaml_ast = LiquidFromParsetree.read_file filename in
       if !LiquidOptions.verbosity>0 then
         FileString.write_file (filename ^ ".ocaml")
           (LiquidOCamlPrinter.contract_ast ocaml_ast);
       (filename, ocaml_ast)
     ) files in
   if !LiquidOptions.parseonly then exit 0;
-  let syntax_ast = LiquidFromOCaml.translate_multi ocaml_asts in
+  let syntax_ast = LiquidFromParsetree.translate_multi ocaml_asts in
   let outprefix =
     match !LiquidOptions.output with
     | Some output when output <> "-" -> Filename.chop_extension output
@@ -205,7 +205,7 @@ let compile_tezos_file filename =
               if !LiquidOptions.ocaml_syntax then ".liq" else ".reliq" in
   let s = try
       LiquidPrinter.Syntax.string_of_structure
-        (LiquidToOCaml.structure_of_contract ~type_annots ~types untyped_ast) []
+        (LiquidToParsetree.structure_of_contract ~type_annots ~types untyped_ast) []
     with LiquidError _ ->
       DebugPrint.string_of_contract untyped_ast in
   match output with
@@ -327,9 +327,9 @@ let translate () =
   let parameter = !Data.parameter in
   let storage = !Data.storage in
   let entry_name = !Data.entry_name in
-  let ocaml_asts = List.map (fun f -> f, LiquidFromOCaml.read_file f) files in
+  let ocaml_asts = List.map (fun f -> f, LiquidFromParsetree.read_file f) files in
   (* first, extract the types *)
-  let contract = LiquidFromOCaml.translate_multi ocaml_asts in
+  let contract = LiquidFromParsetree.translate_multi ocaml_asts in
   let _ = LiquidCheck.typecheck_contract ~warnings:true contract in
   let contract_sig = full_sig_of_contract contract in
   let entry =
@@ -517,7 +517,7 @@ let pack const ty =
   Printf.printf "%s\n%!" bytes
 
 let parse_tez_to_string expl amount =
-  match LiquidData.translate (LiquidFromOCaml.initial_env expl)
+  match LiquidData.translate (LiquidFromParsetree.initial_env expl)
           dummy_contract_sig amount Ttez
   with
   | CTez t ->
@@ -559,7 +559,7 @@ let main () =
           work_done := true), " Switch between OCaml and ReasonML syntax (stdout)";
 
       "--version", Arg.Unit (fun () ->
-          Format.printf "%s@." LiquidToOCaml.output_version;
+          Format.printf "%s@." LiquidToParsetree.output_version;
           exit 0
         ),
       " Show version and exit";

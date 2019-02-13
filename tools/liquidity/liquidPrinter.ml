@@ -252,9 +252,9 @@ module Michelson = struct
     | CContract s -> Printf.bprintf b "%S" s
     | CAddress s -> Printf.bprintf b "%S" s
     | CSignature s -> Printf.bprintf b "%S" s
-    | CTez s -> Printf.bprintf b "%s" (Z.to_string (LiquidInteger.mic_mutez_of_tez s))
-    | CInt n -> Printf.bprintf b "%s" (Z.to_string (LiquidInteger.mic_of_integer n))
-    | CNat n -> Printf.bprintf b "%s" (Z.to_string (LiquidInteger.mic_of_integer n))
+    | CTez s -> Printf.bprintf b "%s" (Z.to_string (LiquidNumber.mic_mutez_of_tez s))
+    | CInt n -> Printf.bprintf b "%s" (Z.to_string (LiquidNumber.mic_of_integer n))
+    | CNat n -> Printf.bprintf b "%s" (Z.to_string (LiquidNumber.mic_of_integer n))
     | CTimestamp s -> Printf.bprintf b "%S" s
     | CBool true -> Printf.bprintf b "True"
     | CBool false -> Printf.bprintf b "False"
@@ -790,18 +790,18 @@ end
 module Liquid = struct
 
   let string_of_type ty =
-    LiquidToOCaml.convert_type ty
+    LiquidToParsetree.convert_type ty
     |> Syntax.string_of_core_type
 
   let string_of_const c =
-    LiquidToOCaml.convert_const c
+    LiquidToParsetree.convert_const c
     |> Syntax.string_of_expression
 
   let string_of_contract c =
-    Syntax.string_of_structure (LiquidToOCaml.structure_of_contract c) []
+    Syntax.string_of_structure (LiquidToParsetree.structure_of_contract c) []
 
   let string_of_code c =
-    LiquidToOCaml.convert_code c
+    LiquidToParsetree.convert_code c
     |> Syntax.string_of_expression
 
 end
@@ -971,9 +971,9 @@ module LiquidDebug = struct
     | CContract s -> Printf.bprintf b "%s" s
     | CAddress s -> Printf.bprintf b "%s" s
     | CSignature s -> Printf.bprintf b "%s" s
-    | CTez s -> Printf.bprintf b "%stz" (LiquidInteger.liq_of_tez s)
-    | CInt n -> Printf.bprintf b "%s" (LiquidInteger.liq_of_integer n)
-    | CNat n -> Printf.bprintf b "%sp" (LiquidInteger.liq_of_integer n)
+    | CTez s -> Printf.bprintf b "%stz" (LiquidNumber.liq_of_tez s)
+    | CInt n -> Printf.bprintf b "%s" (LiquidNumber.liq_of_integer n)
+    | CNat n -> Printf.bprintf b "%sp" (LiquidNumber.liq_of_integer n)
     | CTimestamp s -> Printf.bprintf b "%s" s
     | CBool v -> Printf.bprintf b "%b" v
     | CUnit -> Printf.bprintf b "()"

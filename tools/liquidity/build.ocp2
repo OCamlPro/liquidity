@@ -46,7 +46,7 @@ OCaml.library("ocplib-liquidity-bare",
        "liquidMisc.ml";
 
        "liquidTypes.ml";
-       "liquidInteger.ml";
+       "liquidNumber.ml";
      ];
      requires = [
        "zarith";
@@ -104,7 +104,7 @@ OCaml.library("ocplib-liquidity-base",
 
        "liquidEmit.ml";
        "liquidPeephole.ml";
-       "liquidToOCaml.ml";
+       "liquidToParsetree.ml";
        "liquidPrinter.ml";
        "liquidInfer.ml";
        "liquidCheck.ml";
@@ -112,7 +112,7 @@ OCaml.library("ocplib-liquidity-base",
        "liquidEncode.ml";
        "liquidDecode.ml";
        "liquidMichelson.ml";
-       "liquidFromOCaml.ml";
+       "liquidFromParsetree.ml";
        "liquidData.ml";
 
        "liquidClean.ml";

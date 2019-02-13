@@ -183,7 +183,7 @@ and env = {
 
   (* name of contract being compiled *)
   contractname : string;
-  (* fields modified in LiquidFromOCaml *)
+  (* fields modified in LiquidFromParsetree *)
   (* type definitions *)
   mutable types : (datatype list -> datatype) StringMap.t;
   (* contract type definitions *)

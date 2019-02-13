@@ -213,9 +213,9 @@ and convert_contract_sig ~abbrev csig =
 
 let rec convert_const expr =
   match expr with
-  | CInt n -> Exp.constant (Const.integer (LiquidInteger.liq_of_integer n))
+  | CInt n -> Exp.constant (Const.integer (LiquidNumber.liq_of_integer n))
   | CNat n -> Exp.constant (Const.integer ~suffix:'p'
-                              (LiquidInteger.liq_of_integer n))
+                              (LiquidNumber.liq_of_integer n))
   | CString s -> Exp.constant (Const.string s)
   | CUnit -> Exp.construct (lid "()") None
   | CBool false -> Exp.construct (lid "false") None
@@ -234,9 +234,9 @@ let rec convert_const expr =
   | CTez n ->
     begin match n.mutez with
       | None ->
-        Exp.constant (Const.integer ~suffix:'\231' (LiquidInteger.liq_of_tez n))
+        Exp.constant (Const.integer ~suffix:'\231' (LiquidNumber.liq_of_tez n))
       | Some _ ->
-        Exp.constant (Const.float ~suffix:'\231' (LiquidInteger.liq_of_tez n))
+        Exp.constant (Const.float ~suffix:'\231' (LiquidNumber.liq_of_tez n))
     end
   | CTimestamp s -> Exp.constant (Pconst_integer (s, Some '\232'))
   | CKey_hash n -> Exp.constant (Pconst_integer (n, Some '\233'))

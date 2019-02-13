@@ -132,16 +132,16 @@ let rec convert_const env ?ty expr =
   match expr with
   | Int (_loc, n) ->
     begin match ty with
-      | Some Tnat -> CNat (LiquidInteger.integer_of_mic n)
-      | Some Tint | None -> CInt (LiquidInteger.integer_of_mic n)
-      | Some Ttez -> CTez (LiquidInteger.tez_of_mic_mutez n)
+      | Some Tnat -> CNat (LiquidNumber.integer_of_mic n)
+      | Some Tint | None -> CInt (LiquidNumber.integer_of_mic n)
+      | Some Ttez -> CTez (LiquidNumber.tez_of_mic_mutez n)
       | Some ty -> wrong_type env expr ty
     end
 
   | String (_loc, s) ->
     begin match ty with
       | Some Ttez ->
-        CTez (LiquidInteger.tez_of_mic_mutez (Z.of_string s))
+        CTez (LiquidNumber.tez_of_mic_mutez (Z.of_string s))
       | Some Ttimestamp -> CTimestamp s
       | Some Tkey -> CKey s
       | Some Tkey_hash -> CKey_hash s
@@ -777,7 +777,7 @@ let const_of_string filename s =
       Some (node, env)
 
 let convert_env env =
-  let ty_env = LiquidFromOCaml.initial_env env.filename in
+  let ty_env = LiquidFromParsetree.initial_env env.filename in
   let new_types_map =
     StringMap.map (fun (tys, _i) ->
         let ty = match tys with

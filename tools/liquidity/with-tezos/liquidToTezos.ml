@@ -42,7 +42,7 @@ let rec convert_const ~loc expr =
     `Hex (String.sub s 2 (String.length s - 2))
     |> MBytes.of_hex in
   match expr with
-  | CInt n -> Micheline.Int (loc, LiquidInteger.mic_of_integer n)
+  | CInt n -> Micheline.Int (loc, LiquidNumber.mic_of_integer n)
   | CString s -> Micheline.String (loc, s)
   | CBytes s -> Micheline.Bytes (loc, bytes_of_hex s)
   | CUnit -> Micheline.Prim(loc, "Unit", [], [])
@@ -74,8 +74,8 @@ let rec convert_const ~loc expr =
                                     ))
                     args)
 
-  | CNat n -> Micheline.Int (loc, LiquidInteger.mic_of_integer n)
-  | CTez n -> Micheline.Int (loc, LiquidInteger.mic_mutez_of_tez n)
+  | CNat n -> Micheline.Int (loc, LiquidNumber.mic_of_integer n)
+  | CTez n -> Micheline.Int (loc, LiquidNumber.mic_mutez_of_tez n)
            (*
   | CTez tez
     |CKey _|

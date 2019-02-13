@@ -17,7 +17,7 @@ let c_empty_op ~loc =
   mk ~loc (Const { ty = Tlist Toperation; const = CList []}) (Tlist Toperation)
 let mk_nat ~loc i =
   mk ~loc
-    (Const { ty = Tnat; const = CNat (LiquidInteger.integer_of_int i) })
+    (Const { ty = Tnat; const = CNat (LiquidNumber.integer_of_int i) })
     Tnat
 
 let rec subst_empty_big_map storage_ty code =
