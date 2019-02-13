@@ -2494,9 +2494,14 @@ let ocaml_of_file parser file =
     translate_exn exn
 
 let read_file filename =
+  let parse =
+    if Filename.check_suffix filename ".reliq" then
+      LiquidReasonParse.implementation
+    else
+      LiquidOCamlParse.implementation in
   try
     let ast, _comments =
-      ocaml_of_file LiquidParse.implementation filename in
+      ocaml_of_file parse filename in
     ast
   with exn -> translate_exn exn
 

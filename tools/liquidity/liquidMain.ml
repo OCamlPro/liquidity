@@ -33,12 +33,14 @@ let compile_liquid_files files =
     ) files in
   if !LiquidOptions.parseonly then exit 0;
   let syntax_ast = LiquidFromOCaml.translate_multi ocaml_asts in
-  let outprefix = match List.rev ocaml_asts with
-    | [] -> assert false
-    | (filename, _) :: _ ->
-      Filename.(concat (dirname filename) @@
-                String.uncapitalize_ascii (syntax_ast.contract_name))
-      ^ ".liq" in
+  let outprefix =
+    match !LiquidOptions.output with
+    | Some output when output <> "-" -> Filename.chop_extension output
+    | _ -> match List.rev ocaml_asts with
+      | [] -> assert false
+      | (filename, _) :: _ ->
+        Filename.(concat (dirname filename) @@
+                  String.uncapitalize_ascii (syntax_ast.contract_name)) in
   if !LiquidOptions.verbosity>0 then
     FileString.write_file (outprefix ^ ".syntax")
       (DebugPrint.string_of_contract
@@ -114,16 +116,21 @@ let compile_liquid_files files =
   in
 
   if !LiquidOptions.json then
-    let output = outprefix ^ ".tz.json" in
     let s = LiquidToTezos.json_of_contract c in
-    FileString.write_file output s;
-    Printf.eprintf "File %S generated\n%!" output;
-    Printf.eprintf "If you have a node running, \
-                    you may want to typecheck with:\n";
-    Printf.eprintf "  curl http://127.0.0.1:8732/chains/main/blocks/head/\
-                    helpers/scripts/typecheck_code -H \
-                    \"Content-Type:application/json\" \
-                    -d '{\"program\":'$(cat %s)'}'\n" output
+    let output = match !LiquidOptions.output with
+      | Some output -> output
+      | None -> outprefix ^ ".tz.json" in
+    match output with
+    | "-" -> Printf.printf "%s%!" s
+    | _ ->
+      FileString.write_file output s;
+      Printf.eprintf "File %S generated\n%!" output;
+      Printf.eprintf "If you have a node running, \
+                      you may want to typecheck with:\n";
+      Printf.eprintf "  curl http://127.0.0.1:8732/chains/main/blocks/head/\
+                      helpers/scripts/typecheck_code -H \
+                      \"Content-Type:application/json\" \
+                      -d '{\"program\":'$(cat %s)'}'\n" output
   else
     let s =
       if !LiquidOptions.singleline
@@ -163,11 +170,12 @@ let compile_tezos_file filename =
   if !LiquidOptions.typeonly then exit 0;
 
   let c1 = LiquidDecomp.decompile env c in
-  let outprefix =
-    Filename.(concat (dirname filename) @@
-              String.uncapitalize_ascii c1.contract_name)  ^ ".tz" in
+  let outprefix = match !LiquidOptions.output with
+    | Some output when output <> "-" -> Filename.chop_extension output
+    | _ -> Filename.(concat (dirname filename) @@
+                     String.uncapitalize_ascii c1.contract_name)  ^ ".tz" in
   if !LiquidOptions.verbosity>0 then
-    FileString.write_file  (filename ^ ".liq.pre")
+    FileString.write_file  (filename ^ ".pre")
       (DebugPrint.string_of_contract c1);
   let typed_ast =
     try
@@ -179,7 +187,7 @@ let compile_tezos_file filename =
       (* for side effects in generalized type definitions *)
       let c2 = LiquidDecomp.decompile env c in
       if !LiquidOptions.verbosity>0 then
-        FileString.write_file  (filename ^ ".liq.pre")
+        FileString.write_file  (filename ^ ".pre")
           (DebugPrint.string_of_contract c2);
       LiquidCheck.typecheck_contract ~warnings:false ~decompiling:true c2
   in
@@ -193,20 +201,20 @@ let compile_tezos_file filename =
   (* let untyped_ast = c in *)
   let output = match !LiquidOptions.output with
     | Some output -> output
-    | None -> outprefix ^ ".liq" in
-  FileString.write_file  output
-    (try
-       LiquidPrinter.Syntax.string_of_structure
-         (LiquidToOCaml.structure_of_contract
-            ~type_annots
-            ~types
-            untyped_ast)
-         []
-     with LiquidError _ ->
-       DebugPrint.string_of_contract
-         untyped_ast);
-  Printf.eprintf "File %S generated\n%!" output;
-  ()
+    | None -> outprefix ^
+              if !LiquidOptions.ocaml_syntax then ".liq" else ".reliq" in
+  let s = try
+      LiquidPrinter.Syntax.string_of_structure
+        (LiquidToOCaml.structure_of_contract ~type_annots ~types untyped_ast) []
+    with LiquidError _ ->
+      DebugPrint.string_of_contract untyped_ast in
+  match output with
+  | "-" ->
+    Format.printf "%s%!" s
+  | _ ->
+    FileString.write_file output s;
+    Printf.eprintf "File %S generated\n%!" output;
+    ()
 
 let report_error = function
   | LiquidError error ->
@@ -289,7 +297,9 @@ end
 let compile_files () =
   let files = Data.get_files () in
   let liq_files, others =
-    List.partition (fun filename -> Filename.check_suffix filename ".liq")
+    List.partition (fun filename ->
+        Filename.check_suffix filename ".liq" ||
+        Filename.check_suffix filename ".reliq" )
       files in
   let tz_files, unknown =
     List.partition (fun filename ->
@@ -520,18 +530,20 @@ let parse_tez_to_string expl amount =
 
 
 let convert_file filename =
-  if not (Filename.check_suffix filename ".liq") then
+  let is_liq = Filename.check_suffix filename ".liq" in
+  let is_re =  Filename.check_suffix filename ".reliq" in
+  if not (is_liq || is_re) then
     Printf.kprintf
       failwith "Error: don't know what to do with filename %S" filename;
 
-  let syntax = !LiquidOptions.ocaml_syntax in
   let ic = open_in filename in
   let lexbuf = Lexing.from_channel ic in
+  LiquidOptions.ocaml_syntax := is_liq;
   let str, comments = LiquidParse.implementation lexbuf in
 
-  LiquidOptions.ocaml_syntax := not syntax;
+  LiquidOptions.ocaml_syntax := not is_liq;
   let s = LiquidPrinter.Syntax.string_of_structure str comments in
-  LiquidOptions.ocaml_syntax := syntax;
+  LiquidOptions.ocaml_syntax := is_liq;
   Printf.printf "%s%!" s;
   ()
 

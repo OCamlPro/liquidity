@@ -18,3 +18,6 @@ PKG sodium
 PKG nocrypto
 PKG lwt
 PKG bigstring
+PKG easy-format
+PKG ocaml-migrate-parsetree
+PKG menhirLib

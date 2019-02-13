@@ -13,23 +13,25 @@ LIQUID_FULL_PATH=./_obuild/${LIQUIDITY}/${LIQUIDITY}.asm
 LIQARGS=--verbose
 LIQEXEC="${LIQUID_FULL_PATH} ${LIQARGS}"
 
-echo ${LIQEXEC} tests/$test.liq
-${LIQEXEC} tests/$test.liq || exit 2
+mkdir -p $(dirname "_obuild/tests/$test")
+
+echo ${LIQEXEC} tests/$test.liq -o _obuild/tests/$test.tz
+${LIQEXEC} tests/$test.liq -o _obuild/tests/$test.tz || exit 2
 
 if [ -f ${TEZOS_FULL_PATH} ] ; then
-    ${TEZOS_FULL_PATH} ${TEZOS_ARGS} typecheck script tests/$test.liq.tz || exit 2
+    ${TEZOS_FULL_PATH} ${TEZOS_ARGS} typecheck script _obuild/tests/$test.tz || exit 2
 else
-    echo "\n${RED}${TEZOS_FULL_PATH} not present ! typechecking of tests/$test.liq.tz skipped${DEFAULT}\n"
+    echo "\n${RED}${TEZOS_FULL_PATH} not present ! typechecking of _obuild/tests/$test.tz skipped${DEFAULT}\n"
 fi
 
-echo ${LIQEXEC} tests/$test.liq.tz
-${LIQEXEC} tests/$test.liq.tz || exit 2
+echo ${LIQEXEC} _obuild/tests/$test.tz
+${LIQEXEC} _obuild/tests/$test.tz || exit 2
 
-echo ${LIQEXEC} tests/${test}_liq.tz.liq
-${LIQEXEC} tests/${test}_liq.tz.liq || exit 2
+echo ${LIQEXEC} _obuild/tests/${test}.tz.liq
+${LIQEXEC} _obuild/tests/${test}.tz.liq || exit 2
 
 if [ -f ${TEZOS_FULL_PATH} ] ; then
-    ${TEZOS_FULL_PATH} ${TEZOS_ARGS} typecheck script tests/${test}_liq_tz.liq.tz || exit 2
+    ${TEZOS_FULL_PATH} ${TEZOS_ARGS} typecheck script _obuild/tests/${test}_tz.tz || exit 2
 else
-    echo "\n${RED}${TEZOS_FULL_PATH} not present ! typechecking of tests/${test}_liq_tz.liq.tz skipped${DEFAULT}\n"
+    echo "\n${RED}${TEZOS_FULL_PATH} not present ! typechecking of _obuild/tests/${test}_tz.tz skipped${DEFAULT}\n"
 fi

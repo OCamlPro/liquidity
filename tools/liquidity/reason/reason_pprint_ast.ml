@@ -1775,7 +1775,7 @@ let format_layout ?comments ppf layout =
     Easy_format.Pretty.define_styles fauxmatter html_escape html_style;
   let _ = Easy_format.Pretty.to_formatter fauxmatter easy in
   let trimmed = Reason_syntax_util.processLineEndingsAndStarts (Buffer.contents buf) in
-  Format.fprintf ppf "%s\n" trimmed;
+  Format.fprintf ppf "%s" trimmed;
   Format.pp_print_flush ppf ()
 
 let partitionFinalWrapping listTester wrapFinalItemSetting x =
