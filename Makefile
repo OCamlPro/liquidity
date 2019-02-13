@@ -6,8 +6,8 @@ clone-tezos:
 
 build: _obuild
 	ocp-build build 
-	cp -f _obuild/liquidity/liquidity.asm ./liquidity
 	cp -f _obuild/liquidity-mini/liquidity-mini.asm ./liquidity-mini
+	cp -f _obuild/liquidity/liquidity.asm ./liquidity
 
 install: _obuild
 	ocp-build install liquidity

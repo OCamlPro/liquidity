@@ -1166,12 +1166,13 @@ ReasonML Compiler Arguments
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 By default, the compiler uses expects the OCaml syntax, and outputs
-files in OCaml syntax. This behavior can be changed using the ``--re``
-argument. When this argument is provided, the compiler will expect files
-in ReasonML syntax and output files in ReasonML syntax. If your file
-is ``test-re.liq``, you can compile it using::
+files in OCaml syntax. This behavior changes with the file extension
+and with the ``--re`` argument.  Files that end in ``.reliq`` will be
+parsed as ReasonML Liquidity files. The decompiler will ouptu files in
+ReasonML syntax when given the flag ``-re``. If your file is
+``test.reliq``, you can compile it using::
 
-  liquidity --re test-re.liq
+  liquidity test.reliq
 
 You can also convert a file from one syntax to another, using the
 ``--convert FILE`` argument. For example, a file in OCaml-syntax can
@@ -1259,10 +1260,11 @@ be converted to ReasonML syntax::
 
 The same file can be converted back and forth::
 
-  $ liquidity --convert test19.liq > test19-re.liq
-  $ liquidity --re --convert test19-re.liq > test19.liq
+  $ liquidity --convert test19.liq > test19.reliq
+  $ liquidity --convert test19.reliq > test19.liq
 
-Beware however that the conversion loses the comments.
+Beware however that the conversion from ReasonML syntax back to the
+OCaml one erases the comments.
 
 ReasonML Syntax Extensions
 ~~~~~~~~~~~~~~~~~~~~~~~~~~

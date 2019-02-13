@@ -83,13 +83,13 @@ To compile the file, we can use::
 
   ─➤ liquidity simple.liq
   Main contract Simple
-  File "simple.liq.tz" generated
+  File "simple.tz" generated
   If tezos is compiled, you may want to typecheck with:
-    tezos-client typecheck script simple.liq.tz
+    tezos-client typecheck script simple.tz
 
 The ``liquidity`` compiler will try to compile any file with a ``.liq`` extension provided on the command line.
     
-Let's have a look at the generated ``simple.liq.tz`` file::
+Let's have a look at the generated ``simple.tz`` file::
 
   parameter int;
   storage int;
@@ -105,11 +105,11 @@ Note that we can use a more compact version, on a single line::
 
   ─➤ liquidity-mini --compact simple.liq
   Main contract Simple
-  File "simple.liq.tz" generated
+  File "simple.tz" generated
   If tezos is compiled, you may want to typecheck with:
-    tezos-client typecheck script simple.liq.tz
+    tezos-client typecheck script simple.tz
   
-   ─➤ cat simple.liq.tz
+   ─➤ cat simple.tz
   parameter int; storage int; code { DUP ; DIP { CDR } ; CAR ; DUP ; SWAP ; DROP ; SWAP ; ADD ; NIL operation ; PAIR };
 
   
@@ -137,15 +137,15 @@ Relevant options:
 Decompiling a Michelson file
 ----------------------------
 
-Let's decompile the ``simple.liq.tz`` file from the previous section::
+Let's decompile the ``simple.tz`` file from the previous section::
 
-  ─➤ liquidity simple.liq.tz
-  Program "simple.liq.tz" parsed
-  File "simple_liq.tz.liq" generated
+  ─➤ liquidity simple.tz
+  Program "simple.tz" parsed
+  File "simple.tz.liq" generated
 
 We can now check the result of the decompilation::
   
-  ─➤ cat simple_liq.tz.liq
+  ─➤ cat simple.tz.liq
   [%%version 0.4]
   type storage = int
   [%%entry

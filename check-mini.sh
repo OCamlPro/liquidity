@@ -22,7 +22,7 @@ fi
 
 ./_obuild/${LIQUIDITY}/${LIQUIDITY}.asm _obuild/tests/$test.tz || exit 2
 
-./_obuild/${LIQUIDITY}-mini/${LIQUIDITY}-mini.asm _obuild/tests/${test}_tz.liq || exit 2
+./_obuild/${LIQUIDITY}-mini/${LIQUIDITY}-mini.asm _obuild/tests/$test.tz.liq || exit 2
 
 if [ -f ${TEZOS_FULL_PATH} ] ; then
     ${TEZOS_FULL_PATH} ${TEZOS_ARGS} typecheck script _obuild/tests/${test}_tz.tz
