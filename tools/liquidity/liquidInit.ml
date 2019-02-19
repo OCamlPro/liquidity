@@ -228,7 +228,7 @@ let tmp_contract_of_init ~loc env (init : encoded_exp LiquidTypes.init) storage_
       let parameter_var = mk ~loc (Var "_parameter") ty in
       let code = mk ~loc
           (Let { bnd_var = { nname = arg; nloc = loc };
-                 inline = false;
+                 inline = InAuto;
                  bnd_val = parameter_var;
                  body = init.init_body }) init.init_body.ty in
       ty, code
@@ -239,7 +239,7 @@ let tmp_contract_of_init ~loc env (init : encoded_exp LiquidTypes.init) storage_
           let i = i - 1 in
           let code = mk ~loc (
               Let { bnd_var = { nname = arg; nloc = loc };
-                    inline = false;
+                    inline = InAuto;
                     bnd_val = mk ~loc (Apply {
                         prim = Prim_tuple_get;
                         args = [parameter_var; mk_nat ~loc i] })

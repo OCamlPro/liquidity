@@ -15,7 +15,7 @@ open LiquidOCamlParser
 open LiquidInfer
 
 type 'a ast_elt =
-  | Syn_value of string * bool (* inline *) * 'a
+  | Syn_value of string * inline * 'a
   | Syn_contract of 'a contract
   | Syn_entry of 'a entry
   | Syn_init of 'a init
@@ -750,7 +750,7 @@ let deconstruct_pat env pat e =
       List.fold_left (fun e (v, loc, indexes) ->
           let access = access_of_deconstruct var_name loc indexes in
           mk ~loc (Let { bnd_var = { nname = v; nloc = loc };
-                         inline = false;
+                         inline = InAuto;
                          bnd_val = access; body = e })
         ) e vars_infos
     in
@@ -871,6 +871,11 @@ let filter_non_init acc =
       | Syn_init _ -> false
       | _ -> true
     ) acc
+
+let inline_of_attributes = function
+  | [ { txt = "inline"} , PStr [] ] -> InForced
+  | [ { txt = "noinline"} , PStr [] ] -> InDont
+  | _ -> InAuto
 
 let rec translate_code contracts env exp =
   let loc = loc_of_loc exp.pexp_loc in
@@ -1101,9 +1106,7 @@ let rec translate_code contracts env exp =
       let bnd_val = translate_code contracts env var_exp in
       let body = translate_code contracts env body in
       let bnd_var, ty, body = deconstruct_pat env pat body in
-      let inline = match attrs with
-        | [ { txt = "inline"} , PStr [] ] -> true
-        | _ -> false in
+      let inline = inline_of_attributes attrs in
       let bnd_val =
         match pat.ppat_desc with
         | Ppat_constraint _ -> mk ~loc (TypeAnnot { e = bnd_val; ty = ty })
@@ -1136,9 +1139,7 @@ let rec translate_code contracts env exp =
       let recursive = if is_rec then Some fun_name else None in
       let lam = mk ~loc:(loc_of_loc fun_loc)
           (Lambda { arg_name; arg_ty; body = fun_body; ret_ty; recursive }) in
-      let inline = match attrs with
-        | [ { txt = "inline"} , PStr [] ] -> true
-        | _ -> false in
+      let inline = inline_of_attributes attrs in
       let body = translate_code contracts env body in
       let bnd_var = { nname = fun_name; nloc = loc_of_loc name_loc } in
       Let { bnd_var; inline; bnd_val = lam; body }
@@ -2033,9 +2034,7 @@ and translate_structure env acc ast : syntax_contract option =
         }
         ])); pstr_loc = f_loc } :: ast ->
     let exp = translate_code (filter_contracts acc) env var_exp in
-    let inline = match attrs with
-      | [ { txt = "inline"} , PStr [] ] -> true
-      | _ -> false in
+    let inline = inline_of_attributes attrs in
     if List.mem var_name reserved_keywords then
       error_loc name_loc "top-level value %S forbidden" var_name;
     if StringMap.mem var_name env.ext_prims then
@@ -2079,9 +2078,7 @@ and translate_structure env acc ast : syntax_contract option =
     let recursive = if is_rec then Some fun_name else None in
     let lam = mk ~loc
         (Lambda { arg_name; arg_ty; body = fun_body; ret_ty; recursive }) in
-    let inline = match attrs with
-      | [ { txt = "inline"} , PStr [] ] -> true
-      | _ -> false in
+    let inline = inline_of_attributes attrs in
     if List.mem fun_name reserved_keywords then
       error_loc name_loc "top-level value %S forbidden" fun_name;
     if StringMap.mem fun_name env.ext_prims then

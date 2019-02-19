@@ -693,7 +693,7 @@ let rec decompile contract =
     let bnd_var = lvar_of node in
     let body = decompile_next node in
     mk ~loc:node.loc
-      (Let { bnd_var; inline = false; bnd_val; body })
+      (Let { bnd_var; inline = InAuto; bnd_val; body })
 
   in
   let (begin_node, end_node) = contract.mic_code in

@@ -44,6 +44,10 @@ type tez = { tezzies : string; mutez : string option }
 (** Unbounded integer constants *)
 type integer = { integer : Z.t }
 
+type inline =
+  | InForced (** Force inlining *)
+  | InDont (** Disable inlining *)
+  | InAuto (** Automatic inlining *)
 
 (** Liquidity constants *)
 type const =
@@ -144,7 +148,7 @@ and 'exp entry = {
 and 'exp contract = {
   contract_name : string;    (** Name of the contract (Capitalized) *)
   storage : datatype;        (** Type of storage *)
-  values : (string * bool (* inline *) * 'exp) list;
+  values : (string * inline * 'exp) list;
   (** Global constants or functions *)
   entries : 'exp entry list; (** Entry points of the contract *)
   ty_env : env;
@@ -806,10 +810,10 @@ type ('ty, 'a) exp = {
 (** Type of raw Liquidity expression descriptions *)
 and ('ty, 'a) exp_desc =
   | Let of { bnd_var: loc_name;
-             inline: bool;
+             inline: inline;
              bnd_val: ('ty, 'a) exp;
              body: ('ty, 'a) exp }
-  (** Let binding: {[let\@\@inline bnd_var = bnd_val in body ]} *)
+  (** Let binding: {[let[\@inline] bnd_var = bnd_val in body ]} *)
 
   | Var of string (** Simple variable : [x] *)
 

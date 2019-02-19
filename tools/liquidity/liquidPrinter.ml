@@ -1071,7 +1071,10 @@ module LiquidDebug = struct
       let indent2 = indent ^ "  " in
       Printf.bprintf b "\n%slet %s =" indent bnd_var.nname;
       bprint_code_rec ~debug b indent2 bnd_val;
-      Printf.bprintf b "\n%s%sin" indent (if inline then "[@@inline] " else "");
+      Printf.bprintf b "\n%s%sin" indent (match inline with
+          | InForced -> "[@@inline] "
+          | InDont -> "[@@noinline] "
+          | InAuto -> "");
       bprint_code_rec ~debug b indent body
     | Const { ty ; const } ->
       Printf.bprintf b "\n%s" indent;

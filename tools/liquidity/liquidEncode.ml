@@ -523,7 +523,7 @@ let rec encode env ( exp : typed_exp ) : encoded_exp =
     in
     let (new_name, env, count) =
       new_binding env bnd_var.nname ~effect:bnd_val.effect bnd_val.ty in
-    if inline then (* indication for closure encoding *)
+    if inline = InForced then (* indication for closure encoding *)
       env.force_inline :=
         StringMap.add bnd_var.nname bnd_val !(env.force_inline);
     let body = encode env body in
@@ -538,7 +538,7 @@ let rec encode env ( exp : typed_exp ) : encoded_exp =
           env.to_inline :=
             StringMap.add new_name (const_unit ~loc) !(env.to_inline)
         end
-      | c when c = 1 || inline ->
+      | c when (c = 1 && inline = InAuto) || inline = InForced ->
         (* if bnd_val.effect then
          *   ()
          * else *)
@@ -1149,7 +1149,7 @@ and encode_contract ?(annot=false) ?(decompiling=false) contract =
               mk_typed ~loc
                 (Let { bnd_var = { nname = e.entry_sig.storage_name;
                                    nloc = loc };
-                       inline = false;
+                       inline = InAuto;
                        bnd_val =
                          mk_typed ~loc (Var "storage")
                            env.t_contract_sig.f_storage;

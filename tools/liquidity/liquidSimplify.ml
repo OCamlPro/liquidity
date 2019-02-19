@@ -227,7 +227,7 @@ let rec compute decompile code to_inline =
         | Lambda { arg_name; body } ->
           iter { exp with
                  desc = Let { bnd_var = arg_name;
-                              inline = false;
+                              inline = InAuto;
                               bnd_val = x;  body }
                }
         | _ ->
