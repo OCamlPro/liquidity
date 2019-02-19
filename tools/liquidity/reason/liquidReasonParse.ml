@@ -9,19 +9,29 @@
 
 open Reason_toolchain
 
-let implementation lexbuf =
+let wrap f lexbuf =
   try
-    let str, comments = RE.implementation_with_comments lexbuf in
-    let comments = List.map (fun {Reason_comment.text; location; _ } ->
-        (text, location)
-      ) comments in
-    To_current.copy_structure str, comments
+    f lexbuf
   with
-  | Reason_syntax_util.Error (loc, Syntax_error err) ->
+  | Reason_syntax_util.Error (loc, _)
+  | Reason_lexer.Error(_, loc) ->
     raise (Syntaxerr.Error(Syntaxerr.Other loc))
+  | e -> raise e
+
+let implementation lexbuf =
+  let str, comments = RE.implementation_with_comments lexbuf in
+  let comments = List.map (fun {Reason_comment.text; location; _ } ->
+      (text, location)
+    ) comments in
+  To_current.copy_structure str, comments
 
 let core_type lexbuf =
   To_current.copy_core_type (RE.core_type lexbuf)
 
 let expression lexbuf =
   To_current.copy_expression (RE.expression lexbuf)
+
+
+let implementation = wrap implementation
+let core_type = wrap core_type
+let expression = wrap expression

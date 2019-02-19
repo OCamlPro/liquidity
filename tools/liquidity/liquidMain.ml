@@ -538,6 +538,7 @@ let convert_file filename =
 
   let ic = open_in filename in
   let lexbuf = Lexing.from_channel ic in
+  Location.init lexbuf filename;
   LiquidOptions.ocaml_syntax := is_liq;
   let str, comments = LiquidParse.implementation lexbuf in
 
