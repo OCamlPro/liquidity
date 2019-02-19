@@ -45,7 +45,8 @@ MORE_TESTS=test_ifcons test_if test_loop test_option test_transfer test_call tes
   test_map test_rev test_reduce_closure test_map_closure test_mapreduce_closure \
   test_mapmap_closure test_setreduce_closure test_left_match test_loop_left \
   test_fold test_iter test_big_map test_map_fold_closure test_inline test_rec_fun \
-  bug_annot0 inline_fail bug_annot1 test_infer_unpack test_infer_param test_record
+  bug_annot0 inline_fail bug_annot1 test_infer_unpack test_infer_param test_record \
+  bug187
 OTHER_TESTS=others/broker others/demo others/auction others/multisig others/alias others/game others/mist_wallet_current others/token
 DOC_TESTS=`cd tests; find doc -regex "[^\.]+.liq" -exec sh -c "echo {} | cut -d '.' -f 1" \; | sort -V`
 REV_TESTS=`seq -f 'test%.0f' 0 $(NREVTESTS)`

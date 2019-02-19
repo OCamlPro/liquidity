@@ -571,25 +571,27 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
         | _, [] -> (targs, (typecheck env a) :: args)
         | _, _ -> error loc "Type arguments must come first"
       ) ([], []) (List.rev args) in
-    let tv_inst =
-      try List.combine eprim.tvs targs
-      with Invalid_argument _ ->
+    let rec mk_inst acc tvs args = match tvs, args with
+      | [], [] -> List.rev acc
+      | v :: tvs, [] -> mk_inst ((v, fresh_tvar ()) :: acc) tvs []
+      | v :: tvs, t :: args -> mk_inst ((v, t) :: acc) tvs args
+      | [], _ :: _ ->
         error loc "Expecting %d type arguments, got %d\n"
           (List.length eprim.tvs) (List.length targs) in
-    let atys = List.map (instantiate_to tv_inst) eprim.atys in
-    let rty = instantiate_to tv_inst eprim.rty in
+    let tv_inst = mk_inst [] eprim.tvs targs in
+    let targs = List.map snd tv_inst in
+    let instantiate_ext ty =
+      let subst = StringSet.fold (fun a acc ->
+          if List.mem_assoc a tv_inst then acc
+          else (a, fresh_tvar ()) :: acc
+        ) (free_tvars ty) (List.rev tv_inst) |> List.rev in
+      instantiate_to subst ty in
+    let atys = List.map instantiate_ext eprim.atys in
+    let rty = instantiate_ext eprim.rty in
     let prim = Prim_extension (prim_name, eprim.effect, targs,
                                eprim.nb_arg, eprim.nb_ret, eprim.minst) in
-    begin try List.iter2 (fun a aty ->
-        match expand a.ty with
-        | Tvar _ | Tpartial _ -> unify a.ty aty
-        | _ ->
-          if not (eq_types a.ty aty) then
-            error a.loc "Bad %d args for primitive %S:\n    %s\n"
-              (List.length args) (LiquidTypes.string_of_primitive prim)
-              (String.concat "\n    " (List.map (fun arg ->
-                   string_of_type arg.ty) args))
-      ) args atys
+    begin
+      try List.iter2 (fun a aty -> unify a.ty aty) args atys
       with Invalid_argument _ ->
         error loc "Primitive %S expects %d arguments, was given %d"
           (LiquidTypes.string_of_primitive prim)
@@ -633,8 +635,7 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
       | Tvar _ | Tpartial _ ->
         let ty = fresh_tvar () in
         unify arg.ty (Toption ty); ty
-      | _ -> error loc "not an option type : %s"
-               (string_of_type (expand arg.ty))
+      | ty -> error loc "not an option type : %s" (string_of_type ty)
     in
     let ifnone = typecheck env ifnone in
     let (env, count) = new_binding env some_name.nname arg_ty in
@@ -1312,6 +1313,7 @@ and typecheck_prim2i env prim loc args =
                       ([ Ttimestamp; Ttimestamp ], Tbool) ;
                       ([ Tkey_hash; Tkey_hash ], Tbool) ;
                       ([ Taddress; Taddress ], Tbool) ] in
+    unify ty1 ty2;
     make_type_eqn loc overloads [ ty1; ty2 ]
 
   | Prim_compare, [ ty1; ty2 ] ->
@@ -1324,6 +1326,7 @@ and typecheck_prim2i env prim loc args =
                       ([ Ttimestamp; Ttimestamp ], Tint) ;
                       ([ Tkey_hash; Tkey_hash ], Tint) ;
                       ([ Taddress; Taddress ], Tint) ] in
+    unify ty1 ty2;
     make_type_eqn loc overloads [ ty1; ty2 ]
 
   | Prim_neg, [ ty ] ->
@@ -1501,6 +1504,7 @@ and typecheck_prim2i env prim loc args =
   | Prim_concat_two, [ ty1; ty2 ] ->
     let overloads = [ ([ Tstring; Tstring ], Tstring) ;
                       ([ Tbytes; Tbytes ], Tbytes) ] in
+    unify ty1 ty2;
     make_type_eqn loc overloads [ty1;ty2]
 
   | Prim_string_concat, [ ty ] -> unify ty (Tlist Tstring); Tstring

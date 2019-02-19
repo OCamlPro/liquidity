@@ -10,7 +10,7 @@ type ('aa, 'bb, 'cc) u =
 
 type ('a, 'b) r = ('a, 'b) t
 
-let mk_t (x, y) =
+let[@noinline] mk_t (x, y) =
   { x; y }
 
 (* let mk_somet (x, y) =

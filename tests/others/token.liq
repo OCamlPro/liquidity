@@ -31,7 +31,7 @@ let%init storage owner totalSupply decimals name symbol =
     owner;
   }
 
-let get_account (a, accounts) =
+let get_account (a, (accounts : (address, account) big_map)) =
   match Map.find a accounts with
   | None -> { balance = 0p; allowances = Map }
   | Some account -> account

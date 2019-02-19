@@ -63,7 +63,7 @@ let rec occurs id = function
 let merge_lists l1 l2 =
   List.fold_left (fun l e ->
       if List.mem e l then l else e :: l
-    ) l1 l2
+    ) [] (l1 @ l2)
 
 let rec make_subst l1 l2 = match l1, l2 with
   | [], [] -> []
@@ -189,11 +189,11 @@ let rec unify loc ty1 ty2 =
                 else (merge_lists cl1 cl2, rty1) :: el (*might duplicate constraints*)
               ) el el2
           ) [] el1 in
-        Tpartial (Peqn (el, l1)) |> finalize_eqn
+        Tpartial (Peqn (el, l1)) |> finalize_eqn loc
 
       | Tpartial Peqn (el, l), ty | ty, Tpartial Peqn (el, l) ->
         let el = List.filter (fun (_, rty) -> eq_types ty rty) el in
-        Tpartial (Peqn (el, l)) |> finalize_eqn
+        Tpartial (Peqn (el, l)) |> finalize_eqn loc
 
 
       | Tpartial Ptup pl1, Tpartial Ptup pl2 ->
@@ -361,9 +361,12 @@ and unify_list loc to_unify =
   List.iter (fun (ty1, ty2) ->
       unify loc ty1 ty2) to_unify
 
-and finalize_eqn = function
-  | Tpartial (Peqn ([], loc)) -> error loc "No suitable overload\n"
+and finalize_eqn loc = function
+  | Tpartial (Peqn ([], _)) -> error loc "No suitable overload\n"
   | Tpartial (Peqn ([(cl, rty)], _)) -> rty, cl
+  (* | Tpartial (Peqn ((_, rty) :: el, _)) when
+   *     List.for_all (fun (_, rty') -> eq_types rty rty') el ->
+   *   rty, [] *)
   | tyx -> tyx, []
 
 and resolve loc ty =
@@ -382,7 +385,7 @@ and resolve loc ty =
             ) ([], false) cl in
           if unsat then el else (cl, rty) :: el
         ) [] el in
-      Tpartial (Peqn (el, l)) |> finalize_eqn
+      Tpartial (Peqn (el, loc)) |> finalize_eqn loc
     | _ -> ty, []
   in
   aux ty
@@ -405,7 +408,14 @@ let make_type_eqn loc overloads params =
       let cl, unsat = List.fold_left2 (fun (cl, unsat) op p ->
           if unsat || eq_types op p then (cl, unsat)
           else match p with (* if expand, then Tvar below does not work*)
-            | Tvar _ when compat_types op p -> ((p, op) :: cl, unsat)
+            | Tvar tv1 when
+                compat_types op p &&
+                List.for_all (function
+                    | Tvar tv2, oty when (Ref.get tv1).id = (Ref.get tv2).id ->
+                      compat_types op oty
+                    | _ -> true) cl
+              ->
+              ((p, op) :: cl, unsat)
             | _ -> ([], true)
         ) ([], false) opl params in
       if unsat then eqn else (cl, ort) :: eqn
@@ -413,10 +423,7 @@ let make_type_eqn loc overloads params =
   let ty = Tpartial (Peqn (el, loc)) in
   let ty, to_unify = resolve loc ty in
   let ty = match ty with
-    | Tpartial (Peqn (el, _)) ->
-      List.iter (fun (cl, _) -> List.iter (fun (p, _) ->
-          match expand p with Tvar _ ->
-            unify loc p (Tpartial Ppar) | _ -> ()) cl) el;
+    | Tpartial (Peqn (_, _)) ->
       Tvar (Ref.create { id = fresh_tv (); tyo = Some ty })
     | Tpartial _ -> failwith "Bad return type"
     | _ -> ty (* what if compound ? *)
@@ -464,18 +471,24 @@ let instantiate_to s ty =
       begin match tv.tyo with
         | None -> begin try List.assoc tv.id s with Not_found -> ty end
         | Some (Tpartial _ as ty') ->
-          Ref.set tvr { tv with tyo = Some (aux ty') }; ty
+          let ty'' = aux ty' in
+          if not @@ eq_types ty' ty'' then
+            Ref.set tvr { tv with tyo = Some ty'' };
+          ty
         | Some ty -> aux ty (* a substitution should not exist for tv.id *)
       end
+    | Tpartial (Peqn (el, loc)) ->
+      let el = List.map (fun (cl, rty) ->
+          let rty = aux rty in
+          let cl = List.map (fun (x, y) -> aux x, aux y) cl in
+          (cl, rty)) el in
+      let el = List.filter (fun (cl, _) ->
+          List.for_all (fun (x, y) -> compat_types x y) cl
+        ) el in
+      Tpartial (Peqn (el, loc))
     | _ -> ty
   in
   aux ty
-
-let instantiate (tvars, ty) =
-  let s = StringSet.fold (fun id s ->
-      StringMap.add id (fresh_tvar ()) s
-    ) tvars StringMap.empty in
-  instantiate_to (StringMap.bindings s) ty
 
 let get_type env loc ty =
   let rec aux ty = match ty with
@@ -519,9 +532,10 @@ let get_type env loc ty =
             | [ty] -> Ttuple [ty; fresh_tvar ()]
             | l -> Ttuple l in
           Ref.set tvr { tv with tyo = Some ty }; ty
-        | Tpartial (Pmap (k_ty, v_ty)) ->
-          let ty = Tmap (aux k_ty, aux v_ty) in
-          Ref.set tvr { tv with tyo = Some ty }; ty
+        (* | Tpartial (Pmap (k_ty, v_ty)) ->
+         * TODO might be bigmap also
+         *   let ty = Tmap (aux k_ty, aux v_ty) in
+         *   Ref.set tvr { tv with tyo = Some ty }; ty *)
         | Tpartial (Pcont []) ->
           let ty = Tcontract unit_contract_sig in
           Ref.set tvr { tv with tyo = Some ty }; ty
@@ -544,14 +558,9 @@ let get_type env loc ty =
           end
         | Tpartial (Peqn _) as ty ->
           let ty, to_unify = resolve loc ty in
-          begin match ty with
-            | Tpartial (Peqn (el, l)) -> (* pick first ?*)
-              error l "Unresolved overload, add annotations"
-            | _ ->
-              Ref.set tvr { tv with tyo = Some ty };
-              unify_list loc to_unify;
-              ty
-          end
+          Ref.set tvr { tv with tyo = Some ty };
+          unify_list loc to_unify;
+          ty
         | Tpartial (Ppar) ->
           error loc "Parameter type can't be inferred, add an annotation"
         | ty -> aux ty
@@ -581,7 +590,8 @@ let rec type_name = function
   | Tcontract c ->
     begin match c.sig_name with Some n -> "CN" ^ n | None -> "CU" end
   | Tvar { contents = a }  -> "v" ^ !a.id
-  | Tpartial _ -> assert false (* Removed beforehand *)
+  | Tpartial _ -> "p"
+
 
 let rec vars_to_unit ?loc ty = match ty with
   | Ttuple tyl -> Ttuple (List.map (vars_to_unit ?loc) tyl)
@@ -605,6 +615,16 @@ let rec vars_to_unit ?loc ty = match ty with
     (* unify (match loc with None -> noloc | Some loc -> loc)
      *   ty Tunit; *)
     Tunit
+  | Tpartial (Peqn (_, eqloc)) as ty ->
+    let loc = match loc with None -> eqloc | Some loc -> loc in
+    let ty, to_unify = resolve loc ty in
+    begin match ty with
+      | Tpartial (Peqn (el, l)) -> (* pick first ?*)
+        error loc "Unresolved overload, add annotations"
+      | _ ->
+        unify_list loc to_unify;
+        ty
+    end
   | Tpartial _ ->
     error (match loc with None -> noloc | Some loc -> loc)
       "Type cannot be inferred, please add an annotation"
@@ -633,6 +653,18 @@ let rec tvars_to_unit ({ desc; ty; loc } as e) =
       Project { field; record = tvars_to_unit record }
     | Const { ty; const } ->
       Const { ty = vars_to_unit ~loc ty; const }
+    | Apply { prim = Prim_extension (prim_name, effect, targs,
+                                     nb_arg, nb_ret, minst); args } ->
+      List.iter (fun ty ->
+          if has_tvar ty then
+            error loc "Unresolved type parameter %S for %s, add annotation"
+              (string_of_type ty) prim_name
+        ) targs;
+      let targs = List.map vars_to_unit targs in
+      let args = List.map tvars_to_unit args in
+      Apply { prim = Prim_extension (prim_name, effect, targs,
+                                     nb_arg, nb_ret, minst); args }
+
     | Apply { prim; args } ->
       Apply { prim; args = List.map tvars_to_unit args }
     | If { cond; ifthen; ifelse } ->
@@ -766,27 +798,26 @@ let rec mono_exp env subst vtys (e:typed_exp) =
   (* Printf.printf " %s\n" (string_of_type ty); *)
   let desc = match e.desc with
     (* TODO check with tests if this is needed *)
-    (*
-    | Let lb
-      when not (StringSet.is_empty (free_tvars lb.bnd_val.ty))
-      && (match ty with Tlambda _ | Tclosure _ -> true |_ -> false) ->
+
+    | Let ({ bnd_val = { ty = Tlambda _ | Tclosure _ as bvty }} as lb)
+      when not (StringSet.is_empty (free_tvars bvty)) ->
     (* Printf.printf "let %s = ... in E\n" lb.bnd_var.nname; *)
     let vtys' = StringMap.add lb.bnd_var.nname (ref []) vtys in
     let body = mono_exp subst vtys' lb.body in
     let vty = StringMap.find lb.bnd_var.nname vtys' in
     let substs = List.fold_left (fun ss (tn, ty) ->
         (tn, ty, build_subst lb.bnd_val.ty ty) :: ss) [] !vty in
-    Printf.printf "Raw type of %s : %s\n" lb.bnd_var.nname
-      (string_of_type lb.bnd_val.ty);
-    List.iter (fun (tn, ty, s) ->
-      Printf.printf "%s\n%s\n" tn (string_of_type ty);
-      StringMap.iter (fun id ty ->
-        Printf.printf "%s -> %s  " id
-          (string_of_type ty)
-        ) s;
-      Printf.printf "\n"
-    ) substs;
-    Printf.printf "   let %s = E in ...\n" lb.bnd_var.nname;
+    (* Printf.printf "Raw type of %s : %s\n" lb.bnd_var.nname
+     *   (string_of_type lb.bnd_val.ty);
+     * List.iter (fun (tn, ty, s) ->
+     *   Printf.printf "%s\n%s\n" tn (string_of_type ty);
+     *   StringMap.iter (fun id ty ->
+     *     Printf.printf "%s -> %s  " id
+     *       (string_of_type ty)
+     *     ) s;
+     *   Printf.printf "\n"
+     * ) substs;
+     * Printf.printf "   let %s = E in ...\n" lb.bnd_var.nname; *)
     if substs = [] then begin (* when the bound var is unused *)
       let bnd_val = mono_exp subst vtys lb.bnd_val in
       Let { lb with bnd_val; body }
@@ -798,7 +829,6 @@ let rec mono_exp env subst vtys (e:typed_exp) =
         { e with desc = Let { lb with bnd_var; bnd_val; body } }
       ) body substs
     end.desc
-  *)
     | Var s ->
       begin try
           let tn = type_name ty in
@@ -827,6 +857,12 @@ let rec mono_exp env subst vtys (e:typed_exp) =
                              record = mono_exp subst vtys p.record }
     | Const c -> Const { const = c.const;
                          ty = instantiate c.ty }
+    | Apply { prim = Prim_extension (prim_name, effect, targs,
+                                     nb_arg, nb_ret, minst); args } ->
+      let targs = List.map instantiate targs in
+      let args = List.map (mono_exp subst vtys) args in
+      Apply { prim = Prim_extension (prim_name, effect, targs,
+                                     nb_arg, nb_ret, minst); args }
     | Apply app ->
       Apply { prim = app.prim;
               args = List.map (mono_exp subst vtys) app.args }
@@ -964,3 +1000,17 @@ and mono_contract env c =
       (string_of_type storage);
   let contract = { c with storage; values; entries; c_init } (* ty_env *) in
   contract_tvars_to_unit contract
+
+
+let copy_ty ty =
+  Marshal.from_bytes (Marshal.to_bytes ty []) 0
+
+let instantiate_to subst ty =
+  let ty = if subst = [] then ty else copy_ty ty in
+  instantiate_to subst ty
+
+let instantiate (tvars, ty) =
+  let s = StringSet.fold (fun id s ->
+      StringMap.add id (fresh_tvar ()) s
+    ) tvars StringMap.empty in
+  instantiate_to (StringMap.bindings s) ty

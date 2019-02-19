@@ -4,3 +4,4 @@ external is_implicit : [%stack: UnitContract.instance] -> [%stack: key_hash opti
 external get_storage : [%type: 'a] -> [%stack: UnitContract.instance] -> [%stack: 'a option] = "GET_STORAGE"
 external reveal : [%stack: address] -> [%stack: key] -> [%stack: operation] = "REVEAL"
 external increase_balance : [%stack: tez] -> unit = "INCREASE_BALANCE" [@@effect]
+external test_fail : [%stack: 'a] -> unit = "FAILWITH" [@@effect]

@@ -7,8 +7,8 @@ let%entry main
   _storage =
 
   let amount = Current.amount() in
-  let f arg =
-    arg.(1) + amount > 5.0tz
+  let f (_, acc) =
+    acc + amount > 5.0tz
   in
 
   let is_ok t = t <= 5tz in
