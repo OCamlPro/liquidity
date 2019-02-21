@@ -144,11 +144,19 @@ and 'exp entry = {
   code : 'exp;           (** Liquidity code for the entry point *)
 }
 
+(** Global values *)
+and 'exp value = {
+  val_name : string;
+  inline : inline;
+  val_private : bool; (** exported if false *)
+  val_exp : 'exp;
+}
+
 (** A Liquidity contract *)
 and 'exp contract = {
   contract_name : string;    (** Name of the contract (Capitalized) *)
   storage : datatype;        (** Type of storage *)
-  values : (string * inline * 'exp) list;
+  values : 'exp value list;
   (** Global constants or functions *)
   entries : 'exp entry list; (** Entry points of the contract *)
   ty_env : env;
@@ -1169,8 +1177,11 @@ let rec eq_exp_desc eq_ty eq_var e1 e2 = match e1, e2 with
     (try
        List.for_all2 (eq_exp eq_ty eq_var) c1.args c2.args &&
        eq_types c1.contract.storage c2.contract.storage &&
-       List.for_all2 (fun (v1, i1, e1) (v2, i2, e2) ->
-           v1 = v2 && i1 = i2 && eq_exp eq_ty eq_var e1 e2)
+       List.for_all2 (fun v1 v2 ->
+           v1.val_name = v2.val_name &&
+           v1.inline = v2.inline &&
+           v1.val_private = v2.val_private &&
+           eq_exp eq_ty eq_var v1.val_exp v2.val_exp)
          c1.contract.values c2.contract.values &&
        List.for_all2 (fun e1 e2 ->
            e1.entry_sig.entry_name = e2.entry_sig.entry_name &&

@@ -744,9 +744,10 @@ and structure_of_contract
           (Exp.constant (Const.float output_version))
       ])
   in
-  let values = List.map (fun (v, _inline, body) ->
+  let values = List.map (fun v ->
       Str.value Nonrecursive [
-        Vb.mk (pat_of_name v ~ty:body.ty) (convert_code ~abbrev body)
+        Vb.mk (pat_of_name v.val_name ~ty:v.val_exp.ty)
+          (convert_code ~abbrev v.val_exp)
       ]
     ) contract.values in
   let entries =

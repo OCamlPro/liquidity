@@ -1941,12 +1941,15 @@ and typecheck_contract ~warnings ~decompiling contract =
 
   (* Add bindings to the environment for the global values *)
   let env, values, counts =
-    List.fold_left (fun (env, values, counts) (name, inline, exp) ->
-        let exp = typecheck env exp in
-        let gen = match expand exp.ty with Tlambda _ -> true | _ -> false in
+    List.fold_left (fun (env, values, counts) v ->
+        let val_exp = typecheck env v.val_exp in
+        let gen = match expand val_exp.ty with
+          | Tlambda _ -> true
+          | _ -> false in
         let (env, count) =
-          new_binding env name ~effect:exp.effect ~gen exp.ty in
-        env, ((name, inline, exp) :: values), ((name, count) :: counts)
+          new_binding env v.val_name ~effect:val_exp.effect ~gen val_exp.ty in
+        let v = { v with val_exp } in
+        env, (v :: values), ((v.val_name, count) :: counts)
       ) (env, [], []) contract.values in
   (* Typecheck entries *)
   let entries = List.map (typecheck_entry env) contract.entries in

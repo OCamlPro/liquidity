@@ -278,10 +278,10 @@ and untype_entry env (entry : (datatype, 'a) exp entry) =
 and untype_contract contract =
   let contract = LiquidBoundVariables.bound_contract contract in
   let values, env =
-    List.fold_left (fun (acc, env) (v, i, e) ->
-        let v' = base_of_var v in
-        let env = new_binding v v' env in
-        let value = (v', i, untype env e) in
+    List.fold_left (fun (acc, env) v ->
+        let val_name = base_of_var v.val_name in
+        let env = new_binding v.val_name val_name env in
+        let value = { v with val_name; val_exp = untype env v.val_exp } in
         value :: acc, env) ([], empty_env ()) contract.values in
   let values = List.rev values in
   let entries = List.map (untype_entry env) contract.entries in

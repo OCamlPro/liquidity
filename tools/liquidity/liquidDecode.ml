@@ -239,7 +239,10 @@ and decode_entries param_constrs top_parameter top_storage values exp =
     List.rev values, List.map (entry_of_case param_constrs top_storage) cases
   | Let { bnd_var; inline; bnd_val; body } ->
     decode_entries param_constrs top_parameter top_storage
-      ((bnd_var.nname, inline, decode bnd_val) :: values) body
+      ({ val_name = bnd_var.nname;
+         val_private = false;
+         inline;
+         val_exp = decode bnd_val } :: values) body
   | _ -> raise Exit
 
 and move_outer_lets parameter storage values exp =
@@ -249,7 +252,10 @@ and move_outer_lets parameter storage values exp =
       not @@ StringSet.mem parameter bv &&
       not @@ StringSet.mem storage bv ->
     move_outer_lets parameter storage
-      ((bnd_var.nname, inline, decode bnd_val) :: values) body
+      ({ val_name = bnd_var.nname;
+         inline;
+         val_private = false;
+         val_exp = decode bnd_val } :: values) body
   | _ ->
     (* kept in reverse order because used as an accumulator to decode_entries *)
     values, exp
@@ -292,7 +298,9 @@ and decode_contract contract =
   with Exit ->
     (* decode contract without decoding entries *)
     { contract with
-      values = List.map (fun (v, i, e) -> (v, i, decode e)) contract.values;
+      values =
+        List.map (fun v -> { v with val_exp = decode v.val_exp })
+          contract.values;
       entries =
         List.map (fun e -> { e with code = decode e.code }) contract.entries;
       c_init;

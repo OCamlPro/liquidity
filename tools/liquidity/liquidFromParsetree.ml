@@ -15,7 +15,7 @@ open LiquidOCamlParser
 open LiquidInfer
 
 type 'a ast_elt =
-  | Syn_value of string * inline * 'a
+  | Syn_value of 'a value
   | Syn_contract of 'a contract
   | Syn_entry of 'a entry
   | Syn_init of 'a init
@@ -872,10 +872,30 @@ let filter_non_init acc =
       | _ -> true
     ) acc
 
-let inline_of_attributes = function
-  | [ { txt = "inline"} , PStr [] ] -> InForced
-  | [ { txt = "noinline"} , PStr [] ] -> InDont
-  | _ -> InAuto
+let get_attributes loc attrs =
+  List.iter (function
+      | { txt = "inline" | "noinline" | "private" } , PStr [] -> ()
+      | { txt; loc }, _ ->
+        error_loc loc "Illegal attribute %s" txt
+    ) attrs;
+  let force_inline =
+    List.exists (function { txt = "inline"} , PStr [] -> true | _ -> false)
+      attrs in
+  let no_inline =
+    List.exists (function { txt = "noinline"} , PStr [] -> true | _ -> false)
+      attrs in
+  let inline = match force_inline, no_inline with
+    | true, false -> InForced
+    | false, true -> InDont
+    | false, false -> InAuto
+    | true, true ->
+      error_loc loc
+        "Value cannot have both attributes 'inline' and 'noinline'"
+  in
+  let val_private =
+    List.exists (function { txt = "private"} , PStr [] -> true | _ -> false)
+      attrs in
+  inline, val_private
 
 let rec translate_code contracts env exp =
   let loc = loc_of_loc exp.pexp_loc in
@@ -1102,11 +1122,14 @@ let rec translate_code contracts env exp =
         pvb_pat = pat;
         pvb_expr = var_exp;
         pvb_attributes = attrs;
+        pvb_loc;
       } ], body) } ->
       let bnd_val = translate_code contracts env var_exp in
       let body = translate_code contracts env body in
       let bnd_var, ty, body = deconstruct_pat env pat body in
-      let inline = inline_of_attributes attrs in
+      let inline, val_private = get_attributes pvb_loc attrs in
+      if val_private then
+        error_loc pvb_loc "Value cannot be declared private here";
       let bnd_val =
         match pat.ppat_desc with
         | Ppat_constraint _ -> mk ~loc (TypeAnnot { e = bnd_val; ty = ty })
@@ -1123,6 +1146,7 @@ let rec translate_code contracts env exp =
             pexp_loc = fun_loc;
           };
         pvb_attributes = attrs;
+        pvb_loc;
       } ], body) } ->
       let fun_body, ret_ty = match fun_expr_desc with
         | Pexp_constraint (fun_body, ret_ty) ->
@@ -1139,7 +1163,9 @@ let rec translate_code contracts env exp =
       let recursive = if is_rec then Some fun_name else None in
       let lam = mk ~loc:(loc_of_loc fun_loc)
           (Lambda { arg_name; arg_ty; body = fun_body; ret_ty; recursive }) in
-      let inline = inline_of_attributes attrs in
+      let inline, val_private = get_attributes pvb_loc attrs in
+      if val_private then
+        error_loc pvb_loc "Value cannot be declared private here";
       let body = translate_code contracts env body in
       let bnd_var = { nname = fun_name; nloc = loc_of_loc name_loc } in
       Let { bnd_var; inline; bnd_val = lam; body }
@@ -1941,7 +1967,7 @@ and translate_structure env acc ast : syntax_contract option =
     if StringMap.mem prim_name env.ext_prims then
       error_loc prim_loc "Primitive %S already defined" prim_name;
     if List.exists (function
-        | Syn_value (n, _, _) -> n = prim_name
+        | Syn_value v -> v.val_name = prim_name
         | _ -> false) acc
     then
       error_loc prim_loc "Top-level identifier %S already defined" prim_name;
@@ -2028,23 +2054,24 @@ and translate_structure env acc ast : syntax_contract option =
       Pstr_value (
         Nonrecursive,
         [ {
-          pvb_pat = { ppat_desc = Ppat_var { txt = var_name; loc = name_loc } };
-          pvb_expr = var_exp;
+          pvb_pat = { ppat_desc = Ppat_var { txt = val_name; loc = name_loc } };
+          pvb_expr = val_exp;
           pvb_attributes = attrs;
+          pvb_loc;
         }
         ])); pstr_loc = f_loc } :: ast ->
-    let exp = translate_code (filter_contracts acc) env var_exp in
-    let inline = inline_of_attributes attrs in
-    if List.mem var_name reserved_keywords then
-      error_loc name_loc "top-level value %S forbidden" var_name;
-    if StringMap.mem var_name env.ext_prims then
-      error_loc name_loc "Top-level identifier %S already defined" var_name;
+    let val_exp = translate_code (filter_contracts acc) env val_exp in
+    let inline, val_private = get_attributes pvb_loc attrs in
+    if List.mem val_name reserved_keywords then
+      error_loc name_loc "top-level value %S forbidden" val_name;
+    if StringMap.mem val_name env.ext_prims then
+      error_loc name_loc "Top-level identifier %S already defined" val_name;
     if List.exists (function
-        | Syn_value (n, _, _) -> n = var_name
+        | Syn_value v -> v.val_name = val_name
         | _ -> false) acc
     then
-      error_loc name_loc "Top-level value %S already defined" var_name;
-    let value = Syn_value (var_name, inline, exp) in
+      error_loc name_loc "Top-level value %S already defined" val_name;
+    let value = Syn_value { val_name; inline; val_private; val_exp } in
     translate_structure env (value :: acc) ast
 
 
@@ -2058,6 +2085,7 @@ and translate_structure env acc ast : syntax_contract option =
               pexp_loc = fun_loc;
             };
           pvb_attributes = attrs;
+          pvb_loc;
         }
         ])); pstr_loc = f_loc } :: ast ->
     let contracts = filter_contracts acc in
@@ -2078,17 +2106,18 @@ and translate_structure env acc ast : syntax_contract option =
     let recursive = if is_rec then Some fun_name else None in
     let lam = mk ~loc
         (Lambda { arg_name; arg_ty; body = fun_body; ret_ty; recursive }) in
-    let inline = inline_of_attributes attrs in
+    let inline, val_private = get_attributes pvb_loc attrs in
     if List.mem fun_name reserved_keywords then
       error_loc name_loc "top-level value %S forbidden" fun_name;
     if StringMap.mem fun_name env.ext_prims then
       error_loc name_loc "Top-level identifier %S already defined" fun_name;
     if List.exists (function
-        | Syn_value (n, _, _) -> n = fun_name
+        | Syn_value v -> v.val_name = fun_name
         | _ -> false) acc
     then
       error_loc name_loc "Top-level value %S already defined" fun_name;
-    let value = Syn_value (fun_name, inline, lam) in
+    let value =
+      Syn_value { val_name = fun_name; inline; val_private; val_exp = lam } in
     translate_structure env (value :: acc) ast
 
 
@@ -2298,8 +2327,8 @@ and pack_contract env toplevels =
      *     env.contractname
      *     env.filename; *)
     let rec partition (contracts, values, entries, init) = function
-      | Syn_value (v,i,e) :: r ->
-        partition (contracts, (v,i,e) :: values, entries, init) r
+      | Syn_value v :: r ->
+        partition (contracts, v :: values, entries, init) r
       | Syn_contract c :: r -> partition (c :: contracts, values, entries, init) r
       | Syn_entry e :: r -> partition (contracts, values, e :: entries, init) r
       | Syn_init i :: r -> partition (contracts, values, entries, Some i) r

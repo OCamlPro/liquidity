@@ -764,8 +764,9 @@ let rec tvars_to_unit ({ desc; ty; loc } as e) =
   { e with desc; ty = vars_to_unit ~loc ty }
 
 and contract_tvars_to_unit (contract : typed_contract) =
-  let values = List.map (fun (v, inline, e) ->
-      v, inline, tvars_to_unit e) contract.values in
+  let values = List.map (fun v ->
+      { v with val_exp = tvars_to_unit v.val_exp }
+    ) contract.values in
   let c_init = match contract.c_init with
     | None -> None
     | Some { init_name; init_args; init_body } ->
@@ -950,9 +951,9 @@ let rec mono_exp env subst vtys (e:typed_exp) =
   { e with desc; ty }
 
 and mono_contract env c =
-  let cval, vtys = List.fold_left (fun (cval, vtys) (n, b, e) ->
-      if (StringSet.is_empty (free_tvars e.ty)) then ((n, b, e) :: cval, vtys)
-      else ((n, b, e) :: cval, StringMap.add n (ref []) vtys)
+  let cval, vtys = List.fold_left (fun (cval, vtys) v ->
+      if (StringSet.is_empty (free_tvars v.val_exp.ty)) then (v :: cval, vtys)
+      else (v :: cval, StringMap.add v.val_name (ref []) vtys)
     ) ([], StringMap.empty) c.values in
   let entries = List.map (fun e ->
       let code = mono_exp env [] vtys e.code in
@@ -976,18 +977,18 @@ and mono_contract env c =
              init_args }
     | None -> None
   in
-  let values = List.fold_left (fun cval (n, b, e) ->
-      let vty = try StringMap.find n vtys with Not_found -> ref [] in
+  let values = List.fold_left (fun cval v ->
+      let vty = try StringMap.find v.val_name vtys with Not_found -> ref [] in
       let substs = List.fold_left (fun ss (tn, ty) ->
-          (tn, ty, build_subst e.ty ty) :: ss) [] !vty in
+          (tn, ty, build_subst v.val_exp.ty ty) :: ss) [] !vty in
       if substs = [] then begin
-        let e = mono_exp env [] vtys e in
-        (n, b, e) :: cval
+        { v with val_exp = mono_exp env [] vtys v.val_exp } :: cval
       end else begin
         List.fold_left (fun cval (tn, ty, s) ->
-            let n = n ^ "_" ^ tn in
-            let e = mono_exp env (StringMap.bindings s) vtys e in
-            (n, b, e) :: cval
+            { v with
+              val_name = v.val_name ^ "_" ^ tn;
+              val_exp = mono_exp env (StringMap.bindings s) vtys v.val_exp;
+            } :: cval
           ) cval substs
       end
     ) [] cval in

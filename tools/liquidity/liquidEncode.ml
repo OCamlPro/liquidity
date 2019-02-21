@@ -1130,9 +1130,11 @@ and encode_contract ?(annot=false) ?(decompiling=false) contract =
   let loc = LiquidLoc.loc_in_file env.env.filename in
   let rec values_on_top l exp = match l with
     | [] -> exp
-    | (v, inline, bnd_val) :: rest ->
+    | v :: rest ->
       mk_typed ~loc
-        (Let { bnd_var = { nname = v; nloc = loc }; inline; bnd_val;
+        (Let { bnd_var = { nname = v.val_name; nloc = loc };
+               inline = v.inline;
+               bnd_val = v.val_exp;
                body = values_on_top rest exp }) exp.ty in
   let code_desc, parameter_name, storage_name = match contract.entries with
     | [e] -> e.code.desc, e.entry_sig.parameter_name, e.entry_sig.storage_name
