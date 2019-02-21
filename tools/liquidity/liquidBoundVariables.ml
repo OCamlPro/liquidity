@@ -124,12 +124,7 @@ let rec bv code =
          ) StringSet.empty cases)
 
   | CreateContract { args; contract } ->
-    let bv_entry acc e =
-      bv e.code
-      |> StringSet.remove e.entry_sig.parameter_name
-      |> StringSet.remove e.entry_sig.storage_name
-      |> StringSet.union acc in
-    let bc = List.fold_left bv_entry StringSet.empty contract.entries in
+    let bc = bv_contract contract in
     List.fold_left (fun set arg ->
         StringSet.union set (bv arg)
       ) bc args
@@ -141,6 +136,18 @@ let rec bv code =
 
   | Type _ -> StringSet.empty
 
+and bv_entry acc e =
+  bv e.code
+  |> StringSet.remove e.entry_sig.parameter_name
+  |> StringSet.remove e.entry_sig.storage_name
+  |> StringSet.union acc
+
+and bv_contract contract =
+    let be = List.fold_left bv_entry StringSet.empty contract.entries in
+    List.fold_right (fun (v, i, e) acc ->
+        StringSet.union (bv e)
+          (StringSet.remove v acc)
+      ) contract.values be
 
 let mk desc exp bv = { exp with desc; bv }
 
@@ -385,13 +392,7 @@ let rec bound code =
 
   | CreateContract { args; contract } ->
     let args = List.map bound args in
-    let contract = bound_contract contract in
-    let bv_entry acc e =
-      e.code.bv
-      |> StringSet.remove e.entry_sig.parameter_name
-      |> StringSet.remove e.entry_sig.storage_name
-      |> StringSet.union acc in
-    let bv = List.fold_left bv_entry StringSet.empty contract.entries in
+    let contract, bv = bound_contract contract in
     let bv =
       List.fold_left (fun set arg ->
           StringSet.union set arg.bv
@@ -425,6 +426,19 @@ and bound_entry entry =
   { entry with code = c }
 
 and bound_contract contract =
-  { contract with
-    values = List.map (fun (v, i, body) -> (v, i, bound body)) contract.values;
-    entries = List.map bound_entry contract.entries }
+  let values = List.map (fun (v, i, body) ->
+      (v, i, bound body)) contract.values in
+  let entries = List.map bound_entry contract.entries in
+  let bv_entry acc e =
+    e.code.bv
+    |> StringSet.remove e.entry_sig.parameter_name
+    |> StringSet.remove e.entry_sig.storage_name
+    |> StringSet.union acc in
+  let bv = List.fold_left bv_entry StringSet.empty contract.entries in
+  let bv =
+    List.fold_left (fun bv (v, _, _) -> StringSet.remove v bv) bv values in
+  { contract with values; entries }, bv
+
+let bound_contract contract =
+  let c, _ = bound_contract contract in
+  c
