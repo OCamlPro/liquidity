@@ -144,9 +144,9 @@ and bv_entry acc e =
 
 and bv_contract contract =
     let be = List.fold_left bv_entry StringSet.empty contract.entries in
-    List.fold_right (fun (v, i, e) acc ->
-        StringSet.union (bv e)
-          (StringSet.remove v acc)
+    List.fold_right (fun v acc ->
+        StringSet.union (bv v.val_exp)
+          (StringSet.remove v.val_name acc)
       ) contract.values be
 
 let mk desc exp bv = { exp with desc; bv }
@@ -426,8 +426,8 @@ and bound_entry entry =
   { entry with code = c }
 
 and bound_contract contract =
-  let values = List.map (fun (v, i, body) ->
-      (v, i, bound body)) contract.values in
+  let values = List.map (fun v ->
+      { v with val_exp = bound v.val_exp }) contract.values in
   let entries = List.map bound_entry contract.entries in
   let bv_entry acc e =
     e.code.bv
@@ -436,7 +436,7 @@ and bound_contract contract =
     |> StringSet.union acc in
   let bv = List.fold_left bv_entry StringSet.empty contract.entries in
   let bv =
-    List.fold_left (fun bv (v, _, _) -> StringSet.remove v bv) bv values in
+    List.fold_left (fun bv v -> StringSet.remove v.val_name bv) bv values in
   { contract with values; entries }, bv
 
 let bound_contract contract =
