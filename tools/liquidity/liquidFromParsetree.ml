@@ -2457,8 +2457,9 @@ let translate_multi l =
                       { es with parameter = lift_type es.parameter }
                     ) contract_sig.entries_sig
                 } in
-              (* Register contract type (with same name as contract) in environment *)
-              env.contract_types <-
+              (* Register contract type (with same name as contract)
+                 in top level environment *)
+              top_env.contract_types <-
                 StringMap.add contract.contract_name contract_sig
                   top_env.contract_types;
               Syn_contract contract :: acc
