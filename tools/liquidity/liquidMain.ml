@@ -219,6 +219,11 @@ let compile_tezos_file filename =
 let report_error = function
   | LiquidError error ->
     LiquidLoc.report_error Format.err_formatter error;
+  | LiquidNamespace.Unknown_namespace (p, err_loc) ->
+    LiquidLoc.report_error Format.err_formatter
+      { err_loc;
+        err_msg =
+          Printf.sprintf "Unknown module or contract %s" (String.concat "." p) };
   | LiquidFromTezos.Missing_program_field f ->
     Format.eprintf "Missing script field %s@." f;
   | LiquidDeploy.RequestError (code, msg) ->

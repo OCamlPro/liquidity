@@ -263,6 +263,7 @@ and move_outer_lets parameter storage values exp =
 (* Recover multiple-entry points contract from a contract in
    single-entry point form *)
 and decode_contract contract =
+  let subs = List.map decode_contract contract.subs in
   let c_init = match contract.c_init with
     | None -> None
     | Some i -> Some { i with init_body = decode i.init_body } in
@@ -279,7 +280,7 @@ and decode_contract contract =
         move_outer_lets parameter_name storage_name [] code in
       let values, entries =
         decode_entries param_constrs parameter_name storage_name values code in
-      { contract with values ; entries; c_init }
+      { contract with values ; entries; c_init; subs }
     | [({ entry_sig = { parameter;
                         parameter_name;
                         storage_name;
@@ -293,6 +294,7 @@ and decode_contract contract =
         values = List.rev values;
         entries = [ { e with code = decode code } ];
         c_init;
+        subs;
       }
     | _ -> raise Exit
   with Exit ->
@@ -304,4 +306,5 @@ and decode_contract contract =
       entries =
         List.map (fun e -> { e with code = decode e.code }) contract.entries;
       c_init;
+      subs;
     }

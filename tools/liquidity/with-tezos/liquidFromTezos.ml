@@ -383,7 +383,7 @@ let rec convert_type env expr =
     | Prim(_, "contract", [x], annots) ->
       let sig_name = type_name_of_annots ~allow_capital:true annots in
       let parameter = convert_type env x in
-      let entries_sig = match parameter with
+      let entries_sig = match get_type parameter with
         | Tsum (_, constrs)
           when List.for_all (fun (s, _) -> is_entry_case s) constrs ->
           List.map (fun (s, ty) ->
@@ -790,9 +790,9 @@ let convert_env env =
                 ty_env.labels <- StringMap.add label (name, i) ty_env.labels;
               ) labels;
           | Tsum (name, constrs) ->
-            List.iter (fun (constr, c_ty) ->
+            List.iteri (fun i (constr, c_ty) ->
                 ty_env.constrs <-
-                  StringMap.add constr name ty_env.constrs;
+                  StringMap.add constr (name, i) ty_env.constrs;
               ) constrs;
           | _ -> ()
         end;

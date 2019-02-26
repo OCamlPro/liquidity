@@ -267,6 +267,7 @@ let tmp_contract_of_init ~loc env (init : encoded_exp LiquidTypes.init) storage_
                  code }];
     ty_env = env;
     c_init = None;
+    subs = [];
   }
 
 let compile_liquid_init env contract_sig (init : encoded_exp LiquidTypes.init) (* ((args, sy_init) as init) *) =

@@ -714,6 +714,7 @@ let rec decompile contract =
                                storage_name  };
                  code }];
     c_init = None;
+    subs = [];
     ty_env = LiquidFromParsetree.initial_env "dummy_env";
   }
 

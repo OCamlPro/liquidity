@@ -5,3 +5,12 @@ external get_storage : [%type: 'a] -> [%stack: UnitContract.instance] -> [%stack
 external reveal : [%stack: address] -> [%stack: key] -> [%stack: operation] = "REVEAL"
 external increase_balance : [%stack: tez] -> unit = "INCREASE_BALANCE" [@@effect]
 external test_fail : [%stack: 'a] -> unit = "FAILWITH" [@@effect]
+
+let [@noinline] w = 1p
+
+type t = A | B
+
+let [@noinline] f (x : nat) =
+  match (A : t) with
+  | A -> x + w
+  | B -> failwith A

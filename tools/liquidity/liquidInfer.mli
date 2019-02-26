@@ -20,7 +20,9 @@ val instantiate : StringSet.t * datatype -> datatype
 val unify : location -> datatype -> datatype -> unit
 val generalize : datatype -> datatype -> unit
 
-val find_variant_type : typecheck_env -> (pattern * 'a) list -> datatype option
+val find_variant_type :
+  loc:location -> typecheck_env ->
+  (pattern * 'a) list -> datatype option
 
 val make_type_eqn :
   location -> (datatype list * datatype) list -> datatype list -> datatype

@@ -3,7 +3,7 @@ type storage = int
 type ('a, 'b) t =
   { x : 'a ; y : 'b }
 
-let mk_t (x, y) =
+let[@noinline] mk_t (x, y) =
   { x; y }
 
 let%entry main parameter _ =

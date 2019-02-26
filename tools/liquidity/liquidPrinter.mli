@@ -29,7 +29,7 @@ module Liquid : sig
   (** Pretty-print Liquidity contract *)
   val string_of_contract : typed_contract -> string
   (** Pretty-print typed Liquidity code *)
-  val string_of_code : typed_exp -> string
+  val string_of_code : (datatype, 'a) exp -> string
 end
 
 (** {2 Pretty-printing of Liquidity terms for debugging} *)

@@ -161,6 +161,7 @@ and 'exp contract = {
   entries : 'exp entry list; (** Entry points of the contract *)
   ty_env : env;
   c_init : 'exp init option;
+  subs : 'exp contract list;
 }
 
 and entries_sig = entry_sig list
@@ -203,9 +204,13 @@ and env = {
   (* labels of records in type definitions *)
   mutable labels : (string * int) StringMap.t;
   (* constructors of sum-types in type definitions *)
-  mutable constrs : string StringMap.t;
+  mutable constrs : (string * int) StringMap.t;
   (* extended primitives definitions *)
   mutable ext_prims : extprim StringMap.t;
+  (* path for qualified names *)
+  path : string list;
+  (* other reachable qualified environments *)
+  mutable others : env StringMap.t ;
   (* englobing env *)
   top_env : env option;
 }
@@ -352,6 +357,7 @@ let sig_of_full_sig s = {
   entries_sig = s.f_entries_sig;
 }
 
+let is_only_module c = c.entries = []
 
 (** Free type variables of a type *)
 let free_tvars ty =
@@ -1343,7 +1349,8 @@ type typecheck_env = {
   force_inline : encoded_exp StringMap.t ref;
   t_contract_sig : full_contract_sig;
   clos_env : closure_env option;
-  ftvars : StringSet.t
+  ftvars : StringSet.t;
+  visible_contracts : typed_exp contract list;
 }
 
 let empty_typecheck_env ~warnings t_contract_sig env = {
@@ -1358,7 +1365,8 @@ let empty_typecheck_env ~warnings t_contract_sig env = {
   env = env;
   clos_env = None;
   t_contract_sig;
-  ftvars = StringSet.empty
+  ftvars = StringSet.empty;
+  visible_contracts = [];
 }
 
 
@@ -1567,74 +1575,3 @@ let contract_name_of_annot s =
   Scanf.sscanf s
     (Scanf.format_from_string prefix_contract "" ^^ "%s%!")
     (fun x -> x)
-
-
-let lift_name inner_name n = String.concat "." [inner_name; n]
-
-let lift_name env = lift_name env.contractname
-
-let rec lift_type env ty = match ty with
-  | Tunit | Tbool | Tint | Tnat | Ttez | Tstring | Tbytes | Ttimestamp
-  | Tkey | Tkey_hash | Tsignature | Toperation | Taddress | Tfail -> ty
-  | Ttuple l -> Ttuple (List.map (lift_type env) l)
-  | Toption t -> Toption (lift_type env t)
-  | Tlist t -> Tlist (lift_type env t)
-  | Tset t -> Tset (lift_type env t)
-  | Tmap (t1, t2) -> Tmap (lift_type env t1, lift_type env t2)
-  | Tbigmap (t1, t2) -> Tbigmap (lift_type env t1, lift_type env t2)
-  | Tor (t1, t2) -> Tor (lift_type env t1, lift_type env t2)
-  | Tlambda (t1, t2) -> Tlambda (lift_type env t1, lift_type env t2)
-  | Tcontract c_sig -> Tcontract (lift_contract_sig env c_sig)
-  | Trecord (name, fields) when StringMap.mem name env.types ->
-    Trecord (lift_name env name,
-             List.map (fun (f, ty) -> lift_name env f, lift_type env ty) fields)
-  | Trecord (name, fields) ->
-    Trecord (name, List.map (fun (f, ty) -> f, lift_type env ty) fields)
-  | Tsum (name, constrs) when StringMap.mem name env.types ->
-    Tsum (lift_name env name,
-          List.map (fun (c, ty) -> lift_name env c, lift_type env ty) constrs)
-  | Tsum (name, constrs) ->
-    Tsum (name, List.map (fun (c, ty) -> c, lift_type env ty) constrs)
-  | Tclosure ((t1, t2), t3) ->
-    Tclosure ((lift_type env t1, lift_type env t2), lift_type env t3)
-  | Tvar tvr ->
-    let tv = Ref.get tvr in
-    begin match tv.tyo with
-      | None -> ty
-      | Some ty -> (Ref.set tvr) { tv with tyo = Some (lift_type env ty) }; ty
-    end
-  | Tpartial _ -> raise (Invalid_argument "lift_type")
-
-and lift_contract_sig env c_sig =
-  { sig_name = c_sig.sig_name;
-    entries_sig = List.map (fun es ->
-        { es with parameter = lift_type env es.parameter }
-      ) c_sig.entries_sig
-  }
-
-
-let rec rec_find s env proj =
-  try StringMap.find s (proj env)
-  with Not_found ->
-  match env.top_env with
-  | None -> raise Not_found
-  | Some env -> rec_find s env proj
-
-let find_type s env = rec_find s env (fun env -> env.types)
-let find_contract_type s env = rec_find s env (fun env -> env.contract_types)
-let find_label s env = rec_find s env (fun env -> env.labels)
-let find_constr s env = rec_find s env (fun env -> env.constrs)
-
-let label_type s ty = match ty with
-  | Trecord (_, l) ->
-    begin try List.assoc s l
-      with Not_found -> invalid_arg ("label_type " ^ s)
-    end
-  | _ -> invalid_arg ("label_type")
-
-let constr_type s ty = match ty with
-  | Tsum (_, l) ->
-    begin try List.assoc s l
-      with Not_found -> invalid_arg ("constr_type " ^ s)
-    end
-  | _ -> invalid_arg ("constr_type")

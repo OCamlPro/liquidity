@@ -1229,8 +1229,19 @@ module LiquidDebug = struct
       bprint_code_rec ~debug b indent2 arg;
       bprint_code_rec ~debug b indent2 acc;
       ()
-    | Closure { arg_name; arg_ty; body; ret_ty }
-    (* FIXME change this *)
+    | Closure { arg_name; arg_ty; body; ret_ty; call_env } ->
+      let indent2 = indent ^ "  " in
+      let indent4 = indent2 ^ "  " in
+      Printf.bprintf b "\n%s{ env = " indent;
+      List.iter (fun (s, e) ->
+          Printf.bprintf b "\n%s%s ->" indent2 s;
+          bprint_code_rec ~debug b indent4 e;
+        ) call_env;
+      Printf.bprintf b ";\n%s  f = (fun ( %s : " indent arg_name.nname ;
+      bprint_type b indent2 arg_ty;
+      Printf.bprintf b ") ->\n%s" indent2;
+      bprint_code_rec ~debug b indent4 body;
+      Printf.bprintf b ")\n%s}" indent
     | Lambda { arg_name; arg_ty; body; ret_ty } ->
       let indent2 = indent ^ "  " in
       let indent4 = indent2 ^ "  " in

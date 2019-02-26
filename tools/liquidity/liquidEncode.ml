@@ -8,6 +8,7 @@
 (**************************************************************************)
 
 open LiquidTypes
+open LiquidNamespace
 open LiquidInfer
 
 let noloc env = LiquidLoc.loc_in_file env.env.filename
@@ -76,6 +77,14 @@ let new_binding env name ?(effect=false) ty =
             } in
   (new_name, env, count)
 
+let find_in_clos ~count_used loc ce name =
+  let v, (cpt_in, cpt_out) = StringMap.find name ce.env_bindings in
+  if count_used then begin
+    incr cpt_in;
+    incr cpt_out;
+  end;
+  v
+
 (* Find variable name in either the global environment or the closure
    environment, returns a corresponding expression *)
 let find_var ?(count_used=true) env loc name =
@@ -91,17 +100,11 @@ let find_var ?(count_used=true) env loc name =
     { exp with effect }
   with Not_found ->
   match env.clos_env with
-  | None -> error loc "unbound variable %S" name
+  | None -> error loc "//unbound variable %S" name
   | Some ce ->
-    try
-      let v, (cpt_in, cpt_out) = StringMap.find name ce.env_bindings in
-      if count_used then begin
-        incr cpt_in;
-        incr cpt_out;
-      end;
-      v
+    try find_in_clos ~count_used loc ce name
     with Not_found ->
-      error loc "unbound variable %S" name
+      error loc "unbound //variable %S" name
 
 (* Create environment for closure *)
 let env_for_clos env bvs arg_name arg_type =
@@ -242,16 +245,19 @@ let rec encode_type ?(decompiling=false) ty =
       }] }
   | Tvar _ | Tpartial _ -> assert false (* Removed during typechecking *)
 
+and encode_qual_type env ty =
+  encode_type ~decompiling:env.decompiling (normalize_type env.env ty)
+
 (* encode a contract signature to the corresponding single entry form
    sum type *)
 and encode_contract_sig csig =
   match csig.entries_sig with
-  | [] ->
-    error (LiquidLoc.noloc)
-      "Contract type %shas no entry points"
-      (match csig.sig_name with
-       | Some s -> Printf.sprintf "%s " s
-       | None -> "")
+  | [] -> Tunit
+    (* error (LiquidLoc.noloc)
+     *   "Contract type %shas no entry points"
+     *   (match csig.sig_name with
+     *    | Some s -> Printf.sprintf "%s " s
+     *    | None -> "") *)
   | [{ parameter }] -> parameter
   | entries ->
     Tsum ("_entries",
@@ -283,7 +289,7 @@ let rec has_big_map = function
 (* Encode storage type. This checks that big maps appear only as the
    first component of the toplevel tuple or record storage. *)
 let encode_storage_type env ty =
-  let ty = encode_type ~decompiling:env.decompiling ty in
+  let ty = encode_qual_type env ty in
   match ty with
   | Ttuple (Tbigmap (t1, t2) :: r)
     when not @@ List.exists has_big_map (t1 :: t2 :: r) -> ty
@@ -297,7 +303,7 @@ let encode_storage_type env ty =
 
 (* Encode parameter type. Parameter cannot have big maps. *)
 let encode_parameter_type env ty =
-  let ty = encode_type ~decompiling:env.decompiling ty in
+  let ty = encode_qual_type env ty in
   if has_big_map ty then
     error (noloc env) "big maps are not allowed in parameter type";
   ty
@@ -349,24 +355,20 @@ let rec encode_const env c = match c with
 
   | CConstr (constr, x) ->
     try
-      let ty_name = find_constr constr env.env in
-      let constr_ty = find_type ty_name env.env [] in
+      let constr_ty, (_, constr_pos) =
+        find_constr ~loc:(noloc env) constr env.env in
       (* This is a new instance of the type but we just look at the
          constructors *)
-      match constr_ty with
-      | Tsum (_, constrs) ->
-        let rec iter constrs =
-          match constrs with
-          | [] -> assert false
-          | [c, _] ->
-            assert (c = constr);
-            encode_const env x
-          | (c, _) :: constrs ->
-            if c = constr then CLeft (encode_const env x)
-            else CRight (iter constrs)
-        in
-        iter constrs
-      | _ -> raise Not_found
+      let nb_constrs = match constr_ty with
+        | Tsum (sum_name, constrs) -> List.length constrs
+        | _ -> raise Not_found in
+      let rec mk pos nb_constrs c =
+        match pos, nb_constrs with
+        | 0, 1 -> c
+        | 0, _ -> CLeft c
+        | pos, _ when pos > 0 -> CRight (mk (pos - 1) (nb_constrs - 1) c)
+        | _ -> assert false in
+      mk constr_pos nb_constrs (encode_const env x)
     with Not_found ->
       error (noloc env)  "unknown constructor %s" constr
 
@@ -378,7 +380,7 @@ let rec encode_const env c = match c with
 let rec deconstify env loc ty c =
   if not @@ type_contains_nonlambda_operation ty then
     mk ~loc (Const { ty; const = c }) ty
-  else match c, (encode_type ~decompiling:env.decompiling ty) with
+  else match c, (encode_qual_type env ty) with
     | (CUnit | CBool _ | CInt _ | CNat _ | CTez _ | CTimestamp _ | CString _
       | CBytes _
       | CKey _ | CContract _ | CSignature _ | CNone  | CKey_hash _ | CAddress _),
@@ -503,6 +505,29 @@ let rec decr_counts_vars env e =
 
     | Type _ -> ()
 
+let register_inlining ~loc env new_name count inline bnd_val =
+  if not bnd_val.transfer (* no inlining of values with transfer *) then begin
+    match !count with
+    | c when c <= 0 ->
+      if bnd_val.effect then
+        () (* No inling of values with side effects which don't
+              appear later on *)
+      else begin
+        decr_counts_vars env bnd_val;
+        env.to_inline :=
+          StringMap.add new_name (const_unit ~loc) !(env.to_inline)
+      end
+    | c when (c = 1 && inline = InAuto) || inline = InForced ->
+      env.to_inline := StringMap.add new_name bnd_val !(env.to_inline)
+    | _ -> ()
+  end
+
+let register_inlining_value env v =
+  try
+    let count = StringMap.find v.val_name env.vars_counts in
+    let loc = (v.val_exp : encoded_exp).loc in
+    register_inlining ~loc env v.val_name count v.inline v.val_exp
+  with Not_found -> ()
 
 (* Encode a Liquidity expression *)
 let rec encode env ( exp : typed_exp ) : encoded_exp =
@@ -511,6 +536,7 @@ let rec encode env ( exp : typed_exp ) : encoded_exp =
 
   | Const { ty; const } ->
     let const = encode_const env const in
+    let ty = normalize_type env.env ty in
     (* use functions instead of constants if contains operations *)
     let c = deconstify env loc ty const in
     mk ?name:exp.name ~loc c.desc ty
@@ -527,24 +553,7 @@ let rec encode env ( exp : typed_exp ) : encoded_exp =
       env.force_inline :=
         StringMap.add bnd_var.nname bnd_val !(env.force_inline);
     let body = encode env body in
-    if not bnd_val.transfer (* no inlining of values with transfer *) then begin
-      match !count with
-      | c when c <= 0 ->
-        if bnd_val.effect then
-          () (* No inling of values with side effects which don't
-                appear later on *)
-        else begin
-          decr_counts_vars env bnd_val;
-          env.to_inline :=
-            StringMap.add new_name (const_unit ~loc) !(env.to_inline)
-        end
-      | c when (c = 1 && inline = InAuto) || inline = InForced ->
-        (* if bnd_val.effect then
-         *   ()
-         * else *)
-        env.to_inline := StringMap.add new_name bnd_val !(env.to_inline)
-      | _ -> ()
-    end;
+    register_inlining ~loc env new_name count inline bnd_val;
     mk ?name:exp.name ~loc
       (Let { bnd_var = { bnd_var with nname = new_name };
              inline; bnd_val; body }) body.ty
@@ -874,10 +883,13 @@ let rec encode env ( exp : typed_exp ) : encoded_exp =
     mk ?name:exp.name ~loc desc exp.ty
 
   | Constructor { constr = Constr constr; arg } ->
+
     let arg = encode env arg in
     let exp =
       match exp.ty with
-      | Tsum (_, constrs) ->
+      | Tsum (sum_name, constrs) ->
+        let path, _ = unqualify sum_name in
+        let constr = qualify_name path constr in
         let rec iter constrs orty =
           match constrs, orty with
           | [], _ -> assert false
@@ -910,7 +922,7 @@ let rec encode env ( exp : typed_exp ) : encoded_exp =
             in
             mk ~loc desc orty
         in
-        iter constrs (encode_type ~decompiling:env.decompiling exp.ty)
+        iter constrs (encode_qual_type env exp.ty)
       | _ -> assert false
     in
     mk ?name:exp.name ~loc exp.desc exp.ty
@@ -1109,7 +1121,74 @@ and encode_entry env entry =
          let s3 = storage in {code_entry_3}
    end
 *)
+
+(* Encode modules global functions for export *)
+and encode_modules top_env contracts =
+  let env, values =
+    List.fold_left (fun (env, old_values) c ->
+        let env, sub_values = encode_modules env c.subs in
+        (* create env local to module *)
+        let env =
+          { env with
+            env = c.ty_env;
+            t_contract_sig = full_sig_of_contract c;
+          } in
+
+        let env, new_values =
+          List.fold_left (fun (env, values) v ->
+              let val_name = v.val_name in
+              let val_exp = encode env v.val_exp in
+              let val_exp = if env.annot && val_exp.name = None
+                then { val_exp with
+                       name = Some (qualify_name c.ty_env.path val_name) }
+                else val_exp
+              in
+              let (new_name, env, count) =
+                new_binding env val_name ~effect:val_exp.effect val_exp.ty in
+              if v.inline = InForced then (* indication for closure encoding *)
+                env.force_inline :=
+                  StringMap.add val_name val_exp !(env.force_inline);
+              let v = { v with val_exp } in
+              env, (v, val_name) :: values)
+            (env, []) c.values
+        in
+        let new_values = List.rev new_values in
+
+        (* rename values *)
+        let env, values = List.fold_left (fun (env, values) (v, cur_name) ->
+            try
+              let (new_name, (tv, ty), effect) =
+                StringMap.find cur_name env.vars in
+              let out_name = qualify_name [c.contract_name] cur_name in
+              let vars =
+                StringMap.remove cur_name env.vars
+                |> StringMap.add out_name (new_name, (tv, ty), effect) in
+              begin
+                try
+                  let val_exp = StringMap.find cur_name !(env.force_inline) in
+                  env.force_inline :=
+                    StringMap.remove cur_name !(env.force_inline)
+                    |> StringMap.add out_name val_exp;
+                with Not_found -> ()
+              end;
+              let v = { v with val_name = new_name } in
+              { env with vars }, (v, out_name) :: values
+            with Not_found -> env, values
+          ) (env, []) (new_values @ sub_values)
+        in
+
+        (* return in order *)
+        (env, List.(rev @@ rev_append old_values values))
+      ) (top_env, []) contracts
+  in
+  { env with env = top_env.env;
+             t_contract_sig = top_env.t_contract_sig },
+  values
+
+
+
 and encode_contract ?(annot=false) ?(decompiling=false) contract =
+
   let env =
     {
       warnings=false;
@@ -1123,28 +1202,43 @@ and encode_contract ?(annot=false) ?(decompiling=false) contract =
       env = contract.ty_env;
       clos_env = None;
       t_contract_sig = full_sig_of_contract contract;
-      ftvars = StringSet.empty
+      ftvars = StringSet.empty;
+      visible_contracts = contract.subs;
     } in
+
+  (* Global exported values from modules *)
+  let env, values =
+    encode_modules env contract.subs in
+  let values = List.map fst values in
 
   let parameter = encode_contract_sig (sig_of_full_sig env.t_contract_sig) in
   let loc = LiquidLoc.loc_in_file env.env.filename in
-  let rec values_on_top l exp = match l with
+
+  let rec values_on_top mk l exp = match l with
     | [] -> exp
     | v :: rest ->
-      mk_typed ~loc
+      mk ?name:None ~loc
         (Let { bnd_var = { nname = v.val_name; nloc = loc };
                inline = v.inline;
                bnd_val = v.val_exp;
-               body = values_on_top rest exp }) exp.ty in
+               body = values_on_top mk rest exp }) exp.ty in
+
   let code_desc, parameter_name, storage_name = match contract.entries with
+    | [] -> (Const { ty = Tunit; const = CUnit }), "parameter", "storage"
     | [e] -> e.code.desc, e.entry_sig.parameter_name, e.entry_sig.storage_name
     | _ ->
       let parameter = mk_typed ~loc (Var "parameter") parameter in
+      let ecstrs = List.mapi (fun i e ->
+          let constr = prefix_entry ^ e.entry_sig.entry_name in
+          env.env.constrs <- StringMap.add constr ("_entries", i) env.env.constrs;
+          constr, e.entry_sig.parameter
+        ) contract.entries in
+      env.env.types <-
+        StringMap.add "_entries" (fun _ -> Tsum("_entries", ecstrs)) env.env.types;
       MatchVariant {
         arg = parameter;
-        cases = List.map (fun e ->
+        cases = List.mapi (fun i e ->
             let constr = prefix_entry ^ e.entry_sig.entry_name in
-            env.env.constrs <- StringMap.add constr "_entries" env.env.constrs;
             let pat =
               CConstr (constr, [e.entry_sig.parameter_name]) in
             let body =
@@ -1168,9 +1262,15 @@ and encode_contract ?(annot=false) ?(decompiling=false) contract =
   (* "parameter/2" *)
   let (pname, env, _) = new_binding env parameter_name parameter in
 
-  let code = encode env @@
-    values_on_top contract.values @@
+  let code =
+    values_on_top mk values @@
+    encode env @@
+    values_on_top mk_typed contract.values @@
     mk_typed ~loc code_desc (Ttuple [Tlist Toperation; contract.storage]) in
+
+  (* Register global values for inlining if necessary *)
+  List.iter (register_inlining_value env) values;
+
   let c_init = match contract.c_init with
     | None -> None
     | Some i ->
@@ -1197,6 +1297,7 @@ and encode_contract ?(annot=false) ?(decompiling=false) contract =
       }];
     ty_env = contract.ty_env;
     c_init;
+    subs = [];
   } in
   contract, !(env.to_inline)
 
@@ -1220,6 +1321,7 @@ let encode_const env t_contract_sig const =
       clos_env = None;
       t_contract_sig;
       ftvars = StringSet.empty;
+      visible_contracts = [];
     } in
 
   encode_const env const

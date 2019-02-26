@@ -255,8 +255,8 @@ let rec compute decompile code to_inline =
         desc = Lambda { arg_name; arg_ty; body; ret_ty; recursive } }
 
     | Closure { arg_name; arg_ty; call_env; body; ret_ty } ->
-      let body = iter body in
       let call_env = List.map (fun (name, t) -> name, iter t) call_env in
+      let body = iter body in
       { exp with
         desc = Closure { arg_name; arg_ty; call_env; body; ret_ty } }
 

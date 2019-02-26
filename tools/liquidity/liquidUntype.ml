@@ -276,6 +276,7 @@ and untype_entry env (entry : (datatype, 'a) exp entry) =
     code = untype env entry.code }
 
 and untype_contract contract =
+  let subs = List.map untype_contract contract.subs in
   let contract = LiquidBoundVariables.bound_contract contract in
   let values, env =
     List.fold_left (fun (acc, env) v ->
@@ -288,6 +289,6 @@ and untype_contract contract =
   let c_init = match contract.c_init with
     | None -> None
     | Some i -> Some { i with init_body = untype env i.init_body } in
-  { contract with values; entries; c_init }
+  { contract with values; entries; c_init; subs }
 
 let untype_code code = untype (empty_env ()) code

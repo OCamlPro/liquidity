@@ -431,13 +431,13 @@ let make_type_eqn loc overloads params =
   unify_list loc to_unify;
   ty
 
-let rec find_variant_type env = function
+let rec find_variant_type ~loc env = function
   | [] -> None
-  | (CAny, _) :: cases -> find_variant_type env cases
+  | (CAny, _) :: cases -> find_variant_type ~loc env cases
   | (CConstr (("Left"|"Right"), _), _) :: _ ->
     Some (Tor (fresh_tvar (), fresh_tvar ()))
   | (CConstr (c, _), _) :: _ ->
-    try let n = find_constr c env.env in Some (find_type n env.env [])
+    try Some (fst (LiquidNamespace.find_constr ~loc c env.env))
     with Not_found -> None
 
 
