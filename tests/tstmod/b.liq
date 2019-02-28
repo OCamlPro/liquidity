@@ -1,6 +1,6 @@
 type t =
   | A of int
-  | B of tez
+  | B of A.t
   | C
 
 type s = int * int

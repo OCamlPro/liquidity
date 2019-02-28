@@ -888,13 +888,11 @@ let rec encode env ( exp : typed_exp ) : encoded_exp =
     let exp =
       match exp.ty with
       | Tsum (sum_name, constrs) ->
-        let path, _ = unqualify sum_name in
-        let constr = qualify_name path constr in
         let rec iter constrs orty =
           match constrs, orty with
           | [], _ -> assert false
           | [c, _], orty ->
-            assert (c = constr);
+            (* assert (c = constr); *)
             arg
           | (c, cty) :: constrs, orty ->
             let left_ty, right_ty = match orty with
@@ -1140,7 +1138,7 @@ and encode_modules top_env contracts =
               let val_exp = encode env v.val_exp in
               let val_exp = if env.annot && val_exp.name = None
                 then { val_exp with
-                       name = Some (qualify_name c.ty_env.path val_name) }
+                       name = Some (add_path_name c.ty_env.path val_name) }
                 else val_exp
               in
               let (new_name, env, count) =
@@ -1159,7 +1157,7 @@ and encode_modules top_env contracts =
             try
               let (new_name, (tv, ty), effect) =
                 StringMap.find cur_name env.vars in
-              let out_name = qualify_name [c.contract_name] cur_name in
+              let out_name = add_path_name [c.contract_name] cur_name in
               let vars =
                 StringMap.remove cur_name env.vars
                 |> StringMap.add out_name (new_name, (tv, ty), effect) in

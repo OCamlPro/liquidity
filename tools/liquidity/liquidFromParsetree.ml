@@ -55,7 +55,7 @@ let mk_inner_env env contractname =
     ext_prims = StringMap.empty;
     filename = env.filename;
     top_env = Some env;
-    others = StringMap.empty;
+    others = env.others;
     contractname;
     path = env.path @ [ contractname ];
   } in

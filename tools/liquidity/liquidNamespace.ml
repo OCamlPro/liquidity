@@ -29,6 +29,7 @@ let unqualify s =
   | s :: rpath -> List.rev rpath, s
 
 let qualify_name path s = String.concat "." (path @ [snd @@ unqualify s])
+let add_path_name path s = String.concat "." (path @ [s])
 
 
 (* Find namespace in a tree of (sub-)contracts *)
@@ -104,13 +105,13 @@ let rec normalize_type env ty = match ty with
     Trecord (qualify_name found_env.path name,
              List.map (fun (f, ty) ->
                  qualify_name found_env.path f,
-                 normalize_type env ty) fields)
+                 normalize_type found_env ty) fields)
   | Tsum (name, constrs) ->
     let _, found_env = find_type ~loc:noloc name env [] in
     Tsum (qualify_name found_env.path name,
           List.map (fun (c, ty) ->
               qualify_name found_env.path c,
-              normalize_type env ty) constrs)
+              normalize_type found_env ty) constrs)
   | Tclosure ((t1, t2), t3) ->
     Tclosure ((normalize_type env t1, normalize_type env t2),
               normalize_type env t3)

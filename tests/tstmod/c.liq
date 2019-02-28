@@ -1,7 +1,7 @@
-type storage = int
+type storage = B.t
 
 
 let cf (y : int) = A.af (B.bf (y + A.x)) + B.W.r
 
 let%entry main p s =
-  [], cf p
+  [], B.A (cf p)

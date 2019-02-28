@@ -14,8 +14,8 @@ exception Unknown_namespace of string list * location
 (** Parse namespaces in name *)
 val unqualify : string -> string list * string
 
-(** Qualify name with namespace *)
-val qualify_name : string list -> string -> string
+(** Prepend name with namespace *)
+val add_path_name : string list -> string -> string
 
 (** Normalize types with fully qualified names, constructors and fields *)
 val normalize_type : env -> datatype -> datatype
