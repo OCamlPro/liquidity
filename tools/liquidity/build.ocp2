@@ -46,7 +46,6 @@ OCaml.library("ocplib-liquidity-bare",
        "liquidMisc.ml";
 
        "liquidTypes.ml";
-       "liquidNamespace.ml";
        "liquidNumber.ml";
      ];
      requires = [
@@ -107,6 +106,7 @@ OCaml.library("ocplib-liquidity-base",
        "liquidPeephole.ml";
        "liquidToParsetree.ml";
        "liquidPrinter.ml";
+       "liquidNamespace.ml";
        "liquidInfer.ml";
        "liquidCheck.ml";
        "liquidSimplify.ml";

@@ -12,7 +12,6 @@
 
 open LiquidTypes
 open LiquidNamespace
-open LiquidOCamlParser
 open LiquidInfer
 
 type 'a ast_elt =
@@ -25,73 +24,6 @@ type 'a ast_elt =
 type 'a parsed_struct =
   | PaModule of 'a contract
   | PaContract of 'a contract
-
-(* redefined keywords of the modified OCaml lexer *)
-let liquidity_keywords = [
-  "and", AND;
-  "as", AS;
-  "assert", ASSERT;
-  "begin", BEGIN;
-  (*    "class", CLASS; *)
-  (*    "constraint", CONSTRAINT; *)
-  "do", DO;
-  "done", DONE;
-  "downto", DOWNTO;
-  "else", ELSE;
-  "end", END;
-  (* "exception", EXCEPTION; *)
-  "external", EXTERNAL;
-  "false", FALSE;
-  "for", FOR;
-  "fun", FUN;
-  "function", FUNCTION;
-  (* "functor", FUNCTOR; *)
-  "if", IF;
-  "in", IN;
-  (* "include", INCLUDE; *)
-  (* "inherit", INHERIT; *)
-  (* "initializer", INITIALIZER; *)
-  (* "lazy", LAZY; *)
-  "let", LET;
-  "match", MATCH;
-  (* "entry", METHOD; *)
-  "contract", MODULE;
-  (* "mutable", MUTABLE; *)
-  (* "new", NEW; *)
-  (* "nonrec", NONREC; *)
-  (* "object", OBJECT; *)
-  "of", OF;
-  (* "open", OPEN; *)
-  "or", OR;
-  (*  "parser", PARSER; *)
-  (* "private", PRIVATE; *)
-  "rec", REC;
-  "sig", SIG;
-  "struct", STRUCT;
-  "then", THEN;
-  "to", TO;
-  "true", TRUE;
-  (* "try", TRY; *)
-  "type", TYPE;
-  "val", VAL;
-  (* "virtual", VIRTUAL; *)
-
-  (* "when", WHEN; *)
-  "while", WHILE;
-  "with", WITH;
-
-  "lor", INFIXOP3("lor"); (* Should be INFIXOP2 *)
-  "lxor", INFIXOP3("lxor"); (* Should be INFIXOP2 *)
-  "mod", INFIXOP3("mod");
-  "land", INFIXOP3("land");
-  "lsl", INFIXOP4("lsl");
-  "lsr", INFIXOP4("lsr");
-  "xor", INFIXOP3("xor"); (* Should be INFIXOP2 *)
-  "asr", INFIXOP4("asr")
-]
-
-let () =
-  LiquidOCamlLexer.define_keywords liquidity_keywords
 
 let ident_counter = ref 0
 
@@ -2150,12 +2082,14 @@ and translate_structure env acc ast : syntax_exp parsed_struct =
       pmb_expr = {
         pmod_desc = Pmod_structure structure
       };
-    }} :: ast ->
+    }; pstr_loc } :: ast ->
     let inner_env = mk_inner_env env contract_name in
     begin
       match translate_structure inner_env (acc_for_subcontract acc) structure with
       | PaModule contract ->
-        translate_structure env (Syn_sub_contract contract :: acc) ast
+        error_loc pstr_loc
+          "Contract %s has no entry points (use module instead)"
+          contract_name;
       | PaContract contract ->
         match !LiquidOptions.main with
         | Some main when main = contract_name ->
@@ -2165,6 +2099,29 @@ and translate_structure env acc ast : syntax_exp parsed_struct =
           env.contract_types <-
             StringMap.add contract_name contract_sig env.contract_types;
           translate_structure env (Syn_sub_contract contract :: acc) ast
+    end
+
+  | { pstr_desc =
+        Pstr_extension
+          (({ txt = "module" },
+            PStr
+              [{ pstr_desc = Pstr_module {
+                   pmb_name = { txt = contract_name };
+                   pmb_expr = {
+                     pmod_desc = Pmod_structure structure
+                   };
+                 };
+                  pstr_loc }]
+           ), [])} :: ast ->
+    let inner_env = mk_inner_env env contract_name in
+    begin
+      match translate_structure inner_env (acc_for_subcontract acc) structure with
+      | PaModule contract ->
+        translate_structure env (Syn_sub_contract contract :: acc) ast
+      | PaContract contract ->
+        error_loc pstr_loc
+          "Module %s cannot have entry points (use contract instead)"
+          contract_name;
     end
 
   | [] -> pack_contract env (List.rev acc)

@@ -96,77 +96,78 @@ exception Error of error * Location.t;;
 
 (* The table of keywords *)
 
-let keyword_table, reverse_keyword_table =
-  let create_hashtable n l =
-    let t = Hashtbl.create n in
-    let rev_t = Hashtbl.create n in
-    List.iter (fun (k, v) ->
-      Hashtbl.add t k v;
-      Hashtbl.add rev_t v k;
-    ) l;
-    t, rev_t
-  in
-  create_hashtable 149 [
-    "and", AND;
-    "as", AS;
-    "assert", ASSERT;
-    "begin", BEGIN;
-    "class", CLASS;
-    "constraint", CONSTRAINT;
-    "do", DO;
-    "done", DONE;
-    "downto", DOWNTO;
-    "else", ELSE;
-    "end", END;
-    "exception", EXCEPTION;
-    "external", EXTERNAL;
-    "false", FALSE;
-    "for", FOR;
-    "fun", FUN;
-    "esfun", ES6_FUN;
-    "function", FUNCTION;
-    "functor", FUNCTOR;
-    "if", IF;
-    "in", IN;
-    "include", INCLUDE;
-    "inherit", INHERIT;
-    "initializer", INITIALIZER;
-    "lazy", LAZY;
-    "let", LET;
-    "switch", SWITCH;
-    "contract", MODULE; (* LIQUIDITY *)
-    "pub", PUB;
-    "mutable", MUTABLE;
-    "new", NEW;
-    "nonrec", NONREC;
-    "object", OBJECT;
-    "of", OF;
-    "open", OPEN;
-    "or", OR;
-(*  "parser", PARSER; *)
-    "pri", PRI;
-    "rec", REC;
-    "sig", SIG;
-    "struct", STRUCT;
-    "then", THEN;
-    "to", TO;
-    "true", TRUE;
-    "try", TRY;
-    "type", TYPE;
-    "val", VAL;
-    "virtual", VIRTUAL;
-    "when", WHEN;
-    "while", WHILE;
-    "with", WITH;
+let default_keywords = [
+  "and", AND;
+  "as", AS;
+  "assert", ASSERT;
+  "begin", BEGIN;
+  "class", CLASS;
+  "constraint", CONSTRAINT;
+  "do", DO;
+  "done", DONE;
+  "downto", DOWNTO;
+  "else", ELSE;
+  "end", END;
+  "exception", EXCEPTION;
+  "external", EXTERNAL;
+  "false", FALSE;
+  "for", FOR;
+  "fun", FUN;
+  "esfun", ES6_FUN;
+  "function", FUNCTION;
+  "functor", FUNCTOR;
+  "if", IF;
+  "in", IN;
+  "include", INCLUDE;
+  "inherit", INHERIT;
+  "initializer", INITIALIZER;
+  "lazy", LAZY;
+  "let", LET;
+  "switch", SWITCH;
+  "module", MODULE;
+  "pub", PUB;
+  "mutable", MUTABLE;
+  "new", NEW;
+  "nonrec", NONREC;
+  "object", OBJECT;
+  "of", OF;
+  "open", OPEN;
+  "or", OR;
+  (*  "parser", PARSER; *)
+  "pri", PRI;
+  "rec", REC;
+  "sig", SIG;
+  "struct", STRUCT;
+  "then", THEN;
+  "to", TO;
+  "true", TRUE;
+  "try", TRY;
+  "type", TYPE;
+  "val", VAL;
+  "virtual", VIRTUAL;
+  "when", WHEN;
+  "while", WHILE;
+  "with", WITH;
 
-    "mod", INFIXOP3("mod");
-    "land", INFIXOP3("land");
-    "lor", INFIXOP3("lor");
-    "lxor", INFIXOP3("lxor");
-    "lsl", INFIXOP4("lsl");
-    "lsr", INFIXOP4("lsr");
-    "asr", INFIXOP4("asr")
+  "mod", INFIXOP3("mod");
+  "land", INFIXOP3("land");
+  "lor", INFIXOP3("lor");
+  "lxor", INFIXOP3("lxor");
+  "lsl", INFIXOP4("lsl");
+  "lsr", INFIXOP4("lsr");
+  "asr", INFIXOP4("asr")
 ]
+
+let keyword_table = Hashtbl.create 149
+let reverse_keyword_table = Hashtbl.create 149
+let define_keywords keywords =
+  Hashtbl.clear keyword_table;
+  Hashtbl.clear reverse_keyword_table;
+  List.iter (fun (key, data) ->
+      Hashtbl.add keyword_table key data;
+      Hashtbl.add reverse_keyword_table data key;
+    ) keywords
+let () = define_keywords default_keywords
 
 (* To buffer string literals *)
 

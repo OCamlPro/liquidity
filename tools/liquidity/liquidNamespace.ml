@@ -28,7 +28,7 @@ let unqualify s =
   | [] -> assert false
   | s :: rpath -> List.rev rpath, s
 
-let qualify_name path s = String.concat "." (path @ [s])
+let qualify_name path s = String.concat "." (path @ [snd @@ unqualify s])
 
 
 (* Find namespace in a tree of (sub-)contracts *)
@@ -62,24 +62,30 @@ let find_namespace ~loc fullpath subs =
  *   | Contract_namespace (c, path) ->
  *     StringMap.find s (proj c.ty_env), c.ty_env *)
 
-let rec find_aux ~loc fullpath (path, s) env proj =
+let rec find_env ~loc fullpath path env =
   match path with
-  | [] -> rec_find s env proj
+  | [] -> env
   | p :: path ->
     let env =
       try StringMap.find p env.others
       with Not_found ->
         raise (Unknown_namespace (fullpath, loc))
     in
-    find_aux ~loc fullpath (path, s) env proj
+    find_env ~loc fullpath path env
 
-let find ~loc s env proj =
-  let (path, s) as ps = unqualify s in
-  find_aux ~loc path ps env proj
+let find_env ~loc path env = find_env ~loc path path env
+
+let rec find ~loc s env proj =
+  let path, s = unqualify s in
+  let env = find_env ~loc path env in
+  rec_find s env proj
 
 let find_type ~loc s env subst =
   let mk, found_env = find ~loc s env (fun env -> env.types) in
   mk subst, found_env
+
+let find_contract_type_aux ~loc s env =
+  find ~loc s env (fun env -> env.contract_types)
 
 let rec normalize_type env ty = match ty with
   | Tunit | Tbool | Tint | Tnat | Ttez | Tstring | Tbytes | Ttimestamp
@@ -98,13 +104,13 @@ let rec normalize_type env ty = match ty with
     Trecord (qualify_name found_env.path name,
              List.map (fun (f, ty) ->
                  qualify_name found_env.path f,
-                 normalize_type found_env ty) fields)
+                 normalize_type env ty) fields)
   | Tsum (name, constrs) ->
     let _, found_env = find_type ~loc:noloc name env [] in
     Tsum (qualify_name found_env.path name,
           List.map (fun (c, ty) ->
               qualify_name found_env.path c,
-              normalize_type found_env ty) constrs)
+              normalize_type env ty) constrs)
   | Tclosure ((t1, t2), t3) ->
     Tclosure ((normalize_type env t1, normalize_type env t2),
               normalize_type env t3)
@@ -119,19 +125,19 @@ let rec normalize_type env ty = match ty with
   | Tpartial _ -> raise (Invalid_argument "normalize_type")
 
 and normalize_contract_sig env c_sig =
-  { sig_name = c_sig.sig_name;
-    entries_sig = List.map (fun es ->
-        { es with parameter = normalize_type env es.parameter }
-      ) c_sig.entries_sig
-  }
+  match c_sig.sig_name with
+  | None -> c_sig
+  | Some s ->
+    let _, found_env = find_contract_type_aux ~loc:noloc s env in
+    { c_sig with sig_name = Some (qualify_name found_env.path s) }
 
 let find_type ~loc s env subst =
   let ty, found_env = find_type ~loc s env subst in
   normalize_type found_env ty
 
 let find_contract_type ~loc s env =
-  let csig = find ~loc s env (fun env -> env.contract_types) |> fst in
-  normalize_contract_sig env csig
+  let csig, found_env = find_contract_type_aux ~loc s env in
+  normalize_contract_sig found_env csig
 
 let find_label_ty_name ~loc s env =
   let (tn, i), found_env = find ~loc s env (fun env -> env.labels) in

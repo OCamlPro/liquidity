@@ -20,6 +20,8 @@ val qualify_name : string list -> string -> string
 (** Normalize types with fully qualified names, constructors and fields *)
 val normalize_type : env -> datatype -> datatype
 
+val find_env : loc:location -> string list -> env ->  env
+
 (** Find a type by its qualified alias, returns a fully qualified
     normalized type *)
 val find_type : loc:location -> string -> env -> datatype list -> datatype

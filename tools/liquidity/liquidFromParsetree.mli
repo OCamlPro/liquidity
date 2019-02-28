@@ -11,8 +11,6 @@
 
 open LiquidTypes
 
-val liquidity_keywords : (string * LiquidOCamlParser.token) list
-
 val initial_env : string -> env
 
 val translate :

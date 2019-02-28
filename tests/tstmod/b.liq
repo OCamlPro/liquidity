@@ -5,7 +5,7 @@ type t =
 
 type s = int * int
 
-contract W = struct
+module W = struct
 
    let r = 9
 end
