@@ -290,7 +290,7 @@ module Data = struct
 
   let validate_private_key s =
     if (String.length s <> 54 || let p = String.sub s 0 4 in
-        p <> "edpk" || p <> "sppk" || p <> "p2pk") then
+        p <> "edsk" && p <> "spsk" && p <> "p2sk") then
       failwith (s ^ " is not a valid private key")
 end
 
