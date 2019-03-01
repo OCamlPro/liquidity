@@ -100,11 +100,11 @@ let find_var ?(count_used=true) env loc name =
     { exp with effect }
   with Not_found ->
   match env.clos_env with
-  | None -> error loc "//unbound variable %S" name
+  | None -> error loc "unbound variable %S" name
   | Some ce ->
     try find_in_clos ~count_used loc ce name
     with Not_found ->
-      error loc "unbound //variable %S" name
+      error loc "unbound variable %S" name
 
 (* Create environment for closure *)
 let env_for_clos env bvs arg_name arg_type =
@@ -355,7 +355,7 @@ let rec encode_const env c = match c with
 
   | CConstr (constr, x) ->
     try
-      let constr_ty, (_, constr_pos) =
+      let constr_ty, (_, _, constr_pos) =
         find_constr ~loc:(noloc env) constr env.env in
       (* This is a new instance of the type but we just look at the
          constructors *)

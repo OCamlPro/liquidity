@@ -10,12 +10,16 @@ module C1 = struct
         let%entry main (_x:int) _ = ([] : operation list), ()
 
     end
-    contract type C = sig
+    contract C = struct
 
         type storage = unit
-        val%entry main : t -> _
+        let%entry main (_x:t) _ = ([] : operation list), ()
+        (* val%entry main : t -> _ *)
 
+        let mc = 1tz
     end
+
+    let my = 2tz
 
   end
   
@@ -28,9 +32,12 @@ contract type C = sig
   val%entry main : t -> _
 end
 
-type storage = C1.C2.C.instance * C.instance
+module Y = C1.C2
+contract X = Y.C
+
+type storage = X.instance * C.instance
 
 let%entry main (_k : key_hash) storage =
-  let x = { C1.C2.x = 1tz ; C1.C2.y = true } in
+  let x = { Y.x = 1tz + Y.C.mc + Y.my ; Y.y = true } in
   let op = storage.(0).main x ~amount:0tz in
   [op], storage

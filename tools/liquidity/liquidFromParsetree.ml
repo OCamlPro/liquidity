@@ -82,6 +82,10 @@ let unbound_contract loc ty =
   let loc = loc_of_loc loc in
   LiquidLoc.raise_error ~loc "Unbound contract %S%!" ty
 
+let unbound_module loc ty =
+  let loc = loc_of_loc loc in
+  LiquidLoc.raise_error ~loc "Unbound module %S%!" ty
+
 let error_arg loc arg =
   let loc = loc_of_loc loc in
   LiquidLoc.raise_error ~loc "Unexpected argument %S%!" arg
@@ -2058,24 +2062,56 @@ and translate_structure env acc ast : syntax_exp parsed_struct =
 
   (* contracts *)
 
-  (* Deactivate aliases for contracts *)
-  (*
+  (* contract alias *)
   | { pstr_desc = Pstr_module {
       pmb_name = { txt = contract_name };
       pmb_expr = {
-        pmod_desc = Pmod_ident { txt = Lident c_name; loc };
+        pmod_desc = Pmod_ident { txt = c_name; loc };
       }
     }
     } :: ast ->
+    let c_name = str_of_id c_name in
     begin try
-        let contract = StringMap.find c_name (filter_contracts acc) in
-        let contract = Syn_contract { contract with contract_name } in
-        renamespace env c_name contract_name;
-        translate_structure env (contract :: acc) ast
+        let contract = find_contract ~loc:(loc_of_loc loc)
+            c_name ((StringMap.bindings (filter_contracts acc) |> List.map snd)) in
+        if is_only_module contract then raise Not_found;
+        let contract = { contract with contract_name } in
+        env.others <- StringMap.add contract_name
+            { contract.ty_env with top_env = Some env } env.others;
+        let contract_sig = sig_of_contract contract in
+        env.contract_types <-
+          StringMap.add contract_name contract_sig env.contract_types;
+        translate_structure env (Syn_sub_contract contract :: acc) ast
       with Not_found ->
         unbound_contract loc c_name
     end
-  *)
+
+  (* module alias *)
+  | { pstr_desc =
+        Pstr_extension
+          (({ txt = "module" },
+            PStr
+              [{ pstr_desc = Pstr_module {
+                   pmb_name = { txt = contract_name };
+                   pmb_expr = {
+                     pmod_desc = Pmod_ident { txt = m_name; loc };
+                   }
+                 };
+                   pstr_loc }]
+           ), [])} :: ast ->
+    let mn = str_of_id m_name in
+    let m_path = Longident.flatten m_name in
+    begin try
+        let contract = find_module ~loc:(loc_of_loc loc) m_path
+            ((StringMap.bindings (filter_contracts acc) |> List.map snd)) in
+        if not @@ is_only_module contract then raise Not_found;
+        let contract = { contract with contract_name } in
+        env.others <- StringMap.add contract_name
+            { contract.ty_env with top_env = Some env } env.others;
+        translate_structure env (Syn_sub_contract contract :: acc) ast
+      with Not_found ->
+        unbound_module loc mn
+    end
 
   | { pstr_desc = Pstr_module {
       pmb_name = { txt = contract_name };

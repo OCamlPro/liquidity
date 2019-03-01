@@ -244,7 +244,7 @@ let rec type_of_const ~loc env = function
       | _ -> assert false
     end
   | CConstr (constr, c) ->
-    let ty, (_, i) = find_constr ~loc constr env.env in
+    let ty, (constr, _, i) = find_constr ~loc constr env.env in
     begin match ty with
       | Tsum (n, l) ->
         let l = List.mapi (fun j ((constr, t) as ct) ->
@@ -458,7 +458,7 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
               field record_name;
         end
       | Tvar _ | Tpartial _ ->
-        let record_ty, (ty, _) =
+        let record_ty, (_, ty, _) =
           try find_label ~loc field env.env
           with Not_found -> error loc "unbound record field %S" field
         in
@@ -471,7 +471,7 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
     mk ?name:exp.name ~loc (Project { field; record }) ty
 
   | SetField { record; field; set_val } ->
-    let record_ty, (exp_ty, _) =
+    let record_ty, (field, exp_ty, _) =
       try find_label ~loc field env.env
       with Not_found -> error loc "unbound record field %S" field
     in
@@ -526,7 +526,13 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
             let desc = Call { contract; amount; entry; arg } in
             mk ?name:exp.name ~loc desc Toperation
           with Not_found ->
-            error loc "contract has no entry point %s" entry';
+            error loc
+              "contract has no entry point %s (available entry points: %a)"
+              entry'
+              (Format.pp_print_list
+                 ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ")
+                 Format.pp_print_string)
+              (List.map (fun e -> e.entry_name) contract_sig.entries_sig);
         end
       | Tvar _ | Tpartial _ ->
         let arg = typecheck env arg in
@@ -964,7 +970,7 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
       | Trecord (rname, rtys) -> rname, rtys
       | _ -> assert false in
     let fields = List.map (fun (label, exp) ->
-        let _, (ty', _) = try
+        let _, (label, ty', _) = try
             find_label ~loc label env.env
           with Not_found -> error loc "unbound label %S" label
         in
@@ -985,7 +991,7 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
 
   | Constructor { constr = Constr constr; arg } ->
     begin try
-        let constr_ty, (arg_ty, _) = find_constr ~loc constr env.env in
+        let constr_ty, (constr, arg_ty, _) = find_constr ~loc constr env.env in
         let arg = typecheck_expected "construtor argument" env arg_ty arg in
         mk ?name:exp.name ~loc (Constructor { constr = Constr constr; arg })
           constr_ty

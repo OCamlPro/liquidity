@@ -151,18 +151,18 @@ let find_constr_ty_name ~loc s env =
 let find_label ~loc s env =
   let n, i = find_label_ty_name ~loc s env in
   let ty = find_type ~loc n env [] in
-  let label_ty = match ty with
-    | Trecord (_, l) -> snd (List.nth l i)
+  let label_name, label_ty = match ty with
+    | Trecord (_, l) -> List.nth l i
     | _ -> assert false in
-  ty, (label_ty, i)
+  ty, (label_name, label_ty, i)
 
 let find_constr ~loc s env =
   let n, i = find_constr_ty_name ~loc s env in
   let ty = find_type ~loc n env [] in
-  let constr_ty = match ty with
-    | Tsum (_, l) -> snd (List.nth l i)
+  let constr_name, constr_ty = match ty with
+    | Tsum (_, l) -> List.nth l i
     | _ -> assert false in
-  ty, (constr_ty, i)
+  ty, (constr_name, constr_ty, i)
 
 let find_extprim ~loc s env =
   let e, found_env = find ~loc s env (fun env -> env.ext_prims) in
@@ -181,3 +181,16 @@ let lookup_global_value ~loc s env =
   | Current_namespace -> raise Not_found
   | Contract_namespace (c, _)  ->
     List.find (fun v -> not v.val_private && v.val_name = s) c.values
+
+let find_contract ~loc s contracts =
+  let path, s = unqualify s in
+  match find_namespace ~loc path contracts with
+  | Current_namespace ->
+    List.find (fun c -> c.contract_name = s) contracts
+  | Contract_namespace (c, _)  ->
+    List.find (fun c -> c.contract_name = s) c.subs
+
+let find_module ~loc path contracts =
+  match find_namespace ~loc path contracts with
+  | Current_namespace -> raise Not_found
+  | Contract_namespace (c, _)  -> c

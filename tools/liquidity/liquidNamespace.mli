@@ -32,12 +32,12 @@ val find_contract_type : loc:location -> string -> env -> contract_sig
 (** Find the type to which a label belongs, returns its normalized
     version together with the type of the field value and its position
     in the record *)
-val find_label : loc:location -> string -> env -> datatype * (datatype * int)
+val find_label : loc:location -> string -> env -> datatype * (string * datatype * int)
 
 (** Find the type to which a constructor belongs, returns its normalized
     version together with the type of the constructor argument and its position
     in the sum type *)
-val find_constr : loc:location -> string -> env -> datatype * (datatype * int)
+val find_constr : loc:location -> string -> env -> datatype * (string * datatype * int)
 
 (** Find a qualified external primitive in the environment *)
 val find_extprim : loc:location -> string -> env -> extprim
@@ -48,3 +48,9 @@ val is_extprim : string -> env -> bool
     another contract *)
 val lookup_global_value :
   loc:location -> string -> typecheck_env -> typed_exp value
+
+val find_contract :
+    loc:location -> string -> 'a contract list -> 'a contract
+
+val find_module :
+    loc:location -> string list -> 'a contract list -> 'a contract

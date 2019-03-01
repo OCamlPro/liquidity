@@ -341,13 +341,13 @@ let rec type_contains_nonlambda_operation ty = match expand ty with
 
 (** Extract the signature of a contract *)
 let sig_of_contract c = {
-  sig_name = None;
+  sig_name = (* None *) Some c.contract_name;
   entries_sig = List.map (fun e -> e.entry_sig) c.entries;
 }
 
 (** Extract the full signature (including storage type) of a contract *)
 let full_sig_of_contract c = {
-  f_sig_name = None;
+  f_sig_name = (* None *) Some c.contract_name;
   f_storage = c.storage;
   f_entries_sig = List.map (fun e -> e.entry_sig) c.entries;
 }
