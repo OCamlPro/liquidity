@@ -13,3 +13,5 @@ open LiquidTypes
 
 (** Compile contract to intermediate michelson representation *)
 val translate : encoded_contract -> loc_michelson_contract
+
+val compile_const : encoded_const -> loc_michelson const

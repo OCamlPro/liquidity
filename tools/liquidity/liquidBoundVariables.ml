@@ -114,11 +114,11 @@ let rec bv code =
       (List.fold_left (fun set (pat, exp) ->
            let bv_exp = bv exp in
            let bv_case = match pat with
-             | CConstr (_constr, var_args) ->
+             | PConstr (_constr, var_args) ->
                List.fold_left (fun set var_arg ->
                    StringSet.remove var_arg set
                  ) bv_exp var_args
-             | CAny -> bv_exp
+             | PAny -> bv_exp
            in
            StringSet.union set bv_case
          ) StringSet.empty cases)
@@ -377,11 +377,11 @@ let rec bound code =
     let bv = List.fold_left (fun set (pat, exp) ->
         let bv_exp = bv exp in
         let bv_case = match pat with
-          | CConstr (_constr, var_args) ->
+          | PConstr (_constr, var_args) ->
             List.fold_left (fun set var_arg ->
                 StringSet.remove var_arg set
               ) bv_exp var_args
-          | CAny -> bv_exp
+          | PAny -> bv_exp
         in
         StringSet.union set bv_case
       ) StringSet.empty cases

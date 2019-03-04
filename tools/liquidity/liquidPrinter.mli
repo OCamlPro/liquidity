@@ -25,7 +25,7 @@ module Liquid : sig
   (** Pretty-print Liquidity type *)
   val string_of_type : datatype -> string
   (** Pretty-print Liquidity constant *)
-  val string_of_const : const -> string
+  val string_of_const : (datatype, 'a) exp const -> string
   (** Pretty-print Liquidity contract *)
   val string_of_contract : typed_contract -> string
   (** Pretty-print typed Liquidity code *)
@@ -38,7 +38,7 @@ module LiquidDebug : sig
   (** Pretty-print Liquidity type *)
   val string_of_type : datatype -> string
   (** Pretty-print Liquidity constant *)
-  val string_of_const : const -> string
+  val string_of_const : ('a, 'b) exp const -> string
   (** Pretty-print Liquidity contract *)
   val string_of_contract : ?debug:bool -> ('a, 'b) exp contract -> string
   (** Pretty-print Liquidity typed contract *)
@@ -57,9 +57,9 @@ module Michelson : sig
   (** Pretty-print Michelson type on a single line *)
   val line_of_type : datatype -> string
   (** Pretty-print Michelson constant *)
-  val string_of_const : const -> string
+  val string_of_const : michelson_exp const -> string
   (** Pretty-print Michelson constant on a single line *)
-  val line_of_const : const -> string
+  val line_of_const : michelson_exp const -> string
   (** Pretty-print intermediate Michelson contract *)
   val string_of_contract : michelson_contract -> string
   (** Pretty-print intermediate Michelson contract on a single line *)

@@ -1294,14 +1294,14 @@ let rec translate_code contracts env exp =
       let arg = translate_code contracts env e in
       let cases = List.map (translate_case contracts env) cases in
       let plus_name, ifplus, minus_name, ifminus = match cases with
-        | [ CConstr ("Plus", [p]), ifplus, ploc;
-            CConstr ("Minus", [m]), ifminus, mloc ]
-        | [ CConstr ("Minus", [m]), ifminus, mloc;
-            CConstr ("Plus", [p]), ifplus, ploc ] ->
+        | [ PConstr ("Plus", [p]), ifplus, ploc;
+            PConstr ("Minus", [m]), ifminus, mloc ]
+        | [ PConstr ("Minus", [m]), ifminus, mloc;
+            PConstr ("Plus", [p]), ifplus, ploc ] ->
           { nname = p; nloc = ploc}, ifplus, { nname = m; nloc = mloc }, ifminus
-        | [ CConstr ("Plus", [p]), ifplus, ploc; CAny, ifminus, mloc ] ->
+        | [ PConstr ("Plus", [p]), ifplus, ploc; PAny, ifminus, mloc ] ->
           { nname = p; nloc = ploc}, ifplus, { nname = "_"; nloc = mloc}, ifminus
-        | [ CConstr ("Minus", [m]), ifminus, mloc; CAny, ifplus, ploc ] ->
+        | [ PConstr ("Minus", [m]), ifminus, mloc; PAny, ifplus, ploc ] ->
           { nname = "_"; nloc = ploc}, ifplus, { nname = m; nloc = mloc }, ifminus
         | _ -> error_loc pexp_loc "match%%nat patterns are Plus _, Minus _"
       in
@@ -1312,22 +1312,22 @@ let rec translate_code contracts env exp =
       let cases = List.map (translate_case contracts env) cases in
       begin
         match cases with
-        | [ CConstr ("None", []), ifnone, _; CConstr ("Some", [s]), ifsome, sloc ]
-        | [ CConstr ("Some", [s]), ifsome, sloc; CConstr ("None", []), ifnone, _ ]
-        | [ CConstr ("Some", [s]), ifsome, sloc; CAny, ifnone, _ ] ->
+        | [ PConstr ("None", []), ifnone, _; PConstr ("Some", [s]), ifsome, sloc ]
+        | [ PConstr ("Some", [s]), ifsome, sloc; PConstr ("None", []), ifnone, _ ]
+        | [ PConstr ("Some", [s]), ifsome, sloc; PAny, ifnone, _ ] ->
           MatchOption {arg; ifnone; some_name = { nname = s; nloc = sloc }; ifsome }
-        | [ CConstr ("None", []), ifnone, _; CAny, ifsome, sloc ] ->
+        | [ PConstr ("None", []), ifnone, _; PAny, ifsome, sloc ] ->
           MatchOption {arg; ifnone;
                        some_name = { nname = "_"; nloc = sloc }; ifsome }
 
-        | [ CConstr ("[]", []), ifnil, _; CConstr ("::", [h; t]), ifcons, htloc ]
-        | [ CConstr ("::", [h; t]), ifcons, htloc; CConstr ("[]", []), ifnil, _ ]
-        | [ CConstr ("::", [h; t]), ifcons, htloc; CAny, ifnil, _ ] ->
+        | [ PConstr ("[]", []), ifnil, _; PConstr ("::", [h; t]), ifcons, htloc ]
+        | [ PConstr ("::", [h; t]), ifcons, htloc; PConstr ("[]", []), ifnil, _ ]
+        | [ PConstr ("::", [h; t]), ifcons, htloc; PAny, ifnil, _ ] ->
           MatchList { arg;
                       head_name = { nname = h; nloc = htloc };
                       tail_name = { nname = t; nloc = htloc };
                       ifcons; ifnil }
-        | [ CConstr ("[]", []), ifnil, _; CAny, ifcons, nloc ] ->
+        | [ PConstr ("[]", []), ifnil, _; PAny, ifcons, nloc ] ->
           MatchList { arg;
                       head_name = { nname = "_head"; nloc };
                       tail_name = { nname = "_tail"; nloc };
@@ -1521,7 +1521,7 @@ and translate_case contracts env case : (pattern * syntax_exp * location) =
     let e = translate_code contracts env e in
     match case.pc_lhs with
     | { ppat_desc = Ppat_any; ppat_loc} ->
-      (CAny, e, loc_of_loc ppat_loc)
+      (PAny, e, loc_of_loc ppat_loc)
     | { ppat_desc =
           Ppat_construct (
             { txt = Lident ("Some" | "::" | "Plus" | "Minus" as c) },
@@ -1533,18 +1533,18 @@ and translate_case contracts env case : (pattern * syntax_exp * location) =
         ppat_loc }  ->
       error_loc ppat_loc "Constructor %S takes no arguments" c
     | { ppat_desc = Ppat_construct ( { txt = name } , None); ppat_loc }  ->
-      (CConstr (str_of_id name, []), e, loc_of_loc ppat_loc)
+      (PConstr (str_of_id name, []), e, loc_of_loc ppat_loc)
     | { ppat_desc =
           Ppat_construct (
             { txt = Lident "::" } ,
             Some { ppat_desc = Ppat_tuple [ p1; p2 ]}
           );
         ppat_loc }  ->
-      (CConstr ("::", [var_of_pat p1; var_of_pat p2]), e, loc_of_loc ppat_loc)
+      (PConstr ("::", [var_of_pat p1; var_of_pat p2]), e, loc_of_loc ppat_loc)
 
     | { ppat_desc = Ppat_construct ({ txt = name } , Some pat); ppat_loc }  ->
       let var_name, _, e = deconstruct_pat env pat e in
-      (CConstr (str_of_id name, [var_name.nname]), e, loc_of_loc ppat_loc)
+      (PConstr (str_of_id name, [var_name.nname]), e, loc_of_loc ppat_loc)
 
     | { ppat_loc } ->
       error_loc ppat_loc "bad pattern"

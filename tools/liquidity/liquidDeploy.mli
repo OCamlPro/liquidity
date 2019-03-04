@@ -13,16 +13,16 @@ type from =
 
 type key_diff =
   | DiffKeyHash of string
-  | DiffKey of LiquidTypes.const
+  | DiffKey of LiquidTypes.typed_const
 
 type big_map_diff_item =
-  | Big_map_add of key_diff * LiquidTypes.const
+  | Big_map_add of key_diff * LiquidTypes.typed_const
   | Big_map_remove of key_diff
 
 type big_map_diff = big_map_diff_item list
 
 type stack_item =
-  | StackConst of LiquidTypes.const
+  | StackConst of LiquidTypes.typed_const
   | StackCode of int
 
 type trace_item = {
@@ -38,12 +38,12 @@ type internal_operation =
   | Transaction of {
       amount : string;
       destination : string;
-      parameters : LiquidTypes.const option;
+      parameters : LiquidTypes.typed_const option;
     }
   | Origination of {
       manager: string ;
       delegate: string option ;
-      script: (LiquidTypes.typed_contract * LiquidTypes.const) option ;
+      script: (LiquidTypes.typed_contract * LiquidTypes.typed_const) option ;
       spendable: bool ;
       delegatable: bool ;
       balance: string ;
@@ -73,14 +73,14 @@ module type S = sig
       big map id the contract contains any *)
   val run :
     from -> string -> string -> string ->
-    (operation list * LiquidTypes.const * big_map_diff option) t
+    (operation list * LiquidTypes.typed_const * big_map_diff option) t
 
   val run_debug :
     from -> string -> string -> string ->
-    (operation list * LiquidTypes.const * big_map_diff option * trace) t
+    (operation list * LiquidTypes.typed_const * big_map_diff option * trace) t
 
   (** Compute the initial storage for a specific script, returns storage data *)
-  val init_storage : from -> string list -> LiquidTypes.const t
+  val init_storage : from -> string list -> LiquidTypes.encoded_const t
 
   (** Forge a deployment operation contract on the Tezos node specified in
       ![LiquidOptions], returns the hex-encoded operation *)
@@ -93,7 +93,7 @@ module type S = sig
     ?delegatable:bool -> ?spendable:bool -> from -> string list ->
     (string * (string, exn) result) t
 
-  val get_storage : from -> string -> LiquidTypes.const t
+  val get_storage : from -> string -> LiquidTypes.typed_const t
 
   (** Forge an operation to call a deploy contract, returns the hex-encoded
       operation *)

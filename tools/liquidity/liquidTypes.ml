@@ -49,38 +49,6 @@ type inline =
   | InDont (** Disable inlining *)
   | InAuto (** Automatic inlining *)
 
-(** Liquidity constants *)
-type const =
-  | CUnit
-  | CBool of bool
-  | CInt of integer
-  | CNat of integer
-  | CTez of tez
-  | CTimestamp of string
-  | CString of string
-  | CBytes of string
-  | CKey of string
-  | CSignature of string
-  | CTuple of const list
-  | CNone
-  | CSome of const
-
-  | CMap of (const * const) list
-  | CBigMap of (const * const) list
-  | CList of const list
-  | CSet of const list
-
-  | CLeft of const
-  | CRight of const
-
-  | CKey_hash of string
-  | CContract of string
-  | CAddress of string
-
-  | CRecord of (string * const) list
-  | CConstr of string * const
-
-
 (** Liquidity types *)
 and datatype =
   (* michelson *)
@@ -797,8 +765,8 @@ type constructor =
 (** A pattern in a pattern-matching construct is either a constructor
     [C (a, b, c)] or a wildcard [_] *)
 type pattern =
-  | CConstr of string * string list
-  | CAny
+  | PConstr of string * string list
+  | PAny
 
 (** Name with source location information *)
 type loc_name = { nname : string; nloc: location }
@@ -821,6 +789,49 @@ type ('ty, 'a) exp = {
                                  (these should not be duplicated) *)
 }
 
+
+(** Liquidity constants *)
+and 'exp const =
+  | CUnit
+  | CBool of bool
+  | CInt of integer
+  | CNat of integer
+  | CTez of tez
+  | CTimestamp of string
+  | CString of string
+  | CBytes of string
+  | CKey of string
+  | CSignature of string
+  | CTuple of 'exp const list
+  | CNone
+  | CSome of 'exp const
+
+  | CMap of ('exp const * 'exp const) list
+  | CBigMap of ('exp const * 'exp const) list
+  | CList of 'exp const list
+  | CSet of 'exp const list
+
+  | CLeft of 'exp const
+  | CRight of 'exp const
+
+  | CKey_hash of string
+  | CContract of string
+  | CAddress of string
+
+  | CRecord of (string * 'exp const) list
+  | CConstr of string * 'exp const
+
+  | CLambda of 'exp lambda
+
+and 'exp lambda = {
+  arg_name: loc_name;
+  arg_ty: datatype;
+  body: 'exp;
+  ret_ty: datatype; (* inferred during typechecking *)
+  recursive: string option;
+}
+
+
 (** Type of raw Liquidity expression descriptions *)
 and ('ty, 'a) exp_desc =
   | Let of { bnd_var: loc_name;
@@ -841,7 +852,7 @@ and ('ty, 'a) exp_desc =
   (** Record projection: {[ record.field ]} *)
 
   | Const of { ty: datatype;
-               const: const }
+               const: ('ty, 'a) exp const }
   (** Constant with its type *)
 
   | Apply of { prim: primitive;
@@ -924,12 +935,7 @@ and ('ty, 'a) exp_desc =
   (** Map-Fold (like map-reduce) over collections with accumulator:
       {[ List.map_fold (fun arg_name -> body) arg acc ]} *)
 
-  | Lambda of { arg_name: loc_name;
-                arg_ty: datatype;
-                body: ('ty, 'a) exp;
-                ret_ty: datatype; (* inferred during typechecking *)
-                recursive: string option;
-              }
+  | Lambda of ('ty, 'a) exp lambda
   (** Pure lambda abstractions:
       {[ fun (arg_name : arg_ty) -> (body : ret_ty) ]} *)
 
@@ -1000,6 +1006,7 @@ and ('ty, 'a) exp_desc =
 type typed
 (** Ghost type for encoded expressions *)
 type encoded
+
 (** Untyped expressions *)
 type syntax_exp = (unit, unit) exp
 (** Typed expressions *)
@@ -1009,12 +1016,22 @@ type encoded_exp = (datatype, encoded) exp
 (** Simplified expressions *)
 type live_exp = (datatype * datatype StringMap.t, encoded) exp
 
+(** Untyped constants *)
+type syntax_const = syntax_exp const
+(** Typed constants *)
+type typed_const = typed_exp const
+(** Endoced constants *)
+type encoded_const = encoded_exp const
+(** Simplified constants *)
+type live_const = live_exp const
 
 (** Smart constructor for Liquidity expressions *)
 let mk =
   let bv = StringSet.empty in
   fun ?name ~loc desc ty ->
     let effect, transfer = match desc with
+      | Const { const = CLambda { body = e }} -> e.effect, false (* e.transfer *)
+
       | Const _
       | Var _ -> false, false
 
@@ -1086,6 +1103,11 @@ let mk =
     { desc; name; loc; ty; bv; effect; transfer }
 
 let rec eq_exp_desc eq_ty eq_var e1 e2 = match e1, e2 with
+  | Const { ty = ty1; const = CLambda l1 },
+    Const { ty = ty2; const = CLambda l2 } ->
+    eq_types ty1 ty2 &&
+    l1.arg_name.nname = l2.arg_name.nname && eq_types l1.arg_ty l2.arg_ty &&
+    eq_types l1.ret_ty l2.ret_ty && eq_exp eq_ty eq_var l1.body l2.body
   | Const c1, Const c2 -> c1.const = c2.const && eq_types c1.ty c2.ty
   | Var v1, Var v2 -> eq_var v1 v2
   | Failwith e1, Failwith e2 -> eq_exp eq_ty eq_var e1 e2
@@ -1214,7 +1236,7 @@ let eq_syntax_exp e1 e2 = eq_exp (fun _ _ -> true) (=) e1 e2
 (** Type of Michelson expression *)
 type michelson_exp =
   | M_INS of string * string list
-  | M_INS_CST of string * datatype * const * string list
+  | M_INS_CST of string * datatype * michelson_exp const * string list
   | M_INS_EXP of string * datatype list * michelson_exp list * string list
 
 (** Intermediate representation for Michelson expressions, the first
@@ -1242,7 +1264,7 @@ type 'a pre_michelson =
   | CDR of string option
   | CDAR of int * string option
   | CDDR of int * string option
-  | PUSH of datatype * const
+  | PUSH of datatype * 'a const
   | PAIR
   | RECORD of string * string option
   | COMPARE
@@ -1406,7 +1428,7 @@ and node_kind =
   | N_TRANSFER
   | N_CALL
   | N_CREATE_CONTRACT of node_exp mic_contract
-  | N_CONST of datatype * const
+  | N_CONST of datatype * node_exp const
   | N_PRIM of string
   | N_FAILWITH
   | N_ARG of node * int

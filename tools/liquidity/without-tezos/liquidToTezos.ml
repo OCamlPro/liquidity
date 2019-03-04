@@ -21,8 +21,14 @@ let convert_contract ~expand (c : loc_michelson_contract) =
   LiquidEmit.emit_contract ~expand c,
   [] (* TODO : loc_table *)
 
-let convert_const (c : const) =
-  failwith "mini version cannot convert const"
+let string_of_const c =
+  LiquidPrinter.Michelson.string_of_const c
+
+let line_of_const c =
+  LiquidPrinter.Michelson.line_of_const c
+
+let convert_const ~expand c =
+  LiquidEmit.emit_const ~expand c
 
 let json_of_contract (c : michelson_contract) =
   failwith "mini version cannot generate json contract"

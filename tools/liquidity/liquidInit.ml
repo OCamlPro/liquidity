@@ -9,7 +9,7 @@
 open LiquidTypes
 
 type init =
-  | Init_constant of LiquidTypes.const
+  | Init_constant of LiquidTypes.encoded_const
   | Init_code of (LiquidTypes.encoded_contract *
                   LiquidTypes.loc_michelson_contract)
 

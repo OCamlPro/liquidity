@@ -37,69 +37,6 @@ let prim_type ~loc ?(annots=[]) name args =
   Micheline.Prim(loc, name, args,
                  if !LiquidOptions.no_annot then [] else annots)
 
-let rec convert_const ~loc expr =
-  let bytes_of_hex s =
-    `Hex (String.sub s 2 (String.length s - 2))
-    |> MBytes.of_hex in
-  match expr with
-  | CInt n -> Micheline.Int (loc, LiquidNumber.mic_of_integer n)
-  | CString s -> Micheline.String (loc, s)
-  | CBytes s -> Micheline.Bytes (loc, bytes_of_hex s)
-  | CUnit -> Micheline.Prim(loc, "Unit", [], [])
-  | CBool true -> Micheline.Prim(loc, "True", [], [])
-  | CBool false -> Micheline.Prim(loc, "False", [], [])
-  | CNone -> Micheline.Prim(loc, "None", [], [])
-
-  | CSome x -> Micheline.Prim(loc, "Some", [convert_const ~loc x], [])
-  | CLeft x -> Micheline.Prim(loc, "Left", [convert_const ~loc x], [])
-  | CRight x -> Micheline.Prim(loc, "Right", [convert_const ~loc x], [])
-
-  | CTuple [] -> assert false
-  | CTuple [_] -> assert false
-  | CTuple [x;y] ->
-    Micheline.Prim(loc, "Pair", [convert_const ~loc x;
-                                 convert_const ~loc y], [])
-  | CTuple (x :: y) ->
-    Micheline.Prim(loc, "Pair", [convert_const ~loc x;
-                                 convert_const ~loc (CTuple y)], [])
-
-  | CList args | CSet args ->
-    Micheline.Seq(loc, List.map (convert_const ~loc) args)
-
-  | CMap args | CBigMap args ->
-    Micheline.Seq(loc,
-                  List.map (fun (x,y) ->
-                      Micheline.Prim(loc, "Elt", [convert_const ~loc x;
-                                                  convert_const ~loc y], []
-                                    ))
-                    args)
-
-  | CNat n -> Micheline.Int (loc, LiquidNumber.mic_of_integer n)
-  | CTez n -> Micheline.Int (loc, LiquidNumber.mic_mutez_of_tez n)
-           (*
-  | CTez tez
-    |CKey _|
-   | CSignature _|CLeft _|CRight _)
-            *)
-  | CTimestamp s -> Micheline.String (loc, s)
-  | CKey s when s.[0] = '0' -> Micheline.Bytes (loc, bytes_of_hex s)
-  | CKey s -> Micheline.String (loc, s)
-  | CKey_hash s when s.[0] = '0' -> Micheline.Bytes (loc, bytes_of_hex s)
-  | CKey_hash s -> Micheline.String (loc, s)
-  | CContract s when s.[0] = '0' -> Micheline.Bytes (loc, bytes_of_hex s)
-  | CContract s -> Micheline.String (loc, s)
-  | CAddress s when s.[0] = '0' -> Micheline.Bytes (loc, bytes_of_hex s)
-  | CAddress s -> Micheline.String (loc, s)
-  | CSignature s when s.[0] = '0' -> Micheline.Bytes (loc, bytes_of_hex s)
-  | CSignature s -> Micheline.String (loc, s)
-
-  | CRecord fields ->
-    convert_const ~loc (CTuple (List.map snd fields))
-
-  | _ ->
-    LiquidLoc.raise_error ~loc:(fst loc) "to-tezos: unimplemented const:\n%s%!"
-      (LiquidPrinter.Michelson.string_of_const expr)
-
 
 let rec convert_type ~loc expr =
   match expr with
@@ -178,13 +115,80 @@ and convert_composed_type ty_c ~loc name labels =
     prim_type ~loc ~annots ty_c
       [ty; convert_composed_type ty_c ~loc "" labels]
 
-let rec convert_code expand expr =
+let rec convert_const ~loc expand (expr : loc_michelson const) =
+  let bytes_of_hex s =
+    `Hex (String.sub s 2 (String.length s - 2))
+    |> MBytes.of_hex in
+  match expr with
+  | CInt n -> Micheline.Int (loc, LiquidNumber.mic_of_integer n)
+  | CString s -> Micheline.String (loc, s)
+  | CBytes s -> Micheline.Bytes (loc, bytes_of_hex s)
+  | CUnit -> Micheline.Prim(loc, "Unit", [], [])
+  | CBool true -> Micheline.Prim(loc, "True", [], [])
+  | CBool false -> Micheline.Prim(loc, "False", [], [])
+  | CNone -> Micheline.Prim(loc, "None", [], [])
+
+  | CSome x -> Micheline.Prim(loc, "Some", [convert_const ~loc expand x], [])
+  | CLeft x -> Micheline.Prim(loc, "Left", [convert_const ~loc expand x], [])
+  | CRight x -> Micheline.Prim(loc, "Right", [convert_const ~loc expand x], [])
+
+  | CTuple [] -> assert false
+  | CTuple [_] -> assert false
+  | CTuple [x;y] ->
+    Micheline.Prim(loc, "Pair", [convert_const ~loc expand x;
+                                 convert_const ~loc expand y], [])
+  | CTuple (x :: y) ->
+    Micheline.Prim(loc, "Pair", [convert_const ~loc expand x;
+                                 convert_const ~loc expand (CTuple y)], [])
+
+  | CList args | CSet args ->
+    Micheline.Seq(loc, List.map (convert_const ~loc expand) args)
+
+  | CMap args | CBigMap args ->
+    Micheline.Seq(loc,
+                  List.map (fun (x,y) ->
+                      Micheline.Prim(loc, "Elt", [convert_const ~loc expand x;
+                                                  convert_const ~loc expand y], []
+                                    ))
+                    args)
+
+  | CNat n -> Micheline.Int (loc, LiquidNumber.mic_of_integer n)
+  | CTez n -> Micheline.Int (loc, LiquidNumber.mic_mutez_of_tez n)
+           (*
+  | CTez tez
+    |CKey _|
+   | CSignature _|CLeft _|CRight _)
+            *)
+  | CTimestamp s -> Micheline.String (loc, s)
+  | CKey s when s.[0] = '0' -> Micheline.Bytes (loc, bytes_of_hex s)
+  | CKey s -> Micheline.String (loc, s)
+  | CKey_hash s when s.[0] = '0' -> Micheline.Bytes (loc, bytes_of_hex s)
+  | CKey_hash s -> Micheline.String (loc, s)
+  | CContract s when s.[0] = '0' -> Micheline.Bytes (loc, bytes_of_hex s)
+  | CContract s -> Micheline.String (loc, s)
+  | CAddress s when s.[0] = '0' -> Micheline.Bytes (loc, bytes_of_hex s)
+  | CAddress s -> Micheline.String (loc, s)
+  | CSignature s when s.[0] = '0' -> Micheline.Bytes (loc, bytes_of_hex s)
+  | CSignature s -> Micheline.String (loc, s)
+
+  | CRecord fields ->
+    convert_const ~loc expand (CTuple (List.map snd fields))
+
+  | CLambda lam ->
+    convert_code expand lam.body
+
+  | _ ->
+    LiquidLoc.raise_error ~loc:(fst loc) "to-tezos: unimplemented const:\n%s%!"
+      "TODO"
+      (* (LiquidPrinter.Michelson.string_of_loc_michelson expr) *)
+
+and convert_code expand expr =
   let name = expr.loc_name in
   let ii = ii ~loc:expr.loc in
   let seq = seq ~loc:(expr.loc, None) in
   let prim = prim ~loc:(expr.loc, None) in
-  let convert_type = convert_type ~loc:(expr.loc, None) in
-  let convert_const = convert_const ~loc:(expr.loc, None) in
+  let convert_type ty = convert_type ~loc:(expr.loc, None) ty in
+  let convert_const c = convert_const ~loc:(expr.loc, None) expand c in
   match expr.ins with
   | RENAME a -> prim "RENAME" [] a
   | SEQ exprs -> seq (List.map (convert_code expand) exprs)
@@ -458,6 +462,12 @@ let const_encoding =
     Data_encoding.string
 (* Micheline.erased_encoding 0 Data_encoding.string *)
 
+
+let string_of_const c = string_of_expression c
+
+let line_of_const c =
+  linify (string_of_const c)
+
 let json_of_const c =
   Data_encoding.Json.construct const_encoding c
   |> Data_encoding_ezjsonm.to_string
@@ -500,8 +510,9 @@ let read_tezos_json filename =
   nodes, env
 
 
-let convert_const c =
-  convert_const ~loc:(LiquidLoc.noloc, None) c |> Micheline.strip_locations
+let convert_const ~expand c =
+  convert_const ~loc:(LiquidLoc.noloc, None) expand c
+  |> Micheline.strip_locations
 
 let convert_type ty =
   convert_type ~loc:(LiquidLoc.noloc, None) ty |> Micheline.strip_locations

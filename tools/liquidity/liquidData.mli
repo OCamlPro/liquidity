@@ -9,11 +9,11 @@
 
 open LiquidTypes
 
-val default_const : datatype -> const
+val default_const : datatype -> (datatype, 'a) exp const
 
 (** same as [default_const] but with empty values for collections *)
-val default_empty_const : datatype -> const
+val default_empty_const : datatype -> (datatype, 'a) exp const
 
-val translate_const_exp : encoded_exp -> const
+val translate_const_exp : encoded_exp -> encoded_const
 
-val translate : env -> full_contract_sig -> string -> datatype -> const
+val translate : env -> full_contract_sig -> string -> datatype -> encoded_const

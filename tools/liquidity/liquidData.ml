@@ -50,10 +50,15 @@ let rec default_const = function
   | Tsum (_, (c, ty) :: _) ->
     CConstr (c, default_const ty)
 
+  | Tlambda (arg_ty, ret_ty) as ty ->
+    CLambda { arg_ty; ret_ty; recursive = None;
+              arg_name = { nname = "_"; nloc = noloc };
+              body = mk ~loc:noloc
+                  (Const { ty = ret_ty; const = default_const ret_ty }) ty }
+
   | Tsum (_, [])
   | Tfail
   | Tclosure _
-  | Tlambda _
   | Toperation -> raise Not_found
   | Tvar _ | Tpartial _ -> raise Not_found
 
@@ -90,10 +95,19 @@ let rec default_empty_const = function
   | Tsum (_, (c, ty) :: _) ->
     CConstr (c, default_empty_const ty)
 
+
+  | Tlambda (arg_ty, ret_ty) as ty ->
+    CLambda { arg_ty; ret_ty; recursive = None;
+              arg_name = { nname = "_"; nloc = noloc };
+              body = mk ~loc:noloc
+                  (Failwith
+                     (mk ~loc:noloc (Const { ty = ret_ty; const = CUnit })
+                        Tunit
+                     )) ty }
+
   | Tsum (_, [])
   | Tfail
   | Tclosure _
-  | Tlambda _
   | Toperation -> raise Not_found
   | Tvar _ | Tpartial _ -> raise Not_found
 
@@ -122,6 +136,8 @@ let rec translate_const_exp (exp : encoded_exp) =
 
   | TypeAnnot { e } -> translate_const_exp e
 
+  | Lambda lam -> CLambda lam
+
   | Apply _
   | Var _
   | SetField _
@@ -138,7 +154,6 @@ let rec translate_const_exp (exp : encoded_exp) =
   | Fold _
   | Map _
   | MapFold _
-  | Lambda _
   | Closure _
   | MatchVariant _
   | Failwith _

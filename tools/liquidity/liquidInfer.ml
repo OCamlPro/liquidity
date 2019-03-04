@@ -433,10 +433,10 @@ let make_type_eqn loc overloads params =
 
 let rec find_variant_type ~loc env = function
   | [] -> None
-  | (CAny, _) :: cases -> find_variant_type ~loc env cases
-  | (CConstr (("Left"|"Right"), _), _) :: _ ->
+  | (PAny, _) :: cases -> find_variant_type ~loc env cases
+  | (PConstr (("Left"|"Right"), _), _) :: _ ->
     Some (Tor (fresh_tvar (), fresh_tvar ()))
-  | (CConstr (c, _), _) :: _ ->
+  | (PConstr (c, _), _) :: _ ->
     try Some (fst (LiquidNamespace.find_constr ~loc c env.env))
     with Not_found -> None
 

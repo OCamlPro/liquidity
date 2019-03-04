@@ -127,143 +127,6 @@ let rec get_tyo ty = match ty with
   | None -> None
   | Some ty -> Some (get_type ty)
 
-let rec convert_const env ?ty expr =
-  let ty = get_tyo ty in
-  match expr with
-  | Int (_loc, n) ->
-    begin match ty with
-      | Some Tnat -> CNat (LiquidNumber.integer_of_mic n)
-      | Some Tint | None -> CInt (LiquidNumber.integer_of_mic n)
-      | Some Ttez -> CTez (LiquidNumber.tez_of_mic_mutez n)
-      | Some ty -> wrong_type env expr ty
-    end
-
-  | String (_loc, s) ->
-    begin match ty with
-      | Some Ttez ->
-        CTez (LiquidNumber.tez_of_mic_mutez (Z.of_string s))
-      | Some Ttimestamp -> CTimestamp s
-      | Some Tkey -> CKey s
-      | Some Tkey_hash -> CKey_hash s
-      | Some Tcontract _ -> CContract s
-      | Some Taddress -> CAddress s
-      | Some Tsignature -> CSignature s
-      | Some Tstring | None -> CString s
-      | Some ty -> wrong_type env expr ty
-    end
-
-  | Bytes (_loc, s) ->
-    let to_hex s = "0x" ^ Hex.show (MBytes.to_hex s) in
-    begin match ty with
-      | None | Some Tbytes ->
-        CBytes (to_hex s)
-      | Some Tkey ->
-        (* CKey Ed25519.Public_key.(MBytes.to_string s |> of_bytes |> to_b58check) *)
-        CKey (to_hex s)
-      | Some Tkey_hash ->
-        (* CKey_hash Ed25519.Public_key_hash.(of_bytes_exn s |> to_b58check) *)
-        CKey_hash (to_hex s)
-      | Some Tsignature ->
-        (* CSignature Ed25519.Signature.(to_b58check s) *)
-        CSignature (to_hex s)
-      | Some Taddress ->
-        CAddress (to_hex s)
-      | Some (Tcontract _) ->
-        CContract (to_hex s)
-      | Some ty -> wrong_type env expr ty
-    end
-
-  | Prim(_, "Unit", [], _debug) -> CUnit
-  | Prim(_, "True", [], _debug) -> CBool true
-  | Prim(_, "False", [], _debug) -> CBool false
-
-  | Prim(_, "None", [], _debug) -> CNone
-  | Prim(_, "Some", [x], _debug) ->
-    begin match ty with
-      | None -> CSome (convert_const env x)
-      | Some (Toption ty) -> CSome (convert_const env ~ty x)
-      | Some ty -> wrong_type env expr ty
-    end
-
-  | Prim(_, "Left", [x], _debug) ->
-    begin match ty with
-      | Some (Tsum (tname, (c, ty):: _)) ->
-        CConstr (c, convert_const env ~ty x)
-      | Some (Tor (ty, _)) -> CLeft (convert_const env ~ty x)
-      | None -> CLeft (convert_const env x)
-      | Some ty -> wrong_type env expr ty
-    end
-
-  | Prim(_, "Right", [x], _debug) ->
-    begin match ty with
-      | Some (Tsum (tname, [_; (c, ty)])) ->
-        CConstr (c, convert_const env ~ty x)
-      | Some (Tsum (tname, _ :: rconstrs)) ->
-        convert_const env ~ty:(Tsum(tname, rconstrs)) x
-      | Some (Tor (_, ty)) -> CRight (convert_const env ~ty x)
-      | None -> CRight (convert_const env x)
-      | Some ty -> wrong_type env expr ty
-    end
-
-  | Prim(_, "Pair", [x;y], _debug) ->
-    begin match ty with
-      | Some (Trecord (tname, [fx, tyx; fy, tyy])) ->
-        CRecord [fx, convert_const env ~ty:tyx x;
-                 fy, convert_const env ~ty:tyy y]
-      | Some (Trecord (tname, (f, ty):: rfields) as ty') ->
-        begin match convert_const env ~ty:(Trecord (tname, rfields)) y with
-          | CRecord fields -> CRecord ((f, convert_const env ~ty x) :: fields)
-          | _ -> wrong_type env expr ty'
-        end
-      | Some (Ttuple [tyx;tyy]) ->
-        CTuple [convert_const env ~ty:tyx x; convert_const env ~ty:tyy y]
-      | None ->
-        CTuple [convert_const env x; convert_const env y]
-      | Some (Ttuple (ty :: r) as ty') ->
-        begin match convert_const env ~ty:(Ttuple r) y with
-          | CTuple l -> CTuple (convert_const env ~ty x :: l)
-          | _ -> wrong_type env expr ty'
-        end
-      | Some ty -> wrong_type env expr ty
-    end
-
-  | Seq(_, elems) ->
-    begin match ty with
-      | Some (Tlist ty) ->
-        CList (List.map (convert_const ~ty env) elems)
-      | Some (Tset ty) ->
-        CSet (List.map (convert_const ~ty env) elems)
-      | Some (Tmap (ty_k, ty_e)) ->
-        CMap (List.map (function
-            | Prim(_, "Elt", [k;e], _debug) ->
-              convert_const env ~ty:ty_k k, convert_const env ~ty:ty_e e
-            | expr ->
-              unknown_expr env "convert_const map element" expr
-          ) elems)
-      | Some (Tbigmap (ty_k, ty_e)) ->
-        CBigMap (List.map (function
-            | Prim(_, "Elt", [k;e], _debug) ->
-              convert_const env ~ty:ty_k k, convert_const env ~ty:ty_e e
-            | expr ->
-              unknown_expr env "convert_const big map element" expr
-          ) elems)
-      | None ->
-        CList (List.map (convert_const env) elems)
-      | Some ty ->  wrong_type env expr ty
-    end
-
-  | Prim(_, "Elt", [k;e], _debug) ->
-    begin match ty with
-      | Some (Tmap (ty_k, ty_e)) ->
-        CMap [convert_const env ~ty:ty_k k, convert_const env ~ty:ty_e e]
-      | None ->
-        CMap [convert_const env k, convert_const env e]
-      | Some ty ->
-        wrong_type env expr ty
-    end
-
-  | _ -> unknown_expr env "convert_const" expr
-
 let name_of_annots annots =
   let exception Found of string in
   try
@@ -503,7 +366,157 @@ let rec expand expr =
     | Int _ | String _ | Bytes _ as atom -> atom
 
 
-let rec convert_code env expr =
+let rec convert_const env ?ty expr =
+  let ty = get_tyo ty in
+  let loc = match expr with
+    | Int (i, _) | String (i, _) | Bytes (i, _)
+    | Prim (i, _, _, _) | Seq (i, _) ->
+      loc_of_int env i in
+  let convert_const env ?ty e =
+    fst (convert_const env ?ty e) in
+  let c = match expr with
+    | Int (_, n) ->
+      begin match ty with
+        | Some Tnat -> CNat (LiquidNumber.integer_of_mic n)
+        | Some Tint | None -> CInt (LiquidNumber.integer_of_mic n)
+        | Some Ttez -> CTez (LiquidNumber.tez_of_mic_mutez n)
+        | Some ty -> wrong_type env expr ty
+      end
+
+    | String (_, s) ->
+      begin match ty with
+        | Some Ttez ->
+          CTez (LiquidNumber.tez_of_mic_mutez (Z.of_string s))
+        | Some Ttimestamp -> CTimestamp s
+        | Some Tkey -> CKey s
+        | Some Tkey_hash -> CKey_hash s
+        | Some Tcontract _ -> CContract s
+        | Some Taddress -> CAddress s
+        | Some Tsignature -> CSignature s
+        | Some Tstring | None -> CString s
+        | Some ty -> wrong_type env expr ty
+      end
+
+    | Bytes (_, s) ->
+      let to_hex s = "0x" ^ Hex.show (MBytes.to_hex s) in
+      begin match ty with
+        | None | Some Tbytes ->
+          CBytes (to_hex s)
+        | Some Tkey ->
+          (* CKey Ed25519.Public_key.(MBytes.to_string s |> of_bytes |> to_b58check) *)
+          CKey (to_hex s)
+        | Some Tkey_hash ->
+          (* CKey_hash Ed25519.Public_key_hash.(of_bytes_exn s |> to_b58check) *)
+          CKey_hash (to_hex s)
+        | Some Tsignature ->
+          (* CSignature Ed25519.Signature.(to_b58check s) *)
+          CSignature (to_hex s)
+        | Some Taddress ->
+          CAddress (to_hex s)
+        | Some (Tcontract _) ->
+          CContract (to_hex s)
+        | Some ty -> wrong_type env expr ty
+      end
+
+    | Prim(_, "Unit", [], _debug) -> CUnit
+    | Prim(_, "True", [], _debug) -> CBool true
+    | Prim(_, "False", [], _debug) -> CBool false
+
+    | Prim(_, "None", [], _debug) -> CNone
+    | Prim(_, "Some", [x], _debug) ->
+      begin match ty with
+        | None -> CSome (convert_const env x)
+        | Some (Toption ty) -> CSome (convert_const env ~ty x)
+        | Some ty -> wrong_type env expr ty
+      end
+
+    | Prim(_, "Left", [x], _debug) ->
+      begin match ty with
+        | Some (Tsum (tname, (c, ty):: _)) ->
+          CConstr (c, convert_const env ~ty x)
+        | Some (Tor (ty, _)) -> CLeft (convert_const env ~ty x)
+        | None -> CLeft (convert_const env x)
+        | Some ty -> wrong_type env expr ty
+      end
+
+    | Prim(_, "Right", [x], _debug) ->
+      begin match ty with
+        | Some (Tsum (tname, [_; (c, ty)])) ->
+          CConstr (c, convert_const env ~ty x)
+        | Some (Tsum (tname, _ :: rconstrs)) ->
+          convert_const env ~ty:(Tsum(tname, rconstrs)) x
+        | Some (Tor (_, ty)) -> CRight (convert_const env ~ty x)
+        | None -> CRight (convert_const env x)
+        | Some ty -> wrong_type env expr ty
+      end
+
+    | Prim(_, "Pair", [x;y], _debug) ->
+      begin match ty with
+        | Some (Trecord (tname, [fx, tyx; fy, tyy])) ->
+          CRecord [fx, convert_const env ~ty:tyx x;
+                   fy, convert_const env ~ty:tyy y]
+        | Some (Trecord (tname, (f, ty):: rfields) as ty') ->
+          begin match convert_const env ~ty:(Trecord (tname, rfields)) y with
+            | CRecord fields -> CRecord ((f, convert_const env ~ty x) :: fields)
+            | _ -> wrong_type env expr ty'
+          end
+        | Some (Ttuple [tyx;tyy]) ->
+          CTuple [convert_const env ~ty:tyx x; convert_const env ~ty:tyy y]
+        | None ->
+          CTuple [convert_const env x; convert_const env y]
+        | Some (Ttuple (ty :: r) as ty') ->
+          begin match convert_const env ~ty:(Ttuple r) y with
+            | CTuple l -> CTuple (convert_const env ~ty x :: l)
+            | _ -> wrong_type env expr ty'
+          end
+        | Some ty -> wrong_type env expr ty
+      end
+
+    | Seq(_, elems) ->
+      begin match ty with
+        | Some (Tlist ty) ->
+          CList (List.map (convert_const ~ty env) elems)
+        | Some (Tset ty) ->
+          CSet (List.map (convert_const ~ty env) elems)
+        | Some (Tmap (ty_k, ty_e)) ->
+          CMap (List.map (function
+              | Prim(_, "Elt", [k;e], _debug) ->
+                convert_const env ~ty:ty_k k, convert_const env ~ty:ty_e e
+              | expr ->
+                unknown_expr env "convert_const map element" expr
+            ) elems)
+        | Some (Tbigmap (ty_k, ty_e)) ->
+          CBigMap (List.map (function
+              | Prim(_, "Elt", [k;e], _debug) ->
+                convert_const env ~ty:ty_k k, convert_const env ~ty:ty_e e
+              | expr ->
+                unknown_expr env "convert_const big map element" expr
+            ) elems)
+        | Some (Tlambda (arg_ty, ret_ty)) ->
+          CLambda { arg_name = { nname = "_" ; nloc = loc };
+                    recursive = None;
+                    arg_ty; ret_ty;
+                    body = convert_code env expr }
+        | None ->
+          CList (List.map (convert_const env) elems)
+        | Some ty ->  wrong_type env expr ty
+      end
+
+    | Prim(_, "Elt", [k;e], _debug) ->
+      begin match ty with
+        | Some (Tmap (ty_k, ty_e)) ->
+          CMap [convert_const env ~ty:ty_k k, convert_const env ~ty:ty_e e]
+        | None ->
+          CMap [convert_const env k, convert_const env e]
+        | Some ty ->
+          wrong_type env expr ty
+      end
+
+    | _ -> unknown_expr env "convert_const" expr
+  in
+  (c, loc)
+
+and convert_code env expr =
   match expr with
   | Seq (index, exprs) ->
     mic_loc env index []
@@ -599,9 +612,9 @@ let rec convert_code env expr =
   | Prim(index, "PUSH", [ ty; cst ], annot) ->
     let ty = convert_type env ty in
     begin match get_type ty, convert_const env ~ty cst with
-      | Tnat, CInt n ->
+      | Tnat, (CInt n, _) ->
         mic_loc env index annot (PUSH (Tnat, CNat n))
-      | ty, cst ->
+      | ty, (cst, _) ->
         mic_loc env index annot (PUSH (ty, cst))
     end
   | Prim(index, "PACK", [], annot) ->

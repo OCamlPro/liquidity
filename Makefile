@@ -38,7 +38,7 @@ doc:
 # All of these tests must be run with with_tezos=true
 
 NTESTS=42
-NREVTESTS=9
+NREVTESTS=10
 SIMPLE_TESTS=`seq -f 'test%.0f' 0 $(NTESTS)`
 MORE_TESTS=test_ifcons test_if test_loop test_option test_transfer test_call test_left \
   test_extfun test_left_constr test_closure test_closure2 test_closure3 \

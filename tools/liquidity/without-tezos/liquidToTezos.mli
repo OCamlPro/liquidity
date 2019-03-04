@@ -21,7 +21,8 @@ val convert_contract :
   LiquidTezosTypes.contract * loc_table
 
 (** Convert a Michelson constant to Micheline one *)
-val convert_const : LiquidTypes.const -> LiquidTezosTypes.expr
+val convert_const :
+  expand:bool -> LiquidTypes.loc_michelson LiquidTypes.const -> LiquidTezosTypes.expr
 
 (** {2 Pretty printing Micheline } *)
 
@@ -35,7 +36,11 @@ val json_of_contract : LiquidTezosTypes.contract -> string
 
 val contract_of_json : string -> LiquidTezosTypes.contract
 val contract_of_ezjson : LiquidTezosTypes.json -> LiquidTezosTypes.contract
+
+val line_of_const : LiquidTezosTypes.expr -> string
+val string_of_const : LiquidTezosTypes.expr -> string
 val json_of_const : LiquidTezosTypes.expr -> string
+
 val const_of_json : string -> LiquidTezosTypes.expr
 val const_of_ezjson : LiquidTezosTypes.json -> LiquidTezosTypes.expr
 

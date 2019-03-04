@@ -11,11 +11,41 @@ open LiquidTypes
 
 let mk ?name ~loc (desc: (datatype, typed) exp_desc) ty = mk ?name ~loc desc ty
 
-let rec decode ( exp : encoded_exp ) : typed_exp =
+let rec decode_const (c : encoded_const) : typed_const = match c with
+  | ( CUnit | CBool _ | CInt _ | CNat _ | CTez _ | CTimestamp _ | CString _
+    | CBytes _ | CKey _ | CContract _ | CSignature _ | CNone  | CKey_hash _
+    | CAddress _ ) as c -> c
+
+  | CSome x -> CSome (decode_const x)
+  | CLeft x -> CLeft (decode_const x)
+  | CRight x -> CRight (decode_const x)
+
+  | CTuple xs -> CTuple (List.map (decode_const) xs)
+  | CList xs -> CList (List.map (decode_const) xs)
+  | CSet xs -> CSet (List.map (decode_const) xs)
+
+  | CMap l ->
+    CMap (List.map (fun (x,y) -> decode_const x, decode_const y) l)
+
+  | CBigMap l ->
+    CBigMap (List.map (fun (x,y) -> decode_const x, decode_const y) l)
+
+  | CRecord labels ->
+    CRecord (List.map (fun (f, x) -> f, decode_const x) labels)
+
+  | CConstr (constr, x) ->
+    CConstr (constr, decode_const x)
+
+  | CLambda { arg_name; arg_ty; body; ret_ty; recursive } ->
+    let body = decode body in
+    CLambda { arg_name; arg_ty; body; ret_ty; recursive }
+
+and decode ( exp : encoded_exp ) : typed_exp =
   let loc = exp.loc in
   match exp.desc with
-  | Const c ->
-    mk ?name:exp.name ~loc (Const c) exp.ty
+  | Const { ty; const } ->
+    let const = decode_const const in
+    mk ?name:exp.name ~loc (Const { ty; const }) exp.ty
 
   | Let { bnd_var; inline; bnd_val; body } ->
     let bnd_val = decode bnd_val in
@@ -194,7 +224,7 @@ let rec decode ( exp : encoded_exp ) : typed_exp =
 (* Recover entry point from a pattern matchin branch *)
 and entry_of_case param_constrs top_storage (pat, body) =
   match pat, body.desc with
-  | CConstr (s, [parameter_name]),
+  | PConstr (s, [parameter_name]),
     Let { bnd_var = { nname = storage_name };
           bnd_val = { desc = Var var_storage };
           body = code }
@@ -210,7 +240,7 @@ and entry_of_case param_constrs top_storage (pat, body) =
       };
       code = decode code;
     }
-  | CConstr (s, [parameter_name]), _
+  | PConstr (s, [parameter_name]), _
     when is_entry_case s ->
     let entry_name = entry_name_of_case s in
     let parameter = List.assoc s param_constrs in
@@ -233,7 +263,7 @@ and decode_entries param_constrs top_parameter top_storage values exp =
   | MatchVariant { arg = { desc = Var var_parameter}; cases }
     when var_parameter = top_parameter &&
          List.for_all (function
-             | CConstr (s, _), _ -> is_entry_case s
+             | PConstr (s, _), _ -> is_entry_case s
              | _ -> false) cases
     ->
     List.rev values, List.map (entry_of_case param_constrs top_storage) cases

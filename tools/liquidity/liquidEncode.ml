@@ -308,70 +308,6 @@ let encode_parameter_type env ty =
     error (noloc env) "big maps are not allowed in parameter type";
   ty
 
-(* Encode a constant: constructors are turned into (netsed) Left/Right
-   variant values *)
-let rec encode_const env c = match c with
-  | CUnit | CBool _ | CInt _ | CNat _ | CTez _ | CTimestamp _ | CString _
-  | CBytes _ | CKey _ | CContract _ | CSignature _ | CNone  | CKey_hash _
-  | CAddress _ -> c
-
-  | CSome x -> CSome (encode_const env x)
-  | CLeft x -> CLeft (encode_const env x)
-  | CRight x -> CRight (encode_const env x)
-
-  | CTuple xs -> CTuple (List.map (encode_const env) xs)
-  | CList xs -> CList (List.map (encode_const env) xs)
-  | CSet xs -> CSet (List.map (encode_const env) xs)
-
-  | CMap l ->
-    CMap (List.map (fun (x,y) -> encode_const env x, encode_const env y) l)
-
-  | CBigMap l ->
-    CBigMap (List.map (fun (x,y) -> encode_const env x, encode_const env y) l)
-
-  | CRecord labels when env.decompiling ->
-    CRecord (List.map (fun (f, x) -> f, encode_const env x) labels)
-
-  | CRecord labels ->
-    CTuple (List.map (fun (_, x) -> encode_const env x) labels)
-
-  | CConstr (constr, x) when env.decompiling ->
-    CConstr (constr, encode_const env x)
-
-  | CConstr (constr, x) when is_entry_case constr ->
-    let entry_name = entry_name_of_case constr in
-    let rec iter entries =
-      match entries with
-      | [] -> assert false
-      | [e] ->
-        if e.entry_name <> entry_name then
-          error (noloc env)  "unknown entry point %s" entry_name;
-        encode_const env x
-      | e :: entries ->
-        if e.entry_name = entry_name then CLeft (encode_const env x)
-        else CRight (iter entries)
-    in
-    iter env.t_contract_sig.f_entries_sig
-
-  | CConstr (constr, x) ->
-    try
-      let constr_ty, (_, _, constr_pos) =
-        find_constr ~loc:(noloc env) constr env.env in
-      (* This is a new instance of the type but we just look at the
-         constructors *)
-      let nb_constrs = match constr_ty with
-        | Tsum (sum_name, constrs) -> List.length constrs
-        | _ -> raise Not_found in
-      let rec mk pos nb_constrs c =
-        match pos, nb_constrs with
-        | 0, 1 -> c
-        | 0, _ -> CLeft c
-        | pos, _ when pos > 0 -> CRight (mk (pos - 1) (nb_constrs - 1) c)
-        | _ -> assert false in
-      mk constr_pos nb_constrs (encode_const env x)
-    with Not_found ->
-      error (noloc env)  "unknown constructor %s" constr
-
 
 (* Unfortunately, operations are not allowed in Michelson constants,
    so when they appear in one, we have to turn them to non constant
@@ -529,8 +465,84 @@ let register_inlining_value env v =
     register_inlining ~loc env v.val_name count v.inline v.val_exp
   with Not_found -> ()
 
+(* Encode a constant: constructors are turned into (netsed) Left/Right
+   variant values *)
+let rec encode_const env (c : typed_const) : encoded_const = match c with
+  | ( CUnit | CBool _ | CInt _ | CNat _ | CTez _ | CTimestamp _ | CString _
+    | CBytes _ | CKey _ | CContract _ | CSignature _ | CNone  | CKey_hash _
+    | CAddress _ ) as c -> c
+
+  | CSome x -> CSome (encode_const env x)
+  | CLeft x -> CLeft (encode_const env x)
+  | CRight x -> CRight (encode_const env x)
+
+  | CTuple xs -> CTuple (List.map (encode_const env) xs)
+  | CList xs -> CList (List.map (encode_const env) xs)
+  | CSet xs -> CSet (List.map (encode_const env) xs)
+
+  | CMap l ->
+    CMap (List.map (fun (x,y) -> encode_const env x, encode_const env y) l)
+
+  | CBigMap l ->
+    CBigMap (List.map (fun (x,y) -> encode_const env x, encode_const env y) l)
+
+  | CRecord labels when env.decompiling ->
+    CRecord (List.map (fun (f, x) -> f, encode_const env x) labels)
+
+  | CRecord labels ->
+    CTuple (List.map (fun (_, x) -> encode_const env x) labels)
+
+  | CConstr (constr, x) when env.decompiling ->
+    CConstr (constr, encode_const env x)
+
+  | CConstr (constr, x) when is_entry_case constr ->
+    let entry_name = entry_name_of_case constr in
+    let rec iter entries =
+      match entries with
+      | [] -> assert false
+      | [e] ->
+        if e.entry_name <> entry_name then
+          error (noloc env)  "unknown entry point %s" entry_name;
+        encode_const env x
+      | e :: entries ->
+        if e.entry_name = entry_name then CLeft (encode_const env x)
+        else CRight (iter entries)
+    in
+    iter env.t_contract_sig.f_entries_sig
+
+  | CConstr (constr, x) ->
+    begin try
+        let constr_ty, (_, _, constr_pos) =
+          find_constr ~loc:(noloc env) constr env.env in
+        (* This is a new instance of the type but we just look at the
+           constructors *)
+        let nb_constrs = match constr_ty with
+          | Tsum (sum_name, constrs) -> List.length constrs
+          | _ -> raise Not_found in
+        let rec mk pos nb_constrs c =
+          match pos, nb_constrs with
+          | 0, 1 -> c
+          | 0, _ -> CLeft c
+          | pos, _ when pos > 0 -> CRight (mk (pos - 1) (nb_constrs - 1) c)
+          | _ -> assert false in
+        mk constr_pos nb_constrs (encode_const env x)
+      with Not_found ->
+        error (noloc env)  "unknown constructor %s" constr
+    end
+
+  | CLambda lam ->
+    let enc_lam_exp =
+      encode env
+        (mk_typed ~loc:(noloc env)
+           (Lambda lam) (Tlambda (lam.arg_ty, lam.ret_ty))) in
+    match enc_lam_exp.desc with
+    | Lambda l -> CLambda l
+    | Closure _ ->
+      error (noloc env) "constant lambdas cannot be closures"
+    | _ -> assert false
+
 (* Encode a Liquidity expression *)
-let rec encode env ( exp : typed_exp ) : encoded_exp =
+and encode env ( exp : typed_exp ) : encoded_exp =
   let loc = exp.loc in
   match exp.desc with
 
@@ -949,12 +961,12 @@ let rec encode env ( exp : typed_exp ) : encoded_exp =
     in
     let cases = List.map (fun (pat, e) ->
         let pat, env = match pat with
-          | CAny | CConstr (_, []) -> pat, env
-          | CConstr (c, [var]) ->
+          | PAny | PConstr (_, []) -> pat, env
+          | PConstr (c, [var]) ->
             let var_ty = List.assoc c constrs in
             let (var, env, _) = new_binding env var var_ty in
-            CConstr (c, [var]), env
-          | CConstr _ -> assert false in
+            PConstr (c, [var]), env
+          | PConstr _ -> assert false in
         (pat, encode env e)
       ) cases
     in
@@ -980,6 +992,62 @@ let rec encode env ( exp : typed_exp ) : encoded_exp =
 
   | TypeAnnot _ | Type _ -> assert false (* Removed during typechecking *)
 
+(*
+and encode_lambda ~loc env
+    { arg_name; arg_ty; body; recursive } =
+  match recursive with
+  | Some f ->
+    encode_rec_fun env ~loc ?name:exp.name
+      f arg_name arg_ty ret_ty body
+  | None ->
+    let env_at_lambda = env in
+    let lambda_arg_type = arg_ty in
+    let lambda_arg_name = arg_name in
+    let lambda_body = body in
+    let bvs = LiquidBoundVariables.bv exp in
+    if StringSet.is_empty bvs ||
+       StringSet.for_all (fun bv -> StringMap.mem bv !(env.force_inline)) bvs
+    then
+      (* not a closure (or will be pure after inlining),
+         create a real lambda *)
+      let env = { env_at_lambda with
+                  vars = StringSet.fold (fun bv ->
+                      StringMap.add bv (StringMap.find bv env.vars)
+                    ) bvs StringMap.empty
+                } in
+      let (new_arg_name, env, count) =
+        new_binding env lambda_arg_name.nname lambda_arg_type in
+      let arg_name = { arg_name with nname = new_arg_name } in
+      let body = encode env lambda_body in
+      (* check_used env lambda_arg_name loc arg_count; *)
+      let ty = Tlambda (lambda_arg_type, body.ty) in
+      mk ?name:exp.name  ~loc
+        (Lambda { arg_name; arg_ty = lambda_arg_type;
+                  body; ret_ty = body.ty; recursive = None }) ty
+    else
+      (* create closure with environment *)
+      let env, arg_name, arg_ty, call_env =
+        env_for_clos env bvs arg_name arg_ty in
+      let body = encode env body in
+      (* begin match env.clos_env with *)
+      (*   | None -> () *)
+      (*   | Some clos_env -> *)
+      (*     Format.eprintf "--- Closure %s ---@." arg_name; *)
+      (*     StringMap.iter (fun name (e, (cpt_in, cpt_out)) -> *)
+      (*         Format.eprintf "%s -> %s , (%d, %d)@." *)
+      (*           name (LiquidPrinter.Liquid.string_of_code e) !cpt_in !cpt_out *)
+      (*       ) clos_env.env_bindings *)
+      (* end; *)
+      let desc =
+        Closure { arg_name; arg_ty; call_env; body; ret_ty = body.ty } in
+      let call_env_type = match call_env with
+        | [] -> assert false
+        | [_, t] -> t.ty
+        | _ -> Ttuple (List.map (fun (_, t) -> t.ty) call_env)
+      in
+      let ty = Tclosure ((lambda_arg_type, call_env_type), body.ty) in
+      mk ?name:exp.name ~loc desc ty
+*)
 
 and encode_apply name env prim loc args ty =
   let args = List.map (encode env) args in
@@ -1238,7 +1306,7 @@ and encode_contract ?(annot=false) ?(decompiling=false) contract =
         cases = List.mapi (fun i e ->
             let constr = prefix_entry ^ e.entry_sig.entry_name in
             let pat =
-              CConstr (constr, [e.entry_sig.parameter_name]) in
+              PConstr (constr, [e.entry_sig.parameter_name]) in
             let body =
               mk_typed ~loc
                 (Let { bnd_var = { nname = e.entry_sig.storage_name;

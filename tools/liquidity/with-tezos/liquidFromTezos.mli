@@ -20,13 +20,13 @@ val convert_const_type :
   LiquidTezosTypes.env ->
   LiquidTezosTypes.expr ->
   LiquidTypes.datatype ->
-  LiquidTypes.const
+  LiquidTypes.loc_michelson LiquidTypes.const * LiquidTypes.location
 
 (** Convert a Micheline contant as Liquidity constant. *)
 val convert_const_notype :
   LiquidTezosTypes.env ->
   LiquidTezosTypes.expr ->
-  LiquidTypes.const
+  LiquidTypes.loc_michelson LiquidTypes.const * LiquidTypes.location
 
 (** Parse a Micheline contract as an intermediate Michelson contract.  *)
 val convert_contract :

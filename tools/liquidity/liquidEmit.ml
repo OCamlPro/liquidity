@@ -69,7 +69,10 @@ let rec emit_code ~expand code =
 
   | PUSH (Tunit, CUnit) -> M_INS ("UNIT", var_annot name)
   | PUSH (Tlist ty, CList []) -> M_INS_EXP ("NIL", [ty], [], var_annot name)
-  | PUSH (ty, cst) -> M_INS_CST ("PUSH", ty, cst, var_annot name)
+  | PUSH (ty, cst) ->
+    let cst = emit_const ~expand cst in
+    M_INS_CST ("PUSH", ty, cst, var_annot name)
+
   | DIP (0, exp) -> assert false
   | DIP (1, exp) -> M_INS_EXP ("DIP", [], [emit_code ~expand exp], var_annot name)
   | DIP (n, exp) ->
@@ -175,6 +178,49 @@ let rec emit_code ~expand code =
         M_INS_EXP ("SEQ", [], emit_contract ~expand contract , [])
       ], var_annot name)
   | EXTENSION (minst, tys) -> M_INS_EXP (minst, tys, [], var_annot name)
+
+and emit_const ~expand cst = match cst with
+  | ( CUnit
+    | CBool _
+    | CInt _
+    | CNat _
+    | CTez _
+    | CTimestamp _
+    | CString _
+    | CBytes _
+    | CKey _
+    | CSignature _
+    | CNone
+    | CKey_hash _
+    | CContract _
+    | CAddress _ ) as cst -> cst
+  | CLambda l ->
+    CLambda { l with body = emit_code ~expand l.body }
+  | CTuple l ->
+    CTuple (List.map (emit_const ~expand) l)
+  | CSome c ->
+    CSome (emit_const ~expand c)
+  | CList l ->
+    CList (List.map (emit_const ~expand) l)
+  | CSet l ->
+    CSet (List.map (emit_const ~expand) l)
+  | CMap l ->
+    CMap (List.map (fun (k, v) ->
+        (emit_const ~expand k,
+         emit_const ~expand v)) l)
+  | CBigMap l ->
+    CBigMap (List.map (fun (k, v) ->
+        (emit_const ~expand k,
+         emit_const ~expand v)) l)
+  | CLeft c ->
+    CLeft (emit_const ~expand c)
+  | CRight c ->
+    CRight (emit_const ~expand c)
+  | CRecord l ->
+    CRecord (List.map (fun (f, c) -> f, emit_const ~expand c) l)
+  | CConstr (s, c) ->
+    CConstr (s, emit_const ~expand c)
+
 
 and emit_contract ~expand (contract : loc_michelson_contract) =
   [

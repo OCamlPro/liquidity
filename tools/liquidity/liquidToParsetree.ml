@@ -211,7 +211,16 @@ and convert_contract_sig ~abbrev csig =
   | Some typ -> typ
   | None -> add_abbrev name (Tcontract csig) (ContractType signature)
 
-let rec convert_const expr =
+
+let convert_primitive prim args =
+  match prim, args with
+  | Prim_and, x :: _ when x.ty = Tnat -> "land"
+  | Prim_or, x :: _ when x.ty = Tnat -> "lor"
+  | Prim_xor, x :: _ when x.ty = Tnat -> "lxor"
+  | Prim_not, [x] when x.ty = Tnat || x.ty = Tint -> "lnot"
+  | _ -> LiquidTypes.string_of_primitive prim
+
+let rec convert_const ~abbrev (expr : (datatype, 'a) exp const) =
   match expr with
   | CInt n -> Exp.constant (Const.integer (LiquidNumber.liq_of_integer n))
   | CNat n -> Exp.constant (Const.integer ~suffix:'p'
@@ -222,15 +231,15 @@ let rec convert_const expr =
   | CBool true -> Exp.construct (lid "true") None
   | CNone -> Exp.construct (lid "None") None
   | CSome x -> Exp.construct (lid "Some")
-                 (Some (convert_const x))
+                 (Some (convert_const ~abbrev x))
   | CLeft x -> Exp.construct (lid "Left")
-                 (Some (convert_const x))
+                 (Some (convert_const ~abbrev x))
   | CRight x -> Exp.construct (lid "Right")
-                  (Some (convert_const x))
+                  (Some (convert_const ~abbrev x))
   | CConstr (c, CUnit) -> Exp.construct (lid c) None
   | CConstr (c, x) -> Exp.construct (lid c)
-                        (Some (convert_const x))
-  | CTuple args -> Exp.tuple (List.map convert_const args)
+                        (Some (convert_const ~abbrev x))
+  | CTuple args -> Exp.tuple (List.map (convert_const ~abbrev) args)
   | CTez n ->
     begin match n.mutez with
       | None ->
@@ -249,13 +258,13 @@ let rec convert_const expr =
   | CList [] -> Exp.construct (lid "[]") None
   | CList (head :: tail) ->
     Exp.construct (lid "::") (Some
-                                (Exp.tuple [convert_const head;
-                                            convert_const (CList tail)]))
+                                (Exp.tuple [convert_const ~abbrev head;
+                                            convert_const ~abbrev (CList tail)]))
   | CSet [] ->
     Exp.construct (lid "Set") None
   | CSet list ->
     Exp.construct (lid "Set")
-      (Some (convert_const (CList list)))
+      (Some (convert_const ~abbrev (CList list)))
   | CMap [] ->
     Exp.construct (lid "Map") None
   | CBigMap [] ->
@@ -268,8 +277,8 @@ let rec convert_const expr =
                (Exp.tuple
                   [
                     Exp.tuple [
-                      convert_const key;
-                      convert_const value;
+                      convert_const ~abbrev key;
+                      convert_const ~abbrev value;
                     ];
                     tail
                   ]))
@@ -283,20 +292,17 @@ let rec convert_const expr =
     Exp.construct (lid m) (Some args)
   | CRecord labels ->
     Exp.record
-      (List.map (fun (f, x) -> lid f, convert_const x) labels)
+      (List.map (fun (f, x) -> lid f, convert_const ~abbrev x) labels)
       None
+  | CLambda { arg_name; arg_ty; body } ->
+    Exp.fun_ Nolabel None
+      (Pat.constraint_
+         (pat_of_lname arg_name ~ty:arg_ty)
+         (convert_type ~abbrev ~name:(arg_name.nname ^ "_t") arg_ty))
+      (convert_code ~abbrev body)
 
 
-let convert_primitive prim args =
-  match prim, args with
-  | Prim_and, x :: _ when x.ty = Tnat -> "land"
-  | Prim_or, x :: _ when x.ty = Tnat -> "lor"
-  | Prim_xor, x :: _ when x.ty = Tnat -> "lxor"
-  | Prim_not, [x] when x.ty = Tnat || x.ty = Tint -> "lnot"
-  | _ -> LiquidTypes.string_of_primitive prim
-
-
-let rec convert_code ~abbrev (expr : (datatype, 'a) exp) =
+and convert_code ~abbrev (expr : (datatype, 'a) exp) =
   let loc = loc_of_loc expr.loc in
   match expr.desc with
   | Var name -> Exp.ident ~loc (lid name)
@@ -336,15 +342,15 @@ let rec convert_code ~abbrev (expr : (datatype, 'a) exp) =
         | Ttimestamp
         | Ttez
         | Tbool
-        | Toperation), _ -> convert_const const
+        | Toperation), _ -> convert_const ~abbrev const
       | _, (CList (_ :: _) | CMap (_ :: _) | CBigMap (_ :: _)) ->
-        convert_const const
+        convert_const ~abbrev const
       | (Tsignature, CSignature s
         | Tkey, CKey s
-        | Tkey_hash, CKey_hash s) when s.[0] <> '0' -> convert_const const
+        | Tkey_hash, CKey_hash s) when s.[0] <> '0' -> convert_const ~abbrev const
       | _ ->
         Exp.constraint_
-          ~loc (convert_const const) (convert_type ~abbrev ty)
+          ~loc (convert_const ~abbrev const) (convert_type ~abbrev ty)
     end
 
   | Let { bnd_var; bnd_val; body } ->
@@ -366,7 +372,7 @@ let rec convert_code ~abbrev (expr : (datatype, 'a) exp) =
     let args = match List.rev args with
       | { desc = Const { const = CList [] as cst }} :: r_args ->
         List.fold_left (fun l a -> convert_code ~abbrev a :: l)
-          [convert_const cst]
+          [convert_const ~abbrev cst]
           r_args
       | _ ->
         List.map (convert_code ~abbrev) args
@@ -587,9 +593,9 @@ let rec convert_code ~abbrev (expr : (datatype, 'a) exp) =
   | MatchVariant { arg; cases } ->
     Exp.match_ ~loc (convert_code ~abbrev arg)
       (List.map (function
-           | CAny, exp ->
+           | PAny, exp ->
              Exp.case (Pat.any ()) (convert_code ~abbrev exp)
-           | CConstr (constr, var_args), exp ->
+           | PConstr (constr, var_args), exp ->
              Exp.case
                (Pat.construct (lid constr)
                   (match var_args with
@@ -801,3 +807,5 @@ let translate_expression = convert_code ~abbrev:false
 let convert_type ?(abbrev=false) ty = convert_type ~abbrev ty
 
 let convert_code ?(abbrev=false) code = convert_code ~abbrev code
+
+let convert_const  ?(abbrev=false) c = convert_const ~abbrev c

@@ -72,7 +72,8 @@ let rec compute decompile code to_inline =
 
   let rec iter exp =
     match exp.desc with
-    | Const _ -> exp
+    | Const { ty; const } ->
+      { exp with desc = Const { ty; const = iter_const const } }
     | Var name ->
       begin
         try
@@ -289,7 +290,38 @@ let rec compute decompile code to_inline =
       { exp with desc = TypeAnnot { e; ty } }
 
     | Type _ -> exp
+
+  and iter_const c = match c with
+    | ( CUnit | CBool _ | CInt _ | CNat _ | CTez _ | CTimestamp _ | CString _
+      | CBytes _ | CKey _ | CContract _ | CSignature _ | CNone  | CKey_hash _
+      | CAddress _ ) as c -> c
+
+    | CSome x -> CSome (iter_const x)
+    | CLeft x -> CLeft (iter_const x)
+    | CRight x -> CRight (iter_const x)
+
+    | CTuple xs -> CTuple (List.map (iter_const) xs)
+    | CList xs -> CList (List.map (iter_const) xs)
+    | CSet xs -> CSet (List.map (iter_const) xs)
+
+    | CMap l ->
+      CMap (List.map (fun (x,y) -> iter_const x, iter_const y) l)
+
+    | CBigMap l ->
+      CBigMap (List.map (fun (x,y) -> iter_const x, iter_const y) l)
+
+    | CRecord labels ->
+      CRecord (List.map (fun (f, x) -> f, iter_const x) labels)
+
+    | CConstr (constr, x) ->
+      CConstr (constr, iter_const x)
+
+    | CLambda { arg_name; arg_ty; body; ret_ty; recursive } ->
+      let body = iter body in
+      CLambda { arg_name; arg_ty; body; ret_ty; recursive }
+
   in
+
 
   let rec fixpoint code =
     let c = iter code in

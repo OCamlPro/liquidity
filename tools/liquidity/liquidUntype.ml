@@ -96,7 +96,7 @@ let rec untype (env : env) (code : (datatype, 'a) exp) : (datatype, 'b) exp =
            ifthen = untype env ifthen;
            ifelse = untype env ifelse }
     | Seq (x, y) -> Seq (untype env x, untype env y)
-    | Const c -> Const c
+    | Const { ty; const } -> Const { ty; const = untype_const const }
     | Failwith arg -> Failwith (untype env arg)
 
     | Apply { prim = Prim_Left; args =  [arg; unused] } ->
@@ -106,20 +106,8 @@ let rec untype (env : env) (code : (datatype, 'a) exp) : (datatype, 'b) exp =
     | Apply { prim; args } ->
       Apply { prim; args = List.map (untype env) args }
 
-    | Lambda { arg_name; arg_ty; body; ret_ty; recursive } ->
-      let base = base_of_lvar arg_name in
-      let env = empty_env () in
-      let env = new_lbinding arg_name base env in
-      let recursive, env, ret_ty = match recursive with
-        | None -> recursive, env, Tunit
-        | Some f ->
-          let f_base = base_of_var f in
-          let env = new_binding f f_base env in
-          (Some f_base, env, ret_ty)
-      in
-      Lambda { arg_name = base; arg_ty;
-               body = untype env body; ret_ty;
-               recursive }
+    | Lambda lam ->
+      Lambda (untype_lambda lam)
 
     | Closure { arg_name; arg_ty; call_env; body } ->
       let call_env = List.map (fun (name, t) -> name, untype env t) call_env in
@@ -218,10 +206,10 @@ let rec untype (env : env) (code : (datatype, 'a) exp) : (datatype, 'b) exp =
     | MatchVariant { arg; cases } ->
       let arg = untype env arg in
       let cases = List.map (function
-          | CConstr (c, vars), body ->
+          | PConstr (c, vars), body ->
             let vars, body = untype_case env vars body in
-            CConstr (c, vars), body
-          | CAny, body -> CAny, untype env body
+            PConstr (c, vars), body
+          | PAny, body -> PAny, untype env body
         ) cases in
       MatchVariant { arg; cases }
 
@@ -253,6 +241,49 @@ let rec untype (env : env) (code : (datatype, 'a) exp) : (datatype, 'b) exp =
 
   in
   mk ~loc:code.loc desc code.ty
+
+and untype_lambda { arg_name; arg_ty; body; ret_ty; recursive } =
+  let base = base_of_lvar arg_name in
+  let env = empty_env () in
+  let env = new_lbinding arg_name base env in
+  let recursive, env, ret_ty = match recursive with
+    | None -> recursive, env, Tunit
+    | Some f ->
+      let f_base = base_of_var f in
+      let env = new_binding f f_base env in
+      (Some f_base, env, ret_ty)
+  in
+  { arg_name = base; arg_ty;
+    body = untype env body; ret_ty;
+    recursive }
+
+and untype_const c = match c with
+  | ( CUnit | CBool _ | CInt _ | CNat _ | CTez _ | CTimestamp _ | CString _
+    | CBytes _ | CKey _ | CContract _ | CSignature _ | CNone  | CKey_hash _
+    | CAddress _ ) as c -> c
+
+  | CSome x -> CSome (untype_const x)
+  | CLeft x -> CLeft (untype_const x)
+  | CRight x -> CRight (untype_const x)
+
+  | CTuple xs -> CTuple (List.map (untype_const) xs)
+  | CList xs -> CList (List.map (untype_const) xs)
+  | CSet xs -> CSet (List.map (untype_const) xs)
+
+  | CMap l ->
+    CMap (List.map (fun (x,y) -> untype_const x, untype_const y) l)
+
+  | CBigMap l ->
+    CBigMap (List.map (fun (x,y) -> untype_const x, untype_const y) l)
+
+  | CRecord labels ->
+    CRecord (List.map (fun (f, x) -> f, untype_const x) labels)
+
+  | CConstr (constr, x) ->
+    CConstr (constr, untype_const x)
+
+  | CLambda lam ->
+    CLambda (untype_lambda lam)
 
 and untype_case env vars arg =
   let bv = arg.bv in

@@ -8,7 +8,7 @@
 (**************************************************************************)
 
 type env = unit
-type expr = LiquidTypes.michelson_exp
+type expr = LiquidTypes.michelson_exp LiquidTypes.const
 type contract = LiquidTypes.michelson_contract
 type json
 let empty_env _ = ()

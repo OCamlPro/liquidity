@@ -10,3 +10,5 @@
 open LiquidTypes
 
 val interp : loc_michelson_contract -> node_contract
+
+val decompile_const : location -> loc_michelson const -> node_exp const

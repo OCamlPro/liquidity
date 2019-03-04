@@ -15,16 +15,16 @@ type from =
 
 type key_diff =
   | DiffKeyHash of string
-  | DiffKey of const
+  | DiffKey of typed_const
 
 type big_map_diff_item =
-  | Big_map_add of key_diff * const
+  | Big_map_add of key_diff * typed_const
   | Big_map_remove of key_diff
 
 type big_map_diff = big_map_diff_item list
 
 type stack_item =
-  | StackConst of const
+  | StackConst of typed_const
   | StackCode of int
 
 type trace_item = {
@@ -40,12 +40,12 @@ type internal_operation =
   | Transaction of {
       amount : string;
       destination : string;
-      parameters : LiquidTypes.const option;
+      parameters : typed_const option;
     }
   | Origination of {
       manager: string ;
       delegate: string option ;
-      script: (LiquidTypes.typed_contract * LiquidTypes.const) option ;
+      script: (typed_contract * typed_const) option ;
       spendable: bool ;
       delegatable: bool ;
       balance: string ;
@@ -67,15 +67,15 @@ exception RuntimeFailure of error * string option * trace option
 module type S = sig
   type 'a t
   val run : from -> string -> string -> string ->
-    (operation list * LiquidTypes.const * big_map_diff option) t
+    (operation list * LiquidTypes.typed_const * big_map_diff option) t
   val run_debug : from -> string -> string -> string ->
-    (operation list * LiquidTypes.const * big_map_diff option * trace) t
-  val init_storage : from -> string list -> LiquidTypes.const t
+    (operation list * LiquidTypes.typed_const * big_map_diff option * trace) t
+  val init_storage : from -> string list -> LiquidTypes.encoded_const t
   val forge_deploy : ?delegatable:bool -> ?spendable:bool ->
     from -> string list -> string t
   val deploy : ?delegatable:bool -> ?spendable:bool ->
     from -> string list -> (string * (string, exn) result) t
-  val get_storage : from -> string -> LiquidTypes.const t
+  val get_storage : from -> string -> LiquidTypes.typed_const t
   val forge_call : from -> string -> string -> string -> string t
   val call : from -> string -> string -> string ->
     (string * (unit, exn) result) t
@@ -245,10 +245,22 @@ let name_of_var_annot = function
       )
     with Scanf.Scan_failure _ | End_of_file -> None
 
+let convert_const env ?ty e =
+  let mic_e, loc = match ty with
+    | Some ty -> LiquidFromTezos.convert_const_type env e ty
+    | None -> LiquidFromTezos.convert_const_notype env e in
+  let nod_e = LiquidInterp.decompile_const loc mic_e in
+  let syn_e = LiquidDecomp.decompile_const nod_e in
+  let tenv =
+    empty_typecheck_env ~warnings:false
+      LiquidTypes.dummy_contract_sig
+      (LiquidFromParsetree.initial_env "") in
+  LiquidCheck.typecheck_const tenv ?expected_ty:ty ~loc syn_e
+
 let convert_stack env stack_expr =
   List.map (fun (e, annot) ->
       let name = name_of_var_annot annot in
-      try StackConst (LiquidFromTezos.convert_const_notype env e), name
+      try StackConst (convert_const env e), name
       with _ -> StackCode (memo_stack_code e), name
     ) stack_expr
 
@@ -302,8 +314,7 @@ let fail_msg_of_err loc ~loc_table err =
   let env = { (LiquidTezosTypes.empty_env err_loc.loc_file)
               with loc_table = loc_table_to_map loc_table } in
   let failed_with_expr = LiquidToTezos.const_of_ezjson json in
-  let failed_with =
-    LiquidFromTezos.convert_const_notype env failed_with_expr in
+  let failed_with = convert_const env failed_with_expr in
   err_loc, Some (LiquidPrinter.Liquid.string_of_const failed_with)
 
 let error_trace_of_err loc ~loc_table err =
@@ -633,7 +644,7 @@ let operation_of_json ~head r =
         parameters =
           try find r ["parameters"]
               |> LiquidToTezos.const_of_ezjson
-              |> LiquidFromTezos.convert_const_notype env
+              |> convert_const env
               |> Option.some
           with Not_found -> None;
       }
@@ -648,8 +659,7 @@ let operation_of_json ~head r =
           let storage =
             find r ["script"; "storage"]
             |> LiquidToTezos.const_of_ezjson
-            |> (fun e -> LiquidFromTezos.convert_const_type
-                   env e code.storage)
+            |> (fun e -> convert_const env e ~ty:code.storage)
           in
           Some (code, storage)
         with Not_found -> None in
@@ -680,15 +690,19 @@ let get_big_map_type storage =
   | _ -> None
 
 let run_pre ?(debug=false)
-    env storage_ty pre_michelson source input storage =
+    contract pre_michelson source input storage =
   let rpc = if debug then "trace_code" else "run_code" in
+  let env = contract.ty_env in
+  let storage_ty = contract.storage in
   let c, loc_table =
     LiquidToTezos.convert_contract ~expand:true pre_michelson in
-  let input_m = LiquidToTezos.convert_const input in
-  let storage_m = LiquidToTezos.convert_const storage in
+  let input_m = LiquidMichelson.compile_const input in
+  let input_t = LiquidToTezos.convert_const ~expand:true input_m in
+  let storage_m = LiquidMichelson.compile_const storage in
+  let storage_t = LiquidToTezos.convert_const ~expand:true storage_m in
   let contract_json = LiquidToTezos.json_of_contract c in
-  let input_json = LiquidToTezos.json_of_const input_m in
-  let storage_json = LiquidToTezos.json_of_const storage_m in
+  let input_json = LiquidToTezos.json_of_const input_t in
+  let storage_json = LiquidToTezos.json_of_const storage_t in
   let run_fields = [
     "script", contract_json;
     "input", input_json;
@@ -738,10 +752,7 @@ let run_pre ?(debug=false)
           ) json_diff)
     in
     let env = LiquidTezosTypes.empty_env env.filename in
-    let storage =
-      LiquidFromTezos.convert_const_type env storage_expr
-        storage_ty
-    in
+    let storage = convert_const env storage_expr ~ty:storage_ty in
     (* TODO parse returned operations *)
     let big_map_diff =
       match big_map_diff_expr, get_big_map_type storage_ty with
@@ -750,15 +761,15 @@ let run_pre ?(debug=false)
       | Some d, Some (tk, tv) ->
         Some (List.map (function
             | Ok (k, Some v) ->
-              let v = LiquidFromTezos.convert_const_type env v tv in
-              let k = DiffKey (LiquidFromTezos.convert_const_type env k tk) in
+              let v = convert_const env v ~ty:tv in
+              let k = DiffKey (convert_const env k ~ty:tk) in
               Big_map_add (k, v)
             | Error (h, Some v) ->
-              let v = LiquidFromTezos.convert_const_type env v tv in
+              let v = convert_const env v  ~ty:tv in
               let k = DiffKeyHash h in
               Big_map_add (k, v)
             | Ok (k, None) ->
-              let k = DiffKey (LiquidFromTezos.convert_const_type env k tk) in
+              let k = DiffKey (convert_const env k ~ty:tk) in
               Big_map_remove k
             | Error (h, None) ->
               let k = DiffKeyHash h in
@@ -790,12 +801,13 @@ let run ~debug liquid entry_name input_string storage_string =
   let parameter = match contract_sig.f_entries_sig with
     | [_] -> input
     | _ -> LiquidEncode.encode_const contract.ty_env contract_sig
-             (CConstr (prefix_entry ^ entry_name, input)) in
+             (CConstr (prefix_entry ^ entry_name,
+                       (LiquidDecode.decode_const input))) in
   let storage =
     LiquidData.translate { contract.ty_env with filename = "run_storage" }
       contract_sig storage_string contract.storage
   in
-  run_pre ~debug contract.ty_env contract.storage
+  run_pre ~debug contract
     pre_michelson !LiquidOptions.source parameter storage
 
 let run_debug liquid entry_name input_string storage_string =
@@ -822,8 +834,7 @@ let get_storage liquid address =
     let storage_expr = LiquidToTezos.const_of_ezjson r in
     let env = LiquidTezosTypes.empty_env syntax_ast.ty_env.filename in
     return
-      (LiquidFromTezos.convert_const_type env storage_expr
-         syntax_ast.storage)
+      (convert_const env storage_expr ~ty:syntax_ast.storage)
   with Not_found ->
     raise_response_error "get_storage" r
 
@@ -889,15 +900,15 @@ let init_storage ?source liquid init_params_strings =
     let eval_input_storage =
       try
         LiquidData.default_empty_const syntax_ast.storage
-        |> LiquidEncode.encode_const syntax_ast.ty_env contract_sig
       with Not_found -> failwith "could not construct dummy storage for eval"
     in
     let eval_input_parameter = match init_params with
       | [] -> CUnit
       | [x] -> x
-      | _ -> CTuple init_params in
+      | _ -> CTuple init_params
+    in
 
-    run_pre syntax_ast.ty_env syntax_ast.storage c source
+    run_pre syntax_ast c source
       eval_input_parameter eval_input_storage
     >>= fun (_, eval_init_storage, big_map_diff, _) ->
     (* Add elements of big map *)
@@ -945,9 +956,11 @@ let forge_deploy ?head ?source ?public_key
   is_revealed source >>= fun source_revealed ->
   let c, loc_table =
     LiquidToTezos.convert_contract ~expand:true pre_michelson in
-  let init_storage_m = LiquidToTezos.convert_const init_storage in
+  let init_storage_m = LiquidMichelson.compile_const init_storage in
+  let init_storage_t =
+    LiquidToTezos.convert_const ~expand:true init_storage_m in
   let contract_json = LiquidToTezos.json_of_contract c in
-  let init_storage_json = LiquidToTezos.json_of_const init_storage_m in
+  let init_storage_json = LiquidToTezos.json_of_const init_storage_t in
   let script_json = [
     "code", contract_json;
     "storage", init_storage_json
@@ -1131,11 +1144,13 @@ let forge_call ?head ?source ?public_key
   let parameter = match contract_sig.f_entries_sig with
     | [_] -> input
     | _ -> LiquidEncode.encode_const contract.ty_env contract_sig
-             (CConstr (prefix_entry ^ entry_name, input)) in
+             (CConstr (prefix_entry ^ entry_name,
+                       (LiquidDecode.decode_const input))) in
   let _, loc_table =
     LiquidToTezos.convert_contract ~expand:true pre_michelson in
-  let parameter_m = LiquidToTezos.convert_const parameter in
-  let parameter_json = LiquidToTezos.json_of_const parameter_m in
+  let parameter_m = LiquidMichelson.compile_const parameter in
+  let parameter_t = LiquidToTezos.convert_const ~expand:true parameter_m in
+  let parameter_json = LiquidToTezos.json_of_const parameter_t in
   begin match head with
     | Some head -> return head
     | None -> get_head ()
@@ -1325,9 +1340,9 @@ let pack ?liquid ~const ~ty =
   let const = LiquidData.translate env csig const ty in
   (* LiquidCheck.check_const_type ~to_tez:LiquidPrinter.tez_of_liq noloc
    *   ty const in *)
-  let const = LiquidEncode.encode_const env csig const in
-  let const_m = LiquidToTezos.convert_const const in
-  let const_json = LiquidToTezos.json_of_const const_m in
+  let const_m = LiquidMichelson.compile_const const in
+  let const_t = LiquidToTezos.convert_const ~expand:true const_m in
+  let const_json = LiquidToTezos.json_of_const const_t in
   let ty_m = LiquidToTezos.convert_type (LiquidEncode.encode_type ty) in
   (* same syntax for const and types*)
   let ty_json = LiquidToTezos.json_of_const ty_m in
@@ -1448,6 +1463,7 @@ let forge_call_arg ?(entry_name="main") liquid input_string =
   let parameter = match contract_sig.f_entries_sig with
     | [_] -> input
     | _ -> LiquidEncode.encode_const contract.ty_env contract_sig
-             (CConstr (prefix_entry ^ entry_name, input)) in
-  LiquidToTezos.string_of_expression
-    (LiquidToTezos.convert_const parameter)
+             (CConstr (prefix_entry ^ entry_name,
+                       (LiquidDecode.decode_const input))) in
+  let param_m = LiquidMichelson.compile_const parameter in
+  LiquidToTezos.(string_of_const @@ convert_const ~expand:false param_m)

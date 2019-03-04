@@ -34,3 +34,10 @@ val typecheck_code :
   ?expected_ty:LiquidTypes.datatype ->
   syntax_exp ->
   typed_exp
+
+val typecheck_const :
+  typecheck_env ->
+  ?loc:LiquidTypes.location ->
+  ?expected_ty:LiquidTypes.datatype ->
+  syntax_const ->
+  typed_const

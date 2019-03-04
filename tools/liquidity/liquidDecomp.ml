@@ -232,470 +232,502 @@ let rec arg_of node =
 
   | _ -> mk ~loc (Var (var_of node))
 
+let rec decompile_next node =
+  let loc = node.loc in
+  match node.next with
+  | None ->
+    Format.eprintf "%s@." (LiquidPrinter.string_of_node node);
+    assert false
+  | Some node ->
+    match node.kind, node.args with
+    | N_PRIM "MOD", [arg1; arg2] ->
+      mklet node (MatchOption {
+          arg = mk ~loc (Apply { prim = Prim_ediv;
+                                 args = [arg_of arg1; arg_of arg2] });
+          ifnone = mk ~loc (Failwith (unit ~loc));
+          some_name = lvar_of node;
+          ifsome = mk_get ~loc (mk ~loc (Var (var_of node))) 1;
+        })
+    | N_PRIM "DIV", [arg1; arg2] ->
+      mklet node (MatchOption {
+          arg = mk ~loc (Apply { prim = Prim_ediv;
+                                 args = [arg_of arg1; arg_of arg2] });
+          ifnone = mk ~loc (Failwith (unit ~loc));
+          some_name = lvar_of node;
+          ifsome = mk_get ~loc (mk ~loc (Var (var_of node))) 0;
+        })
 
-let rec decompile contract =
+    (* ABS : int -> int *)
+    | N_ABS, [arg] ->
+      mklet node (Apply { prim = Prim_abs; args = [arg_of arg] })
 
-  let rec decompile_next node =
-    let loc = node.loc in
-    match node.next with
-    | None ->
-      Format.eprintf "%s@." (LiquidPrinter.string_of_node node);
-      assert false
-    | Some node ->
-      match node.kind, node.args with
-      | N_PRIM "MOD", [arg1; arg2] ->
-        mklet node (MatchOption {
-            arg = mk ~loc (Apply { prim = Prim_ediv;
-                                   args = [arg_of arg1; arg_of arg2] });
-            ifnone = mk ~loc (Failwith (unit ~loc));
-            some_name = lvar_of node;
-            ifsome = mk_get ~loc (mk ~loc (Var (var_of node))) 1;
-          })
-      | N_PRIM "DIV", [arg1; arg2] ->
-        mklet node (MatchOption {
-            arg = mk ~loc (Apply { prim = Prim_ediv;
-                                   args = [arg_of arg1; arg_of arg2] });
-            ifnone = mk ~loc (Failwith (unit ~loc));
-            some_name = lvar_of node;
-            ifsome = mk_get ~loc (mk ~loc (Var (var_of node))) 0;
-          })
+    (* ABS as match%nat *)
+    | N_PRIM "ABS", [arg] ->
+      let name = var_of arg in
+      let v = mk ~loc (Var name) in
+      mklet node ( MatchNat {
+          arg = arg_of arg;
+          plus_name = { nname = name; nloc = arg.loc };
+          ifplus = v;
+          minus_name = { nname = name; nloc = arg.loc };
+          ifminus = v })
 
-      (* ABS : int -> int *)
-      | N_ABS, [arg] ->
-        mklet node (Apply { prim = Prim_abs; args = [arg_of arg] })
+    (* UPDATE true -> Set.add *)
+    | N_PRIM "UPDATE", [arg1;
+                        { kind = N_CONST (_, CBool true) };
+                        arg3] ->
+      let arg1, arg3 = arg_of arg1, arg_of arg3 in
+      mklet node (Apply { prim = Prim_set_add; args = [arg1; arg3] })
 
-      (* ABS as match%nat *)
-      | N_PRIM "ABS", [arg] ->
-        let name = var_of arg in
-        let v = mk ~loc (Var name) in
-        mklet node ( MatchNat {
-            arg = arg_of arg;
-            plus_name = { nname = name; nloc = arg.loc };
-            ifplus = v;
-            minus_name = { nname = name; nloc = arg.loc };
-            ifminus = v })
+    (* UPDATE false -> Set.remove *)
+    | N_PRIM "UPDATE", [arg1;
+                        { kind = N_CONST (_, CBool false) };
+                        arg3] ->
+      let arg1, arg3 = arg_of arg1, arg_of arg3 in
+      mklet node (Apply { prim = Prim_set_remove; args = [arg1; arg3] })
 
-      (* UPDATE true -> Set.add *)
-      | N_PRIM "UPDATE", [arg1;
-                          { kind = N_CONST (_, CBool true) };
-                          arg3] ->
-        let arg1, arg3 = arg_of arg1, arg_of arg3 in
-        mklet node (Apply { prim = Prim_set_add; args = [arg1; arg3] })
+    (* UPDATE None -> Map.remove *)
+    | N_PRIM "UPDATE", [arg1;
+                        { kind = N_CONST (_, CNone) };
+                        arg3] ->
+      let arg1, arg3 = arg_of arg1, arg_of arg3 in
+      mklet node (Apply { prim = Prim_map_remove; args = [arg1; arg3] })
 
-      (* UPDATE false -> Set.remove *)
-      | N_PRIM "UPDATE", [arg1;
-                          { kind = N_CONST (_, CBool false) };
-                          arg3] ->
-        let arg1, arg3 = arg_of arg1, arg_of arg3 in
-        mklet node (Apply { prim = Prim_set_remove; args = [arg1; arg3] })
+    (* UPDATE Some -> Map.add *)
+    | N_PRIM "UPDATE", [arg1;
+                        { kind = N_CONST (Toption cty, CSome c) };
+                        arg3] ->
+      let arg1, arg3 = arg_of arg1, arg_of arg3 in
+      let v = mk ~loc (Const { ty = cty; const = decompile_const c }) in
+      mklet node (Apply { prim = Prim_map_add; args = [arg1; v; arg3] })
 
-      (* UPDATE None -> Map.remove *)
-      | N_PRIM "UPDATE", [arg1;
-                          { kind = N_CONST (_, CNone) };
-                          arg3] ->
-        let arg1, arg3 = arg_of arg1, arg_of arg3 in
-        mklet node (Apply { prim = Prim_map_remove; args = [arg1; arg3] })
+    (* UPDATE Some -> Map.add *)
+    | N_PRIM "UPDATE", [arg1;
+                        { kind = N_PRIM "SOME"; args = [arg2]};
+                        arg3] ->
+      let arg1, arg2, arg3 = arg_of arg1, arg_of arg2, arg_of arg3 in
+      mklet node (Apply { prim = Prim_map_add;
+                          args = [arg1; arg2; arg3] })
 
-      (* UPDATE Some -> Map.add *)
-      | N_PRIM "UPDATE", [arg1;
-                          { kind = N_CONST (Toption cty, CSome c) };
-                          arg3] ->
-        let arg1, arg3 = arg_of arg1, arg_of arg3 in
-        let v = mk ~loc (Const { ty = cty; const = c }) in
-        mklet node (Apply { prim = Prim_map_add; args = [arg1; v; arg3] })
+    | N_PRIM "PAIR", [{ kind = N_LAMBDA _ } as f; env]  ->
+      begin match f.node_name with
+        | None -> f.node_name <-node.node_name
+        | Some _ -> ()
+      end;
+      let f = arg_of f in
+      let env = arg_of env in
+      mklet node (Apply { prim = Prim_tuple; args =  [f; env] })
 
-      (* UPDATE Some -> Map.add *)
-      | N_PRIM "UPDATE", [arg1;
-                          { kind = N_PRIM "SOME"; args = [arg2]};
-                          arg3] ->
-        let arg1, arg2, arg3 = arg_of arg1, arg_of arg2, arg_of arg3 in
-        mklet node (Apply { prim = Prim_map_add;
-                            args = [arg1; arg2; arg3] })
+    | N_PRIM prim, _ ->
+      let prim, args =
+        match prim, node.args with
+        | "CDR", [arg] -> Prim_tuple_get, [arg_of arg; nat_one ~loc]
+        | "CAR", [arg] -> Prim_tuple_get, [arg_of arg; nat_zero ~loc]
+        | "NEQ", [arg] -> Prim_neq, [arg_of arg; int_zero ~loc]
+        | "EQ", [arg] -> Prim_eq, [arg_of arg; int_zero ~loc]
+        | "GE", [arg] -> Prim_ge, [arg_of arg; int_zero ~loc]
+        | "GT", [arg] -> Prim_gt, [arg_of arg; int_zero ~loc]
+        | "LE", [arg] -> Prim_le, [arg_of arg; int_zero ~loc]
+        | "LT", [arg] -> Prim_lt, [arg_of arg; int_zero ~loc]
+        | "NEQ", [arg1;arg2] -> Prim_neq, [arg_of arg1; arg_of arg2]
+        | "EQ", [arg1;arg2] -> Prim_eq, [arg_of arg1; arg_of arg2]
+        | "GE", [arg1;arg2] -> Prim_ge, [arg_of arg1; arg_of arg2]
+        | "GT", [arg1;arg2] -> Prim_gt, [arg_of arg1; arg_of arg2]
+        | "LE", [arg1;arg2] -> Prim_le, [arg_of arg1; arg_of arg2]
+        | "LT", [arg1;arg2] -> Prim_lt, [arg_of arg1; arg_of arg2]
+        | "NOW", [] -> Prim_now, [unit ~loc]
+        | "BALANCE", [] -> Prim_balance, [unit ~loc]
+        | "AMOUNT",[] -> Prim_amount, [unit ~loc]
+        | "STEPS_TO_QUOTA",[] -> Prim_gas, [unit ~loc]
+        | "SOURCE",[] -> Prim_source, [unit ~loc]
+        | "SENDER",[] -> Prim_sender, [unit ~loc]
+        | "SELF",[] -> Prim_self, [unit ~loc]
+        | prim, args ->
+          let prim =
+            match prim with
+            | "GET" -> Prim_map_find
+            | "PAIR" -> Prim_tuple
+            | "COMPARE" -> Prim_compare
+            | "CONCAT" -> Prim_concat
+            | "SLICE" -> Prim_slice
+            | "UPDATE" -> Prim_coll_update
+            | "MEM" -> Prim_coll_mem
+            | "SIZE" -> Prim_coll_size
+            | "CONS" -> Prim_Cons
+            | "SUB" -> Prim_sub
+            | "ADD" -> Prim_add
+            | "MUL" -> Prim_mul
+            | "EDIV" -> Prim_ediv
+            | "NEG" -> Prim_neg
+            | "EXEC" -> Prim_exec
+            | "INT" -> Prim_int
+            | "ISNAT" -> Prim_is_nat
+            | "PACK" -> Prim_pack
+            | "BLAKE2B" -> Prim_blake2b
+            | "SHA256" -> Prim_sha256
+            | "SHA512" -> Prim_sha512
+            | "HASH_KEY" -> Prim_hash_key
+            | "CHECK_SIGNATURE" -> Prim_check
+            | "CREATE_ACCOUNT" -> Prim_create_account
+            | "ADDRESS" -> Prim_address
+            | "XOR" -> Prim_xor
+            | "NOT" -> Prim_not
+            | "OR" -> Prim_or
+            | "AND" -> Prim_and
+            | "LSR" -> Prim_lsr
+            | "LSL" -> Prim_lsl
+            | "IMPLICIT_ACCOUNT" -> Prim_default_account
+            | "SET_DELEGATE" -> Prim_set_delegate
+            | "SOME" -> Prim_Some
+            | ins ->
+              LiquidLoc.raise_error
+                "Error: unknown instruction %S"
+                ins
+          in
+          (prim, List.map arg_of args)
+      in
+      mklet node (Apply { prim; args })
 
-      | N_PRIM "PAIR", [{ kind = N_LAMBDA _ } as f; env]  ->
-        begin match f.node_name with
-          | None -> f.node_name <-node.node_name
-          | Some _ -> ()
-        end;
-        let f = arg_of f in
-        let env = arg_of env in
-        mklet node (Apply { prim = Prim_tuple; args =  [f; env] })
+    | N_PROJ field, [arg] ->
+      mklet node (Project { field; record = arg_of arg })
 
-      | N_PRIM prim, _ ->
-        let prim, args =
-          match prim, node.args with
-          | "CDR", [arg] -> Prim_tuple_get, [arg_of arg; nat_one ~loc]
-          | "CAR", [arg] -> Prim_tuple_get, [arg_of arg; nat_zero ~loc]
-          | "NEQ", [arg] -> Prim_neq, [arg_of arg; int_zero ~loc]
-          | "EQ", [arg] -> Prim_eq, [arg_of arg; int_zero ~loc]
-          | "GE", [arg] -> Prim_ge, [arg_of arg; int_zero ~loc]
-          | "GT", [arg] -> Prim_gt, [arg_of arg; int_zero ~loc]
-          | "LE", [arg] -> Prim_le, [arg_of arg; int_zero ~loc]
-          | "LT", [arg] -> Prim_lt, [arg_of arg; int_zero ~loc]
-          | "NEQ", [arg1;arg2] -> Prim_neq, [arg_of arg1; arg_of arg2]
-          | "EQ", [arg1;arg2] -> Prim_eq, [arg_of arg1; arg_of arg2]
-          | "GE", [arg1;arg2] -> Prim_ge, [arg_of arg1; arg_of arg2]
-          | "GT", [arg1;arg2] -> Prim_gt, [arg_of arg1; arg_of arg2]
-          | "LE", [arg1;arg2] -> Prim_le, [arg_of arg1; arg_of arg2]
-          | "LT", [arg1;arg2] -> Prim_lt, [arg_of arg1; arg_of arg2]
-          | "NOW", [] -> Prim_now, [unit ~loc]
-          | "BALANCE", [] -> Prim_balance, [unit ~loc]
-          | "AMOUNT",[] -> Prim_amount, [unit ~loc]
-          | "STEPS_TO_QUOTA",[] -> Prim_gas, [unit ~loc]
-          | "SOURCE",[] -> Prim_source, [unit ~loc]
-          | "SENDER",[] -> Prim_sender, [unit ~loc]
-          | "SELF",[] -> Prim_self, [unit ~loc]
-          | prim, args ->
-            let prim =
-              match prim with
-              | "GET" -> Prim_map_find
-              | "PAIR" -> Prim_tuple
-              | "COMPARE" -> Prim_compare
-              | "CONCAT" -> Prim_concat
-              | "SLICE" -> Prim_slice
-              | "UPDATE" -> Prim_coll_update
-              | "MEM" -> Prim_coll_mem
-              | "SIZE" -> Prim_coll_size
-              | "CONS" -> Prim_Cons
-              | "SUB" -> Prim_sub
-              | "ADD" -> Prim_add
-              | "MUL" -> Prim_mul
-              | "EDIV" -> Prim_ediv
-              | "NEG" -> Prim_neg
-              | "EXEC" -> Prim_exec
-              | "INT" -> Prim_int
-              | "ISNAT" -> Prim_is_nat
-              | "PACK" -> Prim_pack
-              | "BLAKE2B" -> Prim_blake2b
-              | "SHA256" -> Prim_sha256
-              | "SHA512" -> Prim_sha512
-              | "HASH_KEY" -> Prim_hash_key
-              | "CHECK_SIGNATURE" -> Prim_check
-              | "CREATE_ACCOUNT" -> Prim_create_account
-              | "ADDRESS" -> Prim_address
-              | "XOR" -> Prim_xor
-              | "NOT" -> Prim_not
-              | "OR" -> Prim_or
-              | "AND" -> Prim_and
-              | "LSR" -> Prim_lsr
-              | "LSL" -> Prim_lsl
-              | "IMPLICIT_ACCOUNT" -> Prim_default_account
-              | "SET_DELEGATE" -> Prim_set_delegate
-              | "SOME" -> Prim_Some
-              | ins ->
-                LiquidLoc.raise_error
-                  "Error: unknown instruction %S"
-                  ins
-            in
-            (prim, List.map arg_of args)
-        in
-        mklet node (Apply { prim; args })
+    | N_RECORD labels, args ->
+      let fields = try
+          List.map2 (fun label arg ->
+              label, arg_of arg
+            ) labels args
+        with Invalid_argument _ ->
+          LiquidLoc.raise_error
+            "Error: Annotatated record construct has %d fields, \
+             given %d arguments" (List.length labels) (List.length args)
+      in
+      mklet node (Record fields)
 
-      | N_PROJ field, [arg] ->
-        mklet node (Project { field; record = arg_of arg })
+    | N_SETFIELD field, [x; y] ->
+      let set_val = arg_of x in
+      let record = arg_of y in
+      mklet node (SetField { record; field; set_val })
 
-      | N_RECORD labels, args ->
-        let fields = try
-            List.map2 (fun label arg ->
-                label, arg_of arg
-              ) labels args
-          with Invalid_argument _ ->
-            LiquidLoc.raise_error
-              "Error: Annotatated record construct has %d fields, \
-               given %d arguments" (List.length labels) (List.length args)
-        in
-        mklet node (Record fields)
+    | N_LEFT right_ty, [arg] ->
+      mklet node
+        (Constructor {constr = Left right_ty; arg = arg_of arg })
 
-      | N_SETFIELD field, [x; y] ->
-        let set_val = arg_of x in
-        let record = arg_of y in
-        mklet node (SetField { record; field; set_val })
+    | N_RIGHT left_ty, [arg] ->
+      mklet node
+        (Constructor {constr = Right left_ty; arg = arg_of arg })
 
-      | N_LEFT right_ty, [arg] ->
-        mklet node
-          (Constructor {constr = Left right_ty; arg = arg_of arg })
+    | N_CONSTR c, [arg] ->
+      mklet node (Constructor {constr = Constr c; arg = arg_of arg })
 
-      | N_RIGHT left_ty, [arg] ->
-        mklet node
-          (Constructor {constr = Right left_ty; arg = arg_of arg })
+    | N_CONTRACT ty, [arg] ->
+      mklet node (ContractAt { arg = arg_of arg;
+                               c_sig = contract_sig_of_param ty })
 
-      | N_CONSTR c, [arg] ->
-        mklet node (Constructor {constr = Constr c; arg = arg_of arg })
+    | N_UNPACK ty, [arg] ->
+      mklet node (Unpack { arg = arg_of arg; ty })
 
-      | N_CONTRACT ty, [arg] ->
-        mklet node (ContractAt { arg = arg_of arg;
-                                 c_sig = contract_sig_of_param ty })
+    | N_END, [ arg ] -> arg_of arg
 
-      | N_UNPACK ty, [arg] ->
-        mklet node (Unpack { arg = arg_of arg; ty })
+    | N_FAILWITH, [ arg ] ->
+      mk ~loc (Failwith (arg_of arg))
 
-      | N_END, [ arg ] -> arg_of arg
+    | N_CONST (ty, const), [] ->
+      let const = decompile_const const in
+      mklet node (Const { ty; const })
 
-      | N_FAILWITH, [ arg ] ->
-        mk ~loc (Failwith (arg_of arg))
+    | N_IF ({ kind = N_IF_END (_, then_node) },
+            { kind = N_IF_END (_, else_node) }), [arg] ->
+      let desc =
+        match then_node.kind, else_node.kind with
+        | N_IF_THEN (_), N_IF_ELSE (_) ->
+          If { cond = arg_of arg;
+               ifthen = decompile_next then_node;
+               ifelse = decompile_next else_node }
+        | N_IF_CONS (_, var0, var1), N_IF_NIL (_) ->
+          MatchList { arg = arg_of arg;
+                      head_name = lvar_of var0;
+                      tail_name = lvar_of var1;
+                      ifcons = decompile_next then_node;
+                      ifnil = decompile_next else_node }
+        | N_IF_NONE (_), N_IF_SOME (_,var0) ->
+          MatchOption { arg = arg_of arg;
+                        ifnone = decompile_next then_node;
+                        some_name = lvar_of var0;
+                        ifsome = decompile_next else_node }
+        | N_IF_PLUS (_, var0), N_IF_MINUS (_,var1) ->
+          MatchNat { arg = arg_of arg;
+                     plus_name = lvar_of var0;
+                     ifplus = decompile_next then_node;
+                     minus_name = lvar_of var1;
+                     ifminus = decompile_next else_node }
+        | N_IF_LEFT (_, var0), N_IF_RIGHT (_,var1) ->
+          MatchVariant { arg = arg_of arg;
+                         cases = [
+                           PConstr ("Left", [var_of var0]),
+                           decompile_next then_node;
+                           PConstr ("Right", [var_of var1]),
+                           decompile_next else_node
+                         ] }
+        | _ ->
+          LiquidLoc.raise_error
+            "Error: not implemented at IF node %s%!"
+            (LiquidPrinter.string_of_node then_node)
+      in
+      mklet node desc
+    | N_IF_END _, args -> value_of_args ~loc args
 
-      | N_CONST (ty, const), [] ->
-        mklet node (Const { ty; const })
+    | N_LOOP (begin_node, end_node), [cond] ->
+      let cond_e = arg_of cond in
+      let loop_e =
+        mk ~loc
+          (Loop { arg_name = lvar_of begin_node;
+                  body = decompile_next begin_node;
+                  arg = value_of_args ~loc begin_node.args })
+      in
+      let desc = match cond_e.desc with
+        | Const { const = CBool true } ->
+          loop_e.desc
+        | _ ->
+          If { cond = arg_of cond;
+               ifthen = loop_e;
+               ifelse = value_of_args ~loc begin_node.args }
+      in
+      mklet node desc
 
-      | N_IF ({ kind = N_IF_END (_, then_node) },
-              { kind = N_IF_END (_, else_node) }), [arg] ->
-        let desc =
-          match then_node.kind, else_node.kind with
-          | N_IF_THEN (_), N_IF_ELSE (_) ->
-            If { cond = arg_of arg;
-                 ifthen = decompile_next then_node;
-                 ifelse = decompile_next else_node }
-          | N_IF_CONS (_, var0, var1), N_IF_NIL (_) ->
-            MatchList { arg = arg_of arg;
-                        head_name = lvar_of var0;
-                        tail_name = lvar_of var1;
-                        ifcons = decompile_next then_node;
-                        ifnil = decompile_next else_node }
-          | N_IF_NONE (_), N_IF_SOME (_,var0) ->
-            MatchOption { arg = arg_of arg;
-                          ifnone = decompile_next then_node;
-                          some_name = lvar_of var0;
-                          ifsome = decompile_next else_node }
-          | N_IF_PLUS (_, var0), N_IF_MINUS (_,var1) ->
-            MatchNat { arg = arg_of arg;
-                       plus_name = lvar_of var0;
-                       ifplus = decompile_next then_node;
-                       minus_name = lvar_of var1;
-                       ifminus = decompile_next else_node }
-          | N_IF_LEFT (_, var0), N_IF_RIGHT (_,var1) ->
-            MatchVariant { arg = arg_of arg;
-                           cases = [
-                             CConstr ("Left", [var_of var0]),
-                             decompile_next then_node;
-                             CConstr ("Right", [var_of var1]),
-                             decompile_next else_node
-                           ] }
-          | _ ->
-            LiquidLoc.raise_error
-              "Error: not implemented at IF node %s%!"
-              (LiquidPrinter.string_of_node then_node)
-        in
-        mklet node desc
-      | N_IF_END _, args -> value_of_args ~loc args
+    | N_LOOP_END (_,_,final_cond), args ->
+      mk ~loc (Apply { prim = Prim_tuple;
+                       args = [arg_of final_cond;
+                               value_of_args ~loc args] })
 
-      | N_LOOP (begin_node, end_node), [cond] ->
-        let cond_e = arg_of cond in
-        let loop_e =
-          mk ~loc
-            (Loop { arg_name = lvar_of begin_node;
-                    body = decompile_next begin_node;
-                    arg = value_of_args ~loc begin_node.args })
-        in
-        let desc = match cond_e.desc with
-          | Const { const = CBool true } ->
-            loop_e.desc
-          | _ ->
-            If { cond = arg_of cond;
-                 ifthen = loop_e;
-                 ifelse = value_of_args ~loc begin_node.args }
-        in
-        mklet node desc
+    | N_LOOP_LEFT (begin_node, end_node), [first] ->
+      let arg_name = lvar_of begin_node in
+      let acc = match begin_node.args with
+        | [] -> None
+        | args -> Some (value_of_args ~loc begin_node.args) in
+      let desc = match first.kind with
+        | N_LEFT _ ->
+          LoopLeft { arg_name;
+                     body = decompile_next begin_node;
+                     arg = value_of_args ~loc first.args;
+                     acc }
+        | N_RIGHT _ ->
+          (value_of_args ~loc first.args).desc
+        | _ ->
+          let loop_e =
+            mk ~loc
+              (LoopLeft { arg_name;
+                          body = decompile_next begin_node;
+                          arg = mk ~loc (Var arg_name.nname);
+                          acc }) in
+          MatchVariant {
+            arg = arg_of first;
+            cases = [ PConstr ("Left", [arg_name.nname]), loop_e;
+                      PConstr ("Right", [arg_name.nname]),
+                      value_of_args ~loc first.args ];
+          }
+      in
+      mklet node desc
 
-      | N_LOOP_END (_,_,final_cond), args ->
-        mk ~loc (Apply { prim = Prim_tuple;
-                         args = [arg_of final_cond;
-                                 value_of_args ~loc args] })
+    | N_LOOP_LEFT_END (_, _, end_node), args ->
+      begin match args with
+        | [] -> arg_of end_node
+        | _ ->
+          mk ~loc (Apply { prim = Prim_tuple;
+                           args = [arg_of end_node;
+                                   value_of_args ~loc args] })
+      end
 
-      | N_LOOP_LEFT (begin_node, end_node), [first] ->
-        let arg_name = lvar_of begin_node in
-        let acc = match begin_node.args with
-          | [] -> None
-          | args -> Some (value_of_args ~loc begin_node.args) in
-        let desc = match first.kind with
-          | N_LEFT _ ->
-            LoopLeft { arg_name;
-                       body = decompile_next begin_node;
-                       arg = value_of_args ~loc first.args;
-                       acc }
-          | N_RIGHT _ ->
-            (value_of_args ~loc first.args).desc
-          | _ ->
-            let loop_e =
-              mk ~loc
-                (LoopLeft { arg_name;
-                            body = decompile_next begin_node;
-                            arg = mk ~loc (Var arg_name.nname);
-                            acc }) in
-            MatchVariant {
-              arg = arg_of first;
-              cases = [ CConstr ("Left", [arg_name.nname]), loop_e;
-                        CConstr ("Right", [arg_name.nname]),
-                        value_of_args ~loc first.args ];
+    | N_FOLD ({args = rargs} as begin_node, end_node), [arg] ->
+      let acc = value_of_args ~loc rargs in
+      let desc = match acc.desc with
+        | Const { const = CUnit } ->
+          Fold { prim = Prim_coll_iter;
+                 arg_name = lvar_of begin_node;
+                 body = decompile_next begin_node;
+                 arg = arg_of arg;
+                 acc }
+        | _ ->
+          Fold { prim = Prim_coll_fold;
+                 arg_name = lvar_of begin_node;
+                 body = decompile_next begin_node;
+                 arg = arg_of arg;
+                 acc }
+      in
+      mklet node desc
+
+    | N_FOLD_END (_,_,_), args -> value_of_args ~loc args
+
+    | N_MAP ({args = []} as begin_node, end_node), [arg] ->
+      let desc =
+        Map { prim = Prim_coll_map;
+              arg_name = lvar_of begin_node;
+              body = decompile_next begin_node;
+              arg = arg_of arg }
+      in
+      mklet node desc
+
+    | N_MAP ({args = rargs} as begin_node, end_node), [arg] ->
+      let acc = value_of_args ~loc rargs in
+      let desc =
+        MapFold { prim = Prim_coll_map_fold;
+                  arg_name = lvar_of begin_node;
+                  body = decompile_next begin_node;
+                  arg = arg_of arg;
+                  acc }
+      in
+      mklet node desc
+
+    | N_MAP_END (_,_, res), [] ->
+      (* result of .map body *)
+      arg_of res
+
+    | N_MAP_END (_,_, res), args ->
+      (* result of .map_fold body *)
+      mk ~loc (Apply { prim = Prim_tuple;
+                       args = [arg_of res; value_of_args ~loc args] })
+
+    | N_LAMBDA (begin_node, end_node, arg_ty, res_ty), [] ->
+      let desc = Lambda { arg_name = lvar_of begin_node;
+                          arg_ty;
+                          body = decompile_next begin_node;
+                          ret_ty = Tunit; (* res_ty, not yet inferred *)
+                          recursive = None;
+                        }
+      in
+      mklet node desc
+    | N_LAMBDA_END _, [arg] -> arg_of arg
+
+    | N_TRANSFER, [dest; amount] ->
+      mklet node
+        (Transfer { dest = arg_of dest;
+                    amount = arg_of amount })
+
+    | N_CALL, [contract; amount; arg] ->
+      let entry, arg = match arg.kind, arg.args with
+        | N_CONSTR c, [arg] when is_entry_case c ->
+          Some (entry_name_of_case c), arg
+        | _ -> None, arg in
+      mklet node
+        (Call { contract = arg_of contract;
+                amount = arg_of amount;
+                entry;
+                arg = arg_of arg })
+    (* TODO *)
+
+    | N_CREATE_CONTRACT contract, args ->
+      (* Hack: using annotation to represent contract name *)
+      let contract_name =
+        match node.node_name with
+        | None -> "Contract" ^ string_of_int node.num
+        | Some s ->
+          try contract_name_of_annot s
+          with _ -> "Contract" ^ string_of_int node.num in
+      let contract = { (decompile contract) with contract_name } in
+      mklet node
+        (CreateContract { args = List.map arg_of args; contract })
+
+    | (
+      N_LAMBDA_END _
+    | N_LAMBDA _
+    | N_TRANSFER
+    | N_CALL
+    | N_LOOP _
+    | N_LOOP_LEFT _
+    | N_FOLD _
+    | N_MAP _
+    | N_IF _
+    | N_CONST _
+    | N_END
+    | N_UNKNOWN _
+    | N_LEFT _
+    | N_RIGHT _
+    | N_CONTRACT _
+    | N_UNPACK _
+    | N_ABS
+    | N_START
+    | N_LAMBDA_BEGIN
+    | N_VAR _
+    | N_FAILWITH
+    | N_IF_RESULT (_, _)
+    | N_IF_THEN _
+    | N_IF_ELSE _
+    | N_IF_END_RESULT (_, _, _)
+    | N_IF_NONE _
+    | N_IF_SOME (_, _)
+    | N_IF_NIL _
+    | N_IF_CONS (_, _, _)
+    | N_IF_LEFT (_, _)
+    | N_IF_RIGHT (_, _)
+    | N_IF_PLUS (_, _)
+    | N_IF_MINUS (_, _)
+    | N_LOOP_BEGIN _
+    | N_LOOP_LEFT_BEGIN _
+    | N_ARG (_, _)
+    | N_LOOP_RESULT (_, _, _)
+    | N_LOOP_LEFT_RESULT (_, _, _)
+    | N_FOLD_BEGIN _
+    | N_FOLD_RESULT (_, _, _)
+    | N_MAP_BEGIN _
+    | N_MAP_RESULT (_, _, _)
+    | N_RESULT (_, _)
+    | N_PROJ _
+    | N_CONSTR _
+    | N_SETFIELD _
+    ), _->
+      LiquidLoc.raise_error
+        "not implemented at node %s%!"
+        (LiquidPrinter.string_of_node node)
+
+and decompile_const c = match c with
+  | ( CUnit | CBool _ | CInt _ | CNat _ | CTez _ | CTimestamp _ | CString _
+    | CBytes _ | CKey _ | CContract _ | CSignature _ | CNone  | CKey_hash _
+    | CAddress _ ) as c -> c
+
+  | CSome x -> CSome (decompile_const x)
+  | CLeft x -> CLeft (decompile_const x)
+  | CRight x -> CRight (decompile_const x)
+
+  | CTuple xs -> CTuple (List.map (decompile_const) xs)
+  | CList xs -> CList (List.map (decompile_const) xs)
+  | CSet xs -> CSet (List.map (decompile_const) xs)
+
+  | CMap l ->
+    CMap (List.map (fun (x,y) -> decompile_const x, decompile_const y) l)
+
+  | CBigMap l ->
+    CBigMap (List.map (fun (x,y) -> decompile_const x, decompile_const y) l)
+
+  | CRecord labels ->
+    CRecord (List.map (fun (f, x) -> f, decompile_const x) labels)
+
+  | CConstr (constr, x) ->
+    CConstr (constr, decompile_const x)
+
+  | CLambda { arg_name; arg_ty; body = (begin_node, end_node); ret_ty } ->
+    CLambda { arg_name = lvar_of begin_node;
+              arg_ty;
+              body = decompile_next begin_node;
+              ret_ty;
+              recursive = None;
             }
-        in
-        mklet node desc
 
-      | N_LOOP_LEFT_END (_, _, end_node), args ->
-        begin match args with
-          | [] -> arg_of end_node
-          | _ ->
-            mk ~loc (Apply { prim = Prim_tuple;
-                             args = [arg_of end_node;
-                                     value_of_args ~loc args] })
-        end
+and value_of_args ~loc args =
+  match args with
+  | [] -> mk ~loc (Const { ty = Tunit; const = CUnit })
+  | [arg] -> arg_of arg
+  | args ->
+    mk ~loc (Apply { prim = Prim_tuple; args = List.map arg_of args })
 
-      | N_FOLD ({args = rargs} as begin_node, end_node), [arg] ->
-        let acc = value_of_args ~loc rargs in
-        let desc = match acc.desc with
-          | Const { const = CUnit } ->
-            Fold { prim = Prim_coll_iter;
-                   arg_name = lvar_of begin_node;
-                   body = decompile_next begin_node;
-                   arg = arg_of arg;
-                   acc }
-          | _ ->
-            Fold { prim = Prim_coll_fold;
-                   arg_name = lvar_of begin_node;
-                   body = decompile_next begin_node;
-                   arg = arg_of arg;
-                   acc }
-        in
-        mklet node desc
-
-      | N_FOLD_END (_,_,_), args -> value_of_args ~loc args
-
-      | N_MAP ({args = []} as begin_node, end_node), [arg] ->
-        let desc =
-          Map { prim = Prim_coll_map;
-                arg_name = lvar_of begin_node;
-                body = decompile_next begin_node;
-                arg = arg_of arg }
-        in
-        mklet node desc
-
-      | N_MAP ({args = rargs} as begin_node, end_node), [arg] ->
-        let acc = value_of_args ~loc rargs in
-        let desc =
-          MapFold { prim = Prim_coll_map_fold;
-                    arg_name = lvar_of begin_node;
-                    body = decompile_next begin_node;
-                    arg = arg_of arg;
-                    acc }
-        in
-        mklet node desc
-
-      | N_MAP_END (_,_, res), [] ->
-        (* result of .map body *)
-        arg_of res
-
-      | N_MAP_END (_,_, res), args ->
-        (* result of .map_fold body *)
-        mk ~loc (Apply { prim = Prim_tuple;
-                         args = [arg_of res; value_of_args ~loc args] })
-
-      | N_LAMBDA (begin_node, end_node, arg_ty, res_ty), [] ->
-        let desc = Lambda { arg_name = lvar_of begin_node;
-                            arg_ty;
-                            body = decompile_next begin_node;
-                            ret_ty = Tunit; (* res_ty, not yet inferred *)
-                            recursive = None;
-                          }
-        in
-        mklet node desc
-      | N_LAMBDA_END _, [arg] -> arg_of arg
-
-      | N_TRANSFER, [dest; amount] ->
-        mklet node
-          (Transfer { dest = arg_of dest;
-                      amount = arg_of amount })
-
-      | N_CALL, [contract; amount; arg] ->
-        let entry, arg = match arg.kind, arg.args with
-          | N_CONSTR c, [arg] when is_entry_case c ->
-            Some (entry_name_of_case c), arg
-          | _ -> None, arg in
-        mklet node
-          (Call { contract = arg_of contract;
-                  amount = arg_of amount;
-                  entry;
-                  arg = arg_of arg })
-      (* TODO *)
-
-      | N_CREATE_CONTRACT contract, args ->
-        (* Hack: using annotation to represent contract name *)
-        let contract_name =
-          match node.node_name with
-          | None -> "Contract" ^ string_of_int node.num
-          | Some s ->
-            try contract_name_of_annot s
-            with _ -> "Contract" ^ string_of_int node.num in
-        let contract = { (decompile contract) with contract_name } in
-        mklet node
-          (CreateContract { args = List.map arg_of args; contract })
-
-      | (
-        N_LAMBDA_END _
-      | N_LAMBDA _
-      | N_TRANSFER
-      | N_CALL
-      | N_LOOP _
-      | N_LOOP_LEFT _
-      | N_FOLD _
-      | N_MAP _
-      | N_IF _
-      | N_CONST _
-      | N_END
-      | N_UNKNOWN _
-      | N_LEFT _
-      | N_RIGHT _
-      | N_CONTRACT _
-      | N_UNPACK _
-      | N_ABS
-      | N_START
-      | N_LAMBDA_BEGIN
-      | N_VAR _
-      | N_FAILWITH
-      | N_IF_RESULT (_, _)
-      | N_IF_THEN _
-      | N_IF_ELSE _
-      | N_IF_END_RESULT (_, _, _)
-      | N_IF_NONE _
-      | N_IF_SOME (_, _)
-      | N_IF_NIL _
-      | N_IF_CONS (_, _, _)
-      | N_IF_LEFT (_, _)
-      | N_IF_RIGHT (_, _)
-      | N_IF_PLUS (_, _)
-      | N_IF_MINUS (_, _)
-      | N_LOOP_BEGIN _
-      | N_LOOP_LEFT_BEGIN _
-      | N_ARG (_, _)
-      | N_LOOP_RESULT (_, _, _)
-      | N_LOOP_LEFT_RESULT (_, _, _)
-      | N_FOLD_BEGIN _
-      | N_FOLD_RESULT (_, _, _)
-      | N_MAP_BEGIN _
-      | N_MAP_RESULT (_, _, _)
-      | N_RESULT (_, _)
-      | N_PROJ _
-      | N_CONSTR _
-      | N_SETFIELD _
-      ), _->
-        LiquidLoc.raise_error
-          "not implemented at node %s%!"
-          (LiquidPrinter.string_of_node node)
+and mklet node desc =
+  let bnd_val = mk ?name:node.node_name ~loc:node.loc desc in
+  let bnd_var = lvar_of node in
+  let body = decompile_next node in
+  mk ~loc:node.loc
+    (Let { bnd_var; inline = InAuto; bnd_val; body })
 
 
-  and value_of_args ~loc args =
-    match args with
-    | [] -> mk ~loc (Const { ty = Tunit; const = CUnit })
-    | [arg] -> arg_of arg
-    | args ->
-      mk ~loc (Apply { prim = Prim_tuple; args = List.map arg_of args })
+and decompile contract =
 
-  and mklet node desc =
-    let bnd_val = mk ?name:node.node_name ~loc:node.loc desc in
-    let bnd_var = lvar_of node in
-    let body = decompile_next node in
-    mk ~loc:node.loc
-      (Let { bnd_var; inline = InAuto; bnd_val; body })
-
-  in
   let (begin_node, end_node) = contract.mic_code in
 
   let parameter_name, storage_name = match begin_node.next with

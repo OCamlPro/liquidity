@@ -19,16 +19,16 @@ let get = ref (fun _ ->
 
 type key_diff =
   | DiffKeyHash of string
-  | DiffKey of const
+  | DiffKey of typed_const
 
 type big_map_diff_item =
-  | Big_map_add of key_diff * const
+  | Big_map_add of key_diff * typed_const
   | Big_map_remove of key_diff
 
 type big_map_diff = big_map_diff_item list
 
 type stack_item =
-  | StackConst of const
+  | StackConst of typed_const
   | StackCode of int
 
 type trace_item = {
@@ -44,12 +44,12 @@ type internal_operation =
   | Transaction of {
       amount : string;
       destination : string;
-      parameters : const option;
+      parameters : typed_const option;
     }
   | Origination of {
       manager: string ;
       delegate: string option ;
-      script: (typed_contract * const) option ;
+      script: (typed_contract * typed_const) option ;
       spendable: bool ;
       delegatable: bool ;
       balance: string ;
@@ -72,15 +72,15 @@ exception RuntimeFailure of error * string option * trace option
 module type S = sig
   type 'a t
   val run : from -> string -> string -> string ->
-    (operation list * const * big_map_diff option) t
+    (operation list * typed_const * big_map_diff option) t
   val run_debug : from -> string -> string -> string ->
-    (operation list * const * big_map_diff option * trace) t
-  val init_storage : from -> string list -> const t
+    (operation list * typed_const * big_map_diff option * trace) t
+  val init_storage : from -> string list -> encoded_const t
   val forge_deploy : ?delegatable:bool -> ?spendable:bool ->
     from -> string list -> string t
   val deploy : ?delegatable:bool -> ?spendable:bool ->
     from -> string list -> (string * (string, exn) result) t
-  val get_storage : from -> string -> const t
+  val get_storage : from -> string -> typed_const t
   val forge_call : from -> string -> string -> string -> string t
   val call : from -> string -> string -> string ->
     (string * (unit, exn) result) t

@@ -10,7 +10,7 @@ open LiquidTypes
 
 (** Initializer *)
 type init =
-  | Init_constant of LiquidTypes.const (** constant initializer*)
+  | Init_constant of LiquidTypes.encoded_const (** constant initializer*)
   | Init_code of (LiquidTypes.encoded_contract *
                   LiquidTypes.loc_michelson_contract)
   (** initializer compiled to michelson contract (to be evaluated by

@@ -88,12 +88,14 @@ let compile_liquid_files files =
       match LiquidInit.compile_liquid_init live_ast.ty_env
               (full_sig_of_contract syntax_ast) init with
       | LiquidInit.Init_constant c_init when !LiquidOptions.json ->
-        let s = LiquidToTezos.(json_of_const @@ convert_const c_init) in
+        let c_init = LiquidMichelson.compile_const c_init in
+        let s = LiquidToTezos.(json_of_const @@ convert_const ~expand:true c_init) in
         let output = outprefix ^ ".init.json" in
         FileString.write_file output s;
         Printf.eprintf "Constant initial storage generated in %S\n%!" output
       | LiquidInit.Init_constant c_init ->
-        let s = LiquidPrinter.Michelson.line_of_const c_init in
+        let c_init = LiquidMichelson.compile_const c_init in
+        let s = LiquidToTezos.(string_of_const @@ convert_const ~expand:false c_init) in
         let output = outprefix ^ ".init.tz" in
         FileString.write_file output s;
         Printf.eprintf "Constant initial storage generated in %S\n%!" output
@@ -351,12 +353,14 @@ let translate () =
   let parameter_const = match contract_sig.f_entries_sig with
     | [_] -> input
     | _ -> LiquidEncode.encode_const contract.ty_env contract_sig
-             (CConstr (prefix_entry ^ entry_name, input)) in
+             (CConstr (prefix_entry ^ entry_name,
+                       (LiquidDecode.decode_const input))) in
   let to_str mic_data =
+    let mic_data = LiquidMichelson.compile_const mic_data in
     if !LiquidOptions.json then
-      LiquidToTezos.(json_of_const @@ convert_const mic_data)
+      LiquidToTezos.(json_of_const @@ convert_const ~expand:true mic_data)
     else
-      LiquidPrinter.Michelson.line_of_const mic_data in
+      LiquidToTezos.(line_of_const @@ convert_const ~expand:false mic_data) in
   if storage = "" then
     (* Only translate parameter *)
     Printf.printf "%s\n%!" (to_str parameter_const)
@@ -434,15 +438,16 @@ let init_storage () =
         | c :: _ -> c
         | [] -> assert false in
     String.uncapitalize_ascii c in
+  let storage = LiquidMichelson.compile_const storage in
   if !LiquidOptions.json then
-    let s = LiquidToTezos.(json_of_const @@ convert_const storage) in
+    let s = LiquidToTezos.(json_of_const @@ convert_const ~expand:true storage) in
     let output = match !LiquidOptions.output with
       | Some output -> output
       | None -> outname ^ ".init.json" in
     FileString.write_file output s;
     Printf.printf "Constant initial storage generated in %S\n%!" output
   else
-    let s = LiquidPrinter.Michelson.line_of_const storage in
+    let s = LiquidToTezos.(line_of_const @@ convert_const ~expand:false storage) in
     let output = match !LiquidOptions.output with
       | Some output -> output
       | None -> outname ^ ".init.tz" in

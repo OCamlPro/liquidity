@@ -7,24 +7,28 @@
 (*                                                                        *)
 (**************************************************************************)
 
+open LiquidTypes
+
 (** Convert Michelson contracts/constants to Micheline
     contracts/constants for pretty-printing or use by the client. *)
 
-type loc_table = (int * (LiquidTypes.location * string option)) list
+type loc_table = (int * (location * string option)) list
 
 (** Convert a Michelson contract to Micheline one. Also returns a
     table mapping Micheling locations to Liquidity source
     locations. This table is used to produce localized error messages
     and to localize errors returned by the Tezos node. *)
 val convert_contract :
-  expand:bool -> LiquidTypes.loc_michelson_contract ->
+  expand:bool -> loc_michelson_contract ->
   LiquidTezosTypes.contract * loc_table
 
 (** Convert a Michelson constant to Micheline one *)
-val convert_const : LiquidTypes.const -> LiquidTezosTypes.expr
+val convert_const :
+  expand:bool ->
+  loc_michelson const -> LiquidTezosTypes.expr
 
 (** Convert a Michelson type to Micheline one *)
-val convert_type : LiquidTypes.datatype -> LiquidTezosTypes.expr
+val convert_type : datatype -> LiquidTezosTypes.expr
 
 (** {2 Pretty printing Micheline } *)
 
@@ -39,7 +43,11 @@ val json_of_contract : LiquidTezosTypes.contract -> string
 
 val contract_of_json : string -> LiquidTezosTypes.contract
 val contract_of_ezjson : LiquidTezosTypes.json -> LiquidTezosTypes.contract
+
+val line_of_const : LiquidTezosTypes.expr -> string
+val string_of_const : LiquidTezosTypes.expr -> string
 val json_of_const : LiquidTezosTypes.expr -> string
+
 val const_of_json : string -> LiquidTezosTypes.expr
 val const_of_ezjson : LiquidTezosTypes.json -> LiquidTezosTypes.expr
 

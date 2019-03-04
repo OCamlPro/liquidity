@@ -158,28 +158,28 @@ let sig_of_contract contract =
    sum type *)
 let rec merge_matches acc loc cases constrs =
   match cases, constrs with
-  | [ CConstr ("Left", l), case_l; CConstr ("Right", r), case_r ],
+  | [ PConstr ("Left", l), case_l; PConstr ("Right", r), case_r ],
     [ c1, ty1; c2, ty2 ] ->
-    List.rev @@ (CConstr (c2, r), case_r) ::
-                (CConstr (c1, l), case_l) :: acc
+    List.rev @@ (PConstr (c2, r), case_r) ::
+                (PConstr (c1, l), case_l) :: acc
 
-  | [ CConstr ("Left", l), case_l;
-      CConstr ("Right", [x]), { desc = Let { bnd_var = v; bnd_val = case_r;
+  | [ PConstr ("Left", l), case_l;
+      PConstr ("Right", [x]), { desc = Let { bnd_var = v; bnd_val = case_r;
                                              body = { desc = Var v' }}}],
     _ :: _
     when v.nname = v'
     ->
-    merge_matches acc loc [ CConstr ("Left", l), case_l;
-                            CConstr ("Right", [x]), case_r ] constrs
+    merge_matches acc loc [ PConstr ("Left", l), case_l;
+                            PConstr ("Right", [x]), case_r ] constrs
 
-  | [ CConstr ("Left", l), case_l;
-      CConstr ("Right", [x]), { desc =  Let { bnd_var = v; bnd_val = case_r;
+  | [ PConstr ("Left", l), case_l;
+      PConstr ("Right", [x]), { desc =  Let { bnd_var = v; bnd_val = case_r;
                                               body = { desc = Const { const = CUnit } }}}],
     _ :: _ ->
-    merge_matches acc loc [ CConstr ("Left", l), case_l;
-                            CConstr ("Right", [x]), case_r ] constrs
+    merge_matches acc loc [ PConstr ("Left", l), case_l;
+                            PConstr ("Right", [x]), case_r ] constrs
 
-  | [ CConstr ("Left", l), case_l; CConstr ("Right", [x]), case_r ],
+  | [ PConstr ("Left", l), case_l; PConstr ("Right", [x]), case_r ],
     (c1, ty1) :: constrs ->
     begin match case_r.desc with
       | MatchVariant { arg = { desc = Var x' }; cases }
@@ -189,10 +189,10 @@ let rec merge_matches acc loc cases constrs =
            | Right x -> match x with
                         | Left -> ...*)
 
-        merge_matches ((CConstr (c1, l), case_l) :: acc) loc cases constrs
+        merge_matches ((PConstr (c1, l), case_l) :: acc) loc cases constrs
       | _ ->
         (* ==> match | C1 l -> case_l | _ -> case_r *)
-        List.rev @@ (CAny, case_r) :: (CConstr (c1, l), case_l) :: acc
+        List.rev @@ (PAny, case_r) :: (PConstr (c1, l), case_l) :: acc
     end
   | _ -> raise Exit
 
@@ -254,26 +254,26 @@ let rec type_of_const ~loc env = function
         Tsum (n, l)
       | _ -> assert false
     end
-
+  | CLambda { arg_ty; ret_ty } -> Tlambda (arg_ty, ret_ty)
 
 let rec typecheck_const ~loc env cst ty =
   match ty, cst with
   (* No implicit conversions *)
-  | Tunit, CUnit
-  | Tbool, CBool _
-  | Tint, CInt _
-  | Tstring, CString _
-  | Tbytes, CBytes _
-  | Tnat, CNat _
-  | Ttez, CTez _
-  | Tkey, CKey _
-  | Tkey_hash, CKey_hash _
-  | Tcontract _, CContract _
-  | Taddress, CAddress _
-  | Ttimestamp, CTimestamp _
-  | Tsignature, CSignature _
-  | Toption _, CNone
-    -> (ty, cst)
+  | ( Tunit, CUnit
+    | Tbool, CBool _
+    | Tint, CInt _
+    | Tstring, CString _
+    | Tbytes, CBytes _
+    | Tnat, CNat _
+    | Ttez, CTez _
+    | Tkey, CKey _
+    | Tkey_hash, CKey_hash _
+    | Tcontract _, CContract _
+    | Taddress, CAddress _
+    | Ttimestamp, CTimestamp _
+    | Tsignature, CSignature _
+    | Toption _, CNone) as ty_cst
+    -> ty_cst
 
   (* Implicit conversions *)
   | Tint, CNat s -> ty, CInt s
@@ -392,7 +392,7 @@ let rec typecheck_const ~loc env cst ty =
     let constrs =
       List.map (fun (c, t) -> if eq_types t ty then (c, ty) else (c, t)) constrs in
     let ty = Tsum (sname, constrs) in
-    let c = (CConstr (c, cst) : const) in
+    let c = CConstr (c, cst) in
     (ty, c)
 
   | Tsum (sname, constrs), (CLeft _ | CRight _) when env.decompiling ->
@@ -410,6 +410,10 @@ let rec typecheck_const ~loc env cst ty =
       List.map (fun (c, t) -> if t = ty then (c, ty) else (c, t)) constrs in
     Tsum (sname, constrs), CConstr (c, cst)
 
+  | Tlambda (arg_ty, ret_ty), CLambda lam ->
+    let lam, ty = typecheck_lambda ~loc env lam in
+    ty, CLambda lam
+
   | Tvar tv, c ->
     unify loc ty (type_of_const ~loc env c);
     let ty = match (Ref.get tv).tyo with
@@ -422,9 +426,37 @@ let rec typecheck_const ~loc env cst ty =
       (string_of_type ty)
       (string_of_type (type_of_const ~loc env cst))
 
+and typecheck_lambda ~loc env { arg_name; arg_ty; body; ret_ty; recursive } =
+  match recursive with
+  | None ->
+    (* allow closures at typechecking, do not reset env *)
+    (* Printf.printf "Lambda arg %s : %s\n" arg_name.nname (string_of_type arg_ty);
+     * begin match arg_ty with
+     *   | Tcontract c ->
+     *     let n = (match c.sig_name with Some n -> n | _ -> "") in
+     *     Printf.printf "Tcontract %s (%d)\n" n (List.length c.entries_sig);
+     *     List.iter (fun e -> Printf.printf "%s\n" e.entry_name) c.entries_sig
+     *   | _ -> ()
+     * end; *)
+    let (env, arg_count) = new_binding env arg_name.nname arg_ty in
+    let body = typecheck env body in
+    check_used env arg_name arg_count;
+    let lam = { arg_name; arg_ty; body; ret_ty = body.ty; recursive = None } in
+    let ty = Tlambda (arg_ty, body.ty) in
+    (lam, ty)
+  | Some f ->
+    let ty = Tlambda (arg_ty, ret_ty) in
+    let (env, f_count) = new_binding env f ty in
+    let (env, arg_count) = new_binding env arg_name.nname arg_ty in
+    let body = typecheck_expected "recursive function body" env ret_ty body in
+    check_used env arg_name arg_count;
+    check_used env { nname = f; nloc = loc} f_count;
+    let lam = { arg_name; arg_ty; body; ret_ty; recursive } in
+    (lam, ty)
+
 
 (* Typecheck an expression. Returns a typed expression *)
-let rec typecheck env ( exp : syntax_exp ) : typed_exp =
+and typecheck env ( exp : syntax_exp ) : typed_exp =
   let loc = exp.loc in
   let unify = unify loc in
   match exp.desc with
@@ -926,34 +958,9 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
     in
     mk ?name:exp.name ~loc desc ty
 
-  | Lambda { arg_name; arg_ty; body; ret_ty; recursive = None } ->
-    (* allow closures at typechecking, do not reset env *)
-    (* Printf.printf "Lambda arg %s : %s\n" arg_name.nname (string_of_type arg_ty);
-     * begin match arg_ty with
-     *   | Tcontract c ->
-     *     let n = (match c.sig_name with Some n -> n | _ -> "") in
-     *     Printf.printf "Tcontract %s (%d)\n" n (List.length c.entries_sig);
-     *     List.iter (fun e -> Printf.printf "%s\n" e.entry_name) c.entries_sig
-     *   | _ -> ()
-     * end; *)
-    let (env, arg_count) = new_binding env arg_name.nname arg_ty in
-    let body = typecheck env body in
-    check_used env arg_name arg_count;
-    let desc =
-      Lambda { arg_name; arg_ty; body; ret_ty = body.ty; recursive = None } in
-    let ty = Tlambda (arg_ty, body.ty) in
-    mk ?name:exp.name ~loc desc ty
-
-  | Lambda { arg_name; arg_ty; body; ret_ty;
-             recursive = (Some f as recursive) } ->
-    let ty = Tlambda (arg_ty, ret_ty) in
-    let (env, f_count) = new_binding env f ty in
-    let (env, arg_count) = new_binding env arg_name.nname arg_ty in
-    let body = typecheck_expected "recursive function body" env ret_ty body in
-    check_used env arg_name arg_count;
-    check_used env { nname = f; nloc = loc} f_count;
-    let desc = Lambda { arg_name; arg_ty; body; ret_ty; recursive } in
-    mk ?name:exp.name ~loc desc ty
+  | Lambda lam ->
+    let lam, ty = typecheck_lambda ~loc env lam in
+    mk ?name:exp.name ~loc (Lambda lam) ty
 
   (* This cannot be produced by parsing *)
   | Closure _ -> assert false
@@ -1058,8 +1065,8 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
         let expected_type = ref None in
         let cases_extra_constrs =
           List.fold_left (fun acc -> function
-              | CAny, _ -> acc
-              | CConstr (c, _), _ -> StringSet.add c acc
+              | PAny, _ -> acc
+              | PConstr (c, _), _ -> StringSet.add c acc
             ) StringSet.empty cases
           |> ref
         in
@@ -1074,27 +1081,27 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
         let are_unbound vars body =
           let body_vars = LiquidBoundVariables.bv body in
           not (List.exists (fun v -> StringSet.mem v body_vars) vars) in
-        let rec normalize acc rev_cases = match rev_cases, acc with
+        let rec normalize (acc : (pattern * syntax_exp) list) rev_cases = match rev_cases, acc with
           | [], _ -> acc
-          | (_, CAny, body1) :: rev_cases, [CAny, body2]
+          | (_, PAny, body1) :: rev_cases, [PAny, body2]
             when eq_syntax_exp body1 body2 ->
-            normalize [CAny, body1] rev_cases
-          | (_, CAny, body1) :: rev_cases, [CConstr (_, vars2), body2]
+            normalize [PAny, body1] rev_cases
+          | (_, PAny, body1) :: rev_cases, [PConstr (_, vars2), body2]
             when are_unbound vars2 body2 && eq_syntax_exp body1 body2 ->
-            normalize [CAny, body1] rev_cases
-          | (_, CConstr (_, vars1) , body1) :: rev_cases, [CAny, body2]
+            normalize [PAny, body1] rev_cases
+          | (_, PConstr (_, vars1) , body1) :: rev_cases, [PAny, body2]
             when are_unbound vars1 body1 && eq_syntax_exp body1 body2 ->
-            normalize [CAny, body1] rev_cases
-          | (_, CConstr (_, vars1) , body1) :: rev_cases,
-            [CConstr (_, vars2), body2]
+            normalize [PAny, body1] rev_cases
+          | (_, PConstr (_, vars1) , body1) :: rev_cases,
+            [PConstr (_, vars2), body2]
             when are_unbound vars1 body1 && are_unbound vars2 body2 &&
                  eq_syntax_exp body1 body2 ->
-            normalize [CAny, body1] rev_cases
-          | (c1, CAny, body1) :: rev_cases, _ ->
+            normalize [PAny, body1] rev_cases
+          | (c1, PAny, body1) :: rev_cases, _ ->
             (* body1 <> body2 *)
-            normalize ((CConstr (c1, []), body1) :: acc)  rev_cases
-          | (_, CConstr (c1, vars1), body1) :: rev_cases, _ ->
-            normalize ((CConstr (c1, vars1), body1) :: acc)  rev_cases
+            normalize ((PConstr (c1, []), body1) :: acc)  rev_cases
+          | (_, PConstr (c1, vars1), body1) :: rev_cases, _ ->
+            normalize ((PConstr (c1, vars1), body1) :: acc)  rev_cases
         in
         let cases = normalize [] (List.rev cases) in
 
@@ -1115,25 +1122,25 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
             in
             let env, count_opt =
               match pat with
-              | CConstr ("Left", vars) ->
+              | PConstr ("Left", vars) ->
                 let var_ty = match constrs with
                   | ["Left", left_ty; _] -> left_ty
                   | _ -> error loc "expected variant, got %s"
                            (string_of_type arg.ty) in
                 add_vars_env vars var_ty
-              | CConstr ("Right", vars) ->
+              | PConstr ("Right", vars) ->
                 let var_ty = match constrs with
                   | [_; "Right", right_ty] -> right_ty
                   | _ -> error loc "expected variant, got %s"
                            (string_of_type arg.ty) in
                 add_vars_env vars var_ty
-              | CConstr (constr, vars) ->
+              | PConstr (constr, vars) ->
                 let var_ty =
                   try List.assoc constr constrs
                   with Not_found -> error loc "unknown constructor %S" constr
                 in
                 add_vars_env vars var_ty
-              | CAny -> env, None
+              | PAny -> env, None
             in
             let e =
               match !expected_type with
@@ -1148,7 +1155,7 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
                 e
             in
             begin match pat, count_opt with
-              | CConstr (_, [var]), Some count ->
+              | PConstr (_, [var]), Some count ->
                 check_used env { nname = var; nloc = loc} count
               | _ -> ()
             end;
@@ -1207,16 +1214,16 @@ let rec typecheck env ( exp : syntax_exp ) : typed_exp =
 
 and find_case loc env constr cases =
   match List.find_all (function
-      | CAny, _ -> true
-      | CConstr (cname, _), _ -> cname = constr
+      | PAny, _ -> true
+      | PConstr (cname, _), _ -> cname = constr
     ) cases
   with
   | [] ->
     error loc "non-exhaustive pattern. Constructor %s is not matched." constr
   | matched_case :: unused ->
     List.iter (function
-        | CAny, _ -> ()
-        | (CConstr _, (e : syntax_exp)) ->
+        | PAny, _ -> ()
+        | (PConstr _, (e : syntax_exp)) ->
           LiquidLoc.warn e.loc (UnusedMatched constr)
       ) unused;
     matched_case
@@ -1999,6 +2006,10 @@ let typecheck_code env ?expected_ty code =
   | Some expected_ty -> typecheck_expected "value" env expected_ty code
   | None -> typecheck env code
 
+let typecheck_const env ?(loc=noloc env) ?expected_ty cst =
+  match expected_ty with
+  | Some ty -> typecheck_const ~loc env cst ty |> snd
+  | None -> typecheck_const ~loc env cst (type_of_const ~loc env cst) |> snd
 
 (* XXX just for printing, do not use *)
 let rec type_of_const = function
@@ -2034,6 +2045,8 @@ let rec type_of_const = function
 
   | CKey_hash _ -> Tkey_hash
   | CContract _ -> Tcontract unit_contract_sig
+
+  | CLambda { arg_ty; ret_ty } -> Tlambda (arg_ty, ret_ty)
 
   (* XXX just for printing *)
   | CRecord _ -> Trecord ("<record>", [])
