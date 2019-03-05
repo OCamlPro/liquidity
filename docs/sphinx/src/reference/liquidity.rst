@@ -212,6 +212,11 @@ Starting with version ``0.5``, constant values such as ``[]``,
 ``Map``, ``Set``, ``None`` do not need to be annotated with their type
 anymore. It will be inferred (when possible), see `Type inference`_).
 
+Pure (not closures) lambdas are also constants in Liquidity.
+
+* For instance ``fun (x : int) -> x + 1`` can be used anywhere that a
+  constant of type ``int -> int`` is required.
+
 Predefined Primitives
 ---------------------
 
@@ -1103,6 +1108,11 @@ A contract signature contains a declaration for the type ``storage``
 declarations for the entry point signatures with the special keyword
 ``val%entry`` (names of argument can be specified).
 
+| You can use the following syntactic sugar if you don't want to write
+| storage and return types (as they are identical for all entries of a
+| smart contract.) : ``val%entry entry_name : p2:TYPE -> _``
+|
+
 The type of a contract (instance) whose signature is `S` is written
 ``S.instance``. Note that ``S`` must be declared as a contract signature
 beforehand if we want to declare values of type ``S.instance``.
@@ -1407,15 +1417,31 @@ Toplevel:
 * ``[%%version`` FLOAT ``]``
 * Structure*
 
-Structure:
+Contract:
+
+* ``struct`` Structure* ``end``
+* UIDENT
+
+Module:
+
+* ``struct`` ModStructure* ``end``
+* UIDENT
+
+ModStructure:
 
 * ``type`` LIDENT ``=`` Type
 * ``type`` LIDENT ``= {`` [ LIDENT ``:`` Type ``;``]+ ``}``
 * ``type`` LIDENT ``=`` [ ``|`` UIDENT ``of`` Type ]+
-* ``contract`` LIDENT ``= struct`` Structure* ``end``
-* ``contract type`` LIDENT ``= sig`` Signature* ``end``
+* ``module`` UIDENT ``=`` Module
+* ``contract`` UIDENT ``=`` Contract
+* ``contract type`` UIDENT ``= sig`` Signature* ``end``
+* ``let`` ``rec``? Annot* Pattern ``=`` Expression
+
+Structure:
+
+* ModStructure
 * ``let%init storage =`` Expression
-* ``let%entry`` LIDENT ``(`` LIDENT ``:`` Type ``) (`` LIDENT ``:`` Type ``) =`` Expression
+* ``let%entry`` LIDENT Pattern Pattern =`` Expression
 
 Signature:
 
@@ -1423,30 +1449,31 @@ Signature:
 * ``type`` LIDENT
 * ``val%entry`` LIDENT ``:`` LIDENT ``:`` Type ``->`` LIDENT ``:`` Type ``-> operation list *`` Type
 
+Annot:
+
+* ``[@inline]``
+* ``[@private]``
+
 Expression:
 
 * LIDENT
 * UIDENT ``.`` LIDENT
 * [LIDENT ``.``]+ LIDENT
 * [LIDENT ``.``]+ LIDENT ``<-`` Expression
-* ``(`` Expression `:` Type ``)``
+* ``(`` Expression ``:`` Type ``)``
 * ``if`` Expression ``then`` Expression
 * ``if`` Expression ``then`` Expression ``else`` Expression
 * ``Contract.create`` Expression Expression Expression Expression
-  Expression Expression ``(fun ( parameter:`` Type ``) (storage:``
-  Type ``) ->`` Expression ``)``
-* ``(Contract.at`` Expression ``:`` Type ``option)``
-* ``(Bytes.unpack`` Expression ``:`` Type ``option )``
-* ``let`` LIDENT ``=`` Expression ``in`` Expression
-* ``let%inline`` LIDENT ``=`` Expression ``in`` Expression
+  Expression Expression ``(contract`` Contract ``)``
+* ``let`` ``rec``? Annot* Pattern ``=`` Expression ``in`` Expression
 * Expression ``;`` Expression
-* ``Loop.loop (fun`` LIDENT ``->`` Expression ``)`` Expression
-* ``Loop.left (fun`` LIDENT ``->`` Expression ``)`` Expression
+* ``Loop.loop (fun`` Pattern ``->`` Expression ``)`` Expression
+* ``Loop.left (fun`` Pattern ``->`` Expression ``)`` Expression
 * Expression Expression
 * ``match%nat`` Expression ``with | Plus`` LIDENT ``->`` Expression ``| Minus`` LIDENT ``->`` Expression
 * ``match`` Expression ``with | Left`` LIDENT ``->`` Expression ``| Right`` LIDENT ``->`` Expression
 * ``match`` Expression ``with | [] ->`` Expression ``|`` LIDENT ``::`` LIDENT ``->`` Expression
-* ``match`` Expression ``with`` [ ``|`` Pattern ``->`` Expression ]*
+* ``match`` Expression ``with`` [ ``|`` MatchPattern ``->`` Expression ]*
 * ``Left`` Expression
 * ``Right`` Expression
 * ``Some`` Expression
@@ -1455,10 +1482,16 @@ Expression:
 
 Pattern:
 
-* UIDENT
-* UIDENT LIDENT
+* LIDENT
+* ``(`` LIDENT ``:`` Type ``)``
 * ``_``
-* ``(`` LIDENT [``,`` LIDENT]* ``)``
+* ``(`` Pattern [``,`` Pattern]* ``)``
+
+MatchPattern:
+
+* UIDENT
+* UIDENT Pattern
+
 
 Type:
 
@@ -1511,6 +1544,7 @@ Constant:
 * ``Map`` | ``Map`` ``[`` Constant+``;`` ``]``
 * ``Set`` | ``Set`` ``[`` Constant+``;`` ``]``
 * ``BigMap`` | ``BigMap`` ``[`` Constant+``;`` ``]``
+* ``fun`` Pattern ``->`` Expression
 
 B58Char:
 
