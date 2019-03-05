@@ -335,14 +335,15 @@ and convert_code ~abbrev (expr : (datatype, 'a) exp) =
 
   | Const { ty; const } -> begin
       match ty, const with
-      | (Tint
+      | ( Tint
         | Tnat
         | Tstring
         | Tunit
         | Ttimestamp
         | Ttez
         | Tbool
-        | Toperation), _ -> convert_const ~abbrev const
+        | Toperation
+        | Tlambda _ ), _ -> convert_const ~abbrev const
       | _, (CList (_ :: _) | CMap (_ :: _) | CBigMap (_ :: _)) ->
         convert_const ~abbrev const
       | (Tsignature, CSignature s
