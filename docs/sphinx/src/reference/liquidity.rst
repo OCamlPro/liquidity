@@ -999,37 +999,69 @@ collections.
 * ``Coll.map_fold``
 
 
-The Module-like Contract System
+The Modules and Contracts System
 -------------------------------
 
 The system described in this section allows to define several
-contracts in the same file, to reference contracts by their names, and
-to call contracts defined in other files.
+contracts and modules in the same file, to reference contracts by
+their names, and to call contracts defined in other files.
 
-Contract Structures
-~~~~~~~~~~~~~~~~~~~
+The notion of *contract and module structures* in Liquidity is a way
+to define namespaces and to encapsulate types, values and contracts in
+packages. These packages are called structures and are introduced with
+the ``struct`` keyword. Modules, introduced with the keyword
+``module``, can contain types and values but cannot contain any entry
+points. Contracts are introduced with the keyword ``contract``, they
+can contain types, values and must have *at least one* entry point.
 
-The notion of *contract structure* in Liquidity is a way to define
-namespaces and to encapsulate types and contracts in packages. These
-packages are called structures and are introduced with the ``struct``
-keyword. They contain the exact same syntax elements that are allowed
-to define contracts (see `Contract Format`_). These contract
-structures are given names with the keyword ``contract``.
+Types in scope (defined before their use) can be referred to anywhere,
+provided they are adequately qualified (with a dot ``.`` notation).
 
-For instance the following structure defines a contract named ``C``
-with a single entry point ``main``:
+Values are exported outside the module or the contract by default,
+which means they can be used by other modules and contracts. One can
+annotate the value with ``[@private]`` to prevent exporting the value.
 
-.. tryliquidity:: ../../../../tests/doc/doc69.liq
-.. literalinclude:: ../../../../tests/doc/doc69.liq
-   :end-at: end
+For instance the following example defines a module ``M`` with a type
+``t`` and an exported function ``f``.
 
-Components of ``C`` can later be referred to using identifiers
-qualified (with a dot ``.``) by the contract name ``C``:
+.. tryliquidity:: ../../../../tests/doc/doc73.liq
+.. literalinclude:: ../../../../tests/doc/doc73.liq
+   :lines: 1-4
 
-- ``C.storage`` can be used as a type
-- ``succ`` cannot be called from outside the contract
+The contract ``C`` can be defined as such. It uses the type ``t`` of
+``M``, written ``M.t`` and the function ``f`` of ``M`` written
+``M.f``. The function ``succ`` is exported and can be called with
+``C.succ`` outside the contract, whereas ``prev`` cannot (the compiler
+will complain that is does not know the symbol ``C.prev`` if we try to
+use it elsewhere).
 
-Contracts can also be used as first class values:
+.. tryliquidity:: ../../../../tests/doc/doc73.liq
+.. literalinclude:: ../../../../tests/doc/doc73.liq
+   :lines: 6-16
+
+The toplevel contract can use elements from either structures. Here we
+use types and functions from both ``M`` and ``C`` and call the entry
+point ``main`` of a contract instance of type ``C``.
+
+.. tryliquidity:: ../../../../tests/doc/doc73.liq
+.. literalinclude:: ../../../../tests/doc/doc73.liq
+   :lines: 30-33
+
+Module and Contract Aliases
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Modules and contracts can be arbitrarily nested and aliases can be
+defined by simply giving the qualified name (instead of the whole structure).
+
+.. tryliquidity:: ../../../../tests/doc/doc73.liq
+.. literalinclude:: ../../../../tests/doc/doc73.liq
+   :lines: 18-28
+
+First Class Contract Structures
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Contracts structures (note we are not talking about *contract
+instances* here) can also be used as first class values:
 
 .. tryliquidity:: ../../../../tests/doc/doc23.liq
 .. literalinclude:: ../../../../tests/doc/doc23.liq
