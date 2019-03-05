@@ -652,7 +652,7 @@ let rec tvars_to_unit ({ desc; ty; loc } as e) =
     | Project { field; record } ->
       Project { field; record = tvars_to_unit record }
     | Const { ty; const } ->
-      Const { ty = vars_to_unit ~loc ty; const }
+      Const { ty = vars_to_unit ~loc ty; const = const_tvars_to_unit const }
     | Apply { prim = Prim_extension (prim_name, effect, targs,
                                      nb_arg, nb_ret, minst); args } ->
       List.iter (fun ty ->
@@ -763,6 +763,33 @@ let rec tvars_to_unit ({ desc; ty; loc } as e) =
   in
   { e with desc; ty = vars_to_unit ~loc ty }
 
+and const_tvars_to_unit c = match c with
+  | ( CUnit | CBool _ | CInt _ | CNat _ | CTez _ | CTimestamp _ | CString _
+    | CBytes _ | CKey _ | CContract _ | CSignature _ | CNone  | CKey_hash _
+    | CAddress _ ) as c -> c
+  | CSome x -> CSome (const_tvars_to_unit x)
+  | CLeft x -> CLeft (const_tvars_to_unit x)
+  | CRight x -> CRight (const_tvars_to_unit x)
+  | CTuple xs -> CTuple (List.map (const_tvars_to_unit) xs)
+  | CList xs -> CList (List.map (const_tvars_to_unit) xs)
+  | CSet xs -> CSet (List.map (const_tvars_to_unit) xs)
+  | CMap l ->
+    CMap (List.map (fun (x,y) ->
+        const_tvars_to_unit x, const_tvars_to_unit y) l)
+  | CBigMap l ->
+    CBigMap (List.map (fun (x,y) ->
+        const_tvars_to_unit x, const_tvars_to_unit y) l)
+  | CRecord labels ->
+    CRecord (List.map (fun (f, x) ->
+        f, const_tvars_to_unit x) labels)
+  | CConstr (constr, x) ->
+    CConstr (constr, const_tvars_to_unit x)
+  | CLambda { arg_name; arg_ty; body; ret_ty; recursive } ->
+    CLambda { arg_name; recursive;
+              arg_ty = vars_to_unit ~loc:arg_name.nloc arg_ty ;
+              body = tvars_to_unit body;
+              ret_ty = vars_to_unit ~loc:body.loc ret_ty }
+
 and contract_tvars_to_unit (contract : typed_contract) =
   let values = List.map (fun v ->
       { v with val_exp = tvars_to_unit v.val_exp }
@@ -793,6 +820,7 @@ and contract_tvars_to_unit (contract : typed_contract) =
 
 let rec mono_exp env subst vtys (e:typed_exp) =
   let mono_exp = mono_exp env in
+  let mono_const = mono_const env in
   let instantiate ty = instantiate_to subst (get_type env e.loc ty) in
   (* Printf.printf "Exp %s : %s ->>" (string_of_code e) (string_of_type e.ty); *)
   let ty = instantiate e.ty in
@@ -856,8 +884,9 @@ let rec mono_exp env subst vtys (e:typed_exp) =
                                 set_val = mono_exp subst vtys sf.set_val }
     | Project p -> Project { field = p.field;
                              record = mono_exp subst vtys p.record }
-    | Const c -> Const { const = c.const;
-                         ty = instantiate c.ty }
+    | Const c ->
+      let const = mono_const subst vtys c.const in
+      Const { const; ty = instantiate c.ty }
     | Apply { prim = Prim_extension (prim_name, effect, targs,
                                      nb_arg, nb_ret, minst); args } ->
       let targs = List.map instantiate targs in
@@ -949,6 +978,34 @@ let rec mono_exp env subst vtys (e:typed_exp) =
     | Type _ -> assert false (* Removed during typechecking*)
   in
   { e with desc; ty }
+
+and mono_const env subst vtys (c : typed_const) = match c with
+  | ( CUnit | CBool _ | CInt _ | CNat _ | CTez _ | CTimestamp _ | CString _
+    | CBytes _ | CKey _ | CContract _ | CSignature _ | CNone  | CKey_hash _
+    | CAddress _ ) as c -> c
+  | CSome x -> CSome (mono_const env subst vtys x)
+  | CLeft x -> CLeft (mono_const env subst vtys x)
+  | CRight x -> CRight (mono_const env subst vtys x)
+  | CTuple xs -> CTuple (List.map (mono_const env subst vtys) xs)
+  | CList xs -> CList (List.map (mono_const env subst vtys) xs)
+  | CSet xs -> CSet (List.map (mono_const env subst vtys) xs)
+  | CMap l ->
+    CMap (List.map (fun (x,y) ->
+        mono_const env subst vtys x, mono_const env subst vtys y) l)
+  | CBigMap l ->
+    CBigMap (List.map (fun (x,y) ->
+        mono_const env subst vtys x, mono_const env subst vtys y) l)
+  | CRecord labels ->
+    CRecord (List.map (fun (f, x) -> f, mono_const env subst vtys x) labels)
+  | CConstr (constr, x) ->
+    CConstr (constr, mono_const env subst vtys x)
+  | CLambda { arg_name; arg_ty; body; ret_ty; recursive } ->
+    let instantiate ty = instantiate_to subst (get_type env body.loc ty) in
+    let arg_ty = instantiate arg_ty in
+    let ret_ty = instantiate ret_ty in
+    let body = mono_exp env subst vtys body in
+    CLambda { arg_name; arg_ty; body; ret_ty; recursive }
+
 
 and mono_contract env c =
   let cval, vtys = List.fold_left (fun (cval, vtys) v ->

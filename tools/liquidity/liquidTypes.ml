@@ -1103,12 +1103,9 @@ let mk =
     { desc; name; loc; ty; bv; effect; transfer }
 
 let rec eq_exp_desc eq_ty eq_var e1 e2 = match e1, e2 with
-  | Const { ty = ty1; const = CLambda l1 },
-    Const { ty = ty2; const = CLambda l2 } ->
-    eq_types ty1 ty2 &&
-    l1.arg_name.nname = l2.arg_name.nname && eq_types l1.arg_ty l2.arg_ty &&
-    eq_types l1.ret_ty l2.ret_ty && eq_exp eq_ty eq_var l1.body l2.body
-  | Const c1, Const c2 -> c1.const = c2.const && eq_types c1.ty c2.ty
+  | Const c1, Const c2 ->
+    eq_types c1.ty c2.ty &&
+    eq_const eq_ty eq_var c1.const c2.const
   | Var v1, Var v2 -> eq_var v1 v2
   | Failwith e1, Failwith e2 -> eq_exp eq_ty eq_var e1 e2
   | Project p1, Project p2 ->
@@ -1221,6 +1218,45 @@ let rec eq_exp_desc eq_ty eq_var e1 e2 = match e1, e2 with
      with Invalid_argument _ -> false)
   | TypeAnnot a1, TypeAnnot a2 ->
     eq_exp eq_ty eq_var a1.e a2.e && eq_types a1.ty a2.ty
+  | _, _ -> false
+
+and eq_const eq_ty eq_var c1 c2 = match c1, c2 with
+  | ( CUnit | CBool _ | CInt _ | CNat _ | CTez _ | CTimestamp _ | CString _
+    | CBytes _ | CKey _ | CContract _ | CSignature _ | CNone  | CKey_hash _
+    | CAddress _ ),
+    ( CUnit | CBool _ | CInt _ | CNat _ | CTez _ | CTimestamp _ | CString _
+    | CBytes _ | CKey _ | CContract _ | CSignature _ | CNone  | CKey_hash _
+    | CAddress _ ) -> c1 = c2
+  | CSome c1, CSome c2
+  | CLeft c1, CLeft c2
+  | CRight c1, CRight c2
+    -> eq_const eq_ty eq_var c1 c2
+  | CTuple l1, CTuple l2
+  | CList l1, CList l2
+  | CSet l1, CSet l2 ->
+    begin
+      try List.for_all2 (eq_const eq_ty eq_var) l1 l2
+      with Invalid_argument _ -> false
+    end
+  | CMap l1, CMap l2
+  | CBigMap l1, CBigMap l2 ->
+    begin
+      try List.for_all2 (fun (k1, v1) (k2, v2) ->
+          eq_const eq_ty eq_var k1 k2 &&
+          eq_const eq_ty eq_var v1 v2) l1 l2
+      with Invalid_argument _ -> false
+    end
+  | CRecord l1, CRecord l2 ->
+    begin
+      try List.for_all2 (fun (s1, c1) (s2, c2) ->
+          s1 = s2 && eq_const eq_ty eq_var c1 c2) l1 l2
+      with Invalid_argument _ -> false
+    end
+  | CConstr (s1, c1), CConstr (s2, c2) ->
+    s1 = s2 && eq_const eq_ty eq_var c1 c2
+  | CLambda l1, CLambda l2 ->
+    l1.arg_name.nname = l2.arg_name.nname && eq_types l1.arg_ty l2.arg_ty &&
+    eq_types l1.ret_ty l2.ret_ty && eq_exp eq_ty eq_var l1.body l2.body
   | _, _ -> false
 
 (** Generic equality between expressions modulo location, renaming, etc. *)

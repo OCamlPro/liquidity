@@ -746,27 +746,20 @@ and compile_const ~loc c = match c with
   | ( CUnit | CBool _ | CInt _ | CNat _ | CTez _ | CTimestamp _ | CString _
     | CBytes _ | CKey _ | CContract _ | CSignature _ | CNone  | CKey_hash _
     | CAddress _ ) as c -> c
-
   | CSome x -> CSome (compile_const ~loc x)
   | CLeft x -> CLeft (compile_const ~loc x)
   | CRight x -> CRight (compile_const ~loc x)
-
   | CTuple xs -> CTuple (List.map (compile_const ~loc) xs)
   | CList xs -> CList (List.map (compile_const ~loc) xs)
   | CSet xs -> CSet (List.map (compile_const ~loc) xs)
-
   | CMap l ->
     CMap (List.map (fun (x,y) -> compile_const ~loc x, compile_const ~loc y) l)
-
   | CBigMap l ->
     CBigMap (List.map (fun (x,y) -> compile_const ~loc x, compile_const ~loc y) l)
-
   | CRecord labels ->
     CRecord (List.map (fun (f, x) -> f, compile_const ~loc x) labels)
-
   | CConstr (constr, x) ->
     CConstr (constr, compile_const ~loc x)
-
   | CLambda lam ->
     CLambda (compile_lambda ~loc lam)
 

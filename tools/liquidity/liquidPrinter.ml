@@ -744,6 +744,8 @@ module Michelson = struct
     to_string multi_line (fun fmt b _ -> bprint_loc_michelson fmt b)
   let line_of_loc_michelson =
     to_string single_line (fun fmt b _ -> bprint_loc_michelson fmt b)
+  let string_of_loc_michelson_const c =
+    to_string multi_line (bprint_const (fun fmt b _ -> bprint_loc_michelson fmt b)) c
 
 end
 

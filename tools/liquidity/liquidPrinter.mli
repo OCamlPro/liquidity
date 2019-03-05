@@ -72,6 +72,7 @@ module Michelson : sig
   val string_of_loc_michelson : loc_michelson -> string
   (** Pretty-print actual Michelson contract on a single line *)
   val line_of_loc_michelson : loc_michelson -> string
+  val string_of_loc_michelson_const : loc_michelson const -> string
 end
 
 (** Print a decompiled node (for debugging purposes) *)

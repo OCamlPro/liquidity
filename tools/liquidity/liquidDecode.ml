@@ -15,27 +15,20 @@ let rec decode_const (c : encoded_const) : typed_const = match c with
   | ( CUnit | CBool _ | CInt _ | CNat _ | CTez _ | CTimestamp _ | CString _
     | CBytes _ | CKey _ | CContract _ | CSignature _ | CNone  | CKey_hash _
     | CAddress _ ) as c -> c
-
   | CSome x -> CSome (decode_const x)
   | CLeft x -> CLeft (decode_const x)
   | CRight x -> CRight (decode_const x)
-
   | CTuple xs -> CTuple (List.map (decode_const) xs)
   | CList xs -> CList (List.map (decode_const) xs)
   | CSet xs -> CSet (List.map (decode_const) xs)
-
   | CMap l ->
     CMap (List.map (fun (x,y) -> decode_const x, decode_const y) l)
-
   | CBigMap l ->
     CBigMap (List.map (fun (x,y) -> decode_const x, decode_const y) l)
-
   | CRecord labels ->
     CRecord (List.map (fun (f, x) -> f, decode_const x) labels)
-
   | CConstr (constr, x) ->
     CConstr (constr, decode_const x)
-
   | CLambda { arg_name; arg_ty; body; ret_ty; recursive } ->
     let body = decode body in
     CLambda { arg_name; arg_ty; body; ret_ty; recursive }

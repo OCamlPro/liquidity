@@ -1072,27 +1072,20 @@ and decompile_const loc cst = match cst with
   | ( CUnit | CBool _ | CInt _ | CNat _ | CTez _ | CTimestamp _ | CString _
     | CBytes _ | CKey _ | CContract _ | CSignature _ | CNone  | CKey_hash _
     | CAddress _ ) as c -> c
-
   | CSome x -> CSome (decompile_const loc x)
   | CLeft x -> CLeft (decompile_const loc x)
   | CRight x -> CRight (decompile_const loc x)
-
   | CTuple xs -> CTuple (List.map (decompile_const loc) xs)
   | CList xs -> CList (List.map (decompile_const loc) xs)
   | CSet xs -> CSet (List.map (decompile_const loc) xs)
-
   | CMap l ->
     CMap (List.map (fun (x,y) -> decompile_const loc x, decompile_const loc y) l)
-
   | CBigMap l ->
     CBigMap (List.map (fun (x,y) -> decompile_const loc x, decompile_const loc y) l)
-
   | CRecord labels ->
     CRecord (List.map (fun (f, x) -> f, decompile_const loc x) labels)
-
   | CConstr (constr, x) ->
     CConstr (constr, decompile_const loc x)
-
   | CLambda lam ->
     let nodes =
       decompile_lambda loc lam.arg_ty lam.ret_ty lam.body in

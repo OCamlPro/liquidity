@@ -179,8 +179,7 @@ let rec convert_const ~loc expand (expr : loc_michelson const) =
 
   | _ ->
     LiquidLoc.raise_error ~loc:(fst loc) "to-tezos: unimplemented const:\n%s%!"
-      "TODO"
-      (* (LiquidPrinter.Michelson.string_of_loc_michelson expr) *)
+      (LiquidPrinter.Michelson.string_of_loc_michelson_const expr)
 
 and convert_code expand expr =
   let name = expr.loc_name in

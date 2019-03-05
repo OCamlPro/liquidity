@@ -261,27 +261,20 @@ and untype_const c = match c with
   | ( CUnit | CBool _ | CInt _ | CNat _ | CTez _ | CTimestamp _ | CString _
     | CBytes _ | CKey _ | CContract _ | CSignature _ | CNone  | CKey_hash _
     | CAddress _ ) as c -> c
-
   | CSome x -> CSome (untype_const x)
   | CLeft x -> CLeft (untype_const x)
   | CRight x -> CRight (untype_const x)
-
   | CTuple xs -> CTuple (List.map (untype_const) xs)
   | CList xs -> CList (List.map (untype_const) xs)
   | CSet xs -> CSet (List.map (untype_const) xs)
-
   | CMap l ->
     CMap (List.map (fun (x,y) -> untype_const x, untype_const y) l)
-
   | CBigMap l ->
     CBigMap (List.map (fun (x,y) -> untype_const x, untype_const y) l)
-
   | CRecord labels ->
     CRecord (List.map (fun (f, x) -> f, untype_const x) labels)
-
   | CConstr (constr, x) ->
     CConstr (constr, untype_const x)
-
   | CLambda lam ->
     CLambda (untype_lambda lam)
 
