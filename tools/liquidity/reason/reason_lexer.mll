@@ -449,9 +449,10 @@ rule token = parse
         token lexbuf }
   | newline
       { update_loc lexbuf None 1 false 0;
-        match !preprocessor with
-        | None -> token lexbuf
-        | Some _ -> EOL
+        token lexbuf
+        (* match !preprocessor with
+         * | None -> token lexbuf
+         * | Some _ -> EOL *)
       }
   | blank +
       { token lexbuf }
