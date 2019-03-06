@@ -1059,9 +1059,59 @@ and mono_contract env c =
   let contract = { c with storage; values; entries; c_init } (* ty_env *) in
   contract_tvars_to_unit contract
 
-
 let copy_ty ty =
-  Marshal.from_bytes (Marshal.to_bytes ty []) 0
+  let refs = Hashtbl.create 17 in
+  let rec copy_ty ty = match ty with
+    |Tunit|Tbool|Tint|Tnat|Ttez|
+     Tstring|Tbytes|Ttimestamp|Tkey|Tkey_hash|Tsignature|Toperation|Taddress|
+     Tfail -> ty
+    | Ttuple tyl -> Ttuple (List.map copy_ty tyl)
+    | Toption ty -> Toption (copy_ty ty)
+    | Tlist ty -> Tlist (copy_ty ty)
+    | Tset ty -> Tset (copy_ty ty)
+    | Tmap (ty1, ty2) -> Tmap (copy_ty ty1, copy_ty ty2)
+    | Tbigmap (ty1, ty2) -> Tbigmap (copy_ty ty1, copy_ty ty2)
+    | Tor (ty1, ty2) -> Tor (copy_ty ty1, copy_ty ty2)
+    | Tlambda (ty1, ty2) -> Tlambda (copy_ty ty1, copy_ty ty2)
+    | Tclosure ((ty1, ty2), ty3) -> Tclosure ((copy_ty ty1, copy_ty ty2), copy_ty ty3)
+    | Trecord (rn, fl) ->
+      Trecord (rn, List.map (fun (fn, fty) -> (fn, copy_ty fty)) fl)
+    | Tsum (sn, cl) ->
+      Tsum (sn, List.map (fun (cn, cty) -> (cn, copy_ty cty)) cl)
+    | Tcontract c ->
+      Tcontract { c with entries_sig =
+                           List.map (fun es ->
+                               { es with parameter = copy_ty es.parameter }
+                             ) c.entries_sig }
+    | Tvar tvr ->
+      let tv = Ref.get tvr in
+      let tvr =
+        try Hashtbl.find refs tv.id
+        with Not_found ->
+          let tyo = match tv.tyo with
+            | None -> None
+            | Some tyo -> Some (copy_ty tyo) in
+          let tvr = Ref.create { tv with tyo } in
+          Hashtbl.add refs tv.id tvr;
+          tvr in
+      Tvar tvr
+    | Tpartial (Peqn (el, loc)) ->
+      let el = List.map (fun (cl, rty) ->
+          let rty = copy_ty rty in
+          let cl = List.map (fun (x, y) -> copy_ty x, copy_ty y) cl in
+          (cl, rty)) el in
+      let el = List.filter (fun (cl, _) ->
+          List.for_all (fun (x, y) -> compat_types x y) cl
+        ) el in
+      Tpartial (Peqn (el, loc))
+    | Tpartial Ppar -> ty
+    | Tpartial Ptup l ->
+      Tpartial (Ptup (List.map (fun (s, t) -> s, copy_ty t) l))
+    | Tpartial Pmap (t1, t2) ->
+      Tpartial (Pmap (copy_ty t1, copy_ty t2))
+    | Tpartial Pcont l ->
+      Tpartial (Pcont (List.map (fun (s, t) -> s, copy_ty t) l)) in
+  copy_ty ty
 
 let instantiate_to subst ty =
   let ty = if subst = [] then ty else copy_ty ty in
