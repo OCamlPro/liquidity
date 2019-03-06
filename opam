@@ -1,0 +1,45 @@
+(**************************************************************)
+(*                                                            *)
+(*      This file is managed by ocp-autoconf                  *)
+(*  Remove it from `manage_files` in 'ocp-autoconf.config'    *)
+(*  if you want to modify it manually (or use 'opam.trailer') *)
+(*                                                            *)
+(**************************************************************)
+
+opam-version: "1.2"
+maintainer: "liquidity@ocamlpro.com"
+authors: [
+  "Fabrice Lefessant <fabrice.lefessant@ocamlpro.com>"
+  "Alain Mebsout <alain.mebsout@ocamlpro.com>"
+  "David Declerck <david.declerck@ocamlpro.com>"
+]
+homepage: "http://liquidity-lang.org"
+dev-repo: "https://github.com/OCamlPro/liquidity.git"
+bug-reports: "https://github.com/OCamlPro/liquidity/issues"
+build: [
+  [ make ]
+]
+install: [
+  [ make "install" ]
+]
+remove: [
+]
+depends: [
+     "bigstring"
+     "calendar"
+     "digestif" {>= "0.7" }
+     "ezjsonm"
+     "easy-format"
+     "hex"
+     "lwt"
+     "lwt_log"
+     "menhir"
+     "ocamlfind"
+     "ocp-build"
+     "ocplib-endian"
+     "ocurl"
+     "sodium"
+     "uri"
+     "zarith"
+]
+available: [ocaml-version = "4.06.1"]
