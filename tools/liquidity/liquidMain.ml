@@ -551,7 +551,9 @@ let convert_file filename =
   Location.init lexbuf filename;
   LiquidOptions.ocaml_syntax := is_liq;
   let str, comments = LiquidParse.implementation lexbuf in
-
+  (* ocamldoc comments are already in ast *)
+  let comments = List.filter (fun (s, _) ->
+      String.length s > 0 && s.[0] <> '*') comments in
   LiquidOptions.ocaml_syntax := not is_liq;
   let s = LiquidPrinter.Syntax.string_of_structure str comments in
   LiquidOptions.ocaml_syntax := is_liq;

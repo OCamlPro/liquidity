@@ -737,6 +737,7 @@ let acc_for_subcontract acc =
 let get_attributes loc attrs =
   List.iter (function
       | { txt = "inline" | "noinline" | "private" } , PStr [] -> ()
+      | { txt = "ocaml.doc" } , _ -> () (* ignore ocamldoc *)
       | { txt; loc }, _ ->
         error_loc loc "Illegal attribute %s" txt
     ) attrs;
@@ -1663,7 +1664,7 @@ and translate_signature contract_type_name env acc ast =
           ptype_cstrs = [];
           ptype_private = Public;
           ptype_manifest = None;
-          ptype_attributes = [];
+          (* ptype_attributes = []; *)
           ptype_loc;
           ptype_kind; (* Ptype_record labels;*)
         }
@@ -1695,7 +1696,7 @@ and translate_signature contract_type_name env acc ast =
           ptype_cstrs = [];
           ptype_private = Public;
           ptype_manifest = Some ct;
-          ptype_attributes = [];
+          (* ptype_attributes = []; *)
           ptype_loc;
           ptype_kind;
         }
@@ -1712,7 +1713,7 @@ and translate_signature contract_type_name env acc ast =
                  ptyp_desc = Ptyp_arrow (param_label, param_ty, ret_ty)
                };
                pval_prim = [];
-               pval_attributes = [];
+               (* pval_attributes = []; *)
                pval_loc;
              }}
          ]), [])} :: ast ->
@@ -1954,7 +1955,7 @@ and translate_structure env acc ast : syntax_exp parsed_struct =
                                  ptype_cstrs = [];
                                  ptype_private = Public;
                                  ptype_manifest = None;
-                                 ptype_attributes = [];
+                                 (* ptype_attributes = []; *)
                                  ptype_loc;
                                  ptype_kind; (* Ptype_record labels;*)
                                }
@@ -1985,7 +1986,7 @@ and translate_structure env acc ast : syntax_exp parsed_struct =
                                  ptype_cstrs = [];
                                  ptype_private = Public;
                                  ptype_manifest = Some ct;
-                                 ptype_attributes = [];
+                                 (* ptype_attributes = []; *)
                                  ptype_loc;
                                  ptype_kind;
                                }
