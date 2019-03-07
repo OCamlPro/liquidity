@@ -76,6 +76,7 @@ OCaml.library("ocplib-liquidity-examples",
 
        "liquidTestOthers.ml", {
          file2string = [
+                  "votes.liq";
                   "others/demo.liq";
                   "others/broker.liq";
                   "others/auction.liq";
