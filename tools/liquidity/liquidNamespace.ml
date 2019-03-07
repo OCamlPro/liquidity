@@ -181,6 +181,12 @@ let lookup_global_value ~loc s env =
   | Current_namespace -> raise Not_found
   | Contract_namespace (c, _)  ->
     List.find (fun v -> not v.val_private && v.val_name = s) c.values
+  | exception Unknown_namespace (
+      ["Current" | "Account" | "Map" | "Set" | "List" | "Contract"
+      | "Crypto" | "Bytes" | "String" ], _ ) ->
+    (* Better error messages for typos *)
+    raise Not_found
+
 
 let find_contract ~loc s contracts =
   let path, s = unqualify s in

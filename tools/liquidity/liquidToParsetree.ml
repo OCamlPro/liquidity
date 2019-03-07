@@ -137,8 +137,10 @@ let rec convert_type ~abbrev ?name ty =
       with Not_found -> [] in
     typ_constr name args
   | Tcontract contract_sig -> convert_contract_sig ~abbrev contract_sig
-  | Tvar { contents = { contents = { tyo = Some ty }}} -> convert_type ~abbrev ?name ty
-  | Tvar v -> Typ.var (Ref.get v).id
+  | Tvar { contents = { contents = { id; tyo = None | Some Tpartial _ }}} ->
+    Typ.var id
+  | Tvar { contents = { contents = { tyo = Some ty }}} ->
+    convert_type ~abbrev ?name ty
   | Tfail -> assert false
   | Tpartial _ -> assert false
   | _ ->

@@ -794,25 +794,6 @@ module Syntax = struct
 
 end
 
-module Liquid = struct
-
-  let string_of_type ty =
-    LiquidToParsetree.convert_type ty
-    |> Syntax.string_of_core_type
-
-  let string_of_const c =
-    LiquidToParsetree.convert_const c
-    |> Syntax.string_of_expression
-
-  let string_of_contract c =
-    Syntax.string_of_structure (LiquidToParsetree.structure_of_contract c) []
-
-  let string_of_code c =
-    LiquidToParsetree.convert_code c
-    |> Syntax.string_of_expression
-
-end
-
 module LiquidDebug = struct
 
 
@@ -1389,6 +1370,37 @@ module LiquidDebug = struct
     to_string (bprint_contract bprint_code ~debug) cmd
   let string_of_contract_types ?(debug=false) cmd =
     to_string (bprint_contract bprint_code_types ~debug) cmd
+
+end
+
+module Liquid = struct
+
+  let string_of_type ty =
+    try
+      LiquidToParsetree.convert_type ty
+      |> Syntax.string_of_core_type
+    with _ ->
+      LiquidDebug.string_of_type ty
+
+  let string_of_const c =
+    try
+      LiquidToParsetree.convert_const c
+      |> Syntax.string_of_expression
+    with _ ->
+      LiquidDebug.string_of_const c
+
+  let string_of_contract c =
+    try
+      Syntax.string_of_structure (LiquidToParsetree.structure_of_contract c) []
+    with _ ->
+      LiquidDebug.string_of_contract c
+
+  let string_of_code c =
+    try
+      LiquidToParsetree.convert_code c
+      |> Syntax.string_of_expression
+    with _ ->
+      LiquidDebug.string_of_code c
 
 end
 
