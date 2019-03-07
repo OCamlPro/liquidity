@@ -1,7 +1,6 @@
 
 (* constants *)
 
-[%%version 0.5]
 
 type storage = bool *
                int option *

@@ -1,4 +1,3 @@
-[%%version 0.5]
 
 contract type NatContract = sig
   type storage

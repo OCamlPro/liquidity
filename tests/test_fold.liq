@@ -1,6 +1,5 @@
 (* Fold *)
 
-[%%version 0.5]
 
 type storage = int
 

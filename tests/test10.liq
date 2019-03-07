@@ -1,7 +1,6 @@
 
 (* constructors *)
 
-[%%version 0.5]
 
 type storage =
         bool *

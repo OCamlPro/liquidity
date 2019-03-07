@@ -1,5 +1,4 @@
 
-[%%version 0.5]
 
 let f (x, _) = x
 

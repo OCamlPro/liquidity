@@ -1,6 +1,5 @@
 (* Iter *)
 
-[%%version 0.5]
 
 type storage = unit
 

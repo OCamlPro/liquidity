@@ -1,6 +1,5 @@
 (* List.rev *)
 
-[%%version 0.5]
 
 type storage = int list
 

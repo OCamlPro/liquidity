@@ -1,4 +1,3 @@
-[%%version 0.5]
 
 type storage = (int, tez) map * UnitContract.instance
 

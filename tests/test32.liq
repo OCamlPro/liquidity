@@ -1,4 +1,3 @@
-[%%version 0.5]
 
 type t = A of int | B of (int * ((bool * unit) * nat))
 

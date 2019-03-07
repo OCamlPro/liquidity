@@ -1,4 +1,3 @@
-[%%version 0.5]
 type storage = (string, bool) map
 
 let%entry main

@@ -1,4 +1,3 @@
-[%%version 0.404]
 
 contract M = struct
   let r = 9p
