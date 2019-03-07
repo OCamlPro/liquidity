@@ -1,3 +1,104 @@
+0.9   2019-03-06
+    NEW FEATURES
+    * Revamped module system for function exports
+      (This allows to write reusable libraries.)
+    * Private functions/values with [@private]
+    * Disable inlining per function with [@noinline]
+    * Modules and contract aliases
+
+    IMPROVEMENTS
+    * Lambdas in constants
+    * Better type inference when overloading
+
+    BUG FIXES
+    * Fix bad computation of free variables in Contract.create
+
+0.53  2019-02-13
+    IMPROVEMENTS
+    * Parse ReasonML expressions
+    * Option `--call-arg` to print arguments for tezos clients
+    * More peephole optimizations
+
+0.52  2019-02-11
+    NEW FEATURES
+    * ReasonML syntax
+
+0.51  2019-02-09
+    NEW FEATURES
+    * Parameterized type definitions
+
+    IMPROVEMENTS
+    * Tezos as submodule
+
+    BUG FIXES
+    * Bring back support for string amounts, keys, etc.
+
+0.5  2019-01-21
+    NEW FEATURES
+    * Type inference
+    * Polymorphic values and polymorphic inference
+
+    IMPROVEMENTS
+    * Allow unit patterns `()`
+    * Client command `--pack`
+
+    BUG FIXES
+    * Fix printing Michelson list and set constants
+
+0.405 2018-12-06
+    IMPROVEMENTS
+    * Examples of documentation are in the test suite
+      (This way, the documentation is always up to date.)
+    * Namespacing for externals
+
+    BUG FIXES
+    * Fix Travis ubuntu reop
+    * Fix parsing of Tezos node json errors
+    * Remove unsupported Set.map, Set.map_fold
+
+0.404 2018-11-21
+    NEW FEATURES
+    * External custom instructions
+
+    IMPROVEMENTS
+    * Support type annotations in expressions
+    * Support for digestif 0.7
+    * Warning for failing code
+
+    BUG FIXES
+    * Bring --no-annot option back
+    * Forbid Contract.self in non-inlined functions
+    * Prevent redefinition of Map, Set constructors
+    * Workaround Micheline pretty-printing bug
+
+0.402 2018-10-17
+    NEW FEATURES
+    * Multiple entry points
+    * Encoding of types with Michelson annotations
+    * Decompilation of records, enumerations and operations
+    * New syntaxes for contract calls
+    * Labelled arguments for some built-in functions
+    * Contract signatures
+    * Instruction Loop.left
+    * Compilation of tail-recursive functions
+    * Compile multiple contracts in separate files
+    * Option `--main` to compile a specific contract
+
+    IMPROVEMENTS
+    * Better compilation of wildcard pattern matching
+    * Syntax `C.at addr` for `(Contact.at addr : C.instance option)
+    * Better locations reporting
+    * Syntactic sugar `val%entry : param -> _` in signatures
+    * Allow empty (non-toplevel) contracts
+    * Patterns in entry point arguments
+    * Better decompilation
+
+    BUG FIXES
+    * Documentation
+    * Fix deployment issue with big maps
+    * Fix json output of constants
+    * Forbid source, sender in initializer
+
 0.37  2018-10-05
     NEW FEATURES
     * Compatibility with Tezos's Mainnet/Zeronet/Alphanet
