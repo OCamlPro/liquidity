@@ -328,6 +328,9 @@ let rec typecheck_const ~loc env cst ty =
         (ty1, ty2), (cst1, cst2) :: acc
       ) ((ty1, ty2), []) csts in
     let csts = List.rev csts in
+    if not @@ comparable_type ty1 then
+      error loc "Keys of map are of a non comparable type %s"
+        (string_of_type ty);
     Tmap (ty1, ty2), CMap csts
 
   | Tbigmap (ty1, ty2), (CMap csts | CBigMap csts) -> (* allow map *)
@@ -337,6 +340,9 @@ let rec typecheck_const ~loc env cst ty =
         (ty1, ty2), (cst1, cst2) :: acc
       ) ((ty1, ty2), []) csts in
     let csts = List.rev csts in
+    if not @@ comparable_type ty1 then
+      error loc "Keys of big map are of a non comparable type %s"
+        (string_of_type ty);
     Tbigmap (ty1, ty2), CBigMap csts
 
   | Tlist ty, CList csts ->
@@ -352,6 +358,9 @@ let rec typecheck_const ~loc env cst ty =
         let ty, cst = typecheck_const ~loc env cst ty in
         ty, cst :: acc
       ) (ty, []) csts in
+    if not @@ comparable_type ty then
+      error loc "Elements of set are of a non comparable type %s"
+        (string_of_type ty);
     let csts = List.rev csts in
     Tset ty, CSet csts
 

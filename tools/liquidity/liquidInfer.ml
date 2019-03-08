@@ -286,13 +286,24 @@ let rec unify loc ty1 ty2 =
         tyx1, []
 
       | Toption ty1, Toption ty2
-      | Tlist ty1, Tlist ty2
-      | Tset ty1, Tset ty2 ->
+      | Tlist ty1, Tlist ty2 ->
         unify ty1 ty2; tyx1, []
+
+      | Tset ty1, Tset ty2 ->
+        unify ty1 ty2;
+        if not @@ comparable_type ty1 then
+          error loc "Elements of set are of a non comparable type %s"
+            (string_of_type ty1);
+        tyx1, []
 
       | Tmap (k_ty1, v_ty1), Tmap (k_ty2, v_ty2)
       | Tbigmap (k_ty1, v_ty1), Tbigmap (k_ty2, v_ty2) ->
-        unify k_ty1 k_ty2; unify v_ty1 v_ty2; tyx1, []
+        unify k_ty1 k_ty2;
+        if not @@ comparable_type k_ty1 then
+          error loc "Keys of map are of a non comparable type %s"
+            (string_of_type k_ty1);
+        unify v_ty1 v_ty2;
+        tyx1, []
 
       | Tor (l_ty1, r_ty1), Tor (l_ty2, r_ty2) ->
         unify l_ty1 l_ty2; unify r_ty1 r_ty2; tyx1, []
@@ -495,9 +506,24 @@ let get_type env loc ty =
     | Ttuple tyl -> Ttuple (List.map aux tyl)
     | Toption ty -> Toption (aux ty)
     | Tlist ty -> Tlist (aux ty)
-    | Tset ty -> Tset (aux ty)
-    | Tmap (ty1, ty2) -> Tmap (aux ty1, aux ty2)
-    | Tbigmap (ty1, ty2) -> Tbigmap (aux ty1, aux ty2)
+    | Tset ty ->
+      let ty = aux ty in
+      if not @@ comparable_type ty then
+        error loc "Elements of set are of a non comparable type %s"
+          (string_of_type ty);
+      Tset ty
+    | Tmap (ty1, ty2) ->
+      let ty1 = aux ty1 in
+      if not @@ comparable_type ty1 then
+        error loc "Keys of map are of a non comparable type %s"
+          (string_of_type ty1);
+      Tmap (ty1, aux ty2)
+    | Tbigmap (ty1, ty2) ->
+      let ty1 = aux ty1 in
+      if not @@ comparable_type ty1 then
+        error loc "Keys of big map are of a non comparable type %s"
+          (string_of_type ty1);
+      Tbigmap (ty1, aux ty2)
     | Tor (ty1, ty2) -> Tor (aux ty1, aux ty2)
     | Tlambda (ty1, ty2) -> Tlambda (aux ty1, aux ty2)
     | Tclosure ((ty1, ty2), ty3) ->

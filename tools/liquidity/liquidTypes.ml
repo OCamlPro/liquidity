@@ -218,7 +218,7 @@ let comparable_type = function
   | Ttimestamp
   | Tkey_hash
   | Taddress -> true
-  | Tvar _ | Tpartial _ -> raise (Invalid_argument "comparable_type")
+  | Tvar _ | Tpartial _ -> true (* maybe *)
   | _ -> false
 
 (** Equality between types. Contract signatures are first order values
