@@ -60,9 +60,7 @@ author = 'OCamlPro SAS. <contact@ocamlpro.com>'
 #
 # The short X.Y version.
 
-version_liq = subprocess.check_output("../../../_obuild/liquidity-mini/liquidity-mini.asm --version", shell=True).decode("utf-8")
-git = subprocess.check_output("git describe --always", shell=True).decode("utf-8")
-version = version_liq + "(" + git + ")"
+version = subprocess.check_output("../../../_obuild/liquidity-mini/liquidity-mini.asm -v --version", shell=True).decode("utf-8")
 # version = os.environ.get('CI_COMMIT_REF_NAME', 'v1.0')
 # The full version, including alpha/beta/rc tags.
 release = version + datetime.datetime.now().strftime(" (%Y/%m/%d %H:%M)")

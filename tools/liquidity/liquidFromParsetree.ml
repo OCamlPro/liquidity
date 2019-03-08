@@ -28,10 +28,10 @@ type 'a parsed_struct =
 let ident_counter = ref 0
 
 (* The minimal version of liquidity files that are accepted by this compiler *)
-let minimal_version = 0.4
+let minimal_version = 0.9
 
 (* The maximal version of liquidity files that are accepted by this compiler *)
-let maximal_version = 0.9
+let maximal_version = 1.0
 
 
 open Asttypes

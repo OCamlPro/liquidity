@@ -7,5 +7,5 @@
 (*                                                                        *)
 (**************************************************************************)
 
-let commit = "<no version included>"
-let en_date = "<no version included>"
+let commit = "<no commit included>"
+let en_date = "<no date included>"

@@ -565,6 +565,8 @@ let main () =
   let arg_list = Arg.align [
       "--verbose", Arg.Unit (fun () -> incr LiquidOptions.verbosity),
       " Increment verbosity";
+      "-v", Arg.Unit (fun () -> incr LiquidOptions.verbosity),
+      " Increment verbosity";
 
       "--re", Arg.Clear LiquidOptions.ocaml_syntax, " Use ReasonML syntax";
       "--convert", Arg.String (fun s ->
@@ -572,7 +574,12 @@ let main () =
           work_done := true), " Switch between OCaml and ReasonML syntax (stdout)";
 
       "--version", Arg.Unit (fun () ->
-          Format.printf "%s@." LiquidToParsetree.output_version;
+          Format.printf "%s" LiquidToParsetree.output_version;
+          if !LiquidOptions.verbosity > 0 then
+            Format.printf " (%s)" LiquidVersion.commit;
+          if !LiquidOptions.verbosity > 1 then
+            Format.printf "\nCompiled on %s" LiquidVersion.en_date;
+          Format.printf "@.";
           exit 0
         ),
       " Show version and exit";
