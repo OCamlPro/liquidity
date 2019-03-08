@@ -8,7 +8,7 @@
 (**************************************************************************)
 
 (* The version that will be required to compile the generated files. *)
-let output_version = "1.0"
+let output_version = "1.01"
 
 open Asttypes
 open Longident
@@ -112,6 +112,10 @@ let list_caml_abbrevs_in_order () =
   |> List.map (fun (ty, (s, caml_ty, _)) -> s, caml_ty, ty)
 
 let rec convert_type ~abbrev ?name ty =
+  let params =
+    LiquidTypes.free_tvars ty
+    |> StringSet.elements
+    |> List.map (fun v -> Typ.var v) in
   match ty with
   | Ttez ->  typ_constr "tez" []
   | Tunit -> typ_constr "unit" []
@@ -134,7 +138,7 @@ let rec convert_type ~abbrev ?name ty =
         let subst = LiquidTypes.build_subst known_ty ty in
         List.map (fun (_, t) -> convert_type ~abbrev t)
           (StringMap.bindings subst)
-      with Not_found -> [] in
+      with Not_found -> params in
     typ_constr name args
   | Tcontract contract_sig -> convert_contract_sig ~abbrev contract_sig
   | Tvar { contents = { contents = { id; tyo = None | Some Tpartial _ }}} ->

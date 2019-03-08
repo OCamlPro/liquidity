@@ -585,8 +585,10 @@ let rec type_name = function
   | Tlambda (ty1, ty2) -> (type_name ty1) ^ (type_name ty2)
   | Tclosure ((ty1, ty2), ty3) ->
     "C" ^ (type_name ty1) ^ (type_name ty2) ^ (type_name ty3)
-  | Trecord (rn, _) -> "R" ^ rn
-  | Tsum (sn, _) -> "A" ^ sn
+  | Trecord (rn, l) ->
+    String.concat "" (["R"; rn] @ List.map (fun (f, t) -> f ^ type_name t) l)
+  | Tsum (sn, l) ->
+    String.concat "" (["A"; sn] @ List.map (fun (f, t) -> f ^ type_name t) l)
   | Tcontract c ->
     begin match c.sig_name with Some n -> "CN" ^ n | None -> "CU" end
   | Tvar { contents = a }  -> "v" ^ !a.id
