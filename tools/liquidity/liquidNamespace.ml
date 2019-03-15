@@ -93,7 +93,10 @@ let find_env ~loc path env = find_env ~loc path path env
 let rec find ~loc s env proj =
   let path, s = unqualify s in
   let env = find_env ~loc path env in
-  rec_find s env proj
+  if path = [] then
+    rec_find s env proj
+  else
+    StringMap.find s (proj env), env
 
 let find_type ~loc s env subst =
   let mk, found_env = find ~loc s env (fun env -> env.types) in
