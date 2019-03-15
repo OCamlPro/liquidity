@@ -50,7 +50,7 @@ See [installation instructions](docs/sphinx/src/installation/index.rst) and
 Documentation
 -------------
 
-Documentation can be found in [the reference](docs/sphynx/src/reference/liquidity.rst)
+Documentation can be found in [the reference](docs/sphinx/src/reference/liquidity.rst)
 and many examples are in the [tests](tests/) and
 [tests/others](tests/others/) directories.
 
