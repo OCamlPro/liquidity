@@ -53,10 +53,14 @@ val lookup_global_value :
   loc:location -> string -> typecheck_env -> typed_exp value
 
 val find_contract :
-    loc:location -> string -> 'a contract list -> 'a contract
+    loc:location -> string -> env -> 'a contract StringMap.t -> 'a contract
 
 val find_module :
-    loc:location -> string list -> 'a contract list -> 'a contract
+    loc:location -> string list -> env -> 'a contract list -> 'a contract
 
 (** For debug *)
 val qual_contract_name : 'a contract -> string
+
+
+(** Replaces aliases by their aliased values in a qualified name *)
+val unalias_name : string -> env -> string

@@ -178,11 +178,14 @@ and env = {
   (* path for qualified names *)
   path : string list;
   (* other reachable qualified environments *)
-  mutable others : env StringMap.t ;
+  mutable others : other_env StringMap.t ;
   (* englobing env *)
   top_env : env option;
 }
 
+and other_env =
+  | Direct of env
+  | Alias of string list
 
 (** Representation of Liquidity contract initializers *)
 and 'exp init = {

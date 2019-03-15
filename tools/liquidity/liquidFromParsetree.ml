@@ -18,6 +18,7 @@ type 'a ast_elt =
   | Syn_value of 'a value
   | Syn_other_contract of 'a contract
   | Syn_sub_contract of 'a contract
+  | Syn_sub_contract_alias of string * 'a contract
   | Syn_entry of 'a entry
   | Syn_init of 'a init
 
@@ -59,7 +60,7 @@ let mk_inner_env env contractname =
     contractname;
     path = env.path @ [ contractname ];
   } in
-  env.others <- StringMap.add contractname new_env env.others;
+  env.others <- StringMap.add contractname (Direct new_env) env.others;
   new_env
 
 let error_loc loc fmt =
@@ -724,12 +725,15 @@ let filter_contracts acc =
   List.fold_left (fun acc -> function
       | Syn_other_contract c | Syn_sub_contract c ->
         StringMap.add c.contract_name c acc
+      | Syn_sub_contract_alias (alias, c) ->
+        StringMap.add alias c acc
       | _ -> acc) StringMap.empty acc
 
 let acc_for_subcontract acc =
   List.fold_left (fun acc -> function
       | Syn_init _ -> acc
-      | Syn_sub_contract c -> Syn_other_contract c :: acc
+      | Syn_sub_contract c | Syn_sub_contract_alias (_, c) ->
+        Syn_other_contract c :: acc
       | a -> a :: acc
     ) [] acc
   |> List.rev
@@ -2071,18 +2075,14 @@ and translate_structure env acc ast : syntax_exp parsed_struct =
       }
     }
     } :: ast ->
+    let c_path = Longident.flatten c_name in
     let c_name = str_of_id c_name in
     begin try
         let contract = find_contract ~loc:(loc_of_loc loc)
-            c_name ((StringMap.bindings (filter_contracts acc) |> List.map snd)) in
+            c_name env (filter_contracts acc) in
         if is_only_module contract then raise Not_found;
-        let contract = { contract with contract_name } in
-        env.others <- StringMap.add contract_name
-            { contract.ty_env with top_env = Some env } env.others;
-        let contract_sig = sig_of_contract contract in
-        env.contract_types <-
-          StringMap.add contract_name contract_sig env.contract_types;
-        translate_structure env (Syn_sub_contract contract :: acc) ast
+        env.others <- StringMap.add contract_name (Alias c_path) env.others;
+        translate_structure env acc ast
       with Not_found ->
         unbound_contract loc c_name
     end
@@ -2103,13 +2103,11 @@ and translate_structure env acc ast : syntax_exp parsed_struct =
     let mn = str_of_id m_name in
     let m_path = Longident.flatten m_name in
     begin try
-        let contract = find_module ~loc:(loc_of_loc loc) m_path
+        let contract = find_module ~loc:(loc_of_loc loc) m_path env
             ((StringMap.bindings (filter_contracts acc) |> List.map snd)) in
         if not @@ is_only_module contract then raise Not_found;
-        let contract = { contract with contract_name } in
-        env.others <- StringMap.add contract_name
-            { contract.ty_env with top_env = Some env } env.others;
-        translate_structure env (Syn_sub_contract contract :: acc) ast
+        env.others <- StringMap.add contract_name (Alias m_path) env.others;
+        translate_structure env acc ast
       with Not_found ->
         unbound_module loc mn
     end
@@ -2194,6 +2192,8 @@ and pack_contract env toplevels =
     | Syn_value v :: r ->
       partition (contracts, v :: values, entries, init) r
     | Syn_sub_contract c :: r -> partition (c :: contracts, values, entries, init) r
+    | Syn_sub_contract_alias (_, c) :: r ->
+      partition (c :: contracts, values, entries, init) r
     | Syn_other_contract c :: r ->
       (* ignore *)
       partition (contracts, values, entries, init) r
@@ -2330,7 +2330,7 @@ let mk_toplevel_env filename top_env =
     path = [contractname];
     others = top_env.others;
   } in
-  top_env.others <- StringMap.add contractname tenv top_env.others;
+  top_env.others <- StringMap.add contractname (Direct tenv) top_env.others;
   tenv
 
 let translate_multi l =

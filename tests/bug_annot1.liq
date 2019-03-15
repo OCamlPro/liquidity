@@ -33,11 +33,12 @@ contract type C = sig
 end
 
 module Y = C1.C2
-contract X = Y.C
+module R = Y
+contract X = R.C
 
 type storage = X.instance * C.instance
 
 let%entry main (_k : key_hash) storage =
-  let x = { Y.x = 1tz + Y.C.mc + Y.my ; Y.y = true } in
+  let x = { Y.x = 1tz + Y.C.mc + Y.my ; R.y = true } in
   let op = storage.(0).main x ~amount:0tz in
   [op], storage

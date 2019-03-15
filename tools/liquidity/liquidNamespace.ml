@@ -81,14 +81,24 @@ let rec find_env ~loc fullpath path env =
   match path with
   | [] -> env
   | p :: path ->
-    let env =
+    let oenv =
       try StringMap.find p env.others
       with Not_found ->
         raise (Unknown_namespace (fullpath, loc))
     in
-    find_env ~loc fullpath path env
+    match oenv with
+    | Direct env -> find_env ~loc fullpath path env
+    | Alias apath -> find_env ~loc fullpath (apath @ path) env
+
 
 let find_env ~loc path env = find_env ~loc path path env
+
+let unalias path env =
+  try
+    let e = find_env ~loc:noloc path env in
+    if e.path = env.path @ path then None
+    else Some e.path
+  with Unknown_namespace _ -> None
 
 let rec find ~loc s env proj =
   let path, s = unqualify s in
@@ -103,6 +113,10 @@ let find_type ~loc s env subst =
   mk subst, found_env
 
 let find_contract_type_aux ~loc s env =
+  let path, tn = unqualify s in
+  let s = match unalias (path @ [tn]) env with
+    | None -> s
+    | Some p -> String.concat "." p in
   find ~loc s env (fun env -> env.contract_types)
 
 let rec normalize_type ?from_env ~in_env ty =
@@ -218,6 +232,9 @@ let is_extprim s env =
 
 let lookup_global_value ~loc s env =
   let path, s = unqualify s in
+  let path = match unalias path env.env with
+    | None -> path
+    | Some path -> path in
   match find_namespace ~loc path env.visible_contracts with
   | Current_namespace -> raise Not_found
   | Contract_namespace (c, _)  ->
@@ -229,15 +246,21 @@ let lookup_global_value ~loc s env =
     raise Not_found
 
 
-let find_contract ~loc s contracts =
+let find_contract ~loc s env contracts =
   let path, s = unqualify s in
-  match find_namespace ~loc path contracts with
+  let path = match unalias path env with
+    | None -> path
+    | Some path -> path in
+  match find_namespace ~loc path (StringMap.bindings contracts |> List.map snd) with
   | Current_namespace ->
-    List.find (fun c -> c.contract_name = s) contracts
+    StringMap.find s contracts
   | Contract_namespace (c, _)  ->
     List.find (fun c -> c.contract_name = s) c.subs
 
-let find_module ~loc path contracts =
+let find_module ~loc path env contracts =
+  let path = match unalias path env with
+    | None -> path
+    | Some path -> path in
   match find_namespace ~loc path contracts with
   | Current_namespace -> raise Not_found
   | Contract_namespace (c, _)  -> c
@@ -246,3 +269,9 @@ let qual_contract_name c =
   match c.ty_env.path with
   | [] -> c.contract_name
   | p -> String.concat "." p
+
+let unalias_name s env =
+  let path, s' = unqualify s in
+  match unalias path env with
+  | None -> s
+  | Some path -> add_path_name path s'

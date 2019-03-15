@@ -90,7 +90,8 @@ let find_in_clos ~count_used loc ce name =
 let find_var ?(count_used=true) env loc name =
   try
     let vname = name in
-    let (name, (_, ty), effect) = StringMap.find name env.vars in
+    let (name, (_, ty), effect) =
+      StringMap.find (unalias_name name env.env) env.vars in
     let count = StringMap.find name env.vars_counts in
     if count_used then incr count;
     let aname =
