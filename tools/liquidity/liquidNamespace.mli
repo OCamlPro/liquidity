@@ -17,8 +17,11 @@ val unqualify : string -> string list * string
 (** Prepend name with namespace *)
 val add_path_name : string list -> string -> string
 
-(** Normalize types with fully qualified names, constructors and fields *)
-val normalize_type : env -> datatype -> datatype
+(** Normalize type present in environment [in_env] with fully
+    qualified names, constructors and fields, with respect to
+    [from_env] (or from top-level if no argument [~from_env] is
+    given). *)
+val normalize_type : ?from_env:env -> in_env:env -> datatype -> datatype
 
 val find_env : loc:location -> string list -> env ->  env
 

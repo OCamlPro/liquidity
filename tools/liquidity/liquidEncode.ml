@@ -246,7 +246,7 @@ let rec encode_type ?(decompiling=false) ty =
   | Tvar _ | Tpartial _ -> assert false (* Removed during typechecking *)
 
 and encode_qual_type env ty =
-  encode_type ~decompiling:env.decompiling (normalize_type env.env ty)
+  encode_type ~decompiling:env.decompiling ty
 
 (* encode a contract signature to the corresponding single entry form
    sum type *)
@@ -548,7 +548,8 @@ and encode env ( exp : typed_exp ) : encoded_exp =
 
   | Const { ty; const } ->
     let const = encode_const env const in
-    let ty = normalize_type env.env ty in
+    (* normalize wrt to top level env *)
+    let ty = normalize_type ~in_env:env.env ty in
     (* use functions instead of constants if contains operations *)
     let c = deconstify env loc ty const in
     mk ?name:exp.name ~loc c.desc ty
@@ -1193,6 +1194,10 @@ and encode_modules top_env contracts =
   let env, values =
     List.fold_left (fun (env, old_values) c ->
         let env, sub_values = encode_modules env c.subs in
+
+        if !LiquidOptions.verbosity > 0 then
+          Format.eprintf "Encode module %s@." c.contract_name;
+
         (* create env local to module *)
         let env =
           { env with
@@ -1279,6 +1284,9 @@ and encode_contract ?(annot=false) ?(decompiling=false) contract =
 
   let parameter = encode_contract_sig (sig_of_full_sig env.t_contract_sig) in
   let loc = LiquidLoc.loc_in_file env.env.filename in
+
+  if verbosity > 0 then
+    Format.eprintf "Encode contract %s@." contract.contract_name;
 
   let rec values_on_top mk l exp = match l with
     | [] -> exp

@@ -490,25 +490,12 @@ and typecheck env ( exp : syntax_exp ) : typed_exp =
 
   | Project { field; record } ->
     let record = typecheck env record in
-    let ty = match expand record.ty with
-      | Trecord (record_name, ltys) ->
-        begin
-          try List.assoc field ltys
-          with Not_found ->
-            error loc "label %s does not belong to type %s"
-              field record_name;
-        end
-      | Tvar _ | Tpartial _ ->
-        let record_ty, (_, ty, _) =
-          try find_label ~loc field env.env
-          with Not_found -> error loc "unbound record field %S" field
-        in
-        unify record.ty record_ty;
-        ty
-      | rty -> error loc "not a record type: %s, has no field %s"
-                 (string_of_type rty)
-                 field
+    let record_ty, (field, ty, _) =
+      try
+        find_label ~loc field env.env
+      with Not_found -> error loc "unbound record field %S" field
     in
+    unify record_ty record.ty;
     mk ?name:exp.name ~loc (Project { field; record }) ty
 
   | SetField { record; field; set_val } ->

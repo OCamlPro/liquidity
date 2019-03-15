@@ -28,7 +28,21 @@ let unqualify s =
   | [] -> assert false
   | s :: rpath -> List.rev rpath, s
 
-let qualify_name path s = String.concat "." (path @ [snd @@ unqualify s])
+let common_path p1 p2 =
+  let rec aux acc p1 p2 = match p1, p2 with
+    | [], _ | _, [] -> List.rev acc, p1, p2
+    | x1 :: p1, x2 :: p2 ->
+      if x1 = x2 then aux (x1 :: acc) p1 p2
+      else List.rev acc, p1, p2 in
+  aux [] p1 p2
+
+let qualify_name ?from_env ~at s =
+  let from = match from_env with
+    | Some e -> e.path
+    | None -> [] (* top level *) in
+  let _common, _remain_from, path = common_path from at in
+  String.concat "." (path @ [snd @@ unqualify s])
+
 let add_path_name path s = String.concat "." (path @ [s])
 
 
@@ -88,65 +102,88 @@ let find_type ~loc s env subst =
 let find_contract_type_aux ~loc s env =
   find ~loc s env (fun env -> env.contract_types)
 
-let rec normalize_type env ty = match ty with
+let rec normalize_type ?from_env ~in_env ty =
+  match ty with
   | Tunit | Tbool | Tint | Tnat | Ttez | Tstring | Tbytes | Ttimestamp
   | Tkey | Tkey_hash | Tsignature | Toperation | Taddress | Tfail -> ty
-  | Ttuple l -> Ttuple (List.map (normalize_type env) l)
-  | Toption t -> Toption (normalize_type env t)
-  | Tlist t -> Tlist (normalize_type env t)
-  | Tset t -> Tset (normalize_type env t)
-  | Tmap (t1, t2) -> Tmap (normalize_type env t1, normalize_type env t2)
-  | Tbigmap (t1, t2) -> Tbigmap (normalize_type env t1, normalize_type env t2)
-  | Tor (t1, t2) -> Tor (normalize_type env t1, normalize_type env t2)
-  | Tlambda (t1, t2) -> Tlambda (normalize_type env t1, normalize_type env t2)
-  | Tcontract c_sig -> Tcontract (normalize_contract_sig env c_sig)
+  | Ttuple l -> Ttuple (List.map (normalize_type ?from_env ~in_env) l)
+  | Toption t -> Toption (normalize_type ?from_env ~in_env t)
+  | Tlist t -> Tlist (normalize_type ?from_env ~in_env t)
+  | Tset t -> Tset (normalize_type ?from_env ~in_env t)
+  | Tmap (t1, t2) ->
+    Tmap (normalize_type ?from_env ~in_env t1,
+          normalize_type ?from_env ~in_env t2)
+  | Tbigmap (t1, t2) ->
+    Tbigmap (normalize_type ?from_env ~in_env t1,
+             normalize_type ?from_env ~in_env t2)
+  | Tor (t1, t2) ->
+    Tor (normalize_type ?from_env ~in_env t1,
+         normalize_type ?from_env ~in_env t2)
+  | Tlambda (t1, t2) ->
+    Tlambda (normalize_type ?from_env ~in_env t1,
+             normalize_type ?from_env ~in_env t2)
+  | Tcontract c_sig ->
+    Tcontract (normalize_contract_sig ?from_env ~in_env c_sig)
   | Trecord (name, fields) ->
-    let _, found_env = find_type ~loc:noloc name env [] in
-    Trecord (qualify_name found_env.path name,
+    let _, found_env = find_type ~loc:noloc name in_env [] in
+    Trecord (qualify_name ?from_env ~at:found_env.path name,
              List.map (fun (f, ty) ->
-                 qualify_name found_env.path f,
-                 normalize_type found_env ty) fields)
+                 qualify_name ?from_env ~at:found_env.path f,
+                 normalize_type ?from_env ~in_env ty) fields)
   | Tsum (name, constrs) ->
-    let _, found_env = find_type ~loc:noloc name env [] in
-    Tsum (qualify_name found_env.path name,
+    let _, found_env = find_type ~loc:noloc name in_env [] in
+    Tsum (qualify_name ?from_env ~at:found_env.path name,
           List.map (fun (c, ty) ->
-              qualify_name found_env.path c,
-              normalize_type found_env ty) constrs)
+              qualify_name ?from_env ~at:found_env.path c,
+              normalize_type ?from_env ~in_env ty) constrs)
   | Tclosure ((t1, t2), t3) ->
-    Tclosure ((normalize_type env t1, normalize_type env t2),
-              normalize_type env t3)
+    Tclosure ((normalize_type ?from_env ~in_env t1,
+               normalize_type ?from_env ~in_env t2),
+              normalize_type ?from_env ~in_env t3)
   | Tvar tvr ->
     let tv = Ref.get tvr in
     begin match tv.tyo with
       | None -> ty
       | Some ty ->
-        (Ref.set tvr) { tv with tyo = Some (normalize_type env ty) };
+        (Ref.set tvr)
+          { tv with tyo = Some (normalize_type ?from_env ~in_env ty) };
         ty
     end
   | Tpartial _ -> raise (Invalid_argument "normalize_type")
 
-and normalize_contract_sig env c_sig =
+and normalize_contract_sig ?from_env ~in_env c_sig =
   match c_sig.sig_name with
-  | None -> c_sig
+  | None -> c_sig (* TODO *)
   | Some s ->
-    let _, found_env = find_contract_type_aux ~loc:noloc s env in
-    { c_sig with sig_name = Some (qualify_name found_env.path s) }
+    let _, found_env = find_contract_type_aux ~loc:noloc s in_env in
+    let sig_env =
+      try find_env ~loc:noloc ( [unqualify s |> snd]) found_env
+      with Not_found | Unknown_namespace _ ->
+        (* for built-in signatures *)
+        found_env
+    in
+    { sig_name = Some (qualify_name ?from_env ~at:found_env.path s);
+      entries_sig =
+        List.map (fun e ->
+            { e with parameter =
+                       normalize_type ?from_env ~in_env:sig_env e.parameter }
+          ) c_sig.entries_sig }
 
 let find_type ~loc s env subst =
   let ty, found_env = find_type ~loc s env subst in
-  normalize_type found_env ty
+  normalize_type ~from_env:env ~in_env:found_env ty
 
 let find_contract_type ~loc s env =
   let csig, found_env = find_contract_type_aux ~loc s env in
-  normalize_contract_sig found_env csig
+  normalize_contract_sig ~from_env:env ~in_env:found_env csig
 
 let find_label_ty_name ~loc s env =
   let (tn, i), found_env = find ~loc s env (fun env -> env.labels) in
-  qualify_name found_env.path tn, i
+  qualify_name ~from_env:env ~at:found_env.path tn, i
 
 let find_constr_ty_name ~loc s env =
   let (tn, i), found_env = find ~loc s env (fun env -> env.constrs) in
-  qualify_name found_env.path tn, i
+  qualify_name ~from_env:env ~at:found_env.path tn, i
 
 let find_label ~loc s env =
   let n, i = find_label_ty_name ~loc s env in
@@ -166,8 +203,9 @@ let find_constr ~loc s env =
 
 let find_extprim ~loc s env =
   let e, found_env = find ~loc s env (fun env -> env.ext_prims) in
-  { e with atys = List.map (normalize_type found_env) e.atys;
-           rty = normalize_type found_env e.rty }
+  { e with
+    atys = List.map (normalize_type ~from_env:env ~in_env:found_env) e.atys;
+    rty = normalize_type ~from_env:env ~in_env:found_env e.rty }
 
 let is_extprim s env =
   try find_extprim ~loc:noloc s env |> ignore; true
