@@ -287,6 +287,9 @@ and move_outer_lets parameter storage values exp =
    single-entry point form *)
 and decode_contract contract =
   let subs = List.map decode_contract contract.subs in
+  if !LiquidOptions.verbosity > 0 then
+    Format.eprintf "Decode contract %s@."
+      (LiquidNamespace.qual_contract_name contract);
   let c_init = match contract.c_init with
     | None -> None
     | Some i -> Some { i with init_body = decode i.init_body } in

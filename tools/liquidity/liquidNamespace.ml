@@ -238,3 +238,8 @@ let find_module ~loc path contracts =
   match find_namespace ~loc path contracts with
   | Current_namespace -> raise Not_found
   | Contract_namespace (c, _)  -> c
+
+let qual_contract_name c =
+  match c.ty_env.path with
+  | [] -> c.contract_name
+  | p -> String.concat "." p

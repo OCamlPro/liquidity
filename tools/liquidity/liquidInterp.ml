@@ -1144,6 +1144,8 @@ and interp contract =
 
 
 let interp contract =
+  if !LiquidOptions.verbosity > 0 then
+    Format.eprintf "Symbolic execution of Michelson contract@.";
   counter := 0;
   curr_contract := contract;
   Hashtbl.clear nodes;

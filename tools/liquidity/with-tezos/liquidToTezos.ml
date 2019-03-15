@@ -407,6 +407,8 @@ let string_of_expression exp =
   Buffer.contents buf
 
 let string_of_contract c =
+  if !LiquidOptions.verbosity > 0 then
+    Format.eprintf "Pretty print Michelson contract@.";
   let buf = Buffer.create 10000 in
   let ppf = Format.formatter_of_buffer buf in
   Format.pp_set_margin ppf 199999 ;

@@ -223,6 +223,8 @@ and emit_const ~expand cst = match cst with
 
 
 and emit_contract ~expand (contract : loc_michelson_contract) =
+  if !LiquidOptions.verbosity > 0 then
+    Format.eprintf "Emit Michelson for contract@.";
   [
     M_INS_EXP ("parameter", [contract.mic_parameter], [], []);
     M_INS_EXP ("storage", [contract.mic_storage], [], []);

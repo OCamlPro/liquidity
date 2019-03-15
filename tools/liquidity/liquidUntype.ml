@@ -301,6 +301,9 @@ and untype_entry env (entry : (datatype, 'a) exp entry) =
 
 and untype_contract contract =
   let subs = List.map untype_contract contract.subs in
+  if !LiquidOptions.verbosity > 0 then
+    Format.eprintf "Untype contract %s@."
+      (LiquidNamespace.qual_contract_name contract);
   let contract = LiquidBoundVariables.bound_contract contract in
   let values, env =
     List.fold_left (fun (acc, env) v ->

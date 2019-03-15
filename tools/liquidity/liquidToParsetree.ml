@@ -806,6 +806,9 @@ and structure_of_contract
 
 
 let structure_of_contract ?(abbrev=false) ?type_annots ?(types=[]) contract =
+  if !LiquidOptions.verbosity > 0 then
+    Format.eprintf "Contract %s to AST@."
+      (LiquidNamespace.qual_contract_name contract);
   reset_env ();
   structure_of_contract ~abbrev ?type_annots ~types contract
 

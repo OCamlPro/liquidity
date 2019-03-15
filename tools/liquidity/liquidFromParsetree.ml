@@ -2302,6 +2302,8 @@ let translate_exn exn =
 
 
 let translate ~filename ast =
+  if !LiquidOptions.verbosity > 0 then
+    Format.eprintf "Parse file %s@." filename;
   let env = initial_env filename in
   try
     let contract = translate_non_empty_contract env [] ast in
@@ -2337,6 +2339,8 @@ let translate_multi l =
     Format.eprintf "No contracts@.";
     exit 2
   | (filename, ast) :: r_others ->
+    if !LiquidOptions.verbosity > 0 then
+      Format.eprintf "Parse file %s@." filename;
     let top_env = initial_env filename in
     let exception Stop of syntax_contract in
     try

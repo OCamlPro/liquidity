@@ -152,5 +152,7 @@ let rec to_dot ~sub_contract_of contract =
   iter begin_node;
   g
 let to_string contract =
+  if !LiquidOptions.verbosity > 0 then
+    Format.eprintf "Produce decompilation graph as graphviz file@.";
   subgraph_counter := 0;
   Ocamldot.to_string (to_dot ~sub_contract_of:None contract)

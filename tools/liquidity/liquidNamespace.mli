@@ -57,3 +57,6 @@ val find_contract :
 
 val find_module :
     loc:location -> string list -> 'a contract list -> 'a contract
+
+(** For debug *)
+val qual_contract_name : 'a contract -> string

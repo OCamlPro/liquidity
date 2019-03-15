@@ -745,6 +745,8 @@ and decompile contract =
 
 
 let decompile env contract =
+  if !LiquidOptions.verbosity > 0 then
+    Format.eprintf "Decompile Michelson contract@.";
   Hashtbl.reset vars_nums;
   Hashtbl.reset vars_names;
   let contract = decompile contract in

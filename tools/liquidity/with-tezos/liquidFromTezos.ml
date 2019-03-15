@@ -731,6 +731,8 @@ and convert_raw_contract env c =
   { mic_storage; mic_parameter; mic_code }
 
 let convert_contract env c =
+  if !LiquidOptions.verbosity > 0 then
+    Format.eprintf "Parse Michelson contract@.";
   let c =
     List.map (fun c ->
         let c = Micheline.inject_locations (fun i -> i) c in

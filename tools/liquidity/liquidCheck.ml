@@ -1917,6 +1917,10 @@ and typecheck_contract ~others ~warnings ~decompiling contract =
             ~others ~warnings ~decompiling c in
         c :: others, c :: subs) (others, []) contract.subs in
   let others, subs = List.rev rothers, List.rev rsubs in
+
+  if !LiquidOptions.verbosity > 0 then
+    Format.eprintf "Typecheck contract %s@." (qual_contract_name contract);
+
   let t_contract_sig = sig_of_contract contract in
   let t_contract_sig =
     (* when decompiling recover signature of encoded Contract.self *)

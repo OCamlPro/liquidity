@@ -1196,7 +1196,7 @@ and encode_modules top_env contracts =
         let env, sub_values = encode_modules env c.subs in
 
         if !LiquidOptions.verbosity > 0 then
-          Format.eprintf "Encode module %s@." c.contract_name;
+          Format.eprintf "Encode module %s@." (qual_contract_name c);
 
         (* create env local to module *)
         let env =
@@ -1285,8 +1285,8 @@ and encode_contract ?(annot=false) ?(decompiling=false) contract =
   let parameter = encode_contract_sig (sig_of_full_sig env.t_contract_sig) in
   let loc = LiquidLoc.loc_in_file env.env.filename in
 
-  if verbosity > 0 then
-    Format.eprintf "Encode contract %s@." contract.contract_name;
+  if !LiquidOptions.verbosity > 0 then
+    Format.eprintf "Encode contract %s@." (qual_contract_name contract);
 
   let rec values_on_top mk l exp = match l with
     | [] -> exp

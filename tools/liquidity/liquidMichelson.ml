@@ -893,6 +893,9 @@ let translate filename ~peephole contract =
   { contract with code }
  *)
 and translate contract =
+  if !LiquidOptions.verbosity > 0 then
+    Format.eprintf "Translate contract %s to Michelson@."
+      (LiquidNamespace.qual_contract_name contract);
   let mic_storage = contract.storage in
   match contract.entries with
   | [{ entry_sig = { parameter = mic_parameter; parameter_name; storage_name };

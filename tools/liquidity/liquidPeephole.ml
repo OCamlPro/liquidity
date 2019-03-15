@@ -264,3 +264,8 @@ and simplify_steps list tail =
 
 and simplify contract =
   { contract with mic_code = simplify_pre contract.mic_code }
+
+let simplify contract =
+  if !LiquidOptions.verbosity > 0 then
+    Format.eprintf "Peephole optimization of Michelson code@.";
+  simplify contract

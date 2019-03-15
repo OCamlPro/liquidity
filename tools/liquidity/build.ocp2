@@ -101,12 +101,12 @@ OCaml.library("ocplib-liquidity-base",
        "iSO8601.ml";
 
        "liquidBoundVariables.ml";
+       "liquidNamespace.ml";
 
        "liquidEmit.ml";
        "liquidPeephole.ml";
        "liquidToParsetree.ml";
        "liquidPrinter.ml";
-       "liquidNamespace.ml";
        "liquidInfer.ml";
        "liquidCheck.ml";
        "liquidSimplify.ml";

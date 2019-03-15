@@ -325,6 +325,10 @@ let rec compute decompile code to_inline =
 (* iter code *)
 
 and simplify_contract ?(decompile_annoted=false) contract to_inline =
+  if !LiquidOptions.verbosity > 0 then
+    Format.eprintf "Simplify (inlining) contract %s@."
+      (LiquidNamespace.qual_contract_name contract);
+
   match contract.entries with
   | [{ entry_sig = { entry_name = "main" };
        code } as entry ] ->
