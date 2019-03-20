@@ -612,31 +612,32 @@ let get_type env loc ty =
   in
   aux ty
 
-let rec type_name = function
-  | Tfail -> "f" | Tunit -> "u" | Tbool -> "b" | Tint -> "i"
-  | Tnat -> "n" | Ttez -> "z" | Tstring -> "s" | Tbytes -> "x"
-  | Ttimestamp -> "t" | Tkey -> "k" | Tkey_hash -> "h"
-  | Tsignature -> "g" | Toperation -> "o" | Taddress -> "a"
-  | Ttuple tyl -> List.fold_left (fun s ty -> s ^ (type_name ty))
-                    ("T" ^ string_of_int (List.length tyl)) tyl
-  | Toption ty -> "O" ^ (type_name ty)
-  | Tlist ty -> "L" ^ (type_name ty)
-  | Tset ty -> "S" ^ (type_name ty)
-  | Tmap (ty1, ty2) -> "M" ^ (type_name ty1) ^ (type_name ty2)
-  | Tbigmap (ty1, ty2) -> "B" ^ (type_name ty1) ^ (type_name ty2)
-  | Tor (ty1, ty2) -> "X" ^ (type_name ty1) ^ (type_name ty2)
-  | Tlambda (ty1, ty2) -> (type_name ty1) ^ (type_name ty2)
-  | Tclosure ((ty1, ty2), ty3) ->
-    "C" ^ (type_name ty1) ^ (type_name ty2) ^ (type_name ty3)
-  | Trecord (rn, l) ->
-    String.concat "" (["R"; rn] @ List.map (fun (f, t) -> f ^ type_name t) l)
-  | Tsum (sn, l) ->
-    String.concat "" (["A"; sn] @ List.map (fun (f, t) -> f ^ type_name t) l)
-  | Tcontract c ->
-    begin match c.sig_name with Some n -> "CN" ^ n | None -> "CU" end
-  | Tvar { contents = a }  -> "v" ^ !a.id
-  | Tpartial _ -> "p"
+module Hty = Hashtbl.Make (struct
+    type t = datatype
+    let equal = eq_types
+    let hash = Hashtbl.hash
+  end)
 
+(* Create unique nunmber for a type associated to a name *)
+let type_nb =
+  let name_cpts = Hashtbl.create 17 in
+  fun name ty ->
+    let ntypes, max_cpt =
+      try Hashtbl.find name_cpts name
+      with Not_found ->
+        let ts = Hty.create 9 in
+        Hashtbl.add name_cpts name (ts, 0);
+        ts, 0 in
+    try Hty.find ntypes ty
+    with Not_found ->
+      let cpt = max_cpt + 1 in
+      Hty.add ntypes ty cpt;
+      Hashtbl.add name_cpts name (ntypes, cpt);
+      cpt
+
+let mk_typed_name s tn =
+  if tn = 1 then s
+  else Printf.sprintf "%s__%d_" s tn
 
 let rec vars_to_unit ?loc ty = match ty with
   | Ttuple tyl -> Ttuple (List.map (vars_to_unit ?loc) tyl)
@@ -899,11 +900,12 @@ let rec mono_exp env subst vtys (e:typed_exp) =
       Let { lb with bnd_val; body }
     end else begin
       List.fold_left (fun body (tn, ty, s) ->
-        let bnd_var = { lb.bnd_var with nname = lb.bnd_var.nname ^ "_" ^ tn } in
-        let bnd_val =
-          mono_exp ((StringMap.bindings s) @ subst) vtys lb.bnd_val in
-        { e with desc = Let { lb with bnd_var; bnd_val; body } }
-      ) body substs
+          let bnd_var = { lb.bnd_var with
+                          nname = mk_typed_name lb.bnd_var.nname tn } in
+          let bnd_val =
+            mono_exp ((StringMap.bindings s) @ subst) vtys lb.bnd_val in
+          { e with desc = Let { lb with bnd_var; bnd_val; body } }
+        ) body substs
     end.desc
     | Var s ->
       begin try
@@ -911,16 +913,17 @@ let rec mono_exp env subst vtys (e:typed_exp) =
           let tn =
             match List.find_opt (fun (tn, ty') -> eq_types ty ty') !vty with
             | None ->
-              let tn = type_name ty in
+              let tn = type_nb s ty in
               vty := (tn, ty) :: !vty;
               tn
             | Some (tn, _) -> tn in
-          Var (s ^ "_" ^ tn)
+          Var (mk_typed_name s tn)
         with Not_found -> Var s
       end
     | Lambda ({ recursive = Some f } as l) ->
       let recursive =
-        if QualMap.mem env.path f vtys then Some (f ^ "_" ^ type_name ty)
+        if QualMap.mem env.path f vtys then
+          Some (mk_typed_name f (type_nb f ty))
         else Some f in
       let arg_ty = instantiate l.arg_ty in
       let ret_ty = instantiate l.ret_ty in
@@ -1122,7 +1125,7 @@ and mono_values top vtys c =
       end else begin
         List.fold_left (fun cval (tn, ty, s) ->
             { v with
-              val_name = v.val_name ^ "_" ^ tn;
+              val_name = mk_typed_name v.val_name tn;
               val_exp = mono_exp env (StringMap.bindings s) vtys v.val_exp;
             } :: cval
           ) cval substs
