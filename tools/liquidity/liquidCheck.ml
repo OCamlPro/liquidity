@@ -1472,7 +1472,6 @@ and typecheck_prim2i env prim loc args =
   | Prim_gas, [ ty ] -> unify ty Tunit; Tnat
 
   | Prim_pack, [ ty ] ->
-    unify ty (Tpartial Ppar); (* Prevent argument from being generalized *)
     Tbytes
 
   | (Prim_blake2b | Prim_sha256 | Prim_sha512), [ ty ] ->
