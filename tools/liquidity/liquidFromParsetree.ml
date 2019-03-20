@@ -2170,10 +2170,9 @@ and translate_structure env acc ast : syntax_exp parsed_struct =
 and translate_non_empty_contract env acc ast =
   match translate_structure env acc ast with
   | PaModule _ ->
-    Location.raise_errorf
-      "No entry point found for contract %s in file %S%!"
+    LiquidLoc.raise_error ~loc:(LiquidLoc.loc_in_file env.filename)
+      "No entry point found for contract %s%!"
       env.contractname
-      env.filename
   | PaContract contract -> contract
 
 and pack_contract env toplevels =
