@@ -99,6 +99,16 @@ let rec compute decompile code to_inline =
     | Project { field; record } ->
       let record = iter record in
       { exp with desc = Project { field; record } }
+
+    | Apply { prim = Prim_tuple_get;
+              args = [
+                { desc = Apply { prim = Prim_tuple;
+                                 args = tuple
+                               }
+                };
+                { desc = Const { const = CInt n | CNat n } }] } ->
+      List.nth tuple (LiquidNumber.int_of_integer n)
+
     | Let { bnd_val = ({ ty = Tfail } as bnd_val) } ->
       iter bnd_val
     | Let { bnd_var; bnd_val; body = { desc = Var name }}
@@ -127,7 +137,7 @@ let rec compute decompile code to_inline =
          size bnd_val <= inline_treshold_low &&
          (StringMap.mem bnd_var.nname old_to_inline ||
           match bnd_val.desc with
-          | Var _ | Apply { prim = Prim_tuple_get } -> true
+          | Var _ | Apply { prim = Prim_tuple_get | Prim_tuple } -> true
           | _ -> false)
       then
         to_inline := StringMap.add bnd_var.nname bnd_val !to_inline;

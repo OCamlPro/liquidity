@@ -72,6 +72,12 @@ and simplify_step e exprs =
   | LT, { ins = NOT }:: exprs -> simplify_step { e with ins = GE } exprs
   | LE, { ins = NOT }:: exprs -> simplify_step { e with ins = GT } exprs
   | GE, { ins = NOT }:: exprs -> simplify_step { e with ins = LT } exprs
+
+(* TODO: maybe ?
+  | CAR _, { ins = PAIR } :: _ -> simplify_step { e with ins = DUP 1 } exprs
+  | CDR _, { ins = PAIR } :: _ -> simplify_step { e with ins = DUP 2 } exprs
+*)
+
   | FAILWITH, _ -> [e]
 
   | IF(i1,i2), exprs ->
