@@ -244,7 +244,9 @@ let rec encode_type ?(decompiling=false) ty =
         storage_name = "storage";
         parameter;
       }] }
-  | Tvar _ | Tpartial _ -> assert false (* Removed during typechecking *)
+  | Tvar _ | Tpartial _ ->
+    Format.eprintf "%s@." (LiquidPrinter.LiquidDebug.string_of_type ty);
+    assert false (* Removed during typechecking *)
 
 and encode_qual_type env ty =
   encode_type ~decompiling:env.decompiling ty
@@ -839,6 +841,7 @@ and encode env ( exp : typed_exp ) : encoded_exp =
     let lambda_body = body in
     let bvs = LiquidBoundVariables.bv exp in
     if StringSet.is_empty bvs ||
+       (* TODO : unsafe optim, change me *)
        StringSet.for_all (fun bv -> StringMap.mem bv !(env.force_inline)) bvs
     then
       (* not a closure (or will be pure after inlining),

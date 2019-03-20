@@ -1043,7 +1043,7 @@ and typecheck env ( exp : syntax_exp ) : typed_exp =
               (* Left, Right pattern matching *)
               ["Left", left_ty; "Right", right_ty]
             | Tvar _ (* | Tpartial _ *) ->
-              begin match find_variant_type ~loc env cases with
+              begin match find_variant_type ~loc env.env cases with
                 | Some (Tsum (_, constrs) as ty) ->
                   unify arg.ty ty;
                   constrs
@@ -1991,15 +1991,18 @@ and typecheck_contract ~others ~warnings ~decompiling contract =
         ) counts;
       Some { i with init_body }
   in
-  mono_contract env
-    { contract with
-      values = List.rev values;
-      entries;
-      c_init;
-      subs }
+  { contract with
+    values = List.rev values;
+    entries;
+    c_init;
+    subs }
 
 let typecheck_contract ~warnings ~decompiling contract =
-  typecheck_contract ~others:[] ~warnings ~decompiling contract
+  let contract =
+    typecheck_contract ~others:[] ~warnings ~decompiling contract in
+  mono_contract contract
+
+
 
 let typecheck_code env ?expected_ty code =
   match expected_ty with

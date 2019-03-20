@@ -10,6 +10,23 @@
 open LiquidTypes
 open LiquidPrinter.Liquid
 
+module QualMap = struct
+  open LiquidNamespace
+  include Map.Make (struct
+    type t = string list
+    let compare = Pervasives.compare
+  end)
+  let add path s v m =
+    let p', s = unqualify s in
+    add (path @ p' @ [s]) v m
+  let find path s m =
+    let p', s = unqualify s in
+    find (path @ p' @ [s]) m
+  let mem path s m =
+    let p', s = unqualify s in
+    mem (path @ p' @ [s]) m
+end
+
 let error loc msg =
   LiquidLoc.raise_error ~loc ("Type error:  " ^^ msg ^^ "%!")
 
@@ -448,7 +465,7 @@ let rec find_variant_type ~loc env = function
   | (PConstr (("Left"|"Right"), _), _) :: _ ->
     Some (Tor (fresh_tvar (), fresh_tvar ()))
   | (PConstr (c, _), _) :: _ ->
-    try Some (fst (LiquidNamespace.find_constr ~loc c env.env))
+    try Some (fst (LiquidNamespace.find_constr ~loc c env))
     with Not_found -> None
 
 
@@ -573,7 +590,7 @@ let get_type env loc ty =
                       eq_types (aux (snd e1)) e2.parameter
                     ) cs.entries_sig
                 ) el
-            ) env.env.contract_types in
+            ) env.contract_types in
           if StringMap.cardinal csm < 1 then
             error loc "No compatible contract signature found"
           else if StringMap.cardinal csm > 1 then
@@ -638,6 +655,7 @@ let rec vars_to_unit ?loc ty = match ty with
   | Tsum (sn, cl) ->
     Tsum (sn, List.map (fun (cn, cty) -> (cn, vars_to_unit ?loc cty)) cl)
   | Tcontract c -> Tcontract (sig_vars_to_unit ?loc c)
+  | Tvar { contents = { contents = { tyo = Some ty }}} -> vars_to_unit ?loc ty
   | Tvar _ ->
     (* Remaining vars correspond to unused arguments *)
     (* unify (match loc with None -> noloc | Some loc -> loc)
@@ -819,6 +837,7 @@ and const_tvars_to_unit c = match c with
               ret_ty = vars_to_unit ~loc:body.loc ret_ty }
 
 and contract_tvars_to_unit (contract : typed_contract) =
+  let subs = List.map contract_tvars_to_unit contract.subs in
   let values = List.map (fun v ->
       { v with val_exp = tvars_to_unit v.val_exp }
     ) contract.values in
@@ -844,7 +863,7 @@ and contract_tvars_to_unit (contract : typed_contract) =
       | Some env -> Some (env_tvars_to_unit env);
   } in
   let ty_env = env_tvars_to_unit contract.ty_env in
-  { contract with values; c_init; entries; ty_env }
+  { contract with values; c_init; entries; ty_env ; subs }
 
 let rec mono_exp env subst vtys (e:typed_exp) =
   let mono_exp = mono_exp env in
@@ -859,9 +878,9 @@ let rec mono_exp env subst vtys (e:typed_exp) =
     | Let ({ bnd_val = { ty = Tlambda _ | Tclosure _ as bvty }} as lb)
       when not (StringSet.is_empty (free_tvars bvty)) ->
     (* Printf.printf "let %s = ... in E\n" lb.bnd_var.nname; *)
-    let vtys' = StringMap.add lb.bnd_var.nname (ref []) vtys in
+    let vtys' = QualMap.add env.path lb.bnd_var.nname (ref []) vtys in
     let body = mono_exp subst vtys' lb.body in
-    let vty = StringMap.find lb.bnd_var.nname vtys' in
+    let vty = QualMap.find env.path lb.bnd_var.nname vtys' in
     let substs = List.fold_left (fun ss (tn, ty) ->
         (tn, ty, build_subst lb.bnd_val.ty ty) :: ss) [] !vty in
     (* Printf.printf "Raw type of %s : %s\n" lb.bnd_var.nname
@@ -888,16 +907,20 @@ let rec mono_exp env subst vtys (e:typed_exp) =
     end.desc
     | Var s ->
       begin try
-          let tn = type_name ty in
-          let vty = StringMap.find s vtys in
-          if not (List.exists (fun (_, ty') -> eq_types ty ty') !vty)
-          then vty := (tn, ty) :: !vty;
+          let vty = QualMap.find env.path s vtys in
+          let tn =
+            match List.find_opt (fun (tn, ty') -> eq_types ty ty') !vty with
+            | None ->
+              let tn = type_name ty in
+              vty := (tn, ty) :: !vty;
+              tn
+            | Some (tn, _) -> tn in
           Var (s ^ "_" ^ tn)
         with Not_found -> Var s
       end
     | Lambda ({ recursive = Some f } as l) ->
       let recursive =
-        if StringMap.mem f vtys then Some (f ^ "_" ^ type_name ty)
+        if QualMap.mem env.path f vtys then Some (f ^ "_" ^ type_name ty)
         else Some f in
       let arg_ty = instantiate l.arg_ty in
       let ret_ty = instantiate l.ret_ty in
@@ -990,7 +1013,7 @@ let rec mono_exp env subst vtys (e:typed_exp) =
     | Failwith e -> Failwith (mono_exp subst vtys e)
     | CreateContract cc ->
       CreateContract { args = List.map (mono_exp subst vtys) cc.args;
-                       contract = mono_contract env cc.contract }
+                       contract = fst @@ mono_contract vtys cc.contract }
     | ContractAt ca ->
       let c_sig = { ca.c_sig with
                     entries_sig = List.map (fun e ->
@@ -1035,11 +1058,17 @@ and mono_const env subst vtys (c : typed_const) = match c with
     CLambda { arg_name; arg_ty; body; ret_ty; recursive }
 
 
-and mono_contract env c =
-  let cval, vtys = List.fold_left (fun (cval, vtys) v ->
-      if (StringSet.is_empty (free_tvars v.val_exp.ty)) then (v :: cval, vtys)
-      else (v :: cval, StringMap.add v.val_name (ref []) vtys)
-    ) ([], StringMap.empty) c.values in
+and register_global_vtys vtys c =
+  let env = c.ty_env in
+  let vtys =
+    List.fold_left (fun vtys v ->
+        if StringSet.is_empty (free_tvars v.val_exp.ty) then vtys
+        else QualMap.add env.path v.val_name (ref []) vtys
+      ) vtys c.values in
+  List.fold_left register_global_vtys vtys c.subs
+
+and mono_contract vtys c =
+  let env = c.ty_env in
   let entries = List.map (fun e ->
       let code = mono_exp env [] vtys e.code in
       let pty = get_type env code.loc e.entry_sig.parameter in
@@ -1062,8 +1091,30 @@ and mono_contract env c =
              init_args }
     | None -> None
   in
+  let loc = LiquidLoc.loc_in_file env.filename in
+  let storage = get_type env loc c.storage in
+  if not @@ StringSet.is_empty @@ free_tvars storage then
+    error loc
+      "Storage type for contract %s cannot be inferred (%s), \
+       add an annotation or specialize type"
+      c.contract_name
+      (string_of_type storage);
+  let subs, vtys = List.fold_left (fun (subs, vtys) c ->
+      let c, vtys = mono_contract vtys c in
+      c :: subs, vtys
+    ) ([], vtys) (List.rev c.subs) in
+
+  let contract = { c with storage; entries; c_init; subs } in
+  (* delay monomorphisation of global values *)
+  contract, vtys
+
+
+and mono_values top vtys c =
+  let env = c.ty_env in
   let values = List.fold_left (fun cval v ->
-      let vty = try StringMap.find v.val_name vtys with Not_found -> ref [] in
+      let vty =
+        try QualMap.find env.path v.val_name vtys
+        with Not_found -> ref [] in
       let substs = List.fold_left (fun ss (tn, ty) ->
           (tn, ty, build_subst v.val_exp.ty ty) :: ss) [] !vty in
       if substs = [] then begin
@@ -1076,16 +1127,16 @@ and mono_contract env c =
             } :: cval
           ) cval substs
       end
-    ) [] cval in
-  let loc = LiquidLoc.loc_in_file env.env.filename in
-  let storage = get_type env loc c.storage in
-  if not @@ StringSet.is_empty @@ free_tvars storage then
-    error loc
-      "Storage type cannot be inferred (%s), \
-       add an annotation or specialize type"
-      (string_of_type storage);
-  let contract = { c with storage; values; entries; c_init } (* ty_env *) in
-  contract_tvars_to_unit contract
+    ) [] (List.rev c.values) in
+  let subs = List.rev_map (mono_values top vtys) (List.rev c.subs) in
+  { c with values; subs }
+
+
+let mono_contract c =
+  let vtys = register_global_vtys QualMap.empty c in
+  let c, vtys = mono_contract vtys c in
+  let c = mono_values c vtys c in
+  contract_tvars_to_unit c
 
 let copy_ty ty =
   let refs = Hashtbl.create 17 in
