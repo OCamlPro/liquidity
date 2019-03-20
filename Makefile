@@ -4,9 +4,16 @@ all: build
 clone-tezos:
 	git submodule update --init
 
-build: _obuild
-	ocp-build build 
+_obuild/liquidity/liquidity.asm: _obuild
+	ocp-build build liquidity
+
+_obuild/liquidity-mini/liquidity-mini.asm: _obuild
+	ocp-build build liquidity-mini
+
+mini: _obuild/liquidity-mini/liquidity-mini.asm
 	cp -f _obuild/liquidity-mini/liquidity-mini.asm ./liquidity-mini
+
+build: _obuild/liquidity/liquidity.asm mini
 	cp -f _obuild/liquidity/liquidity.asm ./liquidity
 
 install: _obuild
