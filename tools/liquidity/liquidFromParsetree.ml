@@ -26,6 +26,8 @@ type 'a parsed_struct =
   | PaModule of 'a contract
   | PaContract of 'a contract
 
+exception Stop of syntax_contract
+
 let ident_counter = ref 0
 
 (* The minimal version of liquidity files that are accepted by this compiler *)
@@ -734,6 +736,13 @@ let acc_for_subcontract acc =
       | Syn_init _ -> acc
       | Syn_sub_contract c | Syn_sub_contract_alias (_, c) ->
         Syn_other_contract c :: acc
+      | a -> a :: acc
+    ) [] acc
+  |> List.rev
+
+let acc_for_subcontract_as_main acc =
+  List.fold_left (fun acc -> function
+      | Syn_init _ -> acc
       | a -> a :: acc
     ) [] acc
   |> List.rev
@@ -2120,16 +2129,24 @@ and translate_structure env acc ast : syntax_exp parsed_struct =
     }; pstr_loc } :: ast ->
     let inner_env = mk_inner_env env contract_name in
     begin
-      match translate_structure inner_env (acc_for_subcontract acc) structure with
-      | PaModule contract ->
-        error_loc pstr_loc
-          "Contract %s has no entry points (use module instead)"
-          contract_name;
-      | PaContract contract ->
-        match !LiquidOptions.main with
-        | Some main when main = contract_name ->
-          PaContract contract
-        | _ ->
+      match !LiquidOptions.main with
+      | Some main when main = add_path_name env.path contract_name ->
+        begin match translate_structure inner_env (acc_for_subcontract_as_main acc) structure with
+          | PaModule contract ->
+            error_loc pstr_loc
+              "%s is a module and not a contract, \
+               it has no entry points and cannot be used as main"
+              contract_name;
+          | PaContract contract ->
+            raise (Stop contract)
+        end
+      | _ ->
+        match translate_structure inner_env (acc_for_subcontract acc) structure with
+        | PaModule contract ->
+          error_loc pstr_loc
+            "Contract %s has no entry points (use module instead)"
+            contract_name;
+        | PaContract contract ->
           let contract_sig = sig_of_contract contract in
           env.contract_types <-
             StringMap.add contract_name contract_sig env.contract_types;
@@ -2313,7 +2330,9 @@ let translate ~filename ast =
       | _ -> ()
     end;
     contract
-  with exn -> translate_exn exn
+  with
+  | Stop contract -> contract
+  | exn -> translate_exn exn
 
 let mk_toplevel_env filename top_env =
   let contractname = filename_to_contract filename in
@@ -2341,28 +2360,35 @@ let translate_multi l =
     if !LiquidOptions.verbosity > 0 then
       Format.eprintf "Parse file %s@." filename;
     let top_env = initial_env filename in
-    let exception Stop of syntax_contract in
     try
       let acc =
         List.fold_left (fun acc (filename, ast) ->
             let env = mk_toplevel_env filename top_env in
-            match translate_structure env (acc_for_subcontract acc) ast with
-            | PaModule contract ->
-              Format.eprintf "Module %s@." contract.contract_name;
-              Syn_sub_contract contract :: acc
-            | PaContract contract ->
-              begin match !LiquidOptions.main with
-                | Some main when main = contract.contract_name ->
+            match !LiquidOptions.main with
+            | Some main when main = env.contractname (* at toplevel *) ->
+              begin match translate_structure env (acc_for_subcontract_as_main acc) ast with
+                | PaModule contract ->
+                  LiquidLoc.raise_error ~loc:(LiquidLoc.loc_in_file filename)
+                    "%s is a module and not a contract, \
+                     it has no entry points and cannot be used as main"
+                    contract.contract_name;
+                | PaContract contract ->
                   Format.eprintf "Main contract %s@." contract.contract_name;
                   raise (Stop contract)
-                | _ ->
+              end
+            | _ ->
+              begin match translate_structure env (acc_for_subcontract acc) ast with
+                | PaModule contract ->
+                  Format.eprintf "Module %s@." contract.contract_name;
+                  Syn_sub_contract contract :: acc
+                | PaContract contract ->
                   Format.eprintf "Contract %s@." contract.contract_name;
-              end;
-              let contract_sig = sig_of_contract contract in
-              top_env.contract_types <-
-                StringMap.add contract.contract_name contract_sig
-                  top_env.contract_types;
-              Syn_sub_contract contract :: acc
+                  let contract_sig = sig_of_contract contract in
+                  top_env.contract_types <-
+                    StringMap.add contract.contract_name contract_sig
+                      top_env.contract_types;
+                  Syn_sub_contract contract :: acc
+              end
           ) [] (List.rev r_others)
       in
       let contract = translate_non_empty_contract top_env acc ast in
