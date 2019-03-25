@@ -7,16 +7,17 @@ DIR="$(cd "$(dirname "$0")" && echo "$(pwd -P)/")"
 
 LIQUIDITY=liquidity
 LIQUID_FULL_PATH=./${LIQUIDITY}
-LIQARGS="--verbose"
+LIQARGS="--verbose --no-ignore-annots"
 LIQEXEC="${LIQUID_FULL_PATH} ${LIQARGS}"
 
-printf "${BOLD}%-20s${DEFAULT}" "$(basename $test)"
+TESTNAME=$(basename $test)
+printf "${BOLD}%-20s${DEFAULT}" "${TESTNAME%.*}"
 
 mkdir -p $(dirname "_obuild/tests/$test")
 
 run \
     "Compile" \
-    "${LIQEXEC} tests/$test.liq -o _obuild/tests/$test.tz"
+    "${LIQEXEC} tests/$test -o _obuild/tests/$test.tz"
 
 run \
     "Typecheck" \
@@ -25,11 +26,11 @@ run \
 
 run \
     "Decompile" \
-    "${LIQEXEC} _obuild/tests/$test.tz"
+    "${LIQEXEC} _obuild/tests/$test.tz -o _obuild/tests/${test}.tz.liq"
 
 run \
     "Re-compile" \
-    "${LIQEXEC} _obuild/tests/${test}.tz.liq"
+    "${LIQEXEC} _obuild/tests/${test}.tz.liq -o _obuild/tests/${test}_tz.tz"
 
 run \
     "Re-typecheck" \

@@ -255,7 +255,9 @@ let compile_tezos_file filename =
   try compile_tezos_file filename
   with exn ->
     (* Rety and ignore annotations if failing *)
-    if !LiquidOptions.ignore_annots then raise exn;
+    if !LiquidOptions.retry_without_annots ||
+       !LiquidOptions.ignore_annots then
+      raise exn;
     report_error exn;
     Format.printf
       "Decompilation failed, retrying and ignoring \
@@ -610,6 +612,9 @@ let main () =
 
       "--no-annot", Arg.Set LiquidOptions.no_annot,
       " Don't produce any annotations when compiling";
+
+      "--no-ignore-annots", Arg.Clear LiquidOptions.retry_without_annots,
+      " Don't ignore annotations of failure when decompiling";
 
       "--json", Arg.Set LiquidOptions.json,
       " Output Michelson in JSON representation";

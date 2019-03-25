@@ -10,11 +10,14 @@ _obuild/liquidity/liquidity.asm: _obuild
 _obuild/liquidity-mini/liquidity-mini.asm: _obuild
 	ocp-build build liquidity-mini
 
-mini: _obuild/liquidity-mini/liquidity-mini.asm
-	cp -f _obuild/liquidity-mini/liquidity-mini.asm ./liquidity-mini
+liquidity-mini: _obuild/liquidity-mini/liquidity-mini.asm
+	cp -f _obuild/liquidity-mini/liquidity-mini.asm liquidity-mini
 
-build: _obuild/liquidity/liquidity.asm mini
-	cp -f _obuild/liquidity/liquidity.asm ./liquidity
+liquidity: _obuild/liquidity/liquidity.asm
+	cp -f _obuild/liquidity/liquidity.asm liquidity
+
+mini: liquidity-mini
+build: liquidity liquidity-mini
 
 install: _obuild
 	ocp-build install liquidity
@@ -45,7 +48,7 @@ doc:
 
 NTESTS=42
 NREVTESTS=10
-SIMPLE_TESTS=`seq -f 'test%.0f' 0 $(NTESTS)`
+SIMPLE_TESTS=`seq -f 'test%.0f.liq' 0 $(NTESTS)`
 MORE_TESTS=test_ifcons test_if test_loop test_option test_transfer test_call test_left \
   test_extfun test_left_constr test_closure test_closure2 test_closure3 \
   test_map test_rev test_reduce_closure test_map_closure test_mapreduce_closure \
@@ -53,9 +56,10 @@ MORE_TESTS=test_ifcons test_if test_loop test_option test_transfer test_call tes
   test_fold test_iter test_big_map test_map_fold_closure test_inline test_rec_fun \
   bug_annot0 inline_fail bug_annot1 test_infer_unpack test_infer_param test_record \
   bug187 test_modules lambda_const votes bug_197
+RE_TESTS=bug202
 OTHER_TESTS=others/broker others/demo others/auction others/multisig others/alias others/game others/mist_wallet_current others/token
-DOC_TESTS=`cd tests; find doc -regex "[^\.]+.liq" -exec sh -c "echo {} | cut -d '.' -f 1" \; | sort -V`
-REV_TESTS=`find tests/reverse -regex "[^\.]+.tz" -exec sh -c "echo {} | cut -d '.' -f 1" \; | sort -V`
+DOC_TESTS=`cd tests; find doc -regex "[^\.]+.liq" | sort -V`
+REV_TESTS=`find tests/reverse -regex "[^\.]+.tz" | sort -V`
 
 NEW_TEZOS_TESTS= fail weather_insurance
 FAILING_TEZOS_TESTS= originator
@@ -65,20 +69,20 @@ tests: build
 	@echo ---------------------
 	@echo Run full tests
 	@echo ---------------------
-	scripts/run-list.sh scripts/check.sh $(DOC_TESTS) $(SIMPLE_TESTS) $(MORE_TESTS) $(OTHER_TESTS)
+	@scripts/run-list.sh scripts/check.sh $(DOC_TESTS) $(SIMPLE_TESTS) $(MORE_TESTS:=.liq) $(RE_TESTS:=.reliq) $(OTHER_TESTS:=.liq)
 
-tests-mini: build
+tests-mini: mini
 	@echo ---------------------
 	@echo Run mini tests
 	@echo ---------------------
-	scripts/run-list.sh scripts/check-mini.sh $(DOC_TESTS) $(SIMPLE_TESTS) $(MORE_TESTS) $(OTHER_TESTS)
+	@scripts/run-list.sh scripts/check-mini.sh $(DOC_TESTS) $(SIMPLE_TESTS) $(MORE_TESTS:=.liq) $(RE_TESTS:=.reliq) $(OTHER_TESTS:=.liq)
 
-TEZOS_TESTS=$(addprefix tezos/src/bin_client/test/contracts/, $(TEZOS_TESTS_N))
+TEZOS_TESTS=$(addprefix tezos/src/bin_client/test/contracts/, $(TEZOS_TESTS_N:=.tz))
 
 rev-tests: build
 	@echo ---------------------
 	@echo Run reverse tests
 	@echo ---------------------
-	scripts/run-list.sh scripts/check-rev.sh $(REV_TESTS) $(TEZOS_TESTS)
+	@scripts/run-list.sh scripts/check-rev.sh $(REV_TESTS) $(TEZOS_TESTS)
 
 all-tests: tests tests-mini rev-tests

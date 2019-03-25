@@ -43,6 +43,9 @@ let json = ref false
 (** Ignore Michelson type annotations ([%c] and [:t]) when decompiling *)
 let ignore_annots = ref false
 
+(** Retry decompilation of failure with annotations *)
+let retry_without_annots = ref true
+
 (** Don't produce any annotations when compiling *)
 let no_annot = ref false
 
