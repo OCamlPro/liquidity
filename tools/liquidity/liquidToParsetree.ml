@@ -258,6 +258,13 @@ let rec convert_const ~abbrev (expr : (datatype, 'a) exp const) =
   | CKey n -> Exp.constant (Pconst_integer (n, Some '\234'))
   | CSignature n -> Exp.constant (Pconst_integer (n, Some '\235'))
   | CContract n -> Exp.constant (Pconst_integer (n, Some '\236'))
+  | CAddress n when
+      String.length n >= 2 &&
+      String.sub n 0 2 = "tz"
+    ->
+    Exp.constraint_
+      (Exp.constant (Pconst_integer (n, Some '\236')))
+      (convert_type ~abbrev Taddress)
   | CAddress n -> Exp.constant (Pconst_integer (n, Some '\236'))
   | CBytes n -> Exp.constant (Pconst_integer (n, Some '\237'))
 
