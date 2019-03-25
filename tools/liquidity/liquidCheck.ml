@@ -1191,8 +1191,10 @@ and typecheck env ( exp : syntax_exp ) : typed_exp =
           typecheck_expected "delegatable" env Tbool delegatable in
         let init_balance =
           typecheck_expected "initial balance" env Ttez init_balance in
+        let contract_storage_type =
+          normalize_type ~from_env:env.env ~in_env:contract.ty_env contract.storage in
         let init_storage = typecheck_expected "initial storage"
-            env ((* lift_type contract.ty_env *) contract.storage) init_storage in
+            env contract_storage_type init_storage in
         let desc = CreateContract {
             args = [manager; delegate; spendable;
                     delegatable; init_balance; init_storage];

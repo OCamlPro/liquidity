@@ -249,7 +249,7 @@ let rec encode_type ?(decompiling=false) ty =
     assert false (* Removed during typechecking *)
 
 and encode_qual_type env ty =
-  encode_type ~decompiling:env.decompiling ty
+  encode_type ~decompiling:env.decompiling (normalize_type ~in_env:env.env ty)
 
 (* encode a contract signature to the corresponding single entry form
    sum type *)

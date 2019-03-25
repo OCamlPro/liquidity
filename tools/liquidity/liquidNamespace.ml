@@ -140,15 +140,19 @@ let rec normalize_type ?from_env ~in_env ty =
     Tlambda (normalize_type ?from_env ~in_env t1,
              normalize_type ?from_env ~in_env t2)
   | Tcontract c_sig ->
-    Tcontract (normalize_contract_sig ?from_env ~in_env c_sig)
+    Tcontract (normalize_contract_sig ?from_env ~in_env ~build_sig_env:false c_sig)
   | Trecord (name, fields) ->
-    let _, found_env = find_type ~loc:noloc name in_env [] in
+    let _, found_env =
+      try find_type ~loc:noloc name in_env []
+      with Not_found | Unknown_namespace _ -> assert false in
     Trecord (qualify_name ?from_env ~at:found_env.path name,
              List.map (fun (f, ty) ->
                  qualify_name ?from_env ~at:found_env.path f,
                  normalize_type ?from_env ~in_env ty) fields)
   | Tsum (name, constrs) ->
-    let _, found_env = find_type ~loc:noloc name in_env [] in
+    let _, found_env =
+      try find_type ~loc:noloc name in_env []
+      with Not_found | Unknown_namespace _ -> assert false in
     Tsum (qualify_name ?from_env ~at:found_env.path name,
           List.map (fun (c, ty) ->
               qualify_name ?from_env ~at:found_env.path c,
@@ -168,16 +172,20 @@ let rec normalize_type ?from_env ~in_env ty =
     end
   | Tpartial _ -> raise (Invalid_argument "normalize_type")
 
-and normalize_contract_sig ?from_env ~in_env c_sig =
+and normalize_contract_sig ?from_env ~in_env ~build_sig_env c_sig =
   match c_sig.sig_name with
   | None -> c_sig (* TODO *)
   | Some s ->
-    let _, found_env = find_contract_type_aux ~loc:noloc s in_env in
+    let _, found_env =
+      try find_contract_type_aux ~loc:noloc s in_env
+      with Not_found | Unknown_namespace _ -> assert false in
     let sig_env =
-      try find_env ~loc:noloc ( [unqualify s |> snd]) found_env
-      with Not_found | Unknown_namespace _ ->
-        (* for built-in signatures *)
-        found_env
+      if not build_sig_env then in_env
+      else
+        try find_env ~loc:noloc ( [unqualify s |> snd]) found_env
+        with Not_found | Unknown_namespace _ ->
+          (* for built-in signatures *)
+          found_env
     in
     { sig_name = Some (qualify_name ?from_env ~at:found_env.path s);
       entries_sig =
@@ -192,7 +200,7 @@ let find_type ~loc s env subst =
 
 let find_contract_type ~loc s env =
   let csig, found_env = find_contract_type_aux ~loc s env in
-  normalize_contract_sig ~from_env:env ~in_env:found_env csig
+  normalize_contract_sig ~from_env:env ~in_env:found_env ~build_sig_env:true csig
 
 let find_label_ty_name ~loc s env =
   let (tn, i), found_env = find ~loc s env (fun env -> env.labels) in
