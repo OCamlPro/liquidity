@@ -105,31 +105,41 @@ let () =
   Lexer.define_keywords liquidity_keywords
 
 let stage_module_replace = ref 0
+let prev_percent = ref false
 
-(* replace "module" with "contract%module" *)
+(* replace "module" with "%module contract" *)
 let preprocess token lexbuf =
   let open Parser in
   match !stage_module_replace with
   | 0 ->
     begin
       match token lexbuf with
-      | LIDENT "module" ->
+      | LIDENT "module" when not !prev_percent ->
         stage_module_replace := 1;
-        MODULE
+        PERCENT
       | EOL ->
         (* preprocessor in reason lexer is given EOLs also *)
         token lexbuf
-      | t -> t
+      | PERCENT ->
+        prev_percent := true;
+        PERCENT
+      | t ->
+        prev_percent := false;
+        t
     end
   | 1 ->
     stage_module_replace := 2;
-    PERCENT
+    LIDENT "module"
   | 2 ->
     stage_module_replace := 0;
-    LIDENT "module"
+    prev_percent := false;
+    MODULE
   | _ -> assert false
 
 let () =
   Lexer.set_preprocessor
-    (fun () -> stage_module_replace := 0)
+    (fun () ->
+       stage_module_replace := 0;
+       prev_percent := false;
+    )
     preprocess
