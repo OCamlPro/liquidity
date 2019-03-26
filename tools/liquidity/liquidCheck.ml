@@ -319,7 +319,7 @@ let rec typecheck_const ~loc env cst ty =
 
   | Tor (left_ty, right_ty), CRight cst ->
     let right_ty, cst = typecheck_const ~loc env cst right_ty in
-    Tor (left_ty, right_ty), CLeft cst
+    Tor (left_ty, right_ty), CRight cst
 
   | Tmap (ty1, ty2), CMap csts ->
     let (ty1, ty2), csts = List.fold_left (fun ((ty1, ty2), acc) (cst1, cst2) ->
