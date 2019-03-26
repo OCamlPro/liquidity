@@ -147,7 +147,7 @@ let env_for_clos env bvs arg_name arg_type =
     (* Build a closure environment and change lambda argument from arg to
        a tuple (arg, (x1, x2, x3, ...)) *)
     let loc = arg_name.nloc in
-    let env_arg_name = uniq_ident env "closure_env" in
+    let env_arg_name = uniq_ident env "closure_arg" in
     let env_arg_type =
       Ttuple (arg_type :: List.map (fun (_, (_, (_, ty), _, _)) ->
           ty) free_vars_l) in
@@ -565,9 +565,6 @@ and encode env ( exp : typed_exp ) : encoded_exp =
     in
     let (new_name, env, count) =
       new_binding env bnd_var.nname ~effect:bnd_val.effect bnd_val.ty in
-    if inline = InForced then (* indication for closure encoding *)
-      env.force_inline :=
-        StringMap.add bnd_var.nname bnd_val !(env.force_inline);
     let body = encode env body in
     register_inlining ~loc env new_name count inline bnd_val;
     mk ?name:exp.name ~loc
@@ -840,12 +837,8 @@ and encode env ( exp : typed_exp ) : encoded_exp =
     let lambda_arg_name = arg_name in
     let lambda_body = body in
     let bvs = LiquidBoundVariables.bv exp in
-    if StringSet.is_empty bvs ||
-       (* TODO : unsafe optim, change me *)
-       StringSet.for_all (fun bv -> StringMap.mem bv !(env.force_inline)) bvs
-    then
-      (* not a closure (or will be pure after inlining),
-         create a real lambda *)
+    if StringSet.is_empty bvs then
+      (* not a closure, create a real lambda *)
       let env = { env_at_lambda with
                   vars = StringSet.fold (fun bv ->
                       StringMap.add bv (StringMap.find bv env.vars)
@@ -1010,8 +1003,7 @@ and encode_lambda ~loc env
     let lambda_arg_name = arg_name in
     let lambda_body = body in
     let bvs = LiquidBoundVariables.bv exp in
-    if StringSet.is_empty bvs ||
-       StringSet.for_all (fun bv -> StringMap.mem bv !(env.force_inline)) bvs
+    if StringSet.is_empty bvs
     then
       (* not a closure (or will be pure after inlining),
          create a real lambda *)
@@ -1220,9 +1212,6 @@ and encode_modules top_env contracts =
               in
               let (new_name, env, count) =
                 new_binding env val_name ~effect:val_exp.effect val_exp.ty in
-              if v.inline = InForced then (* indication for closure encoding *)
-                env.force_inline :=
-                  StringMap.add val_name val_exp !(env.force_inline);
               let v = { v with val_exp } in
               env, (v, val_name) :: values)
             (env, []) c.values
@@ -1238,14 +1227,6 @@ and encode_modules top_env contracts =
               let vars =
                 StringMap.remove cur_name env.vars
                 |> StringMap.add out_name (new_name, (tv, ty), effect) in
-              begin
-                try
-                  let val_exp = StringMap.find cur_name !(env.force_inline) in
-                  env.force_inline :=
-                    StringMap.remove cur_name !(env.force_inline)
-                    |> StringMap.add out_name val_exp;
-                with Not_found -> ()
-              end;
               let v = { v with val_name = new_name } in
               { env with vars }, (v, out_name) :: values
             with Not_found -> env, values
@@ -1273,7 +1254,6 @@ and encode_contract ?(annot=false) ?(decompiling=false) contract =
       vars = StringMap.empty;
       vars_counts = StringMap.empty;
       to_inline = ref StringMap.empty;
-      force_inline = ref StringMap.empty;
       env = contract.ty_env;
       clos_env = None;
       t_contract_sig = full_sig_of_contract contract;
@@ -1394,7 +1374,6 @@ let encode_const env t_contract_sig const =
       vars = StringMap.empty;
       vars_counts = StringMap.empty;
       to_inline = ref StringMap.empty;
-      force_inline = ref StringMap.empty;
       env = env;
       clos_env = None;
       t_contract_sig;

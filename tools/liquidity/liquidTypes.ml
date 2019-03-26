@@ -1407,7 +1407,6 @@ type typecheck_env = {
   vars_counts : int ref StringMap.t;
   env : env;
   to_inline : encoded_exp StringMap.t ref;
-  force_inline : encoded_exp StringMap.t ref;
   t_contract_sig : full_contract_sig;
   clos_env : closure_env option;
   ftvars : StringSet.t;
@@ -1422,7 +1421,6 @@ let empty_typecheck_env ~warnings t_contract_sig env = {
   vars = StringMap.empty;
   vars_counts = StringMap.empty;
   to_inline = ref StringMap.empty;
-  force_inline = ref StringMap.empty;
   env = env;
   clos_env = None;
   t_contract_sig;

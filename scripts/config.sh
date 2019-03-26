@@ -33,7 +33,7 @@ function run {
             printf -- "$BOLD---- Command ------------------------$DEFAULT\n"
             printf "$BOLD$CMD$DEFAULT\n"
             printf -- "$BOLD==== Output =========================$DEFAULT\n"
-            printf "$OUTPUT\n"
+            echo -e "$OUTPUT\n"
             printf -- "$BOLD=====================================$DEFAULT\n"
             exit 2
         fi

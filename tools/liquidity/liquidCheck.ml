@@ -1950,7 +1950,6 @@ and typecheck_contract ~others ~warnings ~decompiling contract =
       vars = StringMap.empty;
       vars_counts = StringMap.empty;
       to_inline = ref StringMap.empty;
-      force_inline = ref StringMap.empty;
       env = contract.ty_env;
       clos_env = None;
       t_contract_sig;

@@ -231,7 +231,7 @@ let rec compute decompile code to_inline =
       { exp with desc = If { cond; ifthen; ifelse } }
 
     | Apply { prim = Prim_exec; args =  [x; f] } ->
-      (* inline body of lambda *)
+      (* inline body of lambda or closures *)
       let x = iter x in
       let f = iter f in
       begin match f.desc with
@@ -240,6 +240,16 @@ let rec compute decompile code to_inline =
                  desc = Let { bnd_var = arg_name;
                               inline = InAuto;
                               bnd_val = x;  body }
+               }
+        | Closure { arg_name; body; call_env } ->
+          let bnd_val =
+            mk ~loc:exp.loc
+              (Apply { prim = Prim_tuple; args = x :: (List.map snd call_env) })
+              (Ttuple (x.ty :: (List.map (fun (_, x) -> x.ty) call_env))) in
+          iter { exp with
+                 desc = Let { bnd_var = arg_name;
+                              inline = InAuto;
+                              bnd_val;  body }
                }
         | _ ->
           { exp with desc = Apply { prim = Prim_exec; args = [x; f] } }
