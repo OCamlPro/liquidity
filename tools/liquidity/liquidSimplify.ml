@@ -69,6 +69,7 @@ let rec compute decompile code to_inline =
     | Type _ -> 0
   in
 
+  let is_const e = match e.desc with Const _ -> true | _ -> false in
 
   let rec iter exp =
     match exp.desc with
@@ -140,6 +141,8 @@ let rec compute decompile code to_inline =
           | Var _ | Apply { prim = Prim_tuple_get | Prim_tuple } -> true
           | _ -> false)
       then
+        to_inline := StringMap.add bnd_var.nname bnd_val !to_inline;
+      if is_const bnd_val then
         to_inline := StringMap.add bnd_var.nname bnd_val !to_inline;
       (* let obody = body in *)
       let body = iter body in
