@@ -49,6 +49,9 @@ let retry_without_annots = ref true
 (** Don't produce any annotations when compiling *)
 let no_annot = ref false
 
+(** Don't uncurry *)
+let no_uncurrying = ref false
+
 (** Name of main contract when compiling *)
 let main = ref (None : string option)
 

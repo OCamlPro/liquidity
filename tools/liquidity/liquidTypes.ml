@@ -51,8 +51,12 @@ type inline =
 
 type uncurry_flag = bool option ref ref
 
-let default_uncurry () = ref (ref None)
 let dont_uncurry () = ref (ref (Some false))
+
+let default_uncurry () =
+  if !LiquidOptions.no_uncurrying then
+    dont_uncurry ()
+  else ref (ref None)
 
 (** Liquidity types *)
 type datatype =

@@ -616,6 +616,9 @@ let main () =
       "--no-ignore-annots", Arg.Clear LiquidOptions.retry_without_annots,
       " Don't ignore annotations of failure when decompiling";
 
+      "--no-uncurry", Arg.Set LiquidOptions.no_uncurrying,
+      " Don't uncurry non partially applied lambdas";
+
       "--json", Arg.Set LiquidOptions.json,
       " Output Michelson in JSON representation";
 
