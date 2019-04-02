@@ -14,7 +14,7 @@ open LiquidInfer
 let noloc env = LiquidLoc.loc_in_file env.env.filename
 
 let error loc msg =
-  LiquidLoc.raise_error ~loc ("Type error: " ^^ msg ^^ "%!")
+  LiquidLoc.raise_error ~loc ("Encoding error: " ^^ msg ^^ "%!")
 
 let mk_typed ?name ~loc (desc: (datatype, typed) exp_desc) ty =
   mk ?name ~loc desc ty
