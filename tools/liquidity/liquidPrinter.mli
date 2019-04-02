@@ -42,7 +42,7 @@ module LiquidDebug : sig
   (** Pretty-print Liquidity contract *)
   val string_of_contract : ?debug:bool -> ('a, 'b) exp contract -> string
   (** Pretty-print Liquidity typed contract *)
-  val string_of_contract_types : ?debug:bool -> typed_contract -> string
+  val string_of_contract_types : ?debug:bool -> (datatype, 'a) exp contract -> string
   (** Pretty-print typed Liquidity code *)
   val string_of_code : ?debug:bool -> ('a, 'b) exp -> string
   (** Pretty-print Liquidity typed code *)
