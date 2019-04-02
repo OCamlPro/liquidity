@@ -50,8 +50,8 @@ let rec has_tvar = function
   | Ttuple tyl -> List.exists has_tvar tyl
   | Toption ty | Tlist ty | Tset ty -> has_tvar ty
   | Tmap (ty1, ty2) | Tbigmap (ty1, ty2) | Tor (ty1, ty2)
-  | Tlambda (ty1, ty2) -> has_tvar ty1 || has_tvar ty2
-  | Tclosure ((ty1, ty2), ty3) -> has_tvar ty1 || has_tvar ty2 || has_tvar ty3
+  | Tlambda (ty1, ty2, _) -> has_tvar ty1 || has_tvar ty2
+  | Tclosure ((ty1, ty2), ty3, _) -> has_tvar ty1 || has_tvar ty2 || has_tvar ty3
   | Trecord (_, fl) | Tsum (_, fl) ->List.exists (fun (_, ty) -> has_tvar ty) fl
   | Tcontract c -> List.exists (fun e -> has_tvar e.parameter) c.entries_sig
   | Tvar _ -> true
@@ -62,8 +62,8 @@ let rec occurs id = function
   | Ttuple tyl -> List.exists (fun ty -> occurs id ty) tyl
   | Toption ty | Tlist ty | Tset ty -> occurs id ty
   | Tmap (ty1, ty2) | Tbigmap (ty1, ty2) | Tor (ty1, ty2)
-  | Tlambda (ty1, ty2) -> occurs id ty1 || occurs id ty2
-  | Tclosure ((ty1, ty2), ty3) -> occurs id ty1 || occurs id ty2 ||occurs id ty3
+  | Tlambda (ty1, ty2, _) -> occurs id ty1 || occurs id ty2
+  | Tclosure ((ty1, ty2), ty3, _) -> occurs id ty1 || occurs id ty2 ||occurs id ty3
   | Trecord (_, fl) | Tsum (_, fl)->List.exists (fun (_, ty) -> occurs id ty) fl
   | Tcontract c -> List.exists (fun e -> occurs id e.parameter) c.entries_sig
   | Tvar tvr ->
@@ -141,12 +141,12 @@ let rec generalize tyx1 tyx2 =
     generalize l_ty1 l_ty2;
     generalize r_ty1 r_ty2
 
-  | Tlambda (from_ty1, to_ty1), Tlambda (from_ty2, to_ty2) ->
+  | Tlambda (from_ty1, to_ty1, _), Tlambda (from_ty2, to_ty2, _) ->
     generalize from_ty1 from_ty2;
     generalize to_ty1 to_ty2
 
-  | Tclosure ((from_ty1, env_ty1), to_ty1),
-    Tclosure ((from_ty2, env_ty2), to_ty2) ->
+  | Tclosure ((from_ty1, env_ty1), to_ty1, _),
+    Tclosure ((from_ty2, env_ty2), to_ty2, _) ->
     generalize from_ty1 from_ty2;
     generalize env_ty1 env_ty2;
     generalize to_ty1 to_ty2
@@ -170,6 +170,14 @@ let rec generalize tyx1 tyx2 =
         (string_of_type tyx1)
         (string_of_type tyx2)
 
+let unify_uncurry_flags u1 u2 =
+  let u = match !(!u1), !(!u2) with
+    | None, None -> None
+    | None, Some u | Some u, None -> Some u
+    | Some u1, Some u2 -> Some (u1 || u2) in
+  !u1 := u;
+  !u2 := u;
+  u2 := !u1
 
 let rec unify loc ty1 ty2 =
 
@@ -325,14 +333,17 @@ let rec unify loc ty1 ty2 =
       | Tor (l_ty1, r_ty1), Tor (l_ty2, r_ty2) ->
         unify l_ty1 l_ty2; unify r_ty1 r_ty2; tyx1, []
 
-      | Tlambda (from_ty1, to_ty1), Tlambda (from_ty2, to_ty2) ->
-        unify from_ty1 from_ty2; unify to_ty1 to_ty2; tyx1, []
+      | Tlambda (from_ty1, to_ty1, u1), Tlambda (from_ty2, to_ty2, u2) ->
+        unify from_ty1 from_ty2; unify to_ty1 to_ty2;
+        unify_uncurry_flags u1 u2;
+        tyx1, []
 
-      | Tclosure ((from_ty1, env_ty1), to_ty1),
-        Tclosure ((from_ty2, env_ty2), to_ty2) ->
+      | Tclosure ((from_ty1, env_ty1), to_ty1, u1),
+        Tclosure ((from_ty2, env_ty2), to_ty2, u2) ->
         unify from_ty1 from_ty2;
         unify env_ty1 env_ty2;
         unify to_ty1 to_ty2;
+        unify_uncurry_flags u1 u2;
         tyx1, []
 
       | Trecord (_, fl1), Trecord (_, fl2)
@@ -483,8 +494,8 @@ let instantiate_to s ty =
     | Tmap (ty1, ty2) -> Tmap (aux ty1, aux ty2)
     | Tbigmap (ty1, ty2) -> Tbigmap (aux ty1, aux ty2)
     | Tor (ty1, ty2) -> Tor (aux ty1, aux ty2)
-    | Tlambda (ty1, ty2) -> Tlambda (aux ty1, aux ty2)
-    | Tclosure ((ty1, ty2), ty3) -> Tclosure ((aux ty1, aux ty2), aux ty3)
+    | Tlambda (ty1, ty2, u) -> Tlambda (aux ty1, aux ty2, u)
+    | Tclosure ((ty1, ty2), ty3, u) -> Tclosure ((aux ty1, aux ty2), aux ty3, u)
     | Trecord (rn, fl) ->
       Trecord (rn, List.map (fun (fn, fty) -> (fn, aux fty)) fl)
     | Tsum (sn, cl) ->
@@ -542,9 +553,9 @@ let get_type env loc ty =
           (string_of_type ty1);
       Tbigmap (ty1, aux ty2)
     | Tor (ty1, ty2) -> Tor (aux ty1, aux ty2)
-    | Tlambda (ty1, ty2) -> Tlambda (aux ty1, aux ty2)
-    | Tclosure ((ty1, ty2), ty3) ->
-      Tclosure ((aux ty1, aux ty2), aux ty3)
+    | Tlambda (ty1, ty2, u) -> Tlambda (aux ty1, aux ty2, u)
+    | Tclosure ((ty1, ty2), ty3, u) ->
+      Tclosure ((aux ty1, aux ty2), aux ty3, u)
     | Trecord (rn, fl) ->
       Trecord (rn, List.map (fun (f, ty) -> (f, aux ty)) fl)
     | Tsum (sn, cl) ->
@@ -647,10 +658,10 @@ let rec vars_to_unit ?loc ty = match ty with
   | Tmap (ty1, ty2) -> Tmap (vars_to_unit ?loc ty1, vars_to_unit ?loc ty2)
   | Tbigmap (ty1, ty2) -> Tbigmap (vars_to_unit ?loc ty1, vars_to_unit ?loc ty2)
   | Tor (ty1, ty2) -> Tor (vars_to_unit ?loc ty1, vars_to_unit ?loc ty2)
-  | Tlambda (ty1, ty2) -> Tlambda (vars_to_unit ?loc ty1, vars_to_unit ?loc ty2)
-  | Tclosure ((ty1, ty2), ty3) ->
+  | Tlambda (ty1, ty2, u) -> Tlambda (vars_to_unit ?loc ty1, vars_to_unit ?loc ty2, u)
+  | Tclosure ((ty1, ty2), ty3, u) ->
     Tclosure ((vars_to_unit ?loc ty1, vars_to_unit ?loc ty2),
-              vars_to_unit ?loc ty3)
+              vars_to_unit ?loc ty3, u)
   | Trecord (rn, fl) ->
     Trecord (rn, List.map (fun (fn, fty) -> (fn, vars_to_unit ?loc fty)) fl)
   | Tsum (sn, cl) ->
@@ -1154,8 +1165,10 @@ let copy_ty ty =
     | Tmap (ty1, ty2) -> Tmap (copy_ty ty1, copy_ty ty2)
     | Tbigmap (ty1, ty2) -> Tbigmap (copy_ty ty1, copy_ty ty2)
     | Tor (ty1, ty2) -> Tor (copy_ty ty1, copy_ty ty2)
-    | Tlambda (ty1, ty2) -> Tlambda (copy_ty ty1, copy_ty ty2)
-    | Tclosure ((ty1, ty2), ty3) -> Tclosure ((copy_ty ty1, copy_ty ty2), copy_ty ty3)
+    | Tlambda (ty1, ty2, u) ->
+      Tlambda (copy_ty ty1, copy_ty ty2, ref !u)
+    | Tclosure ((ty1, ty2), ty3, u) ->
+      Tclosure ((copy_ty ty1, copy_ty ty2), copy_ty ty3, ref !u)
     | Trecord (rn, fl) ->
       Trecord (rn, List.map (fun (fn, fty) -> (fn, copy_ty fty)) fl)
     | Tsum (sn, cl) ->

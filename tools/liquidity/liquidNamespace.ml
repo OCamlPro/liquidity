@@ -136,9 +136,9 @@ let rec normalize_type ?from_env ~in_env ty =
   | Tor (t1, t2) ->
     Tor (normalize_type ?from_env ~in_env t1,
          normalize_type ?from_env ~in_env t2)
-  | Tlambda (t1, t2) ->
+  | Tlambda (t1, t2, u) ->
     Tlambda (normalize_type ?from_env ~in_env t1,
-             normalize_type ?from_env ~in_env t2)
+             normalize_type ?from_env ~in_env t2, u)
   | Tcontract c_sig ->
     Tcontract (normalize_contract_sig ?from_env ~in_env ~build_sig_env:false c_sig)
   | Trecord (name, fields) ->
@@ -157,10 +157,10 @@ let rec normalize_type ?from_env ~in_env ty =
           List.map (fun (c, ty) ->
               qualify_name ?from_env ~at:found_env.path c,
               normalize_type ?from_env ~in_env ty) constrs)
-  | Tclosure ((t1, t2), t3) ->
+  | Tclosure ((t1, t2), t3, u) ->
     Tclosure ((normalize_type ?from_env ~in_env t1,
                normalize_type ?from_env ~in_env t2),
-              normalize_type ?from_env ~in_env t3)
+              normalize_type ?from_env ~in_env t3, u)
   | Tvar tvr ->
     let tv = Ref.get tvr in
     begin match tv.tyo with

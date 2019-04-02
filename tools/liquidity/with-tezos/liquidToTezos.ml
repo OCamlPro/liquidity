@@ -66,10 +66,11 @@ let rec convert_type ~loc expr =
       | Some n -> [":" ^ n] in
     prim_type ~loc "contract" [convert_type ~loc parameter] ~annots
   | Tcontract _ -> assert false
-  | Tlambda (x,y) -> prim_type ~loc "lambda" [convert_type ~loc x;
-                                              convert_type ~loc y]
-  | Tclosure ((x,e),r) ->
-    convert_type ~loc (Ttuple [Tlambda (Ttuple [x; e], r); e ]);
+  | Tlambda (x,y, _) ->
+    prim_type ~loc "lambda" [convert_type ~loc x;
+                             convert_type ~loc y]
+  | Tclosure ((x,e),r, u) ->
+    convert_type ~loc (Ttuple [Tlambda (Ttuple [x; e], r, u); e ]);
   | Tmap (x,y) -> prim_type ~loc "map" [convert_type ~loc x;convert_type ~loc y]
   | Tbigmap (x,y) ->
     prim_type ~loc "big_map" [convert_type ~loc x;convert_type ~loc y]

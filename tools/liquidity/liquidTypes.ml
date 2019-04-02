@@ -49,8 +49,13 @@ type inline =
   | InDont (** Disable inlining *)
   | InAuto (** Automatic inlining *)
 
+type uncurry_flag = bool option ref ref
+
+let default_uncurry () = ref (ref None)
+let dont_uncurry () = ref (ref (Some false))
+
 (** Liquidity types *)
-and datatype =
+type datatype =
   (* michelson *)
   | Tunit
   | Tbool
@@ -76,12 +81,12 @@ and datatype =
   | Tbigmap of datatype * datatype
   | Tcontract of contract_sig
   | Tor of datatype * datatype
-  | Tlambda of datatype * datatype
+  | Tlambda of datatype * datatype * uncurry_flag
 
   (* liquidity extensions *)
   | Trecord of string * (string * datatype) list
   | Tsum of string * (string * datatype) list
-  | Tclosure of (datatype * datatype) * datatype
+  | Tclosure of (datatype * datatype) * datatype * uncurry_flag
   | Tfail
 
   | Tvar of tv Ref.t
@@ -257,11 +262,13 @@ let rec eq_types ty1 ty2 = match expand ty1, expand ty2 with
 
   | Tmap (a1, b1), Tmap (a2, b2)
   | Tbigmap (a1, b1), Tbigmap (a2, b2)
-  | Tor (a1, b1), Tor (a2, b2)
-  | Tlambda (a1, b1), Tlambda (a2, b2) ->
+  | Tor (a1, b1), Tor (a2, b2) ->
     eq_types a1 a2 && eq_types b1 b2
 
-  | Tclosure ((a1, b1), c1), Tclosure ((a2, b2), c2) ->
+  | Tlambda (a1, b1, u1), Tlambda (a2, b2, u2) ->
+    eq_types a1 a2 && eq_types b1 b2
+
+  | Tclosure ((a1, b1), c1, u2), Tclosure ((a2, b2), c2, u1) ->
     eq_types a1 a2 && eq_types b1 b2 && eq_types c1 c2
 
   | Trecord (n1, l1), Trecord (n2, l2)
@@ -336,8 +343,8 @@ let free_tvars ty =
     | Ttuple tyl -> List.fold_left aux fv tyl
     | Toption ty | Tlist ty | Tset ty -> aux fv ty
     | Tmap (ty1, ty2) | Tbigmap (ty1, ty2) | Tor (ty1, ty2)
-    | Tlambda (ty1, ty2) -> aux (aux fv ty1) ty2
-    | Tclosure ((ty1, ty2), ty3) -> aux (aux (aux fv ty1) ty2) ty3
+    | Tlambda (ty1, ty2, _) -> aux (aux fv ty1) ty2
+    | Tclosure ((ty1, ty2), ty3, _) -> aux (aux (aux fv ty1) ty2) ty3
     | Trecord (_, fl) | Tsum (_, fl) ->
       List.fold_left (fun fv (_, ty) -> aux fv ty) fv fl
     | Tcontract c ->
@@ -373,9 +380,9 @@ let build_subst aty cty =
       aux (aux s tyk1 tyk2) tyv1 tyv2
     | Tor (tyl1, tyr1), Tmap (tyl2, tyr2) ->
       aux (aux s tyl1 tyl2) tyr1 tyr2
-    | Tlambda (tyf1, tyt1), Tlambda (tyf2, tyt2) ->
+    | Tlambda (tyf1, tyt1, _), Tlambda (tyf2, tyt2, _) ->
       aux (aux s tyf1 tyf2) tyt1 tyt2
-    | Tclosure ((tyf1, tye1), tyt1), Tclosure ((tyf2, tye2), tyt2) ->
+    | Tclosure ((tyf1, tye1), tyt1, _), Tclosure ((tyf2, tye2), tyt2, _) ->
       aux (aux (aux s tyf1 tyf2) tyt1 tyt2) tye1 tye2
     | Trecord (_, fl1), Trecord (_, fl2) ->
       List.fold_left2 (fun s (_, ty1) (_, ty2) -> aux s ty1 ty2) s fl1 fl2

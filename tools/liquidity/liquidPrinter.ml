@@ -147,7 +147,7 @@ module Michelson = struct
         Printf.bprintf b "%c%s" fmt.newline indent;
         bprint_type fmt b indent ty2 [];
         Printf.bprintf b ")";
-      | Tlambda (ty1, ty2) ->
+      | Tlambda (ty1, ty2, _) ->
         let indent = fmt.increase_indent indent in
         Printf.bprintf b "(lambda";
         bprint_annots b annots;
@@ -156,9 +156,9 @@ module Michelson = struct
         Printf.bprintf b "%c%s" fmt.newline indent;
         bprint_type fmt b indent ty2 [];
         Printf.bprintf b ")";
-      | Tclosure ((ty_arg, ty_env), ty_r) ->
+      | Tclosure ((ty_arg, ty_env), ty_r, u) ->
         bprint_type fmt b indent
-          (Ttuple [Tlambda (Ttuple [ty_arg; ty_env], ty_r);
+          (Ttuple [Tlambda (Ttuple [ty_arg; ty_env], ty_r, u);
                    ty_env ]) annots;
       | Tvar tvr ->
         Printf.bprintf b "'%s (" (Ref.get tvr).id;
@@ -889,11 +889,11 @@ module LiquidDebug = struct
         Printf.bprintf b ", ";
         bprint_type b "" ty2;
         Printf.bprintf b ") big_map";
-      | Tlambda (ty1, ty2) ->
+      | Tlambda (ty1, ty2, u) ->
         bprint_type b "" ty1;
         Printf.bprintf b " -> ";
         bprint_type b "" ty2;
-      | Tclosure ((ty_arg, ty_env), ty_r) ->
+      | Tclosure ((ty_arg, ty_env), ty_r, u) ->
         bprint_type b "" ty_arg;
         Printf.bprintf b " {";
         bprint_type b "" ty_env;

@@ -274,9 +274,11 @@ let rec convert_type env expr =
         | _, Some (n, c_sig) -> Tcontract c_sig
       end
 
-    | Prim(_, "lambda", [x;y], _debug) -> Tlambda
-                                            (convert_type env x,
-                                             convert_type env y)
+    | Prim(_, "lambda", [x;y], _debug) ->
+      Tlambda
+        (convert_type env x,
+         convert_type env y,
+         dont_uncurry () (* no uncurrying while decompiling *))
     | Prim(_, "map", [x;y], _debug) ->
       Tmap (convert_type env x, convert_type env y)
     | Prim(_, "big_map", [x;y], _debug) ->
@@ -492,7 +494,7 @@ let rec convert_const env ?ty expr =
               | expr ->
                 unknown_expr env "convert_const big map element" expr
             ) elems)
-        | Some (Tlambda (arg_ty, ret_ty)) ->
+        | Some (Tlambda (arg_ty, ret_ty, _)) ->
           CLambda { arg_name = { nname = "_" ; nloc = loc };
                     recursive = None;
                     arg_ty; ret_ty;

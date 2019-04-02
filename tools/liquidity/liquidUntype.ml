@@ -115,7 +115,7 @@ let rec untype (env : env) (code : (datatype, 'a) exp) : (datatype, 'b) exp =
       let env = empty_env () in
       let env = new_lbinding arg_name base env in
       Closure { arg_name = base; arg_ty; call_env;
-                body = untype env body; ret_ty = Tunit }
+                body = untype env body; ret_ty = body.ty }
 
     | Var name ->
       let name = find_name env name in

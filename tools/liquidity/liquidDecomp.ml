@@ -590,7 +590,7 @@ let rec decompile_next (env : env) node =
       let desc = Lambda { arg_name = lvar_of begin_node;
                           arg_ty;
                           body = decompile_next env begin_node;
-                          ret_ty = Tunit; (* res_ty, not yet inferred *)
+                          ret_ty = res_ty;
                           recursive = None;
                         }
       in

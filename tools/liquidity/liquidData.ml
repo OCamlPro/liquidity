@@ -50,7 +50,7 @@ let rec default_const = function
   | Tsum (_, (c, ty) :: _) ->
     CConstr (c, default_const ty)
 
-  | Tlambda (arg_ty, ret_ty) as ty ->
+  | Tlambda (arg_ty, ret_ty, _) as ty ->
     CLambda { arg_ty; ret_ty; recursive = None;
               arg_name = { nname = "_"; nloc = noloc };
               body = mk ~loc:noloc
@@ -96,7 +96,7 @@ let rec default_empty_const = function
     CConstr (c, default_empty_const ty)
 
 
-  | Tlambda (arg_ty, ret_ty) as ty ->
+  | Tlambda (arg_ty, ret_ty, _) as ty ->
     CLambda { arg_ty; ret_ty; recursive = None;
               arg_name = { nname = "_"; nloc = noloc };
               body = mk ~loc:noloc

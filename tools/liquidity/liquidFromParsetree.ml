@@ -195,7 +195,8 @@ let rec translate_type env ?expected typ =
      *   | _ -> None
      * in *)
     Tlambda (translate_type env (* ?expected:expected *) parameter_type,
-             translate_type env return_type)
+             translate_type env return_type,
+             default_uncurry ())
 
   | { ptyp_desc = Ptyp_tuple [ty] } ->
     translate_type env ?expected ty
@@ -552,6 +553,27 @@ and translate_pair exp =
   | Pexp_tuple [e1; e2] -> (e1, e2)
   | _ -> error_loc exp.pexp_loc "pair expected"
 
+(* Prevent uncurring of lambda's in a type *)
+let rec set_curry_flag ty = match ty with
+  | Tunit | Tbool | Tint | Tnat | Ttez | Tstring | Tbytes | Ttimestamp | Tkey
+  | Tkey_hash | Tsignature | Toperation | Taddress | Tfail -> ()
+  | Ttuple tyl -> List.iter set_curry_flag tyl
+  | Toption ty | Tlist ty | Tset ty -> set_curry_flag ty
+  | Tmap (ty1, ty2) | Tbigmap (ty1, ty2) | Tor (ty1, ty2) ->
+    set_curry_flag ty1; set_curry_flag ty2
+  | Tlambda (ty1, ty2, u) ->
+    set_curry_flag ty1; set_curry_flag ty2;
+    !u := Some false;
+  | Tclosure ((ty1, ty2), ty3, u) ->
+    set_curry_flag ty1; set_curry_flag ty2; set_curry_flag ty3;
+    !u := Some false;
+  | Trecord (rn, fl) -> List.iter (fun (_, ty) -> set_curry_flag ty) fl
+  | Tsum (sn, cl) -> List.iter (fun (_, ty) -> set_curry_flag ty) cl
+  | Tcontract c ->
+    List.iter (fun es -> set_curry_flag es.parameter) c.entries_sig
+  | Tvar { contents = { contents = { tyo = Some ty }}} -> set_curry_flag ty
+  | Tvar _ -> ()
+  | Tpartial _ -> ()
 
 let mk ~loc desc = mk ~loc desc ()
 
@@ -1353,11 +1375,14 @@ let rec translate_code contracts env exp =
       end
 
     | { pexp_desc = Pexp_fun (Nolabel, None, pat, body_exp) } ->
+      let body_exp, ret_ty = match body_exp.pexp_desc with
+        | Pexp_constraint (body_exp, ret_ty) ->
+          body_exp, translate_type env ret_ty
+        | _ -> body_exp, fresh_tvar ()
+      in
       let body_exp = translate_code contracts env body_exp in
       let arg_name, arg_ty, body = deconstruct_pat env pat body_exp in
-      Lambda { arg_name; arg_ty; body;
-               ret_ty = Tunit; (* not yet inferred *)
-               recursive = None }
+      Lambda { arg_name; arg_ty; body; ret_ty; recursive = None }
 
     | { pexp_desc = Pexp_record (lab_x_exp_list, None) } ->
       let fields =
@@ -1627,6 +1652,7 @@ and translate_entry name env contracts head_exp mk_parameter mk_storage =
     let storage_name, code = match mk_storage with
       | Some mk -> mk code
       | None -> assert false in
+    set_curry_flag parameter;
     {
       entry_sig = {
         entry_name = name;
@@ -1739,6 +1765,7 @@ and translate_signature contract_type_name env acc ast =
       | Optional _ -> error_loc pval_loc "cannot have optional parameter"
       | Labelled p -> p in
     let parameter = translate_type env param_ty in
+    set_curry_flag parameter;
     let storage_name, ret_ty = match ret_ty.ptyp_desc with
       | Ptyp_arrow (Nolabel, stora_ty, ret_ty) ->
         "storage", ret_ty

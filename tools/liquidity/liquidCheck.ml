@@ -254,7 +254,7 @@ let rec type_of_const ~loc env = function
         Tsum (n, l)
       | _ -> assert false
     end
-  | CLambda { arg_ty; ret_ty } -> Tlambda (arg_ty, ret_ty)
+  | CLambda { arg_ty; ret_ty } -> Tlambda (arg_ty, ret_ty, default_uncurry ())
 
 let rec typecheck_const ~loc env cst ty =
   match ty, cst with
@@ -419,7 +419,7 @@ let rec typecheck_const ~loc env cst ty =
       List.map (fun (c, t) -> if t = ty then (c, ty) else (c, t)) constrs in
     Tsum (sname, constrs), CConstr (c, cst)
 
-  | Tlambda (arg_ty, ret_ty), CLambda lam ->
+  | Tlambda (arg_ty, ret_ty, _), CLambda lam ->
     let lam, ty = typecheck_lambda ~loc env lam in
     ty, CLambda lam
 
@@ -435,33 +435,36 @@ let rec typecheck_const ~loc env cst ty =
       (string_of_type ty)
       (string_of_type (type_of_const ~loc env cst))
 
-and typecheck_lambda ~loc env { arg_name; arg_ty; body; ret_ty; recursive } =
-  match recursive with
-  | None ->
-    (* allow closures at typechecking, do not reset env *)
-    (* Printf.printf "Lambda arg %s : %s\n" arg_name.nname (string_of_type arg_ty);
-     * begin match arg_ty with
-     *   | Tcontract c ->
-     *     let n = (match c.sig_name with Some n -> n | _ -> "") in
-     *     Printf.printf "Tcontract %s (%d)\n" n (List.length c.entries_sig);
-     *     List.iter (fun e -> Printf.printf "%s\n" e.entry_name) c.entries_sig
-     *   | _ -> ()
-     * end; *)
-    let (env, arg_count) = new_binding env arg_name.nname arg_ty in
-    let body = typecheck env body in
-    check_used env arg_name arg_count;
-    let lam = { arg_name; arg_ty; body; ret_ty = body.ty; recursive = None } in
-    let ty = Tlambda (arg_ty, body.ty) in
-    (lam, ty)
-  | Some f ->
-    let ty = Tlambda (arg_ty, ret_ty) in
-    let (env, f_count) = new_binding env f ty in
-    let (env, arg_count) = new_binding env arg_name.nname arg_ty in
-    let body = typecheck_expected "recursive function body" env ret_ty body in
-    check_used env arg_name arg_count;
-    check_used env { nname = f; nloc = loc} f_count;
-    let lam = { arg_name; arg_ty; body; ret_ty; recursive } in
-    (lam, ty)
+and typecheck_lambda ~loc env
+    ({ arg_name; arg_ty; body; ret_ty; recursive } as origlam) =
+  let ty =
+    (* Pre-compute env type if will be tranformed to closure *)
+    let bvs = LiquidBoundVariables.bv (mk ~loc (Lambda origlam) ()) in
+    if StringSet.is_empty bvs then
+      Tlambda (arg_ty, ret_ty, default_uncurry ())
+    else
+      let call_env_args = List.map (fun v ->
+          (find_var env loc v).ty
+        ) (StringSet.elements bvs) in
+      let call_env_ty = match call_env_args with
+        | [ty] -> ty
+        | _ -> Ttuple call_env_args in
+      Tclosure ((arg_ty, call_env_ty), ret_ty, default_uncurry ())
+  in
+  let (env, check_rec_calls) =
+    match recursive with
+    | None -> env, (fun _ -> ())
+    | Some f ->
+      let (env, f_count) = new_binding env f ty in
+      env,
+      (fun env -> check_used env { nname = f; nloc = loc} f_count)
+  in
+  let (env, arg_count) = new_binding env arg_name.nname arg_ty in
+  let body = typecheck_expected "function body" env ret_ty body in
+  check_used env arg_name arg_count;
+  check_rec_calls env;
+  let lam = { arg_name; arg_ty; body; ret_ty = body.ty; recursive } in
+  (lam, ty)
 
 
 (* Typecheck an expression. Returns a typed expression *)
@@ -478,7 +481,9 @@ and typecheck env ( exp : syntax_exp ) : typed_exp =
     let bnd_val = typecheck env bnd_val in
     if bnd_val.ty = Tfail then
       LiquidLoc.warn bnd_val.loc AlwaysFails;
-    let gen = match expand bnd_val.ty with Tlambda _ -> true | _ -> false in
+    let gen = match expand bnd_val.ty with
+      | Tlambda _ | Tclosure _ -> true
+      | _ -> false in
     let (env, count) =
       new_binding env bnd_var.nname ~effect:exp.effect ~gen bnd_val.ty in
     let body = typecheck env body in
@@ -651,7 +656,32 @@ and typecheck env ( exp : syntax_exp ) : typed_exp =
         { exp with desc = Apply { prim = Prim_exec; args =  [x; f] }}
       ) f r
     in
-    typecheck env exp
+    let exp = typecheck env exp in
+    (* helper function to set uncurry flag of type of [f] in
+       application [f x] *)
+    let rec set_uncurry exp =
+      match exp.desc with
+      | Apply { prim = Prim_exec;
+                args = [_; { ty = Tlambda (_, _, uncurry)
+                                | Tclosure (_, _, uncurry) } as f ] } ->
+        (* Application is total if returned type is not a lambda of if
+           the expression is a totally applied lambda *)
+        let total = match exp.ty with
+          | Tlambda (_, _, uncurry) | Tclosure (_, _, uncurry) ->
+            begin match !(!uncurry) with
+              | None -> Some false
+              | Some u -> Some u
+            end
+          | _ -> Some true in
+        (* Don't uncurry a previously curried function *)
+        if !(!uncurry) <> Some false then
+          !uncurry := total;
+        (* Recursively set (un)curry flags in function part *)
+        set_uncurry f
+      | _ -> () in
+    (* Set uncurry flags in expression if needed *)
+    set_uncurry exp;
+    exp
 
   | Apply { prim; args } ->
     typecheck_apply ?name:exp.name ~loc env prim loc args
@@ -1500,12 +1530,12 @@ and typecheck_prim2i env prim loc args =
     unify ty (Toption Tkey_hash); Toperation
 
   | Prim_exec,
-    [ ty; (Tlambda (from_ty, to_ty) | Tclosure ((from_ty, _), to_ty)) ] ->
+    [ ty; (Tlambda (from_ty, to_ty, _) | Tclosure ((from_ty, _), to_ty, _)) ] ->
     unify ty from_ty; to_ty
 
   | Prim_exec, [ aty; lty ] ->
     let to_ty = fresh_tvar () in
-    unify lty (Tlambda (aty, to_ty)); to_ty
+    unify lty (Tlambda (aty, to_ty, default_uncurry ())); to_ty
 
   | Prim_list_rev, [ ty ] -> unify ty (Tlist (fresh_tvar ())); ty
 
@@ -1707,8 +1737,8 @@ and typecheck_prim2t env prim loc args =
     Toperation
 
   | Prim_exec, [ ty;
-                 ( Tlambda(from_ty, to_ty)
-                 | Tclosure((from_ty, _), to_ty))] ->
+                 ( Tlambda(from_ty, to_ty, _)
+                 | Tclosure((from_ty, _), to_ty, _))] ->
 
     fail_neq ~loc ~expected_ty:from_ty ty
       ~info:"in argument of function application";
@@ -1962,7 +1992,7 @@ and typecheck_contract ~others ~warnings ~decompiling contract =
     List.fold_left (fun (env, values, counts) v ->
         let val_exp = typecheck env v.val_exp in
         let gen = match expand val_exp.ty with
-          | Tlambda _ -> true
+          | Tlambda _ | Tclosure _ -> true
           | _ -> false in
         let (env, count) =
           new_binding env v.val_name ~effect:val_exp.effect ~gen val_exp.ty in
@@ -2049,7 +2079,7 @@ let rec type_of_const = function
   | CKey_hash _ -> Tkey_hash
   | CContract _ -> Tcontract unit_contract_sig
 
-  | CLambda { arg_ty; ret_ty } -> Tlambda (arg_ty, ret_ty)
+  | CLambda { arg_ty; ret_ty } -> Tlambda (arg_ty, ret_ty, default_uncurry ())
 
   (* XXX just for printing *)
   | CRecord _ -> Trecord ("<record>", [])

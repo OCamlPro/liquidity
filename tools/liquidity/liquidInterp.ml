@@ -213,9 +213,9 @@ let rec constrlabel_is_in_type c = function
     false
   | Ttuple tys -> List.exists (constrlabel_is_in_type c) tys
   | Toption ty | Tlist ty | Tset ty -> constrlabel_is_in_type c ty
-  | Tmap (t1, t2) | Tbigmap (t1, t2) | Tor (t1, t2) | Tlambda (t1, t2) ->
+  | Tmap (t1, t2) | Tbigmap (t1, t2) | Tor (t1, t2) | Tlambda (t1, t2, _) ->
     constrlabel_is_in_type c t1 || constrlabel_is_in_type c t2
-  | Tclosure ((t1, t2), t3) ->
+  | Tclosure ((t1, t2), t3, _) ->
     constrlabel_is_in_type c t1 ||
     constrlabel_is_in_type c t2 ||
     constrlabel_is_in_type c t3

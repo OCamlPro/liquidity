@@ -10,6 +10,14 @@
 open LiquidTypes
 open LiquidNamespace
 open LiquidInfer
+open LiquidPrinter.Liquid
+
+(* Elements traversed by uncurrying transformation *)
+type uncurry_elt =
+  | ULet of { bnd_var: loc_name;
+              inline: inline;
+              bnd_val: typed_exp; }
+  | UArg of int * loc_name * datatype
 
 let noloc env = LiquidLoc.loc_in_file env.env.filename
 
@@ -147,10 +155,10 @@ let env_for_clos env bvs arg_name arg_type =
     (* Build a closure environment and change lambda argument from arg to
        a tuple (arg, (x1, x2, x3, ...)) *)
     let loc = arg_name.nloc in
-    let env_arg_name = uniq_ident env "closure_arg" in
+    let env_arg_name = uniq_ident env "_closure_arg" in
     let env_arg_type =
-      Ttuple (arg_type :: List.map (fun (_, (_, (_, ty), _, _)) ->
-          ty) free_vars_l) in
+      Ttuple (arg_type ::
+              List.map (fun (_, (_, (_, ty), _, _)) -> ty) free_vars_l) in
     let env_arg_var = mk ~loc (Var env_arg_name) env_arg_type in
     let new_name = uniq_ident env arg_name.nname in
     let env_vars =
@@ -208,23 +216,27 @@ let rec encode_type ?(decompiling=false) ty =
       | Toption t -> Toption t'
       | _ -> assert false
     end
-  | Tor (t1, t2) | Tlambda (t1, t2)
-  | Tbigmap (t1, t2) | Tmap (t1, t2) ->
+  | Tor (t1, t2) | Tbigmap (t1, t2) | Tmap (t1, t2) ->
     let t1', t2' = encode_type ~decompiling t1, encode_type ~decompiling t2 in
     if t1 == t1' && t2 == t2' then ty
     else begin match ty with
       | Tor (t1, t2) -> Tor (t1', t2')
-      | Tlambda (t1, t2) -> Tlambda (t1', t2')
       | Tmap (t1, t2) -> Tmap (t1', t2')
       | Tbigmap (t1, t2) -> Tbigmap (t1', t2')
       | _ -> assert false
     end
-  | Tclosure  ((t1, t2), t3) ->
+  | Tlambda (t1, t2, u) when !(!u) = Some true ->
+    get_lambda_type ~decompiling [] ty
+  | Tlambda (t1, t2, u) ->
+    let t1', t2' = encode_type ~decompiling t1, encode_type ~decompiling t2 in
+    if t1 == t1' && t2 == t2' then ty
+    else Tlambda (t1', t2', u)
+  | Tclosure  ((t1, t2), t3, u) ->
     let t1' = encode_type ~decompiling t1 in
     let t2' = encode_type ~decompiling t2 in
     let t3' = encode_type ~decompiling t3 in
     if t1 == t1' && t2 == t2' && t3 == t3' then ty
-    else Tclosure ((t1', t2'), t3')
+    else Tclosure ((t1', t2'), t3', u)
   | Trecord (name, labels) ->
     Trecord (name, List.map (fun (l, ty) -> l, encode_type ~decompiling ty) labels)
   | Tsum (name, cstys) ->
@@ -268,6 +280,17 @@ and encode_contract_sig csig =
               (prefix_entry ^ entry_name, t)
             ) entries)
 
+and get_lambda_type ~decompiling args = function
+  | Tlambda (t1, t2, u) when !(!u) = Some true ->
+    let t1 = encode_type ~decompiling t1 in
+    get_lambda_type ~decompiling (t1 :: args) t2
+  | t2 ->
+    let t2 = encode_type ~decompiling t2 in
+    let t1 = match args with
+      | [t1] -> t1
+      | _ -> Ttuple (List.rev args) in
+    Tlambda (t1, t2, default_uncurry ())
+
 (* returns true if the type has a big map anywhere *)
 let rec has_big_map = function
   | Tbigmap (_t1, _t2) -> true
@@ -276,10 +299,10 @@ let rec has_big_map = function
   | Ttuple tys ->
     List.exists has_big_map tys
   | Tset t | Tlist t | Toption t -> has_big_map t
-  | Tor (t1, t2) | Tlambda (t1, t2)
+  | Tor (t1, t2) | Tlambda (t1, t2, _)
   | Tmap (t1, t2) ->
     has_big_map t1 || has_big_map t2
-  | Tclosure  ((t1, t2), t3) ->
+  | Tclosure  ((t1, t2), t3, _) ->
     has_big_map t1 || has_big_map t2 || has_big_map t3
   | Trecord (_, labels) ->
     List.exists (fun (_, ty) -> has_big_map ty) labels
@@ -468,6 +491,15 @@ let register_inlining_value env v =
     register_inlining ~loc env v.val_name count v.inline v.val_exp
   with Not_found -> ()
 
+let uncurry_lambda = function
+  | Tlambda (_, _, uncurry)
+  | Tclosure (_, _, uncurry) ->
+    begin match !(!uncurry) with
+      | None -> false
+      | Some u -> u
+    end
+  | _ -> false
+
 (* Encode a constant: constructors are turned into (netsed) Left/Right
    variant values *)
 let rec encode_const env (c : typed_const) : encoded_const = match c with
@@ -537,7 +569,7 @@ let rec encode_const env (c : typed_const) : encoded_const = match c with
     let enc_lam_exp =
       encode env
         (mk_typed ~loc:(noloc env)
-           (Lambda lam) (Tlambda (lam.arg_ty, lam.ret_ty))) in
+           (Lambda lam) (Tlambda (lam.arg_ty, lam.ret_ty, default_uncurry ()))) in
     match enc_lam_exp.desc with
     | Lambda l -> CLambda l
     | Closure _ ->
@@ -827,9 +859,80 @@ and encode env ( exp : typed_exp ) : encoded_exp =
       (MatchList { arg; head_name; tail_name; ifcons; ifnil })
       exp.ty
 
+  (* Uncurry non partially applied lambdas *)
+  | Lambda { arg_name; arg_ty; body; ret_ty; recursive }
+    when uncurry_lambda exp.ty && not env.decompiling ->
+    (* compute arguments of nested fun x -> fun y -> ..., can be
+       interlaced with let constructs (introduced at parsing), so got
+       through them as well *)
+    let rec all_args acc i body = match body.desc with
+      | Lambda { arg_name; arg_ty; body } ->
+        all_args (UArg (i, arg_name, arg_ty) :: acc) (i + 1) body
+      | Let { bnd_var; inline; bnd_val; body } ->
+        all_args (ULet { bnd_var; inline; bnd_val } :: acc) i body
+      | _ ->
+        (* Done, put back trailing let constructs on top of body *)
+        let args, _, body =
+          List.fold_left (fun (acc, dropped_lets, body) -> function
+            | ULet { bnd_var; bnd_val; inline } when not dropped_lets ->
+              let body = mk_typed ~loc:exp.loc
+                  (Let { bnd_var; bnd_val; inline; body }) body.ty in
+              (acc, dropped_lets, body)
+            | a -> (a :: acc, true, body)
+          ) ([], false, body) acc in
+        (body, args) in
+    let body', args = all_args [UArg (0, arg_name, arg_ty)] 1 body in
+    let exp = match args with
+      | [ UArg _ ] ->
+        (* There is only one argument, no uncurrying necessary,
+           reset the uncurry flag *)
+        { exp with ty = Tlambda (arg_ty, ret_ty, default_uncurry ()) }
+      | _ ->
+        (* Multiple arguments to lambda:
+             fun a0 -> let x = x1 in fun a1 -> let y = y2 in fun a2 -> ...
+           Build:
+             fun a ->
+               let a0 = a.(0) in
+               let x = x1 in
+               let a1 = a.(1) in
+               let y = y2 in
+               let a2 = a.(2) in ...*)
+        let body = body' in
+        let args_ty = List.fold_left (fun acc -> function
+            | ULet _ -> acc
+            | UArg (_, _, ty) -> ty :: acc
+          ) [] args |> List.rev in
+        let arg_ty = Ttuple args_ty in
+        let name = uniq_ident env "_uncurried_arg" in
+        let mk = mk_typed ~loc:exp.loc in
+        let v_arg = mk (Var name) arg_ty in
+        let mk_i i = mk (Const { const = CNat (LiquidNumber.integer_of_int i);
+                                 ty = Tnat }) Tnat in
+        let body = List.fold_left (fun body -> function
+            | ULet { bnd_var; inline; bnd_val } ->
+              mk (Let { bnd_var ; bnd_val; inline; body }) body.ty
+            | UArg (i, bnd_var, ty) ->
+              mk
+                (Let { bnd_var ;
+                       bnd_val =
+                         mk (Apply { prim = Prim_tuple_get;
+                                     args = [v_arg; mk_i i]}) ty;
+                       inline = InAuto; body })
+                  body.ty
+          ) body (List.rev args) in
+        (* new (typed) term, change type to new one and reset uncurry flag *)
+        { exp with
+          ty = Tlambda (arg_ty, body.ty, default_uncurry ());
+          desc = Lambda { arg_name = { arg_name with nname = name };
+                          arg_ty; body; ret_ty = body.ty; recursive } }
+    in
+    (* transformation is done on typed ast, still need to go through
+       the other encoding phases *)
+    encode env exp
+
   | Lambda { arg_name; arg_ty; body; ret_ty; recursive = Some f } ->
     encode_rec_fun env ~loc ?name:exp.name
-      f arg_name arg_ty ret_ty body
+      f arg_name arg_ty ret_ty exp.ty body
 
   | Lambda { arg_name; arg_ty; body; recursive = None } ->
     let env_at_lambda = env in
@@ -849,7 +952,7 @@ and encode env ( exp : typed_exp ) : encoded_exp =
       let arg_name = { arg_name with nname = new_arg_name } in
       let body = encode env lambda_body in
       (* check_used env lambda_arg_name loc arg_count; *)
-      let ty = Tlambda (lambda_arg_type, body.ty) in
+      let ty = exp.ty in
       mk ?name:exp.name  ~loc
         (Lambda { arg_name; arg_ty = lambda_arg_type;
                   body; ret_ty = body.ty; recursive = None }) ty
@@ -874,7 +977,11 @@ and encode env ( exp : typed_exp ) : encoded_exp =
         | [_, t] -> t.ty
         | _ -> Ttuple (List.map (fun (_, t) -> t.ty) call_env)
       in
-      let ty = Tclosure ((lambda_arg_type, call_env_type), body.ty) in
+      let uncurry = match exp.ty with
+        | Tlambda (_, _, uncurry) -> uncurry
+        | Tclosure (_, _, uncurry) -> uncurry
+        | _ -> assert false in
+      let ty = Tclosure ((lambda_arg_type, call_env_type), body.ty, uncurry) in
       mk ?name:exp.name ~loc desc ty
 
   (* Closures are created by encoding phase *)
@@ -1047,16 +1154,40 @@ and encode_lambda ~loc env
 *)
 
 and encode_apply name env prim loc args ty =
-  let args = List.map (encode env) args in
   match prim, args with
-  | Prim_exec, [ x; { ty = Tclosure (_, ty) | Tlambda (_,ty) } ] ->
+  | Prim_exec, [ x; f ] ->
+    let x = encode env x in
+    let f, x =
+      if not (uncurry_lambda f.ty) then (encode env f, x)
+      else
+        (* Encode application f x when f is uncurried *)
+        (* Compute arguments and function in ((((f x) y) z) ...) *)
+        let rec all_args acc f = match f.desc with
+          | Apply { prim = Prim_exec; args = [x; f'] } ->
+            if not (uncurry_lambda f'.ty) then (encode env f, acc)
+            else
+              let acc = (encode env x :: acc) in
+              all_args acc f'
+          | _ -> encode env f, acc in
+        let f, args = all_args [x] f in
+        let x = match args with
+          | [x] ->
+            (* only one argument, nothing to do *)
+            x
+          | _ ->
+            (* build argument (x, y, z, ...) *)
+            mk ~loc
+              (Apply { prim = Prim_tuple; args })
+              (Ttuple (List.map (fun x -> x.ty) args)) in
+        (f, x) in
+    mk ~loc ?name (Apply { prim; args = [x ; f] }) ty
+  | _ ->
+    let args = List.map (encode env) args in
     mk ~loc ?name (Apply { prim; args }) ty
-
-  | _ -> mk ~loc ?name (Apply { prim; args }) ty
 
 
 (* Encode tail-recursive function with Loop.left *)
-and encode_rec_fun env ~loc ?name f arg_name arg_ty ret_ty body =
+and encode_rec_fun env ~loc ?name f arg_name arg_ty ret_ty lam_ty body =
   let body = LiquidBoundVariables.bound body in
   let fail_if_called exp =
     if StringSet.mem f exp.bv then
@@ -1138,7 +1269,7 @@ and encode_rec_fun env ~loc ?name f arg_name arg_ty ret_ty body =
   let lam =
     mk_typed ~loc ?name
       (Lambda { arg_name; arg_ty; body; ret_ty; recursive = None })
-      (Tlambda (arg_ty, ret_ty)) in
+      lam_ty in
   encode env lam
 
 

@@ -158,10 +158,14 @@ let rec convert_type ~abbrev ?name ty =
           Typ.tuple (List.map (convert_type ~abbrev) args), "pair_t"
         | Tor (x,y) ->
           typ_constr "variant" [convert_type ~abbrev x; convert_type ~abbrev y], "variant_t"
-        | Tlambda (x,y) ->
+        | Tlambda (x,y, _) ->
           Typ.arrow Nolabel (convert_type ~abbrev x) (convert_type ~abbrev y), "lambda_t"
-        | Tclosure ((x,e),r) ->
-          Typ.arrow Nolabel (convert_type ~abbrev x) (convert_type ~abbrev r), "closure_t"
+        | Tclosure ((x,e),r, _) ->
+          Typ.arrow
+            ~attrs:[id "closure", PTyp (convert_type ~abbrev e)]
+            Nolabel
+            (convert_type ~abbrev x) (convert_type ~abbrev r),
+          "closure_t"
         | Tmap (x,y) ->
           typ_constr "map" [convert_type ~abbrev x;convert_type ~abbrev y], "map_t"
         | Tbigmap (x,y) ->
