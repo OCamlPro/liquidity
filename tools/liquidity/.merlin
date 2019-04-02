@@ -21,3 +21,4 @@ PKG bigstring
 PKG easy-format
 PKG ocaml-migrate-parsetree
 PKG menhirLib
+PKG zarith
