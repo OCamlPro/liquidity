@@ -155,7 +155,10 @@ let env_for_clos env bvs arg_name arg_type =
     (* Build a closure environment and change lambda argument from arg to
        a tuple (arg, (x1, x2, x3, ...)) *)
     let loc = arg_name.nloc in
-    let env_arg_name = uniq_ident env "_closure_arg" in
+    let env_arg_name =
+      uniq_ident env
+        (String.concat "_" @@
+         arg_name.nname :: "" :: List.map fst free_vars_l) in
     let env_arg_type =
       Ttuple (arg_type ::
               List.map (fun (_, (_, (_, ty), _, _)) -> ty) free_vars_l) in
@@ -903,7 +906,11 @@ and encode env ( exp : typed_exp ) : encoded_exp =
             | UArg (_, _, ty) -> ty :: acc
           ) [] args |> List.rev in
         let arg_ty = Ttuple args_ty in
-        let name = uniq_ident env "_uncurried_arg" in
+        let name =
+          String.concat "_" @@
+          List.fold_left (fun acc -> function
+              | ULet _ -> acc
+              | UArg (_, { nname }, _) -> nname :: acc) [] (List.rev args) in
         let mk = mk_typed ~loc:exp.loc in
         let v_arg = mk (Var name) arg_ty in
         let mk_i i = mk (Const { const = CNat (LiquidNumber.integer_of_int i);
