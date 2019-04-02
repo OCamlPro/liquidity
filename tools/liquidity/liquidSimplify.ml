@@ -108,7 +108,16 @@ let rec compute decompile code to_inline =
                                }
                 };
                 { desc = Const { const = CInt n | CNat n } }] } ->
-      List.nth tuple (LiquidNumber.int_of_integer n)
+      iter (List.nth tuple (LiquidNumber.int_of_integer n))
+
+    | Apply { prim = Prim_tuple_get;
+              args = [
+                { desc = Const { const = CTuple tuple ; ty = Ttuple tt } };
+                { desc = Const { const = CInt n | CNat n } }] } ->
+      let n = LiquidNumber.int_of_integer n in
+      let const = iter_const (List.nth tuple n) in
+      let ty = List.nth tt n in
+      { exp with desc = Const { const; ty } }
 
     | Let { bnd_val = ({ ty = Tfail } as bnd_val) } ->
       iter bnd_val

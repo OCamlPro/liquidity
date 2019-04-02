@@ -1140,7 +1140,7 @@ let rec eq_exp_desc eq_ty eq_var e1 e2 = match e1, e2 with
     eq_exp eq_ty eq_var x1 x2 && eq_exp eq_ty eq_var x1 x2
   | Let l1, Let l2 ->
     l1.bnd_var.nname = l2.bnd_var.nname && l1.inline = l2.inline &&
-    eq_exp eq_ty eq_var l1.bnd_val l1.bnd_val &&
+    eq_exp eq_ty eq_var l1.bnd_val l2.bnd_val &&
     eq_exp eq_ty eq_var l1.body l2.body
   | Loop l1, Loop l2 ->
     l1.arg_name.nname = l2.arg_name.nname && eq_exp eq_ty eq_var l1.arg l2.arg &&
