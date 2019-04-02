@@ -169,6 +169,12 @@ let add_name stack seq name =
         if seq.node_name = None then seq.node_name <- Some name;
       | _ -> ()
     end;
+    begin match x with
+      (* recover closures names *)
+      | { kind = N_PRIM "PAIR"; args = [ { kind = N_LAMBDA _ } as x; _] } ->
+        if x.node_name = None then x.node_name <- Some name;
+      | _ -> ()
+    end;
   | [] -> ()
 
 let remove_name stack =
