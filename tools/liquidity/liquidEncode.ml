@@ -301,7 +301,7 @@ let encode_storage_type env ty =
   | _ when not (has_big_map ty) -> ty
   | _ ->
     error (noloc env)
-      "only one big map is only allowed as first component of storage \
+      "only one big map is allowed, and only as first component of storage \
        (either a tuple or a record)"
 
 (* Encode parameter type. Parameter cannot have big maps. *)
