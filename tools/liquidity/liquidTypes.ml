@@ -1553,6 +1553,7 @@ type warning =
   | NotRecursive of string
   | AlwaysFails
   | WeakParam of string
+  | Partial_application
 
 (** {2 Reserved symbols in parsing }  *)
 

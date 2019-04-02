@@ -669,7 +669,10 @@ and typecheck env ( exp : syntax_exp ) : typed_exp =
         let total = match exp.ty with
           | Tlambda (_, _, uncurry) | Tclosure (_, _, uncurry) ->
             begin match !(!uncurry) with
-              | None -> Some false
+              | None ->
+                (* Warn partial applications *)
+                LiquidLoc.warn loc Partial_application;
+                Some false
               | Some u -> Some u
             end
           | _ -> Some true in
