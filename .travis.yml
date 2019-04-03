@@ -1,27 +1,31 @@
 # branches:
 #   only:
 #   - master
-dist: trusty
-language: ocaml
+dist: xenial
+language: generic
 sudo: required
 
 cache:
+  timeout: 1000
   directories:
   - $HOME/.opam
   - tezos
 
 before_install:
-- sh travis-scripts/prepare-trusty.sh
+- sh travis-scripts/prepare-ubuntu.sh
 
 install:
+- export OPAMYES=1
 - sh travis-scripts/prepare-opam.sh
+- bash travis-scripts/build-tezos.sh
+- source travis-scripts/start-tezos-sandbox.sh
 
 script:
-- export OPAMYES=1
 - eval `opam config env`
 - make
 - make tests-mini
 - make tests
 - make rev-tests
 
-# TODO > how to compile and test with tezos (I.e. with a fully compiled version of tezos)?
+after_script:
+- bash travis-scripts/stop-tezos-sandbox.sh

@@ -3,13 +3,14 @@
 export TEZOS_CLIENT_UNSAFE_DISABLE_DISCLAIMER=Y
 
 TEZOS_FULL_PATH=$(which tezos-client || echo "./tezos/tezos-client")
-# TEZOS_ARGS="--addr next.tzscan.io --port 18732"
 
 DEFAULT='\033[0m'
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 BLUE='\033[0;34m'
 BOLD='\033[1m'
+BRED='\033[1;31m'
+BGREEN='\033[1;32m'
 
 VERBOSE=
 
@@ -24,10 +25,10 @@ function run {
         STATUS=$?
         [[ ! -z "$VERBOSE" ]] && echo $OUTPUT
         if [[ "$STATUS" -eq 0 ]] ; then
-            printf "${GREEN}[${BOLD}OK${DEFAULT}${GREEN}]${DEFAULT} "
+            printf "${GREEN}[${BGREEN}OK${GREEN}]${DEFAULT} "
             # printf "     ${GREEN}[${BOLD}OK${DEFAULT}${GREEN}]${DEFAULT}\n"
         else
-            printf "${RED}[${BOLD}KO${DEFAULT}${RED}]${DEFAULT}\n"
+            printf "${RED}[${BRED}KO${RED}]${DEFAULT}\n"
             # printf "     ${RED}[${BOLD}KO${DEFAULT}${RED}]${DEFAULT}\n"
             printf -- "$BOLD---- Command ------------------------$DEFAULT\n"
             printf "$BOLD$CMD$DEFAULT\n"
