@@ -1283,6 +1283,10 @@ and typecheck_prim1 env prim loc args =
         prim, ty
     end
 
+  | Prim_tuple_get, _ ->
+    error loc "get in tuple can only be performed with a constant \
+               integer or natural"
+
   | Prim_tuple_set, [{ ty = tuple_ty ; loc = tuple_loc };
                      { desc = Const { const = CInt n | CNat n }};
                      { ty ; loc = val_loc }] ->
@@ -1309,6 +1313,10 @@ and typecheck_prim1 env prim loc args =
         let ty = tuple_ty in
         prim, ty
     end
+
+  | Prim_tuple_set, _ ->
+    error loc "set in tuple can only be performed with a constant \
+               integer or natural"
 
   | _ ->
     let prim =
@@ -1893,20 +1901,34 @@ and expected_prim_types = function
   | Prim_bytes_sub ->
     3, "nat, nat, bytes"
 
-  | Prim_tuple -> assert false (* any types *)
+  | Prim_tuple -> assert false (* any number of argument *)
 
-  | Prim_tuple_get
-  | Prim_tuple_set
+  | Prim_tuple_get ->
+    1, "nat|int"
+  | Prim_tuple_set ->
+    2, "nat|int, 'a"
+
+  | Prim_coll_mem ->
+    2, "'a, ('a set | ('a, 'b) map | ('a, 'b) big_map)"
+  | Prim_coll_find ->
+    2, "'a, ('a set | ('a, 'b) map | ('a, 'b) big_map)"
+  | Prim_coll_update ->
+    3, "('a, bool, 'a set) | ('a, 'b option, (('a, 'b) map | ('a, 'b) big_map))"
+
+  | Prim_coll_size ->
+    1, "'a list | 'a set | ('a, 'b) map | string | bytes"
+
+  | Prim_Left ->
+    1, "'a"
+  | Prim_Right ->
+    1, "'a"
+  | Prim_slice ->
+    3, "nat, nat, bytes|string"
+  | Prim_concat ->
+    1, "bytes list | string list"
+
   | Prim_unknown
-  | Prim_coll_mem
-  | Prim_coll_find
-  | Prim_coll_update
-  | Prim_coll_size
-  | Prim_Left
-  | Prim_Right
   | Prim_extension _
-  | Prim_slice
-  | Prim_concat
   | Prim_unused _
     -> assert false (* already handled *)
 
