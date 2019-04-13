@@ -666,10 +666,10 @@ and typecheck env ( exp : syntax_exp ) : typed_exp =
         { exp with desc = Apply { prim = Prim_exec false; args =  [f; x] }}
       ) f r
     in
-    let exp = match exp.desc with
-      | Apply { prim = Prim_exec false; args } ->
-        { exp with desc = Apply { prim = Prim_exec true; args } }
-      | _ -> assert false in
+    (* let exp = match exp.desc with
+     *   | Apply { prim = Prim_exec false; args } ->
+     *     { exp with desc = Apply { prim = Prim_exec true; args } }
+     *   | _ -> assert false in *)
     let exp = typecheck env exp in
     (* Set uncurry flags in expression if needed *)
     set_uncurry exp;
@@ -1279,9 +1279,9 @@ and typecheck_prim1 env prim loc args =
         prim, ty
     end
 
-  | Prim_tuple_get, _ ->
-    error loc "get in tuple can only be performed with a constant \
-               integer or natural"
+  (* | Prim_tuple_get, _ ->
+   *   error loc "get in tuple can only be performed with a constant \
+   *              integer or natural" *)
 
   | Prim_tuple_set, [{ ty = tuple_ty ; loc = tuple_loc };
                      { desc = Const { const = CInt n | CNat n }};

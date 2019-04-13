@@ -40,8 +40,11 @@ let fresh_tv =
     (Char.escaped (Char.chr (a + r)))
     ^ (if q > 0 then string_of_int q else "")
 
+let mk_tvar id =
+  Tvar (Ref.create { id; tyo = None })
+
 let fresh_tvar () =
-  Tvar (Ref.create { id = fresh_tv (); tyo = None })
+  mk_tvar (fresh_tv ())
 
 let wrap_tvar ty =
   Tvar (Ref.create { id = fresh_tv (); tyo = Some ty })
@@ -68,7 +71,7 @@ let rec occurs id = function
   | Tcontract c -> List.exists (fun e -> occurs id e.parameter) c.entries_sig
   | Tvar tvr ->
     let tv = Ref.get tvr in
-    tv.id = id || (match tv.tyo with Some ty -> occurs id ty | _ -> false)
+    tv == id || (match tv.tyo with Some ty -> occurs id ty | _ -> false)
   | Tpartial (Peqn (el,_)) ->
     List.exists (fun (cl, rty) -> occurs id rty ||
                                   List.exists (fun (ty1, ty2) -> occurs id ty1 || occurs id ty2) cl) el
@@ -203,7 +206,7 @@ let rec unify loc ty1 ty2 =
         tyx1, []
 
       | Tvar tvr, tyx | tyx, Tvar tvr -> (* (Ref.get tvr).tyo = None *)
-        if occurs (Ref.get tvr).id tyx then
+        if occurs (Ref.get tvr) tyx then
           failwith ("Cyclic vars '" ^ (Ref.get tvr).id);
         tyx, []
 

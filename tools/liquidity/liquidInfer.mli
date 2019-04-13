@@ -9,6 +9,7 @@
 
 open LiquidTypes
 
+val mk_tvar : string -> datatype
 val fresh_tvar : unit -> datatype
 val wrap_tvar : datatype -> datatype
 val has_tvar : datatype -> bool

@@ -244,8 +244,6 @@ let rec compute decompile code to_inline =
 
     | Apply { prim = Prim_exec top; args =  [f; x] } ->
       (* inline body of lambda or closures *)
-      Format.eprintf "inline lambda %s@."
-        (LiquidPrinter.Liquid.string_of_code f);
       let f = iter f in
       let x = iter x in
       begin match f.desc with

@@ -241,8 +241,7 @@ let rec translate_type env ?expected typ =
       | None -> error_loc ptyp_loc "cannot infer type"
     end
 
-  | { ptyp_desc = Ptyp_var id; ptyp_loc } ->
-    Tvar (Ref.create { id; tyo = None })
+  | { ptyp_desc = Ptyp_var id; ptyp_loc } -> mk_tvar id
 
   | { ptyp_loc } -> error_loc ptyp_loc "in type"
 
