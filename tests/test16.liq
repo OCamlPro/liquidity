@@ -7,7 +7,7 @@ let%entry main
   let f = fun arg ->
     arg.(0)
   in
-  let storage = Lambda.pipe (storage, parameter) f in
+  let storage = (storage, parameter) |> f in
   ( [], storage )
 
 

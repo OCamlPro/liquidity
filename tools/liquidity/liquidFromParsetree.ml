@@ -1314,6 +1314,24 @@ let rec translate_code contracts env exp =
              entry = Some entry;
              arg = translate_code contracts env param }
 
+    (* f @@ x -> f x *)
+    | { pexp_desc = Pexp_apply (
+                { pexp_desc = Pexp_ident { txt = Lident "@@" } },
+                (Nolabel, f) :: x) } ->
+      let exp =
+        translate_code contracts env
+          { exp with pexp_desc = Pexp_apply (f, x) } in
+      exp.desc
+
+    (* x |> f -> f x *)
+    | { pexp_desc = Pexp_apply (
+                { pexp_desc = Pexp_ident { txt = Lident "|>" } },
+                [x; Nolabel, f]) } ->
+      let exp =
+        translate_code contracts env
+          { exp with pexp_desc = Pexp_apply (f, [x]) } in
+      exp.desc
+
     (* f x1 x2 ... xn *)
     | { pexp_desc = Pexp_apply (
         { pexp_desc = Pexp_ident ( { txt = var } );
