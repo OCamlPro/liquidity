@@ -256,6 +256,31 @@ let rec type_of_const ~loc env = function
     end
   | CLambda { arg_ty; ret_ty } -> Tlambda (arg_ty, ret_ty, default_uncurry ())
 
+(* helper function to set uncurry flag of type of [f] in application [f x] *)
+let rec set_uncurry exp =
+  match exp.desc with
+  | Apply { prim = Prim_exec _;
+            args = [ { ty = Tlambda (_, _, uncurry)
+                          | Tclosure (_, _, uncurry) } as f; _ ] } ->
+    (* Application is total if returned type is not a lambda of if
+       the expression is a totally applied lambda *)
+    let total = match exp.ty with
+      | Tlambda (_, _, uncurry) | Tclosure (_, _, uncurry) ->
+        begin match !(!uncurry) with
+          | None ->
+            (* Warn partial applications *)
+            LiquidLoc.warn exp.loc Partial_application;
+            Some false
+          | Some u -> Some u
+        end
+      | _ -> Some true in
+    (* Don't uncurry a previously curried function *)
+    if !(!uncurry) <> Some false then
+      !uncurry := total;
+    (* Recursively set (un)curry flags in function part *)
+    set_uncurry f
+  | _ -> ()
+
 let rec typecheck_const ~loc env cst ty =
   match ty, cst with
   (* No implicit conversions *)
@@ -582,7 +607,7 @@ and typecheck env ( exp : syntax_exp ) : typed_exp =
     end
 
   (* contract.main (param) amount *)
-  | Apply { prim = Prim_unknown;
+  | Apply { prim = Prim_exec _;
             args = { desc = Project { field = entry; record = contract }} ::
                    [param; amount] }
     when match (typecheck env contract).ty with
@@ -593,7 +618,7 @@ and typecheck env ( exp : syntax_exp ) : typed_exp =
       (mk (Call { contract; amount; entry = Some entry; arg = param })
          ~loc ())
 
-  | Apply { prim = Prim_unknown;
+  | Apply { prim = Prim_exec _;
             args = { desc = Var "Contract.call" } :: args } ->
     let nb_args = List.length args in
     if nb_args <> 3 || nb_args <> 4  then
@@ -604,16 +629,10 @@ and typecheck env ( exp : syntax_exp ) : typed_exp =
       error loc "Bad syntax for Contract.call."
 
   (* Extended primitives *)
-  | Apply { prim = Prim_unknown;
-            args = { desc = Var prim_name } :: args }
-    when is_extprim prim_name env.env ->
-    let eprim = find_extprim ~loc prim_name env.env in
-    let targs, args = List.fold_left (fun (targs, args) a ->
-        match a.desc, targs with
-        | Type ty, _ -> (ty :: targs, args)
-        | _, [] -> (targs, (typecheck env a) :: args)
-        | _, _ -> error loc "Type arguments must come first"
-      ) ([], []) (List.rev args) in
+  | Apply { prim = Prim_extension (ename, effect, targs, nb_arg, nb_ret, minst);
+            args } ->
+    let eprim = find_extprim ~loc ename env.env in
+    let args = List.map (typecheck env) args in
     let rec mk_inst acc tvs args = match tvs, args with
       | [], [] -> List.rev acc
       | v :: tvs, [] -> mk_inst ((v, fresh_tvar ()) :: acc) tvs []
@@ -631,8 +650,7 @@ and typecheck env ( exp : syntax_exp ) : typed_exp =
       instantiate_to subst ty in
     let atys = List.map instantiate_ext eprim.atys in
     let rty = instantiate_ext eprim.rty in
-    let prim = Prim_extension (prim_name, eprim.effect, targs,
-                               eprim.nb_arg, eprim.nb_ret, eprim.minst) in
+    let prim = Prim_extension (ename, effect, targs, nb_arg, nb_ret, minst) in
     begin
       try List.iter2 (fun a aty -> unify a.ty aty) args atys
       with Invalid_argument _ ->
@@ -642,46 +660,24 @@ and typecheck env ( exp : syntax_exp ) : typed_exp =
     end;
     mk ?name:exp.name ~loc (Apply { prim; args }) rty
 
-  (* <unknown> (prim, args) -> prim args *)
-  | Apply { prim = Prim_unknown;
-            args = { desc = Var name } ::args }
-    when is_primitive name ->
-    let prim = LiquidTypes.primitive_of_string name in
-    typecheck env { exp with
-                    desc = Apply { prim; args } }
-
-  (* <unknown> (f, x1, x2, x3) -> ((f x1) x2) x3) *)
-  | Apply { prim = Prim_unknown; args = f :: ((_ :: _) as r) } ->
+  (* f x1 x2 [x3 ...] -> ((f x1) x2) x3) *)
+  | Apply { prim = Prim_exec true; args = f :: ((_ :: _ :: _) as r) } ->
     let exp = List.fold_left (fun f x ->
-        { exp with desc = Apply { prim = Prim_exec; args =  [x; f] }}
+        { exp with desc = Apply { prim = Prim_exec false; args =  [f; x] }}
       ) f r
     in
+    let exp = match exp.desc with
+      | Apply { prim = Prim_exec false; args } ->
+        { exp with desc = Apply { prim = Prim_exec true; args } }
+      | _ -> assert false in
     let exp = typecheck env exp in
-    (* helper function to set uncurry flag of type of [f] in
-       application [f x] *)
-    let rec set_uncurry exp =
-      match exp.desc with
-      | Apply { prim = Prim_exec;
-                args = [_; { ty = Tlambda (_, _, uncurry)
-                                | Tclosure (_, _, uncurry) } as f ] } ->
-        (* Application is total if returned type is not a lambda of if
-           the expression is a totally applied lambda *)
-        let total = match exp.ty with
-          | Tlambda (_, _, uncurry) | Tclosure (_, _, uncurry) ->
-            begin match !(!uncurry) with
-              | None ->
-                (* Warn partial applications *)
-                LiquidLoc.warn loc Partial_application;
-                Some false
-              | Some u -> Some u
-            end
-          | _ -> Some true in
-        (* Don't uncurry a previously curried function *)
-        if !(!uncurry) <> Some false then
-          !uncurry := total;
-        (* Recursively set (un)curry flags in function part *)
-        set_uncurry f
-      | _ -> () in
+    (* Set uncurry flags in expression if needed *)
+    set_uncurry exp;
+    exp
+
+  | Apply { prim = Prim_exec true; args = [_; _] as args } ->
+    let exp =
+      typecheck_apply ?name:exp.name ~loc env (Prim_exec true) loc args in
     (* Set uncurry flags in expression if needed *)
     set_uncurry exp;
     exp
@@ -1540,11 +1536,11 @@ and typecheck_prim2i env prim loc args =
   | Prim_set_delegate, [ ty ] ->
     unify ty (Toption Tkey_hash); Toperation
 
-  | Prim_exec,
-    [ ty; (Tlambda (from_ty, to_ty, _) | Tclosure ((from_ty, _), to_ty, _)) ] ->
+  | Prim_exec _,
+    [ (Tlambda (from_ty, to_ty, _) | Tclosure ((from_ty, _), to_ty, _)); ty ] ->
     unify ty from_ty; to_ty
 
-  | Prim_exec, [ aty; lty ] ->
+  | Prim_exec _, [ lty; aty ] ->
     let to_ty = fresh_tvar () in
     unify lty (Tlambda (aty, to_ty, default_uncurry ())); to_ty
 
@@ -1747,9 +1743,9 @@ and typecheck_prim2t env prim loc args =
   | Prim_set_delegate, [ Toption Tkey_hash ] ->
     Toperation
 
-  | Prim_exec, [ ty;
-                 ( Tlambda(from_ty, to_ty, _)
-                 | Tclosure((from_ty, _), to_ty, _))] ->
+  | Prim_exec _, [ ( Tlambda(from_ty, to_ty, _)
+                   | Tclosure((from_ty, _), to_ty, _));
+                   ty ] ->
 
     fail_neq ~loc ~expected_ty:from_ty ty
       ~info:"in argument of function application";
@@ -1875,8 +1871,8 @@ and expected_prim_types = function
   | Prim_set_delegate ->
     1, "key_hash option"
 
-  | Prim_exec ->
-    2, "'a, ('a -> 'b)"
+  | Prim_exec _ ->
+    2, "('a -> 'b), 'a"
 
   | Prim_list_rev ->
     1, "'a list"
@@ -1927,7 +1923,6 @@ and expected_prim_types = function
   | Prim_concat ->
     1, "bytes list | string list"
 
-  | Prim_unknown
   | Prim_extension _
   | Prim_unused _
     -> assert false (* already handled *)

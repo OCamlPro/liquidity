@@ -203,7 +203,8 @@ let rec unify loc ty1 ty2 =
         tyx1, []
 
       | Tvar tvr, tyx | tyx, Tvar tvr -> (* (Ref.get tvr).tyo = None *)
-        if occurs (Ref.get tvr).id tyx then failwith "Cyclic vars";
+        if occurs (Ref.get tvr).id tyx then
+          failwith ("Cyclic vars '" ^ (Ref.get tvr).id);
         tyx, []
 
 

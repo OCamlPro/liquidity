@@ -22,18 +22,6 @@ let rec bv code =
 
   | Failwith arg -> bv arg
 
-  | Apply { prim = Prim_unknown;
-            args = ({ desc = Var name } :: args) } ->
-    let set =
-      try
-        LiquidTypes.primitive_of_string name |> ignore;
-        StringSet.empty
-      with Not_found -> StringSet.singleton name
-    in
-    List.fold_left (fun set arg ->
-        StringSet.union set (bv arg)
-      ) set args
-
   | Apply { prim; args } ->
     List.fold_left (fun set arg ->
         StringSet.union set (bv arg)
@@ -178,23 +166,6 @@ let rec bound code =
     let bv = arg.bv in
     let desc = Failwith arg in
     mk desc code bv
-
-  | Apply { prim = Prim_unknown;
-            args = { desc = Var name } :: args } ->
-    let args = List.map bound args in
-    let bv =
-      try
-        LiquidTypes.primitive_of_string name |> ignore;
-        StringSet.empty
-      with Not_found -> StringSet.singleton name
-    in
-    let v = mk (Var name) code bv in
-    let bv =
-      List.fold_left (fun set arg ->
-          StringSet.union set arg.bv
-        ) bv args
-    in
-    mk (Apply { prim = Prim_unknown; args = v :: args }) code bv
 
   | Apply { prim; args } ->
     let args = List.map bound args in

@@ -212,11 +212,7 @@ let rec compile_desc depth env ~loc desc =
     let arg = compile depth env arg in
     arg @ [ ii ~loc FAILWITH ]
 
-  | Apply { prim = Prim_unknown } ->
-    (* This is removed by typechecking *)
-    assert false
-
-  | Apply { prim = Prim_exec; args = [arg; { ty = Tclosure _ } as f] } ->
+  | Apply { prim = Prim_exec _; args = [{ ty = Tclosure _ } as f; arg] } ->
     (* Compile closure application. Open closure pair, pair argument
        with call environment and pass to lambda. *)
     let f_env = compile depth env f in
@@ -225,9 +221,6 @@ let rec compile_desc depth env ~loc desc =
     [ dip ~loc 1 [ dup ~loc 1; ii ~loc @@ CAR None;
                    ii ~loc SWAP; ii ~loc @@ CDR None] ] @
     [ ii ~loc PAIR ; ii ~loc EXEC ]
-
-  | Apply { prim; args = ([_; { ty = Tlambda _ } ] as args) } ->
-    compile_prim ~loc depth env prim args
 
   | Apply { prim; args } ->
     compile_prim ~loc depth env prim args
@@ -502,8 +495,11 @@ and compile_prim ~loc depth env prim args =
     let arg = compile (depth+1) env arg in
     [ push ~loc (Tlist ty) (CList[]) ] @ arg @ [ ii CONS ]
 
+  | Prim_exec _, [f; x] ->
+    let _depth, args_code = compile_args depth env [x; f] in
+    args_code @ [ ii EXEC ]
+
   (* Should be removed in LiquidCheck *)
-  | Prim_unknown, _
   | Prim_list_rev, _ -> assert false
 
   (* Should have disappeared *)
@@ -548,7 +544,7 @@ and compile_prim ~loc depth env prim args =
     | Prim_hash_key|Prim_check|Prim_default_account|Prim_list_size
     | Prim_set_size|Prim_map_size|Prim_or|Prim_and|Prim_xor
     | Prim_not|Prim_abs|Prim_int|Prim_neg|Prim_lsr|Prim_lsl|Prim_is_nat
-    | Prim_exec|Prim_Cons|Prim_set_delegate|Prim_address),_ ->
+    | Prim_exec _|Prim_Cons|Prim_set_delegate|Prim_address),_ ->
     let _depth, args_code = compile_args depth env args in
     let prim_code = match prim, List.length args with
       | Prim_eq, 2 -> [ ii COMPARE; ii EQ ]
@@ -608,8 +604,6 @@ and compile_prim ~loc depth env prim args =
       | Prim_lsr, 2 -> [ ii LSR ]
       | Prim_lsl, 2 -> [ ii LSL ]
 
-      | Prim_exec, 2 -> [ ii EXEC ]
-
       | Prim_string_size, 1 -> [ ii SIZE ]
       | Prim_bytes_size, 1 -> [ ii SIZE ]
 
@@ -630,14 +624,14 @@ and compile_prim ~loc depth env prim args =
         | Prim_hash_key|Prim_check|Prim_default_account|Prim_list_size
         | Prim_set_size|Prim_map_size|Prim_or|Prim_and|Prim_xor
         | Prim_not|Prim_abs|Prim_int|Prim_neg|Prim_lsr|Prim_lsl|Prim_is_nat
-        | Prim_exec|Prim_Cons|Prim_set_delegate|Prim_address),n ->
+        | Prim_exec _|Prim_Cons|Prim_set_delegate|Prim_address),n ->
         Printf.eprintf "Primitive %S: wrong number of args(%d)\n%!"
           (LiquidTypes.string_of_primitive prim)
           n;
         assert false
       (*                           | prim, args -> *)
 
-      | (Prim_unknown|Prim_extension _|Prim_tuple_get
+      | (Prim_extension _|Prim_tuple_get
         | Prim_tuple_set|Prim_tuple
         | Prim_self|Prim_balance|Prim_now|Prim_amount|Prim_gas
         | Prim_Left|Prim_Right|Prim_source|Prim_sender|Prim_unused _

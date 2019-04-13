@@ -1210,7 +1210,8 @@ let rec translate_code contracts env exp =
       let vloc = loc_of_loc vloc in
       let arg_name = "_iter_arg" in
       let arg_var = mk ~loc:vloc (Var arg_name) in
-      let body = mk ~loc (Apply { prim = Prim_exec; args = [arg_var; f] }) in
+      let body =
+        mk ~loc (Apply { prim = Prim_exec true; args = [f; arg_var] }) in
       let arg = translate_code contracts env arg in
       let prim = LiquidTypes.fold_primitive_of_string (iter_coll^".iter") in
       let acc = mk ~loc (Const { ty = Tunit; const =  CUnit }) in
@@ -1232,7 +1233,8 @@ let rec translate_code contracts env exp =
       let arg_name = "_fold_arg" in
       let vloc = loc_of_loc vloc in
       let arg_var = mk ~loc:vloc (Var arg_name) in
-      let body = mk ~loc (Apply { prim = Prim_exec; args = [arg_var; f] }) in
+      let body =
+        mk ~loc (Apply { prim = Prim_exec true; args = [f; arg_var] }) in
       let arg = translate_code contracts env arg in
       let acc = translate_code contracts env acc in
       let prim = LiquidTypes.fold_primitive_of_string (iter_coll^".fold") in
@@ -1253,7 +1255,8 @@ let rec translate_code contracts env exp =
       let arg_name = "_map_arg" in
       let vloc = loc_of_loc vloc in
       let arg_var = mk ~loc:vloc (Var arg_name) in
-      let body = mk ~loc (Apply { prim = Prim_exec; args = [arg_var; f] }) in
+      let body =
+        mk ~loc (Apply { prim = Prim_exec true; args = [f; arg_var] }) in
       let arg = translate_code contracts env arg in
       let prim = LiquidTypes.map_primitive_of_string (map_coll^".map") in
       let arg_name = { nname = arg_name ; nloc = vloc } in
@@ -1274,7 +1277,8 @@ let rec translate_code contracts env exp =
       let arg_name = "_map_fold_arg" in
       let vloc = loc_of_loc vloc in
       let arg_var = mk ~loc:vloc (Var arg_name) in
-      let body = mk ~loc (Apply { prim = Prim_exec; args = [arg_var; f] }) in
+      let body =
+        mk ~loc (Apply { prim = Prim_exec true; args = [f; arg_var] }) in
       let arg = translate_code contracts env arg in
       let acc = translate_code contracts env acc in
       let prim =
@@ -1311,14 +1315,46 @@ let rec translate_code contracts env exp =
              entry = Some entry;
              arg = translate_code contracts env param }
 
+    (* f x1 x2 ... xn *)
+    | { pexp_desc = Pexp_apply (
+        { pexp_desc = Pexp_ident ( { txt = var } );
+          pexp_loc = var_loc },
+        args) } ->
+      let f = str_of_id var in
+      let args =
+        List.map (function
+            | (Nolabel, exp) -> translate_code contracts env exp
+            | (_, { pexp_loc }) ->
+              error_loc pexp_loc "cannot have labelled arguments"
+          ) args in
+      if is_primitive f then
+        let prim = LiquidTypes.primitive_of_string f in
+        Apply { prim; args }
+      else if is_extprim f env then
+        let eprim = find_extprim ~loc f env in
+        let targs, args =
+          List.fold_left (fun (targs, args) a ->
+              match a.desc, targs with
+              | Type ty, _ -> (ty :: targs, args)
+              | _, [] -> (targs, a :: args)
+              | _, _ -> error_loc exp.pexp_loc "Type arguments must come first"
+            ) ([], []) (List.rev args) in
+        let prim = Prim_extension
+            (f, eprim.effect, targs, eprim.nb_arg, eprim.nb_ret, eprim.minst) in
+        Apply { prim; args }
+      else
+        Apply { prim = Prim_exec true;
+                args = mk ~loc:(loc_of_loc var_loc) (Var f) :: args }
+
     | { pexp_desc = Pexp_apply (exp, args) } ->
       let exp = translate_code contracts env exp in
-      Apply { prim = Prim_unknown;
-              args = exp :: List.map (function
-                  | (Nolabel, exp) -> translate_code contracts env exp
-                  | (_, { pexp_loc }) -> error_loc pexp_loc "in arg"
-                ) args
-            }
+      let args =
+        List.map (function
+            | (Nolabel, exp) -> translate_code contracts env exp
+            | (_, { pexp_loc }) ->
+              error_loc pexp_loc "cannot have labelled arguments"
+          ) args in
+      Apply { prim = Prim_exec true; args = exp :: args }
 
     | { pexp_desc = Pexp_extension (
         { txt = "nat" },

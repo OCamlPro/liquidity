@@ -424,7 +424,6 @@ type 'a mic_contract = {
 (** Allowed built-in primities in Liquidity *)
 type primitive =
   (* resolved in LiquidCheck *)
-  | Prim_unknown
   | Prim_coll_find
   | Prim_coll_update
   | Prim_coll_mem
@@ -503,7 +502,7 @@ type primitive =
   | Prim_lsr
   | Prim_lsl
 
-  | Prim_exec
+  | Prim_exec of bool
 
   | Prim_bytes_size
   | Prim_string_size
@@ -653,8 +652,8 @@ let () =
       "<<", Prim_lsl;
       "lsl", Prim_lsl;
 
-      "Lambda.pipe" , Prim_exec;
-      "|>", Prim_exec;
+      "@@" , Prim_exec false;
+      "@@" , Prim_exec true;
 
       "Coll.update", Prim_coll_update;
       "Coll.mem", Prim_coll_mem;
@@ -663,7 +662,6 @@ let () =
       "Coll.concat",Prim_concat;
       "Coll.slice",Prim_slice;
 
-      "<unknown>", Prim_unknown;
       "<unused>", Prim_unused None;
       "<extension>", Prim_extension ("", false, [], 0, 0, "");
 
@@ -872,7 +870,7 @@ and ('ty, 'a) exp_desc =
   | Apply of { prim: primitive;
                args: ('ty, 'a) exp list }
   (** Built-in function application. Functions that are not built-in
-      use the special primitive {!Prim_unknown}. *)
+      use the special primitive {!Prim_exec}. *)
 
   | If of { cond: ('ty, 'a) exp;
             ifthen: ('ty, 'a) exp;
@@ -1137,7 +1135,7 @@ let rec eq_exp_desc eq_ty eq_var e1 e2 = match e1, e2 with
     s1.field = s2.field && eq_exp eq_ty eq_var s1.record s2.record &&
     eq_exp eq_ty eq_var s1.set_val s2.set_val
   | Seq (x1, y1), Seq (x2, y2) ->
-    eq_exp eq_ty eq_var x1 x2 && eq_exp eq_ty eq_var x1 x2
+    eq_exp eq_ty eq_var x1 x2 && eq_exp eq_ty eq_var y1 y2
   | Let l1, Let l2 ->
     l1.bnd_var.nname = l2.bnd_var.nname && l1.inline = l2.inline &&
     eq_exp eq_ty eq_var l1.bnd_val l2.bnd_val &&

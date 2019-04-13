@@ -694,8 +694,6 @@ and encode env ( exp : typed_exp ) : encoded_exp =
     let arg = encode env arg in
     mk ~loc (Failwith arg) Tfail
 
-  | Apply { prim = Prim_unknown } -> assert false
-
   (* List.rev -> List.reduce (::) *)
   | Apply { prim = Prim_list_rev; args = [l] } ->
     let l = encode env l in
@@ -1162,7 +1160,7 @@ and encode_lambda ~loc env
 
 and encode_apply name env prim loc args ty =
   match prim, args with
-  | Prim_exec, [ x; f ] ->
+  | Prim_exec _, [ f; x ] ->
     let x = encode env x in
     let f, x =
       if not (uncurry_lambda f.ty) then (encode env f, x)
@@ -1170,7 +1168,7 @@ and encode_apply name env prim loc args ty =
         (* Encode application f x when f is uncurried *)
         (* Compute arguments and function in ((((f x) y) z) ...) *)
         let rec all_args acc f = match f.desc with
-          | Apply { prim = Prim_exec; args = [x; f'] } ->
+          | Apply { prim = Prim_exec _; args = [f'; x] } ->
             if not (uncurry_lambda f'.ty) then (encode env f, acc)
             else
               let acc = (encode env x :: acc) in
@@ -1187,7 +1185,7 @@ and encode_apply name env prim loc args ty =
               (Apply { prim = Prim_tuple; args })
               (Ttuple (List.map (fun x -> x.ty) args)) in
         (f, x) in
-    mk ~loc ?name (Apply { prim; args = [x ; f] }) ty
+    mk ~loc ?name (Apply { prim; args = [f ; x] }) ty
   | _ ->
     let args = List.map (encode env) args in
     mk ~loc ?name (Apply { prim; args }) ty
@@ -1215,7 +1213,7 @@ and encode_rec_fun env ~loc ?name f arg_name arg_ty ret_ty lam_ty body =
     else match body.desc with
       | Var v when v = f ->
         error loc "Call to %s is not a tail-recursive call" f
-      | Apply { prim = Prim_exec; args = [arg; { desc = Var ff }] }
+      | Apply { prim = Prim_exec _; args = [{ desc = Var ff }; arg] }
         when ff = f ->
         mk_typed ~loc ?name:body.name (
           Constructor { constr = Left ret_ty; arg }

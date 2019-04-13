@@ -92,8 +92,6 @@ and decode ( exp : encoded_exp ) : typed_exp =
     let arg = decode arg in
     mk ~loc (Failwith arg) Tfail
 
-  | Apply { prim = Prim_unknown } -> assert false
-
   (* TODO *)
   (* List.rev -> List.reduce (::) *)
 

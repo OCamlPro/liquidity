@@ -318,6 +318,11 @@ let rec decompile_next (env : env) node =
       let cenv = arg_of cenv in
       mklet env node (Apply { prim = Prim_tuple; args =  [f; cenv] })
 
+    | N_PRIM "EXEC", [x; f]  ->
+      let x = arg_of x in
+      let f = arg_of f in
+      mklet env node (Apply { prim = Prim_exec true; args =  [f; x] })
+
     | N_PRIM prim, _ ->
       let prim, args =
         match prim, node.args with
@@ -359,7 +364,6 @@ let rec decompile_next (env : env) node =
             | "MUL" -> Prim_mul
             | "EDIV" -> Prim_ediv
             | "NEG" -> Prim_neg
-            | "EXEC" -> Prim_exec
             | "INT" -> Prim_int
             | "ISNAT" -> Prim_is_nat
             | "PACK" -> Prim_pack

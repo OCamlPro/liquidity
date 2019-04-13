@@ -242,10 +242,12 @@ let rec compute decompile code to_inline =
       let ifelse = iter ifelse in
       { exp with desc = If { cond; ifthen; ifelse } }
 
-    | Apply { prim = Prim_exec; args =  [x; f] } ->
+    | Apply { prim = Prim_exec top; args =  [f; x] } ->
       (* inline body of lambda or closures *)
-      let x = iter x in
+      Format.eprintf "inline lambda %s@."
+        (LiquidPrinter.Liquid.string_of_code f);
       let f = iter f in
+      let x = iter x in
       begin match f.desc with
         | Lambda { arg_name; body } ->
           iter { exp with
@@ -264,7 +266,7 @@ let rec compute decompile code to_inline =
                               bnd_val;  body }
                }
         | _ ->
-          { exp with desc = Apply { prim = Prim_exec; args = [x; f] } }
+          { exp with desc = Apply { prim = Prim_exec top; args = [f; x] } }
       end
 
     | Apply { prim; args } ->

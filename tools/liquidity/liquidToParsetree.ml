@@ -403,7 +403,7 @@ and convert_code ~abbrev (expr : (datatype, 'a) exp) =
   | Apply { prim = Prim_tuple; args } ->
     Exp.tuple ~loc
       (List.map (convert_code ~abbrev) args)
-  | Apply { prim =  Prim_exec; args =  [x; f] } ->
+  | Apply { prim =  Prim_exec _; args =  [f; x] } ->
     Exp.apply ~loc
       (convert_code ~abbrev f) [Nolabel, convert_code ~abbrev x]
 
@@ -517,8 +517,8 @@ and convert_code ~abbrev (expr : (datatype, 'a) exp) =
   | Fold { prim = (Prim_map_iter|Prim_set_iter|Prim_list_iter as prim);
            arg_name;
            body = { desc = Apply {
-               prim = Prim_exec;
-               args = [{ desc = Var iter_arg }; f] }};
+               prim = Prim_exec _;
+               args = [f; { desc = Var iter_arg }] }};
            arg } when iter_arg = arg_name.nname ->
     Exp.apply ~loc
       (Exp.ident (lid (LiquidTypes.string_of_fold_primitive prim)))
@@ -537,8 +537,8 @@ and convert_code ~abbrev (expr : (datatype, 'a) exp) =
       ]
   | Fold { prim; arg_name;
            body = { desc = Apply {
-               prim = Prim_exec;
-               args = [{ desc = Var iter_arg }; f] }};
+               prim = Prim_exec _;
+               args = [f; { desc = Var iter_arg }] }};
            arg; acc } when iter_arg = arg_name.nname ->
     Exp.apply ~loc
       (Exp.ident (lid (LiquidTypes.string_of_fold_primitive prim)))
@@ -560,8 +560,8 @@ and convert_code ~abbrev (expr : (datatype, 'a) exp) =
 
   | Map { prim; arg_name;
           body = { desc = Apply {
-              prim = Prim_exec;
-              args = [{ desc = Var map_arg }; f] }};
+              prim = Prim_exec _;
+              args = [f; { desc = Var map_arg }] }};
           arg } when map_arg = arg_name.nname ->
     Exp.apply ~loc
       (Exp.ident (lid (LiquidTypes.string_of_map_primitive prim)))
@@ -581,8 +581,8 @@ and convert_code ~abbrev (expr : (datatype, 'a) exp) =
 
   | MapFold { prim; arg_name;
               body = { desc = Apply {
-                  prim = Prim_exec;
-                  args = [{ desc = Var map_arg }; f] }};
+                  prim = Prim_exec _;
+                  args = [f; { desc = Var map_arg }] }};
               arg; acc } when map_arg = arg_name.nname ->
     Exp.apply ~loc
       (Exp.ident (lid (LiquidTypes.string_of_map_fold_primitive prim)))
