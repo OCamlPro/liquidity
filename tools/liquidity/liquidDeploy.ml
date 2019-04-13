@@ -626,8 +626,11 @@ let managerPubkey chain_id =
   | Some Zeronet -> "manager_pubkey"
   | Some (Alphanet | Mainnet) -> "managerPubkey"
   | None ->
-    if chain_id = LiquidOptions.zeronet_id then "manager_pubkey"
-    else "managerPubkey"
+    if chain_id = LiquidOptions.alphanet_id
+    || chain_id = LiquidOptions.main_id then
+      "managerPubkey"
+    else
+      "manager_pubkey"
 
 let operation_of_json ~head r =
   let env = LiquidTezosTypes.empty_env "operation" in

@@ -102,6 +102,6 @@ type proto =
 let protocol = ref (None : proto option)
 
 let main_id = "NetXdQprcVkpaWU"
-let zeronet_id = "NetXSzLHKwSumh7"
+let alphanet_id = "NetXgtSLGNJvNye"
 
 let ocaml_syntax = ref true
