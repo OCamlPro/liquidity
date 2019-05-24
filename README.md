@@ -7,8 +7,9 @@ Liquidity: a Smart Contract Language for Tezos
 ==============================================
 
 Liquidity is a language to program Smart Contracts for Tezos. It uses
-the syntax of OCaml, and strictly complies to Michelson security
-restrictions.
+the syntax of OCaml (and ReasonML), and strictly complies to Michelson
+security restrictions. Liquidity is distributed under the terms of the
+[GPLv3 license](LICENSE).
 
 The Liquidity Project
 ---------------------
@@ -16,15 +17,15 @@ The Liquidity Project
 The Liquidity project contains:
 * A compiler from Liquidity files (.liq extension) to Michelson
 * A de-compiler from Michelson files (.tz extension) to Liquidity
-* An evaluator of Michelson contracts
+* A Tezos client to deploy and interact with Liquidity contracts
 
 The Liquidity Language
 ----------------------
 
 The Liquidity language provides the following features:
 
-* Full coverage of the Michelson language: Anything that can be written in
-  Michelson can be written in Liquidity
+* Full coverage of the Michelson language: anything that can be written in
+  Michelson can be written in Liquidity.
 
 * Local variables instead of stack manipulations: values can be stored
   in local variables.
@@ -60,13 +61,4 @@ Status
 All features of Michelson are supported in Liquidity. All tests from
 https://github.com/tezos/tezos/tree/alphanet/test/contracts can be
 decompiled to Liquidity and recompiled to Michelson.
-
-Roadmap
--------
-
-The current roadmap is:
-
-* Development of an online editor for Liquidity
-
-* Development of a proof assistant for Liquidity contracts
 

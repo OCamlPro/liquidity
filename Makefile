@@ -44,6 +44,22 @@ distclean: clean
 doc:
 	$(MAKE) -C docs/sphinx/
 
+headers:
+	headache -h misc/header -c misc/headache_config \
+		Makefile build.ocp2 \
+		scripts/*.sh travis-scripts/*.sh \
+                tools/liquidity/build.ocp2 \
+		tools/liquidity/*.ml[ily] \
+		tools/liquidity/*.ml \
+		tools/liquidity/with*-tezos/*.ml[ily] \
+		tools/liquidity/with*-tezos/*.ml \
+		tools/liquidity/reason/liquidReasonParse.ml \
+		libs/*/build.ocp2 \
+		libs/*/*.ml[ily] \
+		libs/*/*.ml \
+		libs/*/*/*.ml
+
+
 # All of these tests must be run with with_tezos=true
 
 NTESTS=42
