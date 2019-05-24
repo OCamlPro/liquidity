@@ -30,7 +30,7 @@ sudo apt-get install -y -qq libgmp-dev
 
 # do this in a second step
 # for ubuntu, these packages are too old or not available in xenial
-sudo add-apt-repository "deb http://fr.archive.ubuntu.com/ubuntu artful main universe"
+sudo add-apt-repository "deb http://fr.archive.ubuntu.com/ubuntu bionic main universe"
 sudo apt-get update -qq
 sudo apt-get install -y -qq \
      libsecp256k1-dev libsecp256k1-0 libsodium-dev libssl-dev \
