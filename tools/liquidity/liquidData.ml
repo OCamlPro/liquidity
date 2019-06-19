@@ -39,7 +39,7 @@ let rec default_const = function
   | Tbytes -> CBytes "0x"
   | Ttimestamp -> CTimestamp "1970-01-01T00:00:00Z"
   | Tkey -> CKey "edpkuit3FiCUhd6pmqf9ztUTdUs1isMTbF9RBGfwKk1ZrdTmeP9ypN"
-  | Tkey_hash -> CKey_hash "tz1YLtLqD1fWHthSVHPD116oYvsd4PTAHUoc"
+  | Tkey_hash -> CKey_hash "dn1UqnHgHFe8ezEgsoow4hERctPssuWiw9h8"
   | Tsignature ->
     CSignature
       "edsigthTzJ8X7MPmNeEwybRAvdxS1pupqcM5Mk4uCuyZAe7uEk\
@@ -86,7 +86,7 @@ let rec default_empty_const = function
   | Tbytes -> CBytes "0x"
   | Ttimestamp -> CTimestamp "1970-01-01T00:00:00Z"
   | Tkey -> CKey "edpkuit3FiCUhd6pmqf9ztUTdUs1isMTbF9RBGfwKk1ZrdTmeP9ypN"
-  | Tkey_hash -> CKey_hash "tz1YLtLqD1fWHthSVHPD116oYvsd4PTAHUoc"
+  | Tkey_hash -> CKey_hash "dn1UqnHgHFe8ezEgsoow4hERctPssuWiw9h8"
   | Tsignature ->
     CSignature
       "edsigthTzJ8X7MPmNeEwybRAvdxS1pupqcM5Mk4uCuyZAe7uEk\

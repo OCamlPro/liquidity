@@ -403,7 +403,7 @@ let int_literal =
 let base58_char =
   ['1'-'9' 'A'-'H' 'J'-'N' 'P'-'Z' 'a'-'k' 'm'-'z' ]
 let keyhash_literal =
-  ("tz1" | "tz2" | "tz3") base58_char* (* 36 *)
+  ("tz1" | "tz2" | "tz3" | "dn1" | "dn2" | "dn3") base58_char* (* 36 *)
 let contract_literal =
   "KT1" base58_char* (* 36 *)
 let key_literal =

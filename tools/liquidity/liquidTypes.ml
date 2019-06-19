@@ -1642,13 +1642,14 @@ let reserved_keywords = [
 let has_reserved_prefix s =
   (* [
      "tz1"; "tz2"; "tz3" ;
+     "dn1"; "dn2"; "dn3" ;
      "edpk"; "sppk"; "p2pk";
      "edsig"; "spsig1"; "p2sig";
      ] *)
   let len = String.length s in
   len >= 3 &&
   match s.[0], s.[1], s.[2] with
-  | 't', 'z', ('1' | '2' | '3') -> true
+  | (('t', 'z') | ('d', 'n')), ('1' | '2' | '3') -> true
   | 'e', 'd', 'p'
   | 's', 'p', 'p'
   | 'p', '2', 'p' -> len >= 4 && s.[3] = 'k'

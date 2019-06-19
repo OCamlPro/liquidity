@@ -649,7 +649,7 @@ let main () =
       "--source", Arg.String (fun s ->
           Data.validate_key_hash s;
           LiquidOptions.source := Some s),
-      "<tz1...> Set the source for deploying or running a contract (default: none)";
+      "<dn1...> Set the source for deploying or running a contract (default: none)";
 
       "--private-key", Arg.String (fun s ->
           Data.validate_private_key s;
