@@ -89,7 +89,7 @@ let rec convert_type ~loc expr =
   match expr with
   | Tunit -> prim_type ~loc "unit" []
   | Ttimestamp -> prim_type ~loc "timestamp" []
-  | Ttez -> prim_type ~loc "mutez" []
+  | Ttez -> prim_type ~loc (LiquidOptions.mu_amount_type ()) []
   | Tint -> prim_type ~loc "int" []
   | Tnat -> prim_type ~loc "nat" []
   | Tbool -> prim_type ~loc "bool" []

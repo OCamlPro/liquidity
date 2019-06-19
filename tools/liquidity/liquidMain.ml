@@ -308,7 +308,9 @@ module Data = struct
       failwith (s ^ " is not a valid contract address")
 
   let validate_key_hash s =
-    if String.length s <> 36 || String.sub s 0 2 <> "tz" then
+    if String.length s <> 36 ||
+       let pref = String.sub s 0 2 in
+       pref <> "tz" && pref <> "dn" then
       failwith (s ^ " is not a valid key hash")
 
   let validate_private_key s =
@@ -599,6 +601,17 @@ let main () =
           exit 0
         ),
       " Show version and exit";
+
+      "--network", Arg.String (function
+          | "dune" | "Dune" | "DUNE" ->
+            LiquidOptions.network := Dune_network
+          | "tezos" | "Tezos" | "TEZOS" ->
+            LiquidOptions.network := Tezos_network
+          | s ->
+            Format.eprintf "%s not allowed for network" s;
+            exit 1
+        ),
+      "<dune|tezos> Set the network to use";
 
       "-o", Arg.String (fun o -> LiquidOptions.output := Some o),
       "<filename> Output code in <filename>";

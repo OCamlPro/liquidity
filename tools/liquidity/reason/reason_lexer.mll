@@ -533,13 +533,13 @@ rule token = parse
   | uppercase_latin1 identchar_latin1 *
       { warn_latin1 lexbuf; UIDENT(Lexing.lexeme lexbuf) }
   | int_literal { INT (Lexing.lexeme lexbuf, None) }
-  | (int_literal as lit) "tz" (* Liquidity *)
+  | (int_literal as lit) ("tz" | "DUN" | "dun" | "dn") (* Liquidity *)
       { INT (lit, Some tez_char) }
   | (int_literal as lit) (literal_modifier as modif)
       { INT (lit, Some modif) }
   | float_literal | hex_float_literal
       { FLOAT (Lexing.lexeme lexbuf, None) }
-  | ((float_literal) as lit) "tz" (* Liquidity *)
+  | ((float_literal) as lit) ("tz" | "DUN" | "dun" | "dn") (* Liquidity *)
       { FLOAT (lit, Some tez_char) }
   | ((float_literal | hex_float_literal) as lit) (literal_modifier as modif)
       { FLOAT (lit, Some modif) }

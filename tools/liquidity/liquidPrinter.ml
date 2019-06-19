@@ -87,7 +87,7 @@ module Michelson = struct
       | Tbool -> Printf.bprintf b "bool"
       | Tint -> Printf.bprintf b "int"
       | Tnat -> Printf.bprintf b "nat"
-      | Ttez -> Printf.bprintf b "mutez"
+      | Ttez -> Printf.bprintf b "%s" (LiquidOptions.mu_amount_type ())
       | Tstring -> Printf.bprintf b "string"
       | Tbytes -> Printf.bprintf b "bytes"
       | Ttimestamp  -> Printf.bprintf b "timestamp"
@@ -833,7 +833,7 @@ module LiquidDebug = struct
       | Tbool -> Printf.bprintf b "bool"
       | Tint -> Printf.bprintf b "int"
       | Tnat -> Printf.bprintf b "nat"
-      | Ttez -> Printf.bprintf b "tez"
+      | Ttez -> Printf.bprintf b "%s" (LiquidOptions.amount_type ())
       | Tstring -> Printf.bprintf b "string"
       | Tbytes -> Printf.bprintf b "bytes"
       | Ttimestamp  -> Printf.bprintf b "timestamp"
@@ -973,7 +973,8 @@ module LiquidDebug = struct
     | CContract s -> Printf.bprintf b "%s" s
     | CAddress s -> Printf.bprintf b "%s" s
     | CSignature s -> Printf.bprintf b "%s" s
-    | CTez s -> Printf.bprintf b "%stz" (LiquidNumber.liq_of_tez s)
+    | CTez s -> Printf.bprintf b "%s%s" (LiquidNumber.liq_of_tez s)
+                  (LiquidOptions.curreny ())
     | CInt n -> Printf.bprintf b "%s" (LiquidNumber.liq_of_integer n)
     | CNat n -> Printf.bprintf b "%sp" (LiquidNumber.liq_of_integer n)
     | CTimestamp s -> Printf.bprintf b "%s" s

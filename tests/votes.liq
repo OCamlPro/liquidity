@@ -25,9 +25,9 @@ let%init storage addresses = {
 let%entry vote choice storage =
   (* Only allowed while voting period is ongoing *)
   if Current.time () > storage.deadline then failwith "Voting closed";
-  (* Voter must send at least 5tz to vote *)
-  if Current.amount () < 5.00tz then
-    failwith "Not enough money, at least 5tz to vote";
+  (* Voter must send at least 5DUN to vote *)
+  if Current.amount () < 5.00DUN then
+    failwith "Not enough money, at least 5DUN to vote";
   (* Voter cannot vote twice *)
   if Map.mem (Current.sender ()) storage.voters then
     failwith ("Has already voted", Current.sender ());

@@ -173,7 +173,7 @@ let rec convert_type ~abbrev ?name ty =
     |> StringSet.elements
     |> List.map (fun v -> Typ.var v) in
   match ty with
-  | Ttez ->  typ_constr "tez" []
+  | Ttez -> typ_constr (LiquidOptions.amount_type ()) []
   | Tunit -> typ_constr "unit" []
   | Ttimestamp -> typ_constr "timestamp" []
   | Tint -> typ_constr "int" []
@@ -320,7 +320,7 @@ let rec convert_const ~abbrev (expr : (datatype, 'a) exp const) =
   | CContract n -> Exp.constant (Pconst_integer (n, Some '\236'))
   | CAddress n when
       String.length n >= 2 &&
-      String.sub n 0 2 = "tz"
+      let pref = String.sub n 0 2 in pref = "tz" || pref = "dn"
     ->
     Exp.constraint_
       (Exp.constant (Pconst_integer (n, Some '\236')))

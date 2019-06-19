@@ -1808,9 +1808,13 @@ and expected_prim_types = function
   | Prim_neg ->
     1, "int | nat"
   | Prim_add | Prim_sub ->
-    2, "(nat | int | tez | timestamp), (nat | int | tez | timestamp)"
+    2, Printf.sprintf
+      "(nat | int | %s | timestamp), (nat | int | %s | timestamp)"
+      (LiquidOptions.amount_type ()) (LiquidOptions.amount_type ())
   | Prim_mul | Prim_ediv ->
-    2, "(nat | int | tez), (nat | int | tez)"
+    2, Printf.sprintf
+      "(nat | int | %s), (nat | int | %s)"
+      (LiquidOptions.amount_type ()) (LiquidOptions.amount_type ())
 
   | Prim_xor | Prim_or ->
     2, "(bool | nat), (bool | nat)"
@@ -1876,8 +1880,10 @@ and expected_prim_types = function
     1, "<Contract>.instance"
 
   | Prim_create_account ->
-    4, "manager:key_hash, delegate:(key_hash option), \
-        delegatable:bool, amount:tez"
+    4, Printf.sprintf
+      "manager:key_hash, delegate:(key_hash option), \
+       delegatable:bool, amount:%s"
+      (LiquidOptions.amount_type ())
 
   | Prim_default_account ->
     1, "key_hash"

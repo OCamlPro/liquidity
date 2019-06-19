@@ -1604,6 +1604,7 @@ let predefined_types =
       "bool", Tunit;
       "nat", Tunit;
       "tez", Tunit;
+      "dun", Tunit;
       "string", Tunit;
       "bytes", Tunit;
       "timestamp", Tunit;
@@ -1649,7 +1650,8 @@ let has_reserved_prefix s =
   let len = String.length s in
   len >= 3 &&
   match s.[0], s.[1], s.[2] with
-  | (('t', 'z') | ('d', 'n')), ('1' | '2' | '3') -> true
+  | 't', 'z', ('1' | '2' | '3') -> true
+  | 'd', 'n', ('1' | '2' | '3') -> true
   | 'e', 'd', 'p'
   | 's', 'p', 'p'
   | 'p', '2', 'p' -> len >= 4 && s.[3] = 'k'

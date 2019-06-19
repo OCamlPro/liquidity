@@ -1985,7 +1985,7 @@ let constant ?raw_literal ?(parens=true) ppf = function
     paren (parens && i.[0] = '-')
       (fun ppf (i, m) ->
          if m = '\231' then
-           Format.fprintf ppf "%stz" i
+           Format.fprintf ppf "%s%s" i (LiquidOptions.curreny ())
          else
            Format.fprintf ppf "%s%c" i m) ppf (i,m)
   | Pconst_float (i, None) ->
@@ -1995,7 +1995,7 @@ let constant ?raw_literal ?(parens=true) ppf = function
     paren (parens && i.[0] = '-')
       (fun ppf (i,m) ->
          if m = '\231' then
-           Format.fprintf ppf "%stz" i
+           Format.fprintf ppf "%s%s" i (LiquidOptions.curreny ())
          else
            Format.fprintf ppf "%s%c" i m
       ) ppf (i,m)

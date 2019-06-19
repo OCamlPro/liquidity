@@ -221,7 +221,7 @@ let rec convert_type ?(parameter=false) env expr =
   let ty = match expr with
     | Prim(_, "unit", [], _debug) -> Tunit
     | Prim(_, "timestamp", [], _debug) -> Ttimestamp
-    | Prim(_, "mutez", [], _debug) -> Ttez
+    | Prim(_, ("mutez" | "mudun"), [], _debug) -> Ttez
     | Prim(_, "int", [], _debug) -> Tint
     | Prim(_, "nat", [], _debug) -> Tnat
     | Prim(_, "bool", [], _debug) -> Tbool

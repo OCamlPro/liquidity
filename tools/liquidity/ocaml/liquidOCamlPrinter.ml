@@ -220,13 +220,13 @@ let constant f = function
   | Pconst_integer (i, Some m) ->
     paren (i.[0]='-') (fun f (i, m) ->
         if m = '\231' then
-          pp f "%stz" i
+          pp f "%s%s" i (LiquidOptions.curreny ())
         else
           pp f "%s%c" i m) f (i,m)
   | Pconst_float (i, None) -> paren (i.[0]='-') (fun f -> pp f "%s") f i
   | Pconst_float (i, Some m) -> paren (i.[0]='-') (fun f (i,_m) ->
       if m = '\231' then
-        pp f "%stz" i
+        pp f "%s%s" i (LiquidOptions.curreny ())
       else
         pp f "%s%c" i m) f (i,m)
 

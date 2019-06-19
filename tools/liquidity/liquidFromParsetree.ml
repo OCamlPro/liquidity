@@ -127,7 +127,7 @@ let rec translate_type env ?expected typ =
   | { ptyp_desc = Ptyp_constr ({ txt = Lident "bool" }, []) } -> Tbool
   | { ptyp_desc = Ptyp_constr ({ txt = Lident "int" }, []) } -> Tint
   | { ptyp_desc = Ptyp_constr ({ txt = Lident "nat" }, []) } -> Tnat
-  | { ptyp_desc = Ptyp_constr ({ txt = Lident "tez" }, []) } -> Ttez
+  | { ptyp_desc = Ptyp_constr ({ txt = Lident ("tez" | "dun") }, []) } -> Ttez
   | { ptyp_desc = Ptyp_constr ({ txt = Lident "string" }, []) } -> Tstring
   | { ptyp_desc = Ptyp_constr ({ txt = Lident "bytes" }, []) } -> Tbytes
   | { ptyp_desc = Ptyp_constr ({ txt = Lident "timestamp" }, []) } -> Ttimestamp

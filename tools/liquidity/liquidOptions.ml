@@ -120,3 +120,31 @@ let main_id = "NetXdQprcVkpaWU"
 let alphanet_id = "NetXgtSLGNJvNye"
 
 let ocaml_syntax = ref true
+
+type network =
+  | Dune_network
+  | Tezos_network
+
+let network =
+  ref
+    (match Sys.getenv "LIQUID_NETWORK" with
+     | "dune" | "Dune" | "DUNE" -> Dune_network
+     | "tezos" | "Tezos" | "TEZOS" -> Tezos_network
+     | _ ->
+       Format.eprintf
+         "Warning: wrong value for LIQUID_NETWORK, defaulting to Dune@.";
+       Dune_network
+     | exception Not_found -> Dune_network
+    )
+
+let curreny () = match !network with
+  | Dune_network -> "DUN"
+  | Tezos_network -> "tz"
+
+let amount_type () = match !network with
+  | Dune_network -> "dun"
+  | Tezos_network -> "tez"
+
+let mu_amount_type () = match !network with
+  | Dune_network -> "mudun"
+  | Tezos_network -> "mutez"
