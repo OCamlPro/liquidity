@@ -636,17 +636,6 @@ let get_protocol () =
   with Not_found ->
     raise_response_error "get_protocol" r
 
-let managerPubkey chain_id =
-  match !LiquidOptions.protocol with
-  | Some Zeronet -> "manager_pubkey"
-  | Some (Alphanet | Mainnet) -> "managerPubkey"
-  | None ->
-    if chain_id = LiquidOptions.alphanet_id
-    || chain_id = LiquidOptions.main_id then
-      "managerPubkey"
-    else
-      "manager_pubkey"
-
 let operation_of_json ~head r =
   let env = LiquidTezosTypes.empty_env "operation" in
   let source = Ezjsonm.(find r ["source"] |> get_string) in
@@ -682,7 +671,7 @@ let operation_of_json ~head r =
           Some (code, storage)
         with Not_found -> None in
       Origination {
-        manager = find r [managerPubkey head.head_hash] |> get_string;
+        manager = find r ["manager_pubkey"] |> get_string;
         script;
         spendable =
           (try find r ["spendable"] |> get_bool with Not_found -> true);
@@ -991,7 +980,7 @@ let forge_deploy ?head ?source ?public_key
     "counter", Printf.sprintf "\"%d\"" counter;
     "gas_limit", Printf.sprintf "%S" !LiquidOptions.gas_limit;
     "storage_limit", Printf.sprintf "%S" !LiquidOptions.storage_limit;
-    managerPubkey head.head_chain_id, Printf.sprintf "%S" source;
+    "manager_pubkey", Printf.sprintf "%S" source;
     "balance", Printf.sprintf "%S" !LiquidOptions.amount;
     "spendable", string_of_bool spendable;
     "delegatable", string_of_bool delegatable;
