@@ -309,263 +309,6 @@ let translate_ext_type env typ =
   in
   aux false [] [] typ
 
-
-exception NotAConstant
-
-(* Translate an expression, expecting a constant. Fails with [NotAConstant]
-   if the expression is not a constant. *)
-let rec translate_const env exp =
-  match exp with
-  | { pexp_desc = Pexp_construct ( { txt = Lident "()" }, None ) } ->
-    CUnit, Some Tunit
-  | { pexp_desc = Pexp_construct ( { txt = Lident "true" }, None ) } ->
-    CBool true, Some Tbool
-  | { pexp_desc = Pexp_construct ( { txt = Lident "false" }, None ) } ->
-    CBool false, Some Tbool
-  | { pexp_desc = Pexp_construct ( { txt = Lident "None" }, None ) } ->
-    CNone, Some (Toption (fresh_tvar ()))
-  | { pexp_desc = Pexp_constant (Pconst_integer (s,None)) } ->
-    CInt (LiquidNumber.integer_of_liq s), Some Tint
-  | { pexp_desc = Pexp_constant (Pconst_integer (s, Some 'p')) } ->
-    CNat (LiquidNumber.integer_of_liq s), Some Tnat
-
-  | { pexp_desc = Pexp_constant (Pconst_integer (s, Some '\231')) } ->
-    CTez (LiquidNumber.tez_of_liq s), Some Ttez
-  | { pexp_desc = Pexp_constant (Pconst_float (s, Some '\231')) } ->
-    CTez (LiquidNumber.tez_of_liq s), Some Ttez
-
-  (* Timestamps *)
-  | { pexp_desc = Pexp_constant (Pconst_integer (s, Some '\232')) } ->
-    CTimestamp (ISO8601.of_string s), Some Ttimestamp
-
-  (* Key_hash *)
-  | { pexp_desc = Pexp_constant (Pconst_integer (s, Some '\233')) } ->
-    CKey_hash s, Some Tkey_hash
-
-  (* Address *)
-  | { pexp_desc = Pexp_constant (Pconst_integer (s, Some '\236')) } ->
-    CAddress s, Some Taddress
-
-  (* Key *)
-  | { pexp_desc = Pexp_constant (Pconst_integer (s, Some '\234')) } ->
-    CKey s, Some Tkey
-
-  (* Signature *)
-  | { pexp_desc = Pexp_constant (Pconst_integer (s, Some '\235')) } ->
-    CSignature s, Some Tsignature
-
-  (* Bytes *)
-  | { pexp_desc = Pexp_constant (Pconst_integer (s, Some '\237')) } ->
-    CBytes s, Some Tbytes
-
-  | { pexp_desc = Pexp_constant (Pconst_string (s, None)) } ->
-    CString s, Some Tstring
-
-  | { pexp_desc = Pexp_tuple [exp] } ->
-    translate_const env exp
-
-  | { pexp_desc = Pexp_tuple exps } ->
-    let csts, tys = List.split (List.map (translate_const env) exps) in
-    let tys =
-      try
-        Some (Ttuple (List.map (function
-            | None -> raise Exit
-            | Some ty -> ty) tys))
-      with Exit -> None
-    in
-    CTuple csts, tys
-
-  | { pexp_desc = Pexp_construct (
-      { txt = Lident "[]" }, None) } ->
-    CList [], Some (Tlist (fresh_tvar ()))
-
-  | { pexp_desc = Pexp_construct (
-      { txt = Lident "::" },
-      Some { pexp_desc = Pexp_tuple [head; tail] }) } ->
-    let head, head_ty = translate_const env head in
-    let tail, tail_ty = translate_const env tail in
-    begin
-      match tail with
-      | CList tail ->
-        let cst = CList (head :: tail) in
-        let ty =
-          match head_ty, tail_ty with
-          | Some head_ty, Some (Tlist tail_ty) ->
-            let is_var = match tail_ty with Tvar _ -> true | _ -> false in
-            if not is_var && not @@ eq_types head_ty tail_ty then
-              error_loc exp.pexp_loc "inconsistent types in list";
-            Some (Tlist head_ty)
-          | Some head_ty, None ->
-            Some (Tlist head_ty)
-          | _ ->
-            error_loc exp.pexp_loc "inconsistent types in list"
-        in
-        cst, ty
-      | _ ->
-        error_loc exp.pexp_loc "inconsistent types in list"
-    end
-
-  | { pexp_desc = Pexp_construct ({ txt = Lident "Map" }, None) } ->
-    CMap [], Some (Tmap (fresh_tvar (), fresh_tvar ()))
-
-  | { pexp_desc = Pexp_construct ({ txt = Lident "BigMap" }, None) } ->
-    CBigMap [], Some (Tbigmap (fresh_tvar (), fresh_tvar ()))
-
-  | { pexp_desc = Pexp_construct (
-      { txt = Lident ("Map" | "BigMap" as map_kind) },
-      Some pair_list) } ->
-    let pair_list = translate_list pair_list in
-    let pair_list = List.map translate_pair pair_list in
-    let pair_list = List.map (fun (e1,e2) ->
-        let cst1, ty1 = translate_const env e1 in
-        let cst2, ty2 = translate_const env e2 in
-        (cst1, cst2), (ty1, ty2)
-      ) pair_list in
-    let pair_list = List.sort compare pair_list in
-    let csts, tys = List.split pair_list in
-    let tys = match tys with
-      | (Some ty1, Some ty2) :: tail ->
-
-        List.iter (function
-              (Some ty1', Some ty2') when ty1' = ty1 && ty2' = ty2
-              -> ()
-            | _ -> error_loc exp.pexp_loc
-                     "inconsistent map types"
-          )
-          tail;
-        begin match map_kind with
-          | "Map" -> Some (Tmap (ty1, ty2))
-          | "BigMap" -> Some (Tbigmap (ty1, ty2))
-          | _ -> assert false
-        end
-      | _ -> (*None*)
-        begin match map_kind with
-          | "Map" -> Some (Tmap (fresh_tvar (), fresh_tvar ()))
-          | "BigMap" -> Some (Tbigmap (fresh_tvar (), fresh_tvar ()))
-          | _ -> assert false
-        end
-    in
-    begin match map_kind with
-      | "Map" -> CMap csts, tys
-      | "BigMap" -> CBigMap csts, tys
-      | _ -> assert false
-    end
-
-  | { pexp_desc = Pexp_construct (
-      { txt = Lident "Set" }, None) } ->
-    CSet [], Some (Tset (fresh_tvar ()))
-
-  | { pexp_desc = Pexp_construct (
-      { txt = Lident "Set" }, Some pair_list) } ->
-    let list = translate_list pair_list in
-    let list = List.map (fun e1 ->
-        let cst1, ty1 = translate_const env e1 in
-        cst1, ty1
-      ) list in
-    let list = List.sort compare list in
-    let csts, tys = List.split list in
-    let tys = match tys with
-      | Some ty1 :: tail ->
-        List.iter (function
-              Some ty1' when ty1' = ty1 -> ()
-            | _ -> error_loc exp.pexp_loc
-                     "inconsistent set types"
-          )
-          tail;
-        Some (Tset ty1)
-      | _ -> None
-    in
-    CSet csts, tys
-
-
-  | { pexp_desc = Pexp_construct (
-      { txt = Lident "Some" }, Some arg) } ->
-    let arg, ty = translate_const env arg in
-    let ty = match ty with
-      | None -> None
-      | Some ty -> Some (Toption ty)
-    in
-    CSome arg, ty
-
-  | { pexp_desc = Pexp_construct (
-      { txt = Lident "Left" }, Some arg) } ->
-    let arg, ty = translate_const env arg in
-    let ty = match ty with
-      | None -> None
-      | Some ty -> Some (Tor (ty, fresh_tvar ()))
-    in
-    CLeft arg, ty
-
-  | { pexp_desc = Pexp_construct (
-      { txt = Lident "Right" }, Some arg) } ->
-    let arg, ty = translate_const env arg in
-    let ty = match ty with
-      | None -> None
-      | Some ty -> Some (Tor (fresh_tvar (), ty))
-    in
-    CRight arg, ty
-
-  | { pexp_desc = Pexp_construct ({ txt = lid ; loc }, args) } ->
-    let loc = loc_of_loc loc in
-    let lid = str_of_id lid in
-    let c =
-      match args with
-      | None -> CUnit
-      | Some args ->
-        let c, ty_opt = translate_const env args in
-        c
-    in
-    let ty =
-      try
-        Some (fst (find_constr ~loc lid env))
-      with Not_found -> raise NotAConstant (* None *)
-    in
-    CConstr (lid, c), ty
-
-  | { pexp_desc = Pexp_record (lab_x_exp_list, None) } ->
-    let lab_x_exp_list =
-      List.map (fun ({ txt = label; loc }, exp) ->
-          try
-            let label = str_of_id label in
-            let c, ty_opt = translate_const env exp in
-            label, loc_of_loc loc, c
-          with Not_found ->
-            error_loc exp.pexp_loc "unknown label %s" (str_of_id label)
-        ) lab_x_exp_list in
-    let ty = match lab_x_exp_list with
-      | [] -> error_loc exp.pexp_loc "empty record"
-      | (label, loc, _) :: _ ->
-        try
-          Some (fst (find_label ~loc label env))
-        with Not_found -> raise NotAConstant (* None *)
-    in
-    let fields = List.map (fun (f, _loc, c) -> f, c) lab_x_exp_list in
-    CRecord fields, ty
-
-  | { pexp_desc = Pexp_constraint (cst, ty) } ->
-    let cst, tyo = translate_const env cst in
-    let ty = translate_type env ?expected:tyo ty in
-    cst, Some ty
-
-  | _ -> raise NotAConstant
-
-and translate_list exp =
-  match exp.pexp_desc with
-  | Pexp_tuple [exp] -> translate_list exp
-  | Pexp_construct({ txt = Lident "[]" }, None) -> []
-
-  | Pexp_construct({ txt = Lident "::" },
-                   Some { pexp_desc = Pexp_tuple [e1; e2] }) ->
-    e1 :: translate_list e2
-
-  | _ -> error_loc exp.pexp_loc "list expected"
-
-and translate_pair exp =
-  match exp.pexp_desc with
-  | Pexp_tuple [exp] -> translate_pair exp
-  | Pexp_tuple [e1; e2] -> (e1, e2)
-  | _ -> error_loc exp.pexp_loc "pair expected"
-
 (* Prevent uncurring of lambda's in a type *)
 let rec set_curry_flag ty = match ty with
   | Tunit | Tbool | Tint | Tnat | Ttez | Tstring | Tbytes | Ttimestamp | Tkey
@@ -808,7 +551,276 @@ let get_attributes loc attrs =
       attrs in
   inline, val_private
 
-let rec translate_code contracts env exp =
+
+exception NotAConstant
+
+(* Translate an expression, expecting a constant. Fails with [NotAConstant]
+   if the expression is not a constant. *)
+let rec translate_const env exp =
+  match exp with
+  | { pexp_desc = Pexp_construct ( { txt = Lident "()" }, None ) } ->
+    CUnit, Some Tunit
+  | { pexp_desc = Pexp_construct ( { txt = Lident "true" }, None ) } ->
+    CBool true, Some Tbool
+  | { pexp_desc = Pexp_construct ( { txt = Lident "false" }, None ) } ->
+    CBool false, Some Tbool
+  | { pexp_desc = Pexp_construct ( { txt = Lident "None" }, None ) } ->
+    CNone, Some (Toption (fresh_tvar ()))
+  | { pexp_desc = Pexp_constant (Pconst_integer (s,None)) } ->
+    CInt (LiquidNumber.integer_of_liq s), Some Tint
+  | { pexp_desc = Pexp_constant (Pconst_integer (s, Some 'p')) } ->
+    CNat (LiquidNumber.integer_of_liq s), Some Tnat
+
+  | { pexp_desc = Pexp_constant (Pconst_integer (s, Some '\231')) } ->
+    CTez (LiquidNumber.tez_of_liq s), Some Ttez
+  | { pexp_desc = Pexp_constant (Pconst_float (s, Some '\231')) } ->
+    CTez (LiquidNumber.tez_of_liq s), Some Ttez
+
+  (* Timestamps *)
+  | { pexp_desc = Pexp_constant (Pconst_integer (s, Some '\232')) } ->
+    CTimestamp (ISO8601.of_string s), Some Ttimestamp
+
+  (* Key_hash *)
+  | { pexp_desc = Pexp_constant (Pconst_integer (s, Some '\233')) } ->
+    CKey_hash s, Some Tkey_hash
+
+  (* Address *)
+  | { pexp_desc = Pexp_constant (Pconst_integer (s, Some '\236')) } ->
+    CAddress s, Some Taddress
+
+  (* Key *)
+  | { pexp_desc = Pexp_constant (Pconst_integer (s, Some '\234')) } ->
+    CKey s, Some Tkey
+
+  (* Signature *)
+  | { pexp_desc = Pexp_constant (Pconst_integer (s, Some '\235')) } ->
+    CSignature s, Some Tsignature
+
+  (* Bytes *)
+  | { pexp_desc = Pexp_constant (Pconst_integer (s, Some '\237')) } ->
+    CBytes s, Some Tbytes
+
+  | { pexp_desc = Pexp_constant (Pconst_string (s, None)) } ->
+    CString s, Some Tstring
+
+  | { pexp_desc = Pexp_tuple [exp] } ->
+    translate_const env exp
+
+  | { pexp_desc = Pexp_tuple exps } ->
+    let csts, tys = List.split (List.map (translate_const env) exps) in
+    let tys =
+      try
+        Some (Ttuple (List.map (function
+            | None -> raise Exit
+            | Some ty -> ty) tys))
+      with Exit -> None
+    in
+    CTuple csts, tys
+
+  | { pexp_desc = Pexp_construct (
+      { txt = Lident "[]" }, None) } ->
+    CList [], Some (Tlist (fresh_tvar ()))
+
+  | { pexp_desc = Pexp_construct (
+      { txt = Lident "::" },
+      Some { pexp_desc = Pexp_tuple [head; tail] }) } ->
+    let head, head_ty = translate_const env head in
+    let tail, tail_ty = translate_const env tail in
+    begin
+      match tail with
+      | CList tail ->
+        let cst = CList (head :: tail) in
+        let ty =
+          match head_ty, tail_ty with
+          | Some head_ty, Some (Tlist tail_ty) ->
+            let is_var = match tail_ty with Tvar _ -> true | _ -> false in
+            if not is_var && not @@ eq_types head_ty tail_ty then
+              error_loc exp.pexp_loc "inconsistent types in list";
+            Some (Tlist head_ty)
+          | Some head_ty, None ->
+            Some (Tlist head_ty)
+          | _ ->
+            error_loc exp.pexp_loc "inconsistent types in list"
+        in
+        cst, ty
+      | _ ->
+        error_loc exp.pexp_loc "inconsistent types in list"
+    end
+
+  | { pexp_desc = Pexp_construct ({ txt = Lident "Map" }, None) } ->
+    CMap [], Some (Tmap (fresh_tvar (), fresh_tvar ()))
+
+  | { pexp_desc = Pexp_construct ({ txt = Lident "BigMap" }, None) } ->
+    CBigMap [], Some (Tbigmap (fresh_tvar (), fresh_tvar ()))
+
+  | { pexp_desc = Pexp_construct (
+      { txt = Lident ("Map" | "BigMap" as map_kind) },
+      Some pair_list) } ->
+    let pair_list = translate_list pair_list in
+    let pair_list = List.map translate_pair pair_list in
+    let pair_list = List.map (fun (e1,e2) ->
+        let cst1, ty1 = translate_const env e1 in
+        let cst2, ty2 = translate_const env e2 in
+        (cst1, cst2), (ty1, ty2)
+      ) pair_list in
+    let pair_list = List.sort compare pair_list in
+    let csts, tys = List.split pair_list in
+    let tys = match tys with
+      | (Some ty1, Some ty2) :: tail ->
+
+        List.iter (function
+              (Some ty1', Some ty2') when ty1' = ty1 && ty2' = ty2
+              -> ()
+            | _ -> error_loc exp.pexp_loc
+                     "inconsistent map types"
+          )
+          tail;
+        begin match map_kind with
+          | "Map" -> Some (Tmap (ty1, ty2))
+          | "BigMap" -> Some (Tbigmap (ty1, ty2))
+          | _ -> assert false
+        end
+      | _ -> (*None*)
+        begin match map_kind with
+          | "Map" -> Some (Tmap (fresh_tvar (), fresh_tvar ()))
+          | "BigMap" -> Some (Tbigmap (fresh_tvar (), fresh_tvar ()))
+          | _ -> assert false
+        end
+    in
+    begin match map_kind with
+      | "Map" -> CMap csts, tys
+      | "BigMap" -> CBigMap csts, tys
+      | _ -> assert false
+    end
+
+  | { pexp_desc = Pexp_construct (
+      { txt = Lident "Set" }, None) } ->
+    CSet [], Some (Tset (fresh_tvar ()))
+
+  | { pexp_desc = Pexp_construct (
+      { txt = Lident "Set" }, Some pair_list) } ->
+    let list = translate_list pair_list in
+    let list = List.map (fun e1 ->
+        let cst1, ty1 = translate_const env e1 in
+        cst1, ty1
+      ) list in
+    let list = List.sort compare list in
+    let csts, tys = List.split list in
+    let tys = match tys with
+      | Some ty1 :: tail ->
+        List.iter (function
+              Some ty1' when ty1' = ty1 -> ()
+            | _ -> error_loc exp.pexp_loc
+                     "inconsistent set types"
+          )
+          tail;
+        Some (Tset ty1)
+      | _ -> None
+    in
+    CSet csts, tys
+
+
+  | { pexp_desc = Pexp_construct (
+      { txt = Lident "Some" }, Some arg) } ->
+    let arg, ty = translate_const env arg in
+    let ty = match ty with
+      | None -> None
+      | Some ty -> Some (Toption ty)
+    in
+    CSome arg, ty
+
+  | { pexp_desc = Pexp_construct (
+      { txt = Lident "Left" }, Some arg) } ->
+    let arg, ty = translate_const env arg in
+    let ty = match ty with
+      | None -> None
+      | Some ty -> Some (Tor (ty, fresh_tvar ()))
+    in
+    CLeft arg, ty
+
+  | { pexp_desc = Pexp_construct (
+      { txt = Lident "Right" }, Some arg) } ->
+    let arg, ty = translate_const env arg in
+    let ty = match ty with
+      | None -> None
+      | Some ty -> Some (Tor (fresh_tvar (), ty))
+    in
+    CRight arg, ty
+
+  | { pexp_desc = Pexp_construct ({ txt = lid ; loc }, args) } ->
+    let loc = loc_of_loc loc in
+    let lid = str_of_id lid in
+    let c =
+      match args with
+      | None -> CUnit
+      | Some args ->
+        let c, ty_opt = translate_const env args in
+        c
+    in
+    let ty =
+      try
+        Some (fst (find_constr ~loc lid env))
+      with Not_found -> raise NotAConstant (* None *)
+    in
+    CConstr (lid, c), ty
+
+  | { pexp_desc = Pexp_record (lab_x_exp_list, None) } ->
+    let lab_x_exp_list =
+      List.map (fun ({ txt = label; loc }, exp) ->
+          try
+            let label = str_of_id label in
+            let c, ty_opt = translate_const env exp in
+            label, loc_of_loc loc, c
+          with Not_found ->
+            error_loc exp.pexp_loc "unknown label %s" (str_of_id label)
+        ) lab_x_exp_list in
+    let ty = match lab_x_exp_list with
+      | [] -> error_loc exp.pexp_loc "empty record"
+      | (label, loc, _) :: _ ->
+        try
+          Some (fst (find_label ~loc label env))
+        with Not_found -> raise NotAConstant (* None *)
+    in
+    let fields = List.map (fun (f, _loc, c) -> f, c) lab_x_exp_list in
+    CRecord fields, ty
+
+  | { pexp_desc = Pexp_constraint (cst, ty) } ->
+    let cst, tyo = translate_const env cst in
+    let ty = translate_type env ?expected:tyo ty in
+    cst, Some ty
+
+  | { pexp_desc = Pexp_fun (Nolabel, None, pat, body_exp) } ->
+    let body_exp, ret_ty = match body_exp.pexp_desc with
+      | Pexp_constraint (body_exp, ret_ty) ->
+        body_exp, translate_type env ret_ty
+      | _ -> body_exp, fresh_tvar ()
+    in
+    let body_exp = translate_code StringMap.empty env body_exp in
+    let arg_name, arg_ty, body = deconstruct_pat env pat body_exp in
+    CLambda { arg_name; arg_ty; body; ret_ty; recursive = None },
+    Some (Tlambda (arg_ty, ret_ty, default_uncurry ()))
+
+  | _ -> raise NotAConstant
+
+and translate_list exp =
+  match exp.pexp_desc with
+  | Pexp_tuple [exp] -> translate_list exp
+  | Pexp_construct({ txt = Lident "[]" }, None) -> []
+
+  | Pexp_construct({ txt = Lident "::" },
+                   Some { pexp_desc = Pexp_tuple [e1; e2] }) ->
+    e1 :: translate_list e2
+
+  | _ -> error_loc exp.pexp_loc "list expected"
+
+and translate_pair exp =
+  match exp.pexp_desc with
+  | Pexp_tuple [exp] -> translate_pair exp
+  | Pexp_tuple [e1; e2] -> (e1, e2)
+  | _ -> error_loc exp.pexp_loc "pair expected"
+
+
+and translate_code contracts env exp =
   let loc = loc_of_loc exp.pexp_loc in
   let desc =
     match exp with
