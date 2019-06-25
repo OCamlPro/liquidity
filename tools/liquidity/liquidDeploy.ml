@@ -1356,7 +1356,7 @@ let pack ?liquid ~const ~ty =
   let pack_fields = [
     "data", const_json;
     "type", ty_json;
-    "gas", "\"400000\"";
+    "gas", "\"800000\"";
   ] in
   let pack_json = mk_json_obj pack_fields in
   send_post ~data:pack_json "/chains/main/blocks/head/helpers/scripts/pack_data"
