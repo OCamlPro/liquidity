@@ -24,8 +24,6 @@
 open LiquidTypes
 
 
-
-
 let rec bv code =
   match code.desc with
   | If { cond; ifthen; ifelse} ->
@@ -45,13 +43,7 @@ let rec bv code =
     StringSet.union (bv bnd_val)
       (StringSet.remove bnd_var.nname (bv body))
 
-  | Lambda { arg_name; arg_ty; body; ret_ty; recursive } ->
-    bv body
-    |> StringSet.remove arg_name.nname
-    |> fun bv -> begin match recursive with
-      | None -> bv
-      | Some f -> StringSet.remove f bv
-    end
+  | Lambda lam -> bv_lambda lam
 
   | Closure { arg_name; arg_ty; call_env; body; ret_ty } ->
     bv body
@@ -138,6 +130,32 @@ let rec bv code =
 
   | Type _ -> StringSet.empty
 
+and bv_const const =
+  match const with
+  | ( CUnit | CBool _ | CInt _ | CNat _ | CTez _ | CTimestamp _ | CString _
+    | CBytes _ | CKey _ | CContract _ | CSignature _ | CNone  | CKey_hash _
+    | CAddress _ ) -> StringSet.empty
+  | CSome x | CLeft x | CRight x | CConstr (_, x) -> bv_const x
+  | CTuple xs | CList xs | CSet xs ->
+    List.fold_left
+      (fun acc x -> StringSet.union acc (bv_const x)) StringSet.empty xs
+  | CMap l | CBigMap l ->
+    List.fold_left
+      (fun acc (x, y) -> StringSet.union acc
+          (StringSet.union (bv_const x) (bv_const y))) StringSet.empty l
+  | CRecord labels ->
+    List.fold_left
+      (fun acc (_, x) -> StringSet.union acc (bv_const x))
+      StringSet.empty labels
+  | CLambda lam -> bv_lambda lam
+
+and bv_lambda { arg_name; arg_ty; body; ret_ty; recursive } =
+  bv body
+  |> StringSet.remove arg_name.nname
+  |> fun bv -> match recursive with
+  | None -> bv
+  | Some f -> StringSet.remove f bv
+
 and bv_entry acc e =
   bv e.code
   |> StringSet.remove e.entry_sig.parameter_name
@@ -173,7 +191,10 @@ let rec bound code =
     mk desc code bv
 
   | Const { ty; const } ->
-    mk code.desc code StringSet.empty
+    let bv = bv_const const in
+    let const = bound_const const in
+    let desc = Const { ty; const } in
+    mk desc code bv
 
   | Failwith arg ->
     let arg = bound arg in
@@ -199,13 +220,9 @@ let rec bound code =
     let desc = Let { bnd_var; inline; bnd_val; body } in
     mk desc code bv
 
-  | Lambda { arg_name; arg_ty; body; ret_ty; recursive } ->
-    let body = bound body in
-    let desc = Lambda { arg_name; arg_ty; body; ret_ty; recursive } in
-    let bv = bv body |> StringSet.remove arg_name.nname in
-    let bv = match recursive with
-      | None -> bv
-      | Some f -> StringSet.remove f bv in
+  | Lambda lam ->
+    let lam, bv = bound_lambda lam in
+    let desc = Lambda lam in
     mk desc code bv
 
   | Closure { arg_name; arg_ty; call_env; body; ret_ty } ->
@@ -404,6 +421,36 @@ let rec bound code =
 
   | Type _ ->
     mk code.desc code StringSet.empty
+
+and bound_const = function
+  | ( CUnit | CBool _ | CInt _ | CNat _ | CTez _ | CTimestamp _ | CString _
+    | CBytes _ | CKey _ | CContract _ | CSignature _ | CNone  | CKey_hash _
+    | CAddress _ ) as c -> c
+  | CSome x -> CSome (bound_const x)
+  | CLeft x -> CLeft (bound_const x)
+  | CRight x -> CRight (bound_const x)
+  | CTuple xs -> CTuple (List.map (bound_const) xs)
+  | CList xs -> CList (List.map (bound_const) xs)
+  | CSet xs -> CSet (List.map (bound_const) xs)
+  | CMap l ->
+    CMap (List.map (fun (x,y) -> bound_const x, bound_const y) l)
+  | CBigMap l ->
+    CBigMap (List.map (fun (x,y) -> bound_const x, bound_const y) l)
+  | CRecord labels ->
+    CRecord (List.map (fun (f, x) -> f, bound_const x) labels)
+  | CConstr (constr, x) ->
+    CConstr (constr, bound_const x)
+  | CLambda lam ->
+    CLambda (fst @@ bound_lambda lam)
+
+and bound_lambda { arg_name; arg_ty; body; ret_ty; recursive } =
+  let body = bound body in
+  let lam = { arg_name; arg_ty; body; ret_ty; recursive } in
+  let bv = bv body |> StringSet.remove arg_name.nname in
+  let bv = match recursive with
+    | None -> bv
+    | Some f -> StringSet.remove f bv in
+  lam, bv
 
 and bound_entry entry =
   let c = bound entry.code in

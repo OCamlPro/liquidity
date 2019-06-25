@@ -382,3 +382,9 @@ and simplify_contract ?(decompile_annoted=false) contract to_inline =
       entries = [{ entry with code = compute decompile_annoted code to_inline }]
     }
   | _ -> assert false
+
+let simplify_const const =
+  let c_exp = mk ~loc:noloc (Const { ty = Tunit ; const }) Tunit in (* dummy *)
+  match compute true c_exp StringMap.empty with
+  | { desc = Const { const } } -> const
+  | _ -> assert false

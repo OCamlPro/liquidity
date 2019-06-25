@@ -332,4 +332,6 @@ and untype_contract contract =
     | Some i -> Some { i with init_body = untype env i.init_body } in
   { contract with values; entries; c_init; subs }
 
-let untype_code code = untype (empty_env ()) code
+let untype_code code = untype (empty_env ()) (LiquidBoundVariables.bound code)
+
+let untype_const const = untype_const (LiquidBoundVariables.bound_const const)

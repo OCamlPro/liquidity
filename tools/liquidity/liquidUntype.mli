@@ -27,3 +27,4 @@ open LiquidTypes
 
 val untype_contract : (datatype, 'a) exp contract -> (datatype, 'b) exp contract
 val untype_code : (datatype, 'a) exp -> (datatype, 'b) exp
+val untype_const : (datatype, 'a) exp const -> (datatype, 'b) exp const

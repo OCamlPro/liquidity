@@ -271,6 +271,10 @@ let convert_const env ?ty e =
       LiquidTypes.dummy_contract_sig
       (LiquidFromParsetree.initial_env "") in
   LiquidCheck.typecheck_const tenv ?expected_ty:ty ~loc syn_e
+  |> LiquidEncode.encode_const tenv.env tenv.t_contract_sig
+  |> LiquidSimplify.simplify_const
+  |> LiquidDecode.decode_const
+  |> LiquidUntype.untype_const
 
 let convert_stack env stack_expr =
   List.map (fun (e, annot) ->

@@ -31,3 +31,6 @@ val bound_contract : ('a, 'b) exp contract -> ('a, 'b) exp contract
 
 (** Add free variable information to an expression  *)
 val bound : ('a, 'b) exp -> ('a, 'b) exp
+
+(** Add free variable information to a constant  *)
+val bound_const : ('a, 'b) exp const -> ('a, 'b) exp const
