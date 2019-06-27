@@ -29,6 +29,11 @@
 open LiquidTypes
 
 
+let default_key_hash () =
+  match !LiquidOptions.network with
+  | LiquidOptions.Dune_network -> "dn1UqnHgHFe8ezEgsoow4hERctPssuWiw9h8"
+  | LiquidOptions.Tezos_network -> "tz1YLtLqD1fWHthSVHPD116oYvsd4PTAHUoc"
+
 let rec default_const = function
   | Tunit -> CUnit
   | Tbool -> CBool false
@@ -39,7 +44,7 @@ let rec default_const = function
   | Tbytes -> CBytes "0x"
   | Ttimestamp -> CTimestamp "1970-01-01T00:00:00Z"
   | Tkey -> CKey "edpkuit3FiCUhd6pmqf9ztUTdUs1isMTbF9RBGfwKk1ZrdTmeP9ypN"
-  | Tkey_hash -> CKey_hash "dn1UqnHgHFe8ezEgsoow4hERctPssuWiw9h8"
+  | Tkey_hash -> CKey_hash (default_key_hash ())
   | Tsignature ->
     CSignature
       "edsigthTzJ8X7MPmNeEwybRAvdxS1pupqcM5Mk4uCuyZAe7uEk\
@@ -86,7 +91,7 @@ let rec default_empty_const = function
   | Tbytes -> CBytes "0x"
   | Ttimestamp -> CTimestamp "1970-01-01T00:00:00Z"
   | Tkey -> CKey "edpkuit3FiCUhd6pmqf9ztUTdUs1isMTbF9RBGfwKk1ZrdTmeP9ypN"
-  | Tkey_hash -> CKey_hash "dn1UqnHgHFe8ezEgsoow4hERctPssuWiw9h8"
+  | Tkey_hash -> CKey_hash (default_key_hash ())
   | Tsignature ->
     CSignature
       "edsigthTzJ8X7MPmNeEwybRAvdxS1pupqcM5Mk4uCuyZAe7uEk\
