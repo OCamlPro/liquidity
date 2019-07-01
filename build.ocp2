@@ -52,35 +52,3 @@ default_for_javascript = false;
 
 try { for_javascript = for_javascript; }
   catch("unknown-variable",x){ for_javascript = default_for_javascript; }
-
-ojt_dir = "tezos/vendors/ocplib-json-typed/";
-
-OCaml.library("ocplib-json-typed",
-        ocaml + {
-          files = [
-          ojt_dir + "lib_json_typed/json_repr.ml";
-          ojt_dir + "lib_json_typed/json_query.ml";
-          ojt_dir + "lib_json_typed/json_schema.ml";
-          ojt_dir + "lib_json_typed/json_encoding.ml";
-          ];
-          requires = '[
-                   ezjsonm
-                   ocplib-endian
-                   uri
-          ];
-          }
-   );
-
-
-OCaml.library("ocplib-json-typed-bson",
-        ocaml + {
-          files = [
-             ojt_dir + "lib_json_typed_bson/json_repr_bson.ml";
-          ];
-          requires = '[
-                   ocplib-json-typed
-                   ocplib-endian
-          ];
-          }
-   );
-

@@ -84,9 +84,10 @@ OCaml.library("michelson",
         from_tezos("lib_data_encoding/binary_description.ml");
         from_tezos("lib_data_encoding/data_encoding.ml");
         from_tezos("lib_stdlib/tag.ml");
-        from_tezos("lib_stdlib/logging.ml");
         from_tezos("lib_stdlib/lwt_utils.ml");
         from_tezos("lib_stdlib/lwt_canceler.ml");
+        from_tezos("lib_stdlib/ring.ml");
+        from_tezos("lib_stdlib/weakRingTable.ml");
         from_tezos("lib_error_monad/error_monad_sig.ml");
         from_tezos("lib_error_monad/error_monad.ml");
         from_tezos("lib_micheline/micheline.ml");
@@ -116,3 +117,34 @@ OCaml.library("michelson",
 
 }
 
+
+ojt_dir = "../../tezos/vendors/ocplib-json-typed/";
+
+OCaml.library("ocplib-json-typed",
+        ocaml + {
+          files = [
+          ojt_dir + "src/json_repr.ml";
+          ojt_dir + "src/json_query.ml";
+          ojt_dir + "src/json_schema.ml";
+          ojt_dir + "src/json_encoding.ml";
+          ];
+          requires = '[
+                   ezjsonm
+                   ocplib-endian
+                   uri
+          ];
+          }
+   );
+
+
+OCaml.library("ocplib-json-typed-bson",
+        ocaml + {
+          files = [
+             ojt_dir + "src/json_repr_bson.ml";
+          ];
+          requires = '[
+                   ocplib-json-typed
+                   ocplib-endian
+          ];
+          }
+   );

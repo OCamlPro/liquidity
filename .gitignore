@@ -1,6 +1,6 @@
 *~
 _obuild
-_opam
+_opam*
 /tests/*.cm?
 /tests/*/*.cm?
 *-orig
