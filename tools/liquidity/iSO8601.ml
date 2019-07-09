@@ -21,23 +21,28 @@
 (*  along with this program.  If not, see <https://www.gnu.org/licenses/>.  *)
 (****************************************************************************)
 
-let cut_at s c =
-  try
-    let pos = String.index s c in
+let cut_at s seps =
+  let pos = List.fold_left (fun pos c ->
+      match pos with
+      | Some _ -> pos
+      | None -> String.index_opt s c
+    ) None seps in
+  match pos with
+  | None -> s, None
+  | Some pos ->
     String.sub s 0 pos,
     Some (String.sub s (pos+1) (String.length s - pos -1))
-  with Not_found -> s, None
 
 let of_string s =
-  let date, hour = cut_at s 'T' in
+  let date, hour = cut_at s ['T'; ' '] in
   let hour, timezone =
     match hour with
     | None -> "00:00:00", "Z"
     | Some s ->
-      let hour, timezone = cut_at s '+' in
+      let hour, timezone = cut_at s ['+'] in
       let hour, timezone = match timezone with
         | None ->
-          let hour, _ = cut_at s 'Z' in
+          let hour, _ = cut_at s ['Z'] in
           hour, "Z"
         | Some timezone ->
           hour, "+" ^ timezone

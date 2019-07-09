@@ -403,7 +403,8 @@ let rec convert_const env ?ty expr =
       begin match ty with
         | Some Ttez ->
           CTez (LiquidNumber.tez_of_mic_mutez (Z.of_string s))
-        | Some Ttimestamp -> CTimestamp s
+        | Some Ttimestamp ->
+          CTimestamp (ISO8601.of_string s)
         | Some Tkey -> CKey s
         | Some Tkey_hash -> CKey_hash s
         | Some Tcontract _ -> CContract s
