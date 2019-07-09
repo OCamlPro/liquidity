@@ -126,12 +126,17 @@ let find_type ~loc s env subst =
   let mk, found_env = find ~loc s env (fun env -> env.types) in
   mk subst, found_env
 
-let find_contract_type_aux ~loc s env =
+let rec find_contract_type_aux ~loc s env =
   let path, tn = unqualify s in
-  let s = match unalias (path @ [tn]) env with
+  let qs = match unalias (path @ [tn]) env with
     | None -> s
     | Some p -> String.concat "." p in
-  find ~loc s env (fun env -> env.contract_types)
+  try find ~loc qs env (fun env -> env.contract_types)
+  with (Not_found | Unknown_namespace _ as e) ->
+  match env.top_env with
+  | None -> raise e
+  | Some env -> find_contract_type_aux ~loc s env
+
 
 let rec normalize_type ?from_env ~in_env ty =
   match ty with
