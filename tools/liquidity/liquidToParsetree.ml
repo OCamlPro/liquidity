@@ -22,7 +22,7 @@
 (****************************************************************************)
 
 (* The version that will be required to compile the generated files. *)
-let output_version = "1.04"
+let output_version = "1.041"
 
 open Asttypes
 open Longident
