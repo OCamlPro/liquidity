@@ -504,7 +504,7 @@ and compile_prim ~loc depth env prim args =
 
   (* catch the special case of [a;b;c] where
      the ending NIL is not annotated with a type *)
-  | Prim_Cons, [ { ty } as arg; { ty = Tunit } ] ->
+  | Prim_Cons, [ { ty } as arg; _ ] ->
     let ty = LiquidEncode.encode_type ty in
     let arg = compile (depth+1) env arg in
     [ push ~loc (Tlist ty) (CList[]) ] @ arg @ [ ii CONS ]

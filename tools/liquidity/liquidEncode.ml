@@ -89,7 +89,10 @@ let uniq_ident env name =
 
 (* Create a new binding in the typechecking environment to uniquely
    rename variable for alpha-renaming (prevents capture). *)
-let new_binding env name ?(effect=false) ty =
+let new_binding env name ?effect ty =
+  let effect = match effect with
+    | Some e -> e
+    | None -> LiquidTypes.may_contain_arrow_type ty in
   let new_name = uniq_ident env name in
   let count = ref 0 in
   let tys = (StringSet.empty, ty) in
@@ -177,17 +180,22 @@ let env_for_clos env bvs arg_name arg_type =
       Ttuple (arg_type ::
               List.map (fun (_, (_, (_, ty), _, _)) -> ty) free_vars_l) in
     let env_arg_var = mk ~loc (Var env_arg_name) env_arg_type in
+    (* No effect registered on [env_arg_var] here, will be added to
+       individual bindings *)
     let new_name = uniq_ident env arg_name.nname in
     let env_vars =
       StringMap.add arg_name.nname
         (new_name, (StringSet.empty, arg_type), 0, (ref 0, ref 0)) free_vars in
-    (* let size = StringMap.cardinal env_vars in *)
     let env_bindings =
-      StringMap.map (fun (name, (_, ty), index, count) ->
+      StringMap.mapi (fun out_name (name, (_, ty), index, count) ->
+          (* [name.(index)] has effect if variable outside closure has some *)
+          let effect =
+            if index = 0 then false
+            else (find_var ~count_used:false ext_env loc out_name).effect in
           let ei = mk_nat ~loc index in
-          let exp = mk ~name ~loc
+          let exp = { (mk ~name ~loc
               (Apply { prim = Prim_tuple_get; args = [env_arg_var; ei] })
-              ty in
+              ty) with effect } in
           exp, count
         ) env_vars
     in

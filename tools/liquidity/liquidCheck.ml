@@ -48,7 +48,10 @@ let check_comparable loc prim ty1 ty2 =
       (string_of_type ty1)
       (string_of_type ty2)
 
-let new_binding env name ?(effect=false) ?(gen=false) ty =
+let new_binding env name ?effect ?(gen=false) ty =
+  let effect = match effect with
+    | Some e -> e
+    | None -> LiquidTypes.may_contain_arrow_type ty in
   let count = ref 0 in
   let ftvars = free_tvars ty in
   (* if gen then begin

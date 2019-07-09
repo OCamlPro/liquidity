@@ -247,6 +247,26 @@ let comparable_type = function
   | Tvar _ | Tpartial _ -> true (* maybe *)
   | _ -> false
 
+let is_arrow_type = function
+  | Tlambda _ | Tclosure _ -> true
+  | _ -> false
+
+let rec may_contain_arrow_type ty = match expand ty with
+  | Tlambda _ | Tclosure _ -> true
+  | Toperation | Tunit | Tbool | Tint | Tnat | Ttez | Tstring | Tbytes
+  | Ttimestamp | Tkey | Tkey_hash | Tsignature | Taddress | Tfail -> false
+  | Ttuple l -> List.exists may_contain_arrow_type l
+  | Toption ty | Tlist ty | Tset ty ->
+    may_contain_arrow_type ty
+  | Tmap (t1, t2) | Tbigmap (t1, t2) | Tor (t1, t2) ->
+    may_contain_arrow_type t1 || may_contain_arrow_type t2
+  | Trecord (_, l) | Tsum (_, l) ->
+    List.exists (fun (_, t) -> may_contain_arrow_type t) l
+  | Tcontract s ->
+    List.exists (fun e -> may_contain_arrow_type e.parameter)
+      s.entries_sig
+  | Tvar _ | Tpartial _ -> true
+
 (** Equality between types. Contract signatures are first order values
     in types, and equality between those is modulo renaming (of
     signatures). *)
