@@ -1404,9 +1404,7 @@ and typecheck_prim2i env prim loc args =
                       ([ Tnat; Tint ], Tint) ;
                       ([ Tint; Tnat ], Tint) ;
                       ([ Tint; Ttimestamp ], Ttimestamp) ;
-                      ([ Tnat; Ttimestamp ], Ttimestamp) ;
-                      ([ Ttimestamp; Tint ], Ttimestamp) ;
-                      ([ Ttimestamp; Tnat ], Ttimestamp) ] in
+                      ([ Ttimestamp; Tint ], Ttimestamp) ] in
     make_type_eqn loc overloads [ ty1; ty2 ]
 
   | Prim_sub, [ ty1; ty2 ] ->
@@ -1416,7 +1414,6 @@ and typecheck_prim2i env prim loc args =
                       ([ Tnat; Tint ], Tint) ;
                       ([ Tint; Tnat ], Tint) ;
                       ([ Ttimestamp; Tint ], Ttimestamp) ;
-                      ([ Ttimestamp; Tnat ], Ttimestamp) ;
                       ([ Ttimestamp; Ttimestamp ], Ttimestamp) ] in
     make_type_eqn loc overloads [ ty1; ty2 ]
 
@@ -1607,9 +1604,9 @@ and typecheck_prim2t env prim loc args =
   | (Prim_add|Prim_sub|Prim_mul), [ (Tint|Tnat);
                                     (Tint|Tnat) ] -> Tint
 
-  | Prim_add, [ Ttimestamp; Tint|Tnat ] -> Ttimestamp
-  | Prim_add, [ Tint|Tnat; Ttimestamp ] -> Ttimestamp
-  | Prim_sub, [ Ttimestamp; Tint|Tnat ] -> Ttimestamp
+  | Prim_add, [ Ttimestamp; Tint ] -> Ttimestamp
+  | Prim_add, [ Tint; Ttimestamp ] -> Ttimestamp
+  | Prim_sub, [ Ttimestamp; Tint ] -> Ttimestamp
   | Prim_sub, [ Ttimestamp; Ttimestamp ] -> Tint
 
   (* TODO: improve types of ediv in Michelson ! *)

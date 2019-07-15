@@ -410,8 +410,8 @@ Operations on numeric values
   * ``tez -> tez -> tez``
   * ``nat -> nat -> nat``
   * ``int|nat -> int|nat -> int``
-  * ``timestamp -> int|nat -> timestamp``
-  * ``int|nat -> timestamp -> timestamp``
+  * ``timestamp -> int -> timestamp``
+  * ``int -> timestamp -> timestamp``
     
     It is translated to ``ADD`` in Michelson.
     
@@ -419,7 +419,7 @@ Operations on numeric values
   
   * ``tez -> tez -> tez``
   * ``int|nat -> int|nat -> int``
-  * ``timestamp -> int|nat -> timestamp``
+  * ``timestamp -> int -> timestamp``
   * ``timestamp -> timestamp -> int``
   * ``int|nat -> int`` (unary negation)
   
