@@ -120,11 +120,14 @@ let rec uniformize_stack if_stack stack =
         next = None; prevs = [] }
     @ if_stack
 
+let not_fail_stack = function
+  | { kind = N_FAILWITH } :: _ -> false
+  | _ -> true
+
 let rec merge_stacks if_stack end_node1 end_node2 stack1 stack2 =
   match stack1, stack2 with
   | [], [] -> []
-  | { kind = N_FAILWITH } :: _, { kind = N_FAILWITH } :: _ -> stack1
-  | { kind = N_FAILWITH } :: _, _ ->
+  | { kind = N_FAILWITH } :: _, _ when not_fail_stack stack2 ->
     begin
       match end_node2 with
       | None -> assert false
@@ -132,7 +135,7 @@ let rec merge_stacks if_stack end_node1 end_node2 stack1 stack2 =
         merge_stacks if_stack end_node2 None
           stack2 (uniformize_stack if_stack stack2)
     end
-  | _, { kind = N_FAILWITH } :: _ ->
+  |  _, { kind = N_FAILWITH } :: _  when not_fail_stack stack1 ->
     merge_stacks if_stack end_node1 None
       stack1 (uniformize_stack if_stack stack1)
   | _ ->

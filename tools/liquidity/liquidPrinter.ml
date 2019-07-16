@@ -1307,16 +1307,7 @@ module LiquidDebug = struct
       List.iter (fun exp ->
           bprint_code_rec ~debug b indent2 exp
         ) args;
-      (* let indent4 = indent2 ^ "  " in *)
       Printf.bprintf b "\n%s(contract %s)" indent contract.contract_name;
-      (* Printf.bprintf b "\n%s(fun " indent;
-       * Printf.bprintf b "(parameter : ";
-       * bprint_type b indent2 contract.contract_sig.parameter;
-       * Printf.bprintf b ") (storage : ";
-       * bprint_type b indent2 contract.contract_sig.storage;
-       * Printf.bprintf b ") ->\n%s" indent2;
-       * bprint_code_rec ~debug b indent4 contract.code;
-       * Printf.bprintf b "))" *)
     | ContractAt { arg; c_sig } ->
       Printf.bprintf b "\n%s(Contract.at" indent;
       let indent2 = indent ^ "  " in

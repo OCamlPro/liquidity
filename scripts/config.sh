@@ -24,6 +24,7 @@
 ############################################################################
 
 export TEZOS_CLIENT_UNSAFE_DISABLE_DISCLAIMER=Y
+export LIQUID_NETWORK=tezos
 
 TEZOS_FULL_PATH=$(which tezos-client || echo "./tezos/tezos-client")
 

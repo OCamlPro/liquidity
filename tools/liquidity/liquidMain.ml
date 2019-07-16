@@ -269,7 +269,7 @@ let compile_tezos_file filename =
   try compile_tezos_file filename
   with exn ->
     (* Rety and ignore annotations if failing *)
-    if !LiquidOptions.retry_without_annots ||
+    if not !LiquidOptions.retry_without_annots ||
        !LiquidOptions.ignore_annots then
       raise exn;
     report_error exn;
