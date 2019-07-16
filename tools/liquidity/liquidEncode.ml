@@ -525,6 +525,21 @@ let uncurry_lambda = function
     end
   | _ -> false
 
+let record_field_name_in_env env field record =
+  let field_pos = match record.ty with
+    | Trecord (_, ltys) ->
+      (let exception Found of int in
+       try
+         List.iteri (fun i (l, _) -> if field = l then raise (Found i)) ltys;
+         assert false
+       with Found i -> i)
+    | _ -> assert false in
+  let record = { record with ty = encode_qual_type env record.ty } in
+  let field = match record.ty with
+    | Trecord (_, ltys) -> List.nth ltys field_pos |> fst
+    | _ -> assert false in
+  (field, record)
+
 (* Encode a constant: constructors are turned into (netsed) Left/Right
    variant values *)
 let rec encode_const env (c : typed_const) : encoded_const = match c with
@@ -632,11 +647,13 @@ and encode env ( exp : typed_exp ) : encoded_exp =
 
   | Project { field; record } ->
     let record = encode env record in
+    let field, record = record_field_name_in_env env field record in
     mk ?name:exp.name ~loc (Project { field; record }) exp.ty
 
   | SetField { record; field; set_val } ->
     let record = encode env record in
     let set_val = encode env set_val in
+    let field, record = record_field_name_in_env env field record in
     mk ?name:exp.name ~loc (SetField { record; field; set_val }) exp.ty
 
   | Seq (exp1, exp2) ->
@@ -1015,9 +1032,13 @@ and encode env ( exp : typed_exp ) : encoded_exp =
   | Closure _ -> assert false
 
   | Record fields ->
-    let fields = List.map (fun (label, exp) ->
-        label, encode env exp
-      ) fields in
+    let ty = encode_qual_type env exp.ty in
+    let ltys = match ty with
+      | Trecord (_, ltys) -> ltys
+      | _ -> assert false in
+    let fields = List.map2 (fun (_label, exp) (label, lty) ->
+        label, encode env { exp with ty = lty }
+      ) fields ltys in
     let desc = Record fields in
     mk ?name:exp.name ~loc desc exp.ty
 
