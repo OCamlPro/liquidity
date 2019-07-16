@@ -47,7 +47,7 @@ let common_path p1 p2 =
     | [], _ | _, [] -> List.rev acc, p1, p2
     | x1 :: p1, x2 :: p2 ->
       if x1 = x2 then aux (x1 :: acc) p1 p2
-      else List.rev acc, p1, p2 in
+      else List.rev acc, x1 :: p1, x2 :: p2 in
   aux [] p1 p2
 
 let qualify_name ?from_env ~at s =
