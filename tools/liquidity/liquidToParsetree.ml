@@ -72,19 +72,56 @@ type abbrev_kind =
   | TypeName of core_type
   | ContractType of module_type
 
+module HAbbrev = Hashtbl.Make (struct
+    type t = datatype
+    let rec erase_names ty = match ty with
+      | Tvar { contents  = { contents = { tyo = Some ty }}} -> erase_names ty
+      | Tunit|Tbool|Tint|Tnat|Ttez
+      | Tstring|Tbytes|Ttimestamp|Tkey|Tkey_hash|Tsignature|Toperation|Taddress
+      | Tfail | Tpartial _ | Tvar _ -> ty
+      | Ttuple tyl -> Ttuple (List.map erase_names tyl)
+      | Toption ty -> Toption (erase_names ty)
+      | Tlist ty -> Tlist (erase_names ty)
+      | Tset ty -> Tset (erase_names ty)
+      | Tmap (ty1, ty2) -> Tmap (erase_names ty1, erase_names ty2)
+      | Tbigmap (ty1, ty2) -> Tbigmap (erase_names ty1, erase_names ty2)
+      | Tor (ty1, ty2) -> Tor (erase_names ty1, erase_names ty2)
+      | Tlambda (ty1, ty2, u) ->
+        Tlambda (erase_names ty1, erase_names ty2, u)
+      | Tclosure ((ty1, ty2), ty3, u) ->
+        Tclosure ((erase_names ty1, erase_names ty2), erase_names ty3, u)
+      | Trecord (_rn, fl) ->
+        Trecord ("", List.map (fun (fn, fty) -> (fn, erase_names fty)) fl)
+      | Tsum (_sn, cl) ->
+        Tsum ("", List.map (fun (cn, cty) -> (cn, erase_names cty)) cl)
+      | Tcontract c ->
+        Tcontract { c with entries_sig =
+                             List.map (fun es ->
+                                 { es with parameter = erase_names es.parameter }
+                               ) c.entries_sig }
+    let hash ty = Hashtbl.hash (erase_names ty)
+    let equal ty1 ty2 = eq_types (erase_names ty1) (erase_names ty2)
+  end)
+
 let cpt_abbrev = ref 0
-let abbrevs = Hashtbl.create 101
+let abbrevs = HAbbrev.create 101
+let out_abbrevs = HAbbrev.create 0
 let rev_abbrevs = Hashtbl.create 101
 let top_level_contracts = ref []
 
 let get_abbrev ty =
-  match Hashtbl.find abbrevs ty with
+  match HAbbrev.find abbrevs ty with
   | s, TypeName _, _ -> typ_constr s []
   | s, ContractType _, _ -> typ_constr (s ^ ".instance") []
 
-let add_abbrev s ty kind =
+let rec add_abbrev ?(ignore_out=false) s ty kind =
   try
-    match Hashtbl.find abbrevs ty with
+    if ignore_out then raise Not_found;
+    let _, kind, _ = HAbbrev.find out_abbrevs ty in
+    add_abbrev ~ignore_out:true s Tunit kind
+  with Not_found ->
+  try
+    match HAbbrev.find abbrevs ty with
     | s', kind', _ when s' <> s || kind' <> kind -> raise Not_found
     | _, TypeName _, _ -> typ_constr s []
     | _, ContractType _, _ -> typ_constr (s ^ ".instance") []
@@ -94,7 +131,7 @@ let add_abbrev s ty kind =
       if Hashtbl.mem rev_abbrevs s then
         s ^ string_of_int !cpt_abbrev
       else s in
-    Hashtbl.add abbrevs ty (s, kind, !cpt_abbrev);
+    HAbbrev.add abbrevs ty (s, kind, !cpt_abbrev);
     Hashtbl.replace rev_abbrevs s ty;
     match kind with
     | TypeName _ -> typ_constr s []
@@ -102,26 +139,31 @@ let add_abbrev s ty kind =
 
 let reset_env () =
   cpt_abbrev := 0;
-  Hashtbl.reset abbrevs;
+  (* out_abbrevs := HAbbrev.create 0; *)
+  HAbbrev.reset abbrevs;
   Hashtbl.reset rev_abbrevs;
   top_level_contracts := []
 
 let save_env () =
   let cpt = !cpt_abbrev in
   let contracts = !top_level_contracts in
-  let save_abbrevs = Hashtbl.copy abbrevs in
+  let save_abbrevs = HAbbrev.copy abbrevs in
+  let save_out_abbrevs = HAbbrev.copy out_abbrevs in
+  HAbbrev.iter (HAbbrev.add out_abbrevs) abbrevs;
   let save_rev_abbrevs = Hashtbl.copy rev_abbrevs in
   (* reset_env (); *)
   (fun () ->
      reset_env ();
      cpt_abbrev := cpt;
      top_level_contracts := contracts;
-     Hashtbl.iter (Hashtbl.add abbrevs) save_abbrevs;
+     (* out_abbrevs := HAbbrev.create 0; *)
+     HAbbrev.iter (HAbbrev.add out_abbrevs) save_out_abbrevs;
+     HAbbrev.iter (HAbbrev.add abbrevs) save_abbrevs;
      Hashtbl.iter (Hashtbl.add rev_abbrevs) save_rev_abbrevs;
   )
 
 let list_caml_abbrevs_in_order () =
-  Hashtbl.fold (fun ty v l -> (ty, v) :: l) abbrevs []
+  HAbbrev.fold (fun ty v l -> (ty, v) :: l) abbrevs []
   |> List.fast_sort (fun (_, (_, _, i1)) (_, (_, _, i2)) -> i1 - i2)
   |> List.map (fun (ty, (s, caml_ty, _)) -> s, caml_ty, ty)
 
@@ -767,7 +809,7 @@ and structure_of_contract
       Hashtbl.iter (fun ty s ->
           match ty with
           | Tlambda _ | Tclosure _ | Tor _ | Ttuple _
-            when abbrev && not @@ Hashtbl.mem abbrevs ty ->
+            when abbrev && not @@ HAbbrev.mem abbrevs ty ->
             ignore (add_abbrev s ty (TypeName (convert_type ~abbrev:false ty)))
           | _ -> ()
         ) type_annots
@@ -835,6 +877,7 @@ let structure_of_contract ?(abbrev=false) ?type_annots ?(types=[]) contract =
     Format.eprintf "Contract %s to AST@."
       (LiquidNamespace.qual_contract_name contract);
   reset_env ();
+  HAbbrev.reset out_abbrevs;
   structure_of_contract ~abbrev ?type_annots ~types contract
 
 let translate_expression = convert_code ~abbrev:false
