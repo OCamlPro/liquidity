@@ -210,7 +210,7 @@ let add_generalize_to_env =
       List.iter (LiquidInfer.generalize ty) l;
       env.types <- StringMap.add name (ty :: l, i) env.types
 
-let rec convert_type env expr =
+let rec convert_type ?(parameter=false) env expr =
   let name = match expr with
     | Prim(_, _, _, a) -> begin match type_name_of_annots a with
         | Some "storage" -> Some "storage_"
@@ -247,8 +247,9 @@ let rec convert_type env expr =
 
     | Prim(_, "or", [x;y], _debug) ->
       begin match name with
-        | None -> Tor (convert_type env x, convert_type env y)
-        | Some name ->
+        | None when not parameter -> Tor (convert_type env x, convert_type env y)
+        | _ ->
+          let name = match name with None -> "_entries" | Some n -> n in
           try
             let ty = Tsum (name, type_constrs ~gen:false env expr) in
             let ty_gen = Tsum (name, type_constrs ~gen:true env expr) in
@@ -742,7 +743,7 @@ and convert_code env expr =
   | _ -> unknown_expr env "convert_code" expr
 
 and convert_raw_contract env c =
-  let mic_parameter = convert_type env (find c "parameter") in
+  let mic_parameter = convert_type env ~parameter:true (find c "parameter") in
   let mic_storage = convert_type env (find c "storage") in
   let mic_code = convert_code env (find c "code") in
   { mic_storage; mic_parameter; mic_code }

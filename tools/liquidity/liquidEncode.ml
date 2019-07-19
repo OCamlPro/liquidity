@@ -302,7 +302,7 @@ and encode_contract_sig csig =
   | entries ->
     Tsum ("_entries",
           List.map (fun { entry_name; parameter = t } ->
-              (prefix_entry ^ entry_name, t)
+              (entry_name, t)
             ) entries)
 
 and get_lambda_type ~decompiling args = function
@@ -687,7 +687,7 @@ and encode env ( exp : typed_exp ) : encoded_exp =
             | _ -> false
           -> arg
         | Some entry ->
-          let constr = prefix_entry ^ entry in
+          let constr = entry in
           let rec iter entries =
             match entries with
             | [] -> assert false
@@ -700,7 +700,7 @@ and encode env ( exp : typed_exp ) : encoded_exp =
                 | [ e ] -> e.parameter
                 | _ ->
                   let cstrs =
-                    List.map (fun e -> prefix_entry ^ e.entry_name, e.parameter)
+                    List.map (fun e -> e.entry_name, e.parameter)
                       entries in
                   Tsum ("", cstrs)
               in
@@ -1468,7 +1468,7 @@ and encode_contract ?(annot=false) ?(decompiling=false) contract =
     | _ ->
       let parameter = mk_typed ~loc (Var "parameter") parameter in
       let ecstrs = List.mapi (fun i e ->
-          let constr = prefix_entry ^ e.entry_sig.entry_name in
+          let constr = e.entry_sig.entry_name in
           env.env.constrs <- StringMap.add constr ("_entries", i) env.env.constrs;
           constr, e.entry_sig.parameter
         ) contract.entries in
@@ -1477,7 +1477,7 @@ and encode_contract ?(annot=false) ?(decompiling=false) contract =
       MatchVariant {
         arg = parameter;
         cases = List.mapi (fun i e ->
-            let constr = prefix_entry ^ e.entry_sig.entry_name in
+            let constr = e.entry_sig.entry_name in
             let pat =
               PConstr (constr, [e.entry_sig.parameter_name]) in
             let body =

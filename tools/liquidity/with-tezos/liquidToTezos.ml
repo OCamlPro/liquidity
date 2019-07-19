@@ -25,6 +25,12 @@ open LiquidTypes
 open Michelson_Tezos
 open Micheline
 
+type annot =
+  | Eannot of string
+  | Tannot of string
+  | Fannot of string
+  | Nannot of string
+
 type loc_table = (int * (LiquidTypes.location * string option)) list
 
 type tezos_code = (unit,string) Micheline.node
@@ -35,21 +41,48 @@ let loc_of_many (l : loc_michelson list) = match l, List.rev l with
   | [], _ | _, [] -> LiquidLoc.noloc
   | first :: _, last :: _ -> LiquidLoc.merge first.loc last.loc
 
+let convert_annot = function
+  | Tannot l -> ":" ^ l
+  | Fannot l | Eannot l -> "%" ^ l
+  | Nannot l -> "@" ^ l
+
+let convert_annots annots =
+  List.fold_left (fun acc a -> match a with
+      | Eannot _ -> convert_annot a :: acc
+      | _ ->
+        if !LiquidOptions.no_annot then acc else convert_annot a :: acc)
+    [] annots
+  |> List.rev
+
+let parse_annot x =
+  let l = String.length x in
+  if l = 0 then None
+  else
+    let n = String.sub x 1 (l - 1) in
+    match x.[0] with
+    | ':' -> Some (Tannot n)
+    | '%' -> Some (Fannot n)
+    | '@' -> Some (Nannot n)
+    | _ -> None
+
+let parse_annots annots =
+  List.fold_left (fun acc a -> match parse_annot a with
+      | Some a -> a :: acc
+      | None -> acc) [] annots |> List.rev
+
 let prim ~loc ?(fields=[]) name args var_name =
-  let annots = List.map (fun f -> "%" ^ f) fields in
+  let annots = List.map (fun f -> Fannot f) fields in
   let annots = match var_name with
-    | Some s -> ("@" ^ s) :: annots
+    | Some s -> (Nannot s) :: annots
     | None -> annots
   in
-  Micheline.Prim(loc, name, args,
-                 if !LiquidOptions.no_annot then [] else annots)
+  Micheline.Prim(loc, name, args, convert_annots annots)
 
 let seq ~loc exprs =
   Micheline.Seq(loc, exprs)
 
 let prim_type ~loc ?(annots=[]) name args =
-  Micheline.Prim(loc, name, args,
-                 if !LiquidOptions.no_annot then [] else annots)
+  Micheline.Prim(loc, name, args, convert_annots annots)
 
 
 let rec convert_type ~loc expr =
@@ -77,7 +110,7 @@ let rec convert_type ~loc expr =
   | Tcontract { sig_name; entries_sig = [{ parameter }]} ->
     let annots = match sig_name with
       | None -> []
-      | Some n -> [":" ^ n] in
+      | Some n -> [Tannot n] in
     prim_type ~loc "contract" [convert_type ~loc parameter] ~annots
   | Tcontract _ -> assert false
   | Tlambda (x,y, _) ->
@@ -102,33 +135,38 @@ and convert_record_type ~loc name labels =
 and convert_sum_type ~loc name constrs =
   convert_composed_type "or" ~loc name constrs
 
-and convert_composed_type ty_c ~loc name labels =
+and convert_composed_type ty_c ~loc ?(parameter=false) name labels =
+  let parameter = parameter || name = "_entries" in
   match labels with
   | [] -> assert false
   | [l, ty] ->
     begin match convert_type ~loc ty with
-      | Micheline.Prim(loc, "big_map", args, annots) ->
-        prim_type ~loc "big_map" args ~annots:[":"^l]
+      | Micheline.Prim(loc, "big_map", args, _annots) ->
+        prim_type ~loc "big_map" args ~annots:[Tannot l]
       | Micheline.Prim(loc, name, args, annots) ->
-        prim_type ~loc name args ~annots:(annots @ ["%"^l])
+        prim_type ~loc name args ~annots:(parse_annots annots @ [
+            if parameter then Eannot l else Fannot l
+          ])
       | _ -> assert false
     end
   | [lb, (Tbigmap _ as ty_b); lr, ty_r] ->
     (* workaround for { lb : _ big_map; lr : _ } => pair *)
-    let annots = if name = "" then [] else [":"^name] in
+    let annots = if name = "" then [] else [Tannot name] in
     let ty_b = convert_type ~loc ty_b in
     let ty_r = convert_type ~loc ty_r in
     prim_type ~loc ~annots ty_c [ty_b; ty_r]
   | (l, ty) :: labels ->
-    let annots = if name = "" then [] else [":"^name] in
+    let annots = if name = "" then [] else [Tannot name] in
     let ty = match convert_type ~loc ty with
       | Micheline.Prim(loc, "big_map", args, annots) ->
-        prim_type ~loc "big_map" args ~annots:[":"^l]
+        prim_type ~loc "big_map" args ~annots:[Tannot l]
       | Micheline.Prim(loc, name, args, annots) ->
-        prim_type ~loc name args ~annots:(annots @ ["%"^l])
+        prim_type ~loc name args ~annots:(parse_annots annots @ [
+            if parameter then Eannot l else Fannot l
+          ])
       | _ -> assert false in
     prim_type ~loc ~annots ty_c
-      [ty; convert_composed_type ty_c ~loc "" labels]
+      [ty; convert_composed_type ty_c ~loc ~parameter "" labels]
 
 let rec convert_const ~loc expand (expr : loc_michelson const) =
   let bytes_of_hex s =

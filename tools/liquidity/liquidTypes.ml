@@ -1658,15 +1658,26 @@ let has_reserved_prefix s =
   | _ -> false
 
 (** Prefix for constructor used to encode entry point names *)
-let prefix_entry = "_Liq_entry_"
+let prefixes_entry = ["_Liq_entry_"]
 
 (** Prefix for constructor used to encode contracts *)
 let prefix_contract = "_Liq_contract_"
 
 let entry_name_of_case s =
-  Scanf.sscanf s
-    (Scanf.format_from_string prefix_entry "" ^^ "%s%!")
-    (fun x -> x)
+  let rec iter = function
+    | [] -> raise Not_found
+    | prefix_entry :: prefixes ->
+       try
+         Scanf.sscanf s
+           (Scanf.format_from_string prefix_entry "" ^^ "%s%!")
+           (fun x -> x)
+       with _ -> iter prefixes in
+  try iter prefixes_entry
+  with _ ->
+        if String.length s = 0 then raise Not_found
+        else match s.[0] with
+             | '_' | 'a' .. 'z' -> s
+             | _ -> raise Not_found
 
 let is_entry_case s =
   try

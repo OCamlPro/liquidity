@@ -812,7 +812,7 @@ let run ~debug liquid entry_name input_string storage_string =
   let parameter = match contract_sig.f_entries_sig with
     | [_] -> input
     | _ -> LiquidEncode.encode_const contract.ty_env contract_sig
-             (CConstr (prefix_entry ^ entry_name,
+             (CConstr (entry_name,
                        (LiquidDecode.decode_const input))) in
   let storage =
     LiquidData.translate { contract.ty_env with filename = "run_storage" }
@@ -1155,7 +1155,7 @@ let forge_call ?head ?source ?public_key
   let parameter = match contract_sig.f_entries_sig with
     | [_] -> input
     | _ -> LiquidEncode.encode_const contract.ty_env contract_sig
-             (CConstr (prefix_entry ^ entry_name,
+             (CConstr (entry_name,
                        (LiquidDecode.decode_const input))) in
   let _, loc_table =
     LiquidToTezos.convert_contract ~expand:true pre_michelson in
@@ -1474,7 +1474,7 @@ let forge_call_arg ?(entry_name="main") liquid input_string =
   let parameter = match contract_sig.f_entries_sig with
     | [_] -> input
     | _ -> LiquidEncode.encode_const contract.ty_env contract_sig
-             (CConstr (prefix_entry ^ entry_name,
+             (CConstr (entry_name,
                        (LiquidDecode.decode_const input))) in
   let param_m = LiquidMichelson.compile_const parameter in
   LiquidToTezos.(string_of_const @@ convert_const ~expand:false param_m)

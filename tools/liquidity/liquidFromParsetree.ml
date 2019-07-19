@@ -48,7 +48,7 @@ let ident_counter = ref 0
 let minimal_version = 0.9
 
 (* The maximal version of liquidity files that are accepted by this compiler *)
-let maximal_version = 1.042
+let maximal_version = 1.043
 
 
 open Asttypes

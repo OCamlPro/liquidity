@@ -241,7 +241,7 @@ let rec constrlabel_is_in_type c = function
     List.exists (fun (_, t) -> constrlabel_is_in_type c t) l
   | Tcontract s ->
     List.exists (fun e ->
-        c = prefix_entry ^ e.entry_name ||
+        c = e.entry_name ||
         constrlabel_is_in_type c e.parameter)
       s.entries_sig
   | Tvar { contents = { contents = { tyo = Some ty }}} ->

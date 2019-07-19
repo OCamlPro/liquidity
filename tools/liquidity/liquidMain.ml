@@ -369,7 +369,7 @@ let translate () =
   let parameter_const = match contract_sig.f_entries_sig with
     | [_] -> input
     | _ -> LiquidEncode.encode_const contract.ty_env contract_sig
-             (CConstr (prefix_entry ^ entry_name,
+             (CConstr (entry_name,
                        (LiquidDecode.decode_const input))) in
   let to_str mic_data =
     let mic_data = LiquidMichelson.compile_const mic_data in
