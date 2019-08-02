@@ -311,7 +311,11 @@ and untype_entry env (entry : (datatype, 'a) exp entry) =
                   parameter_name = base_parameter;
                   storage_name = base_storage;
                 };
-    code = untype env entry.code }
+    code = untype env entry.code ;
+    fee_code = match entry.fee_code with
+      | None -> None
+      | Some fee_code -> Some (untype env fee_code)
+  }
 
 and untype_contract contract =
   let subs = List.map untype_contract contract.subs in

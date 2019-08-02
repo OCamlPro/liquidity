@@ -364,11 +364,15 @@ let mic_loc env index annots ins =
   let loc = loc_of_int env index in
   { ins; loc; loc_name }
 
-let rec find nodes name =
+let rec find nodes ?annots name =
   match nodes with
   | [] -> raise (Missing_program_field name)
-  | Prim(_, name_maybe, [ v ], _) :: nodes ->
-    if name_maybe = name then v
+  | Prim(_, name_maybe, [ v ], a) :: nodes ->
+    if name_maybe = name then
+      match annots with
+      | None -> v
+      | Some a' when a = a' -> v
+      | Some _ -> find nodes ?annots name
     else find nodes name
   | _ -> raise (Missing_program_field name)
 
@@ -746,7 +750,11 @@ and convert_raw_contract env c =
   let mic_parameter = convert_type env ~parameter:true (find c "parameter") in
   let mic_storage = convert_type env (find c "storage") in
   let mic_code = convert_code env (find c "code") in
-  { mic_storage; mic_parameter; mic_code }
+  let mic_fee_code =
+    try
+      Some (convert_code env (find c "code" ~annots:["@fee"]))
+    with Missing_program_field _ -> None in
+  { mic_storage; mic_parameter; mic_code; mic_fee_code }
 
 let convert_contract env c =
   if !LiquidOptions.verbosity > 0 then

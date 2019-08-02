@@ -1975,11 +1975,18 @@ and typecheck_entry env entry =
   (* Code for entry point must be of type (operation list * storage) *)
   let code =
     typecheck_expected "return value" env expected_ty entry.code in
+  let expected_fee_ty = Ttuple [Ttez; Tnat] in
+  (* Code for entry point must be of type (operation list * storage) *)
+  let fee_code = match entry.fee_code with
+    | None -> None
+    | Some fee_code ->
+      Some (typecheck_expected "fee return value" env expected_fee_ty fee_code)
+  in
   let check_used v c =
     check_used env { nname = v; nloc = noloc env } c in
   check_used entry.entry_sig.parameter_name count_param;
   check_used entry.entry_sig.storage_name count_storage;
-  { entry with code }
+  { entry with code; fee_code }
 
 and typecheck_contract ~others ~warnings ~decompiling contract =
   let rothers, rsubs =

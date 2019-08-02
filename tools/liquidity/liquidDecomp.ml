@@ -749,6 +749,11 @@ and decompile env contract =
 
   let code = decompile_next env begin_node in
 
+  let fee_code = match contract.mic_fee_code with
+    | None -> None
+    | Some (begin_node, end_node) ->
+      Some (decompile_next env begin_node) in
+
   { contract_name = "_dummy_";
     storage = contract.mic_storage;
     values = [];
@@ -756,7 +761,8 @@ and decompile env contract =
                                parameter = contract.mic_parameter;
                                parameter_name ;
                                storage_name  };
-                 code }];
+                 code ;
+                 fee_code }];
     c_init = None;
     subs = [];
     ty_env = env ;

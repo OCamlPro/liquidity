@@ -359,10 +359,10 @@ and convert_code expand expr =
   | STEPS_TO_QUOTA -> prim "STEPS_TO_QUOTA" [] name
   | CREATE_ACCOUNT -> prim "CREATE_ACCOUNT" [] name
   | CREATE_CONTRACT contract ->
-    let p, s, c = convert_contract_raw expand contract in
+    let p, s, c, f = convert_contract_raw expand contract in
     let p = Micheline.map_node (fun l -> l, None) (fun n -> n) p in
     let s = Micheline.map_node (fun l -> l, None) (fun n -> n) s in
-    prim "CREATE_CONTRACT" [seq [p; s; c]] name
+    prim "CREATE_CONTRACT" [seq ([p; s; c] @ (match f with None -> [] | Some f -> [f]))] name
 
   | XOR -> prim "XOR" [] name
   | AND -> prim "AND" [] name
@@ -407,13 +407,20 @@ and convert_contract_raw expand c =
   let arg_type = convert_type ~loc c.mic_parameter in
   let storage_type = convert_type ~loc c.mic_storage in
   let code = convert_code expand c.mic_code in
+  let fee_code = match c.mic_fee_code with
+    | None -> None
+    | Some mic_fee -> Some (convert_code expand mic_fee) in
   let p = Micheline.Prim(loc, "parameter", [arg_type], []) in
   let s = Micheline.Prim(loc, "storage", [storage_type], []) in
   let c = Micheline.Prim((loc, None), "code", [code], []) in
-  (p, s, c)
+  let f = match fee_code with
+    | None -> None
+    | Some fee_code ->
+      Some (Micheline.Prim((loc, None), "code", [fee_code], ["@fee"])) in
+  (p, s, c, f)
 
 let convert_contract ~expand c =
-  let p, s, c = convert_contract_raw expand c in
+  let p, s, c, f = convert_contract_raw expand c in
   let mp, tp = Micheline.extract_locations p in
   let ms, ts = Micheline.extract_locations s in
   let code_loc_offset = List.length tp + List.length ts + 1 in
@@ -423,6 +430,15 @@ let convert_contract ~expand c =
       i + code_loc_offset, l
     ) loc_table in
 
+  let mf, loc_table = match f with
+    | None -> [], loc_table
+    | Some f ->
+      let mf, fee_loc_table = Micheline.extract_locations f in
+      let fee_loc_table = List.map (fun (i, l) ->
+          i + code_loc_offset, l
+        ) fee_loc_table in
+      [mf], loc_table @ fee_loc_table in
+
   if !LiquidOptions.verbosity > 1 then
     List.iter (fun (i, (l, s)) ->
         match s with
@@ -430,7 +446,7 @@ let convert_contract ~expand c =
         | Some s -> Format.eprintf "%d -> %a -> %S@." i LiquidLoc.print_loc l s
       ) loc_table;
 
-  [mp; ms; mc], loc_table
+  [mp; ms; mc] @ mf, loc_table
 
 let print_program comment_of_loc ppf (c, loc_table) =
   let c = List.map

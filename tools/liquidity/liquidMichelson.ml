@@ -907,11 +907,17 @@ and translate contract =
   let mic_storage = contract.storage in
   match contract.entries with
   | [{ entry_sig = { parameter = mic_parameter; parameter_name; storage_name };
-       code }] ->
+       code; fee_code }] ->
     { mic_parameter;
       mic_storage;
       mic_code =  translate_code ~parameter_name ~storage_name code
-                  |> finalize_fail_pre }
+                  |> finalize_fail_pre ;
+      mic_fee_code = match fee_code with
+        | None -> None
+        | Some fee_code ->
+          Some (translate_code ~parameter_name ~storage_name fee_code
+                |> finalize_fail_pre)
+    }
   | _ -> assert false
 
 

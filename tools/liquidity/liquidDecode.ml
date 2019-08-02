@@ -244,6 +244,7 @@ and entry_of_case param_constrs top_storage (pat, body) =
         storage_name;
       };
       code = decode code;
+      fee_code = None (* TODO *)
     }
   | PConstr (s, [parameter_name]), _
     when is_entry_case s ->
@@ -257,6 +258,7 @@ and entry_of_case param_constrs top_storage (pat, body) =
         storage_name = top_storage ;
       };
       code = decode body;
+      fee_code = None (* TODO *)
     }
   | _ -> raise Exit
 
@@ -312,6 +314,7 @@ and decode_contract contract =
                        storage_name;
                      };
          code;
+         fee_code;
        }] ->
       (* multi-entry points encoded contract *)
       let values, code =
@@ -324,13 +327,18 @@ and decode_contract contract =
                         storage_name;
                       };
           code;
+          fee_code;
         } as e)] ->
       (* sinle entry point contract *)
       let values, code =
         move_outer_lets parameter_name storage_name [] code in
       { contract with
         values = List.rev values;
-        entries = [ { e with code = decode code } ];
+        entries = [ { e with
+                      code = decode code;
+                      fee_code = match fee_code with
+                        | None -> None
+                        | Some fee_code -> Some (decode fee_code) } ];
         c_init;
         subs;
       }
@@ -342,7 +350,12 @@ and decode_contract contract =
         List.map (fun v -> { v with val_exp = decode v.val_exp })
           contract.values;
       entries =
-        List.map (fun e -> { e with code = decode e.code }) contract.entries;
+        List.map (fun e -> { e with
+                             code = decode e.code;
+                             fee_code = match e.fee_code with
+                               | None -> None
+                               | Some fee_code -> Some (decode fee_code) }
+                 ) contract.entries;
       c_init;
       subs;
     }

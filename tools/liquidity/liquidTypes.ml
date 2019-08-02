@@ -133,6 +133,7 @@ and entry_sig = {
 and 'exp entry = {
   entry_sig : entry_sig; (** Signature of the entry point *)
   code : 'exp;           (** Liquidity code for the entry point *)
+  fee_code : 'exp option;(** Code for the entry point's fees *)
 }
 
 (** Global values *)
@@ -453,6 +454,7 @@ type 'a mic_contract = {
   mic_parameter : datatype;
   mic_storage : datatype;
   mic_code : 'a;
+  mic_fee_code : 'a option;
 }
 
 (** Allowed built-in primities in Liquidity *)

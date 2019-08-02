@@ -273,7 +273,7 @@ let tmp_contract_of_init ~loc env (init : encoded_exp LiquidTypes.init) storage_
                                parameter;
                                parameter_name = "_parameter";
                                storage_name = "_storage" };
-                 code }];
+                 code; fee_code = None }];
     ty_env = env;
     c_init = None;
     subs = [];

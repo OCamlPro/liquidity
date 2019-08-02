@@ -1338,6 +1338,9 @@ and encode_entry env entry =
       storage_name;
     };
     code = encode env entry.code;
+    fee_code = match entry.fee_code with
+      | None -> None
+      | Some fee_code -> Some (encode env fee_code)
   }
 
 (* Contract is encoded to single entry point form (with name "main"):
@@ -1462,9 +1465,16 @@ and encode_contract ?(annot=false) ?(decompiling=false) contract =
                bnd_val = v.val_exp;
                body = values_on_top mk rest exp }) exp.ty in
 
-  let code_desc, parameter_name, storage_name = match contract.entries with
-    | [] -> (Const { ty = Tunit; const = CUnit }), "parameter", "storage"
-    | [e] -> e.code.desc, e.entry_sig.parameter_name, e.entry_sig.storage_name
+  let code_desc, fee_code_desc, parameter_name, storage_name =
+    match contract.entries with
+    | [] ->
+      Const { ty = Tunit; const = CUnit }, None, "parameter", "storage"
+    | [e] ->
+      e.code.desc,
+      (match e.fee_code with
+       | None -> None
+       | Some fee_code -> Some fee_code.desc),
+      e.entry_sig.parameter_name, e.entry_sig.storage_name
     | _ ->
       let parameter = mk_typed ~loc (Var "parameter") parameter in
       let ecstrs = List.mapi (fun i e ->
@@ -1474,23 +1484,51 @@ and encode_contract ?(annot=false) ?(decompiling=false) contract =
         ) contract.entries in
       env.env.types <-
         StringMap.add "_entries" (fun _ -> Tsum("_entries", ecstrs)) env.env.types;
-      MatchVariant {
-        arg = parameter;
-        cases = List.mapi (fun i e ->
-            let constr = e.entry_sig.entry_name in
-            let pat =
-              PConstr (constr, [e.entry_sig.parameter_name]) in
-            let body =
-              mk_typed ~loc
-                (Let { bnd_var = { nname = e.entry_sig.storage_name;
-                                   nloc = loc };
-                       inline = InAuto;
-                       bnd_val =
-                         mk_typed ~loc (Var "storage")
-                           env.t_contract_sig.f_storage;
-                       body = e.code }) e.code.ty in
-            pat, body
-          ) contract.entries },
+      let mk_pattern_matching_case entry_name parameter_name storage_name code =
+        let constr = entry_name in
+        let pat =
+          PConstr (constr, [parameter_name]) in
+        let body =
+          mk_typed ~loc
+            (Let { bnd_var = { nname = storage_name;
+                               nloc = loc };
+                   inline = InAuto;
+                   bnd_val =
+                     mk_typed ~loc (Var "storage")
+                       env.t_contract_sig.f_storage;
+                   body = code }) code.ty in
+        pat, body in
+
+      let code =
+        MatchVariant {
+          arg = parameter;
+          cases = List.mapi (fun i e ->
+              mk_pattern_matching_case e.entry_sig.entry_name
+                e.entry_sig.parameter_name e.entry_sig.storage_name
+                e.code
+            ) contract.entries }
+      in
+      let fee_code =
+        if List.for_all (function { fee_code = None } -> true | _ -> false)
+            contract.entries then
+          None
+        else Some (MatchVariant {
+            arg = parameter;
+            cases = (List.mapi (fun i (e : typed_exp entry) ->
+                match e.fee_code with
+                | None ->
+                  error e.code.loc
+                    "Entry point %s does not have code to compute fees, while \
+                     other entry points do. All (or no) entry points must \
+                     provide code to compute fees." e.entry_sig.entry_name
+                | Some fee_code ->
+                  mk_pattern_matching_case e.entry_sig.entry_name
+                    e.entry_sig.parameter_name e.entry_sig.storage_name
+                    fee_code
+              ) contract.entries) }) in
+
+      code,
+      fee_code,
       "parameter",
       "storage"
   in
@@ -1506,6 +1544,16 @@ and encode_contract ?(annot=false) ?(decompiling=false) contract =
     encode env @@
     values_on_top mk_typed contract.values @@
     mk_typed ~loc code_desc (Ttuple [Tlist Toperation; contract.storage]) in
+
+  let fee_code = match fee_code_desc with
+    | None -> None
+    | Some fee_code_desc ->
+      Some (
+        values_on_top mk values @@
+        encode env @@
+        values_on_top mk_typed contract.values @@
+        mk_typed ~loc fee_code_desc (Ttuple [Ttez; Tnat])
+      ) in
 
   (* Register global values for inlining if necessary *)
   List.iter (register_inlining_value env) values;
@@ -1533,6 +1581,7 @@ and encode_contract ?(annot=false) ?(decompiling=false) contract =
           parameter = encode_parameter_type env parameter;
         };
         code;
+        fee_code;
       }];
     ty_env = contract.ty_env;
     c_init;

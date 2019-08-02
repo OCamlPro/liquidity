@@ -293,7 +293,9 @@ let curr_contract = ref { mic_parameter = Tunit;
                           mic_storage = Tunit;
                           mic_code = { loc = noloc;
                                        loc_name = None;
-                                       ins = SEQ [] }}
+                                       ins = SEQ [] };
+                          mic_fee_code = None }
+
 let known_constrlabel c =
   constrlabel_is_in_contract c !curr_contract
 
@@ -1138,32 +1140,39 @@ and decompile_if if_node if_stack
   stack, if_node
 
 
-and interp contract =
+and interp_code mic_code =
 
-  let initial_code = match contract.mic_code.ins with
-    | SEQ code -> mic_loc contract.mic_code.loc
-                    (SEQ (mic_loc contract.mic_code.loc PAIR :: code))
+  let initial_code = match mic_code.ins with
+    | SEQ code -> mic_loc mic_code.loc
+                    (SEQ (mic_loc mic_code.loc PAIR :: code))
     | _ ->
-      LiquidLoc.raise_error ~loc:contract.mic_code.loc
+      LiquidLoc.raise_error ~loc:mic_code.loc
         "Code of contract must be a sequence%!"
   in
 
-  let start_node = node contract.mic_code.loc N_START [] [] in
+  let start_node = node mic_code.loc N_START [] [] in
 
   let initial_stack = [
-    node contract.mic_code.loc (N_VAR "parameter") [] [];
-    node contract.mic_code.loc (N_VAR "storage") [] [];
+    node mic_code.loc (N_VAR "parameter") [] [];
+    node mic_code.loc (N_VAR "storage") [] [];
   ] in
 
   let stack, seq = decompile initial_stack start_node initial_code in
   let end_node = match stack with
     | [ arg ] -> node arg.loc N_END [arg] [seq]
     | _ ->
-      LiquidLoc.raise_error ~loc:contract.mic_code.loc
+      LiquidLoc.raise_error ~loc:mic_code.loc
         "Final stack of contract must have a single element%!"
   in
-  let mic_code = (start_node, end_node) in
-  { contract with mic_code }
+  (start_node, end_node)
+
+and interp contract =
+  { contract with
+    mic_code = interp_code contract.mic_code;
+    mic_fee_code = match contract.mic_fee_code with
+      | None -> None
+      | Some mic_fee -> Some (interp_code mic_fee)
+  }
 
 
 let interp contract =
