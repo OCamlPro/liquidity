@@ -740,19 +740,28 @@ and mklet env node desc =
 
 and decompile env contract =
 
-  let (begin_node, end_node) = contract.mic_code in
-
-  let parameter_name, storage_name = match begin_node.next with
-    | Some { kind = N_PRIM "PAIR"; args = [p; s] } ->
-      var_of p, var_of s
-    | _ -> "parameter", "storage" in
-
+  let (begin_node, _) = contract.mic_code in
   let code = decompile_next env begin_node in
 
-  let fee_code = match contract.mic_fee_code with
-    | None -> None
-    | Some (begin_node, end_node) ->
-      Some (decompile_next env begin_node) in
+  let arg_names = match begin_node.next with
+    | Some { kind = N_PRIM "PAIR"; args = [p; s] } ->
+      Some (var_of p, var_of s)
+    | _ -> None in
+
+  let fee_code, arg_names = match contract.mic_fee_code with
+    | None -> None, arg_names
+    | Some (begin_node, _) ->
+      Some (decompile_next env begin_node),
+      match arg_names with
+      | Some _ -> arg_names
+      | None -> match begin_node.next with
+        | Some { kind = N_PRIM "PAIR"; args = [p; s] } ->
+          Some (var_of p, var_of s)
+        | _ -> None in
+
+  let parameter_name, storage_name = match arg_names with
+    | None -> "parameter", "storage"
+    | Some ps -> ps in
 
   { contract_name = "_dummy_";
     storage = contract.mic_storage;

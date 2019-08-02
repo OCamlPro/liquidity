@@ -314,9 +314,14 @@ and decode_contract contract =
                        storage_name;
                      };
          code;
-         fee_code;
+         fee_code; (* TODO *)
        }] ->
       (* multi-entry points encoded contract *)
+      (match fee_code with
+       | None -> ()
+       | Some _ ->
+         Format.eprintf "[NOT IMPLEMENTED] Fee code cannot be \
+                         decoded yet to entry points.@.");
       let values, code =
         move_outer_lets parameter_name storage_name [] code in
       let values, entries =

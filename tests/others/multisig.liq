@@ -51,34 +51,44 @@ let should_execute (p, storage) =
   nb_agree >= storage.min_agree
 
 let%entry pay (parameter : unit) storage =
-  (* Simple payment, nothing to do *)
-  [], storage
+  begin[@fee
+    failwith "I don't pay fees for the entry point pay"
+  ]
+    (* Simple payment, nothing to do *)
+    [], storage
+  end
 
 let%entry manage (action : action) storage =
-  (* Owner wants to perform an action *)
-  let owner = Current.source () in
-  (* the caller must be an owner*)
-  if not (Set.mem owner storage.owners) then
-    Current.failwith ("Not an owner", owner);
-  (* Don't send money while managing multisig *)
-  if Current.amount () <> 0tz then
-    Current.failwith "Don't send money while managing multisig";
-  (* Register the desired action in the storage *)
-  let storage =
-    storage.actions <- Map.update owner action storage.actions in
-  let do_nothing = [], storage in
-  match action with
-  | None ->
-    (* action is to remove previous proposition: nothing to do *)
-    do_nothing
-  | Some p ->
-    (* The action is new proposition *)
-    check_proposition p; (* it must be a valid one *)
-    if should_execute (p, storage) then
-      (* execute proposition, i.e. transfer tokens *)
-      let c_dest = Account.default p.destination in
-      let op = Contract.call c_dest p.amount () in
-      (* reset the map of actions *)
-      [op], storage.actions <- Map []
-    else
+  begin[@fee
+    match action with
+    | None -> 0.01tz, 0p
+    | Some _ -> 0.15tz, 10p
+  ]
+    (* Owner wants to perform an action *)
+    let owner = Current.source () in
+    (* the caller must be an owner*)
+    if not (Set.mem owner storage.owners) then
+      Current.failwith ("Not an owner", owner);
+    (* Don't send money while managing multisig *)
+    if Current.amount () <> 0tz then
+      Current.failwith "Don't send money while managing multisig";
+    (* Register the desired action in the storage *)
+    let storage =
+      storage.actions <- Map.update owner action storage.actions in
+    let do_nothing = [], storage in
+    match action with
+    | None ->
+      (* action is to remove previous proposition: nothing to do *)
       do_nothing
+    | Some p ->
+      (* The action is new proposition *)
+      check_proposition p; (* it must be a valid one *)
+      if should_execute (p, storage) then
+        (* execute proposition, i.e. transfer tokens *)
+        let c_dest = Account.default p.destination in
+        let op = Contract.call c_dest p.amount () in
+        (* reset the map of actions *)
+        [op], storage.actions <- Map []
+      else
+        do_nothing
+  end

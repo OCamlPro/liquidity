@@ -1356,8 +1356,16 @@ module LiquidDebug = struct
     Printf.bprintf b ")\n";
     Printf.bprintf b "    (%s/1: " entry.entry_sig.storage_name;
     bprint_type b indent2 storage_ty;
-    Printf.bprintf b ") = \n";
-    bprint_code ~debug b indent entry.code
+    Printf.bprintf b ")";
+    begin match entry.fee_code with
+      | None -> ()
+      | Some fee_code ->
+        Printf.bprintf b "\n    [@@fee \n";
+        bprint_code ~debug b (indent ^ "      ") fee_code;
+        Printf.bprintf b "\n    ]\n";
+    end;
+    Printf.bprintf b " = \n";
+   bprint_code ~debug b indent entry.code
 
   let bprint_contract bprint_code ~debug b indent contract =
     let storage_ty = contract.storage in

@@ -377,9 +377,14 @@ and simplify_contract ?(decompile_annoted=false) contract to_inline =
 
   match contract.entries with
   | [{ entry_sig = { entry_name = "main" };
-       code } as entry ] ->
+       code; fee_code } as entry ] ->
     { contract with
-      entries = [{ entry with code = compute decompile_annoted code to_inline }]
+      entries = [{ entry with
+                   code = compute decompile_annoted code to_inline ;
+                   fee_code = match fee_code with
+                     | None -> None
+                     | Some fee_code -> Some (compute decompile_annoted fee_code to_inline)
+                 }]
     }
   | _ -> assert false
 

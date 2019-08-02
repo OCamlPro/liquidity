@@ -1167,12 +1167,13 @@ and interp_code mic_code =
   (start_node, end_node)
 
 and interp contract =
-  { contract with
-    mic_code = interp_code contract.mic_code;
-    mic_fee_code = match contract.mic_fee_code with
-      | None -> None
-      | Some mic_fee -> Some (interp_code mic_fee)
-  }
+  let mic_code = interp_code contract.mic_code in
+  counter := 0;
+  Hashtbl.clear nodes;
+  let mic_fee_code = match contract.mic_fee_code with
+    | None -> None
+    | Some mic_fee -> Some (interp_code mic_fee) in
+  { contract with mic_code ; mic_fee_code}
 
 
 let interp contract =

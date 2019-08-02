@@ -40,8 +40,6 @@ let rec to_dot ~sub_contract_of contract =
       nodes
   in
 
-  let (begin_node, end_node) = contract.mic_code in
-
   let node_of node =
     try
       Hashtbl.find nodes node.num
@@ -65,11 +63,6 @@ let rec to_dot ~sub_contract_of contract =
   let add_edge n1 n2 attrs =
     Ocamldot.add_edge (node_of n1) (node_of n2) attrs
   in
-
-  Ocamldot.add_node_attrs (node_of begin_node)
-    [NodeColor "green"; NodeStyle Filled];
-  Ocamldot.add_node_attrs (node_of end_node)
-    [NodeColor "red"; NodeStyle Filled];
 
   let done_set = Hashtbl.create 1000 in
 
@@ -163,8 +156,27 @@ let rec to_dot ~sub_contract_of contract =
       iter_next node
     end
   in
+
+  let (begin_node, end_node) = contract.mic_code in
+  Ocamldot.add_node_attrs (node_of begin_node)
+    [NodeColor "green"; NodeStyle Filled];
+  Ocamldot.add_node_attrs (node_of end_node)
+    [NodeColor "red"; NodeStyle Filled];
   iter begin_node;
+
+  begin match contract.mic_fee_code with
+    | None -> ()
+    | Some (begin_fee_node, end_fee_node) ->
+      Ocamldot.add_node_attrs (node_of begin_fee_node)
+        [NodeColor "turquoise"; NodeStyle Filled];
+      Ocamldot.add_node_attrs (node_of end_fee_node)
+        [NodeColor "purple"; NodeStyle Filled];
+      iter begin_fee_node;
+  end;
+
+  (* Return graph *)
   g
+
 let to_string contract =
   if !LiquidOptions.verbosity > 0 then
     Format.eprintf "Produce decompilation graph as graphviz file@.";

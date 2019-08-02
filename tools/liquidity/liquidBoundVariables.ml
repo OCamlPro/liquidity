@@ -454,15 +454,21 @@ and bound_lambda { arg_name; arg_ty; body; ret_ty; recursive } =
 
 and bound_entry entry =
   let c = bound entry.code in
+  let f = match entry.fee_code with
+    | None -> None
+    | Some fee_code -> Some (bound fee_code) in
   assert (StringSet.equal c.bv (bv entry.code));
-  { entry with code = c }
+  { entry with code = c; fee_code = f }
 
 and bound_contract contract =
   let values = List.map (fun v ->
       { v with val_exp = bound v.val_exp }) contract.values in
   let entries = List.map bound_entry contract.entries in
   let bv_entry acc e =
-    e.code.bv
+    StringSet.union e.code.bv
+      (match e.fee_code with
+       | None -> StringSet.empty
+       | Some fee_code -> fee_code.bv)
     |> StringSet.remove e.entry_sig.parameter_name
     |> StringSet.remove e.entry_sig.storage_name
     |> StringSet.union acc in

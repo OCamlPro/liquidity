@@ -772,6 +772,15 @@ and structure_item_of_entry ~abbrev storage_ty storage_caml entry =
   (* ignore (convert_type ~abbrev ~name:entry.entry_sig.parameter_name
    *           entry.entry_sig.parameter); *)
   let code = convert_code ~abbrev entry.code in
+  let code = match entry.fee_code with
+    | None -> code
+    | Some fee_code ->
+      let fee_code = convert_code ~abbrev fee_code in
+      { code with
+        pexp_attributes = code.pexp_attributes @ [
+            id "fee", PStr [Str.eval fee_code]
+          ] }
+  in
   Str.extension (
     { txt = "entry"; loc = !default_loc },
     PStr    [

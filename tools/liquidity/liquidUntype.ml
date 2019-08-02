@@ -302,19 +302,25 @@ and untype_case env vars arg =
   (List.rev vars', arg')
 
 and untype_entry env (entry : (datatype, 'a) exp entry) =
-  let bv = entry.code.bv in
+  let bv =
+    StringSet.union entry.code.bv
+      (match entry.fee_code with
+       | None -> StringSet.empty
+       | Some fee_code -> fee_code.bv) in
   let base_parameter, env = find_free env entry.entry_sig.parameter_name bv in
   let base_storage, env = find_free env entry.entry_sig.storage_name bv in
   let env = new_binding entry.entry_sig.parameter_name base_parameter env in
   let env = new_binding entry.entry_sig.storage_name base_storage env in
+  let code = untype env entry.code in
+  let fee_code = match entry.fee_code with
+    | None -> None
+    | Some fee_code -> Some (untype env fee_code) in
   { entry_sig = { entry.entry_sig with
                   parameter_name = base_parameter;
                   storage_name = base_storage;
                 };
-    code = untype env entry.code ;
-    fee_code = match entry.fee_code with
-      | None -> None
-      | Some fee_code -> Some (untype env fee_code)
+    code;
+    fee_code;
   }
 
 and untype_contract contract =

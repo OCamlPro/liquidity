@@ -7,16 +7,18 @@ type storage =
         int option *
         (string,int) map
 
+(* let fee = (10tz, 10p) *)
+
 let%entry main
-      (_parameter : bool)
+      (p : bool)
       (storage : storage)
       =
       begin [@fee
-        if _parameter then (10tz, 10p) else (0tz, 0p)
+        if p then (10tz, 10p) else (0tz, 0p)
       ]
 
         (* options *)
-        let x = 3 in
+        let x = if true then 3 else 4 in
         let option = Some x in
         let storage  = Array.set storage 1 option in
 

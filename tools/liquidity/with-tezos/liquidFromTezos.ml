@@ -372,8 +372,9 @@ let rec find nodes ?annots name =
       match annots with
       | None -> v
       | Some a' when a = a' -> v
-      | Some _ -> find nodes ?annots name
-    else find nodes name
+      | Some _ ->
+        find nodes ?annots name
+    else find nodes ?annots name
   | _ -> raise (Missing_program_field name)
 
 let rec expand expr =
@@ -749,7 +750,7 @@ and convert_code env expr =
 and convert_raw_contract env c =
   let mic_parameter = convert_type env ~parameter:true (find c "parameter") in
   let mic_storage = convert_type env (find c "storage") in
-  let mic_code = convert_code env (find c "code") in
+  let mic_code = convert_code env (find c "code" ~annots:[]) in
   let mic_fee_code =
     try
       Some (convert_code env (find c "code" ~annots:["@fee"]))
