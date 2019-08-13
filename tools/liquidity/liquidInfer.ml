@@ -1164,11 +1164,13 @@ and mono_values top vtys c =
   { c with values; subs }
 
 
-let mono_contract c =
+let mono_contract ?(keep_tvars=false) c =
   let vtys = register_global_vtys QualMap.empty c in
   let c, vtys = mono_contract vtys c in
   let c = mono_values c vtys c in
-  contract_tvars_to_unit c
+  if keep_tvars
+  then c
+  else contract_tvars_to_unit c
 
 let copy_ty ty =
   let refs = Hashtbl.create 17 in

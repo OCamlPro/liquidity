@@ -2067,11 +2067,15 @@ and typecheck_contract ~others ~warnings ~decompiling contract =
     c_init;
     subs }
 
-let typecheck_contract ~warnings ~decompiling contract =
+let typecheck_contract
+    ~warnings
+    ~decompiling
+    ?(monomorphise=true)
+    ?(keep_tvars=false)
+    contract =
   let contract =
     typecheck_contract ~others:[] ~warnings ~decompiling contract in
-  mono_contract contract
-
+  if monomorphise then mono_contract ~keep_tvars contract else contract
 
 
 let typecheck_code env ?expected_ty code =

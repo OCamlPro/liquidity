@@ -42,4 +42,4 @@ val find_variant_type :
 val make_type_eqn :
   location -> (datatype list * datatype) list -> datatype list -> datatype
 
-val mono_contract : typed_contract -> typed_contract
+val mono_contract : ?keep_tvars: bool -> typed_contract -> typed_contract
