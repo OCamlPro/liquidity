@@ -146,5 +146,5 @@ let amount_type () = match !network with
   | Tezos_network -> "tez"
 
 let mu_amount_type () = match !network with
-  | Dune_network -> "mudun"
+  | Dune_network
   | Tezos_network -> "mutez"
