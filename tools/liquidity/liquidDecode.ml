@@ -25,6 +25,13 @@ open LiquidTypes
 
 let mk ?name ~loc (desc: (datatype, typed) exp_desc) ty = mk ?name ~loc desc ty
 
+let base_of_var arg =
+  try
+    let pos = String.index arg '/' in
+    String.sub arg 0 pos
+  with Not_found ->
+    raise (Invalid_argument ("LiquidDecode.base_of_var: "^arg))
+
 let rec decode_const (c : encoded_const) : typed_const = match c with
   | ( CUnit | CBool _ | CInt _ | CNat _ | CTez _ | CTimestamp _ | CString _
     | CBytes _ | CKey _ | CContract _ | CSignature _ | CNone  | CKey_hash _
@@ -227,15 +234,31 @@ and decode ( exp : encoded_exp ) : typed_exp =
     mk ?name:exp.name ~loc (Type ty) exp.ty
 
 (* Recover entry point from a pattern matchin branch *)
-and entry_of_case param_constrs top_storage (pat, body) =
-  match pat, body.desc with
-  | PConstr (s, [parameter_name]),
-    Let { bnd_var = { nname = storage_name };
-          bnd_val = { desc = Var var_storage };
-          body = code }
-    when is_entry_case s && var_storage = top_storage ->
+and entry_of_case param_constrs top_storage (pat, body, fee_body) =
+  let extract_storage_name body = match body.desc with
+    | Let { bnd_var = { nname = storage_name };
+            bnd_val = { desc = Var var_storage };
+            body }
+      when var_storage = top_storage ->
+      storage_name, body
+    | _ -> top_storage, body
+  in
+  match pat with
+  | PConstr (s, [parameter_name]) when is_entry_case s ->
+    let storage_name, body = extract_storage_name body in
     let entry_name = entry_name_of_case s in
     let parameter = List.assoc s param_constrs in
+    let fee_code = match fee_body with
+      | None -> None
+      | Some fee_body ->
+        let fee_storage_name, fee_body = extract_storage_name fee_body in
+        if base_of_var fee_storage_name <> base_of_var storage_name then
+          (Format.eprintf "Mismatch between fee code storage name and \
+                           entry points. Fee code cannot be decoded.@.";
+           None)
+        else
+          Some (decode fee_body)
+    in
     {
       entry_sig = {
         entry_name;
@@ -243,29 +266,15 @@ and entry_of_case param_constrs top_storage (pat, body) =
         parameter_name;
         storage_name;
       };
-      code = decode code;
-      fee_code = None (* TODO *)
-    }
-  | PConstr (s, [parameter_name]), _
-    when is_entry_case s ->
-    let entry_name = entry_name_of_case s in
-    let parameter = List.assoc s param_constrs in
-    {
-      entry_sig = {
-        entry_name;
-        parameter;
-        parameter_name;
-        storage_name = top_storage ;
-      };
       code = decode body;
-      fee_code = None (* TODO *)
+      fee_code;
     }
   | _ -> raise Exit
 
 (* Recover entries points from a top-level pattern matching, also move
    top-level (at the level of the matching branch) local definitions
    to global definitions *)
-and decode_entries param_constrs top_parameter top_storage values exp =
+and decode_entries param_constrs top_parameter top_storage values exp fee_exp =
   match exp.desc with
   | MatchVariant { arg = { desc = Var var_parameter}; cases }
     when var_parameter = top_parameter &&
@@ -273,13 +282,44 @@ and decode_entries param_constrs top_parameter top_storage values exp =
              | PConstr (s, _), _ -> is_entry_case s
              | _ -> false) cases
     ->
-    List.rev values, List.map (entry_of_case param_constrs top_storage) cases
+    let fee_cases = match fee_exp with
+      | None -> None
+      | Some { desc =
+                 MatchVariant { arg = { desc = Var var_parameter};
+                                cases = fee_cases } }
+        when var_parameter = top_parameter &&
+             try
+               List.for_all2 (fun (pat_e, _) (pat_fee, _) ->
+                   match pat_e, pat_fee with
+                   | PConstr (s_e, v_e), PConstr (s_fee, v_fee) ->
+                     s_e = s_fee &&
+                     List.for_all2 (fun v_e v_fee ->
+                         base_of_var v_e = base_of_var v_fee
+                       ) v_e v_fee
+                   | _ -> false
+                 ) cases fee_cases
+             with Invalid_argument _ -> false
+        ->
+        Some fee_cases
+      | Some e ->
+        Format.eprintf "Mismatch between fee code and entry points. \
+                        Fee code cannot be decoded.@.";
+        None
+    in
+    let cases = match fee_cases with
+      | None -> List.map (fun (pat, c) -> pat, c, None) cases
+      | Some fee_cases ->
+        List.map2 (fun (pat, c) (_, fc) -> pat, c, Some fc) cases fee_cases
+    in
+    List.rev values,
+    List.map (entry_of_case param_constrs top_storage) cases
+
   | Let { bnd_var; inline; bnd_val; body } ->
     decode_entries param_constrs top_parameter top_storage
       ({ val_name = bnd_var.nname;
          val_private = false;
          inline;
-         val_exp = decode bnd_val } :: values) body
+         val_exp = decode bnd_val } :: values) body fee_exp
   | _ -> raise Exit
 
 and move_outer_lets parameter storage values exp =
@@ -314,18 +354,19 @@ and decode_contract contract =
                        storage_name;
                      };
          code;
-         fee_code; (* TODO *)
+         fee_code;
        }] ->
-      (* multi-entry points encoded contract *)
-      (match fee_code with
-       | None -> ()
-       | Some _ ->
-         Format.eprintf "[NOT IMPLEMENTED] Fee code cannot be \
-                         decoded yet to entry points.@.");
       let values, code =
         move_outer_lets parameter_name storage_name [] code in
+      let values, fee_code = match fee_code with
+        | None -> values, None
+        | Some fee_code ->
+          let values, fee_code =
+            move_outer_lets parameter_name storage_name values fee_code in
+          values, Some fee_code in
       let values, entries =
-        decode_entries param_constrs parameter_name storage_name values code in
+        decode_entries param_constrs parameter_name storage_name
+          values code fee_code in
       { contract with values ; entries; c_init; subs }
     | [({ entry_sig = { parameter;
                         parameter_name;
