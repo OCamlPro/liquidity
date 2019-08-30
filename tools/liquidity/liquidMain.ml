@@ -161,8 +161,10 @@ let compile_liquid_files files =
     | output ->
       FileString.write_file output s;
       Printf.eprintf "File %S generated\n%!" output;
-      Printf.eprintf "If tezos is compiled, you may want to typecheck with:\n";
-      Printf.eprintf "  tezos-client typecheck script %s\n" output
+      Printf.eprintf "You may want to typecheck with:\n";
+      Printf.eprintf "  %s-client typecheck script %s\n"
+        (String.lowercase_ascii (LiquidOptions.network_name ()))
+        output
 
 
 let compile_tezos_file filename =
@@ -673,7 +675,7 @@ let main () =
       "N Set the counter for the operation instead of retrieving it";
 
       "--tezos-node", Arg.String (fun s -> LiquidOptions.tezos_node := s),
-      "<addr:port> Set the address and port of a Tezos node to run or deploy \
+      "<addr:port> Set the address and port of a node to run or deploy \
        contracts (default: 127.0.0.1:8732)\
        \n\
        \n\
@@ -700,7 +702,10 @@ let main () =
             work_done := true;
             run ());
       ],
-      "ENTRY PARAMETER STORAGE Run Liquidity contract on Tezos node";
+      (Printf.sprintf
+         "ENTRY PARAMETER STORAGE Run Liquidity contract on %s node"
+         (LiquidOptions.network_name ())
+      );
 
       "--delegatable", Arg.Set LiquidOptions.delegatable,
       " With --[forge-]deploy, deploy a delegatable contract";

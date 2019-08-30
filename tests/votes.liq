@@ -22,7 +22,11 @@ let%init storage addresses = {
 
 (** Entry point for voting.
     @param choice A string corresponding to the candidate *)
-let%entry vote choice storage =
+let%entry vote choice storage = begin [@fee
+  let fee = 0.01_DUN in
+  let max_storage = 5p (* bytes *) in
+  fee, max_storage
+]
   (* Only allowed while voting period is ongoing *)
   if Current.time () > storage.deadline then failwith "Voting closed";
   (* Voter must send at least 5DUN to vote *)
@@ -44,6 +48,7 @@ let%entry vote choice storage =
       storage.voters <- Map.add (Current.sender ()) () storage.voters in
     (* Return updated storage *)
     ([], storage)
+end
 
 (* Auxiliary function : returns the list of candidates with the
    maximum number of votes (there can be more than one in case of
@@ -60,7 +65,11 @@ let find_winners votes =
   winners
 
 (** Entry point for paying winning candidates. *)
-let%entry payout () storage =
+let%entry payout () storage = begin [@fee
+  let fee =
+    0.008_DUN + Map.size storage.votes * 0.000_25_DUN in
+  (fee, 0p (* no burn*))
+]
   (* Only allowed once voting period is over *)
   if Current.time () <= storage.deadline then failwith "Voting ongoing";
   (* Indentify winners of vote *)
@@ -78,3 +87,4 @@ let%entry payout () storage =
     ) winners in
   (* Return list of operations. Storage is unchanged *)
   operations, storage
+end
