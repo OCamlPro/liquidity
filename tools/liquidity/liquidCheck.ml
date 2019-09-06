@@ -1581,6 +1581,22 @@ and typecheck_prim2i env prim loc args =
   | Prim_bytes_sub, [ ty1; ty2; ty3 ] ->
     unify ty1 Tnat; unify ty2 Tnat; unify ty3 Tbytes; Toption Tbytes
 
+  | Prim_get_balance, [ ty ] ->
+    unify ty (Tpartial (Pcont []));
+    Ttez
+
+  | Prim_block_level, [ ty ] ->
+    unify ty Tunit;
+    Tnat
+
+  | Prim_collect_call, [ ty ] ->
+    unify ty Tunit;
+    Tbool
+
+  | Prim_is_implicit, [ ty ] ->
+    unify ty (Tpartial (Pcont ["main", Tunit]));
+    Toption Tkey_hash
+
   | _ -> failwith ("typecheck_prim2i " ^
                    (LiquidTypes.string_of_primitive prim) ^ " TODO")
 
@@ -1785,6 +1801,12 @@ and typecheck_prim2t env prim loc args =
   | Prim_string_sub, [ Tnat; Tnat; Tstring ] -> Toption Tstring
   | Prim_bytes_sub, [ Tnat; Tnat; Tbytes ] -> Toption Tbytes
 
+  | Prim_get_balance, [ Tcontract _ ] -> Ttez
+  | Prim_block_level, [ Tunit ] -> Tnat
+  | Prim_collect_call, [ Tunit ] -> Tbool
+  | Prim_is_implicit, [ Tcontract { entries_sig = [{ parameter = Tunit }] } ] ->
+    Toption Tkey_hash
+
   | prim, args_tys ->
     let nb_args, str_types = expected_prim_types prim in
     if List.length args <> nb_args then
@@ -1862,7 +1884,9 @@ and expected_prim_types = function
   | Prim_source
   | Prim_sender
   | Prim_amount
-  | Prim_gas ->
+  | Prim_gas
+  | Prim_block_level
+  | Prim_collect_call ->
     1, "unit"
 
   | Prim_blake2b
@@ -1876,7 +1900,7 @@ and expected_prim_types = function
   | Prim_check ->
     3, "key, signature, bytes"
 
-  | Prim_address ->
+  | Prim_address | Prim_get_balance ->
     1, "<Contract>.instance"
 
   | Prim_create_account ->
@@ -1942,6 +1966,9 @@ and expected_prim_types = function
     3, "nat, nat, bytes|string"
   | Prim_concat ->
     1, "bytes list | string list"
+
+  | Prim_is_implicit ->
+    1, "UnitContract.instance"
 
   | Prim_extension _
   | Prim_unused _

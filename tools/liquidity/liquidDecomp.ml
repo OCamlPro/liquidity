@@ -397,6 +397,10 @@ let rec decompile_next (env : env) node =
             | "IMPLICIT_ACCOUNT" -> Prim_default_account
             | "SET_DELEGATE" -> Prim_set_delegate
             | "SOME" -> Prim_Some
+            | "BLOCK_LEVEL" -> Prim_block_level
+            | "COLLECT_CALL" -> Prim_collect_call
+            | "GET_BALANCE" -> Prim_get_balance
+            | "IS_IMPLICIT" -> Prim_is_implicit
             | ins ->
               LiquidLoc.raise_error
                 "Error: unknown instruction %S"

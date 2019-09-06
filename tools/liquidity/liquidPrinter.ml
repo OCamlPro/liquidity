@@ -737,6 +737,18 @@ module Michelson = struct
       Printf.bprintf b "%S" minst;
       bprint_pre_name b name;
       List.iter (fun ty -> bprint_type fmt b " " ty) tys
+    | BLOCK_LEVEL ->
+      Printf.bprintf b "BLOCK_LEVEL";
+      bprint_pre_name b name;
+    | COLLECT_CALL ->
+      Printf.bprintf b "COLLECT_CALL";
+      bprint_pre_name b name;
+    | GET_BALANCE ->
+      Printf.bprintf b "GET_BALANCE";
+      bprint_pre_name b name;
+    | IS_IMPLICIT ->
+      Printf.bprintf b "IS_IMPLICIT";
+      bprint_pre_name b name
 
   let rec bprint_loc_michelson fmt b m =
     bprint_pre_michelson bprint_loc_michelson fmt b m.loc_name m.ins

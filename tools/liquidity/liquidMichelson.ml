@@ -487,6 +487,8 @@ and compile_prim ~loc depth env prim args =
   | Prim_gas, _ -> [ ii STEPS_TO_QUOTA ]
   | Prim_source, _ -> [ ii SOURCE ]
   | Prim_sender, _ -> [ ii SENDER ]
+  | Prim_block_level, _ -> [ ii BLOCK_LEVEL ]
+  | Prim_collect_call, _ -> [ ii COLLECT_CALL ]
 
   | Prim_Left, [ arg; { desc = Apply { prim = Prim_unused constr };
                         ty = right_ty }] ->
@@ -558,7 +560,8 @@ and compile_prim ~loc depth env prim args =
     | Prim_hash_key|Prim_check|Prim_default_account|Prim_list_size
     | Prim_set_size|Prim_map_size|Prim_or|Prim_and|Prim_xor
     | Prim_not|Prim_abs|Prim_int|Prim_neg|Prim_lsr|Prim_lsl|Prim_is_nat
-    | Prim_exec _|Prim_Cons|Prim_set_delegate|Prim_address),_ ->
+    | Prim_exec _|Prim_Cons|Prim_set_delegate|Prim_address
+    | Prim_get_balance|Prim_is_implicit),_ ->
     let _depth, args_code = compile_args depth env args in
     let prim_code = match prim, List.length args with
       | Prim_eq, 2 -> [ ii COMPARE; ii EQ ]
@@ -624,6 +627,9 @@ and compile_prim ~loc depth env prim args =
       | Prim_string_sub, 3 -> [ ii SLICE ]
       | Prim_bytes_sub, 3 -> [ ii SLICE ]
 
+      | Prim_get_balance, 1 -> [ ii GET_BALANCE ]
+      | Prim_is_implicit, 1 -> [ ii IS_IMPLICIT ]
+
       | (Prim_eq|Prim_neq|Prim_lt|Prim_le|Prim_gt|Prim_ge
         | Prim_compare|Prim_add|Prim_sub|Prim_mul|Prim_ediv|Prim_map_find
         | Prim_map_update|Prim_map_add|Prim_map_remove
@@ -638,7 +644,8 @@ and compile_prim ~loc depth env prim args =
         | Prim_hash_key|Prim_check|Prim_default_account|Prim_list_size
         | Prim_set_size|Prim_map_size|Prim_or|Prim_and|Prim_xor
         | Prim_not|Prim_abs|Prim_int|Prim_neg|Prim_lsr|Prim_lsl|Prim_is_nat
-        | Prim_exec _|Prim_Cons|Prim_set_delegate|Prim_address),n ->
+        | Prim_exec _|Prim_Cons|Prim_set_delegate|Prim_address
+        | Prim_get_balance|Prim_is_implicit),n ->
         Printf.eprintf "Primitive %S: wrong number of args(%d)\n%!"
           (LiquidTypes.string_of_primitive prim)
           n;
@@ -651,7 +658,8 @@ and compile_prim ~loc depth env prim args =
         | Prim_Left|Prim_Right|Prim_source|Prim_sender|Prim_unused _
         | Prim_coll_find|Prim_coll_update|Prim_coll_mem
         | Prim_coll_size|Prim_list_rev|Prim_slice
-        | Prim_concat|Prim_concat_two), _ ->
+        | Prim_concat|Prim_concat_two
+        | Prim_block_level|Prim_collect_call), _ ->
         (* already filtered out *)
         Printf.eprintf "Primitive %S ?\n%!"
           (LiquidTypes.string_of_primitive prim)

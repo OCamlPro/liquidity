@@ -192,6 +192,10 @@ let rec emit_code ~expand code =
         M_INS_EXP ("SEQ", [], emit_contract ~expand contract , [])
       ], var_annot name)
   | EXTENSION (minst, tys) -> M_INS_EXP (minst, tys, [], var_annot name)
+  | GET_BALANCE -> M_INS ("GET_BALANCE", var_annot name)
+  | IS_IMPLICIT -> M_INS ("IS_IMPLICIT", var_annot name)
+  | BLOCK_LEVEL -> M_INS ("BLOCK_LEVEL", var_annot name)
+  | COLLECT_CALL -> M_INS ("COLLECT_CALL", var_annot name)
 
 and emit_const ~expand cst = match cst with
   | ( CUnit
@@ -243,4 +247,7 @@ and emit_contract ~expand (contract : loc_michelson_contract) =
     M_INS_EXP ("parameter", [contract.mic_parameter], [], []);
     M_INS_EXP ("storage", [contract.mic_storage], [], []);
     M_INS_EXP ("code", [], [emit_code ~expand contract.mic_code], []);
-  ]
+  ] @ match contract.mic_fee_code with
+  | None -> []
+  | Some mic_fee_code ->
+    [ M_INS_EXP ("code", [], [emit_code ~expand mic_fee_code], ["@fee"]) ]

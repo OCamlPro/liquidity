@@ -745,6 +745,15 @@ and convert_code env expr =
   | Prim(index, "ADDRESS", [], annot) ->
     mic_loc env index annot (ADDRESS)
 
+  | Prim(index, "BLOCK_LEVEL", [], annot) ->
+    mic_loc env index annot (BLOCK_LEVEL)
+  | Prim(index, "COLLECT_CALL", [], annot) ->
+    mic_loc env index annot (COLLECT_CALL)
+  | Prim(index, "IS_IMPLICIT", [], annot) ->
+    mic_loc env index annot (IS_IMPLICIT)
+  | Prim(index, "GET_BALANCE", [], annot) ->
+    mic_loc env index annot (GET_BALANCE)
+
   | _ -> unknown_expr env "convert_code" expr
 
 and convert_raw_contract env c =

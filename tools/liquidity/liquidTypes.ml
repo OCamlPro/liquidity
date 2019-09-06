@@ -552,6 +552,13 @@ type primitive =
   | Prim_string_concat
   | Prim_bytes_concat
 
+  (* Dune specific *)
+  | Prim_block_level
+  | Prim_get_balance
+  | Prim_is_implicit
+  | Prim_collect_call
+
+
 (** Allowed built-in primities for fold applications *)
 type prim_fold =
   | Prim_map_iter
@@ -585,123 +592,131 @@ let string_of_primitive = Hashtbl.create 101
  * get and set
  * get_last and set_last
  * tuple
-*)
+ *)
 let () =
   List.iter (fun (n,p) ->
       Hashtbl.add primitive_of_string n p;
       Hashtbl.add string_of_primitive p n;
     )
-    [
-      "get", Prim_tuple_get;
-      "set", Prim_tuple_set;
-      "tuple", Prim_tuple;
+    (begin match !LiquidOptions.network with
+     | Tezos_network -> []
+     | Dune_network -> [
+         "Current.block_level", Prim_block_level;
+         "Contract.get_balance", Prim_get_balance;
+         "Contract.is_implicit", Prim_is_implicit;
+         "Current.collect_call", Prim_collect_call;
+       ]
+     end @ [
+       "get", Prim_tuple_get;
+       "set", Prim_tuple_set;
+       "tuple", Prim_tuple;
 
-      "Array.get", Prim_tuple_get;
-      "Array.set", Prim_tuple_set;
+       "Array.get", Prim_tuple_get;
+       "Array.set", Prim_tuple_set;
 
-      "Current.balance", Prim_balance;
-      "Current.time", Prim_now;
-      "Current.amount", Prim_amount;
-      "Current.gas", Prim_gas;
-      "Current.source", Prim_source;
-      "Current.sender", Prim_sender;
+       "Current.balance", Prim_balance;
+       "Current.time", Prim_now;
+       "Current.amount", Prim_amount;
+       "Current.gas", Prim_gas;
+       "Current.source", Prim_source;
+       "Current.sender", Prim_sender;
 
-      "Left", Prim_Left;
-      "Right", Prim_Right;
-      "=", Prim_eq;
-      "<>", Prim_neq;
-      "<", Prim_lt;
-      "<=", Prim_le;
-      ">", Prim_gt;
-      ">=", Prim_ge;
-      "compare", Prim_compare;
-      "+", Prim_add;
-      "-", Prim_sub;
-      "*", Prim_mul;
-      "/", Prim_ediv;
-      "~-", Prim_neg;
+       "Left", Prim_Left;
+       "Right", Prim_Right;
+       "=", Prim_eq;
+       "<>", Prim_neq;
+       "<", Prim_lt;
+       "<=", Prim_le;
+       ">", Prim_gt;
+       ">=", Prim_ge;
+       "compare", Prim_compare;
+       "+", Prim_add;
+       "-", Prim_sub;
+       "*", Prim_mul;
+       "/", Prim_ediv;
+       "~-", Prim_neg;
 
-      "Map.find", Prim_map_find;
-      "Map.update", Prim_map_update;
-      "Map.add", Prim_map_add;
-      "Map.remove", Prim_map_remove;
-      "Map.mem", Prim_map_mem;
-      "Map.cardinal", Prim_map_size;
-      "Map.size", Prim_map_size;
+       "Map.find", Prim_map_find;
+       "Map.update", Prim_map_update;
+       "Map.add", Prim_map_add;
+       "Map.remove", Prim_map_remove;
+       "Map.mem", Prim_map_mem;
+       "Map.cardinal", Prim_map_size;
+       "Map.size", Prim_map_size;
 
-      "Set.update", Prim_set_update;
-      "Set.add", Prim_set_add;
-      "Set.remove", Prim_set_remove;
-      "Set.mem", Prim_set_mem;
-      "Set.cardinal", Prim_set_size;
-      "Set.size", Prim_set_size;
+       "Set.update", Prim_set_update;
+       "Set.add", Prim_set_add;
+       "Set.remove", Prim_set_remove;
+       "Set.mem", Prim_set_mem;
+       "Set.cardinal", Prim_set_size;
+       "Set.size", Prim_set_size;
 
-      "Some", Prim_Some;
+       "Some", Prim_Some;
 
-      "List.rev", Prim_list_rev;
-      "List.length", Prim_list_size;
-      "List.size", Prim_list_size;
+       "List.rev", Prim_list_rev;
+       "List.length", Prim_list_size;
+       "List.size", Prim_list_size;
 
-      "Contract.set_delegate", Prim_set_delegate;
-      "Contract.address", Prim_address;
-      "Contract.self", Prim_self;
+       "Contract.set_delegate", Prim_set_delegate;
+       "Contract.address", Prim_address;
+       "Contract.self", Prim_self;
 
-      "Account.create", Prim_create_account;
-      "Account.default", Prim_default_account;
+       "Account.create", Prim_create_account;
+       "Account.default", Prim_default_account;
 
-      "Crypto.blake2b", Prim_blake2b;
-      "Crypto.sha256", Prim_sha256;
-      "Crypto.sha512", Prim_sha512;
-      "Crypto.hash_key", Prim_hash_key;
-      "Crypto.check", Prim_check;
+       "Crypto.blake2b", Prim_blake2b;
+       "Crypto.sha256", Prim_sha256;
+       "Crypto.sha512", Prim_sha512;
+       "Crypto.hash_key", Prim_hash_key;
+       "Crypto.check", Prim_check;
 
-      "Bytes.pack", Prim_pack;
-      "Bytes.length", Prim_bytes_size;
-      "Bytes.size", Prim_bytes_size;
-      "Bytes.concat", Prim_bytes_concat;
-      "Bytes.slice", Prim_bytes_sub;
-      "Bytes.sub", Prim_bytes_sub;
+       "Bytes.pack", Prim_pack;
+       "Bytes.length", Prim_bytes_size;
+       "Bytes.size", Prim_bytes_size;
+       "Bytes.concat", Prim_bytes_concat;
+       "Bytes.slice", Prim_bytes_sub;
+       "Bytes.sub", Prim_bytes_sub;
 
-      "String.length", Prim_string_size;
-      "String.size", Prim_string_size;
-      "String.concat", Prim_string_concat;
-      "String.slice", Prim_string_sub;
-      "String.sub", Prim_string_sub;
+       "String.length", Prim_string_size;
+       "String.size", Prim_string_size;
+       "String.concat", Prim_string_concat;
+       "String.slice", Prim_string_sub;
+       "String.sub", Prim_string_sub;
 
-      "@", Prim_concat_two;
+       "@", Prim_concat_two;
 
-      "::", Prim_Cons;
-      "lor", Prim_or;
-      "or", Prim_or;
-      "||", Prim_or;
-      "&", Prim_and;
-      "land", Prim_and;
-      "&&", Prim_and;
-      "lxor", Prim_xor;
-      "xor", Prim_xor;
-      "not", Prim_not;
-      "abs", Prim_abs;
-      "is_nat", Prim_is_nat;
-      "int", Prim_int;
-      ">>", Prim_lsr;
-      "lsr", Prim_lsr;
-      "<<", Prim_lsl;
-      "lsl", Prim_lsl;
+       "::", Prim_Cons;
+       "lor", Prim_or;
+       "or", Prim_or;
+       "||", Prim_or;
+       "&", Prim_and;
+       "land", Prim_and;
+       "&&", Prim_and;
+       "lxor", Prim_xor;
+       "xor", Prim_xor;
+       "not", Prim_not;
+       "abs", Prim_abs;
+       "is_nat", Prim_is_nat;
+       "int", Prim_int;
+       ">>", Prim_lsr;
+       "lsr", Prim_lsr;
+       "<<", Prim_lsl;
+       "lsl", Prim_lsl;
 
-      "@@" , Prim_exec false;
-      "@@" , Prim_exec true;
+       "@@" , Prim_exec false;
+       "@@" , Prim_exec true;
 
-      "Coll.update", Prim_coll_update;
-      "Coll.mem", Prim_coll_mem;
-      "Coll.find", Prim_coll_find;
-      "Coll.size",Prim_coll_size;
-      "Coll.concat",Prim_concat;
-      "Coll.slice",Prim_slice;
+       "Coll.update", Prim_coll_update;
+       "Coll.mem", Prim_coll_mem;
+       "Coll.find", Prim_coll_find;
+       "Coll.size",Prim_coll_size;
+       "Coll.concat",Prim_concat;
+       "Coll.slice",Prim_slice;
 
-      "<unused>", Prim_unused None;
-      "<extension>", Prim_extension ("", false, [], 0, 0, "");
+       "<unused>", Prim_unused None;
+       "<extension>", Prim_extension ("", false, [], 0, 0, "");
 
-    ]
+    ])
 
 let is_primitive s = Hashtbl.mem primitive_of_string s
 let primitive_of_string s = Hashtbl.find primitive_of_string s
@@ -1415,6 +1430,12 @@ type 'a pre_michelson =
   (* obsolete *)
   | MOD
   | DIV
+
+  (* Dune specific *)
+  | BLOCK_LEVEL
+  | GET_BALANCE
+  | IS_IMPLICIT
+  | COLLECT_CALL
 
 (** Intermediate Michelson expressions with location information and
     names *)

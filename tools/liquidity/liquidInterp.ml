@@ -258,6 +258,7 @@ let rec constrlabel_is_in_code c code =
   | BLAKE2B | SHA256 | SHA512 | HASH_KEY | CHECK_SIGNATURE | ADDRESS | CONS
   | OR | XOR | AND | NOT | INT | ABS | ISNAT | NEG | MUL | EDIV | LSL | LSR
   | SOURCE | SENDER | SIZE | IMPLICIT_ACCOUNT | SET_DELEGATE | PACK | MOD | DIV
+  | BLOCK_LEVEL | IS_IMPLICIT | COLLECT_CALL | GET_BALANCE
     -> false
   | UNPACK ty
   | PUSH (ty, _)
@@ -1076,6 +1077,22 @@ and decompile_aux stack (seq : node) ins =
     let res_op = node ins.loc (N_RESULT (x, 0)) [] [] in
     let res_addr = node ins.loc (N_RESULT (x, 1)) [] [] in
     res_op :: res_addr :: stack, x
+
+  | BLOCK_LEVEL, stack ->
+    let x = node ins.loc (N_PRIM "BLOCK_LEVEL") [] [seq] in
+    x :: stack, x
+
+  | COLLECT_CALL, stack ->
+    let x = node ins.loc (N_PRIM "COLLECT_CALL") [] [seq] in
+    x :: stack, x
+
+  | GET_BALANCE, x :: stack ->
+    let x = node ins.loc (N_PRIM "GET_BALANCE") [x] [seq] in
+    x :: stack, x
+
+  | IS_IMPLICIT, x :: stack ->
+    let x = node ins.loc (N_PRIM "IS_IMPLICIT") [x] [seq] in
+    x :: stack, x
 
   | _ ->
     (* let ins = LiquidEmit.emit_code ins in *)

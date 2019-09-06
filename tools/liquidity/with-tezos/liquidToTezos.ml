@@ -402,6 +402,11 @@ and convert_code expand expr =
 
   | EXTENSION (minst, tys) -> prim minst (List.map convert_type tys) name
 
+  | BLOCK_LEVEL -> prim "BLOCK_LEVEL" [] name
+  | COLLECT_CALL -> prim "COLLECT_CALL" [] name
+  | GET_BALANCE -> prim "GET_BALANCE" [] name
+  | IS_IMPLICIT -> prim "IS_IMPLICIT" [] name
+
 and convert_contract_raw expand c =
   let loc = LiquidLoc.noloc in
   let arg_type = convert_type ~loc c.mic_parameter in
