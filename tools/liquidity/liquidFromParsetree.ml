@@ -1727,11 +1727,14 @@ and translate_entry name env contracts head_exp mk_parameter mk_storage =
     let code = translate_code contracts env exp in
     let fee_code = match exp.pexp_attributes with
       | [] -> None
-      | [ { txt = "fee" | "fees" } ,
-          PStr [{ pstr_desc = Pstr_eval (fee_exp,[])} ] ]
+      | ( { txt = "fee" | "fees" } ,
+          PStr [{ pstr_desc = Pstr_eval (fee_exp,[])} ] ) :: _
         when !LiquidOptions.network = Dune_network ->
         Some (translate_code contracts env fee_exp)
-      | ({ txt }, _) :: _ -> error_loc exp.pexp_loc "Unknown attribute @%s" txt
+      | l ->
+        error_loc exp.pexp_loc "Unknown attributes @[<v>%a@]"
+          (Format.pp_print_list Format.pp_print_string)
+          (List.map (fun (att, _) -> "@" ^ att.txt) l)
     in
     let parameter_name, parameter, code = match mk_parameter with
       | Some mk -> mk code
