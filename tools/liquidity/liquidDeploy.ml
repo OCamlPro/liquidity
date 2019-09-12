@@ -863,12 +863,16 @@ let is_revealed source =
     return false
 
 let get_public_key_hash_from_secret_key sk =
-  sk
-  |> Sodium.Sign.secret_key_to_public_key
-  (* Replace by this when tezos is fixed *)
-  (* |> Ed25519.Secret_key.to_public_key *)
-  |> Ed25519.Public_key.hash
-  |> Ed25519.Public_key_hash.to_b58check
+  let pk = Sodium.Sign.secret_key_to_public_key sk in
+  match !LiquidOptions.network with
+  | Tezos_network ->
+    pk
+    |> Ed25519.Public_key_hash_tezos.of_public_key
+    |> Ed25519.Public_key_hash_tezos.to_b58check
+  | Dune_network ->
+    pk
+    |> Ed25519.Public_key_hash_dune.of_public_key
+    |> Ed25519.Public_key_hash_dune.to_b58check
 
 let get_public_key_from_secret_key sk =
   sk
