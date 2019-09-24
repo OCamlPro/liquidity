@@ -48,7 +48,7 @@ let ident_counter = ref 0
 let minimal_version = 0.9
 
 (* The maximal version of liquidity files that are accepted by this compiler *)
-let maximal_version = 1.05
+let maximal_version = 1.051
 
 
 open Asttypes
@@ -1725,23 +1725,21 @@ and translate_entry name env contracts head_exp mk_parameter mk_storage =
 
   | exp ->
     let code = translate_code contracts env exp in
+    let mk_parameter, mk_storage = match mk_parameter, mk_storage with
+      | Some mkp, Some mks -> mkp, mks
+      | _ -> assert false in
+    let parameter_name, parameter, code = mk_parameter code in
+    let storage_name, code = mk_storage code in
     let fee_code = match exp.pexp_attributes with
-      | [] -> None
       | ( { txt = "fee" | "fees" } ,
           PStr [{ pstr_desc = Pstr_eval (fee_exp,[])} ] ) :: _
         when !LiquidOptions.network = Dune_network ->
-        Some (translate_code contracts env fee_exp)
-      | l ->
-        error_loc exp.pexp_loc "Unknown attributes @[<v>%a@]"
-          (Format.pp_print_list Format.pp_print_string)
-          (List.map (fun (att, _) -> "@" ^ att.txt) l)
+        let fee_code = translate_code contracts env fee_exp in
+        let _, _, fee_code = mk_parameter fee_code in
+        let _, fee_code = mk_storage fee_code in
+        Some fee_code
+      | _ -> None
     in
-    let parameter_name, parameter, code = match mk_parameter with
-      | Some mk -> mk code
-      | None -> assert false in
-    let storage_name, code = match mk_storage with
-      | Some mk -> mk code
-      | None -> assert false in
     set_curry_flag parameter;
     {
       entry_sig = {

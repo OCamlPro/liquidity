@@ -289,13 +289,18 @@ and decode_entries param_constrs top_parameter top_storage values exp fee_exp =
                                 cases = fee_cases } }
         when var_parameter = top_parameter &&
              try
-               List.for_all2 (fun (pat_e, _) (pat_fee, _) ->
+               List.for_all2 (fun (pat_e, _) (pat_fee, b_fee) ->
                    match pat_e, pat_fee with
                    | PConstr (s_e, v_e), PConstr (s_fee, v_fee) ->
                      s_e = s_fee &&
-                     List.for_all2 (fun v_e v_fee ->
+                     (List.for_all2 (fun v_e v_fee ->
                          base_of_var v_e = base_of_var v_fee
-                       ) v_e v_fee
+                        ) v_e v_fee
+                      ||
+                      let bv_fee = LiquidBoundVariables.bv b_fee in
+                      List.for_all (fun v_fee ->
+                          not @@ StringSet.mem v_fee bv_fee) v_fee
+                     )
                    | _ -> false
                  ) cases fee_cases
              with Invalid_argument _ -> false

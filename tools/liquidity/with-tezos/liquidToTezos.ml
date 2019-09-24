@@ -402,6 +402,11 @@ and convert_code expand expr =
 
   | EXTENSION (minst, tys) -> prim minst (List.map convert_type tys) name
 
+  | BLOCK_LEVEL when expand -> prim "LEVEL" [] name
+  | COLLECT_CALL when expand -> prim "COLLCALL" [] name
+  | GET_BALANCE when expand -> prim "GETBAL" [] name
+  | IS_IMPLICIT when expand-> prim "ISIMP" [] name
+
   | BLOCK_LEVEL -> prim "BLOCK_LEVEL" [] name
   | COLLECT_CALL -> prim "COLLECT_CALL" [] name
   | GET_BALANCE -> prim "GET_BALANCE" [] name

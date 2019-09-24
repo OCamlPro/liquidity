@@ -2007,7 +2007,8 @@ and typecheck_entry env entry =
   let fee_code = match entry.fee_code with
     | None -> None
     | Some fee_code ->
-      Some (typecheck_expected "fee return value" env expected_fee_ty fee_code)
+      Some (typecheck_expected "fee return value"
+              { env with warnings = false } expected_fee_ty fee_code)
   in
   let check_used v c =
     check_used env { nname = v; nloc = noloc env } c in

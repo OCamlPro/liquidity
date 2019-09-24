@@ -76,7 +76,7 @@ let compile_liquid_files files =
   let live_ast =
     if !LiquidOptions.simplify then begin
       let to_inline = if !LiquidOptions.inline then to_inline
-        else StringMap.empty in
+        else StringMap.empty, StringMap.empty in
       let live_ast = LiquidSimplify.simplify_contract encoded_ast to_inline in
       if !LiquidOptions.verbosity>0 then
         FileString.write_file (outprefix ^ ".simple")

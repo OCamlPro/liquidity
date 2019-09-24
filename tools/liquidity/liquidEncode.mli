@@ -27,7 +27,7 @@ val encode_type : ?decompiling:bool -> datatype -> datatype
 
 val encode_contract :
   ?annot:bool -> ?decompiling:bool -> typed_contract ->
-  encoded_contract * encoded_exp StringMap.t
+  encoded_contract * (encoded_exp StringMap.t * encoded_exp StringMap.t)
 
 val encode_code : typecheck_env -> typed_exp -> encoded_exp
 

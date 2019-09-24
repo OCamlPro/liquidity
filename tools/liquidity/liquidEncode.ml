@@ -80,6 +80,13 @@ let uniq_ident env name =
   env.counter := !(env.counter) + 1;
   Printf.sprintf "%s/%d" name !(env.counter)
 
+let copy_env env =
+  { env with
+    counter = ref !(env.counter);
+    to_inline = ref !(env.to_inline);
+    vars_counts = StringMap.map (fun c -> ref !c) env.vars_counts;
+  }
+
 (* let fresh_tmp = *)
 (*   let cpt = ref 0 in *)
 (*   fun () -> *)
@@ -492,11 +499,16 @@ let rec decr_counts_vars env e =
 
     | Type _ -> ()
 
+let effect_binding env bnd_val = match bnd_val.desc with
+  | Lambda _ -> false
+  | Closure _ -> false
+  | _ -> bnd_val.effect
+
 let register_inlining ~loc env new_name count inline bnd_val =
   if not bnd_val.transfer (* no inlining of values with transfer *) then begin
     match !count with
     | c when c <= 0 ->
-      if bnd_val.effect then
+      if effect_binding env bnd_val then
         () (* No inling of values with side effects which don't
               appear later on *)
       else begin
@@ -1539,6 +1551,8 @@ and encode_contract ?(annot=false) ?(decompiling=false) contract =
   (* "parameter/2" *)
   let (pname, env, _) = new_binding env parameter_name parameter in
 
+  let fee_env = copy_env env in
+
   let code =
     values_on_top mk values @@
     encode env @@
@@ -1557,6 +1571,7 @@ and encode_contract ?(annot=false) ?(decompiling=false) contract =
 
   (* Register global values for inlining if necessary *)
   List.iter (register_inlining_value env) values;
+  List.iter (register_inlining_value fee_env) values;
 
   let c_init = match contract.c_init with
     | None -> None
@@ -1587,7 +1602,7 @@ and encode_contract ?(annot=false) ?(decompiling=false) contract =
     c_init;
     subs = [];
   } in
-  contract, !(env.to_inline)
+  contract, (!(env.to_inline), !(fee_env.to_inline))
 
 
 let encode_code tenv code =

@@ -27,7 +27,9 @@ open LiquidTypes
     simplifications. *)
 val simplify_contract :
   ?decompile_annoted:bool ->
-  encoded_contract -> encoded_exp StringMap.t -> encoded_contract
+  encoded_contract ->
+  encoded_exp StringMap.t * encoded_exp StringMap.t ->
+  encoded_contract
 
 (** Simplify a constant (mostly inlining in lambdas). *)
 val simplify_const : (datatype, 'a) exp const -> (datatype, 'a) exp const

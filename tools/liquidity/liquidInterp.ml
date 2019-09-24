@@ -120,14 +120,17 @@ let rec uniformize_stack if_stack stack =
         next = None; prevs = [] }
     @ if_stack
 
-let not_fail_stack = function
-  | { kind = N_FAILWITH } :: _ -> false
-  | _ -> true
+let rec fail_stack = function
+  | { kind = N_FAILWITH } :: _ -> true
+  | { kind = N_IF_END_RESULT ({ args }, _, _) } :: _ -> fail_stack args
+  | _ -> false
 
 let rec merge_stacks if_stack end_node1 end_node2 stack1 stack2 =
   match stack1, stack2 with
   | [], [] -> []
-  | { kind = N_FAILWITH } :: _, _ when not_fail_stack stack2 ->
+  | _ when
+      fail_stack stack1 &&
+      not @@ fail_stack stack2 ->
     begin
       match end_node2 with
       | None -> assert false
@@ -135,7 +138,9 @@ let rec merge_stacks if_stack end_node1 end_node2 stack1 stack2 =
         merge_stacks if_stack end_node2 None
           stack2 (uniformize_stack if_stack stack2)
     end
-  |  _, { kind = N_FAILWITH } :: _  when not_fail_stack stack1 ->
+  |  _ when
+      fail_stack stack2 &&
+      not @@ fail_stack stack1 ->
     merge_stacks if_stack end_node1 None
       stack1 (uniformize_stack if_stack stack1)
   | _ ->
@@ -168,10 +173,26 @@ let rec merge_stacks if_stack end_node1 end_node2 stack1 stack2 =
        | Some node -> node.args <- List.rev node.args);
       stack
     with Exit ->
-      LiquidLoc.raise_error ~loc:end_node1.loc
+      let loc = match end_node2 with
+        | None -> end_node1.loc
+        | Some end_node2 -> LiquidLoc.merge end_node1.loc end_node2.loc in
+      LiquidLoc.raise_error ~loc
         "interp error merging stacks:\n%a%a"
         (fprint_stack "stack1 ") stack1
         (fprint_stack "stack2 ") stack2
+
+(*
+let merge_stacks if_stack end_node1 end_node2 stack1 stack2 =
+  Format.eprintf
+    "\nmerging stacks:\n%a%a"
+    (fprint_stack "stack1 ") stack1
+    (fprint_stack "stack2 ") stack2;
+  let s = merge_stacks if_stack end_node1 end_node2 stack1 stack2 in
+  Format.eprintf
+    "\n==>\n%a@."
+    (fprint_stack "result ") s;
+  s
+*)
 
 let add_name stack seq name =
   match stack with

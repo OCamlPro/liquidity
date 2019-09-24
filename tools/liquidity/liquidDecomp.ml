@@ -361,6 +361,8 @@ let rec decompile_next (env : env) node =
         | "SOURCE",[] -> Prim_source, [unit ~loc]
         | "SENDER",[] -> Prim_sender, [unit ~loc]
         | "SELF",[] -> Prim_self, [unit ~loc]
+        | "BLOCK_LEVEL", [] -> Prim_block_level, [unit ~loc]
+        | "COLLECT_CALL", [] -> Prim_collect_call, [unit ~loc]
         | prim, args ->
           let prim =
             match prim with
@@ -397,8 +399,6 @@ let rec decompile_next (env : env) node =
             | "IMPLICIT_ACCOUNT" -> Prim_default_account
             | "SET_DELEGATE" -> Prim_set_delegate
             | "SOME" -> Prim_Some
-            | "BLOCK_LEVEL" -> Prim_block_level
-            | "COLLECT_CALL" -> Prim_collect_call
             | "GET_BALANCE" -> Prim_get_balance
             | "IS_IMPLICIT" -> Prim_is_implicit
             | ins ->

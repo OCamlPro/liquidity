@@ -174,11 +174,15 @@ let rec compute decompile code to_inline =
         body
       else
         let bnd_val = iter bnd_val in
+        let effect = match bnd_val.desc with
+          | Lambda _ -> false
+          | Closure _ -> false
+          | _ -> bnd_val.effect in
         begin
           try
             if StringSet.mem bnd_var.nname (LiquidBoundVariables.bv body) then
               raise Exit;
-            if not bnd_val.effect then
+            if not effect then
               body
             else
             if bnd_val.ty <> Tunit then raise Exit
@@ -370,7 +374,7 @@ let rec compute decompile code to_inline =
 
 (* iter code *)
 
-and simplify_contract ?(decompile_annoted=false) contract to_inline =
+and simplify_contract ?(decompile_annoted=false) contract (to_inline, to_inline_fee) =
   if !LiquidOptions.verbosity > 0 then
     Format.eprintf "Simplify (inlining) contract %s@."
       (LiquidNamespace.qual_contract_name contract);
