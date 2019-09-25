@@ -14,6 +14,8 @@
   patching the right parts, through the power of types(tm)
 *)
 
+open Migrate_parsetree
+
 val ml_to_reason_swap : string -> string
 
 val escape_string : string -> string

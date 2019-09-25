@@ -15,6 +15,7 @@
 *)
 
 (* #if defined BS_NO_COMPILER_PATCH then *)
+open Migrate_parsetree
 open Ast_404
 (* #end *)
 

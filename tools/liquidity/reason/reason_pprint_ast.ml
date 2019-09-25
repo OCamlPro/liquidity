@@ -46,6 +46,7 @@
 
 (* TODO more fine-grained precedence pretty-printing *)
 
+open Migrate_parsetree
 open Ast_404
 open Asttypes
 open Location
