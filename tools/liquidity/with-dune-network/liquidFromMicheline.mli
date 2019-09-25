@@ -21,34 +21,51 @@
 (*  along with this program.  If not, see <https://www.gnu.org/licenses/>.  *)
 (****************************************************************************)
 
-(* Disable to compile without the sources of Tezos.
-   The following features with be disabled:
-   * Decompilation of Michelson files
-   * Execution of Michelson contracts
-*)
+(** Parse/convert Michelson contracts and constants. *)
 
-Sys = module("ocp-build:Sys", "1.0");
+exception Missing_program_field of string
 
-(* This value is used if with_dune_network is not set before *)
-default_with_dune_network = Sys.file_exists("dune-network/README.md");
+(** Convert a Micheline contant as a typed Liquidity constant.
 
-try { with_dune_network = with_dune_network; }
-  catch("unknown-variable",x){ with_dune_network = default_with_dune_network; }
+    The type is used to recover an actual Liquidity constant, e.g.,
+    {[ (0, (1, 2)) ]} with type {[ t = { x:int; y:int; z:int } ]} is
+    converted to {[ { x = 0; y = 1; z = 2 } ]}. *)
+val convert_const_type :
+  LiquidMichelineTypes.env ->
+  LiquidMichelineTypes.expr ->
+  LiquidTypes.datatype ->
+  LiquidTypes.loc_michelson LiquidTypes.const * LiquidTypes.location
 
-(* By default, liquidity will contain some version information
-  (Git commit, build date, etc.). However, during development, it
-  makes recompilation slower, so you can create a file DEVEL here
-  to tell ocp-build not to include version information.
-  The flag can also be controled in an inclusing project by using
-  the 'with_version' option.
-*)
+(** Convert a Micheline contant as Liquidity constant. *)
+val convert_const_notype :
+  LiquidMichelineTypes.env ->
+  LiquidMichelineTypes.expr ->
+  LiquidTypes.loc_michelson LiquidTypes.const * LiquidTypes.location
 
-default_with_version = !Sys.file_exists("DEVEL");
+(** Parse a Micheline contract as an intermediate Michelson contract.  *)
+val convert_contract :
+  LiquidMichelineTypes.env ->
+  LiquidMichelineTypes.contract ->
+  LiquidTypes.loc_michelson_contract
 
-try { with_version = with_version; }
-  catch("unknown-variable",x){ with_version = default_with_version; }
+(** Parse a string as a Micheline contract. *)
+val contract_of_string :
+  string -> (* maybe filename *)
+  string -> (* content *)
+  (LiquidMichelineTypes.contract * LiquidMichelineTypes.env) option
 
-default_for_javascript = false;
+(** Parse a string as a Micheline constant. *)
+val const_of_string :
+  string -> (* maybe filename *)
+  string -> (* content *)
+  (LiquidMichelineTypes.expr * LiquidMichelineTypes.env) option
 
-try { for_javascript = for_javascript; }
-  catch("unknown-variable",x){ for_javascript = default_for_javascript; }
+val convert_env : LiquidMichelineTypes.env -> LiquidTypes.env
+
+(** Extract usefule information from environement for decompiling
+    phase. *)
+val infos_env :
+  LiquidMichelineTypes.env ->
+  bool (* true if tz annoted *)
+  * (LiquidTypes.datatype, string) Hashtbl.t
+  * (string * LiquidTypes.datatype) list

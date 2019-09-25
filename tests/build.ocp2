@@ -1,6 +1,6 @@
 List = module("ocp-build:List", "1.0");
 
-tezos_test_dir = "../tezos/src/bin_client/test/contracts/";
+test_dir = "../dune-network/src/bin_client/test/contracts/";
 
 OCaml.library("ocplib-liquidity-examples",
   ocaml + {
@@ -105,15 +105,15 @@ OCaml.library("ocplib-liquidity-examples",
     ];
   });
 
-if( with_tezos ) {
+if( with_dune_network ) {
 
-  OCaml.library("ocplib-tezos-examples",
+  OCaml.library("ocplib-michelson-examples",
     ocaml + {
     files = [
 
-       "liquidTestTezos.ml", {
+       "liquidTestMichelson.ml", {
          file2string = List.map (function (file){
-             return tezos_test_dir + file;
+             return test_dir + file;
            }, [
            "attic/accounts.tz";
            "attic/add1.tz";

@@ -24,7 +24,12 @@
 ############################################################################
 
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
+. $DIR/env.sh
 
-DUNE="$DIR/../dune-network"
+export OPAMYES=1
 
-DUNE_PID_FILE="/tmp/dunliqsandbox.pid"
+pushd $DUNE
+make build-deps
+eval `opam config env`
+make
+popd

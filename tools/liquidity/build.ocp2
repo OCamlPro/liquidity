@@ -141,19 +141,19 @@ OCaml.library("ocplib-liquidity-base",
    });
 
 
-if ( with_tezos ) {
-OCaml.library("ocplib-liquidity-with-tezos",
+if ( with_dune_network ) {
+OCaml.library("ocplib-liquidity-with-dune-network",
    ocaml + {
      files = [
-       "with-tezos/liquidTezosTypes.ml";
-       "with-tezos/liquidFromTezos.ml";
-       "with-tezos/liquidToTezos.ml";
+       "with-dune-network/liquidMichelineTypes.ml";
+       "with-dune-network/liquidFromMicheline.ml";
+       "with-dune-network/liquidToMicheline.ml";
        "liquidDecomp.ml";
      ];
      requires = [
         "ocplib-liquidity-base";
         "ocplib-liquidity-parser";
-        "michelson";
+        "dune-network-lib";
      ];
    });
 
@@ -164,7 +164,7 @@ OCaml.library("ocplib-liquidity-deploy",
        "liquidDeploy.ml";
      ];
      requires = [
-       "ocplib-liquidity-with-tezos";
+       "ocplib-liquidity-with-dune-network";
        "ocplib-liquidity-parser";
        "curl";
        "curl.lwt";
@@ -201,12 +201,12 @@ OCaml.program("liquidity",
 }
 }
 
-OCaml.library("ocplib-liquidity-without-tezos",
+OCaml.library("ocplib-liquidity-without-dune-network",
    ocaml + {
      files = [
-       "without-tezos/liquidTezosTypes.ml";
-       "without-tezos/liquidFromTezos.ml";
-       "without-tezos/liquidToTezos.ml";
+       "without-dune-network/liquidMichelineTypes.ml";
+       "without-dune-network/liquidFromMicheline.ml";
+       "without-dune-network/liquidToMicheline.ml";
        "liquidDecomp.ml";
      ];
      requires = [
@@ -215,10 +215,10 @@ OCaml.library("ocplib-liquidity-without-tezos",
      ];
    });
 
-OCaml.library("ocplib-liquidity-deploy-without-tezos",
+OCaml.library("ocplib-liquidity-deploy-without-dune-network",
    ocaml + {
      files = [
-       "without-tezos/liquidDeploy.ml";
+       "without-dune-network/liquidDeploy.ml";
      ];
      requires = [
        "ocplib-liquidity-base";
@@ -235,8 +235,8 @@ OCaml.program("liquidity-mini",
      ];
      requires = [
        "ocplib-dot";
-       "ocplib-liquidity-deploy-without-tezos";
-       "ocplib-liquidity-without-tezos";
+       "ocplib-liquidity-deploy-without-dune-network";
+       "ocplib-liquidity-without-dune-network";
        "ocplib-liquidity-base";
        "ocplib-file";
      ];

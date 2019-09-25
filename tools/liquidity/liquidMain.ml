@@ -103,24 +103,24 @@ let compile_liquid_files files =
               (full_sig_of_contract syntax_ast) init with
       | LiquidInit.Init_constant c_init when !LiquidOptions.json ->
         let c_init = LiquidMichelson.compile_const c_init in
-        let s = LiquidToTezos.(json_of_const @@ convert_const ~expand:true c_init) in
+        let s = LiquidToMicheline.(json_of_const @@ convert_const ~expand:true c_init) in
         let output = outprefix ^ ".init.json" in
         FileString.write_file output s;
         Printf.eprintf "Constant initial storage generated in %S\n%!" output
       | LiquidInit.Init_constant c_init ->
         let c_init = LiquidMichelson.compile_const c_init in
-        let s = LiquidToTezos.(string_of_const @@ convert_const ~expand:false c_init) in
+        let s = LiquidToMicheline.(string_of_const @@ convert_const ~expand:false c_init) in
         let output = outprefix ^ ".init.tz" in
         FileString.write_file output s;
         Printf.eprintf "Constant initial storage generated in %S\n%!" output
       | LiquidInit.Init_code (_, pre_init) ->
-        let mic_init, _ = LiquidToTezos.convert_contract ~expand:true pre_init in
+        let mic_init, _ = LiquidToMicheline.convert_contract ~expand:true pre_init in
         let s, output =
           if !LiquidOptions.json then
-            LiquidToTezos.json_of_contract mic_init,
+            LiquidToMicheline.json_of_contract mic_init,
             outprefix ^ ".initializer.tz.json"
           else
-            LiquidToTezos.string_of_contract mic_init,
+            LiquidToMicheline.string_of_contract mic_init,
             outprefix ^ ".initializer.tz"
         in
         FileString.write_file output s;
@@ -128,11 +128,11 @@ let compile_liquid_files files =
   end;
 
   let c, loc_table =
-    LiquidToTezos.convert_contract ~expand:(!LiquidOptions.json) pre_michelson
+    LiquidToMicheline.convert_contract ~expand:(!LiquidOptions.json) pre_michelson
   in
 
   if !LiquidOptions.json then
-    let s = LiquidToTezos.json_of_contract c in
+    let s = LiquidToMicheline.json_of_contract c in
     let output = match !LiquidOptions.output with
       | Some output -> output
       | None -> outprefix ^ ".tz.json" in
@@ -150,8 +150,8 @@ let compile_liquid_files files =
   else
     let s =
       if !LiquidOptions.singleline
-      then LiquidToTezos.line_of_contract c
-      else LiquidToTezos.string_of_contract c in
+      then LiquidToMicheline.line_of_contract c
+      else LiquidToMicheline.string_of_contract c in
     match
       match !LiquidOptions.output with
       | Some output -> output
@@ -170,10 +170,10 @@ let compile_liquid_files files =
 let compile_tezos_file filename =
   let code, env =
     if Filename.check_suffix filename ".json" || !LiquidOptions.json then
-      LiquidToTezos.read_tezos_json filename
-    else LiquidToTezos.read_tezos_file filename
+      LiquidToMicheline.read_micheline_json filename
+    else LiquidToMicheline.read_micheline_file filename
   in
-  let c = LiquidFromTezos.convert_contract env code in
+  let c = LiquidFromMicheline.convert_contract env code in
   let c = LiquidClean.clean_contract c in
   (* let c = if !LiquidOptions.peephole then LiquidPeephole.simplify c else c in *)
   let c = LiquidInterp.interp c in
@@ -200,8 +200,8 @@ let compile_tezos_file filename =
       LiquidCheck.typecheck_contract ~warnings:false ~decompiling:true c1
     with LiquidError _ ->
       (* Retry with generalization of types *)
-      LiquidTezosTypes.set_generalize_types env true;
-      ignore (LiquidFromTezos.convert_contract env code);
+      LiquidMichelineTypes.set_generalize_types env true;
+      ignore (LiquidFromMicheline.convert_contract env code);
       (* for side effects in generalized type definitions *)
       let c2 = LiquidDecomp.decompile env c in
       if !LiquidOptions.verbosity>0 then
@@ -209,7 +209,7 @@ let compile_tezos_file filename =
           (DebugPrint.string_of_contract c2);
       LiquidCheck.typecheck_contract ~warnings:false ~decompiling:true c2
   in
-  let annoted_tz, type_annots, types = LiquidFromTezos.infos_env env in
+  let annoted_tz, type_annots, types = LiquidFromMicheline.infos_env env in
   let encode_ast, to_inline =
     LiquidEncode.encode_contract ~decompiling:true typed_ast in
   let live_ast = LiquidSimplify.simplify_contract
@@ -242,7 +242,7 @@ let report_error = function
       { err_loc;
         err_msg =
           Printf.sprintf "Unknown module or contract %s" (String.concat "." p) };
-  | LiquidFromTezos.Missing_program_field f ->
+  | LiquidFromMicheline.Missing_program_field f ->
     Format.eprintf "Missing script field %s@." f;
   | LiquidDeploy.RequestError (code, msg) ->
     Format.eprintf "Request Error (code %d):\n%s@." code msg;
@@ -378,9 +378,9 @@ let translate () =
   let to_str mic_data =
     let mic_data = LiquidMichelson.compile_const mic_data in
     if !LiquidOptions.json then
-      LiquidToTezos.(json_of_const @@ convert_const ~expand:true mic_data)
+      LiquidToMicheline.(json_of_const @@ convert_const ~expand:true mic_data)
     else
-      LiquidToTezos.(line_of_const @@ convert_const ~expand:false mic_data) in
+      LiquidToMicheline.(line_of_const @@ convert_const ~expand:false mic_data) in
   if storage = "" then
     (* Only translate parameter *)
     Printf.printf "%s\n%!" (to_str parameter_const)
@@ -460,14 +460,14 @@ let init_storage () =
     String.uncapitalize_ascii c in
   let storage = LiquidMichelson.compile_const storage in
   if !LiquidOptions.json then
-    let s = LiquidToTezos.(json_of_const @@ convert_const ~expand:true storage) in
+    let s = LiquidToMicheline.(json_of_const @@ convert_const ~expand:true storage) in
     let output = match !LiquidOptions.output with
       | Some output -> output
       | None -> outname ^ ".init.json" in
     FileString.write_file output s;
     Printf.printf "Constant initial storage generated in %S\n%!" output
   else
-    let s = LiquidToTezos.(line_of_const @@ convert_const ~expand:false storage) in
+    let s = LiquidToMicheline.(line_of_const @@ convert_const ~expand:false storage) in
     let output = match !LiquidOptions.output with
       | Some output -> output
       | None -> outname ^ ".init.tz" in

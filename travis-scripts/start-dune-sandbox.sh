@@ -23,8 +23,19 @@
 #  along with this program.  If not, see <https://www.gnu.org/licenses/>.  #
 ############################################################################
 
+shopt -s expand_aliases
+
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
+. $DIR/env.sh
 
-DUNE="$DIR/../dune-network"
+rm -f $DUNE_PID_FILE
+eval `opam config env`
 
-DUNE_PID_FILE="/tmp/dunliqsandbox.pid"
+$DUNE/src/bin_node/tezos-sandboxed-node.sh 5 &> /tmp/dune-log &
+echo $! > $DUNE_PID_FILE
+
+echo "Waiting a bit for node to be started"
+sleep 5
+eval `$DUNE/src/bin_client/tezos-init-sandboxed-client.sh 5`
+
+tezos-activate-alpha

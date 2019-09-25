@@ -23,6 +23,6 @@
 
 open LiquidTypes
 
-val decompile : LiquidTezosTypes.env -> node_contract -> syntax_contract
+val decompile : LiquidMichelineTypes.env -> node_contract -> syntax_contract
 
 val decompile_const : node_exp const -> syntax_const

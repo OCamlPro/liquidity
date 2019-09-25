@@ -21,34 +21,51 @@
 (*  along with this program.  If not, see <https://www.gnu.org/licenses/>.  *)
 (****************************************************************************)
 
-(* Disable to compile without the sources of Tezos.
-   The following features with be disabled:
-   * Decompilation of Michelson files
-   * Execution of Michelson contracts
-*)
+open LiquidTypes
 
-Sys = module("ocp-build:Sys", "1.0");
+type loc_table = (int * (LiquidTypes.location * string option)) list
 
-(* This value is used if with_dune_network is not set before *)
-default_with_dune_network = Sys.file_exists("dune-network/README.md");
+let string_of_contract (c : michelson_contract) =
+  LiquidPrinter.Michelson.string_of_contract c
 
-try { with_dune_network = with_dune_network; }
-  catch("unknown-variable",x){ with_dune_network = default_with_dune_network; }
+let line_of_contract (c : michelson_contract) =
+  LiquidPrinter.Michelson.line_of_contract c
 
-(* By default, liquidity will contain some version information
-  (Git commit, build date, etc.). However, during development, it
-  makes recompilation slower, so you can create a file DEVEL here
-  to tell ocp-build not to include version information.
-  The flag can also be controled in an inclusing project by using
-  the 'with_version' option.
-*)
+let convert_contract ~expand (c : loc_michelson_contract) =
+  LiquidEmit.emit_contract ~expand c,
+  [] (* TODO : loc_table *)
 
-default_with_version = !Sys.file_exists("DEVEL");
+let string_of_const c =
+  LiquidPrinter.Michelson.string_of_const c
 
-try { with_version = with_version; }
-  catch("unknown-variable",x){ with_version = default_with_version; }
+let line_of_const c =
+  LiquidPrinter.Michelson.line_of_const c
 
-default_for_javascript = false;
+let convert_const ~expand c =
+  LiquidEmit.emit_const ~expand c
 
-try { for_javascript = for_javascript; }
-  catch("unknown-variable",x){ for_javascript = default_for_javascript; }
+let json_of_contract (c : michelson_contract) =
+  failwith "mini version cannot generate json contract"
+
+let contract_of_json _ =
+  failwith "mini version cannot parse json contract"
+
+let contract_of_ezjson _ =
+  failwith "mini version cannot parse ezjson contract"
+
+let json_of_const _ =
+  failwith "mini version cannot generate json constant"
+
+let const_of_json _ =
+  failwith "mini version cannot parse json constant"
+
+let const_of_ezjson _ =
+  failwith "mini version cannot parse ezjson constant"
+
+let read_micheline_file (_filename : string) =
+  failwith "mini version cannot decompile"
+
+let read_micheline_json (_filename : string) =
+  failwith "mini version cannot decompile"
+
+let arg_list work_done = []

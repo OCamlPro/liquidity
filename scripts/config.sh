@@ -24,9 +24,10 @@
 ############################################################################
 
 export TEZOS_CLIENT_UNSAFE_DISABLE_DISCLAIMER=Y
-export LIQUID_NETWORK=tezos
+export DUNE_CLIENT_UNSAFE_DISABLE_DISCLAIMER=Y
+export LIQUID_NETWORK=dune
 
-TEZOS_FULL_PATH=$(which tezos-client || echo "./tezos/tezos-client")
+DUNE_FULL_PATH=$(which dune-client || which tezos-client || echo "./dune-network/dune-client")
 
 DEFAULT='\033[0m'
 RED='\033[0;31m'

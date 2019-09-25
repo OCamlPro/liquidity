@@ -44,8 +44,8 @@ run \
 
 run \
     "Typecheck" \
-    "${TEZOS_FULL_PATH} ${TEZOS_ARGS} typecheck script _obuild/tests/$test.tz" \
-    $([ -f ${TEZOS_FULL_PATH} ] ; echo $?)
+    "${DUNE_FULL_PATH} ${DUNE_ARGS} typecheck script _obuild/tests/$test.tz" \
+    $([ -f ${DUNE_FULL_PATH} ] ; echo $?)
 
 run \
     "Decompile" \
@@ -57,7 +57,7 @@ run \
 
 run \
     "Re-typecheck" \
-    "${TEZOS_FULL_PATH} ${TEZOS_ARGS} typecheck script _obuild/tests/${test}_tz.tz" \
-    $([ -f ${TEZOS_FULL_PATH} ] ; echo $?)
+    "${DUNE_FULL_PATH} ${DUNE_ARGS} typecheck script _obuild/tests/${test}_tz.tz" \
+    $([ -f ${DUNE_FULL_PATH} ] ; echo $?)
 
 echo

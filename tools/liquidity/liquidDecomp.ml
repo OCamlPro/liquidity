@@ -787,7 +787,7 @@ let decompile env contract =
     Format.eprintf "Decompile Michelson contract@.";
   Hashtbl.reset vars_nums;
   Hashtbl.reset vars_names;
-  let ty_env = LiquidFromTezos.convert_env env in
+  let ty_env = LiquidFromMicheline.convert_env env in
   let contract = decompile ty_env contract in
   { contract with
     ty_env;

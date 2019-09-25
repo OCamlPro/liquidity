@@ -1,3 +1,4 @@
-[submodule "tezos"]
-	path = tezos
-	url = https://gitlab.com/tezos/tezos.git
+[submodule "dune-network"]
+	path = dune-network
+	url = https://gitlab.com/dune-network/dune-network.git
+	branch = mainnet

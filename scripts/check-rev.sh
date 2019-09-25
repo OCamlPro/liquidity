@@ -37,8 +37,8 @@ mkdir -p $(dirname "_obuild/tests/$test")
 
 run \
     "Typecheck" \
-    "${TEZOS_FULL_PATH} ${TEZOS_ARGS} typecheck script $test" \
-    $([ -f ${TEZOS_FULL_PATH} ] ; echo $?)
+    "${DUNE_FULL_PATH} ${DUNE_ARGS} typecheck script $test" \
+    $([ -f ${DUNE_FULL_PATH} ] ; echo $?)
 
 run \
     "Decompile" \
@@ -50,7 +50,7 @@ run \
 
 run \
     "Re-typecheck" \
-    "${TEZOS_FULL_PATH} ${TEZOS_ARGS} typecheck script _obuild/tests/$test.liq.tz" \
-    $([ -f ${TEZOS_FULL_PATH} ] ; echo $?)
+    "${DUNE_FULL_PATH} ${DUNE_ARGS} typecheck script _obuild/tests/$test.liq.tz" \
+    $([ -f ${DUNE_FULL_PATH} ] ; echo $?)
 
 echo

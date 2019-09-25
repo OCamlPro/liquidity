@@ -21,34 +21,33 @@
 (*  along with this program.  If not, see <https://www.gnu.org/licenses/>.  *)
 (****************************************************************************)
 
-(* Disable to compile without the sources of Tezos.
-   The following features with be disabled:
-   * Decompilation of Michelson files
-   * Execution of Michelson contracts
-*)
+open LiquidTypes
+open Dune_Network_Lib
 
-Sys = module("ocp-build:Sys", "1.0");
+type expr = string Micheline.canonical
+type contract = expr list
 
-(* This value is used if with_dune_network is not set before *)
-default_with_dune_network = Sys.file_exists("dune-network/README.md");
+type env = {
+  filename : string;
+  loc_table : location IntMap.t;
+  type_annots : (datatype, string) Hashtbl.t;
+  mutable types : (datatype list * int) StringMap.t;
+  mutable contract_types : (string * contract_sig) list;
+  mutable annoted : bool;
+  mutable generalize_types : bool;
+}
 
-try { with_dune_network = with_dune_network; }
-  catch("unknown-variable",x){ with_dune_network = default_with_dune_network; }
+let empty_env filename = {
+  filename;
+  loc_table = IntMap.empty;
+  type_annots = Hashtbl.create 17;
+  types = StringMap.empty;
+  contract_types = ["UnitContract", unit_contract_sig];
+  annoted = false;
+  generalize_types = false;
+}
 
-(* By default, liquidity will contain some version information
-  (Git commit, build date, etc.). However, during development, it
-  makes recompilation slower, so you can create a file DEVEL here
-  to tell ocp-build not to include version information.
-  The flag can also be controled in an inclusing project by using
-  the 'with_version' option.
-*)
+type json = Data_encoding.json
 
-default_with_version = !Sys.file_exists("DEVEL");
-
-try { with_version = with_version; }
-  catch("unknown-variable",x){ with_version = default_with_version; }
-
-default_for_javascript = false;
-
-try { for_javascript = for_javascript; }
-  catch("unknown-variable",x){ for_javascript = default_for_javascript; }
+let set_generalize_types env b =
+  env.generalize_types <- b

@@ -21,34 +21,22 @@
 (*  along with this program.  If not, see <https://www.gnu.org/licenses/>.  *)
 (****************************************************************************)
 
-(* Disable to compile without the sources of Tezos.
-   The following features with be disabled:
-   * Decompilation of Michelson files
-   * Execution of Michelson contracts
-*)
+(*
+#include "../../dune-network/src/utils/data_encoding_ezjsonm.ml"
+ *)
+let to_string _json = assert false
+let from_string _json = assert false
+let read_file _filename = assert false
+let write_file _filename _json = assert false
 
-Sys = module("ocp-build:Sys", "1.0");
+let to_root = function
+  | `O ctns -> `O ctns
+  | `A ctns -> `A ctns
+  | `Null -> `O []
+  | oth -> `A [ oth ]
 
-(* This value is used if with_dune_network is not set before *)
-default_with_dune_network = Sys.file_exists("dune-network/README.md");
+let to_string j = Ezjsonm.to_string ~minify:true (to_root j)
 
-try { with_dune_network = with_dune_network; }
-  catch("unknown-variable",x){ with_dune_network = default_with_dune_network; }
-
-(* By default, liquidity will contain some version information
-  (Git commit, build date, etc.). However, during development, it
-  makes recompilation slower, so you can create a file DEVEL here
-  to tell ocp-build not to include version information.
-  The flag can also be controled in an inclusing project by using
-  the 'with_version' option.
-*)
-
-default_with_version = !Sys.file_exists("DEVEL");
-
-try { with_version = with_version; }
-  catch("unknown-variable",x){ with_version = default_with_version; }
-
-default_for_javascript = false;
-
-try { for_javascript = for_javascript; }
-  catch("unknown-variable",x){ for_javascript = default_for_javascript; }
+let from_string s =
+  try (Ezjsonm.from_string s :> Data_encoding.json)
+  with Ezjsonm.Parse_error (_, msg) -> failwith ("error: " ^ msg)

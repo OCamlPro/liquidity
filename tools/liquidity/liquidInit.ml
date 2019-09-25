@@ -164,8 +164,9 @@ let rec subst_empty_big_map storage_ty code =
                      | Prim_gas
                      | Prim_create_account ) as p } ->
       LiquidLoc.raise_error ~loc
-        "%s forbidden in initializer (for this version of Tezos)"
+        "%s forbidden in initializer (for this version of %s)"
         (string_of_primitive p)
+        (LiquidOptions.network_name ())
 
     | Apply { prim; args } ->
       let args' = List.map (subst_empty_big_map storage_ty) args in
@@ -287,17 +288,8 @@ let compile_liquid_init env contract_sig (init : encoded_exp LiquidTypes.init) (
   try (* Maybe it is constant *)
     let c_init = LiquidData.translate_const_exp init.init_body in
     Init_constant c_init
-  (* let s = LiquidPrinter.Michelson.line_of_const c_init in
-   * let output = env.filename ^ ".init.tz" in
-   * FileString.write_file output s;
-   * Printf.eprintf "Constant initial storage generated in %S\n%!" output *)
   with LiquidError _ ->
     (* non constant initial value *)
     let init_contract = tmp_contract_of_init ~loc env init contract_sig.f_storage in
     let pre_init = LiquidMichelson.translate init_contract in
     Init_code (init_contract, pre_init)
-(* let mic_init = LiquidToTezos.convert_contract pre_init in
- * let s = LiquidToTezos.line_of_contract mic_init in
- * let output = env.filename ^ ".initializer.tz" in
- * FileString.write_file output s;
- * Printf.eprintf "Storage initializer generated in %S\n%!" output *)

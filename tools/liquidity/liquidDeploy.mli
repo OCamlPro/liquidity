@@ -83,7 +83,7 @@ val get : (string -> string Lwt.t) ref
 module type S = sig
   type 'a t
 
-  (** Run contract with given parameter and storage on the Tezos node specified
+  (** Run contract with given parameter and storage on the Dune node specified
       in ![LiquidOptions], returns the return value, the storage and a diff of a
       big map id the contract contains any *)
   val run :
@@ -97,12 +97,12 @@ module type S = sig
   (** Compute the initial storage for a specific script, returns storage data *)
   val init_storage : from -> string list -> LiquidTypes.encoded_const t
 
-  (** Forge a deployment operation contract on the Tezos node specified in
+  (** Forge a deployment operation contract on the Dune node specified in
       ![LiquidOptions], returns the hex-encoded operation *)
   val forge_deploy :
     ?delegatable:bool -> ?spendable:bool -> from -> string list -> string t
 
-  (** Deploy a Liquidity contract on the Tezos node specified in
+  (** Deploy a Liquidity contract on the Dune node specified in
       ![LiquidOptions], returns the operation hash and the contract address *)
   val deploy :
     ?delegatable:bool -> ?spendable:bool -> from -> string list ->
@@ -114,7 +114,7 @@ module type S = sig
       operation *)
   val forge_call : from -> string -> string -> string -> string t
 
-  (** Calls a deployed Liquidity contract on the Tezos node specified in
+  (** Calls a deployed Liquidity contract on the Dune node specified in
       ![LiquidOptions], returns the operation hash *)
   val call : from -> string -> string -> string ->
     (string * (unit, exn) result) t

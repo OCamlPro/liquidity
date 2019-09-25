@@ -22,7 +22,7 @@
 (****************************************************************************)
 
 open LiquidTypes
-open Michelson_Tezos (* for crypto *)
+open Dune_Network_Lib (* for crypto *)
 
 type from =
   | From_strings of string list
@@ -262,8 +262,8 @@ let name_of_var_annot = function
 
 let convert_const env ?ty e =
   let mic_e, loc = match ty with
-    | Some ty -> LiquidFromTezos.convert_const_type env e ty
-    | None -> LiquidFromTezos.convert_const_notype env e in
+    | Some ty -> LiquidFromMicheline.convert_const_type env e ty
+    | None -> LiquidFromMicheline.convert_const_notype env e in
   let nod_e = LiquidInterp.decompile_const loc mic_e in
   let syn_e = LiquidDecomp.decompile_const nod_e in
   let tenv =
@@ -292,7 +292,7 @@ let trace_of_json env ~loc_table ?(error=false) trace_r =
         let stack =
           Ezjsonm.find step ["stack"]
           |> Ezjsonm.get_list (fun s ->
-              Ezjsonm.find s ["item"] |> LiquidToTezos.const_of_ezjson,
+              Ezjsonm.find s ["item"] |> LiquidToMicheline.const_of_ezjson,
               try Some (Ezjsonm.find s ["annot"] |> Ezjsonm.get_string)
               with Not_found -> None
             )
@@ -330,9 +330,9 @@ let loc_table_to_map loc_table =
 let fail_msg_of_err loc ~loc_table err =
   let json = Ezjsonm.find err ["with"] in
   let err_loc, _ (* failwith_ty *) = List.assoc loc loc_table in
-  let env = { (LiquidTezosTypes.empty_env err_loc.loc_file)
+  let env = { (LiquidMichelineTypes.empty_env err_loc.loc_file)
               with loc_table = loc_table_to_map loc_table } in
-  let failed_with_expr = LiquidToTezos.const_of_ezjson json in
+  let failed_with_expr = LiquidToMicheline.const_of_ezjson json in
   let failed_with = convert_const env failed_with_expr in
   err_loc, Some (LiquidPrinter.Liquid.string_of_const failed_with)
 
@@ -340,7 +340,7 @@ let error_trace_of_err loc ~loc_table err =
   let err_loc, _ = List.assoc loc loc_table in
   try
     let json = Ezjsonm.find err ["trace"] in
-    let env = { (LiquidTezosTypes.empty_env err_loc.loc_file)
+    let env = { (LiquidMichelineTypes.empty_env err_loc.loc_file)
                 with loc_table = loc_table_to_map loc_table } in
     let trace = trace_of_json env ~loc_table ~error:true json in
     err_loc, Some trace
@@ -559,12 +559,12 @@ let compile_liquid liquid =
   ( syntax_ast, pre_michelson, pre_init )
 
 let decompile_michelson code =
-  let env = LiquidTezosTypes.empty_env "mic_code" in
-  let c = LiquidFromTezos.convert_contract env code in
+  let env = LiquidMichelineTypes.empty_env "mic_code" in
+  let c = LiquidFromMicheline.convert_contract env code in
   let c = LiquidClean.clean_contract c in
   let c = LiquidInterp.interp c in
   let c = LiquidDecomp.decompile env c in
-  let annoted_tz, type_annots, types = LiquidFromTezos.infos_env env in
+  let annoted_tz, type_annots, types = LiquidFromMicheline.infos_env env in
   let typed_ast = LiquidCheck.typecheck_contract ~warnings:false ~decompiling:true c in
   let encode_ast, to_inline =
     LiquidEncode.encode_contract ~decompiling:true typed_ast in
@@ -641,7 +641,7 @@ let get_protocol () =
     raise_response_error "get_protocol" r
 
 let operation_of_json ~head r =
-  let env = LiquidTezosTypes.empty_env "operation" in
+  let env = LiquidMichelineTypes.empty_env "operation" in
   let source = Ezjsonm.(find r ["source"] |> get_string) in
   let nonce = Ezjsonm.(find r ["nonce"] |> get_int) in
   let kind = Ezjsonm.(find r ["kind"] |> get_string) in
@@ -654,7 +654,7 @@ let operation_of_json ~head r =
         destination = find r ["destination"] |> get_string;
         parameters =
           try find r ["parameters"]
-              |> LiquidToTezos.const_of_ezjson
+              |> LiquidToMicheline.const_of_ezjson
               |> convert_const env
               |> Option.some
           with Not_found -> None;
@@ -665,11 +665,11 @@ let operation_of_json ~head r =
         try
           let code =
             find r ["script"; "code"]
-            |> LiquidToTezos.contract_of_ezjson
+            |> LiquidToMicheline.contract_of_ezjson
             |> decompile_michelson in
           let storage =
             find r ["script"; "storage"]
-            |> LiquidToTezos.const_of_ezjson
+            |> LiquidToMicheline.const_of_ezjson
             |> (fun e -> convert_const env e ~ty:code.storage)
           in
           Some (code, storage)
@@ -706,14 +706,14 @@ let run_pre ?(debug=false)
   let env = contract.ty_env in
   let storage_ty = contract.storage in
   let c, loc_table =
-    LiquidToTezos.convert_contract ~expand:true pre_michelson in
+    LiquidToMicheline.convert_contract ~expand:true pre_michelson in
   let input_m = LiquidMichelson.compile_const input in
-  let input_t = LiquidToTezos.convert_const ~expand:true input_m in
+  let input_t = LiquidToMicheline.convert_const ~expand:true input_m in
   let storage_m = LiquidMichelson.compile_const storage in
-  let storage_t = LiquidToTezos.convert_const ~expand:true storage_m in
-  let contract_json = LiquidToTezos.json_of_contract c in
-  let input_json = LiquidToTezos.json_of_const input_t in
-  let storage_json = LiquidToTezos.json_of_const storage_t in
+  let storage_t = LiquidToMicheline.convert_const ~expand:true storage_m in
+  let contract_json = LiquidToMicheline.json_of_contract c in
+  let input_json = LiquidToMicheline.json_of_const input_t in
+  let storage_json = LiquidToMicheline.json_of_const storage_t in
   let run_fields = [
     "script", contract_json;
     "input", input_json;
@@ -738,20 +738,20 @@ let run_pre ?(debug=false)
       if not debug then None
       else Some (Ezjsonm.find r ["trace"])
     in
-    let storage_expr = LiquidToTezos.const_of_ezjson storage_r in
+    let storage_expr = LiquidToMicheline.const_of_ezjson storage_r in
     let get_value v = match Ezjsonm.get_dict v with
       | [] -> None
       | _ :: _ ->
-        Some (LiquidToTezos.const_of_ezjson v)
+        Some (LiquidToMicheline.const_of_ezjson v)
       | exception Ezjsonm.Parse_error _ ->
-        Some (LiquidToTezos.const_of_ezjson v) in
+        Some (LiquidToMicheline.const_of_ezjson v) in
     let big_map_diff_expr = match big_map_diff_r with
       | None -> None
       | Some json_diff ->
         Some (Ezjsonm.get_list (fun diffi ->
             try
               Ok (
-                Ezjsonm.find diffi ["key"] |> LiquidToTezos.const_of_ezjson,
+                Ezjsonm.find diffi ["key"] |> LiquidToMicheline.const_of_ezjson,
                 try Ezjsonm.find diffi ["value"] |> get_value
                 with Not_found -> None
               )
@@ -762,7 +762,7 @@ let run_pre ?(debug=false)
                        diffi)
           ) json_diff)
     in
-    let env = LiquidTezosTypes.empty_env env.filename in
+    let env = LiquidMichelineTypes.empty_env env.filename in
     let storage = convert_const env storage_expr ~ty:storage_ty in
     (* TODO parse returned operations *)
     let big_map_diff =
@@ -842,8 +842,8 @@ let get_storage liquid address =
   >>= fun r ->
   let r = Ezjsonm.from_string r in
   try
-    let storage_expr = LiquidToTezos.const_of_ezjson r in
-    let env = LiquidTezosTypes.empty_env syntax_ast.ty_env.filename in
+    let storage_expr = LiquidToMicheline.const_of_ezjson r in
+    let env = LiquidMichelineTypes.empty_env syntax_ast.ty_env.filename in
     return
       (convert_const env storage_expr ~ty:syntax_ast.storage)
   with Not_found ->
@@ -932,7 +932,7 @@ let init_storage ?source liquid init_params_strings =
         let m = List.fold_left (fun m -> function
             | Big_map_add (DiffKey k, v) -> (k, v) :: m
             | Big_map_add (DiffKeyHash _, _) ->
-              failwith "Big map must be empty in initial storage with this version of Tezos node"
+              failwith "Big map must be empty in initial storage with this version of Dune node"
             | Big_map_remove _ -> m
           ) m l
         in
@@ -941,7 +941,7 @@ let init_storage ?source liquid init_params_strings =
         let m = List.fold_left (fun m -> function
             | Big_map_add (DiffKey k, v) -> (k, v) :: m
             | Big_map_add (DiffKeyHash _, _) ->
-              failwith "Big map must be empty in initial storage with this version of Tezos node"
+              failwith "Big map must be empty in initial storage with this version of Dune node"
             | Big_map_remove _ -> m
           ) m l
         in
@@ -970,12 +970,12 @@ let forge_deploy ?head ?source ?public_key
   get_next_counter source >>= fun counter ->
   is_revealed source >>= fun source_revealed ->
   let c, loc_table =
-    LiquidToTezos.convert_contract ~expand:true pre_michelson in
+    LiquidToMicheline.convert_contract ~expand:true pre_michelson in
   let init_storage_m = LiquidMichelson.compile_const init_storage in
   let init_storage_t =
-    LiquidToTezos.convert_const ~expand:true init_storage_m in
-  let contract_json = LiquidToTezos.json_of_contract c in
-  let init_storage_json = LiquidToTezos.json_of_const init_storage_t in
+    LiquidToMicheline.convert_const ~expand:true init_storage_m in
+  let contract_json = LiquidToMicheline.json_of_contract c in
+  let init_storage_json = LiquidToMicheline.json_of_const init_storage_t in
   let script_json = [
     "code", contract_json;
     "storage", init_storage_json
@@ -1162,10 +1162,10 @@ let forge_call ?head ?source ?public_key
              (CConstr (entry_name,
                        (LiquidDecode.decode_const input))) in
   let _, loc_table =
-    LiquidToTezos.convert_contract ~expand:true pre_michelson in
+    LiquidToMicheline.convert_contract ~expand:true pre_michelson in
   let parameter_m = LiquidMichelson.compile_const parameter in
-  let parameter_t = LiquidToTezos.convert_const ~expand:true parameter_m in
-  let parameter_json = LiquidToTezos.json_of_const parameter_t in
+  let parameter_t = LiquidToMicheline.convert_const ~expand:true parameter_m in
+  let parameter_json = LiquidToMicheline.json_of_const parameter_t in
   begin match head with
     | Some head -> return head
     | None -> get_head ()
@@ -1356,11 +1356,11 @@ let pack ?liquid ~const ~ty =
   (* LiquidCheck.check_const_type ~to_tez:LiquidPrinter.tez_of_liq noloc
    *   ty const in *)
   let const_m = LiquidMichelson.compile_const const in
-  let const_t = LiquidToTezos.convert_const ~expand:true const_m in
-  let const_json = LiquidToTezos.json_of_const const_t in
-  let ty_m = LiquidToTezos.convert_type (LiquidEncode.encode_type ty) in
+  let const_t = LiquidToMicheline.convert_const ~expand:true const_m in
+  let const_json = LiquidToMicheline.json_of_const const_t in
+  let ty_m = LiquidToMicheline.convert_type (LiquidEncode.encode_type ty) in
   (* same syntax for const and types*)
-  let ty_json = LiquidToTezos.json_of_const ty_m in
+  let ty_json = LiquidToMicheline.json_of_const ty_m in
   let pack_fields = [
     "data", const_json;
     "type", ty_json;
@@ -1481,4 +1481,4 @@ let forge_call_arg ?(entry_name="main") liquid input_string =
              (CConstr (entry_name,
                        (LiquidDecode.decode_const input))) in
   let param_m = LiquidMichelson.compile_const parameter in
-  LiquidToTezos.(string_of_const @@ convert_const ~expand:false param_m)
+  LiquidToMicheline.(string_of_const @@ convert_const ~expand:false param_m)

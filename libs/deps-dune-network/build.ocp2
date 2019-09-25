@@ -21,34 +21,80 @@
 (*  along with this program.  If not, see <https://www.gnu.org/licenses/>.  *)
 (****************************************************************************)
 
-(* Disable to compile without the sources of Tezos.
-   The following features with be disabled:
-   * Decompilation of Michelson files
-   * Execution of Michelson contracts
-*)
+(* This part of the library is made to create a minimal set of dependencies
+to be able to run code that was directly extracted from Dune Network *)
 
-Sys = module("ocp-build:Sys", "1.0");
+function pp_js(file) {
+    return file,
+           { pp =  ["camlp4o"; "%{js_of_ocaml-camlp4_SRC_DIR}%/pa_js.cma"]};
+}
 
-(* This value is used if with_dune_network is not set before *)
-default_with_dune_network = Sys.file_exists("dune-network/README.md");
+OCaml.library("ocplib-fake-lwt",
+   ocaml + {
+     files = [
+       "utils.ml";
+       "lwt.ml";
+       "lwt_list.ml";
+       "lwt_mutex.ml";
+       "lwt_stream.ml";
+       "lwt_io.ml";
+     ];
+   });
 
-try { with_dune_network = with_dune_network; }
-  catch("unknown-variable",x){ with_dune_network = default_with_dune_network; }
+if( with_dune_network ) {
 
-(* By default, liquidity will contain some version information
-  (Git commit, build date, etc.). However, during development, it
-  makes recompilation slower, so you can create a file DEVEL here
-  to tell ocp-build not to include version information.
-  The flag can also be controled in an inclusing project by using
-  the 'with_version' option.
-*)
+if( for_javascript ) {
 
-default_with_version = !Sys.file_exists("DEVEL");
+OCaml.library("zarith", ocaml + {
+     files = [
+       "z.ml";
+     ];
+     requires = [
+       "nums";
+   ];
+});
 
-try { with_version = with_version; }
-  catch("unknown-variable",x){ with_version = default_with_version; }
+OCaml.library("dune-network-deps", ocaml + {
+     files = [
+       "nocrypto.ml";
+       pp_js("js/blake2.ml");
+       "hacl.ml";
+     ];
+     requires = [
+       "zarith";
+       "lwt";
+       (* "cstruct"; *)
+       "bigstring";
+       "ocplib-endian";
+       "uutf";
+       "ocplib-ezjsonm-js";
+       "ocp-libsodium-js";
+       "js_of_ocaml";
+       "hex";
+       "digestif.ocaml";
+   ];
+});
 
-default_for_javascript = false;
+} else {
 
-try { for_javascript = for_javascript; }
-  catch("unknown-variable",x){ for_javascript = default_for_javascript; }
+OCaml.library("dune-network-deps", ocaml + {
+     files = [
+       "blake2b-ref.c";    (* from BLAKE/BLAKE *)
+       "blake2b-stubs.c";
+       "blake2.ml";
+       "hacl.ml";
+     ];
+     requires = [
+       "zarith";
+       (* "cstruct"; *)
+       "bigstring";
+       "ocplib-endian";
+       "lwt";
+       "digestif.ocaml";
+       "sodium";
+       "ezjsonm";
+     ];
+});
+
+}
+}

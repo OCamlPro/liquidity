@@ -51,7 +51,7 @@ let parseonly = ref false
 let singleline = ref false
 
 (** Produce outputs of the compiler in Json format. This can be used
-    to construct RPCs manually outside the Tezos client and Liquidity
+    to construct RPCs manually outside the Dune client and Liquidity
     client *)
 let json = ref false
 
@@ -95,11 +95,11 @@ let delegatable = ref false
 let spendable = ref false
 
 (** Gas limit for transactions and originations. The default value is
-    the maximum allowed by Tezos at the moment. *)
+    the maximum allowed by Dune at the moment. *)
 let gas_limit = ref "800000"
 
 (** The storage limit for transactions and originations. The default
-    value is the maximum allowed by Tezos at the moment. *)
+    value is the maximum allowed by Dune at the moment. *)
 let storage_limit = ref "60000"
 
 (** Private key can be given to the liquidity tezos-client when

@@ -24,7 +24,13 @@
 ############################################################################
 
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
+. $DIR/env.sh
 
-DUNE="$DIR/../dune-network"
-
-DUNE_PID_FILE="/tmp/dunliqsandbox.pid"
+if [ -e "$DUNE_PID_FILE" ]
+then
+    echo "Killing Dune node..."
+    kill `cat $DUNE_PID_FILE`
+    rm -f $DUNE_PID_FILE
+else
+    echo "Dune node was not started."
+fi

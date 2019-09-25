@@ -9,7 +9,7 @@ cache:
   timeout: 1000
   directories:
   - $HOME/.opam
-  - tezos
+  - dune-network
 
 before_install:
 - sh travis-scripts/prepare-ubuntu.sh
@@ -17,8 +17,8 @@ before_install:
 install:
 - export OPAMYES=1
 - sh travis-scripts/prepare-opam.sh
-- bash travis-scripts/build-tezos.sh
-- source travis-scripts/start-tezos-sandbox.sh
+- bash travis-scripts/build-dune.sh
+- source travis-scripts/start-dune-sandbox.sh
 
 script:
 - eval `opam config env`
@@ -28,4 +28,4 @@ script:
 - make rev-tests
 
 after_script:
-- bash travis-scripts/stop-tezos-sandbox.sh
+- bash travis-scripts/stop-dune-sandbox.sh

@@ -1,0 +1,153 @@
+(****************************************************************************)
+(*                               Liquidity                                  *)
+(*                                                                          *)
+(*                  Copyright (C) 2017-2019 OCamlPro SAS                    *)
+(*                                                                          *)
+(*                    Authors: Fabrice Le Fessant                           *)
+(*                             Alain Mebsout                                *)
+(*                             David Declerck                               *)
+(*                                                                          *)
+(*  This program is free software: you can redistribute it and/or modify    *)
+(*  it under the terms of the GNU General Public License as published by    *)
+(*  the Free Software Foundation, either version 3 of the License, or       *)
+(*  (at your option) any later version.                                     *)
+(*                                                                          *)
+(*  This program is distributed in the hope that it will be useful,         *)
+(*  but WITHOUT ANY WARRANTY; without even the implied warranty of          *)
+(*  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the           *)
+(*  GNU General Public License for more details.                            *)
+(*                                                                          *)
+(*  You should have received a copy of the GNU General Public License       *)
+(*  along with this program.  If not, see <https://www.gnu.org/licenses/>.  *)
+(****************************************************************************)
+
+(* Most of this code is from Dune_Network, so we use include files and a submodule *)
+
+if( with_dune_network ) {
+
+ocaml.debug = true;
+
+compflags = [ "-bin-annot"; "-g"; "-thread"; "-short-paths"; "-safe-string";
+                "-w"; "+27-30-40"; ];
+
+dune_network_dir = "../../dune-network/src/";
+
+(* Some functions to declare Dune_Network dependencies created by including source
+  files with #include *)
+function pp_dune_network(file){
+  return file, { more_deps = [ dune_network_dir + file ] };
+}
+
+function pp_proto_client(file){
+  return file, { more_deps = [ dune_network_dir + "proto_004_Pt24m4xi/lib_client/" + file ] };
+}
+
+function pp_stdlib(file){
+  return file, { more_deps = [ dune_network_dir + "lib_stdlib/" + file ] };
+}
+
+function pp_base(file){
+  return file, { more_deps = [ dune_network_dir + "lib_base/" + file ] };
+}
+
+function pp_crypto(file){
+  return file, { more_deps = [ dune_network_dir + "lib_crypto/" + file ] };
+}
+
+function from_dune_network(file){
+  return dune_network_dir + file;
+}
+
+
+OCaml.library("dune-network-lib",
+  ocaml + {
+     bytelink = [ "-custom" ];
+     pp = [ "ocp-pp" ];
+     files = OCaml.pack("Dune_Network_Lib", [
+        from_dune_network("lib_stdlib/compare.ml");
+        from_dune_network("lib_stdlib/option.ml");
+        from_dune_network("lib_stdlib/mBytes.ml");
+        from_dune_network("lib_stdlib/tzList.ml");
+        from_dune_network("lib_stdlib/tzString.ml");
+        from_dune_network("lib_stdlib/utils.ml");
+        from_dune_network("lib_stdlib/binary_stream.ml");
+        from_dune_network("lib_data_encoding/binary_size.ml");
+        from_dune_network("lib_data_encoding/encoding.ml");
+        from_dune_network("lib_data_encoding/binary_error.ml");
+        from_dune_network("lib_data_encoding/binary_length.ml");
+        from_dune_network("lib_data_encoding/binary_reader.ml");
+        from_dune_network("lib_data_encoding/binary_writer.ml");
+        from_dune_network("lib_data_encoding/binary_stream_reader.ml");
+        from_dune_network("lib_data_encoding/json.ml");
+        from_dune_network("lib_data_encoding/bson.ml");
+        from_dune_network("lib_data_encoding/binary_schema.ml");
+        from_dune_network("lib_data_encoding/binary_description.ml");
+        from_dune_network("lib_data_encoding/data_encoding.ml");
+        from_dune_network("lib_stdlib/tag.ml");
+        from_dune_network("lib_stdlib/lwt_utils.ml");
+        from_dune_network("lib_stdlib/lwt_canceler.ml");
+        from_dune_network("lib_stdlib/ring.ml");
+        from_dune_network("lib_stdlib/weakRingTable.ml");
+        from_dune_network("lib_error_monad/error_monad_sig.ml");
+        from_dune_network("lib_error_monad/error_monad.ml");
+        from_dune_network("lib_micheline/micheline.ml");
+        from_dune_network("lib_micheline/micheline_parser.ml");
+        from_dune_network("lib_micheline/micheline_printer.ml");
+        "data_encoding_ezjsonm.ml";
+        "tezos_config.ml";
+        "RPC_arg.ml";
+        "clic.ml";
+        from_dune_network("lib_crypto/base58.ml");
+        from_dune_network("lib_crypto/helpers.ml");
+        from_dune_network("lib_crypto/blake2B.ml");
+        "ed25519.ml";
+        from_dune_network("lib_crypto/s.ml");
+        from_dune_network("lib_crypto/operation_hash.ml");
+        pp_proto_client("michelson_v1_macros.ml");
+     ]);
+     requires = [
+              "dune-network-deps";
+              "ocplib-json-typed";
+              "ocplib-json-typed-bson"; (* data_encoding *)
+              "ocplib-endian";     (* data_encoding *)
+              "ocplib-endian.bigstring";
+              "bigstring";
+              "calendar";
+              "hex";
+              "lwt_log";
+     ];
+   });
+
+}
+
+
+ojt_dir = "../../dune-network/vendors/ocplib-json-typed/";
+
+OCaml.library("ocplib-json-typed",
+        ocaml + {
+          files = [
+          ojt_dir + "src/json_repr.ml";
+          ojt_dir + "src/json_query.ml";
+          ojt_dir + "src/json_schema.ml";
+          ojt_dir + "src/json_encoding.ml";
+          ];
+          requires = '[
+                   ezjsonm
+                   ocplib-endian
+                   uri
+          ];
+          }
+   );
+
+
+OCaml.library("ocplib-json-typed-bson",
+        ocaml + {
+          files = [
+             ojt_dir + "src/json_repr_bson.ml";
+          ];
+          requires = '[
+                   ocplib-json-typed
+                   ocplib-endian
+          ];
+          }
+   );

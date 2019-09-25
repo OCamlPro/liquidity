@@ -23,7 +23,7 @@
 
 all: build
 
-clone-tezos:
+clone-dune-network:
 	git submodule update --init
 
 _obuild/liquidity/liquidity.asm: _obuild
@@ -73,8 +73,8 @@ headers:
                 tools/liquidity/build.ocp2 \
 		tools/liquidity/*.ml[ily] \
 		tools/liquidity/*.ml \
-		tools/liquidity/with*-tezos/*.ml[ily] \
-		tools/liquidity/with*-tezos/*.ml \
+		tools/liquidity/with*-dune-network/*.ml[ily] \
+		tools/liquidity/with*-dune-network/*.ml \
 		tools/liquidity/reason/liquidReasonParse.ml \
 		libs/*/build.ocp2 \
 		libs/*/*.ml[ily] \
@@ -82,7 +82,7 @@ headers:
 		libs/*/*/*.ml
 
 
-# All of these tests must be run with with_tezos=true
+# All of these tests must be run with with_dune_network=true
 
 NTESTS=42
 NREVTESTS=10
@@ -99,9 +99,9 @@ OTHER_TESTS=others/broker others/demo others/auction others/multisig others/alia
 DOC_TESTS=`cd tests; find doc -regex "[^\.]+.liq" | sort -V`
 REV_TESTS=`find tests/reverse -regex "[^\.]+.tz" | sort -V`
 
-NEW_TEZOS_TESTS= fail weather_insurance
-FAILING_TEZOS_TESTS= originator
-TEZOS_TESTS=`find tezos/src/bin_client/test/contracts -regex "[^\.]+.tz" ! -path "*concat_hello.tz"| sort -V`
+NEW_DUNE_TESTS= fail weather_insurance
+FAILING_DUNE_TESTS= originator
+DUNE_TESTS=`find dune-network/src/bin_client/test/contracts -regex "[^\.]+.tz" ! -path "*concat_hello.tz"| sort -V`
 
 TESTS=$(DOC_TESTS) $(SIMPLE_TESTS) $(MORE_TESTS:=.liq) $(RE_TESTS:=.reliq) $(OTHER_TESTS:=.liq)
 
@@ -117,7 +117,7 @@ tests-mini: mini
 	@echo ---------------------
 	@scripts/run-list.sh scripts/check-mini.sh $(TESTS)
 
-RTESTS=$(REV_TESTS) $(TEZOS_TESTS)
+RTESTS=$(REV_TESTS) $(DUNE_TESTS)
 
 rev-tests: build
 	@echo ---------------------

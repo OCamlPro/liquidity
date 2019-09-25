@@ -3,13 +3,13 @@ next | master
 [![Travis-CI Build Status](https://travis-ci.org/OCamlPro/liquidity.svg?branch=next)](https://travis-ci.org/OCamlPro/liquidity) | [![Travis-CI Build Status](https://travis-ci.org/OCamlPro/liquidity.svg?branch=master)](https://travis-ci.org/OCamlPro/liquidity) 
 
 
-Liquidity: a Smart Contract Language for Tezos
+Liquidity: a Smart Contract Language for Dune Network
 ==============================================
 
-Liquidity is a language to program Smart Contracts for Tezos. It uses
-the syntax of OCaml (and ReasonML), and strictly complies to Michelson
-security restrictions. Liquidity is distributed under the terms of the
-[GPLv3 license](LICENSE).
+Liquidity is a language to program Smart Contracts for Dune Network
+(and Tezos). It uses the syntax of OCaml (and ReasonML), and strictly
+complies to Michelson security restrictions. Liquidity is distributed
+under the terms of the [GPLv3 license](LICENSE).
 
 The Liquidity Project
 ---------------------
@@ -59,6 +59,5 @@ Status
 ------
 
 All features of Michelson are supported in Liquidity. All tests from
-https://github.com/tezos/tezos/tree/alphanet/test/contracts can be
+https://github.com/dune-network/dune-network/tree/mainnet/test/contracts can be
 decompiled to Liquidity and recompiled to Michelson.
-
