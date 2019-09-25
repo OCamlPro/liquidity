@@ -48,12 +48,6 @@ let new_binding tyvar var env =
 let new_lbinding tyvar var env =
   new_binding tyvar.nname var.nname env
 
-let find_name env name =
-  try
-    StringMap.find name env.env_map
-  with Not_found ->
-    name
-
 let base_of_var arg =
   try
     let pos = String.index arg '/' in
@@ -63,6 +57,15 @@ let base_of_var arg =
 
 let base_of_lvar arg =
   { arg with nname = base_of_var arg.nname }
+
+let find_name env name =
+  try
+    StringMap.find name env.env_map
+  with Not_found ->
+    (* This is for the fee code case where the parameter name with /
+       might be lost in the decoding phase (when decompiling). This
+       hacks allows to bypass this. *)
+    base_of_var name
 
 let escape_var arg =
   try
