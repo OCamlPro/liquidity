@@ -9,7 +9,7 @@ To install Liquidity from sources, you will need a working
 installation of OCaml with `OPAM
 <http://opam.ocaml.org/doc/2.0/Install.html>`__ at least version 2.0.
 
-As of Aug 15, 2018, the following process should work:
+As of Oct 4, 2019, the following process should work:
 
 1. Create an OPAM switch called ``liquidity``, with version 4.06.1 of OCaml::
      
@@ -28,11 +28,11 @@ As of Aug 15, 2018, the following process should work:
     
   This command should create a ``liquidity`` directory with the ``next`` branch.
 
-3. Within the ``liquidity`` directory, the Tezos sources in branch
-   ``mainnet`` should be in a subdirectory ``tezos``. This can be
+3. Within the ``liquidity`` directory, the Dune Network sources in branch
+   ``mainnet`` should be in a subdirectory ``dune-network``. This can be
    achieved either with a symbolic link, or by checkouting the sources::
 
-     make clone-tezos
+     make clone-dune-network
 
 4. Install Liquidity dependencies::
 
@@ -50,7 +50,7 @@ As of Aug 15, 2018, the following process should work:
 
      (cd tests && liquidity test0.liq)
 
-7. Optionnally, you can build some local documentation with sphinx
+7. Optionally, you can build some local documentation with sphinx
    and the Read-The-Docs theme (``pip3 install sphinx-rtd-theme``)::
 
      make doc
