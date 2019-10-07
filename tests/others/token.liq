@@ -12,14 +12,9 @@ type storage = {
   name : string;
   symbol : string;
   owner : address;
-  conversion_rate : nat * dun;
 }
 
-let base_fee = 0.041_DUN
-let base_burn = 8p
-
-let%init storage owner totalSupply decimals name symbol conversion_rate =
-  if conversion_rate.(1) = 0_DUN then failwith "Bad conversion rate";
+let%init storage owner totalSupply decimals name symbol =
   let owner_account  =
     { balance = totalSupply;
       allowances = Map } in
@@ -33,7 +28,6 @@ let%init storage owner totalSupply decimals name symbol conversion_rate =
     name;
     symbol;
     owner;
-    conversion_rate;
   }
 
 let get_account (a, (accounts : (address, account) big_map)) =
@@ -56,47 +50,10 @@ let perform_transfer
   let accounts = Map.add dest new_account_dest accounts in
   [], storage.accounts <- accounts
 
-
-let take_fee_as_tokens (sender, (fee, burn), storage) =
-  let (c_tok, c_dun) = storage.conversion_rate in
-  let tokens = (fee + burn * 0.001_DUN) * c_tok / c_dun in
-  match tokens with
-  | None -> failwith ()
-  | Some (fee_tokens, _) ->
-    let accounts = storage.accounts in
-    let account_sender = get_account (sender, accounts) in
-    let new_account_sender = match is_nat (account_sender.balance - fee_tokens) with
-      | None ->
-        failwith ("Not enough tokens to pay fees", account_sender.balance, fee_tokens)
-      | Some b -> account_sender.balance <- b in
-    let accounts = Map.add sender new_account_sender accounts in
-    storage.accounts <- accounts
-
-let fee_transfer dest storage =
-  let burn = if Map.mem dest storage.accounts then 0p else base_burn in
-  base_fee, burn
-
-let%entry transfer (dest, tokens) storage = begin[@fee
-  fee_transfer dest storage
-]
-  let storage =
-    if Current.collect_call () then
-      take_fee_as_tokens
-        (Current.sender (), fee_transfer dest storage, storage)
-    else storage in
+let%entry transfer (dest, tokens) storage =
   perform_transfer (Current.sender (), dest, tokens, storage)
-end
 
-let fee_approve = base_fee, base_burn + 20p
-
-let%entry approve (spender, tokens) storage = begin[@fee
-  fee_approve
-]
-  let storage =
-    if Current.collect_call () then
-      take_fee_as_tokens
-        (Current.sender (), fee_approve, storage)
-    else storage in
+let%entry approve (spender, tokens) storage =
   let account_sender = get_account (Current.sender (), storage.accounts) in
   let account_sender =
     account_sender.allowances <-
@@ -107,20 +64,8 @@ let%entry approve (spender, tokens) storage = begin[@fee
   let storage = storage.accounts <-
       Map.add (Current.sender ()) account_sender storage.accounts in
   [], storage
-end
 
-let fee_transferFrom dest storage =
-  let burn = if Map.mem dest storage.accounts then 0p else base_burn in
-  base_fee + 0.002_DUN, burn
-
-let%entry transferFrom (from, dest, tokens) storage = begin[@fee
-  fee_transferFrom dest storage
-]
-  let storage =
-    if Current.collect_call () then
-      take_fee_as_tokens
-        (Current.sender (), fee_transferFrom dest storage, storage)
-    else storage in
+let%entry transferFrom (from, dest, tokens) storage =
   let account_from = get_account (from, storage.accounts) in
   let new_allowances_from =
     match Map.find (Current.sender ()) account_from.allowances with
@@ -138,7 +83,7 @@ let%entry transferFrom (from, dest, tokens) storage = begin[@fee
   let storage = storage.accounts <-
       Map.add from account_from storage.accounts in
   perform_transfer (from, dest, tokens, storage)
-end
+
 
 
 (* ------------- Storage access from outside ------------- *)
@@ -153,46 +98,32 @@ contract type NatNatContract = sig
   val%entry main : nat * nat -> _
 end
 
-let%entry balanceOf (spender, forward) storage = begin[@fee
-   failwith "I don't pay fees for balanceOf"
-]
+let%entry balanceOf (spender, forward) storage =
   let spender_balance = match Map.find spender storage.accounts with
     | None -> 0p
     | Some account -> account.balance in
   [ forward.main spender_balance ~amount:0tz ], storage
-end
 
-let%entry allowance (from, spender, forward) storage = begin[@fee
-  failwith "I don't pay fees for allowance"
-]
+let%entry allowance (from, spender, forward)
+    storage =
   let spender_allowance = match Map.find from storage.accounts with
     | None -> 0p, 0p
     | Some account -> match Map.find spender account.allowances with
       | None -> 0p, account.balance
       | Some allowed -> allowed, account.balance in
   [ forward.main spender_allowance ~amount:0tz ], storage
-end
+
 
 (* -------------- Creating accounts ------------------------ *)
 
-(*
-Fee to the baker: đ0.021479
-Consumed gas: 211548
-*)
-let%entry createAccount (dest, tokens) storage = begin[@fee
-   failwith "I don't pay fees for createAccount"
-]
+let%entry createAccount (dest, tokens) storage =
   if Current.sender () <> storage.owner then
     failwith "Only owner can create accounts";
   perform_transfer (storage.owner, dest, tokens, storage)
-end
 
-let%entry createAccounts new_accounts storage = begin[@fee
-   failwith "I don't pay fees for createAccounts"
-]
+let%entry createAccounts new_accounts storage =
   if Current.sender () <> storage.owner then
     failwith "Only owner can create accounts";
   List.fold (fun ((dest, tokens), (_ops, storage)) ->
       perform_transfer (storage.owner, dest, tokens, storage)
     ) new_accounts ([], storage)
-end

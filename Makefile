@@ -95,7 +95,7 @@ MORE_TESTS=test_ifcons test_if test_loop test_option test_transfer test_call tes
   bug_annot0 inline_fail bug_annot1 test_infer_unpack test_infer_param test_record \
   bug187 test_modules lambda_const votes bug_197 curry bug_210 bug_213 bug_213_0 bug_214 bug_216
 RE_TESTS=bug202
-OTHER_TESTS=others/broker others/demo others/auction others/multisig others/alias others/game others/mist_wallet_current others/token others/token_vote
+OTHER_TESTS=others/broker others/demo others/auction others/multisig others/alias others/game others/mist_wallet_current others/token others/token_vote others/token_no_fee
 DOC_TESTS=`cd tests; find doc -regex "[^\.]+.liq" | sort -V`
 REV_TESTS=`find tests/reverse -regex "[^\.]+.tz" | sort -V`
 
