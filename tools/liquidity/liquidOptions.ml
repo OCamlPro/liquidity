@@ -74,18 +74,18 @@ let main = ref (None : string option)
 let output = ref (None : string option)
 
 
-(** {2 Options of the Liquidity tezos client } *)
+(** {2 Options of the Liquidity Dune client } *)
 
 (** Address of the node with the RPC port *)
-let tezos_node = ref "127.0.0.1:8732"
+let node = ref "127.0.0.1:8733"
 
-(** Source (optional) of the transaction, a tz.. or a KT1... *)
+(** Source (optional) of the transaction, a dn.. or a KT1... *)
 let source = ref (None : string option)
 
-(** Amount in tez for the transaction or origination *)
+(** Amount in DUN for the transaction or origination *)
 let amount = ref "0"
 
-(** Fee (default 0.1 tz) in microtez *)
+(** Fee (default 0.1 DUN) in mudun *)
 let fee = ref "100000"
 
 (** Originate a delegatable contract *)
@@ -102,22 +102,12 @@ let gas_limit = ref "800000"
     value is the maximum allowed by Dune at the moment. *)
 let storage_limit = ref "60000"
 
-(** Private key can be given to the liquidity tezos-client when
+(** Private key can be given to the liquidity dune-client when
     injecting signed transactions and originations directly. *)
 let private_key = ref (None : string option)
 
 let signature = ref (None : string option)
 let counter = ref (None : int option)
-
-type proto =
-  | Zeronet
-  | Mainnet
-  | Alphanet
-
-let protocol = ref (None : proto option)
-
-let main_id = "NetXdQprcVkpaWU"
-let alphanet_id = "NetXgtSLGNJvNye"
 
 let ocaml_syntax = ref true
 

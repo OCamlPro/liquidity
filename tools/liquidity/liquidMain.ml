@@ -654,12 +654,12 @@ let main () =
       "--amount", Arg.String (fun amount ->
           LiquidOptions.amount := parse_tez_to_string "--amount" amount
         ),
-      "<1.99tz> Set amount for deploying or running a contract (default: 0tz)";
+      "<1.99DUN> Set amount for deploying or running a contract (default: 0DUN)";
 
       "--fee", Arg.String (fun fee ->
           LiquidOptions.fee := parse_tez_to_string "--fee" fee
         ),
-      "<0.05tz> Set fee for deploying a contract (default: 0.05tz)";
+      "<0.1DUN> Set fee for deploying a contract (default: 0.1DUN)";
 
       "--source", Arg.String (fun s ->
           Data.validate_key_hash s;
@@ -674,25 +674,13 @@ let main () =
       "--counter", Arg.Int (fun n -> LiquidOptions.counter := Some n),
       "N Set the counter for the operation instead of retrieving it";
 
-      "--tezos-node", Arg.String (fun s -> LiquidOptions.tezos_node := s),
+      "--node", Arg.String (fun s -> LiquidOptions.node := s),
       "<addr:port> Set the address and port of a node to run or deploy \
-       contracts (default: 127.0.0.1:8732)\
+       contracts (default: 127.0.0.1:8733)\
        \n\
        \n\
        Available commands:\
       ";
-
-      "--protocol", Arg.String (function
-          | "zeronet" -> LiquidOptions.protocol := Some Zeronet
-          | "alphanet" -> LiquidOptions.protocol := Some Alphanet
-          | "mainnet" -> LiquidOptions.protocol := Some Mainnet
-          | s ->
-            Format.eprintf
-              "Unknown protocol %s (use mainnet, zeronet, alphanet)@." s;
-            exit 2
-        ),
-      " Specify protocol (mainnet, zeronet, alphanet) \
-       (detect if not specified)";
 
       "--run", Arg.Tuple [
         Arg.String (fun s -> Data.entry_name := s);

@@ -192,7 +192,7 @@ end
 (*      (Ezjsonm.to_string ~minify:false (Ezjsonm.from_string data)); *)
 
 let curl_call meth f data path =
-  let host = !LiquidOptions.tezos_node in
+  let host = !LiquidOptions.node in
   if !LiquidOptions.verbosity > 0 then
     Printf.eprintf "\n%s to %s%s:\n--------------\n<<<%s>>>\n%!"
       meth host path data;
