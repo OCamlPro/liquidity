@@ -288,91 +288,110 @@ let convert_primitive prim args =
 
 let rec convert_const ~abbrev (expr : (datatype, 'a) exp const) =
   match expr with
-  | CInt n -> Exp.constant (Const.integer (LiquidNumber.liq_of_integer n))
-  | CNat n -> Exp.constant (Const.integer ~suffix:'p'
-                              (LiquidNumber.liq_of_integer n))
-  | CString s -> Exp.constant (Const.string s)
-  | CUnit -> Exp.construct (lid "()") None
-  | CBool false -> Exp.construct (lid "false") None
-  | CBool true -> Exp.construct (lid "true") None
-  | CNone -> Exp.construct (lid "None") None
-  | CSome x -> Exp.construct (lid "Some")
-                 (Some (convert_const ~abbrev x))
-  | CLeft x -> Exp.construct (lid "Left")
-                 (Some (convert_const ~abbrev x))
-  | CRight x -> Exp.construct (lid "Right")
-                  (Some (convert_const ~abbrev x))
-  | CConstr (c, CUnit) -> Exp.construct (lid c) None
-  | CConstr (c, x) -> Exp.construct (lid c)
-                        (Some (convert_const ~abbrev x))
-  | CTuple args -> Exp.tuple (List.map (convert_const ~abbrev) args)
+  | CInt n ->
+    Exp.constant (Const.integer (LiquidNumber.liq_of_integer n)),
+    true
+  | CNat n ->
+    Exp.constant (Const.integer ~suffix:'p'
+                    (LiquidNumber.liq_of_integer n)),
+    true
+  | CString s -> Exp.constant (Const.string s), true
+  | CUnit -> Exp.construct (lid "()") None, true
+  | CBool false -> Exp.construct (lid "false") None, true
+  | CBool true -> Exp.construct (lid "true") None, true
+  | CNone -> Exp.construct (lid "None") None, false
+  | CSome x ->
+    let x, inferable_type = convert_const ~abbrev x in
+    Exp.construct (lid "Some") (Some x), inferable_type
+  | CLeft x ->
+    let x, inferable_type = convert_const ~abbrev x in
+    Exp.construct (lid "Left") (Some x), inferable_type
+  | CRight x ->
+    let x, inferable_type = convert_const ~abbrev x in
+    Exp.construct (lid "Right") (Some x), inferable_type
+  | CConstr (c, CUnit) -> Exp.construct (lid c) None, true
+  | CConstr (c, x) ->
+    let x, inferable_type = convert_const ~abbrev x in
+    Exp.construct (lid c) (Some x), inferable_type
+  | CTuple args ->
+    let args, inferable_type = List.fold_right (fun x (args, inferable_type) ->
+        let x, infer = convert_const ~abbrev x in
+        x :: args, inferable_type && infer
+      ) args ([], true) in
+    Exp.tuple args, inferable_type
   | CTez n ->
     begin match n.mutez with
       | None ->
-        Exp.constant (Const.integer ~suffix:'\231' (LiquidNumber.liq_of_tez n))
+        Exp.constant (Const.integer ~suffix:'\231' (LiquidNumber.liq_of_tez n)),
+        true
       | Some _ ->
-        Exp.constant (Const.float ~suffix:'\231' (LiquidNumber.liq_of_tez n))
+        Exp.constant (Const.float ~suffix:'\231' (LiquidNumber.liq_of_tez n)),
+        true
     end
-  | CTimestamp s -> Exp.constant (Pconst_integer (s, Some '\232'))
-  | CKey_hash n -> Exp.constant (Pconst_integer (n, Some '\233'))
-  | CKey n -> Exp.constant (Pconst_integer (n, Some '\234'))
-  | CSignature n -> Exp.constant (Pconst_integer (n, Some '\235'))
-  | CContract n -> Exp.constant (Pconst_integer (n, Some '\236'))
+  | CTimestamp s ->
+    let inferable_type = try ignore (int_of_string s); false with _ -> true in
+    Exp.constant (Pconst_integer (s, Some '\232')), inferable_type
+  | CKey_hash n ->
+    let c = Exp.constant (Pconst_integer (n, Some '\233')) in
+    if n.[0] <> '0' then c, true
+    else Exp.constraint_ c (convert_type ~abbrev Tkey_hash), true
+  | CKey n ->
+    let c = Exp.constant (Pconst_integer (n, Some '\234')) in
+    if n.[0] <> '0' then c, true
+    else Exp.constraint_ c (convert_type ~abbrev Tkey), true
+  | CSignature n ->
+    let c = Exp.constant (Pconst_integer (n, Some '\235')) in
+    if n.[0] <> '0' then c, true
+    else Exp.constraint_ c (convert_type ~abbrev Tsignature), true
+  | CContract n ->
+    Exp.constant (Pconst_integer (n, Some '\236')), false
   | CAddress n when
       String.length n >= 2 &&
       let pref = String.sub n 0 2 in pref = "tz" || pref = "dn"
     ->
     Exp.constraint_
       (Exp.constant (Pconst_integer (n, Some '\236')))
-      (convert_type ~abbrev Taddress)
-  | CAddress n -> Exp.constant (Pconst_integer (n, Some '\236'))
-  | CBytes n -> Exp.constant (Pconst_integer (n, Some '\237'))
+      (convert_type ~abbrev Taddress), true
+  | CAddress n ->
+    Exp.constant (Pconst_integer (n, Some '\236')), true
+  | CBytes n -> Exp.constant (Pconst_integer (n, Some '\237')), true
 
-  | CList [] -> Exp.construct (lid "[]") None
+  | CList [] -> Exp.construct (lid "[]") None, false
   | CList (head :: tail) ->
-    Exp.construct (lid "::") (Some
-                                (Exp.tuple [convert_const ~abbrev head;
-                                            convert_const ~abbrev (CList tail)]))
+    let head, inferable_type_h = convert_const ~abbrev head in
+    let tail, inferable_type_t = convert_const ~abbrev (CList tail) in
+    let inferable_type = inferable_type_h || inferable_type_t in
+    Exp.construct (lid "::") (Some (Exp.tuple [head; tail])), inferable_type
   | CSet [] ->
-    Exp.construct (lid "Set") None
+    Exp.construct (lid "Set") None, false
   | CSet list ->
-    Exp.construct (lid "Set")
-      (Some (convert_const ~abbrev (CList list)))
+    let list, inferable_type = convert_const ~abbrev (CList list) in
+    Exp.construct (lid "Set") (Some list), inferable_type
   | CMap [] ->
-    Exp.construct (lid "Map") None
+    Exp.construct (lid "Map") None, false
   | CBigMap [] ->
-    Exp.construct (lid "BigMap") None
+    Exp.construct (lid "BigMap") None, false
   | CMap list | CBigMap list ->
-    let args =
-      List.fold_left (fun tail (key,value) ->
-          Exp.construct (lid "::")
-            (Some
-               (Exp.tuple
-                  [
-                    Exp.tuple [
-                      convert_const ~abbrev key;
-                      convert_const ~abbrev value;
-                    ];
-                    tail
-                  ]))
-        ) (Exp.construct (lid "[]") None) list
-    in
+    let list = List.map (fun (key, value) -> CTuple [key; value]) list in
+    let list, inferable_type = convert_const ~abbrev (CList list) in
     let m = match expr with
       | CMap _ -> "Map"
       | CBigMap _ -> "BigMap"
       | _ -> assert false
     in
-    Exp.construct (lid m) (Some args)
+    Exp.construct (lid m) (Some list), inferable_type
   | CRecord labels ->
     Exp.record
-      (List.map (fun (f, x) -> lid f, convert_const ~abbrev x) labels)
-      None
+      (List.map (fun (f, x) ->
+           let x, _ = convert_const ~abbrev x in
+           lid f, x) labels)
+      None, true
   | CLambda { arg_name; arg_ty; body } ->
     Exp.fun_ Nolabel None
       (Pat.constraint_
          (pat_of_lname arg_name ~ty:arg_ty)
          (convert_type ~abbrev ~name:(arg_name.nname ^ "_t") arg_ty))
-      (convert_code ~abbrev body)
+      (convert_code ~abbrev body), true
 
 
 and convert_code ~abbrev (expr : (datatype, 'a) exp) =
@@ -406,26 +425,10 @@ and convert_code ~abbrev (expr : (datatype, 'a) exp) =
   | Seq (x, y) ->
     Exp.sequence (convert_code ~abbrev x) (convert_code ~abbrev y)
 
-  | Const { ty; const } -> begin
-      match ty, const with
-      | ( Tint
-        | Tnat
-        | Tstring
-        | Tunit
-        | Ttimestamp
-        | Ttez
-        | Tbool
-        | Toperation
-        | Tlambda _ ), _ -> convert_const ~abbrev const
-      | _, (CList (_ :: _) | CMap (_ :: _) | CBigMap (_ :: _)) ->
-        convert_const ~abbrev const
-      | (Tsignature, CSignature s
-        | Tkey, CKey s
-        | Tkey_hash, CKey_hash s) when s.[0] <> '0' -> convert_const ~abbrev const
-      | _ ->
-        Exp.constraint_
-          ~loc (convert_const ~abbrev const) (convert_type ~abbrev ty)
-    end
+  | Const { ty; const } ->
+      let const, inferable_type = convert_const ~abbrev const in
+      if inferable_type then const
+      else Exp.constraint_ ~loc const (convert_type ~abbrev ty)
 
   | Let { bnd_var; bnd_val; body } ->
     Exp.let_ ~loc Nonrecursive
@@ -446,7 +449,7 @@ and convert_code ~abbrev (expr : (datatype, 'a) exp) =
     let args = match List.rev args with
       | { desc = Const { const = CList [] as cst }} :: r_args ->
         List.fold_left (fun l a -> convert_code ~abbrev a :: l)
-          [convert_const ~abbrev cst]
+          [convert_const ~abbrev cst |> fst]
           r_args
       | _ ->
         List.map (convert_code ~abbrev) args
@@ -895,4 +898,4 @@ let convert_type ?(abbrev=false) ty = convert_type ~abbrev ty
 
 let convert_code ?(abbrev=false) code = convert_code ~abbrev code
 
-let convert_const  ?(abbrev=false) c = convert_const ~abbrev c
+let convert_const  ?(abbrev=false) c = convert_const ~abbrev c |> fst
