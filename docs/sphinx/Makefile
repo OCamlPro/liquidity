@@ -30,5 +30,5 @@ web: _site
 	cd _site && php -S localhost:10000
 
 $(SOURCEDIR)/reference/michelson.rst:
-	wget https://gitlab.com/tezos/tezos/raw/mainnet/docs/whitedoc/michelson.rst \
+	wget https://gitlab.com/dune-network/dune-network/raw/mainnet/docs/whitedoc/michelson.rst \
 	-O $(SOURCEDIR)/reference/michelson.rst

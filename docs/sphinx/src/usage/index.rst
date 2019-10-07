@@ -6,7 +6,7 @@ It can be used to:
 
 * compile Liquidity files (.liq) to Michelson
 * decompile Michelson files (.tz) to Liquidity
-* interact with a tezos-node to simulate or deploy a contract
+* interact with a dune-node to simulate or deploy a contract
 
 Basic Usage
 -----------
@@ -35,11 +35,11 @@ Let's run ``liquidity`` with no options::
     --source <tz1...>        Set the source for deploying or running a contract (default: none)
     --private-key <edsk...>  Set the private key for deploying a contract (default: none)
     --counter N              Set the counter for the operation instead of retrieving it
-    --tezos-node <addr:port> Set the address and port of a Tezos node to run or deploy contracts (default: 127.0.0.1:8732)
+    ---node <addr:port>      Set the address and port of a Dune node to run or deploy contracts (default: 127.0.0.1:8733)
 
   Available commands:
     --protocol               Specify protocol (mainnet, zeronet, alphanet) (detect if not specified)
-    --run ENTRY              PARAMETER STORAGE Run Liquidity contract on Tezos node
+    --run ENTRY              PARAMETER STORAGE Run Liquidity contract on Dune node
     --delegatable            With --[forge-]deploy, deploy a delegatable contract
     --spendable              With --[forge-]deploy, deploy a spendable contract
     --init-storage           [INPUT1 INPUT2 ...] Generate initial storage
@@ -84,8 +84,6 @@ To compile the file, we can use::
   ─➤ liquidity simple.liq
   Main contract Simple
   File "simple.tz" generated
-  If tezos is compiled, you may want to typecheck with:
-    tezos-client typecheck script simple.tz
 
 The ``liquidity`` compiler will try to compile any file with a ``.liq`` extension provided on the command line.
     
@@ -106,9 +104,7 @@ Note that we can use a more compact version, on a single line::
   ─➤ liquidity-mini --compact simple.liq
   Main contract Simple
   File "simple.tz" generated
-  If tezos is compiled, you may want to typecheck with:
-    tezos-client typecheck script simple.tz
-  
+
    ─➤ cat simple.tz
   parameter int; storage int; code { DUP ; DIP { CDR } ; CAR ; DUP ; SWAP ; DROP ; SWAP ; ADD ; NIL operation ; PAIR };
 
@@ -159,23 +155,23 @@ Relevant options:
   --verbose                Increment verbosity
 
 
-Interacting with a Tezos node
+Interacting with a Dune node
 -----------------------------
 
-Liquidity comes with a Tezos client which allows interactions with a
+Liquidity comes with a Dune client which allows interactions with a
 node using Liquidity smart contracts and Liquidity syntax.
 
 
 Running a simulation of the contract
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-If you have access to a Tezos node (for instance locally on port
+If you have access to a Dune node (for instance locally on port
 8732), you can run contract call simulations of a contract by
 specifying its current storage value, the entry point and the
 transaction parameter::
 
   > liquidity \
-      --tezos-node http://127.0.0.1:8732 \
+      --node http://127.0.0.1:8733 \
       --amount 2tz \
       tests/others/demo.liq \
       --run main '"candidate 1"' 'Map ["candidate 1", 0; "candidate 2", 0]'
@@ -187,7 +183,7 @@ transaction parameter::
 ::
 
   > liquidity \
-      --tezos-node http://127.0.0.1:8732 \
+      --node http://127.0.0.1:8733 \
       --amount 5tz \
       tests/others/demo.liq \
       --run main '"candidate 1"' 'Map ["candidate 1", 0; "candidate 2", 0]'
@@ -199,15 +195,15 @@ transaction parameter::
 Relevant options:
     --amount <1.99tz>        Set amount for deploying or running a contract (default: 0tz)
     --source <tz1...>        Set the source for deploying or running a contract (default: none)
-    --tezos-node <addr:port>  Set the address and port of a Tezos node to run or deploy contracts (default: 127.0.0.1:8732)
-    --run <ENTRY PARAMETER STORAGE>  Run Liquidity contract on Tezos node
+    --node <addr:port>       Set the address and port of a Dune node to run or deploy contracts (default: 127.0.0.1:8733)
+    --run <ENTRY PARAMETER STORAGE>  Run Liquidity contract on Dune node
 
 
 Deploying a contract
 ~~~~~~~~~~~~~~~~~~~~
 
 To deploy a contract you need to forge a deployment operation, sign
-this operation and inject it to a Tezos node. This can be performed
+this operation and inject it to a Dune node. This can be performed
 separately or all at once with the command ``--deploy``.
 
 
@@ -220,7 +216,7 @@ initializer takes one string parameter as argument, and with initial
 balance 2tz::
 
   liquidity \
-    --tezos-node http://127.0.0.1:8732 \
+    --node http://127.0.0.1:8733 \
     --amount 2tz \
     --fee 0tz \
     --delegatable \
@@ -245,7 +241,7 @@ First we need to produce (forge) an unsigned serialized deployment
 operation::
 
   > liquidity \
-     --tezos-node http://127.0.0.1:8732 \
+     --node http://127.0.0.1:8733 \
      --amount 2tz \
      --fee 0tz \
      --delegatable \
@@ -255,12 +251,12 @@ operation::
 
 Using the default client we can then sign this operation with an
 account ``my_account`` on an offline machine. If this accounts
-corresponds to a hardware wallet (like a ledger nano S) in the tezos
+corresponds to a hardware wallet (like a ledger nano S) in the Dune
 client, you will be required to confirm the signature. If this
 accounts in an encrypted private key you will be asked to input your
 password::
 
-  > tezos-client sign bytes 0x03$(cat ./my_op.bytes) for my_account
+  > dune-client sign bytes 0x03$(cat ./my_op.bytes) for my_account
 
   Signature: edsigtzxo2Q7wFiEjausSp7pKUXLK9PnPqf8rHEKdc18HtNVbZSg5WJyFJwk14w7mykCsq3nV5iB6Eo4gTX3y8Dv8tkn1EadRj7
 
@@ -268,7 +264,7 @@ Save this signature. You can now inject the signed operation on the
 Tezos newtork by simply issuing::
 
   > liquidity \
-     --tezos-node http://127.0.0.1:8732 \
+     --node http://127.0.0.1:8733 \
      --signature edsigtzxo2Q7wFiEjausSp7pKUXLK9PnPqf8rHEKdc18HtNVbZSg5WJyFJwk14w7mykCsq3nV5iB6Eo4gTX3y8Dv8tkn1EadRj7 \
      --inject my_op.bytes
 
@@ -278,7 +274,7 @@ Relevant options:
     --source <tz1...>        Set the source for deploying or running a contract (default: none)
     --private-key <edsk...>  Set the private key for deploying a contract (default: none)
     --counter N              Set the counter for the operation instead of retrieving it
-    --tezos-node <addr:port>  Set the address and port of a Tezos node to run or deploy contracts (default: 127.0.0.1:8732)
+    --node <addr:port>        Set the address and port of a Dune node to run or deploy contracts (default: 127.0.0.1:8733)
     --protocol                Specify protocol (mainnet, zeronet, alphanet) (detect if not specified)
     --delegatable             With --[forge-]deploy, deploy a delegatable contract
     --spendable               With --[forge-]deploy, deploy a spendable contract
@@ -291,7 +287,7 @@ Calling a contract
 ~~~~~~~~~~~~~~~~~~
 
 To call an already deployed smart contract you need to forge a
-transfer operation, sign this operation ans inject it to a Tezos
+transfer operation, sign this operation ans inject it to a Dune
 node. This can be performed separately or all at once with the command
 ``--call``.
 
@@ -303,7 +299,7 @@ The following command will call the ``demo.liq`` contract deployed at
 address ``KT1Ukta5wAt5R87U2awCoYHJAVA38FeptagD`` on the zeronet::
 
   liquidity \
-    --tezos-node http://zeronet-node.tzscan.io \
+    --node http://testnet-node.dunscan.io \
     --amount 5tz \
     --fee 0tz \
     --private-key edsk2gL9deG8idefWJJWNNtKXeszWR4FrEdNFM5622t1PkzH66oH3r \
@@ -325,7 +321,7 @@ First we need to produce (forge) an unsigned serialized deployment
 operation::
 
   > liquidity \
-      --tezos-node http://zeronet-node.tzscan.io \
+      --node http://testnet-node.dunscan.io \
       --amount 5tz \
       --fee 0tz \
       --source tz1WWXeGFgtARRLPPzT2qcpeiQZ8oQb6rBZd \
@@ -334,7 +330,7 @@ operation::
 
 ::
 
-  > tezos-client sign bytes 0x03$(cat ./my_op.bytes) for my_account
+  > dune-client sign bytes 0x03$(cat ./my_op.bytes) for my_account
 
   Signature:edsigu1xkB6tC2Sm39QaGtAzPbjdfWF7V9ctNVwGVH52zrmus921eVmdga2nZowGkF9HSagMNsw6ZaZ8xoKvvhyFgfgirR9Wuow
 
@@ -342,7 +338,7 @@ Save this signature. You can now inject the signed operation on the
 Tezos newtork by simply issuing::
 
   > liquidity \
-      --tezos-node http://zeronet-node.tzscan.io \
+      --node http://testnet-node.dunscan.io \
       --signature edsigu1xkB6tC2Sm39QaGtAzPbjdfWF7V9ctNVwGVH52zrmus921eVmdga2nZowGkF9HSagMNsw6ZaZ8xoKvvhyFgfgirR9Wuow \
       --inject my_op.bytes
 
@@ -354,7 +350,7 @@ Relevant options:
     --source <tz1...>        Set the source for deploying or running a contract (default: none)
     --private-key <edsk...>  Set the private key for deploying a contract (default: none)
     --counter N              Set the counter for the operation instead of retrieving it
-    --tezos-node <addr:port>  Set the address and port of a Tezos node to run or deploy contracts (default: 127.0.0.1:8732)
+    --node <addr:port>        Set the address and port of a Dune node to run or deploy contracts (default: 127.0.0.1:8733)
     --protocol                Specify protocol (mainnet, zeronet, alphanet) (detect if not specified)
     --call <KT1... ENTRY PARAMETER>  Call deployed contract
     --forge-call <KT1... ENTRY PARAMETER>  Forge call transaction operation
@@ -367,7 +363,7 @@ Generating initial storage
 ::
 
   > liquidity \
-      --tezos-node http://zeronet-node.tzscan.io \
+      --node http://testnet-node.dunscan.io \
       tests/others/demo.liq
       --init-storage '"this"'
 
@@ -383,7 +379,7 @@ Generating initial storage
 
 Relevant options:
     --amount <1.99tz>        Set amount for deploying or running a contract (default: 0tz)
-    --tezos-node <addr:port>  Set the address and port of a Tezos node to run or deploy contracts (default: 127.0.0.1:8732)
+    --node <addr:port>       Set the address and port of a Dune node to run or deploy contracts (default: 127.0.0.1:8733)
     --init-storage <INPUTS>   Generate initial storage
     --json                   Output Michelson in JSON representation
     -o <filename>            Output code in <filename>

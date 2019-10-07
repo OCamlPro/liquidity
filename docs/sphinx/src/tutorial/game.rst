@@ -2,14 +2,14 @@ A Game with an oracle
 =====================
 
 In this small tutorial, we will see how to write a chance game on the
-Tezos blockchain with Liquidity and a small external oracle which
+Dune blockchain with Liquidity and a small external oracle which
 provides random numbers.
 
 
 Principle of the game
 ---------------------
 
-Rules of the game are handled by a smart contract on the Tezos
+Rules of the game are handled by a smart contract on the Dune
 blockchain.
 
 When a player decides to start a game, she must start by making a
@@ -201,7 +201,7 @@ if we want to replace the random generator one day.
     | None -> failwith ()
     | Some (_, r) -> r in
 
-Smart contracts are public objects on the Tezos blockchain so anyone
+Smart contracts are public objects on the Dune blockchain so anyone
 can decide to call them. This means that permissions must be handled
 by the logic of the smart contract itself. In particular, we don't
 want ``finish`` to be callable by anyone, otherwise it would mean that
@@ -288,8 +288,8 @@ Full Liquidity Code of the Game Smart Contract
 The Oracle
 ----------
 
-The oracle can be implemented using `Tezos RPCs
-<http://tezos.gitlab.io/mainnet/api/rpc.html>`_ on a running Tezos
+The oracle can be implemented using `Dune Network RPCs
+<https://dune.network/docs/dune-node-mainnet/api/rpc.html>`_ on a running Dune
 node. The principle of the oracle is the following:
 
 #. Monitor new blocks in the chain.
@@ -309,19 +309,19 @@ node. The principle of the oracle is the following:
 These can be implemented with the following RPCs:
 
 * Monitoring blocks: `/chains/main/blocks?[length=<int>]
-  <http://tezos.gitlab.io/mainnet/api/rpc.html#get-chains-chain-id-blocks>`_
+  <https://dune.network/docs/dune-node-mainnet/api/rpc.html#get-chains-chain-id-blocks>`_
 
 * Listing operations in blocks:
   `/chains/main/blocks/<block_id>/operations/3
-  <http://tezos.gitlab.io/mainnet/api/rpc.html#get-block-id-operations-list-offset>`_
+  <https://dune.network/docs/dune-node-mainnet/api/rpc.html#get-block-id-operations-list-offset>`_
 
 * Getting the storage of a contract:
   `/chains/main/blocks/<block_id>/context/contracts/<contract_id>/storage
-  <http://tezos.gitlab.io/mainnet/api/rpc.html#get-block-id-context-contracts-contract-id-storage>`_
+  <https://dune.network/docs/dune-node-mainnet/api/rpc.html#get-block-id-context-contracts-contract-id-storage>`_
 
 * Making transactions or contract calls:
 
-  * Either call the ``tezos-client`` binary (easiest if running on a
+  * Either call the ``dune-client`` binary (easiest if running on a
     server).
   * Call the ``liquidity file.liq --call ...`` binary (private key must
     be in plain text so it is not recommended for production servers).
@@ -329,7 +329,7 @@ These can be implemented with the following RPCs:
     with:
 
       * `/chains/main/blocks/head/helpers/forge/operations
-        <http://tezos.gitlab.io/mainnet/api/rpc.html#post-block-id-helpers-forge-operations>`_
+        <https://dune.network/docs/dune-node-mainnet/api/rpc.html#post-block-id-helpers-forge-operations>`_
       * Signing must be done locally:
 
           #. prepend bytes ``03``
@@ -338,8 +338,8 @@ These can be implemented with the following RPCs:
           #. Sign with either ed25519, secp256k1, p256 depending on
              your private key
 
-      * `/chains/main/blocks/head/helpers/scripts/run_operation <http://tezos.gitlab.io/mainnet/api/rpc.html#post-block-id-helpers-scripts-run-operation>`_
-      * `/injection/operation <http://tezos.gitlab.io/mainnet/api/rpc.html#post-injection-operation>`_
+      * `/chains/main/blocks/head/helpers/scripts/run_operation <https://dune.network/docs/dune-node-mainnet/api/rpc.html#post-block-id-helpers-scripts-run-operation>`_
+      * `/injection/operation <https://dune.network/docs/dune-node-mainnet/api/rpc.html#post-injection-operation>`_
 
 An implementation of a random number Oracle in OCaml (which uses the
 liquidity client to make transactions) can be found in this
@@ -360,7 +360,7 @@ Remarks
    the random number transaction appears in another chain. In this
    case, the player that sees this happen could potentially play
    another game with a chosen number if she sees the random number in
-   the mempool. However, in Tezos operations include a block hash to
+   the mempool. However, in Dune, operations include a block hash to
    designate a particular branch so the random number transaction
    would not be valid in this other branch.
 

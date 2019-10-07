@@ -7,7 +7,7 @@ Welcome to Liquidity's documentation!
 =====================================
 
 Liquidity is a high-level statically-typed language to program Smart
-Contracts for Tezos. It uses a subset of the syntax of OCaml, and
+Contracts for Dune Network. It uses a subset of the syntax of OCaml, and
 strictly complies to Michelson security restrictions. It comes with a
 decompiler that can translate Michelson contracts to Liquidity, for
 auditing purposes.
