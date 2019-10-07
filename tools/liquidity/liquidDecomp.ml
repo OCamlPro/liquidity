@@ -59,6 +59,13 @@ let const_name_of_datatype = function
 let vars_nums = Hashtbl.create 101
 let vars_names = Hashtbl.create 101
 
+let save_hashtbl h =
+  let old = Hashtbl.copy h in
+  Hashtbl.clear h;
+  fun () ->
+    Hashtbl.clear h;
+    Hashtbl.iter (Hashtbl.add h) old
+
 let rec var_of node =
   try Hashtbl.find vars_names node.num
   with Not_found ->
@@ -741,6 +748,21 @@ and mklet env node desc =
   mk ~loc:node.loc
     (Let { bnd_var; inline = InAuto; bnd_val; body })
 
+and decompile_fee_code env arg_names mic_fee_code =
+  let begin_node, _ = mic_fee_code in
+  let restore_var_nums = save_hashtbl vars_nums in
+  let restore_var_names = save_hashtbl vars_names in
+  let fee_code = decompile_next env begin_node in
+  let arg_names = match arg_names with
+    | Some _ -> arg_names
+    | None -> match begin_node.next with
+      | Some { kind = N_PRIM "PAIR"; args = [p; s] } ->
+        Some (var_of p, var_of s)
+      | _ -> None in
+  restore_var_nums ();
+  restore_var_names ();
+  fee_code, arg_names
+
 
 and decompile env contract =
 
@@ -754,14 +776,10 @@ and decompile env contract =
 
   let fee_code, arg_names = match contract.mic_fee_code with
     | None -> None, arg_names
-    | Some (begin_node, _) ->
-      Some (decompile_next env begin_node),
-      match arg_names with
-      | Some _ -> arg_names
-      | None -> match begin_node.next with
-        | Some { kind = N_PRIM "PAIR"; args = [p; s] } ->
-          Some (var_of p, var_of s)
-        | _ -> None in
+    | Some mic_fee_code ->
+      let fee_code, arg_names =
+        decompile_fee_code env arg_names mic_fee_code in
+      Some fee_code, arg_names in
 
   let parameter_name, storage_name = match arg_names with
     | None -> "parameter", "storage"
