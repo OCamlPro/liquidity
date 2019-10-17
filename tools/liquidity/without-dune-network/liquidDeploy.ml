@@ -97,6 +97,8 @@ module type S = sig
   val deploy : ?delegatable:bool -> ?spendable:bool ->
     from -> string list -> (string * (string, exn) result) t
   val get_storage : from -> string -> typed_const t
+  val get_big_map_value :
+    from -> string -> string -> LiquidTypes.typed_const option t
   val forge_call : from -> string -> string -> string -> string t
   val call : from -> string -> string -> string ->
     (string * (unit, exn) result) t
@@ -123,6 +125,9 @@ module Dummy = struct
     failwith "mini version cannot deploy"
 
   let get_storage _ _ =
+    failwith "mini version cannot query node"
+
+  let get_big_map_value _ _ _ =
     failwith "mini version cannot query node"
 
   let forge_call _ _ _ _ =

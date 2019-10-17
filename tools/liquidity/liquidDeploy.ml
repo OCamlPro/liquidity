@@ -91,6 +91,8 @@ module type S = sig
   val deploy : ?delegatable:bool -> ?spendable:bool ->
     from -> string list -> (string * (string, exn) result) t
   val get_storage : from -> string -> LiquidTypes.typed_const t
+  val get_big_map_value :
+    from -> string -> string -> LiquidTypes.typed_const option t
   val forge_call : from -> string -> string -> string -> string t
   val call : from -> string -> string -> string ->
     (string * (unit, exn) result) t
@@ -271,9 +273,9 @@ let convert_const env ?ty e =
       LiquidTypes.dummy_contract_sig
       (LiquidFromParsetree.initial_env "") in
   LiquidCheck.typecheck_const tenv ?expected_ty:ty ~loc syn_e
-  |> LiquidEncode.encode_const tenv.env tenv.t_contract_sig
+  (* |> LiquidEncode.encode_const tenv.env tenv.t_contract_sig *)
   |> LiquidSimplify.simplify_const
-  |> LiquidDecode.decode_const
+  (* |> LiquidDecode.decode_const *)
   |> LiquidUntype.untype_const
 
 let convert_stack env stack_expr =
@@ -700,6 +702,12 @@ let get_big_map_type storage =
   | Trecord (_, (_, Tbigmap (k, v)) :: _) -> Some (k, v)
   | _ -> None
 
+let get_big_map_name storage =
+  match storage with
+  | Ttuple (Tbigmap (k, v) :: _) -> Some None
+  | Trecord (_, (name, Tbigmap _) :: _) -> Some (Some name)
+  | _ -> None
+
 let run_pre ?(debug=false)
     contract pre_michelson source input storage =
   let rpc = if debug then "trace_code" else "run_code" in
@@ -834,7 +842,7 @@ let run liquid entry_name input_string storage_string =
   Lwt.return (nbops, sto, big_diff)
 
 let get_storage liquid address =
-  let syntax_ast, pre_michelson, pre_init_infos = compile_liquid liquid in
+  let syntax_ast, _, _ = compile_liquid liquid in
   send_get
     (Printf.sprintf
        "/chains/main/blocks/head/context/contracts/%s/storage"
@@ -845,9 +853,51 @@ let get_storage liquid address =
     let storage_expr = LiquidToMicheline.const_of_ezjson r in
     let env = LiquidMichelineTypes.empty_env syntax_ast.ty_env.filename in
     return
-      (convert_const env storage_expr ~ty:syntax_ast.storage)
+      (try convert_const env storage_expr ~ty:syntax_ast.storage
+       with LiquidTypes.LiquidError _ ->
+         Format.eprintf "Could not convert constant to contract storage type.@.";
+         convert_const env storage_expr)
   with Not_found ->
     raise_response_error "get_storage" r
+
+let get_big_map_value liquid address key =
+  let contract , pre_michelson, _ = compile_liquid liquid in
+  let contract_sig = full_sig_of_contract contract in
+  let (key_ty, val_ty) = match get_big_map_type contract.storage with
+    | None -> failwith "no big map"
+    | Some (k,v) -> k, v in
+  let key =
+    LiquidData.translate { contract.ty_env with filename = "big_map_key" }
+      contract_sig key key_ty
+  in
+  let key_m = LiquidMichelson.compile_const key in
+  let key_t = LiquidToMicheline.convert_const ~expand:true key_m in
+  let key_json = LiquidToMicheline.json_of_const key_t in
+  let key_ty_t = LiquidToMicheline.convert_type key_ty in
+  let key_ty_json = LiquidToMicheline.json_of_const key_ty_t in
+  let data_fields = [
+    "key", key_json;
+    "type", key_ty_json;
+  ] in
+  let data = mk_json_obj data_fields in
+  send_post ~data
+    (Printf.sprintf
+       "/chains/main/blocks/head/context/contracts/%s/big_map_get"
+       address)
+  >>= function
+  | "null\n" | "null" -> return_none
+  | r ->
+    let r = Ezjsonm.from_string r in
+    try
+      let expr = LiquidToMicheline.const_of_ezjson r in
+      let env = LiquidMichelineTypes.empty_env "big_map_value" in
+      return_some
+        (try convert_const env expr ~ty:val_ty
+         with LiquidTypes.LiquidError _ ->
+           Format.eprintf "Could not convert constant to value type.@.";
+           convert_const env expr)
+    with Not_found ->
+      raise_response_error "get_big_map_value" r
 
 let is_revealed source =
   send_get
@@ -948,8 +998,9 @@ let init_storage ?source liquid init_params_strings =
         CRecord ((bname, CBigMap m) :: rrecord)
       | _ -> eval_init_storage
     in
-    Printf.eprintf "Evaluated initial storage: %s\n%!"
-      (LiquidPrinter.Liquid.string_of_const eval_init_storage);
+    if !LiquidOptions.verbosity > 0 then
+      Printf.eprintf "Evaluated initial storage: %s\n%!"
+        (LiquidPrinter.Liquid.string_of_const eval_init_storage);
     return (LiquidEncode.encode_const
               syntax_ast.ty_env contract_sig eval_init_storage)
 
@@ -1406,6 +1457,9 @@ module Async = struct
   let get_storage liquid address =
     get_storage liquid address
 
+  let get_big_map_value liquid address key =
+    get_big_map_value liquid address key
+
   let call liquid address parameter_string =
     call liquid address parameter_string
 
@@ -1447,6 +1501,9 @@ module Sync = struct
 
   let get_storage liquid address =
     Lwt_main.run (get_storage liquid address)
+
+  let get_big_map_value liquid address key =
+    Lwt_main.run (get_big_map_value liquid address key)
 
   let call liquid address entry_name parameter_string =
     Lwt_main.run (call liquid address entry_name parameter_string)

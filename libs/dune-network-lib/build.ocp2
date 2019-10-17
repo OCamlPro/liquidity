@@ -132,7 +132,7 @@ OCaml.library("ocplib-json-typed",
           ojt_dir + "src/json_encoding.ml";
           ];
           requires = '[
-                   ezjsonm
+                   dune-network-deps
                    ocplib-endian
                    uri
           ];

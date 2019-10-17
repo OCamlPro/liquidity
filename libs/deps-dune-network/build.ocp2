@@ -54,6 +54,12 @@ OCaml.library("zarith", ocaml + {
    ];
 });
 
+OCaml.library("ezjsonm", ocaml + {
+     requires = [
+       "ocplib-ezjsonm-js";
+   ];
+});
+
 OCaml.library("dune-network-deps", ocaml + {
      files = [
        "nocrypto.ml";

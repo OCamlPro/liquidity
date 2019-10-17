@@ -2489,16 +2489,19 @@ let translate_multi l =
                      it has no entry points and cannot be used as main"
                     contract.contract_name;
                 | PaContract contract ->
-                  Format.eprintf "Main contract %s@." contract.contract_name;
+                  if !LiquidOptions.verbosity >= 0 then
+                    Format.eprintf "Main contract %s@." contract.contract_name;
                   raise (Stop contract)
               end
             | _ ->
               begin match translate_structure env (acc_for_subcontract acc) ast with
                 | PaModule contract ->
-                  Format.eprintf "Module %s@." contract.contract_name;
+                  if !LiquidOptions.verbosity >= 0 then
+                    Format.eprintf "Module %s@." contract.contract_name;
                   Syn_sub_contract contract :: acc
                 | PaContract contract ->
-                  Format.eprintf "Contract %s@." contract.contract_name;
+                  if !LiquidOptions.verbosity >= 0 then
+                    Format.eprintf "Contract %s@." contract.contract_name;
                   let contract_sig = sig_of_contract contract in
                   top_env.contract_types <-
                     StringMap.add contract.contract_name contract_sig
@@ -2508,7 +2511,8 @@ let translate_multi l =
           ) [] (List.rev r_others)
       in
       let contract = translate_non_empty_contract top_env acc ast in
-      Format.eprintf "Main contract %s@." contract.contract_name;
+      if !LiquidOptions.verbosity >= 0 then
+        Format.eprintf "Main contract %s@." contract.contract_name;
       begin match !LiquidOptions.main with
         | Some main when main <> contract.contract_name ->
           Format.eprintf "No contract named %s.@." main;

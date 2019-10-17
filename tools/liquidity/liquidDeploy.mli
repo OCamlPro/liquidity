@@ -110,6 +110,9 @@ module type S = sig
 
   val get_storage : from -> string -> LiquidTypes.typed_const t
 
+  val get_big_map_value :
+    from -> string -> string -> LiquidTypes.typed_const option t
+
   (** Forge an operation to call a deploy contract, returns the hex-encoded
       operation *)
   val forge_call : from -> string -> string -> string -> string t
