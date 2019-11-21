@@ -85,20 +85,26 @@ exception LocalizedError of error
 exception RuntimeFailure of error * string option * trace option
 
 
+
 module type S = sig
   type 'a t
   val run : from -> string -> string -> string ->
-    (operation list * typed_const * big_map_diff option) t
+    (operation list * LiquidTypes.typed_const * big_map_diff option) t
   val run_debug : from -> string -> string -> string ->
-    (operation list * typed_const * big_map_diff option * trace) t
-  val init_storage : from -> string list -> encoded_const t
+    (operation list * LiquidTypes.typed_const * big_map_diff option * trace) t
+  val init_storage : from -> string list -> LiquidTypes.encoded_const t
+  val forge_deploy_script :
+    source:string -> from -> string list ->
+    (string * string * LiquidToMicheline.loc_table) t
   val forge_deploy : ?delegatable:bool -> ?spendable:bool ->
     from -> string list -> string t
   val deploy : ?delegatable:bool -> ?spendable:bool ->
     from -> string list -> (string * (string, exn) result) t
-  val get_storage : from -> string -> typed_const t
+  val get_storage : from -> string -> LiquidTypes.typed_const t
   val get_big_map_value :
     from -> string -> string -> LiquidTypes.typed_const option t
+  val forge_call_parameter :
+    from -> string -> string -> string * LiquidToMicheline.loc_table
   val forge_call : from -> string -> string -> string -> string t
   val call : from -> string -> string -> string ->
     (string * (unit, exn) result) t
@@ -118,6 +124,9 @@ module Dummy = struct
   let init_storage _ _ =
     failwith "mini version cannot deploy"
 
+  let forge_deploy_script ~source:_ _ _ =
+    failwith "mini version cannot deploy"
+
   let forge_deploy ?(delegatable=false) ?(spendable=false) _ _ =
     failwith "mini version cannot deploy"
 
@@ -129,6 +138,9 @@ module Dummy = struct
 
   let get_big_map_value _ _ _ =
     failwith "mini version cannot query node"
+
+  let forge_call_parameter _ _ _ =
+    failwith "mini version cannot call"
 
   let forge_call _ _ _ _ =
     failwith "mini version cannot call"

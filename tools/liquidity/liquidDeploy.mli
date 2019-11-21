@@ -97,6 +97,10 @@ module type S = sig
   (** Compute the initial storage for a specific script, returns storage data *)
   val init_storage : from -> string list -> LiquidTypes.encoded_const t
 
+  val forge_deploy_script :
+    source:string -> from -> string list ->
+    (string * string * LiquidToMicheline.loc_table) t
+
   (** Forge a deployment operation contract on the Dune node specified in
       ![LiquidOptions], returns the hex-encoded operation *)
   val forge_deploy :
@@ -112,6 +116,9 @@ module type S = sig
 
   val get_big_map_value :
     from -> string -> string -> LiquidTypes.typed_const option t
+
+  val forge_call_parameter :
+    from -> string -> string -> string * LiquidToMicheline.loc_table
 
   (** Forge an operation to call a deploy contract, returns the hex-encoded
       operation *)

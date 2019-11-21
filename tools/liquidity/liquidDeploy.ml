@@ -86,6 +86,9 @@ module type S = sig
   val run_debug : from -> string -> string -> string ->
     (operation list * LiquidTypes.typed_const * big_map_diff option * trace) t
   val init_storage : from -> string list -> LiquidTypes.encoded_const t
+  val forge_deploy_script :
+    source:string -> from -> string list ->
+    (string * string * LiquidToMicheline.loc_table) t
   val forge_deploy : ?delegatable:bool -> ?spendable:bool ->
     from -> string list -> string t
   val deploy : ?delegatable:bool -> ?spendable:bool ->
@@ -93,6 +96,8 @@ module type S = sig
   val get_storage : from -> string -> LiquidTypes.typed_const t
   val get_big_map_value :
     from -> string -> string -> LiquidTypes.typed_const option t
+  val forge_call_parameter :
+    from -> string -> string -> string * LiquidToMicheline.loc_table
   val forge_call : from -> string -> string -> string -> string t
   val call : from -> string -> string -> string ->
     (string * (unit, exn) result) t
@@ -1004,6 +1009,17 @@ let init_storage ?source liquid init_params_strings =
     return (LiquidEncode.encode_const
               syntax_ast.ty_env contract_sig eval_init_storage)
 
+let forge_deploy_script ~source liquid init_params_strings =
+  let syntax_ast, pre_michelson, _ = compile_liquid liquid in
+  init_storage ~source liquid init_params_strings >>= fun init_storage ->
+  let c, loc_table =
+    LiquidToMicheline.convert_contract ~expand:true pre_michelson in
+  let init_storage_m = LiquidMichelson.compile_const init_storage in
+  let init_storage_t =
+    LiquidToMicheline.convert_const ~expand:true init_storage_m in
+  let contract_json = LiquidToMicheline.json_of_contract c in
+  let init_storage_json = LiquidToMicheline.json_of_const init_storage_t in
+  return (contract_json, init_storage_json, loc_table)
 
 let forge_deploy ?head ?source ?public_key
     ?(delegatable=false) ?(spendable=false)
@@ -1012,26 +1028,19 @@ let forge_deploy ?head ?source ?public_key
     | Some source, _ | _, Some source -> source
     | None, None -> raise (ResponseError "forge_deploy: Missing source")
   in
-  let syntax_ast, pre_michelson, _ = compile_liquid liquid in
-  init_storage ~source liquid init_params_strings >>= fun init_storage ->
+  forge_deploy_script ~source liquid init_params_strings
+  >>= fun (contract_json, init_storage_json, loc_table) ->
+  let script_json = [
+    "code", contract_json;
+    "storage", init_storage_json
+  ] |> mk_json_obj
+  in
   begin match head with
     | Some head -> return head
     | None -> get_head ()
   end >>= fun head ->
   get_next_counter source >>= fun counter ->
   is_revealed source >>= fun source_revealed ->
-  let c, loc_table =
-    LiquidToMicheline.convert_contract ~expand:true pre_michelson in
-  let init_storage_m = LiquidMichelson.compile_const init_storage in
-  let init_storage_t =
-    LiquidToMicheline.convert_const ~expand:true init_storage_m in
-  let contract_json = LiquidToMicheline.json_of_contract c in
-  let init_storage_json = LiquidToMicheline.json_of_const init_storage_t in
-  let script_json = [
-    "code", contract_json;
-    "storage", init_storage_json
-  ] |> mk_json_obj
-  in
   let origination_json counter = [
     "kind", "\"origination\"";
     "source", Printf.sprintf "%S" source;
@@ -1188,13 +1197,7 @@ let deploy ?(delegatable=false) ?(spendable=false) liquid init_params_strings =
   | op_h, (Error e :: _ | _ :: Error e :: _) -> return (op_h, Error e)
   | _ -> raise (ResponseError "deploy (inject)")
 
-
-let forge_call ?head ?source ?public_key
-    liquid address entry_name input_string =
-  let source = match source, !LiquidOptions.source with
-    | Some source, _ | _, Some source -> source
-    | None, None -> raise (ResponseError "forge_call: Missing source")
-  in
+let forge_call_parameter liquid entry_name input_string =
   let contract, pre_michelson, pre_init_infos = compile_liquid liquid in
   let contract_sig = full_sig_of_contract contract in
   let entry =
@@ -1216,7 +1219,17 @@ let forge_call ?head ?source ?public_key
     LiquidToMicheline.convert_contract ~expand:true pre_michelson in
   let parameter_m = LiquidMichelson.compile_const parameter in
   let parameter_t = LiquidToMicheline.convert_const ~expand:true parameter_m in
-  let parameter_json = LiquidToMicheline.json_of_const parameter_t in
+  LiquidToMicheline.json_of_const parameter_t, loc_table
+
+
+let forge_call ?head ?source ?public_key
+    liquid address entry_name input_string =
+  let source = match source, !LiquidOptions.source with
+    | Some source, _ | _, Some source -> source
+    | None, None -> raise (ResponseError "forge_call: Missing source")
+  in
+  let parameter_json, loc_table =
+    forge_call_parameter liquid entry_name input_string in
   begin match head with
     | Some head -> return head
     | None -> get_head ()
@@ -1435,10 +1448,15 @@ module Async = struct
   let init_storage liquid init_params_strings =
     init_storage liquid init_params_strings
 
+  let forge_deploy_script ~source liquid init_params_strings =
+    forge_deploy_script ~source liquid init_params_strings
+
   let forge_deploy ?(delegatable=false) ?(spendable=false)
       liquid init_params_strings =
     forge_deploy ~delegatable ~spendable liquid init_params_strings
     >>= fun (op, _, _) -> return op
+
+  let forge_call_parameter = forge_call_parameter
 
   let forge_call liquid address entry_name parameter_string =
     forge_call liquid address entry_name parameter_string
@@ -1480,10 +1498,15 @@ module Sync = struct
   let init_storage liquid init_params_strings =
     Lwt_main.run (init_storage liquid init_params_strings)
 
+  let forge_deploy_script ~source liquid init_params_strings =
+    Lwt_main.run (forge_deploy_script ~source liquid init_params_strings)
+
   let forge_deploy ?(delegatable=false) ?(spendable=false)
       liquid init_params_strings =
     Lwt_main.run (forge_deploy liquid init_params_strings
                   >>= fun (op, _, _) -> return op)
+
+  let forge_call_parameter = forge_call_parameter
 
   let forge_call liquid address entry_name parameter_string =
     Lwt_main.run (forge_call liquid address entry_name parameter_string

@@ -222,6 +222,7 @@ OCaml.library("ocplib-liquidity-deploy-without-dune-network",
      ];
      requires = [
        "ocplib-liquidity-base";
+       "ocplib-liquidity-without-dune-network";
        "ocplib-fake-lwt"
      ];
    });
