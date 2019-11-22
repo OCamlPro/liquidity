@@ -631,6 +631,29 @@ let get_head () =
   with Not_found ->
     raise_response_error "get_head" r
 
+type constants = {
+  hard_gas_limit_per_operation : int;
+  hard_storage_limit_per_operation : int;
+}
+
+let get_constants () =
+  send_get "/chains/main/blocks/head/context/constants" >>= fun r ->
+  let r = Ezjsonm.from_string r in
+  try
+    {
+      hard_gas_limit_per_operation =
+        Ezjsonm.find r ["hard_gas_limit_per_operation"]
+        |> Ezjsonm.get_string
+        |> int_of_string;
+      hard_storage_limit_per_operation =
+        Ezjsonm.find r ["hard_storage_limit_per_operation"]
+        |> Ezjsonm.get_string
+        |> int_of_string;
+    }
+    |> return
+  with Not_found ->
+    raise_response_error "get_constants" r
+
 let get_predecessor () =
   send_get "/chains/main/blocks/head/header" >>= fun r ->
   let r = Ezjsonm.from_string r in
@@ -1044,10 +1067,10 @@ let forge_deploy ?head ?source ?public_key
   let origination_json counter = [
     "kind", "\"origination\"";
     "source", Printf.sprintf "%S" source;
-    "fee", Printf.sprintf "%S" !LiquidOptions.fee;
+    "fee", "1000"; (* Printf.sprintf "%S" !LiquidOptions.fee; *)
     "counter", Printf.sprintf "\"%d\"" counter;
-    "gas_limit", Printf.sprintf "%S" !LiquidOptions.gas_limit;
-    "storage_limit", Printf.sprintf "%S" !LiquidOptions.storage_limit;
+    "gas_limit", "800000"; (* Printf.sprintf "%S" !LiquidOptions.gas_limit; *)
+    "storage_limit", "60000"; (* Printf.sprintf "%S" !LiquidOptions.storage_limit; *)
     "manager_pubkey", Printf.sprintf "%S" source;
     "balance", Printf.sprintf "%S" !LiquidOptions.amount;
     "spendable", string_of_bool spendable;
@@ -1091,7 +1114,7 @@ let hash msg =
 let sign sk op_b =
   Ed25519.sign sk (hash op_b)
 
-let inject_operation ?loc_table ?sk ~head json_op op =
+let inject_operation ?(force=false) ?loc_table ?sk ~head json_op op =
   let op_b = MBytes.of_string (Hex.to_string op) in
   get_protocol () >>= fun protocol ->
   let signed_op, op_hash, data = match sk with
@@ -1162,6 +1185,11 @@ let inject_operation ?loc_table ?sk ~head json_op op =
    with Not_found ->
      raise_response_error ?loc_table "inject (preapply/operations)" r
   ) >>= fun result ->
+  if not force then
+    (* Don't inject if there is an error *)
+    List.iter (function
+        | Error exn -> raise exn
+        | Ok _ -> ()) result;
   let data = Printf.sprintf "%S" (Hex.show signed_op) in
   send_post ?loc_table ~data "/injection/operation" >>= fun r ->
   (try
@@ -1171,7 +1199,6 @@ let inject_operation ?loc_table ?sk ~head json_op op =
        (Ezjsonm.from_string r)
   ) >>= fun injected_op_hash ->
   assert (injected_op_hash = op_hash);
-
   return (injected_op_hash, result)
 
 
@@ -1221,8 +1248,38 @@ let forge_call_parameter liquid entry_name input_string =
   let parameter_t = LiquidToMicheline.convert_const ~expand:true parameter_m in
   LiquidToMicheline.json_of_const parameter_t, loc_table
 
+let dummy_sign = "edsigtXomBKi5CTRf5cjATJWSyaRvhfYNHqSUGrn4SdbYRcGwQ\
+                  rUGjzEfQDTuqHhuA8b2d8NarZjz8TRf65WkpQmo423BtomS8Q"
 
-let forge_call ?head ?source ?public_key
+let minimal_fees = Z.of_int 100
+let nanotez_per_gas_unit = Z.of_int 100
+let nanotez_per_byte = Z.of_int 1000
+let to_nanotez m = Z.mul (Z.of_int 1000) m
+let of_nanotez n = Z.div (Z.add (Z.of_int 999) n) (Z.of_int 1000)
+
+let compute_fees ~gas_limit ~size =
+  let minimal_fees_in_nanotez = to_nanotez minimal_fees in
+  let fees_for_gas_in_nanotez =
+    Z.mul nanotez_per_gas_unit (Z.of_int gas_limit) in
+  let fees_for_size_in_nanotez = Z.mul nanotez_per_byte (Z.of_int size) in
+  let fees_in_nanotez =
+    Z.add minimal_fees_in_nanotez @@
+    Z.add fees_for_gas_in_nanotez fees_for_size_in_nanotez in
+  of_nanotez fees_in_nanotez
+
+let compute_gas_limit ~fee ~size =
+  let minimal_fees_in_nanotez = to_nanotez minimal_fees in
+  let fees_for_size_in_nanotez = Z.mul nanotez_per_byte (Z.of_int size) in
+  let fee_in_nanotez = to_nanotez fee in
+  let fees_for_gas_in_nanotez =
+    Z.sub fee_in_nanotez @@
+    Z.add minimal_fees_in_nanotez fees_for_size_in_nanotez in
+  Z.div fees_for_gas_in_nanotez nanotez_per_gas_unit
+  |> Z.to_int
+  |> max 0
+
+let rec forge_call_json ?head ?source ?public_key
+    ?fee ?gas_limit ?storage_limit ?real_op_size
     liquid address entry_name input_string =
   let source = match source, !LiquidOptions.source with
     | Some source, _ | _, Some source -> source
@@ -1234,15 +1291,36 @@ let forge_call ?head ?source ?public_key
     | Some head -> return head
     | None -> get_head ()
   end >>= fun head ->
+  get_constants ()
+  >>= fun { hard_gas_limit_per_operation; hard_storage_limit_per_operation } ->
   get_next_counter source >>= fun counter ->
   is_revealed source >>= fun source_revealed ->
+  let storage_limit = match storage_limit with
+    | Some l -> l
+    | None -> hard_storage_limit_per_operation in
+  let gas_limit = match gas_limit with
+    | Some l -> l
+    | None -> hard_gas_limit_per_operation in
+  let fee = match fee, real_op_size with
+    | _, None -> "0"
+    | Some f, _ -> f
+    | None, Some size ->
+      Z.to_string @@
+      compute_fees ~gas_limit ~size
+  in
+  let gas_limit = match real_op_size with
+    | None -> gas_limit
+    | Some size ->
+      min gas_limit @@
+      compute_gas_limit ~fee:(Z.of_string fee) ~size in
+  (* Format.printf "computed fee %s@." fee; *)
   let transaction_json counter = [
     "kind", "\"transaction\"";
     "source", Printf.sprintf "%S" source;
-    "fee", Printf.sprintf "%S" !LiquidOptions.fee;
+    "fee", Printf.sprintf "%S" fee;
     "counter", Printf.sprintf "\"%d\"" counter;
-    "gas_limit", Printf.sprintf "%S" !LiquidOptions.gas_limit;
-    "storage_limit", Printf.sprintf "%S" !LiquidOptions.storage_limit;
+    "gas_limit", Printf.sprintf "\"%d\"" gas_limit;
+    "storage_limit", Printf.sprintf "\"%d\"" storage_limit;
     "amount", Printf.sprintf "%S" !LiquidOptions.amount;
     "destination", Printf.sprintf "%S" address;
     "parameters", parameter_json;
@@ -1264,11 +1342,103 @@ let forge_call ?head ?source ?public_key
       [reveal_json; transaction_json (counter + 1)]
   in
   let operations_json = mk_json_arr operations in
-  let data = [
-    "branch", Printf.sprintf "%S" head.head_hash;
-    "contents", operations_json;
-  ] |> mk_json_obj
+  let data = ([
+      "branch", Printf.sprintf "%S" head.head_hash;
+      "contents", operations_json;
+    ] @ if real_op_size = None then
+        ["signature", Printf.sprintf "%S" dummy_sign ]
+      else
+        []
+    ) |> mk_json_obj
   in
+  match real_op_size with
+  | None ->
+    return (data, operations_json, loc_table)
+  | Some size ->
+    send_post ~loc_table ~data
+      "/chains/main/blocks/head/helpers/forge/operations"
+    >>= fun r ->
+    let op = get_json_string r in
+    let actual_size = String.length op / 2 + 64 in
+    if actual_size <= size then
+      return (data, operations_json, loc_table)
+    else
+      (* Fix point to estimate size of operation which depends on fees
+         which depends on size of operation *rolleyes* *)
+      forge_call_json ~head ~source ?public_key ~real_op_size:actual_size
+        ?fee:None ~gas_limit ~storage_limit
+        liquid address entry_name input_string
+
+
+let estimate_gas_storage ~loc_table data =
+  send_post ~loc_table ~data
+    "/chains/main/blocks/head/helpers/scripts/run_operation"
+  >>= fun r ->
+  let r = Ezjsonm.from_string r in
+  let contents =
+    Ezjsonm.find r ["contents"] |> Ezjsonm.get_list (fun o -> o) in
+  let res = match contents with
+    | [ x (* reveal *) ; y ] ->
+      assert (Ezjsonm.find x ["kind"] |> Ezjsonm.get_string = "reveal");
+      y
+    | [ y ] -> y
+    | _ -> invalid_arg "estimate_gas_storage" in
+  let result = Ezjsonm.find res ["metadata"; "operation_result" ] in
+  let status =
+    Ezjsonm.find result ["status"] |> Ezjsonm.get_string in
+  match status with
+  | "failed" ->
+    let errors =
+      try Ezjsonm.find result ["errors"]
+      with Not_found -> `A [] in
+    raise_response_error ~loc_table status errors
+  | "applied" ->
+    let consumed_gas =
+      try Ezjsonm.find result ["consumed_gas"]
+          |> Ezjsonm.get_string |> int_of_string (* |> (+) 100 *)
+      with Not_found -> 0 in
+    let consumed_storage =
+      try Ezjsonm.find result ["paid_storage_size_diff"]
+          |> Ezjsonm.get_string |> int_of_string (* |> (+) 10 *)
+      with Not_found -> 0 in
+    let internal_ops =
+      try
+        Ezjsonm.find res ["metadata"; "internal_operation_results" ]
+        |> Ezjsonm.get_list (fun o -> o)
+      with Not_found -> [] in
+    let consumed_gas, consumed_storage =
+      List.fold_left (fun (gas, storage) op ->
+        let result =  Ezjsonm.find op ["result"] in
+        let consumed_gas =
+          try Ezjsonm.find result ["consumed_gas"]
+              |> Ezjsonm.get_string |> int_of_string
+          with Not_found -> 0 in
+        let consumed_storage =
+          try Ezjsonm.find result ["paid_storage_size_diff"]
+              |> Ezjsonm.get_string |> int_of_string
+          with Not_found -> 0 in
+        (gas + consumed_gas, storage + consumed_storage)
+      ) (consumed_gas, consumed_storage) internal_ops in
+    (* Format.printf "gas %d, storage %d@." consumed_gas consumed_storage; *)
+    return (consumed_gas, consumed_storage)
+  | _ -> failwith status
+
+
+let forge_call ?head ?source ?public_key
+    liquid address entry_name input_string =
+  forge_call_json ?head ?source ?public_key
+    liquid address entry_name input_string >>= fun (data, _, loc_table) ->
+  estimate_gas_storage ~loc_table data >>= fun (est_gas_limit, est_storage_limit) ->
+  let gas_limit = match !LiquidOptions.gas_limit with
+    | None -> est_gas_limit
+    | Some l -> l in
+  let storage_limit = match !LiquidOptions.storage_limit with
+    | None -> est_storage_limit
+    | Some l -> l in
+  forge_call_json ?head ?source ?public_key ~real_op_size:0
+    ?fee:!LiquidOptions.fee ~gas_limit ~storage_limit
+    liquid address entry_name input_string
+  >>= fun (data, operations_json, loc_table) ->
   send_post ~loc_table ~data
     "/chains/main/blocks/head/helpers/forge/operations"
   >>= fun r ->

@@ -657,9 +657,9 @@ let main () =
       "<1.99DUN> Set amount for deploying or running a contract (default: 0DUN)";
 
       "--fee", Arg.String (fun fee ->
-          LiquidOptions.fee := parse_tez_to_string "--fee" fee
+          LiquidOptions.fee := Some (parse_tez_to_string "--fee" fee)
         ),
-      "<0.1DUN> Set fee for deploying a contract (default: 0.1DUN)";
+      "<0.1DUN> Set fee for deploying a contract (default: computed automatically)";
 
       "--source", Arg.String (fun s ->
           Data.validate_key_hash s;

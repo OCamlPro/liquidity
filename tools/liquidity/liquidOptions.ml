@@ -85,8 +85,8 @@ let source = ref (None : string option)
 (** Amount in DUN for the transaction or origination *)
 let amount = ref "0"
 
-(** Fee (default 0.1 DUN) in mudun *)
-let fee = ref "100000"
+(** Fee in mudun *)
+let fee = ref (None : string option)
 
 (** Originate a delegatable contract *)
 let delegatable = ref false
@@ -94,13 +94,11 @@ let delegatable = ref false
 (** Originate a spendable contract *)
 let spendable = ref false
 
-(** Gas limit for transactions and originations. The default value is
-    the maximum allowed by Dune at the moment. *)
-let gas_limit = ref "800000"
+(** Gas limit for transactions and originations. *)
+let gas_limit = ref (None : int option)
 
-(** The storage limit for transactions and originations. The default
-    value is the maximum allowed by Dune at the moment. *)
-let storage_limit = ref "60000"
+(** The storage limit for transactions and originations. *)
+let storage_limit = ref (None : int option)
 
 (** Private key can be given to the liquidity dune-client when
     injecting signed transactions and originations directly. *)

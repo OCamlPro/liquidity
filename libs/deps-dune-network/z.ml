@@ -76,3 +76,7 @@ let abs = Num.abs_num
 let to_string = Num.string_of_num
 
 let of_string = Num.num_of_string
+
+let div x y = fst (div_rem x y)
+
+let sub x y = Num.sub_num x y
