@@ -2,7 +2,7 @@ type storage = unit
 
 let%entry main () _ =
   let me = Contract.self () in
-  let op = me.other 10 ~amount:0tz in
+  let op = me.other 10 ~amount:0DUN in
   [op], ()
 
 let%entry other (x : int) _ =

@@ -87,7 +87,7 @@ The built-in base types are:
 - ``bool``: Booleans
 - ``int``: Unbounded integers
 - ``nat``: Unbounded naturals (positive integers)
-- ``tez``: The type of amounts
+- ``dun``: The type of amounts
 - ``string``: character strings
 - ``bytes``: bytes sequences
 - ``timestamp``: dates and timestamps
@@ -147,9 +147,9 @@ As in Michelson, there are different types of integers:
 * ``nat`` : an unbounded positive integer, written either with a ``p``
   suffix (``0p``, ``12p``, etc.) or as an integer with a type coercion
   ( ``(0 : nat)`` ).
-* ``tez`` : an unbounded positive float of Tezzies, written either
-  with a ``tz`` suffix (``1.00tz``, etc.) or as a string with type
-  coercion (``("1.00" : tez)``).
+* ``dun`` : an unbounded positive float of DUNs, written either
+  with a ``DUN`` (or ``dun``) suffix (``1.00DUN``, etc.) or as a string with type
+  coercion (``("1.00" : dun)``).
 
 Strings (``string``) are delimited by the characters ``"`` and ``"``.
 
@@ -165,7 +165,7 @@ Timestamps (``timestamp``) are written in ISO 8601 format, like in Michelson:
 
 Keys, key hashes and signatures are base58-check encoded, the same as in Michelson:
 
-* ``tz1YLtLqD1fWHthSVHPD116oYvsd4PTAHUoc`` is a key hash (``key_hash``)
+* ``dn1HieGdCFcT8Lg9jDANfEGbJyt6arqEuSJb`` is a key hash (``key_hash``)
 * ``edpkuit3FiCUhd6pmqf9ztUTdUs1isMTbF9RBGfwKk1ZrdTmeP9ypN`` is a public
   key (``key``)
 *
@@ -199,8 +199,8 @@ It is also possible to coerce some constants between their inferred
 type and another compatible type, using the notation
 ``( CONSTANT : NEWTYPE )``:
 
-* A ``string`` can be coerced to ``tez`` (the string must contain an
-  integer in mutez à la Michelson), ``timestamp``, ``key``,
+* A ``string`` can be coerced to ``dun`` (the string must contain an
+  integer in mudun à la Michelson), ``timestamp``, ``key``,
   ``address``, ``_ contract``, ``key_hash`` and ``signature``.
 * A ``bytes`` can be coerced to ``address``, ``_.instance``, ``key``,
   ``key_hash`` and ``signature``.
@@ -300,7 +300,7 @@ can be compared with each other:
 * ``bool``
 * ``int``
 * ``nat``
-* ``tez``
+* ``dun``
 * ``string``
 * ``bytes``
 * ``timestamp``
@@ -326,8 +326,8 @@ values and return an integer, as follows. ``compare x y``
 The ``Current`` module
 ~~~~~~~~~~~~~~~~~~~~~~
 
-* ``Current.balance: unit -> tez``: returns the balance of the current
-  contract. The balance contains the amount of tez that was sent by
+* ``Current.balance: unit -> dun``: returns the balance of the current
+  contract. The balance contains the amount of dun that was sent by
   the current operation. It is translated to ``BALANCE`` in Michelson.
 
   .. tryliquidity:: ../../../../tests/doc/doc1.liq
@@ -342,7 +342,7 @@ The ``Current`` module
   .. tryliquidity:: ../../../../tests/doc/doc2.liq
   .. literalinclude:: ../../../../tests/doc/doc2.liq
 
-* ``Current.amount: unit -> tez``: returns the amount of tez
+* ``Current.amount: unit -> dun``: returns the amount of dun
   transferred by the current operation (standard or internal
   transaction). It is translated to ``AMOUNT`` in Michelson.
 
@@ -383,6 +383,19 @@ The ``Current`` module
   .. tryliquidity:: ../../../../tests/doc/doc7.liq
   .. literalinclude:: ../../../../tests/doc/doc7.liq
 
+* ``Current.block_level: unit -> nat``: returns the level of the block
+  in which the transaction is included.
+
+  .. tryliquidity:: ../../../../tests/doc/doc75.liq
+  .. literalinclude:: ../../../../tests/doc/doc75.liq
+
+* ``Current.collect_call: unit -> bool``: returns ``true`` if the
+  current call is a collect call..
+
+  .. tryliquidity:: ../../../../tests/doc/doc76.liq
+  .. literalinclude:: ../../../../tests/doc/doc76.liq
+
+
 Operations on tuples
 ~~~~~~~~~~~~~~~~~~~~
 
@@ -407,7 +420,7 @@ Operations on numeric values
 
 * ``+``: Addition. With the following types:
   
-  * ``tez -> tez -> tez``
+  * ``dun -> dun -> dun``
   * ``nat -> nat -> nat``
   * ``int|nat -> int|nat -> int``
   * ``timestamp -> int -> timestamp``
@@ -417,7 +430,7 @@ Operations on numeric values
     
 * ``-``: Substraction. With the following types:
   
-  * ``tez -> tez -> tez``
+  * ``dun -> dun -> dun``
   * ``int|nat -> int|nat -> int``
   * ``timestamp -> int -> timestamp``
   * ``timestamp -> timestamp -> int``
@@ -428,8 +441,8 @@ Operations on numeric values
 
 * ``*``: Multiplication. With the following types:
 
-  * ``nat -> tez -> tez``
-  * ``tez -> nat -> tez``
+  * ``nat -> dun -> dun``
+  * ``dun -> nat -> dun``
   * ``nat -> nat -> nat``
   * ``nat|int -> nat|int -> int``
 
@@ -443,8 +456,8 @@ Operations on numeric values
 
   * ``nat -> nat -> ( nat * nat ) option``
   * ``int|nat -> int|nat -> ( int *  nat ) option``
-  * ``tez -> nat -> ( tez * tez ) option``
-  * ``tez -> tez -> ( nat * tez ) option``
+  * ``dun -> nat -> ( dun * dun ) option``
+  * ``dun -> dun -> ( nat * dun ) option``
   
     It is translated to ``EDIV`` in Michelson.
 
@@ -512,7 +525,7 @@ Operations on numeric values
 Operations on contracts
 ~~~~~~~~~~~~~~~~~~~~~~~
 
-* ``Contract.call: dest:'S.instance -> amount:tez ->
+* ``Contract.call: dest:'S.instance -> amount:dun ->
   ?entry:<entry_name> parameter:'a -> operation``. Forge an internal
   contract call. It is translated to ``TRANSFER_TOKENS`` in Michelson.
   Arguments can be labeled, in which case they can be given
@@ -521,7 +534,7 @@ Operations on contracts
   .. tryliquidity:: ../../../../tests/doc/doc13.liq
   .. literalinclude:: ../../../../tests/doc/doc13.liq
 
-* ``<c.entry>: 'parameter -> amount:tez -> operation``. Forge an
+* ``<c.entry>: 'parameter -> amount:dun -> operation``. Forge an
   internal contract call. It is translated to ``TRANSFER_TOKENS`` in
   Michelson.  The amount argument can be labeled, in which case it can
   appear before the parameter.
@@ -529,18 +542,18 @@ Operations on contracts
   .. tryliquidity:: ../../../../tests/doc/doc14.liq
   .. literalinclude:: ../../../../tests/doc/doc14.liq
 
-* ``Account.transfer: dest:key_hash -> amount:tez ->
+* ``Account.transfer: dest:key_hash -> amount:dun ->
   operation``. Forge an internal transaction to the implicit (_i.e._
   default) account contract of ``dest``. Arguments can be labeled, in
   which case they can be given in any order. *The resulting operation
-  cannot fail (if the transfer amount leaves more than 0.257tz on both
+  cannot fail (if the transfer amount leaves more than 0.257DUN on both
   contracts).*
 
   .. tryliquidity:: ../../../../tests/doc/doc15.liq
   .. literalinclude:: ../../../../tests/doc/doc15.liq
 
 * ``Account.create: manager:key_hash -> delegate:key_hash option ->
-  delegatable:bool -> amount:tez -> operation * address``. Forge an
+  delegatable:bool -> amount:dun -> operation * address``. Forge an
   operation to create a new (originated) account and returns its
   address. It is translated to ``CREATE_ACCOUNT`` in
   Michelson. Arguments can be labeled, in which case they can be given
@@ -577,12 +590,28 @@ Operations on contracts
 * ``Contract.at: address -> _.instance option``. Returns the contract
   associated with the address and type annotation, if any. Must be
   annotated with the type of the contract. It is translated to
-  ``CREATE_CONTRACT`` in Michelson.
+  ``CREATE_CONTRACT`` in Michelson. For any contract or contract type
+  ``C``, you can also use the syntactic sugar ``C.at`` without any
+  type annotation.
 
   .. tryliquidity:: ../../../../tests/doc/doc20.liq
   .. literalinclude:: ../../../../tests/doc/doc20.liq
 
-    
+
+* ``Contract.get_balance: address -> dun``. Returns the balance of the
+  contract associated with the address (0 if it does not exist).
+
+  .. tryliquidity:: ../../../../tests/doc/doc77.liq
+  .. literalinclude:: ../../../../tests/doc/doc77.liq
+
+* ``Contract.is_implicit: UnitContract.instance -> key_hash
+  option``. Returns the key hash of a contract if it is an implicit
+  one, otherwise, returns ``None``.
+
+  .. tryliquidity:: ../../../../tests/doc/doc74.liq
+  .. literalinclude:: ../../../../tests/doc/doc74.liq
+
+
 * ``Contract.self: unit -> _.instance``. Returns the current
   executing contract. It is translated to ``SELF`` in Michelson.
 
@@ -590,7 +619,7 @@ Operations on contracts
   .. literalinclude:: ../../../../tests/doc/doc21.liq
 
 * ``Contract.create: manager:key_hash -> delegate:key_hash option ->
-  spendable:bool -> delegatable:bool -> amount:tez -> storage:'storage
+  spendable:bool -> delegatable:bool -> amount:dun -> storage:'storage
   -> code:(contract _) -> (operation, address)``. Forge an operation
   to originate a contract with code. The contract is only created when
   the operation is executed, so it must be returned by the
@@ -1073,9 +1102,9 @@ instances* here) can also be used as first class values:
 
 **Instances** of contracts can be called with three different syntaxes:
 
-- ``Contract.call ~dest:c ~amount:1tz ~parameter:"hello"``
-- ``Contract.call ~dest:c ~amount:1tz ~entry:main ~parameter:"hello"``
-- ``c.main "hello" ~amount:1tz``
+- ``Contract.call ~dest:c ~amount:1DUN ~parameter:"hello"``
+- ``Contract.call ~dest:c ~amount:1DUN ~entry:main ~parameter:"hello"``
+- ``c.main "hello" ~amount:1DUN``
 
 These calls are all equivalent.
 
@@ -1261,7 +1290,7 @@ be converted to ReasonML syntax::
     };
   
     let key_hash = Crypto.hash_key(storage.key);
-    if (key_hash == tz1KqTpEZ7Yob7QbPE4Hy4Wo8fHG8LhKxZSx) {
+    if (key_hash == dn1HieGdCFcT8Lg9jDANfEGbJyt6arqEuSJb) {
       Current.failwith();
     };
     if (key_hash
@@ -1282,7 +1311,7 @@ be converted to ReasonML syntax::
     let delegatable = false;
     let _cocococ: option(PlusOne.instance) = Contract.at(storage.c);
     let _cocococ2 = PlusOne.at(storage.c);
-    let _op1 = Contract.self().main(sign, ~amount=0tz);
+    let _op1 = Contract.self().main(sign, ~amount=0DUN);
     let (account_op, _account) =
       Account.create(key_hash, delegate, delegatable, amount[0] + amount[1]);
     let (c_op, c_addr) =
@@ -1501,7 +1530,7 @@ Type:
 * ``bool``
 * ``int``
 * ``nat``
-* ``tez``
+* ``dun``
 * ``string``
 * ``bytes``
 * ``timestamp``
@@ -1523,9 +1552,9 @@ Type:
   
 Constant:
 
-* ``tz1`` B58Char+(33)
-* ``tz2`` B58Char+(33)
-* ``tz3`` B58Char+(33)
+* ``dn1`` B58Char+(33)
+* ``dn2`` B58Char+(33)
+* ``dn3`` B58Char+(33)
 * ``edpk`` B58Char+(50)
 * ``sppk`` B58Char+(50)
 * ``p2pk`` B58Char+(50)
@@ -1538,7 +1567,7 @@ Constant:
 * ``false``
 * DIGIT [DIGIT | ``_``]*
 * DIGIT [DIGIT | ``_``]* ``p``
-* DIGIT [DIGIT | ``_``]* [``.`` [DIGIT | ``_``]*]? ``tz``
+* DIGIT [DIGIT | ``_``]* [``.`` [DIGIT | ``_``]*]? ``DUN``
 * DAY [``T`` HOUR [ TIMEZONE ]?]?
 * ``"`` CHAR* ``"``
 * ``()``

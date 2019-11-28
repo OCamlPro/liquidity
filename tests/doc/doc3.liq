@@ -1,4 +1,4 @@
-type storage = tez
+type storage = dun
 
 let%entry main () _ =
   let received = Current.amount () in

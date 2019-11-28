@@ -4,5 +4,5 @@ let%entry main (k : key_hash) _ =
   let not_delegatable = false in
   let (op, addr) =
     Account.create
-      ~manager:k ~delegate:(Some k) ~delegatable:false ~amount:100tz in
+      ~manager:k ~delegate:(Some k) ~delegatable:false ~amount:100DUN in
   ([op], Some addr)

@@ -30,4 +30,4 @@ contract C_alias = C
 type storage = M.t
 
 let%entry main (c : C.instance) s =
-  [c.main () ~amount:0tz], C.succ (M.f (2 * s))
+  [c.main () ~amount:0DUN], C.succ (M.f (2 * s))

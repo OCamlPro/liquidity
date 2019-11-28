@@ -6,4 +6,4 @@ end
 type storage = unit
 
 let%entry main (c : UnitContract.instance) _ =
-  [c.main ~amount:0tz ()], ()
+  [c.main ~amount:0DUN ()], ()
