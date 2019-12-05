@@ -1169,6 +1169,8 @@ let rec forge_deploy_json ?head ?source ?public_key
   let computed_fee = match real_op_size with
     | None -> Z.zero
     | Some size ->
+      let gas_limit =
+        if source_revealed then gas_limit else gas_limit + 10000 in
       compute_fees ~gas_limit ~size
   in
   let computed_fee = match fee with
@@ -1433,6 +1435,8 @@ let rec forge_call_json ?head ?source ?public_key
   let computed_fee = match real_op_size with
     | None -> Z.zero
     | Some size ->
+      let gas_limit =
+        if source_revealed then gas_limit else gas_limit + 10000 in
       compute_fees ~gas_limit ~size
   in
   let computed_fee = match fee with
