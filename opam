@@ -35,5 +35,8 @@ depends: [
      "sodium"
      "uri"
      "zarith"
+     "ipaddr" { < "4.0.0" }
+     "uecc"
+     "rresult"
 ]
 available: [ocaml-version >= "4.06.1"]

@@ -2,6 +2,7 @@
 	path = dune-network
 	url = https://gitlab.com/dune-network/dune-network.git
 	branch = mainnet
+
 [submodule "libs/ezcmd"]
 	path = libs/ezcmd
 	url = https://github.com/OCamlPro/ezcmd.git

@@ -1,0 +1,25 @@
+OCaml.library("ocplib-liq2love",
+   ocaml + {
+     files = [
+     	   "compil_utils.ml";
+	   "preprocess.ml";
+     	   "liq2love.ml";
+     ];
+     requires = [
+       "ocplib-dot";
+       "ocplib-liquidity-base";
+       "ocplib-file";
+       "dune-proto";
+     ];
+   });
+
+OCaml.program("makelove",
+   ocaml + {
+     files = [
+     	   "liq2love_main.ml"
+     ];
+     requires = [
+       "dune-proto";
+       "ocplib-liq2love"
+     ];
+   });
