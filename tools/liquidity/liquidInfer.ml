@@ -635,8 +635,9 @@ let get_type env loc ty =
                | ["main", ty] -> contract_sig_of_param ty
                | _ -> error loc "No compatible contract signature found")
             | [_, csig] -> csig
-            | _ :: _ :: _ ->
-              error loc "Different compatible contract signature may match"
+            | (c1, _) :: (c2, _) :: _ ->
+              error loc "Different compatible contract signature match \
+                        (Both %s and %s)" c1 c2
           in
           let ty = aux (Tcontract csig) in
           Ref.set tvr { tv with tyo = Some ty }; ty

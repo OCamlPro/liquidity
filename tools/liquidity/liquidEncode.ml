@@ -1103,6 +1103,7 @@ and encode env ( exp : typed_exp ) : encoded_exp =
     mk ?name:exp.name ~loc exp.desc exp.ty
 
   | Constructor { constr = Left right_ty; arg } ->
+    let right_ty = normalize_type ~in_env:env.env right_ty in
     let arg = encode env arg in
     let ty = Tor(arg.ty, right_ty) in
     let desc = Apply { prim = Prim_Left;
@@ -1110,6 +1111,7 @@ and encode env ( exp : typed_exp ) : encoded_exp =
     mk ?name:exp.name ~loc desc ty
 
   | Constructor { constr = Right left_ty; arg } ->
+    let left_ty = normalize_type ~in_env:env.env left_ty in
     let arg = encode env arg in
     let ty = Tor (left_ty, arg.ty) in
     let desc = Apply { prim = Prim_Right;
@@ -1129,6 +1131,7 @@ and encode env ( exp : typed_exp ) : encoded_exp =
           | PAny | PConstr (_, []) -> pat, env
           | PConstr (c, [var]) ->
             let var_ty = List.assoc c constrs in
+            let var_ty = normalize_type ~in_env:env.env var_ty in
             let (var, env, _) = new_binding env var var_ty in
             PConstr (c, [var]), env
           | PConstr _ -> assert false in

@@ -126,6 +126,25 @@ let find_type ~loc s env subst =
   let mk, found_env = find ~loc s env (fun env -> env.types) in
   mk subst, found_env
 
+(* Necessary for encoding phases where some dependencies information
+   is not kept *)
+let rec find_type_loose ~loc s env subst =
+  try find_type ~loc s env subst
+  with (Not_found | Unknown_namespace _ as e) ->
+    StringMap.fold (fun _ oenv acc ->
+        match acc, oenv with
+        | Some _, _ -> acc
+        | _, Alias _ -> acc
+        | _, Direct env ->
+          try Some (find_type_loose ~loc s env subst)
+          with Not_found | Unknown_namespace _ -> None
+      ) env.others None
+    |> function
+    | Some res -> res
+    | None -> match env.top_env with
+      | None -> raise e
+      | Some env -> find_type_loose ~loc s env subst
+
 let rec find_contract_type_aux ~loc s env =
   let path, tn = unqualify s in
   let qs = match unalias (path @ [tn]) env with
@@ -162,7 +181,7 @@ let rec normalize_type ?from_env ~in_env ty =
     Tcontract (normalize_contract_sig ?from_env ~in_env ~build_sig_env:false c_sig)
   | Trecord (name, fields) ->
     let _, found_env =
-      try find_type ~loc:noloc name in_env []
+      try find_type_loose ~loc:noloc name in_env []
       with Not_found | Unknown_namespace _ -> assert false in
     Trecord (qualify_name ?from_env ~at:found_env.path name,
              List.map (fun (f, ty) ->
@@ -170,7 +189,7 @@ let rec normalize_type ?from_env ~in_env ty =
                  normalize_type ?from_env ~in_env ty) fields)
   | Tsum (name, constrs) ->
     let _, found_env =
-      try find_type ~loc:noloc name in_env []
+      try find_type_loose ~loc:noloc name in_env []
       with Not_found | Unknown_namespace _ -> assert false in
     Tsum (qualify_name ?from_env ~at:found_env.path name,
           List.map (fun (c, ty) ->
@@ -184,9 +203,9 @@ let rec normalize_type ?from_env ~in_env ty =
     let tv = Ref.get tvr in
     begin match tv.tyo with
       | None -> ty
-      | Some ty ->
+      | Some ty2 ->
         (Ref.set tvr)
-          { tv with tyo = Some (normalize_type ?from_env ~in_env ty) };
+          { tv with tyo = Some (normalize_type ?from_env ~in_env ty2) };
         ty
     end
   | Tpartial _ -> raise (Invalid_argument "normalize_type")
@@ -195,9 +214,21 @@ and normalize_contract_sig ?from_env ~in_env ~build_sig_env c_sig =
   match c_sig.sig_name with
   | None -> c_sig (* TODO *)
   | Some s ->
-    let _, found_env =
-      try find_contract_type_aux ~loc:noloc s in_env
-      with Not_found | Unknown_namespace _ -> assert false in
+    let rec env_of_contract_type_name s env =
+      try find_contract_type_aux ~loc:noloc s env |> snd
+      with (Not_found | Unknown_namespace _ as e) ->
+        StringMap.fold (fun _ oenv acc ->
+            match acc, oenv with
+            | Some _, _ -> acc
+            | _, Alias _ -> acc
+            | _, Direct env ->
+              try Some (env_of_contract_type_name s env)
+              with Not_found | Unknown_namespace _ -> None
+          ) env.others None
+        |> function
+        | None -> raise e
+        | Some env -> env in
+    let found_env = env_of_contract_type_name s in_env in
     let sig_env =
       if not build_sig_env then in_env
       else
@@ -265,7 +296,13 @@ let lookup_global_value ~loc s env =
   match find_namespace ~loc path env.visible_contracts with
   | Current_namespace -> raise Not_found
   | Contract_namespace (c, _)  ->
-    List.find (fun v -> not v.val_private && v.val_name = s) c.values
+    let v = List.find (fun v -> not v.val_private && v.val_name = s) c.values in
+    Format.eprintf "Normalize %s@."
+      (LiquidPrinter.Liquid.string_of_type v.val_exp.ty);
+    let ty = normalize_type
+        ~from_env:env.env
+        ~in_env:c.ty_env v.val_exp.ty in
+    { v with val_exp = { v.val_exp with ty } }
   | exception Unknown_namespace (
       ["Current" | "Account" | "Map" | "Set" | "List" | "Contract"
       | "Crypto" | "Bytes" | "String" ], _ ) ->
