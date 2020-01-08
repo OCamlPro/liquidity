@@ -206,6 +206,9 @@ let add_generalize_to_env =
     | None ->
       env.types <- StringMap.add name ([ty], !cpt) env.types;
       incr cpt
+    | Some _ when name = "_entries" ->
+      env.types <- StringMap.add (name ^ string_of_int !cpt) ([ty], !cpt) env.types;
+      incr cpt
     | Some (l, i) ->
       List.iter (LiquidInfer.generalize ty) l;
       env.types <- StringMap.add name (ty :: l, i) env.types

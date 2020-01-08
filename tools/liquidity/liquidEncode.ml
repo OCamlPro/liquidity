@@ -1148,7 +1148,9 @@ and encode env ( exp : typed_exp ) : encoded_exp =
   | CreateContract { args; contract } ->
     let args = List.map (encode env) args in
     let contract, c_to_inline =
-      encode_contract ~annot:env.annot
+      encode_contract
+        ~annot:env.annot
+        ~decompiling:env.decompiling
         { contract with
           subs = env.visible_contracts @ contract.subs } in
     (* Performed inlining and simplifications on subcontract at encoding time *)

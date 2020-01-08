@@ -811,7 +811,7 @@ and structure_of_contract
   reset_env ();
   let ignore_type s =
     StringMap.mem s predefined_types
-    || s = "_entries" in
+    || String.length s >= 8 && String.sub s 0 8 = "_entries" in
   List.iter (fun (s, ty) ->
       if not (ignore_type s) then
         ignore (add_abbrev s ty (TypeName (convert_type ~abbrev:false ty)))
@@ -885,9 +885,9 @@ and structure_of_contract
 
 
 let structure_of_contract ?(abbrev=false) ?type_annots ?(types=[]) contract =
-  if !LiquidOptions.verbosity > 0 then
-    Format.eprintf "Contract %s to AST@."
-      (LiquidNamespace.qual_contract_name contract);
+  (* if !LiquidOptions.verbosity > 0 then
+   *   Format.eprintf "Contract %s to AST@."
+   *     (LiquidNamespace.qual_contract_name contract); *)
   reset_env ();
   HAbbrev.reset out_abbrevs;
   structure_of_contract ~abbrev ?type_annots ~types contract

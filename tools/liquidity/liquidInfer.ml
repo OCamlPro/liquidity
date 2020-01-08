@@ -612,6 +612,15 @@ let get_type env loc ty =
           let ty = Tcontract unit_contract_sig in
           Ref.set tvr { tv with tyo = Some ty }; ty
         | Tpartial (Pcont el) ->
+          let rec get_contract_types acc env =
+            let acc = StringMap.fold (fun _ oenv acc ->
+                match oenv with
+                | Alias _ -> acc
+                | Direct env -> get_contract_types acc env
+              ) env.others acc in
+            StringMap.union (fun _ _ x -> Some x) acc env.contract_types in
+          let known_contract_types =
+            get_contract_types predefined_contract_types env in
           let csm = StringMap.filter (fun cn cs ->
               List.for_all (fun e1 ->
                   List.exists (fun e2 ->
@@ -619,15 +628,18 @@ let get_type env loc ty =
                       eq_types (aux (snd e1)) e2.parameter
                     ) cs.entries_sig
                 ) el
-            ) env.contract_types in
-          if StringMap.cardinal csm < 1 then
-            error loc "No compatible contract signature found"
-          else if StringMap.cardinal csm > 1 then
-            error loc "Different compatible contract signature may match"
-          else begin
-            let ty = aux (Tcontract (snd (StringMap.choose csm))) in
-            Ref.set tvr { tv with tyo = Some ty }; ty
-          end
+            ) known_contract_types in
+          let csig = match StringMap.bindings csm with
+            | [] ->
+              (match el with
+               | ["main", ty] -> contract_sig_of_param ty
+               | _ -> error loc "No compatible contract signature found")
+            | [_, csig] -> csig
+            | _ :: _ :: _ ->
+              error loc "Different compatible contract signature may match"
+          in
+          let ty = aux (Tcontract csig) in
+          Ref.set tvr { tv with tyo = Some ty }; ty
         | Tpartial (Peqn _) as ty ->
           let ty, to_unify = resolve loc ty in
           Ref.set tvr { tv with tyo = Some ty };
