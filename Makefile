@@ -58,7 +58,7 @@ clean: _obuild clean-tests clean-sources
 	rm -f liquidity
 
 build-deps:
-	opam install . --deps-only
+	opam install . --deps-only --working-dir -y
 
 distclean: clean
 	rm -rf _obuild
