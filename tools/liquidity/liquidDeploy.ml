@@ -631,6 +631,32 @@ let get_head () =
   with Not_found ->
     raise_response_error "get_head" r
 
+let get_manager_key source =
+  send_get
+    (Printf.sprintf "/chains/main/blocks/head/context/contracts/%s/manager_key"
+       source)
+  >>= fun r ->
+  try
+    try
+      let r = Ezjsonm.from_string r in
+      Ezjsonm.find r ["key"]
+      |> Ezjsonm.get_string
+      |> return
+    with _->
+      get_json_string r |> return
+  with Not_found ->
+    raise_response_error "get_manager_key" (Ezjsonm.from_string r)
+
+let get_manager source =
+  send_get
+    (Printf.sprintf "/chains/main/blocks/head/context/contracts/%s/manager"
+       source)
+  >>= fun r ->
+  try
+    get_json_string r |> return
+  with Not_found ->
+    raise_response_error "get_manager" (Ezjsonm.from_string r)
+
 type constants = {
   hard_gas_limit_per_operation : int;
   hard_storage_limit_per_operation : int;
@@ -932,13 +958,20 @@ let is_revealed source =
     (Printf.sprintf
        "/chains/main/blocks/head/context/contracts/%s/manager_key"
        source)
-  >>= fun r ->
-  let r = Ezjsonm.from_string r in
-  try
-    ignore (Ezjsonm.find r ["key"]);
-    return true
-  with Not_found ->
-    return false
+  >>= function
+  | "null\n" | "null" -> return false
+  | r ->
+    try
+      let r = Ezjsonm.from_string r in
+      try
+        ignore (Ezjsonm.find r ["key"]);
+        return true
+      with Not_found ->
+        return false
+    with _ ->
+      ignore (get_json_string r);
+      return true
+
 
 let get_public_key_hash_from_secret_key sk =
   let pk = Sodium.Sign.secret_key_to_public_key sk in
@@ -1182,6 +1215,7 @@ let rec forge_deploy_json ?head ?source ?public_key
         LiquidNumber.(liq_of_tez @@ tez_of_mic_mutez (Z.of_string fee))
         LiquidNumber.(liq_of_tez @@ tez_of_mic_mutez computed_fee)
     | Some fee -> fee in
+  get_manager source >>= fun manager ->
   let origination_json counter = [
     "kind", "\"origination\"";
     "source", Printf.sprintf "%S" source;
@@ -1189,7 +1223,7 @@ let rec forge_deploy_json ?head ?source ?public_key
     "counter", Printf.sprintf "\"%d\"" counter;
     "gas_limit", Printf.sprintf "\"%d\"" gas_limit;
     "storage_limit", Printf.sprintf "\"%d\"" storage_limit;
-    "manager_pubkey", Printf.sprintf "%S" source;
+    "manager_pubkey", Printf.sprintf "%S" manager;
     "balance", Printf.sprintf "%S" !LiquidOptions.amount;
     "spendable", string_of_bool spendable;
     "delegatable", string_of_bool delegatable;
@@ -1197,7 +1231,8 @@ let rec forge_deploy_json ?head ?source ?public_key
   ] |> mk_json_obj
   in
   let operations = match source_revealed, public_key with
-    | true, _ | _, None -> [origination_json counter]
+    | true, _ -> [origination_json counter]
+    | false, None -> failwith "Missing public key for revelation"
     | false, Some edpk ->
       let reveal_json = [
         "kind", "\"reveal\"";
@@ -1461,7 +1496,8 @@ let rec forge_call_json ?head ?source ?public_key
   ] |> mk_json_obj
   in
   let operations = match source_revealed, public_key with
-    | true, _ | _, None -> [transaction_json counter]
+    | true, _ -> [transaction_json counter]
+    | false, None -> failwith "Missing public key for revelation"
     | false, Some edpk ->
       let reveal_json = [
         "kind", "\"reveal\"";
