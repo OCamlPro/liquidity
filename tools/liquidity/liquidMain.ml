@@ -214,6 +214,10 @@ let compile_tezos_file filename =
     LiquidEncode.encode_contract ~decompiling:true typed_ast in
   let live_ast = LiquidSimplify.simplify_contract
       ~decompile_annoted:annoted_tz encode_ast to_inline in
+  if !LiquidOptions.verbosity>0 then
+    FileString.write_file (filename ^ ".simple")
+      (DebugPrint.string_of_contract
+         live_ast);
   let multi_ast = LiquidDecode.decode_contract live_ast in
   let untyped_ast = LiquidUntype.untype_contract multi_ast in
   (* let untyped_ast = c in *)

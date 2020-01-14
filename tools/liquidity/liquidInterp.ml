@@ -83,12 +83,17 @@ let unsanitize_gen_name s =
 let unsanitize_name s =
   let s = unsanitize_gen_name s in
   if List.mem s reserved_keywords || has_reserved_prefix s then
-    s ^ "_"
+    Some (s ^ "_")
   else if String.length s > 0 then
     match s.[0] with
-    | 'A' .. 'Z' | '0' .. '9' -> "_" ^ s
-    | _ -> s
-  else s
+    | 'A' .. 'Z' | '0' .. '9' -> Some ("_" ^ s)
+    | '_' ->
+      if String.length s > 1 then
+        if s.[1] = '/' then None
+        else Some s
+      else None
+    | _ -> Some s
+  else Some s
 
 let fprint_stack msg fmt stack =
   Format.fprintf fmt "Stack %s:\n" msg;
@@ -198,19 +203,19 @@ let add_name stack seq name =
   match stack with
   | x :: _ ->
     let name = unsanitize_name name in
-    if x.node_name = None then x.node_name <- Some name;
+    if x.node_name = None then x.node_name <- name;
     begin match x.kind, seq.kind with
       | N_IF_END_RESULT _, N_IF _
       | N_LOOP_RESULT _, N_LOOP _
       | N_LOOP_LEFT_RESULT _, N_LOOP_LEFT _
       | N_FOLD_RESULT _, N_FOLD _ ->
-        if seq.node_name = None then seq.node_name <- Some name;
+        if seq.node_name = None then seq.node_name <- name;
       | _ -> ()
     end;
     begin match x with
       (* recover closures names *)
       | { kind = N_PRIM "PAIR"; args = [ { kind = N_LAMBDA _ } as x; _] } ->
-        if x.node_name = None then x.node_name <- Some name;
+        if x.node_name = None then x.node_name <- name;
       | _ -> ()
     end;
   | [] -> ()
