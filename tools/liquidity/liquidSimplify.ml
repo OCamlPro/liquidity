@@ -157,6 +157,10 @@ let rec compute decompile code to_inline =
       (* special case for let x = v in (x.(0), x.(1)) *)
       iter v
     | Let { bnd_var; inline; bnd_val; body } ->
+      let restore_to_inline =
+        let out_to_inline = !to_inline in
+        fun () -> to_inline := out_to_inline
+      in
       if decompile && bnd_val.name = None &&
          size bnd_val <= inline_treshold_low &&
          (StringMap.mem bnd_var.nname old_to_inline ||
@@ -171,8 +175,10 @@ let rec compute decompile code to_inline =
       let body = iter body in
       (* if body <> obody then iter { exp with desc = Let (name, loc, v, body) } else *)
       if StringMap.mem bnd_var.nname !to_inline then
-        body
+        (restore_to_inline ();
+         body)
       else
+        let () = restore_to_inline () in
         let bnd_val = iter bnd_val in
         let effect = match bnd_val.desc with
           | Lambda _ -> false
