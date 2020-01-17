@@ -273,21 +273,8 @@ let rec encode_type ?(decompiling=false) ty =
     Trecord (name, List.map (fun (l, ty) -> l, encode_type ~decompiling ty) labels)
   | Tsum (name, cstys) ->
     Tsum (name, List.map (fun (c, ty) -> c, encode_type ~decompiling ty) cstys)
-  | Tcontract contract_sig when decompiling ->
-    Tcontract { contract_sig with
-                entries_sig =
-                  List.map (fun e ->
-                      { e with parameter = encode_type ~decompiling e. parameter }
-                    ) contract_sig.entries_sig
-              }
-  | Tcontract contract_sig ->
-    let parameter = encode_type ~decompiling (encode_contract_sig contract_sig) in
-    Tcontract { contract_sig with entries_sig = [{
-        entry_name = "main";
-        parameter_name = "parameter";
-        storage_name = "storage";
-        parameter;
-      }] }
+  | Tcontract (entry, param) ->
+    Tcontract (entry, encode_type ~decompiling param)
   | Tvar _ | Tpartial _ ->
     Format.eprintf "%s@." (LiquidPrinter.LiquidDebug.string_of_type ty);
     assert false (* Removed during typechecking *)
@@ -330,7 +317,7 @@ let rec has_big_map = function
   | Tsignature | Tstring | Tbytes | Toperation | Taddress | Tfail -> false
   | Ttuple tys ->
     List.exists has_big_map tys
-  | Tset t | Tlist t | Toption t -> has_big_map t
+  | Tset t | Tlist t | Toption t | Tcontract (_, t) -> has_big_map t
   | Tor (t1, t2) | Tlambda (t1, t2, _)
   | Tmap (t1, t2) ->
     has_big_map t1 || has_big_map t2
@@ -340,8 +327,6 @@ let rec has_big_map = function
     List.exists (fun (_, ty) -> has_big_map ty) labels
   | Tsum (_, cstys) ->
     List.exists (fun (_, ty) -> has_big_map ty) cstys
-  | Tcontract { entries_sig } ->
-    List.exists (fun { parameter } -> has_big_map parameter) entries_sig
   | Tvar _ | Tpartial _ -> assert false (* Removed during typechecking *)
 
 (* Encode storage type. This checks that big maps appear only as the
@@ -377,7 +362,7 @@ let rec deconstify env loc ty c =
   else match c, (encode_qual_type env ty) with
     | (CUnit | CBool _ | CInt _ | CNat _ | CTez _ | CTimestamp _ | CString _
       | CBytes _
-      | CKey _ | CContract _ | CSignature _ | CNone  | CKey_hash _ | CAddress _),
+      | CKey _ | CSignature _ | CNone  | CKey_hash _ | CAddress _),
       _ ->
       mk ~loc (Const { ty; const =c }) ty
 
@@ -437,7 +422,7 @@ let rec deconstify env loc ty c =
         (LiquidPrinter.Liquid.string_of_type ty);
       assert false
 
-(* Decrement counters for variables that they appear in an expression *)
+(* Decrement counters for variables that appear in an expression *)
 let rec decr_counts_vars env e =
   if e.effect then () else
     match e.desc with
@@ -463,7 +448,8 @@ let rec decr_counts_vars env e =
     | Loop { body = e1; arg = e2 }
     | LoopLeft { body = e1; arg = e2; acc = None }
     | Map { body = e1; arg = e2 }
-    | Transfer { dest = e1; amount = e2 } ->
+    | Transfer { dest = e1; amount = e2 }
+    | SelfCall { amount = e1; arg = e2 } ->
       decr_counts_vars env e1;
       decr_counts_vars env e2;
 
@@ -556,7 +542,7 @@ let record_field_name_in_env env field record =
    variant values *)
 let rec encode_const env (c : typed_const) : encoded_const = match c with
   | ( CUnit | CBool _ | CInt _ | CNat _ | CTez _ | CTimestamp _ | CString _
-    | CBytes _ | CKey _ | CContract _ | CSignature _ | CNone  | CKey_hash _
+    | CBytes _ | CKey _ | CSignature _ | CNone  | CKey_hash _
     | CAddress _ ) as c -> c
 
   | CSome x -> CSome (encode_const env x)
@@ -583,6 +569,7 @@ let rec encode_const env (c : typed_const) : encoded_const = match c with
     CConstr (constr, encode_const env x)
 
   | CConstr (constr, x) when is_entry_case constr ->
+    (* TODO maybe remove *)
     let entry_name = entry_name_of_case constr in
     let rec iter entries =
       match entries with
@@ -689,57 +676,14 @@ and encode env ( exp : typed_exp ) : encoded_exp =
     let amount = encode env amount in
     let contract = encode env contract in
     let arg = encode env arg in
-    let arg =
-      if env.decompiling then arg
-      else match entry with
-        | None -> arg
-        | Some _
-          when match contract.ty with
-            | Tcontract { entries_sig = [_] } -> true
-            | _ -> false
-          -> arg
-        | Some entry ->
-          let constr = entry in
-          let rec iter entries =
-            match entries with
-            | [] -> assert false
-            | [e] ->
-              if e.entry_name <> entry then
-                error (noloc env)  "unknown entry point %s" entry;
-              arg
-            | e :: entries ->
-              let mk_sums entries = match entries with
-                | [ e ] -> e.parameter
-                | _ ->
-                  let cstrs =
-                    List.map (fun e -> e.entry_name, e.parameter)
-                      entries in
-                  Tsum ("", cstrs)
-              in
-              let desc =
-                if e.entry_name = entry then
-                  let right_ty = mk_sums entries in
-                  Apply { prim = Prim_Left;
-                          args = [arg; unused env ~loc ~constr right_ty] }
-                else
-                  let arg = iter entries in
-                  let left_ty = e.parameter in
-                  let u = match entries with
-                    | [_] -> unused env ~loc ~constr left_ty
-                    | _ ->
-                      (* marker for partially contructed values *)
-                      unused env ~loc ~constr:"_" left_ty in
-                  Apply { prim = Prim_Right; args =  [arg; u] }
-              in
-              mk ~loc desc (mk_sums (e :: entries))
-          in
-          iter (match contract.ty with
-              | Tcontract c_sig -> c_sig.entries_sig
-              | _ -> assert false)
-    in
-    let entry = if env.decompiling then entry else None in
     mk ?name:exp.name ~loc
       (Call { contract; amount; entry; arg }) Toperation
+
+  | SelfCall { amount; entry; arg } ->
+    let amount = encode env amount in
+    let arg = encode env arg in
+    mk ?name:exp.name ~loc
+      (SelfCall { amount; entry; arg }) Toperation
 
   | Failwith arg ->
     let arg = encode env arg in
@@ -1140,9 +1084,9 @@ and encode env ( exp : typed_exp ) : encoded_exp =
     in
     mk ?name:exp.name ~loc (MatchVariant { arg; cases }) exp.ty
 
-  | ContractAt { arg; c_sig } ->
+  | ContractAt { arg; entry; entry_param } ->
     let arg = encode env arg in
-    mk ?name:exp.name ~loc (ContractAt { arg; c_sig }) exp.ty
+    mk ?name:exp.name ~loc (ContractAt { arg; entry; entry_param }) exp.ty
 
   | Unpack { arg; ty } ->
     let arg = encode env arg in
@@ -1339,28 +1283,7 @@ and encode_rec_fun env ~loc ?name f arg_name arg_ty ret_ty lam_ty body =
       lam_ty in
   encode env lam
 
-
-and encode_entry env entry =
-  (* "storage/1" *)
-  let (storage_name, env, _) =
-    new_binding env entry.entry_sig.storage_name env.t_contract_sig.f_storage in
-  (* "parameter/2" *)
-  let (parameter_name, env, _) =
-    new_binding env entry.entry_sig.parameter_name entry.entry_sig.parameter in
-  {
-    entry_sig = {
-      entry.entry_sig with
-      parameter = encode_parameter_type env entry.entry_sig.parameter;
-      parameter_name;
-      storage_name;
-    };
-    code = encode env entry.code;
-    fee_code = match entry.fee_code with
-      | None -> None
-      | Some fee_code -> Some (encode env fee_code)
-  }
-
-(* Contract is encoded to single entry point form (with name "main"):
+(* Contract is encoded to single entry point form (with name "root"):
    {contract C = struct
       ...
       let%entry e1 (p1 : ty1) s1 = code_entry_1
@@ -1375,7 +1298,7 @@ and encode_entry env entry =
       | _Liq_entry_e2 of ty2
       | _Liq_entry_e3 of ty3
 
-     let%entry main (paramter : p) storage =
+     let%entry root (paramter : p) storage =
        match parameter with
        | _Liq_entry_e1 p1 ->
          let s1 = storage in {code_entry_1}
@@ -1595,7 +1518,7 @@ and encode_contract ?(annot=false) ?(decompiling=false) contract =
     storage = encode_storage_type env contract.storage;
     entries = [{
         entry_sig = {
-          entry_name = "main";
+          entry_name = "root";
           parameter_name = pname;
           storage_name;
           parameter = encode_parameter_type env parameter;

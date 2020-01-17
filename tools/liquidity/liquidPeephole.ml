@@ -118,7 +118,7 @@ and simplify_step e exprs =
     end
 
   (* takes nothing, add one item on stack : 0 -> 1 *)
-  | (PUSH _ | NOW | BALANCE | SELF | SOURCE | SENDER | AMOUNT | STEPS_TO_QUOTA
+  | (PUSH _ | NOW | BALANCE | SELF _ | SOURCE | SENDER | AMOUNT | STEPS_TO_QUOTA
     | LAMBDA _
     ),
     {ins=DIP_DROP (n,m); loc} :: exprs ->
@@ -130,7 +130,7 @@ and simplify_step e exprs =
     else
       lii ~loc (DIP_DROP (n,m-1)) :: exprs
 
-  | (PUSH _ | NOW | BALANCE | SELF | SOURCE | SENDER | AMOUNT | STEPS_TO_QUOTA
+  | (PUSH _ | NOW | BALANCE | SELF _ | SOURCE | SENDER | AMOUNT | STEPS_TO_QUOTA
     | LAMBDA _
     ), {ins=DROP} :: exprs -> exprs
 

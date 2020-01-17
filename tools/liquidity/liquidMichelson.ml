@@ -212,12 +212,38 @@ let rec compile_desc depth env ~loc desc =
     amount @
     [ push ~loc Tunit CUnit; ii ~loc TRANSFER_TOKENS ]
 
-  | Call { entry = Some _ } ->
-    assert false (* should have been encoded *)
-
-  | Call { contract; amount; entry = None; arg } ->
-    (* Contract.call (encoded) compiled to TRANSFER_TOKENS *)
+  | Call { contract = ({ ty = Tcontract _ } as contract);
+           amount; entry; arg } ->
+    (* Contract.call compiled to TRANSFER_TOKENS *)
     let contract = compile depth env contract in
+    let amount = compile (depth+1) env amount in
+    let arg = compile (depth+2) env arg in
+    contract @ amount @ arg @ [ ii ~loc TRANSFER_TOKENS ]
+
+  | Call { contract = ({ ty = Taddress } as address);
+           amount; entry; arg } ->
+    (* Contract.call on addresses compiled to CONTRACT + TRANSFER_TOKENS *)
+    let address = compile depth env address in
+    let ty = LiquidEncode.encode_type arg.ty in
+    let error_msg = Printf.sprintf "No entrypoint %s with parameter type %s"
+        (match entry with None -> "default" | Some e -> e)
+        (LiquidPrinter.Liquid.string_of_type arg.ty) in
+    let contract =
+      address @
+      [ ii ~loc (CONTRACT (entry, ty));
+        ii ~loc @@
+        IF_NONE (
+          seq [ push ~loc Tstring (CString error_msg) ;
+                ii ~loc FAILWITH ],
+          seq []) ] in
+    let amount = compile (depth+1) env amount in
+    let arg = compile (depth+2) env arg in
+    contract @ amount @ arg @ [ ii ~loc TRANSFER_TOKENS ]
+
+  | Call _ -> assert false
+
+  | SelfCall { amount; entry; arg } ->
+    let contract = [ ii ~loc (SELF entry) ] in
     let amount = compile (depth+1) env amount in
     let arg = compile (depth+2) env arg in
     contract @ amount @ arg @ [ ii ~loc TRANSFER_TOKENS ]
@@ -419,10 +445,10 @@ let rec compile_desc depth env ~loc desc =
     args_code @
     [contract_code; ii ~loc PAIR]
 
-  | ContractAt { arg; c_sig } ->
-    let param_ty = LiquidEncode.encode_contract_sig c_sig in
+  | ContractAt { arg; entry; entry_param } ->
+    let param_ty = LiquidEncode.encode_type entry_param in
     compile depth env arg @
-    [ ii ~loc (CONTRACT param_ty) ]
+    [ ii ~loc (CONTRACT (entry, param_ty)) ]
 
   | Unpack { arg; ty } ->
     let ty = LiquidEncode.encode_type ty in
@@ -475,12 +501,6 @@ and compile_prim ~loc depth env prim args =
     x_code @ set_code
   | Prim_tuple_set, _ -> assert false
 
-  | Prim_self, _ when env.in_lambda ->
-    LiquidLoc.raise_error ~loc
-      "Typing error: \
-       Current.self is not allowed inside non-inlined functions\n%!"
-
-  | Prim_self, _ -> [ ii SELF ]
   | Prim_balance, _ -> [ ii BALANCE ]
   | Prim_now, _ -> [ ii NOW ]
   | Prim_amount, _ -> [ ii AMOUNT ]
@@ -654,7 +674,7 @@ and compile_prim ~loc depth env prim args =
 
       | (Prim_extension _|Prim_tuple_get
         | Prim_tuple_set|Prim_tuple
-        | Prim_self|Prim_balance|Prim_now|Prim_amount|Prim_gas
+        | Prim_balance|Prim_now|Prim_amount|Prim_gas
         | Prim_Left|Prim_Right|Prim_source|Prim_sender|Prim_unused _
         | Prim_coll_find|Prim_coll_update|Prim_coll_mem
         | Prim_coll_size|Prim_list_rev|Prim_slice
@@ -760,7 +780,7 @@ and compile_lambda ~loc { arg_name; arg_ty; body; ret_ty; recursive } =
 
 and compile_const ~loc c = match c with
   | ( CUnit | CBool _ | CInt _ | CNat _ | CTez _ | CTimestamp _ | CString _
-    | CBytes _ | CKey _ | CContract _ | CSignature _ | CNone  | CKey_hash _
+    | CBytes _ | CKey _ | CSignature _ | CNone  | CKey_hash _
     | CAddress _ ) as c -> c
   | CSome x -> CSome (compile_const ~loc x)
   | CLeft x -> CLeft (compile_const ~loc x)

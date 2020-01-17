@@ -220,6 +220,11 @@ let rec untype (env : env) (code : (datatype, 'a) exp) : (datatype, 'b) exp =
              entry;
              arg = untype env arg }
 
+    | SelfCall { amount; entry; arg } ->
+      SelfCall { amount = untype env amount;
+             entry;
+             arg = untype env arg }
+
     | MatchVariant { arg; cases } ->
       let arg = untype env arg in
       let cases = List.map (function
@@ -237,8 +242,8 @@ let rec untype (env : env) (code : (datatype, 'a) exp) : (datatype, 'b) exp =
       CreateContract { args = List.map (untype env) args;
                        contract = untype_contract contract }
 
-    | ContractAt { arg; c_sig } ->
-      ContractAt { arg = untype env arg; c_sig }
+    | ContractAt { arg; entry; entry_param } ->
+      ContractAt { arg = untype env arg; entry; entry_param }
 
     | Unpack { arg; ty } ->
       Unpack { arg = untype env arg; ty }
@@ -276,7 +281,7 @@ and untype_lambda { arg_name; arg_ty; body; ret_ty; recursive } =
 
 and untype_const c = match c with
   | ( CUnit | CBool _ | CInt _ | CNat _ | CTez _ | CTimestamp _ | CString _
-    | CBytes _ | CKey _ | CContract _ | CSignature _ | CNone  | CKey_hash _
+    | CBytes _ | CKey _ | CSignature _ | CNone  | CKey_hash _
     | CAddress _ ) as c -> c
   | CSome x -> CSome (untype_const x)
   | CLeft x -> CLeft (untype_const x)

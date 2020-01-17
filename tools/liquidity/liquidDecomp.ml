@@ -367,7 +367,6 @@ let rec decompile_next (env : env) node =
         | "STEPS_TO_QUOTA",[] -> Prim_gas, [unit ~loc]
         | "SOURCE",[] -> Prim_source, [unit ~loc]
         | "SENDER",[] -> Prim_sender, [unit ~loc]
-        | "SELF",[] -> Prim_self, [unit ~loc]
         | "BLOCK_LEVEL", [] -> Prim_block_level, [unit ~loc]
         | "COLLECT_CALL", [] -> Prim_collect_call, [unit ~loc]
         | prim, args ->
@@ -448,9 +447,8 @@ let rec decompile_next (env : env) node =
     | N_CONSTR c, [arg] ->
       mklet env node (Constructor {constr = Constr c; arg = arg_of arg })
 
-    | N_CONTRACT ty, [arg] ->
-      mklet env node (ContractAt { arg = arg_of arg;
-                               c_sig = contract_sig_of_param ty })
+    | N_CONTRACT (entry, entry_param), [arg] ->
+      mklet env node (ContractAt { arg = arg_of arg; entry; entry_param })
 
     | N_UNPACK ty, [arg] ->
       mklet env node (Unpack { arg = arg_of arg; ty })
@@ -631,8 +629,16 @@ let rec decompile_next (env : env) node =
         (Transfer { dest = arg_of dest;
                     amount = arg_of amount })
 
+
+    | N_CALL, [ { kind = N_SELF entry }; amount; arg] ->
+      mklet env node
+        (SelfCall { amount = arg_of amount;
+                    entry;
+                    arg = arg_of arg })
+
     | N_CALL, [contract; amount; arg] ->
       let entry, arg = match arg.kind, arg.args with
+        (* TODO not necessary *)
         | N_CONSTR c, [arg] when is_entry_case c ->
           Some (entry_name_of_case c), arg
         | _ -> None, arg in
@@ -703,6 +709,7 @@ let rec decompile_next (env : env) node =
     | N_PROJ _
     | N_CONSTR _
     | N_SETFIELD _
+    | N_SELF _
     ), _->
       LiquidLoc.raise_error
         "not implemented at node %s%!"
@@ -710,7 +717,7 @@ let rec decompile_next (env : env) node =
 
 and decompile_const env c = match c with
   | ( CUnit | CBool _ | CInt _ | CNat _ | CTez _ | CTimestamp _ | CString _
-    | CBytes _ | CKey _ | CContract _ | CSignature _ | CNone  | CKey_hash _
+    | CBytes _ | CKey _ | CSignature _ | CNone  | CKey_hash _
     | CAddress _ ) as c -> c
   | CSome x -> CSome (decompile_const env x)
   | CLeft x -> CLeft (decompile_const env x)

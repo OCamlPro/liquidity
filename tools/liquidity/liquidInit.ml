@@ -51,7 +51,7 @@ let rec subst_empty_big_map storage_ty code =
     | Const _ -> desc
     | Var _ -> desc
 
-    | Transfer _ | Call _ -> assert false
+    | Transfer _ | Call _ | SelfCall _ -> assert false
 
     | Failwith arg ->
       let arg' = subst_empty_big_map storage_ty arg in
@@ -159,10 +159,8 @@ let rec subst_empty_big_map storage_ty code =
 
     | Apply { prim = ( Prim_sender
                      | Prim_source
-                     | Prim_self
                      | Prim_balance
-                     | Prim_gas
-                     | Prim_create_account ) as p } ->
+                     | Prim_gas ) as p } ->
       LiquidLoc.raise_error ~loc
         "%s forbidden in initializer (for this version of %s)"
         (string_of_primitive p)
@@ -202,10 +200,10 @@ let rec subst_empty_big_map storage_ty code =
       if List.for_all2 (==) args args' then desc
       else CreateContract { args = args'; contract }
 
-    | ContractAt { arg; c_sig } ->
+    | ContractAt { arg; entry; entry_param } ->
       let arg' = subst_empty_big_map storage_ty arg in
       if arg == arg' then desc
-      else ContractAt { arg = arg'; c_sig }
+      else ContractAt { arg = arg'; entry; entry_param }
 
     | Unpack { arg; ty } ->
       let arg' = subst_empty_big_map storage_ty arg in

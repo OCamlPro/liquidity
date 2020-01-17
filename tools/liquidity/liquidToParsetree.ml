@@ -94,11 +94,7 @@ module HAbbrev = Hashtbl.Make (struct
         Trecord ("", List.map (fun (fn, fty) -> (fn, erase_names fty)) fl)
       | Tsum (_sn, cl) ->
         Tsum ("", List.map (fun (cn, cty) -> (cn, erase_names cty)) cl)
-      | Tcontract c ->
-        Tcontract { c with entries_sig =
-                             List.map (fun es ->
-                                 { es with parameter = erase_names es.parameter }
-                               ) c.entries_sig }
+      | Tcontract (entry, ty) -> Tcontract (entry, erase_names ty)
     let hash ty = Hashtbl.hash (erase_names ty)
     let equal ty1 ty2 = eq_types (erase_names ty1) (erase_names ty2)
   end)
@@ -196,7 +192,8 @@ let rec convert_type ~abbrev ?name ty =
           (StringMap.bindings subst)
       with Not_found -> params in
     typ_constr name args
-  | Tcontract contract_sig -> convert_contract_sig ~abbrev contract_sig
+  | Tcontract _ ->
+    failwith "Cannot produce contract handle types in source"
   | Tvar { contents = { contents = { id; tyo = None | Some Tpartial _ }}} ->
     Typ.var id
   | Tvar { contents = { contents = { tyo = Some ty }}} ->
@@ -243,40 +240,6 @@ let rec convert_type ~abbrev ?name ty =
         add_abbrev name ty (TypeName caml_ty)
       | _ ->
         caml_ty
-
-and convert_contract_sig ~abbrev csig =
-  let name = match csig.sig_name with
-    | None -> "ContractType" (* ^ (string_of_int !cpt_abbrev) *)
-    | Some name -> name in
-  let val_items = List.map (fun e ->
-      let parameter = convert_type ~abbrev e.parameter in
-      Sig.extension (
-        id "entry",
-        PSig [
-          Sig.value
-            (Val.mk (id e.entry_name)
-               (Typ.arrow (Labelled e.parameter_name) parameter
-                  (Typ.arrow Nolabel (typ_constr "storage" [])
-                     (Typ.tuple [typ_constr "list" [typ_constr "operation" []];
-                                 typ_constr "storage" []]))))
-        ])
-    ) csig.entries_sig in
-  let abstr_storage = Sig.type_ Recursive [
-      Type.mk ~kind:Ptype_abstract (id "storage")
-    ] in
-  let signature = Mty.signature (abstr_storage :: val_items) in
-  let typ = StringMap.fold (fun n csig' -> function
-      | Some _ as acc -> acc
-      | None ->
-        match csig'.sig_name with
-        | Some name when eq_types (Tcontract csig') (Tcontract csig) ->
-          Some (typ_constr (name ^ ".instance") [])
-        | _ -> None
-    ) predefined_contract_types None in
-  match typ with
-  | Some typ -> typ
-  | None -> add_abbrev name (Tcontract csig) (ContractType signature)
-
 
 let convert_primitive prim args =
   match prim, args with
@@ -343,8 +306,6 @@ let rec convert_const ~abbrev (expr : (datatype, 'a) exp const) =
     let c = Exp.constant (Pconst_integer (n, Some '\235')) in
     if n.[0] <> '0' then c, true
     else Exp.constraint_ c (convert_type ~abbrev Tsignature), true
-  | CContract n ->
-    Exp.constant (Pconst_integer (n, Some '\236')), false
   | CAddress n when
       String.length n >= 2 &&
       let pref = String.sub n 0 2 in pref = "tz" || pref = "dn"
@@ -550,6 +511,15 @@ and convert_code ~abbrev (expr : (datatype, 'a) exp) =
         Labelled "amount", convert_code ~abbrev amount;
       ]
 
+  | SelfCall { amount; entry; arg } ->
+    let entry = match entry with None -> "default" | Some e -> e in
+    Exp.apply ~loc
+      (Exp.ident (lid ("Self." ^ entry)))
+      [
+        Nolabel, convert_code ~abbrev arg;
+        Labelled "amount", convert_code ~abbrev amount;
+      ]
+
   | Loop { arg_name; body; arg } ->
     Exp.apply ~loc
       (Exp.ident (lid "Loop.loop"))
@@ -722,8 +692,7 @@ and convert_code ~abbrev (expr : (datatype, 'a) exp) =
       (Typ.constr (lid "variant")
          [convert_type ~abbrev left_ty; Typ.any ()])
 
-  | CreateContract { args = [manager; delegate; spendable;
-                             delegatable; init_balance; init_storage];
+  | CreateContract { args = [delegate; init_balance; init_storage];
                      contract } ->
     let restore_env = save_env () in
     let structure = structure_of_contract ~abbrev contract in
@@ -736,10 +705,7 @@ and convert_code ~abbrev (expr : (datatype, 'a) exp) =
     (* top_level_contracts := contract_struct_item :: !top_level_contracts; *)
     Exp.apply ~loc
       (Exp.ident (lid "Contract.create"))
-      [Labelled "manager", convert_code ~abbrev manager;
-       Labelled "delegate", convert_code ~abbrev delegate;
-       Labelled "spendable", convert_code ~abbrev spendable;
-       Labelled "delegatable", convert_code ~abbrev delegatable;
+      [Labelled "delegate", convert_code ~abbrev delegate;
        Labelled "amount", convert_code ~abbrev init_balance;
        Labelled "storage", convert_code ~abbrev init_storage;
        Nolabel, Exp.pack (Mod.structure structure)
@@ -747,12 +713,23 @@ and convert_code ~abbrev (expr : (datatype, 'a) exp) =
 
   | CreateContract _ -> assert false
 
-  | ContractAt { arg; c_sig } ->
-    Exp.constraint_ ~loc
-      (Exp.apply ~loc
-         (Exp.ident (lid "Contract.at"))
-         [ Nolabel, convert_code ~abbrev arg ])
-      (convert_type ~abbrev (Toption (Tcontract c_sig)))
+  | ContractAt { arg; entry; entry_param } ->
+    let entry = match entry with None -> "default" | Some e -> e in
+    Exp.apply ~loc
+      (Exp.extension (
+          id ~loc "handle",
+          PSig [
+            Sig.extension (
+              id ~loc "entry",
+              PSig [
+                Sig.value
+                  (Val.mk (id entry)
+                     (Typ.arrow Nolabel
+                        (convert_type ~abbrev entry_param)
+                        (Typ.any ())))
+              ])
+          ]))
+      [ Nolabel, convert_code ~abbrev arg ]
 
   | Unpack { arg; ty } ->
     Exp.constraint_ ~loc

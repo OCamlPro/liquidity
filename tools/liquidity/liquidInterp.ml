@@ -255,7 +255,7 @@ let rec constrlabel_is_in_type c = function
   | Tkey | Tkey_hash | Tsignature | Toperation | Taddress | Tfail ->
     false
   | Ttuple tys -> List.exists (constrlabel_is_in_type c) tys
-  | Toption ty | Tlist ty | Tset ty -> constrlabel_is_in_type c ty
+  | Toption ty | Tlist ty | Tset ty | Tcontract (_, ty) -> constrlabel_is_in_type c ty
   | Tmap (t1, t2) | Tbigmap (t1, t2) | Tor (t1, t2) | Tlambda (t1, t2, _) ->
     constrlabel_is_in_type c t1 || constrlabel_is_in_type c t2
   | Tclosure ((t1, t2), t3, _) ->
@@ -265,11 +265,6 @@ let rec constrlabel_is_in_type c = function
   | Trecord (_, l) | Tsum (_, l) ->
     List.exists (fun (c', _) -> c' = c) l ||
     List.exists (fun (_, t) -> constrlabel_is_in_type c t) l
-  | Tcontract s ->
-    List.exists (fun e ->
-        c = e.entry_name ||
-        constrlabel_is_in_type c e.parameter)
-      s.entries_sig
   | Tvar { contents = { contents = { tyo = Some ty }}} ->
     constrlabel_is_in_type c ty
   | Tvar _ | Tpartial _ -> (* assert *) false
@@ -280,7 +275,7 @@ let rec constrlabel_is_in_code c code =
   | EXEC | DUP _ | DIP_DROP _ | DROP | CAR _ | CDR _ | CDAR _ | CDDR _
   | PAIR | RECORD _ | COMPARE | LE | LT | GE | GT | NEQ | EQ | FAILWITH
   | NOW | TRANSFER_TOKENS | ADD | SUB | BALANCE | SWAP | GET | UPDATE | SOME
-  | CONCAT | MEM | SLICE | SELF | AMOUNT | STEPS_TO_QUOTA | CREATE_ACCOUNT
+  | CONCAT | MEM | SLICE | SELF _ | AMOUNT | STEPS_TO_QUOTA | CREATE_ACCOUNT
   | BLAKE2B | SHA256 | SHA512 | HASH_KEY | CHECK_SIGNATURE | ADDRESS | CONS
   | OR | XOR | AND | NOT | INT | ABS | ISNAT | NEG | MUL | EDIV | LSL | LSR
   | SOURCE | SENDER | SIZE | IMPLICIT_ACCOUNT | SET_DELEGATE | PACK | MOD | DIV
@@ -290,7 +285,7 @@ let rec constrlabel_is_in_code c code =
   | PUSH (ty, _)
   | LEFT (ty, _)
   | RIGHT (ty, _)
-  | CONTRACT ty -> constrlabel_is_in_type c ty
+  | CONTRACT (_, ty) -> constrlabel_is_in_type c ty
   | CREATE_CONTRACT contract -> constrlabel_is_in_contract c contract
   | LAMBDA (ty1, ty2, code) ->
     constrlabel_is_in_type c ty1 ||
@@ -816,8 +811,8 @@ and decompile_aux stack (seq : node) ins =
   | SENDER, stack ->
     let x = node ins.loc (N_PRIM "SENDER") [] [seq] in
     x :: stack, x
-  | SELF, stack ->
-    let x = node ins.loc (N_PRIM "SELF") [] [seq] in
+  | SELF entry, stack ->
+    let x = node ins.loc (N_SELF entry) [] [seq] in
     x :: stack, x
   | NOW, stack ->
     let x = node ins.loc (N_PRIM "NOW") [] [seq] in
@@ -876,8 +871,8 @@ and decompile_aux stack (seq : node) ins =
     let x = node ins.loc (N_RIGHT left_ty) [x] [seq] in
     x :: stack, x
 
-  | CONTRACT ty, x :: stack -> (* TODO : keep types too ! *)
-    let x = node ins.loc (N_CONTRACT ty) [x] [seq] in
+  | CONTRACT (entry, ty), x :: stack -> (* TODO : keep types too ! *)
+    let x = node ins.loc (N_CONTRACT (entry, ty)) [x] [seq] in
     x :: stack, x
   | UNPACK ty, x :: stack -> (* TODO : keep types too ! *)
     let x = node ins.loc (N_UNPACK ty) [x] [seq] in
@@ -1138,7 +1133,7 @@ and decompile_lambda loc arg_ty res_ty code =
 
 and decompile_const loc cst = match cst with
   | ( CUnit | CBool _ | CInt _ | CNat _ | CTez _ | CTimestamp _ | CString _
-    | CBytes _ | CKey _ | CContract _ | CSignature _ | CNone  | CKey_hash _
+    | CBytes _ | CKey _ | CSignature _ | CNone  | CKey_hash _
     | CAddress _ ) as c -> c
   | CSome x -> CSome (decompile_const loc x)
   | CLeft x -> CLeft (decompile_const loc x)

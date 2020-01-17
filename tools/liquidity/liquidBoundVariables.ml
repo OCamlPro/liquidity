@@ -78,6 +78,8 @@ let rec bv code =
 
   | Transfer { dest; amount } -> StringSet.union (bv dest) (bv amount)
 
+  | SelfCall { amount; arg } -> StringSet.union (bv arg) (bv amount)
+
   | Call { contract; amount; entry; arg } ->
     List.fold_left (fun set exp ->
         StringSet.union set (bv exp)
@@ -133,7 +135,7 @@ let rec bv code =
 and bv_const const =
   match const with
   | ( CUnit | CBool _ | CInt _ | CNat _ | CTez _ | CTimestamp _ | CString _
-    | CBytes _ | CKey _ | CContract _ | CSignature _ | CNone  | CKey_hash _
+    | CBytes _ | CKey _ | CSignature _ | CNone  | CKey_hash _
     | CAddress _ ) -> StringSet.empty
   | CSome x | CLeft x | CRight x | CConstr (_, x) -> bv_const x
   | CTuple xs | CList xs | CSet xs ->
@@ -301,6 +303,13 @@ let rec bound code =
     let desc = Transfer { dest; amount } in
     mk desc code bv
 
+  | SelfCall { amount; entry; arg } ->
+    let amount = bound amount in
+    let arg = bound arg in
+    let bv = StringSet.union arg.bv amount.bv in
+    let desc = SelfCall { amount; entry; arg } in
+    mk desc code bv
+
   | Call { contract; amount; entry; arg } ->
     let contract = bound contract in
     let amount = bound amount in
@@ -403,9 +412,9 @@ let rec bound code =
     let desc = CreateContract { args; contract } in
     mk desc code bv
 
-  | ContractAt { arg; c_sig } ->
+  | ContractAt { arg; entry; entry_param } ->
     let arg = bound arg in
-    let desc = ContractAt { arg; c_sig } in
+    let desc = ContractAt { arg; entry; entry_param } in
     mk desc code arg.bv
 
   | Unpack { arg; ty } ->
@@ -424,7 +433,7 @@ let rec bound code =
 
 and bound_const = function
   | ( CUnit | CBool _ | CInt _ | CNat _ | CTez _ | CTimestamp _ | CString _
-    | CBytes _ | CKey _ | CContract _ | CSignature _ | CNone  | CKey_hash _
+    | CBytes _ | CKey _ | CSignature _ | CNone  | CKey_hash _
     | CAddress _ ) as c -> c
   | CSome x -> CSome (bound_const x)
   | CLeft x -> CLeft (bound_const x)

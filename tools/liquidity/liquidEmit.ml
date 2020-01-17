@@ -37,6 +37,8 @@ let field_annot = function
   | None -> []
   | Some field -> ["%" ^ field]
 
+let entrypoint_annot = field_annot
+
 let rec emit_code ~expand code =
   let name = code.loc_name in
   let i = i ~loc:code.loc in
@@ -73,7 +75,8 @@ let rec emit_code ~expand code =
   | RIGHT (ty, constr) ->
     M_INS_EXP ("RIGHT", [ty], [],
                var_annot name @ field_annot (Some "") @ field_annot constr)
-  | CONTRACT ty -> M_INS_EXP ("CONTRACT", [ty], [], var_annot name)
+  | CONTRACT (entry, ty) ->
+    M_INS_EXP ("CONTRACT", [ty], [], entrypoint_annot entry @ var_annot name)
 
   | UNPACK ty -> M_INS_EXP ("UNPACK", [ty], [], var_annot name)
 
@@ -154,7 +157,7 @@ let rec emit_code ~expand code =
   | CONCAT -> M_INS ("CONCAT", var_annot name)
   | SLICE -> M_INS ("SLICE", var_annot name)
   | MEM -> M_INS ("MEM", var_annot name)
-  | SELF -> M_INS ("SELF", var_annot name)
+  | SELF entry -> M_INS ("SELF", entrypoint_annot entry @ var_annot name)
   (*  | SOURCE -> M_INS "SOURCE" *)
   | AMOUNT -> M_INS ("AMOUNT", var_annot name)
   | STEPS_TO_QUOTA -> M_INS ("STEPS_TO_QUOTA", var_annot name)
@@ -210,7 +213,6 @@ and emit_const ~expand cst = match cst with
     | CSignature _
     | CNone
     | CKey_hash _
-    | CContract _
     | CAddress _ ) as cst -> cst
   | CLambda l ->
     CLambda { l with body = emit_code ~expand l.body }

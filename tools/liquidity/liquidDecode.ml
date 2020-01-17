@@ -34,7 +34,7 @@ let base_of_var arg =
 
 let rec decode_const (c : encoded_const) : typed_const = match c with
   | ( CUnit | CBool _ | CInt _ | CNat _ | CTez _ | CTimestamp _ | CString _
-    | CBytes _ | CKey _ | CContract _ | CSignature _ | CNone  | CKey_hash _
+    | CBytes _ | CKey _ | CSignature _ | CNone  | CKey_hash _
     | CAddress _ ) as c -> c
   | CSome x -> CSome (decode_const x)
   | CLeft x -> CLeft (decode_const x)
@@ -95,18 +95,29 @@ and decode ( exp : encoded_exp ) : typed_exp =
     let desc = Transfer { dest; amount } in
     mk ?name:exp.name ~loc desc exp.ty
 
+  | Call { amount; entry = None; arg;
+           contract = { desc = MatchOption {
+               arg = { desc = ContractAt { arg = addr; entry; entry_param }};
+               ifnone = { desc = Failwith _ };
+               ifsome = { desc = Var x }; some_name }  }
+         } when some_name.nname = x ->
+    let amount = decode amount in
+    let contract = decode addr in
+    let arg = decode arg in
+    let desc = Call { contract; amount; entry; arg } in
+    mk ?name:exp.name ~loc desc exp.ty
+
   | Call { contract; amount; entry; arg } ->
     let amount = decode amount in
     let contract = decode contract in
-    let desc = match entry, arg.desc with
-      | None, Constructor { constr = Constr c; arg } when is_entry_case c ->
-        let entry = Some (entry_name_of_case c) in
-        let arg = decode arg in
-        Call { contract; amount; entry; arg }
-      | _, _ ->
-        let arg = decode arg in
-        Call { contract; amount; entry; arg }
-    in
+    let arg = decode arg in
+    let desc = Call { contract; amount; entry; arg } in
+    mk ?name:exp.name ~loc desc exp.ty
+
+  | SelfCall { amount; entry; arg } ->
+    let amount = decode amount in
+    let arg = decode arg in
+    let desc = SelfCall { amount; entry; arg } in
     mk ?name:exp.name ~loc desc exp.ty
 
   | Failwith arg ->
@@ -213,9 +224,9 @@ and decode ( exp : encoded_exp ) : typed_exp =
     let cases = List.map (fun (pat, e) -> pat, decode e) cases in
     mk ?name:exp.name ~loc (MatchVariant { arg; cases }) exp.ty
 
-  | ContractAt { arg; c_sig } ->
+  | ContractAt { arg; entry; entry_param } ->
     let arg = decode arg in
-    mk ?name:exp.name ~loc (ContractAt { arg; c_sig }) exp.ty
+    mk ?name:exp.name ~loc (ContractAt { arg; entry; entry_param }) exp.ty
 
   | Unpack { arg; ty } ->
     let arg = decode arg in
@@ -361,7 +372,7 @@ and decode_contract contract =
     | None -> None
     | Some i -> Some { i with init_body = decode i.init_body } in
   try match contract.entries with
-    | [{ entry_sig = { entry_name = "main";
+    | [{ entry_sig = { entry_name = _;
                        parameter = Tsum (_, param_constrs);
                        parameter_name;
                        storage_name;

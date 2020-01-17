@@ -61,6 +61,8 @@ let rec compute decompile code to_inline =
     | MapFold { body; arg; acc } -> 30 + size body + size arg + size acc
     | Call { contract; amount; arg } ->
       1 + size contract + size amount + size arg
+    | SelfCall { amount; arg } ->
+      1 + size amount + size arg
     | Transfer { dest; amount } ->
       1 + size dest + size amount
 
@@ -306,6 +308,11 @@ let rec compute decompile code to_inline =
       let arg = iter arg in
       { exp with desc = Call { contract; amount; entry; arg } }
 
+    | SelfCall { amount; entry; arg } ->
+      let amount = iter amount in
+      let arg = iter arg in
+      { exp with desc = SelfCall { amount; entry; arg } }
+
     | Lambda { arg_name; arg_ty; body; ret_ty; recursive } ->
       let body = iter body in
       { exp with
@@ -329,9 +336,9 @@ let rec compute decompile code to_inline =
       (* contract is already simplified *)
       { exp with desc = CreateContract { args; contract } }
 
-    | ContractAt { arg; c_sig } ->
+    | ContractAt { arg; entry; entry_param } ->
       let arg = iter arg in
-      { exp with desc = ContractAt { arg; c_sig } }
+      { exp with desc = ContractAt { arg; entry; entry_param } }
 
     | Unpack { arg; ty } ->
       let arg = iter arg in
@@ -349,7 +356,7 @@ let rec compute decompile code to_inline =
 
   and iter_const c = match c with
     | ( CUnit | CBool _ | CInt _ | CNat _ | CTez _ | CTimestamp _ | CString _
-      | CBytes _ | CKey _ | CContract _ | CSignature _ | CNone  | CKey_hash _
+      | CBytes _ | CKey _ | CSignature _ | CNone  | CKey_hash _
       | CAddress _ ) as c -> c
     | CSome x -> CSome (iter_const x)
     | CLeft x -> CLeft (iter_const x)
@@ -386,7 +393,7 @@ and simplify_contract ?(decompile_annoted=false) contract (to_inline, to_inline_
       (LiquidNamespace.qual_contract_name contract);
 
   match contract.entries with
-  | [{ entry_sig = { entry_name = "main" };
+  | [{ entry_sig = { entry_name = "root" };
        code; fee_code } as entry ] ->
     { contract with
       entries = [{ entry with

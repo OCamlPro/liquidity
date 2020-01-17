@@ -107,12 +107,9 @@ let rec convert_type ~loc expr =
   | Ttuple (x :: tys) ->
     prim_type ~loc "pair" [convert_type ~loc x; convert_type ~loc (Ttuple tys)]
   | Tor (x,y) -> prim_type ~loc "or" [convert_type ~loc x; convert_type ~loc y]
-  | Tcontract { sig_name; entries_sig = [{ parameter }]} ->
-    let annots = match sig_name with
-      | None -> []
-      | Some n -> [Tannot n] in
-    prim_type ~loc "contract" [convert_type ~loc parameter] ~annots
-  | Tcontract _ -> assert false
+  | Tcontract (e, parameter) ->
+    (* XXX Should not appear! *)
+    prim_type ~loc "contract" [convert_type ~loc parameter]
   | Tlambda (x,y, _) ->
     prim_type ~loc "lambda" [convert_type ~loc x;
                              convert_type ~loc y]
@@ -217,8 +214,6 @@ let rec convert_const ~loc expand (expr : loc_michelson const) =
   | CKey s -> Micheline.String (loc, s)
   | CKey_hash s when s.[0] = '0' -> Micheline.Bytes (loc, bytes_of_hex s)
   | CKey_hash s -> Micheline.String (loc, s)
-  | CContract s when s.[0] = '0' -> Micheline.Bytes (loc, bytes_of_hex s)
-  | CContract s -> Micheline.String (loc, s)
   | CAddress s when s.[0] = '0' -> Micheline.Bytes (loc, bytes_of_hex s)
   | CAddress s -> Micheline.String (loc, s)
   | CSignature s when s.[0] = '0' -> Micheline.Bytes (loc, bytes_of_hex s)
@@ -336,8 +331,11 @@ and convert_code expand expr =
   | LOOP_LEFT loop -> prim "LOOP_LEFT" [convert_code expand loop] name
   | ITER body -> prim "ITER" [convert_code expand body] name
   | MAP body -> prim "MAP" [convert_code expand body] name
-  | CONTRACT ty ->
-    prim "CONTRACT" [convert_type ty] name
+  | CONTRACT (entry, ty) ->
+    let fields = match entry with
+      | None -> []
+      | Some e -> [e] in
+    prim "CONTRACT" [convert_type ty] ~fields name
   | UNPACK ty ->
     prim "UNPACK" [convert_type ty] name
   | INT -> prim "INT" [] name
@@ -355,7 +353,11 @@ and convert_code expand expr =
     else
       prim (Printf.sprintf "D%sP" (String.make n 'U')) [] name
 
-  | SELF -> prim "SELF" [] name
+  | SELF entry ->
+    let fields = match entry with
+      | None -> []
+      | Some e -> [e] in
+    prim "SELF" [] ~fields name
   | STEPS_TO_QUOTA -> prim "STEPS_TO_QUOTA" [] name
   | CREATE_ACCOUNT -> prim "CREATE_ACCOUNT" [] name
   | CREATE_CONTRACT contract ->

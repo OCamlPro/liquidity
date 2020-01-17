@@ -102,17 +102,13 @@ module Michelson = struct
         bprint_type_record name fmt b indent labels annots
       | Tsum (name, constrs) ->
         bprint_type_sum name fmt b indent constrs annots
-      | Tcontract { sig_name; entries_sig = [{ parameter = ty }] } ->
+      | Tcontract (_entry, ty) ->
         let indent = fmt.increase_indent indent in
         Printf.bprintf b "(contract";
-        bprint_annots b
-          (match sig_name with
-           | None -> annots
-           | Some name -> (":" ^ name) :: annots);
+        bprint_annots b annots;
         Printf.bprintf b "%c%s" fmt.newline indent;
         bprint_type fmt b indent ty [];
         Printf.bprintf b ")";
-      | Tcontract _ -> assert false
       | Tor (ty1, ty2) ->
         let indent = fmt.increase_indent indent in
         Printf.bprintf b "(or";
@@ -276,7 +272,6 @@ module Michelson = struct
     | CBytes s -> Printf.bprintf b "%s" s
     | CKey s -> Printf.bprintf b "%S" s
     | CKey_hash s -> Printf.bprintf b "%S" s
-    | CContract s -> Printf.bprintf b "%S" s
     | CAddress s -> Printf.bprintf b "%S" s
     | CSignature s -> Printf.bprintf b "%S" s
     | CTez s -> Printf.bprintf b "%s" (Z.to_string (LiquidNumber.mic_mutez_of_tez s))
@@ -451,6 +446,8 @@ module Michelson = struct
       | Some field -> Printf.bprintf b " %%%s " field
       | None -> ()
 
+  let bprint_pre_entry b e = bprint_pre_field b e
+
   let rec bprint_pre_michelson bprint_arg fmt b name
       (m  : 'a pre_michelson) = match m with
     (* = function *)
@@ -613,9 +610,10 @@ module Michelson = struct
     | MEM ->
       Printf.bprintf b "MEM";
       bprint_pre_name b name;
-    | SELF ->
+    | SELF e ->
       Printf.bprintf b "SELF";
       bprint_pre_name b name;
+      bprint_pre_entry b e;
     | AMOUNT ->
       Printf.bprintf b "AMOUNT";
       bprint_pre_name b name;
@@ -699,9 +697,10 @@ module Michelson = struct
       bprint_pre_name b name;
       bprint_pre_field b constr;
       bprint_type fmt b "" ty;
-    | CONTRACT ty ->
+    | CONTRACT (e, ty) ->
       Printf.bprintf b "CONTRACT";
       bprint_pre_name b name;
+      bprint_pre_entry b e;
       bprint_type fmt b "" ty;
     | EDIV ->
       Printf.bprintf b "EDIV";
@@ -883,11 +882,10 @@ module LiquidDebug = struct
           ) rtys;
       | Tsum (name, _) ->
         Printf.bprintf b "%s" name;
-      | Tcontract { sig_name = Some s } ->
-        Printf.bprintf b "%s.instance" s;
-      | Tcontract contract_sig ->
-        bprint_contract_sig expand b indent contract_sig;
-        Printf.bprintf b ".instance";
+      | Tcontract (entry, ty) ->
+        Printf.bprintf b "[%%handle %s : " entry;
+        bprint_type b "" ty;
+        Printf.bprintf b "]";
       | Tor (ty1, ty2) ->
         Printf.bprintf b "(";
         bprint_type b "" ty1;
@@ -939,7 +937,11 @@ module LiquidDebug = struct
             Printf.bprintf b " %d:%s" n id) pl;
         Printf.bprintf b ")";
       | Tpartial (Pmap _) -> Printf.bprintf b "pmap"
-      | Tpartial (Pcont _) -> Printf.bprintf b "pcont"
+      | Tpartial (Pcont None) -> Printf.bprintf b "pcont none"
+      | Tpartial (Pcont Some (e, ty)) ->
+        Printf.bprintf b "pcont[%s : " e;
+        bprint_type b indent (LiquidTypes.expand ty);
+        Printf.bprintf b "]";
       | Tpartial (Ppar) -> Printf.bprintf b "ppar"
     in
     bprint_type b indent ty
@@ -982,7 +984,6 @@ module LiquidDebug = struct
     | CBytes s -> Printf.bprintf b "%s" s
     | CKey s -> Printf.bprintf b "%s" s
     | CKey_hash s -> Printf.bprintf b "%s" s
-    | CContract s -> Printf.bprintf b "%s" s
     | CAddress s -> Printf.bprintf b "%s" s
     | CSignature s -> Printf.bprintf b "%s" s
     | CTez s -> Printf.bprintf b "%s%s" (LiquidNumber.liq_of_tez s)
@@ -1144,17 +1145,18 @@ module LiquidDebug = struct
       bprint_code_rec ~debug b indent2 dest;
       bprint_code_rec ~debug b indent2 amount;
       Printf.bprintf b ")"
-    | Call { contract; amount; entry = None; arg } ->
-      Printf.bprintf b "\n%s(Contract.call" indent;
-      let indent2 = indent ^ "  " in
-      bprint_code_rec ~debug b indent2 contract;
-      bprint_code_rec ~debug b indent2 amount;
-      bprint_code_rec ~debug b indent2 arg;
-      Printf.bprintf b ")"
-    | Call { contract; amount; entry = Some entry; arg } ->
+    | Call { contract; amount; entry; arg } ->
+      let entry = match entry with None -> "default" | Some e -> e in
       Printf.bprintf b "\n%s(" indent;
       bprint_code_rec ~debug b indent contract;
       Printf.bprintf b ".%s" entry;
+      let indent2 = indent ^ "  " in
+      bprint_code_rec ~debug b indent2 arg;
+      bprint_code_rec ~debug b indent2 amount;
+      Printf.bprintf b ")"
+    | SelfCall { amount; entry; arg } ->
+      let entry = match entry with None -> "default" | Some e -> e in
+      Printf.bprintf b "\n%s(Self.%s" indent entry;
       let indent2 = indent ^ "  " in
       bprint_code_rec ~debug b indent2 arg;
       bprint_code_rec ~debug b indent2 amount;
@@ -1321,13 +1323,11 @@ module LiquidDebug = struct
           bprint_code_rec ~debug b indent2 exp
         ) args;
       Printf.bprintf b "\n%s(contract %s)" indent contract.contract_name;
-    | ContractAt { arg; c_sig } ->
-      Printf.bprintf b "\n%s(Contract.at" indent;
-      let indent2 = indent ^ "  " in
-      bprint_code_rec ~debug b indent2 arg;
-      Printf.bprintf b " : ";
-      bprint_type b (indent ^ "  ") (Toption (Tcontract c_sig));
-      Printf.bprintf b ")"
+    | ContractAt { arg; entry; entry_param } ->
+      let entry = match entry with None -> "default" | Some e -> e in
+      Printf.bprintf b "\n%s[%%%%handle val%%entry %s : " indent entry;
+      bprint_type b (indent ^ "  ") entry_param;
+      Printf.bprintf b " -> _ ]"
     | Unpack { arg; ty } ->
       Printf.bprintf b "\n%s(Bytes.unpack" indent;
       let indent2 = indent ^ "  " in
@@ -1474,7 +1474,8 @@ let string_of_node node =
   | N_END -> "N_END"
   | N_LEFT _ -> "N_LEFT"
   | N_RIGHT _ -> "N_RIGHT"
-  | N_CONTRACT _ -> "N_CONTRACT"
+  | N_CONTRACT (None, _) -> "N_CONTRACT"
+  | N_CONTRACT (Some e, _) -> Printf.sprintf "N_CONTRACT %s" e
   | N_UNPACK _ -> "N_UNPACK"
   | N_ABS -> "N_ABS"
   | N_CREATE_CONTRACT _ -> "N_CREATE_CONTRACT"
@@ -1483,7 +1484,9 @@ let string_of_node node =
   | N_CONSTR c -> "N_CONSTR " ^ c
   | N_SETFIELD f -> "N_SETFIELD " ^ f
   | N_RESULT (_, i) -> Printf.sprintf "N_RESULT %d" i
-  | N_LOOP_LEFT _ -> Printf.sprintf "N_LOOP_LEFT"
-  | N_LOOP_LEFT_BEGIN _ -> Printf.sprintf "N_LOOP_LEFT_BEGIN"
-  | N_LOOP_LEFT_END _ -> Printf.sprintf "N_LOOP_LEFT_END"
-  | N_LOOP_LEFT_RESULT _ -> Printf.sprintf "N_LOOP_LEFT_RESULT"
+  | N_LOOP_LEFT _ -> "N_LOOP_LEFT"
+  | N_LOOP_LEFT_BEGIN _ -> "N_LOOP_LEFT_BEGIN"
+  | N_LOOP_LEFT_END _ -> "N_LOOP_LEFT_END"
+  | N_LOOP_LEFT_RESULT _ -> "N_LOOP_LEFT_RESULT"
+  | N_SELF None -> "N_SELF"
+  | N_SELF Some e -> Printf.sprintf "N_SELF %s" e

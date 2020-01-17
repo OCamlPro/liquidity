@@ -87,9 +87,10 @@ let[@inline] set_balance (a, balance, (accounts : accounts)) =
 let%entry transfer (dest, tokens, data) storage =
   no_base_currency ();
   let accounts = perform_transfer (dest, tokens, storage.accounts) in
-  let ops = match TokenReceiver.at dest with
-    | Some destC ->
-      [destC.receiveTokens (Current.sender (), tokens, data) ~amount:0DUN]
+  (* let ops = match [%handle TokenReceiver.receiveTokens] dest with *)
+  let ops = match [%handle TokenReceiver.receiveTokens] dest with
+    | Some dest ->
+      [dest.receiveTokens (Current.sender (), tokens, data) ~amount:0DUN]
     | None -> match data with
       | None -> []
       | Some _ -> failwith "Cannot send data to a non TokenReceiver contract"
@@ -101,13 +102,13 @@ let%entry transfer (dest, tokens, data) storage =
 
 contract type BalanceForwarder = sig
   type storage
-  val%entry main : nat -> _
+  val%entry readBalance : nat -> _
 end
 
 let%entry balanceOf (addr, forward) storage =
   no_base_currency ();
   let balance = get_balance (addr, storage.accounts) in
-  [ forward.main balance ~amount:0tz ], storage
+  [ forward.readBalance balance ~amount:0DUN ], storage
 
 
 (* ------------------ Burning tokens  ------------------------ *)

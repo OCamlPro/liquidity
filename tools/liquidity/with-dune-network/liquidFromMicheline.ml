@@ -199,6 +199,10 @@ let type_constr_of_annots annots =
 let type_label_of_annots annots =
   type_constr_or_label_of_annots ~allow_capital:false annots
 
+let entryname_of_annots annots =
+  type_constr_or_label_of_annots ~allow_capital:false ~keep_empty:false annots
+
+
 let add_generalize_to_env =
   let cpt = ref 0 in
   fun name ty env ->
@@ -262,35 +266,9 @@ let rec convert_type ?(parameter=false) env expr =
       end
 
     | Prim(_, "contract", [x], annots) ->
-      let sig_name = type_name_of_annots ~allow_capital:true annots in
+      (* XXX should not appear *)
       let parameter = convert_type env x in
-      let entries_sig = match get_type parameter with
-        | Tsum (_, constrs)
-          when List.for_all (fun (s, _) -> is_entry_case s) constrs ->
-          List.map (fun (s, ty) ->
-              { entry_name = entry_name_of_case s;
-                parameter = ty;
-                parameter_name = "parameter";
-                storage_name = "storage" }
-            ) constrs
-        | _ -> [{
-            entry_name = "main";
-            parameter_name = "parameter";
-            storage_name = "storage";
-            parameter;
-          }] in
-      let c_sig = { sig_name; entries_sig } in
-      begin match
-          sig_name,
-          List.find_opt (fun (n, c_sig') -> eq_signature c_sig c_sig')
-            env.contract_types
-        with
-        | None, None -> Tcontract c_sig
-        | Some n, None ->
-          env.contract_types <- (n, c_sig) :: env.contract_types;
-          Tcontract c_sig
-        | _, Some (n, c_sig) -> Tcontract c_sig
-      end
+      Tcontract ("_", parameter)
 
     | Prim(_, "lambda", [x;y], _debug) ->
       Tlambda
@@ -416,7 +394,6 @@ let rec convert_const env ?ty expr =
           CTimestamp (ISO8601.of_string s)
         | Some Tkey -> CKey s
         | Some Tkey_hash -> CKey_hash s
-        | Some Tcontract _ -> CContract s
         | Some Taddress -> CAddress s
         | Some Tsignature -> CSignature s
         | Some Tstring | None -> CString s
@@ -439,8 +416,6 @@ let rec convert_const env ?ty expr =
           CSignature (to_hex s)
         | Some Taddress ->
           CAddress (to_hex s)
-        | Some (Tcontract _) ->
-          CContract (to_hex s)
         | Some ty -> wrong_type env expr ty
       end
 
@@ -620,7 +595,10 @@ and convert_code env expr =
   | Prim(index, "SENDER", [], annot) ->
     mic_loc env index annot (SENDER)
   | Prim(index, "SELF", [], annot) ->
-    mic_loc env index annot (SELF)
+    let entry = match entryname_of_annots annot with
+      | [] -> None
+      | e :: _ -> Some e  in
+    mic_loc env index annot (SELF entry)
   | Prim(index, "OR", [], annot) ->
     mic_loc env index annot (OR)
   | Prim(index, "LAMBDA", [ty1; ty2; expr], annot) ->
@@ -697,8 +675,10 @@ and convert_code env expr =
       | _ -> mic_loc env index annot (RIGHT (ty, None))
     end
   | Prim(index, "CONTRACT", [ty], annot) ->
-    mic_loc env index annot
-      (CONTRACT (convert_type env ty))
+    let entry = match entryname_of_annots annot with
+      | [] -> None
+      | e :: _ -> Some e  in
+    mic_loc env index annot (CONTRACT (entry, convert_type env ty))
   | Prim(index, "UNPACK", [ty], annot) ->
     mic_loc env index annot
       (UNPACK (convert_type env ty))

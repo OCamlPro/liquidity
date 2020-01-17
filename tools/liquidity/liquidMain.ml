@@ -40,6 +40,8 @@ exception Bad_arg
 let compile_liquid_files files =
   let ocaml_asts = List.map (fun filename ->
       let ocaml_ast = LiquidFromParsetree.read_file filename in
+      (* Format.eprintf "%s\n================\n@."
+       *   (LiquidPrinter.Syntax.string_of_structure ocaml_ast []); *)
       if !LiquidOptions.verbosity>0 then
         FileString.write_file (filename ^ ".ocaml")
           (LiquidOCamlPrinter.contract_ast ocaml_ast);
@@ -241,8 +243,11 @@ let compile_tezos_file filename =
 let report_error = function
   | LiquidError error ->
     LiquidLoc.report_error Format.err_formatter error;
-  | LiquidNamespace.Unknown_namespace (p, err_loc) ->
-    LiquidLoc.report_error Format.err_formatter
+  | LiquidNamespace.Unknown_namespace (p, err_loc) as exn ->
+    let backtrace = Printexc.get_backtrace () in
+    Format.eprintf "Error: %s\nBacktrace:\n%s@."
+      (Printexc.to_string exn) backtrace
+;    LiquidLoc.report_error Format.err_formatter
       { err_loc;
         err_msg =
           Printf.sprintf "Unknown module or contract %s" (String.concat "." p) };

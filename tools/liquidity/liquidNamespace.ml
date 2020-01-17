@@ -177,8 +177,8 @@ let rec normalize_type ?from_env ~in_env ty =
   | Tlambda (t1, t2, u) ->
     Tlambda (normalize_type ?from_env ~in_env t1,
              normalize_type ?from_env ~in_env t2, u)
-  | Tcontract c_sig ->
-    Tcontract (normalize_contract_sig ?from_env ~in_env ~build_sig_env:false c_sig)
+  | Tcontract (e, ty) ->
+    Tcontract (e, normalize_type ?from_env ~in_env ty)
   | Trecord (name, fields) ->
     let _, found_env =
       try find_type_loose ~loc:noloc name in_env []

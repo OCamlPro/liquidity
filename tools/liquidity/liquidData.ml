@@ -49,7 +49,6 @@ let rec default_const = function
     CSignature
       "edsigthTzJ8X7MPmNeEwybRAvdxS1pupqcM5Mk4uCuyZAe7uEk\
        68YpuGDeViW8wSXMrCi5CwoNgqs8V2w8ayB5dMJzrYCHhD8C7"
-  | Tcontract _ -> CContract "KT1BEqzn5Wx8uJrZNvuS9DVHmLvG9td3fDLi"
   | Taddress -> CAddress "KT1BEqzn5Wx8uJrZNvuS9DVHmLvG9td3fDLi"
   | Ttuple l ->
     CTuple (List.map default_const l)
@@ -78,7 +77,8 @@ let rec default_const = function
   | Tsum (_, [])
   | Tfail
   | Tclosure _
-  | Toperation -> raise Not_found
+  | Toperation
+  | Tcontract _ -> raise Not_found
   | Tvar _ | Tpartial _ -> raise Not_found
 
 let rec default_empty_const = function
@@ -96,7 +96,6 @@ let rec default_empty_const = function
     CSignature
       "edsigthTzJ8X7MPmNeEwybRAvdxS1pupqcM5Mk4uCuyZAe7uEk\
        68YpuGDeViW8wSXMrCi5CwoNgqs8V2w8ayB5dMJzrYCHhD8C7"
-  | Tcontract _ -> CContract "KT1GE2AZhazRxGsAjRVkQccHcB2pvANXQWd7"
   | Taddress -> CAddress "KT1GE2AZhazRxGsAjRVkQccHcB2pvANXQWd7"
   | Ttuple l ->
     CTuple (List.map default_empty_const l)
@@ -127,7 +126,8 @@ let rec default_empty_const = function
   | Tsum (_, [])
   | Tfail
   | Tclosure _
-  | Toperation -> raise Not_found
+  | Toperation
+  | Tcontract _ -> raise Not_found
   | Tvar _ | Tpartial _ -> raise Not_found
 
 let rec translate_const_exp (exp : encoded_exp) =
@@ -165,6 +165,7 @@ let rec translate_const_exp (exp : encoded_exp) =
   | Seq _
   | Transfer _
   | Call _
+  | SelfCall _
   | MatchOption _
   | MatchNat _
   | MatchList _

@@ -97,7 +97,7 @@ type datatype =
 
   | Tmap of datatype * datatype
   | Tbigmap of datatype * datatype
-  | Tcontract of contract_sig
+  | Tcontract of string * datatype
   | Tor of datatype * datatype
   | Tlambda of datatype * datatype * uncurry_flag
 
@@ -116,7 +116,7 @@ and partial_type =
   | Peqn of ((datatype * datatype) list * datatype) list * location (*overload*)
   | Ptup of (int * datatype) list (* partial tuple *)
   | Pmap of datatype * datatype (* map or bigmap *)
-  | Pcont of (string * datatype) list (* unknown contract *)
+  | Pcont of (string * datatype) option (* unknown contract *)
   | Ppar (* equation parameter *)
 
 (** A signature for an entry point *)
@@ -235,7 +235,7 @@ let size_of_type = function
 
 (** Comparable types can be used as, e.g., keys in a map. This
     corresponds to comparable types in Michelson *)
-let comparable_type = function
+let rec comparable_type = function
   | Tbool
   | Tint
   | Tnat
@@ -245,6 +245,8 @@ let comparable_type = function
   | Ttimestamp
   | Tkey_hash
   | Taddress -> true
+  | Ttuple l -> List.for_all comparable_type l
+  | Trecord (_, l) -> List.for_all (fun (_f, ty) -> comparable_type ty) l
   | Tvar _ | Tpartial _ -> true (* maybe *)
   | _ -> false
 
@@ -257,15 +259,12 @@ let rec may_contain_arrow_type ty = match expand ty with
   | Toperation | Tunit | Tbool | Tint | Tnat | Ttez | Tstring | Tbytes
   | Ttimestamp | Tkey | Tkey_hash | Tsignature | Taddress | Tfail -> false
   | Ttuple l -> List.exists may_contain_arrow_type l
-  | Toption ty | Tlist ty | Tset ty ->
+  | Toption ty | Tlist ty | Tset ty | Tcontract (_, ty) ->
     may_contain_arrow_type ty
   | Tmap (t1, t2) | Tbigmap (t1, t2) | Tor (t1, t2) ->
     may_contain_arrow_type t1 || may_contain_arrow_type t2
   | Trecord (_, l) | Tsum (_, l) ->
     List.exists (fun (_, t) -> may_contain_arrow_type t) l
-  | Tcontract s ->
-    List.exists (fun e -> may_contain_arrow_type e.parameter)
-      s.entries_sig
   | Tvar _ | Tpartial _ -> true
 
 (** Equality between types. Contract signatures are first order values
@@ -318,7 +317,7 @@ let rec eq_types ty1 ty2 = match expand ty1, expand ty2 with
       with Invalid_argument _ -> false
     end
 
-  | Tcontract csig1, Tcontract csig2 -> eq_signature csig1 csig2
+  | Tcontract (e1, ty1), Tcontract (e2, ty2) -> e1 = e2 && eq_types ty1 ty2
 
   | Tvar tvr1, Tvar tvr2 -> (Ref.get tvr1).id = (Ref.get tvr2).id
 
@@ -343,15 +342,12 @@ let rec type_contains_nonlambda_operation ty = match expand ty with
   | Tunit | Tbool | Tint | Tnat | Ttez | Tstring | Tbytes
   | Ttimestamp | Tkey | Tkey_hash | Tsignature | Taddress | Tfail -> false
   | Ttuple l -> List.exists type_contains_nonlambda_operation l
-  | Toption ty | Tlist ty | Tset ty ->
+  | Toption ty | Tlist ty | Tset ty | Tcontract (_, ty) ->
     type_contains_nonlambda_operation ty
   | Tmap (t1, t2) | Tbigmap (t1, t2) | Tor (t1, t2) ->
     type_contains_nonlambda_operation t1 || type_contains_nonlambda_operation t2
   | Trecord (_, l) | Tsum (_, l) ->
     List.exists (fun (_, t) -> type_contains_nonlambda_operation t) l
-  | Tcontract s ->
-    List.exists (fun e -> type_contains_nonlambda_operation e.parameter)
-      s.entries_sig
   | Tlambda _ | Tclosure _ -> false
   | Tvar _ | Tpartial _ ->
     raise (Invalid_argument "type_contains_nonlambda_operation")
@@ -380,14 +376,12 @@ let is_only_module c = c.entries = []
 let free_tvars ty =
   let rec aux fv ty = match expand ty with
     | Ttuple tyl -> List.fold_left aux fv tyl
-    | Toption ty | Tlist ty | Tset ty -> aux fv ty
+    | Toption ty | Tlist ty | Tset ty | Tcontract (_, ty) -> aux fv ty
     | Tmap (ty1, ty2) | Tbigmap (ty1, ty2) | Tor (ty1, ty2)
     | Tlambda (ty1, ty2, _) -> aux (aux fv ty1) ty2
     | Tclosure ((ty1, ty2), ty3, _) -> aux (aux (aux fv ty1) ty2) ty3
     | Trecord (_, fl) | Tsum (_, fl) ->
       List.fold_left (fun fv (_, ty) -> aux fv ty) fv fl
-    | Tcontract c ->
-      List.fold_left (fun fv { parameter = ty } -> aux fv ty) fv c.entries_sig
     | Tvar tvr -> begin match (Ref.get tvr).tyo with
         | None -> StringSet.add (Ref.get tvr).id fv
         | Some ty -> aux fv ty
@@ -400,7 +394,7 @@ let free_tvars ty =
         ) fv el
     | Tpartial (Ptup pl) -> List.fold_left (fun fv (_, ty) -> aux fv ty) fv pl
     | Tpartial (Pmap (ty1, ty2)) -> aux (aux fv ty1) ty2
-    | Tpartial (Pcont el) -> List.fold_left (fun fv (_, ty) -> aux fv ty) fv el
+    | Tpartial (Pcont (Some (_, ty))) -> aux fv ty
     | _ -> fv
   in
   aux StringSet.empty ty
@@ -427,10 +421,7 @@ let build_subst aty cty =
       List.fold_left2 (fun s (_, ty1) (_, ty2) -> aux s ty1 ty2) s fl1 fl2
     | Tsum (_, cl1), Tsum (_, cl2) ->
       List.fold_left2 (fun s (_, ty1) (_, ty2) -> aux s ty1 ty2) s cl1 cl2
-    | Tcontract c1, Tcontract c2 ->
-      List.fold_left2 (fun s e1 e2 ->
-          aux s e1.parameter e2.parameter
-        ) s c1.entries_sig c2.entries_sig
+    | Tcontract (_, ty1), Tcontract (_, ty2) -> aux s ty1 ty2
     | Tvar tvr, _ ->
       let tv = Ref.get tvr in
       begin match tv.tyo with
@@ -476,7 +467,6 @@ type primitive =
   | Prim_tuple_set
   | Prim_tuple
 
-  | Prim_self
   | Prim_balance
   | Prim_now
   | Prim_amount
@@ -659,7 +649,6 @@ let () =
 
        "Contract.set_delegate", Prim_set_delegate;
        "Contract.address", Prim_address;
-       "Contract.self", Prim_self;
 
        "Account.create", Prim_create_account;
        "Account.default", Prim_default_account;
@@ -878,7 +867,6 @@ and 'exp const =
   | CRight of 'exp const
 
   | CKey_hash of string
-  | CContract of string
   | CAddress of string
 
   | CRecord of (string * 'exp const) list
@@ -935,6 +923,12 @@ and ('ty, 'a) exp_desc =
                   amount: ('ty, 'a) exp }
   (** Transfers:
       - {[ Account.transfer ~dest ~amount ]} *)
+
+  | SelfCall of { amount: ('ty, 'a) exp;
+                  entry: string option;
+                  arg: ('ty, 'a) exp }
+  (** Self contract calls:
+      - {[ Self.entry arg ~amount ]} *)
 
   | Call of { contract: ('ty, 'a) exp;
               amount: ('ty, 'a) exp;
@@ -1049,7 +1043,8 @@ and ('ty, 'a) exp_desc =
           (contract C) ]} *)
 
   | ContractAt of { arg: ('ty, 'a) exp;
-                    c_sig: contract_sig }
+                    entry: string option;
+                    entry_param: datatype }
   (** Contract from address: {[ (Contract.at arg : (contract C_sig) option ]} *)
 
   | Unpack of { arg: ('ty, 'a) exp;
@@ -1122,6 +1117,10 @@ let mk =
         contract.effect || amount.effect || arg.effect,
         true
 
+      | SelfCall { amount; arg } ->
+        amount.effect || arg.effect,
+        true
+
       | If { cond = e1; ifthen = e2; ifelse = e3 }
       | MatchOption { arg = e1; ifnone = e2; ifsome = e3 }
       | MatchNat { arg = e1; ifplus = e2; ifminus = e3 }
@@ -1176,7 +1175,9 @@ let rec eq_exp_desc eq_ty eq_var e1 e2 = match e1, e2 with
   | Constructor c1, Constructor c2 ->
     c1.constr = c2.constr && eq_exp eq_ty eq_var c1.arg c2.arg
   | ContractAt c1, ContractAt c2 ->
-    eq_signature c1.c_sig c2.c_sig && eq_exp eq_ty eq_var c1.arg c2.arg
+    c1.entry = c2.entry &&
+    eq_types c1.entry_param c2.entry_param &&
+    eq_exp eq_ty eq_var c1.arg c2.arg
   | Unpack u1, Unpack u2 ->
     eq_types u1.ty u2.ty && eq_exp eq_ty eq_var u1.arg u2.arg
   | Lambda l1, Lambda l2 ->
@@ -1285,10 +1286,10 @@ let rec eq_exp_desc eq_ty eq_var e1 e2 = match e1, e2 with
 
 and eq_const eq_ty eq_var c1 c2 = match c1, c2 with
   | ( CUnit | CBool _ | CInt _ | CNat _ | CTez _ | CTimestamp _ | CString _
-    | CBytes _ | CKey _ | CContract _ | CSignature _ | CNone  | CKey_hash _
+    | CBytes _ | CKey _ | CSignature _ | CNone  | CKey_hash _
     | CAddress _ ),
     ( CUnit | CBool _ | CInt _ | CNat _ | CTez _ | CTimestamp _ | CString _
-    | CBytes _ | CKey _ | CContract _ | CSignature _ | CNone  | CKey_hash _
+    | CBytes _ | CKey _ | CSignature _ | CNone  | CKey_hash _
     | CAddress _ ) -> c1 = c2
   | CSome c1, CSome c2
   | CLeft c1, CLeft c2
@@ -1382,7 +1383,7 @@ type 'a pre_michelson =
   | MEM
   | SLICE
 
-  | SELF
+  | SELF of string option
   | AMOUNT
   | STEPS_TO_QUOTA
   | CREATE_ACCOUNT
@@ -1407,7 +1408,7 @@ type 'a pre_michelson =
 
   | LEFT of datatype * string option
   | RIGHT of datatype * string option
-  | CONTRACT of datatype
+  | CONTRACT of string option * datatype
 
   | EDIV
   | LSL
@@ -1567,7 +1568,7 @@ and node_kind =
   | N_END
   | N_LEFT of datatype
   | N_RIGHT of datatype
-  | N_CONTRACT of datatype
+  | N_CONTRACT of string option * datatype
   | N_UNPACK of datatype
   | N_ABS
   | N_RECORD of string list
@@ -1575,6 +1576,7 @@ and node_kind =
   | N_PROJ of string
   | N_CONSTR of string
   | N_RESULT of node * int
+  | N_SELF of string option
 
 and node_exp = node * node
 
@@ -1589,15 +1591,17 @@ let noloc = { loc_file = "<unspecified>"; loc_pos = None }
 
 (** Build a default contract signature (with a single [main] entry
     point) for a parameter type *)
-let contract_sig_of_param ?sig_name parameter = {
+let contract_sig_of_default ?sig_name parameter = {
   sig_name;
   entries_sig = [ {
-      entry_name = "main";
+      entry_name = "default";
       parameter;
       parameter_name = "parameter";
       storage_name = "storage";
     }];
 }
+
+let contract_type_of_default ty = Tcontract ("default", ty)
 
 let dummy_contract_sig = {
   f_sig_name = None;
@@ -1646,7 +1650,8 @@ let predefined_types =
     ]
 
 (** Predefined signature for contract with unit parameter *)
-let unit_contract_sig = contract_sig_of_param ~sig_name:"UnitContract" Tunit
+let unit_contract_sig = contract_sig_of_default ~sig_name:"UnitContract" Tunit
+let unit_contract_ty = contract_type_of_default Tunit
 
 let predefined_contract_types =
   List.fold_left (fun acc (name, cty) ->

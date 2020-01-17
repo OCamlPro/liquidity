@@ -224,20 +224,6 @@ let rec translate_type env ?expected typ =
     Ttuple (List.map2 (fun ty expected -> translate_type env ?expected ty)
               types expecteds)
 
-  | { ptyp_desc = Ptyp_constr ({ txt = ty_name ; loc }, []) }
-    when Longident.last ty_name = "instance" ->
-    let contract_type_name =
-      match List.rev (Longident.flatten ty_name) with
-      | _ :: rpath -> String.concat "." (List.rev rpath)
-      | _ -> assert false
-    in
-    begin
-      let loc = loc_of_loc loc in
-      try Tcontract (find_contract_type ~loc contract_type_name env)
-      with Not_found ->
-        unbound_contract_type typ.ptyp_loc contract_type_name
-    end
-
   | { ptyp_desc = Ptyp_constr ({ txt = ty_name; loc }, params); ptyp_loc } ->
     let ty_name = str_of_id ty_name in
     let loc = loc_of_loc loc in
@@ -314,7 +300,7 @@ let rec set_curry_flag ty = match ty with
   | Tunit | Tbool | Tint | Tnat | Ttez | Tstring | Tbytes | Ttimestamp | Tkey
   | Tkey_hash | Tsignature | Toperation | Taddress | Tfail -> ()
   | Ttuple tyl -> List.iter set_curry_flag tyl
-  | Toption ty | Tlist ty | Tset ty -> set_curry_flag ty
+  | Toption ty | Tlist ty | Tset ty | Tcontract (_, ty) -> set_curry_flag ty
   | Tmap (ty1, ty2) | Tbigmap (ty1, ty2) | Tor (ty1, ty2) ->
     set_curry_flag ty1; set_curry_flag ty2
   | Tlambda (ty1, ty2, u) ->
@@ -325,8 +311,6 @@ let rec set_curry_flag ty = match ty with
     !u := Some false;
   | Trecord (rn, fl) -> List.iter (fun (_, ty) -> set_curry_flag ty) fl
   | Tsum (sn, cl) -> List.iter (fun (_, ty) -> set_curry_flag ty) cl
-  | Tcontract c ->
-    List.iter (fun es -> set_curry_flag es.parameter) c.entries_sig
   | Tvar { contents = { contents = { tyo = Some ty }}} -> set_curry_flag ty
   | Tvar _ -> ()
   | Tpartial _ -> ()
@@ -909,15 +893,13 @@ and translate_code contracts env exp =
           Pexp_apply (
             { pexp_desc = Pexp_ident
                   { txt = Ldot(Lident "Contract", "create") } },
-            ([_; _; _; _; _; _; _] as args));
+            ([_; _; _; _] as args));
         pexp_loc } ->
-      let (manager_exp, delegate_exp, spendable_exp,
-           delegatable_exp, amount_exp, storage_exp, contract) =
+      let (delegate_exp, amount_exp, storage_exp, contract) =
         match order_labelled_args pexp_loc
-                ["manager"; "delegate"; "spendable"; "delegatable";
-                 "amount"; "storage"; "code" ] args
+                ["delegate"; "amount"; "storage"; "code" ] args
         with
-        | [d; m; de; s; a; st;
+        | [d; a; st;
            { pexp_desc = Pexp_pack {
                  pmod_desc = Pmod_ident { txt = c };
                  pmod_loc } }] ->
@@ -925,8 +907,8 @@ and translate_code contracts env exp =
           let c =
             try StringMap.find c contracts
             with Not_found -> unbound_contract pmod_loc c in
-          (d, m, de, s, a, st, c)
-        | [d; m; de; s; a; st;
+          (d, a, st, c)
+        | [d; a; st;
            { pexp_desc = Pexp_pack {
                  pmod_desc = Pmod_structure structure;
                  pmod_loc } }] ->
@@ -935,13 +917,10 @@ and translate_code contracts env exp =
                           |> List.map (fun (_, c) -> Syn_other_contract c) in
           let contract =
             translate_non_empty_contract inner_env inner_acc structure in
-          (d, m, de, s, a, st, contract)
+          (d, a, st, contract)
         | _ -> error_loc pexp_loc "wrong arguments for Contract.create" in
       CreateContract
-        { args = [translate_code contracts env manager_exp;
-                  translate_code contracts env delegate_exp;
-                  translate_code contracts env spendable_exp;
-                  translate_code contracts env delegatable_exp;
+        { args = [translate_code contracts env delegate_exp;
                   translate_code contracts env amount_exp;
                   translate_code contracts env storage_exp;
                  ];
@@ -954,63 +933,65 @@ and translate_code contracts env exp =
         pexp_loc } ->
       error_loc pexp_loc
         "Wrong number or order of arguements for Contract.create.\n\
-         Expected syntax is : Contract.create <manager> <delegate> \
-         <delegatable> <spendable> <amount> <initial_storage> \
-         (contract <ContractName>)"
-
-    | { pexp_desc =
-          Pexp_constraint (
-            { pexp_desc =
-                Pexp_apply (
-                  { pexp_desc = Pexp_ident
-                        { txt = Ldot(Lident "Contract", "at") } },
-                  [
-                    Nolabel, addr_exp;
-                  ]) },
-            pty) } ->
-
-      let c_sig = match translate_type env pty with
-        | Toption ((Tcontract csig)) -> csig
-        | _ -> error_loc pty.ptyp_loc
-                 "Contract.at type must be (contract C) option for some C"
-      in
-      ContractAt { arg =  translate_code contracts env addr_exp; c_sig }
+         Expected syntax is : Contract.create <delegate> \
+         <amount> <initial_storage> (contract <ContractName>)"
 
     | { pexp_desc =
           Pexp_apply (
-            { pexp_desc = Pexp_ident
-                  { txt = Ldot(contract_id, "at") } },
+            { pexp_desc = Pexp_extension (
+                  { txt = "handle" },
+                  PStr [{ pstr_desc = Pstr_eval (
+                      { pexp_desc = Pexp_ident
+                            { txt = Ldot(contract_id, entry_point);
+                              loc = c_loc } },
+                      [])}]
+                )
+            },
             [
               Nolabel, addr_exp;
             ]) }
       when StringMap.mem (str_of_id contract_id) env.contract_types ->
-      let c_sig = StringMap.find (str_of_id contract_id) env.contract_types in
-      ContractAt { arg = translate_code contracts env addr_exp; c_sig }
+      let contract_name = str_of_id contract_id in
+      let c_sig = StringMap.find contract_name env.contract_types in
+      let { parameter = entry_param } =
+        try List.find (fun { entry_name } -> entry_name = entry_point )
+              c_sig.entries_sig
+        with Not_found ->
+          error_loc c_loc "%s has no entry point %s" contract_name entry_point
+      in
+      ContractAt { arg = translate_code contracts env addr_exp;
+                   entry = Some entry_point ;
+                   entry_param }
 
     | { pexp_desc =
           Pexp_apply (
-            { pexp_desc = Pexp_ident
-                  { txt = Ldot(Lident contract_name, "at") } },
+            { pexp_desc = Pexp_extension (
+                  { txt = "handle" },
+                  PSig [{ psig_desc = Psig_extension (
+                      ({ txt = "entry" }, PSig [{
+                           psig_desc = Psig_value {
+                               pval_name = { txt = entry_name; loc = name_loc };
+                               pval_type = {
+                                 ptyp_desc = Ptyp_arrow (param_label, param_ty,
+                                                         { ptyp_desc = Ptyp_any })
+                               };
+                               pval_prim = [];
+                               (* pval_attributes = []; *)
+                               pval_loc;
+                             }}
+                         ]), [])
+                    }]
+                )
+            },
             [
               Nolabel, addr_exp;
-            ]) }
-      when StringMap.mem contract_name contracts ->
-      let c_sig = sig_of_contract (StringMap.find contract_name contracts) in
-      ContractAt { arg =  translate_code contracts env addr_exp; c_sig }
-
-    | { pexp_desc =
-          Pexp_apply (
-            { pexp_desc = Pexp_ident
-                  { txt = Ldot(Lident "Contract", "at") } },
-            [
-              Nolabel, addr_exp;
-            ]);
-        pexp_loc } ->
-      (* let c_sig = Toption (Tvar (Ref.create
-       *   { id = fresh_tv (); tyo = Some (Tpartial (Pcont [])) })) in
-       * ContractAt { arg =  translate_code contracts env addr_exp; c_sig } *)
-      error_loc pexp_loc
-        "Contract.at must be annotated by the resulting contract type (option)"
+            ]) } ->
+      let entry_param = translate_type env param_ty in
+      if List.mem entry_name reserved_keywords then
+        error_loc name_loc "entry point %S forbidden" entry_name;
+      ContractAt { arg =  translate_code contracts env addr_exp;
+                   entry = Some entry_name;
+                   entry_param }
 
     | { pexp_desc =
           Pexp_constraint (
@@ -1328,6 +1309,16 @@ and translate_code contracts env exp =
                 translate_code contracts env delegatable;
                 translate_code contracts env amount;
               ] }
+
+    (* Self.entry param ~amount *)
+    | { pexp_desc = Pexp_apply (
+        { pexp_desc = Pexp_ident { txt = Ldot(Lident "Self", entry) } },
+        ( [Nolabel, param; Labelled "amount", amount]
+        | [Labelled "amount", amount; Nolabel, param] )
+      ) } ->
+      SelfCall { amount = translate_code contracts env amount;
+                 entry = Some entry;
+                 arg = translate_code contracts env param }
 
     (* special case for contract call with contract.entry param ~amount *)
     | { pexp_desc = Pexp_apply (
