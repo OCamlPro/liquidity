@@ -1229,7 +1229,7 @@ and typecheck env ( exp : syntax_exp ) : typed_exp =
     mk ?name:exp.name ~loc desc (Toption ty)
 
   | ContractAt { arg; entry; entry_param } ->
-    let arg = typecheck_expected "Contract.at argument" env Taddress arg in
+    let arg = typecheck_expected "[%%handle ...] argument" env Taddress arg in
     let desc = ContractAt { arg; entry; entry_param } in
     let e = match entry with None -> "default" | Some e -> e in
     mk ?name:exp.name ~loc desc (Toption (Tcontract (e, entry_param)))

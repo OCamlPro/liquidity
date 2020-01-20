@@ -963,6 +963,7 @@ and translate_code contracts env exp =
                    entry = Some entry_point ;
                    entry_param }
 
+    (* [%handle: val%entry entry_name : param_ty ] *)
     | { pexp_desc =
           Pexp_apply (
             { pexp_desc = Pexp_extension (
@@ -971,10 +972,7 @@ and translate_code contracts env exp =
                       ({ txt = "entry" }, PSig [{
                            psig_desc = Psig_value {
                                pval_name = { txt = entry_name; loc = name_loc };
-                               pval_type = {
-                                 ptyp_desc = Ptyp_arrow (param_label, param_ty,
-                                                         { ptyp_desc = Ptyp_any })
-                               };
+                               pval_type = param_ty;
                                pval_prim = [];
                                (* pval_attributes = []; *)
                                pval_loc;
@@ -1824,13 +1822,12 @@ and translate_signature contract_type_name env acc ast =
     add_type_alias ~loc:ptype_loc ty_name params ty env;
     translate_signature contract_type_name env acc ast
 
+  (*  val%entry entry_name : param_ty *)
   | { psig_desc = Psig_extension (
       ({ txt = "entry" }, PSig [{
            psig_desc = Psig_value {
                pval_name = { txt = entry_name; loc = name_loc };
-               pval_type = {
-                 ptyp_desc = Ptyp_arrow (param_label, param_ty, ret_ty)
-               };
+               pval_type = param_ty;
                pval_prim = [];
                (* pval_attributes = []; *)
                pval_loc;
@@ -1840,38 +1837,10 @@ and translate_signature contract_type_name env acc ast =
       error_loc name_loc "entry point %S forbidden" entry_name;
     if List.exists (fun e -> e.entry_name = entry_name) acc then
       error_loc name_loc "entry point %S is already declared" entry_name;
-    let parameter_name = match param_label with
-      | Nolabel -> "parameter"
-      | Optional _ -> error_loc pval_loc "cannot have optional parameter"
-      | Labelled p -> p in
+    let parameter_name = "parameter" in
     let parameter = translate_type env param_ty in
     set_curry_flag parameter;
-    let storage_name, ret_ty = match ret_ty.ptyp_desc with
-      | Ptyp_arrow (Nolabel, stora_ty, ret_ty) ->
-        "storage", ret_ty
-      | Ptyp_arrow (Optional _, stora_ty, _) ->
-        error_loc ret_ty.ptyp_loc "cannot have optional storage"
-      | Ptyp_arrow (Labelled s, stora_ty, ret_ty) ->
-        s, ret_ty
-      | Ptyp_any ->
-        "storage", ret_ty
-      | _ ->
-        error_loc ret_ty.ptyp_loc
-          "must be an arrow type storage -> (operation list * storage)"
-    in
-    begin match ret_ty.ptyp_desc with
-      | Ptyp_any -> ()
-      | Ptyp_tuple [ ret_op ;
-                     { ptyp_desc =
-                         Ptyp_constr ({ txt = Lident "storage" }, []) }] ->
-        begin match translate_type env ret_op with
-          | Tlist Toperation -> ()
-          | _ -> error_loc ret_op.ptyp_loc
-                   "entry must return operation list as first component"
-        end
-      | _ -> error_loc ret_ty.ptyp_loc
-               "entry must return (operation list * storage)"
-    end;
+    let storage_name= "storage" in
     let entry = { entry_name; parameter; parameter_name; storage_name } in
     translate_signature contract_type_name env (entry :: acc) ast
 

@@ -724,9 +724,7 @@ and convert_code ~abbrev (expr : (datatype, 'a) exp) =
               PSig [
                 Sig.value
                   (Val.mk (id entry)
-                     (Typ.arrow Nolabel
-                        (convert_type ~abbrev entry_param)
-                        (Typ.any ())))
+                     (convert_type ~abbrev entry_param))
               ])
           ]))
       [ Nolabel, convert_code ~abbrev arg ]

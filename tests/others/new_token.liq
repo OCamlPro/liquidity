@@ -23,9 +23,7 @@ type storage = {
 }
 
 contract type TokenReceiver = sig
-  type storage
-  val%entry receiveTokens : (address * nat * bytes option) -> _
-  (* more ... *)
+  val%entry receiveTokens : address * nat * bytes option
 end
 
 let%init storage owner decimals name symbol =
@@ -33,7 +31,7 @@ let%init storage owner decimals name symbol =
     accounts = BigMap;
     totalSupply = 0p;
     metadata = {
-      version = 1p, 0p; (* Version of standard : 1.0 *)
+      version = 1p, 1p; (* Version of standard : 1.1 *)
       decimals;
       name;
       symbol;
@@ -87,8 +85,11 @@ let[@inline] set_balance (a, balance, (accounts : accounts)) =
 let%entry transfer (dest, tokens, data) storage =
   no_base_currency ();
   let accounts = perform_transfer (dest, tokens, storage.accounts) in
-  (* let ops = match [%handle TokenReceiver.receiveTokens] dest with *)
-  let ops = match [%handle TokenReceiver.receiveTokens] dest with
+  let ops =
+    match [%handle TokenReceiver.receiveTokens] dest
+    (* Alternative syntax: *)
+    (* [%handle: val%entry receiveTokens : address * nat * bytes option] dest *)
+    with
     | Some dest ->
       [dest.receiveTokens (Current.sender (), tokens, data) ~amount:0DUN]
     | None -> match data with
@@ -100,15 +101,10 @@ let%entry transfer (dest, tokens, data) storage =
 
 (* --------------- Storage access from outside ---------------- *)
 
-contract type BalanceForwarder = sig
-  type storage
-  val%entry readBalance : nat -> _
-end
-
 let%entry balanceOf (addr, forward) storage =
   no_base_currency ();
   let balance = get_balance (addr, storage.accounts) in
-  [ forward.readBalance balance ~amount:0DUN ], storage
+  [ forward.readBalance (addr, balance) ~amount:0DUN ], storage
 
 
 (* ------------------ Burning tokens  ------------------------ *)
