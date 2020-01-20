@@ -310,51 +310,75 @@ and get_lambda_type ~decompiling args = function
       | _ -> Ttuple (List.rev args) in
     Tlambda (t1, t2, default_uncurry ())
 
-(* returns true if the type has a big map anywhere *)
-let rec has_big_map = function
-  | Tbigmap (_t1, _t2) -> true
+let rec allowed_type
+    ?(allow_big_map=true)
+    ?(allow_operation=true)
+    ?(allow_contract=true) = function
   | Ttez | Tunit | Ttimestamp | Tint | Tnat | Tbool | Tkey | Tkey_hash
-  | Tsignature | Tstring | Tbytes | Toperation | Taddress | Tfail -> false
+  | Tsignature | Tstring | Taddress | Tbytes -> true
+  | Toperation -> allow_operation
+  | Tfail -> false
   | Ttuple tys ->
-    List.exists has_big_map tys
-  | Tset t | Tlist t | Toption t | Tcontract (_, t) -> has_big_map t
-  | Tor (t1, t2) | Tlambda (t1, t2, _)
+    List.for_all
+      (allowed_type ~allow_big_map ~allow_operation ~allow_contract)
+      tys
+  | Tset t ->
+    comparable_type t &&
+    allowed_type ~allow_big_map ~allow_operation ~allow_contract t
+  | Tlist t | Toption t ->
+    allowed_type ~allow_big_map ~allow_operation ~allow_contract t
+  | Tcontract (_, t) ->
+    allow_contract &&
+    allowed_type ~allow_big_map ~allow_operation ~allow_contract t
+  | Tor (t1, t2) ->
+    allowed_type ~allow_big_map ~allow_operation ~allow_contract t1 &&
+    allowed_type ~allow_big_map ~allow_operation ~allow_contract t2
+  | Tlambda (t1, t2, _) ->
+    allowed_type t1 &&
+    allowed_type t2
   | Tmap (t1, t2) ->
-    has_big_map t1 || has_big_map t2
+    comparable_type t1 &&
+    allowed_type ~allow_big_map ~allow_operation ~allow_contract t1 &&
+    allowed_type ~allow_big_map ~allow_operation ~allow_contract t2
   | Tclosure  ((t1, t2), t3, _) ->
-    has_big_map t1 || has_big_map t2 || has_big_map t3
-  | Trecord (_, labels) ->
-    List.exists (fun (_, ty) -> has_big_map ty) labels
-  | Tsum (_, cstys) ->
-    List.exists (fun (_, ty) -> has_big_map ty) cstys
-  | Tvar _ | Tpartial _ -> assert false (* Removed during typechecking *)
+    allowed_type t1 &&
+    allowed_type t2 &&
+    allowed_type t3
+  | Trecord (_, ltys)
+  | Tsum (_, ltys) ->
+    List.for_all (fun (_, ty) ->
+        allowed_type ~allow_big_map ~allow_operation ~allow_contract ty) ltys
+  | Tbigmap (t1, t2) ->
+    allow_big_map &&
+    comparable_type t1 &&
+    allowed_type ~allow_big_map:false ~allow_operation ~allow_contract t1 &&
+    allowed_type
+      ~allow_big_map:false ~allow_operation:false ~allow_contract:false t2
+  | Tvar _ | Tpartial _ -> false (* Removed during typechecking *)
+
+let check_allowed_type loc ?allow_operation ?allow_contract ty =
+  if not @@ allowed_type ?allow_operation ?allow_contract ty then
+    error loc
+      "The following type is not allowed: %s"
+      (string_of_type ty)
 
 (* Encode storage type. This checks that big maps appear only as the
    first component of the toplevel tuple or record storage. *)
 let encode_storage_type env ty =
   let ty = encode_qual_type env ty in
-  match ty with
-  | Ttuple (Tbigmap (t1, t2) :: r)
-    when not @@ List.exists has_big_map (t1 :: t2 :: r) -> ty
-  | Trecord (_, ((_, Tbigmap (t1, t2)) :: r))
-    when not @@ List.exists has_big_map (t1 :: t2 :: List.map snd r) -> ty
-  | _ when not (has_big_map ty) -> ty
-  | _ ->
-    error (noloc env)
-      "only one big map is allowed, and only as first component of storage \
-       (either a tuple or a record)"
+  check_allowed_type (noloc env) ~allow_operation:false ~allow_contract:false ty;
+  ty
 
 (* Encode parameter type. Parameter cannot have big maps. *)
 let encode_parameter_type env ty =
   let ty = encode_qual_type env ty in
-  if has_big_map ty then
-    error (noloc env) "big maps are not allowed in parameter type";
+  check_allowed_type (noloc env) ~allow_operation:false ~allow_contract:true ty;
   ty
 
 
-(* Unfortunately, operations are not allowed in Michelson constants,
-   so when they appear in one, we have to turn them to non constant
-   expressions. For instance (Set [op]) is turned into
+(* Unfortunately, operations and big maps are not allowed in Michelson
+   constants, so when they appear in one, we have to turn them to non
+   constant expressions. For instance (Set [op]) is turned into
    Set.add op (Set : operation set) *)
 let rec deconstify env loc ty c =
   if not @@ type_contains_nonlambda_operation ty then
@@ -1555,3 +1579,8 @@ let encode_const env t_contract_sig const =
     } in
 
   encode_const env const
+
+let encode_type ?decompiling ty =
+  let ty = encode_type ?decompiling ty in
+  check_allowed_type (LiquidLoc.loc_in_file "_none_") ty;
+  ty
