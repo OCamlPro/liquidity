@@ -44,8 +44,9 @@ let rec decode_const (c : encoded_const) : typed_const = match c with
   | CSet xs -> CSet (List.map (decode_const) xs)
   | CMap l ->
     CMap (List.map (fun (x,y) -> decode_const x, decode_const y) l)
-  | CBigMap l ->
-    CBigMap (List.map (fun (x,y) -> decode_const x, decode_const y) l)
+  | CBigMap BMList l ->
+    CBigMap (BMList (List.map (fun (x,y) -> decode_const x, decode_const y) l))
+  | CBigMap BMId _ as c -> c
   | CRecord labels ->
     CRecord (List.map (fun (f, x) -> f, decode_const x) labels)
   | CConstr (constr, x) ->

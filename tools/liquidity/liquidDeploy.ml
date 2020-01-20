@@ -1039,6 +1039,8 @@ let init_storage ?source liquid init_params_strings =
     >>= fun (_, eval_init_storage, big_map_diff, _) ->
     (* Add elements of big map *)
     let eval_init_storage = match eval_init_storage, big_map_diff with
+      (* TODO : big map diffs on id *)
+      (*
       | CTuple (CBigMap m :: rtuple), Some l ->
         let m = List.fold_left (fun m -> function
             | Big_map_add (DiffKey k, v) -> (k, v) :: m
@@ -1057,6 +1059,7 @@ let init_storage ?source liquid init_params_strings =
           ) m l
         in
         CRecord ((bname, CBigMap m) :: rrecord)
+      *)
       | _ -> eval_init_storage
     in
     if !LiquidOptions.verbosity > 0 then

@@ -383,6 +383,8 @@ let rec convert_const env ?ty expr =
         | Some Tnat -> CNat (LiquidNumber.integer_of_mic n)
         | Some Tint | None -> CInt (LiquidNumber.integer_of_mic n)
         | Some Ttez -> CTez (LiquidNumber.tez_of_mic_mutez n)
+        | Some (Tbigmap (_k, _v)) ->
+          CBigMap (BMId (LiquidNumber.integer_of_mic n))
         | Some ty -> wrong_type env expr ty
       end
 
@@ -487,12 +489,12 @@ let rec convert_const env ?ty expr =
                 unknown_expr env "convert_const map element" expr
             ) elems)
         | Some (Tbigmap (ty_k, ty_e)) ->
-          CBigMap (List.map (function
+          CBigMap (BMList (List.map (function
               | Prim(_, "Elt", [k;e], _debug) ->
                 convert_const env ~ty:ty_k k, convert_const env ~ty:ty_e e
               | expr ->
                 unknown_expr env "convert_const big map element" expr
-            ) elems)
+            ) elems))
         | Some (Tlambda (arg_ty, ret_ty, _)) ->
           CLambda { arg_name = { nname = "_" ; nloc = loc };
                     recursive = None;

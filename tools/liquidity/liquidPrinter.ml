@@ -301,7 +301,7 @@ module Michelson = struct
       bprint_const bprint_mic fmt b indent cst;
       if not inseq then Printf.bprintf b ")";
     | CTuple tys -> bprint_const_pairs bprint_mic fmt b ~inseq indent tys
-    | CMap pairs | CBigMap pairs ->
+    | CMap pairs | CBigMap BMList pairs ->
       let indent = fmt.increase_indent indent in
       Printf.bprintf b "{";
       let _ = List.fold_left (fun first (cst1, cst2) ->
@@ -317,6 +317,8 @@ module Michelson = struct
         ) true pairs
       in
       Printf.bprintf b "}";
+    | CBigMap BMId id ->
+      Printf.bprintf b "%s" (Z.to_string (LiquidNumber.mic_of_integer id))
     | CList csts | CSet csts ->
       let indent = fmt.increase_indent indent in
       Printf.bprintf b "{";
@@ -1018,8 +1020,10 @@ module LiquidDebug = struct
         ) cs;
       Printf.bprintf b ")";
     | CMap [] -> Printf.bprintf b "(Map [])";
-    | CBigMap [] -> Printf.bprintf b "(BigMap [])";
-    | CMap ((c1, c2) :: pairs) | CBigMap ((c1, c2) :: pairs) ->
+    | CBigMap BMId id ->
+      Printf.bprintf b "(BigMap %s)" (LiquidNumber.liq_of_integer id);
+    | CBigMap BMList [] -> Printf.bprintf b "(BigMap [])";
+    | CMap ((c1, c2) :: pairs) | CBigMap BMList ((c1, c2) :: pairs) ->
       let indent2 = indent ^ "      " in
       if String.length indent > 2 then Printf.bprintf b "\n%s" indent;
       Printf.bprintf b "(%s [" (match cst with

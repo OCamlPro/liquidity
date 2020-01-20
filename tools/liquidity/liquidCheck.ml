@@ -234,8 +234,8 @@ let rec type_of_const ~loc env = function
   | CMap [] -> Tmap (fresh_tvar (), fresh_tvar ())
   | CMap ((k,e) :: _) -> Tmap (type_of_const ~loc env k, type_of_const ~loc env e)
 
-  | CBigMap [] -> Tbigmap (fresh_tvar (), fresh_tvar ())
-  | CBigMap ((k,e) :: _) -> Tbigmap (type_of_const ~loc env k, type_of_const ~loc env e)
+  | CBigMap (BMList [] | BMId _)-> Tbigmap (fresh_tvar (), fresh_tvar ())
+  | CBigMap BMList ((k,e) :: _) -> Tbigmap (type_of_const ~loc env k, type_of_const ~loc env e)
 
   | CList [] -> Tlist (fresh_tvar ())
   | CList (e :: _) -> Tlist (type_of_const ~loc env e)
@@ -365,7 +365,7 @@ let rec typecheck_const ~loc env cst ty =
         (string_of_type ty);
     Tmap (ty1, ty2), CMap csts
 
-  | Tbigmap (ty1, ty2), (CMap csts | CBigMap csts) -> (* allow map *)
+  | Tbigmap (ty1, ty2), (CMap csts | CBigMap BMList csts) -> (* allow map *)
     let (ty1, ty2), csts = List.fold_left (fun ((ty1, ty2), acc) (cst1, cst2) ->
         let ty1, cst1 = typecheck_const ~loc env cst1 ty1 in
         let ty2, cst2 = typecheck_const ~loc env cst2 ty2 in
@@ -375,7 +375,12 @@ let rec typecheck_const ~loc env cst ty =
     if not @@ comparable_type ty1 then
       error loc "Keys of big map are of a non comparable type %s"
         (string_of_type ty);
-    Tbigmap (ty1, ty2), CBigMap csts
+    Tbigmap (ty1, ty2), CBigMap (BMList csts)
+  | Tbigmap (ty1, ty2), CBigMap BMId id -> (* allow map *)
+    if not @@ comparable_type ty1 then
+      error loc "Keys of big map are of a non comparable type %s"
+        (string_of_type ty);
+    Tbigmap (ty1, ty2), CBigMap (BMId id)
 
   | Tlist ty, CList csts ->
     let ty, csts = List.fold_left (fun (ty, acc) cst ->
@@ -2136,8 +2141,8 @@ let rec type_of_const = function
   | CMap [] -> Tmap (Tint, Tunit)
   | CMap ((k,e) :: _) -> Tmap (type_of_const k, type_of_const e)
 
-  | CBigMap [] -> Tbigmap (Tint, Tunit)
-  | CBigMap ((k,e) :: _) -> Tbigmap (type_of_const k, type_of_const e)
+  | CBigMap (BMList [] | BMId _) -> Tbigmap (Tint, Tunit)
+  | CBigMap BMList ((k,e) :: _) -> Tbigmap (type_of_const k, type_of_const e)
 
   | CList [] -> Tlist (Tunit)
   | CList (e :: _) -> Tlist (type_of_const e)

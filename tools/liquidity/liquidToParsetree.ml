@@ -330,9 +330,12 @@ let rec convert_const ~abbrev (expr : (datatype, 'a) exp const) =
     Exp.construct (lid "Set") (Some list), inferable_type
   | CMap [] ->
     Exp.construct (lid "Map") None, false
-  | CBigMap [] ->
+  | CBigMap BMList [] ->
     Exp.construct (lid "BigMap") None, false
-  | CMap list | CBigMap list ->
+  | CBigMap BMId id ->
+    let id = Exp.constant (Const.integer (LiquidNumber.liq_of_integer id)) in
+    Exp.construct (lid "BigMap") (Some id), false
+  | CMap list | CBigMap BMList list ->
     let list = List.map (fun (key, value) -> CTuple [key; value]) list in
     let list, inferable_type = convert_const ~abbrev (CList list) in
     let m = match expr with

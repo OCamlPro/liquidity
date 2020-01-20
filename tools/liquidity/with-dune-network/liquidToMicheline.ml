@@ -194,14 +194,15 @@ let rec convert_const ~loc expand (expr : loc_michelson const) =
   | CList args | CSet args ->
     Micheline.Seq(loc, List.map (convert_const ~loc expand) args)
 
-  | CMap args | CBigMap args ->
+  | CMap args | CBigMap BMList args ->
     Micheline.Seq(loc,
                   List.map (fun (x,y) ->
                       Micheline.Prim(loc, "Elt", [convert_const ~loc expand x;
                                                   convert_const ~loc expand y], []
                                     ))
                     args)
-
+  | CBigMap BMId n ->
+    Micheline.Int (loc, LiquidNumber.mic_of_integer n)
   | CNat n -> Micheline.Int (loc, LiquidNumber.mic_of_integer n)
   | CTez n -> Micheline.Int (loc, LiquidNumber.mic_mutez_of_tez n)
            (*

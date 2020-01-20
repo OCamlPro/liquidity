@@ -862,7 +862,7 @@ and 'exp const =
   | CSome of 'exp const
 
   | CMap of ('exp const * 'exp const) list
-  | CBigMap of ('exp const * 'exp const) list
+  | CBigMap of 'exp big_map_const
   | CList of 'exp const list
   | CSet of 'exp const list
 
@@ -876,6 +876,10 @@ and 'exp const =
   | CConstr of string * 'exp const
 
   | CLambda of 'exp lambda
+
+and 'exp big_map_const =
+  | BMList of ('exp const * 'exp const) list
+  | BMId of integer
 
 and 'exp lambda = {
   arg_name: loc_name;
@@ -1305,13 +1309,14 @@ and eq_const eq_ty eq_var c1 c2 = match c1, c2 with
       with Invalid_argument _ -> false
     end
   | CMap l1, CMap l2
-  | CBigMap l1, CBigMap l2 ->
+  | CBigMap BMList l1, CBigMap BMList l2 ->
     begin
       try List.for_all2 (fun (k1, v1) (k2, v2) ->
           eq_const eq_ty eq_var k1 k2 &&
           eq_const eq_ty eq_var v1 v2) l1 l2
       with Invalid_argument _ -> false
     end
+  | CBigMap BMId i1, CBigMap BMId i2 -> i1 = i2
   | CRecord l1, CRecord l2 ->
     begin
       try List.for_all2 (fun (s1, c1) (s2, c2) ->

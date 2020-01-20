@@ -635,7 +635,13 @@ let rec translate_const env exp =
     CMap [], Some (Tmap (fresh_tvar (), fresh_tvar ()))
 
   | { pexp_desc = Pexp_construct ({ txt = Lident "BigMap" }, None) } ->
-    CBigMap [], Some (Tbigmap (fresh_tvar (), fresh_tvar ()))
+    CBigMap (BMList []), Some (Tbigmap (fresh_tvar (), fresh_tvar ()))
+
+  | { pexp_desc = Pexp_construct (
+      { txt = Lident "BigMap" },
+      Some { pexp_desc = Pexp_constant (Pconst_integer (s ,None)) }) } ->
+    CBigMap (BMId (LiquidNumber.integer_of_liq s)),
+    Some (Tbigmap (fresh_tvar (), fresh_tvar ()))
 
   | { pexp_desc = Pexp_construct (
       { txt = Lident ("Map" | "BigMap" as map_kind) },
@@ -673,7 +679,7 @@ let rec translate_const env exp =
     in
     begin match map_kind with
       | "Map" -> CMap csts, tys
-      | "BigMap" -> CBigMap csts, tys
+      | "BigMap" -> CBigMap (BMList csts), tys
       | _ -> assert false
     end
 

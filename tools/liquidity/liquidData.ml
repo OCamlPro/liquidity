@@ -57,8 +57,8 @@ let rec default_const = function
   | Tset ty -> CSet [default_const ty]
   | Tmap (ty1, ty2) ->
     CMap [default_const ty1, default_const ty2]
-  | Tbigmap  (ty1, ty2) ->
-    CBigMap [default_const ty1, default_const ty2]
+  | Tbigmap (ty1, ty2) ->
+    CBigMap (BMList [default_const ty1, default_const ty2])
   | Tor (ty, _) -> CLeft (default_const ty)
   | Trecord (_, fields) ->
     CRecord (
@@ -103,7 +103,7 @@ let rec default_empty_const = function
   | Tlist ty -> CList []
   | Tset ty -> CSet []
   | Tmap (ty1, ty2) -> CMap []
-  | Tbigmap  (ty1, ty2) -> CBigMap []
+  | Tbigmap  (ty1, ty2) -> CBigMap (BMList [])
   | Tor (ty, _) -> CLeft (default_empty_const ty)
   | Trecord (_, fields) ->
     CRecord (

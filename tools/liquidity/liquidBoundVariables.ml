@@ -141,10 +141,11 @@ and bv_const const =
   | CTuple xs | CList xs | CSet xs ->
     List.fold_left
       (fun acc x -> StringSet.union acc (bv_const x)) StringSet.empty xs
-  | CMap l | CBigMap l ->
+  | CMap l | CBigMap BMList l ->
     List.fold_left
       (fun acc (x, y) -> StringSet.union acc
           (StringSet.union (bv_const x) (bv_const y))) StringSet.empty l
+  | CBigMap BMId _ -> StringSet.empty
   | CRecord labels ->
     List.fold_left
       (fun acc (_, x) -> StringSet.union acc (bv_const x))
@@ -443,8 +444,9 @@ and bound_const = function
   | CSet xs -> CSet (List.map (bound_const) xs)
   | CMap l ->
     CMap (List.map (fun (x,y) -> bound_const x, bound_const y) l)
-  | CBigMap l ->
-    CBigMap (List.map (fun (x,y) -> bound_const x, bound_const y) l)
+  | CBigMap BMList l ->
+    CBigMap (BMList (List.map (fun (x,y) -> bound_const x, bound_const y) l))
+  | CBigMap BMId _ as c -> c
   | CRecord labels ->
     CRecord (List.map (fun (f, x) -> f, bound_const x) labels)
   | CConstr (constr, x) ->

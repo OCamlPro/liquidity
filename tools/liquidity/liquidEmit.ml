@@ -229,10 +229,11 @@ and emit_const ~expand cst = match cst with
     CMap (List.map (fun (k, v) ->
         (emit_const ~expand k,
          emit_const ~expand v)) l)
-  | CBigMap l ->
-    CBigMap (List.map (fun (k, v) ->
+  | CBigMap BMList l ->
+    CBigMap (BMList (List.map (fun (k, v) ->
         (emit_const ~expand k,
-         emit_const ~expand v)) l)
+         emit_const ~expand v)) l))
+  | CBigMap BMId _ as c -> c
   | CLeft c ->
     CLeft (emit_const ~expand c)
   | CRight c ->

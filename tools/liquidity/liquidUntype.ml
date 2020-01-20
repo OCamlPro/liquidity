@@ -291,8 +291,9 @@ and untype_const c = match c with
   | CSet xs -> CSet (List.map (untype_const) xs)
   | CMap l ->
     CMap (List.map (fun (x,y) -> untype_const x, untype_const y) l)
-  | CBigMap l ->
-    CBigMap (List.map (fun (x,y) -> untype_const x, untype_const y) l)
+  | CBigMap BMList l ->
+    CBigMap (BMList (List.map (fun (x,y) -> untype_const x, untype_const y) l))
+  | CBigMap BMId _ as c -> c
   | CRecord labels ->
     CRecord (List.map (fun (f, x) -> f, untype_const x) labels)
   | CConstr (constr, x) ->

@@ -279,7 +279,7 @@ let rec constrlabel_is_in_code c code =
   | BLAKE2B | SHA256 | SHA512 | HASH_KEY | CHECK_SIGNATURE | ADDRESS | CONS
   | OR | XOR | AND | NOT | INT | ABS | ISNAT | NEG | MUL | EDIV | LSL | LSR
   | SOURCE | SENDER | SIZE | IMPLICIT_ACCOUNT | SET_DELEGATE | PACK | MOD | DIV
-  | BLOCK_LEVEL | IS_IMPLICIT | COLLECT_CALL | GET_BALANCE
+  | BLOCK_LEVEL | IS_IMPLICIT | COLLECT_CALL | GET_BALANCE | EMPTY_BIG_MAP _
     -> false
   | UNPACK ty
   | PUSH (ty, _)
@@ -1105,7 +1105,7 @@ and decompile_aux stack (seq : node) ins =
     x :: stack, x
 
   | EMPTY_BIG_MAP (k, v), stack ->
-    let x = node ins.loc (N_CONST (Tbigmap (k, v), CBigMap [])) []  [seq] in
+    let x = node ins.loc (N_CONST (Tbigmap (k, v), CBigMap (BMList []))) []  [seq] in
     x :: stack, x
 
   | _ ->
@@ -1136,8 +1136,10 @@ and decompile_const loc cst = match cst with
   | CSet xs -> CSet (List.map (decompile_const loc) xs)
   | CMap l ->
     CMap (List.map (fun (x,y) -> decompile_const loc x, decompile_const loc y) l)
-  | CBigMap l ->
-    CBigMap (List.map (fun (x,y) -> decompile_const loc x, decompile_const loc y) l)
+  | CBigMap BMId _ as c -> c
+  | CBigMap BMList l ->
+    CBigMap
+      (BMList (List.map (fun (x,y) -> decompile_const loc x, decompile_const loc y) l))
   | CRecord labels ->
     CRecord (List.map (fun (f, x) -> f, decompile_const loc x) labels)
   | CConstr (constr, x) ->

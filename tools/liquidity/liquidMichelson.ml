@@ -793,8 +793,11 @@ and compile_const ~loc c = match c with
   | CSet xs -> CSet (List.map (compile_const ~loc) xs)
   | CMap l ->
     CMap (List.map (fun (x,y) -> compile_const ~loc x, compile_const ~loc y) l)
-  | CBigMap l ->
-    CBigMap (List.map (fun (x,y) -> compile_const ~loc x, compile_const ~loc y) l)
+  | CBigMap BMList l ->
+    CBigMap
+      (BMList
+         (List.map (fun (x,y) -> compile_const ~loc x, compile_const ~loc y) l))
+  | CBigMap BMId _ as c -> c
   | CRecord labels ->
     CRecord (List.map (fun (f, x) -> f, compile_const ~loc x) labels)
   | CConstr (constr, x) ->

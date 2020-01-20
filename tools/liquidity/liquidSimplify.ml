@@ -366,8 +366,9 @@ let rec compute decompile code to_inline =
     | CSet xs -> CSet (List.map (iter_const) xs)
     | CMap l ->
       CMap (List.map (fun (x,y) -> iter_const x, iter_const y) l)
-    | CBigMap l ->
-      CBigMap (List.map (fun (x,y) -> iter_const x, iter_const y) l)
+    | CBigMap BMList l ->
+      CBigMap (BMList (List.map (fun (x,y) -> iter_const x, iter_const y) l))
+    | CBigMap BMId _ as c -> c
     | CRecord labels ->
       CRecord (List.map (fun (f, x) -> f, iter_const x) labels)
     | CConstr (constr, x) ->

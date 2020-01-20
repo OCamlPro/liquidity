@@ -726,8 +726,11 @@ and decompile_const env c = match c with
   | CSet xs -> CSet (List.map (decompile_const env) xs)
   | CMap l ->
     CMap (List.map (fun (x,y) -> decompile_const env x, decompile_const env y) l)
-  | CBigMap l ->
-    CBigMap (List.map (fun (x,y) -> decompile_const env x, decompile_const env y) l)
+  | CBigMap BMList l ->
+    CBigMap
+      (BMList (List.map (fun (x,y) -> decompile_const env x,
+                                      decompile_const env y) l))
+  | CBigMap BMId _ as c -> c
   | CRecord labels ->
     CRecord (List.map (fun (f, x) -> f, decompile_const env x) labels)
   | CConstr (constr, x) ->

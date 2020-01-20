@@ -827,9 +827,10 @@ and const_tvars_to_unit c = match c with
   | CMap l ->
     CMap (List.map (fun (x,y) ->
         const_tvars_to_unit x, const_tvars_to_unit y) l)
-  | CBigMap l ->
-    CBigMap (List.map (fun (x,y) ->
-        const_tvars_to_unit x, const_tvars_to_unit y) l)
+  | CBigMap BMList l ->
+    CBigMap (BMList (List.map (fun (x,y) ->
+        const_tvars_to_unit x, const_tvars_to_unit y) l))
+  | CBigMap BMId _ as c -> c
   | CRecord labels ->
     CRecord (List.map (fun (f, x) ->
         f, const_tvars_to_unit x) labels)
@@ -1053,9 +1054,10 @@ and mono_const env subst vtys (c : typed_const) = match c with
   | CMap l ->
     CMap (List.map (fun (x,y) ->
         mono_const env subst vtys x, mono_const env subst vtys y) l)
-  | CBigMap l ->
-    CBigMap (List.map (fun (x,y) ->
-        mono_const env subst vtys x, mono_const env subst vtys y) l)
+  | CBigMap BMList l ->
+    CBigMap (BMList (List.map (fun (x,y) ->
+        mono_const env subst vtys x, mono_const env subst vtys y) l))
+  | CBigMap BMId _ as c -> c
   | CRecord labels ->
     CRecord (List.map (fun (f, x) -> f, mono_const env subst vtys x) labels)
   | CConstr (constr, x) ->

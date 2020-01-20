@@ -388,7 +388,7 @@ let rec deconstify env loc ty c =
       | CBytes _
       | CKey _ | CSignature _ | CNone  | CKey_hash _ | CAddress _),
       _ ->
-      mk ~loc (Const { ty; const =c }) ty
+      mk ~loc (Const { ty; const = c }) ty
 
     | CSome c, Toption ty' ->
       mk ~loc (Apply { prim = Prim_Some; args = [deconstify env loc ty' c] }) ty
@@ -427,7 +427,7 @@ let rec deconstify env loc ty c =
         cs
         (mk ~loc (Const { ty; const = CMap [] }) ty)
 
-    | CBigMap cs, Tbigmap (tk, te) ->
+    | CBigMap (BMList cs), Tbigmap (tk, te) ->
       List.fold_right (fun (k, e) acc ->
           mk (Apply { prim = Prim_map_add;
                       args = [deconstify env loc tk k; deconstify env loc te e; acc] })
@@ -438,6 +438,9 @@ let rec deconstify env loc ty c =
         (mk ~loc (Apply { prim = Prim_big_map_create;
                           (* Ghost unused arguments to carry big map type *)
                           args = [unused env ~loc tk; unused env ~loc te] }) ty)
+
+    | CBigMap (BMId id ), Tbigmap (tk, te) ->
+      mk ~loc (Const { ty; const = c }) ty
 
     (* Removed by encode const *)
     | CRecord _, _
@@ -583,8 +586,12 @@ let rec encode_const env (c : typed_const) : encoded_const = match c with
   | CMap l ->
     CMap (List.map (fun (x,y) -> encode_const env x, encode_const env y) l)
 
-  | CBigMap l ->
-    CBigMap (List.map (fun (x,y) -> encode_const env x, encode_const env y) l)
+  | CBigMap BMList l ->
+    CBigMap
+      (BMList
+         (List.map (fun (x,y) -> encode_const env x, encode_const env y) l))
+
+  | CBigMap BMId _ as c -> c
 
   | CRecord labels when env.decompiling ->
     CRecord (List.map (fun (f, x) -> f, encode_const env x) labels)
