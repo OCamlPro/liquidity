@@ -1046,8 +1046,7 @@ and ('ty, 'a) exp_desc =
   | CreateContract of { args: ('ty, 'a) exp list;
                         contract: ('ty, 'a) exp contract }
   (** Oringinating contracts:
-      {[ Contract.create ~manager ~delegate ~spendable ~delegatable ~amount
-          (contract C) ]} *)
+      {[ Contract.create ~delegate~amount (contract C) ]} *)
 
   | ContractAt of { arg: ('ty, 'a) exp;
                     entry: string option;

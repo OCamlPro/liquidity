@@ -88,12 +88,6 @@ let amount = ref "0"
 (** Fee in mudun *)
 let fee = ref (None : string option)
 
-(** Originate a delegatable contract *)
-let delegatable = ref false
-
-(** Originate a spendable contract *)
-let spendable = ref false
-
 (** Gas limit for transactions and originations. *)
 let gas_limit = ref (None : int option)
 

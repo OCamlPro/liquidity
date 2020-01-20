@@ -56,11 +56,8 @@ type internal_operation =
       parameters : LiquidTypes.typed_const option;
     }
   | Origination of {
-      manager: string ;
       delegate: string option ;
       script: (LiquidTypes.typed_contract * LiquidTypes.typed_const) option ;
-      spendable: bool ;
-      delegatable: bool ;
       balance: string ;
     }
   | Delegation of string option
@@ -103,14 +100,12 @@ module type S = sig
 
   (** Forge a deployment operation contract on the Dune node specified in
       ![LiquidOptions], returns the hex-encoded operation *)
-  val forge_deploy :
-    ?delegatable:bool -> ?spendable:bool -> from -> string list -> string t
+  val forge_deploy : from -> string list -> string t
 
   (** Deploy a Liquidity contract on the Dune node specified in
       ![LiquidOptions], returns the operation hash and the contract address *)
   val deploy :
-    ?delegatable:bool -> ?spendable:bool -> from -> string list ->
-    (string * (string, exn) result) t
+    from -> string list -> (string * (string, exn) result) t
 
   val get_storage : from -> string -> LiquidTypes.typed_const t
 

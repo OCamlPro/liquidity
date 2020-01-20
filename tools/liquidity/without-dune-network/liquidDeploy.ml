@@ -63,11 +63,8 @@ type internal_operation =
       parameters : typed_const option;
     }
   | Origination of {
-      manager: string ;
       delegate: string option ;
       script: (typed_contract * typed_const) option ;
-      spendable: bool ;
-      delegatable: bool ;
       balance: string ;
     }
   | Delegation of string option
@@ -96,10 +93,8 @@ module type S = sig
   val forge_deploy_script :
     source:string -> from -> string list ->
     (string * string * LiquidToMicheline.loc_table) t
-  val forge_deploy : ?delegatable:bool -> ?spendable:bool ->
-    from -> string list -> string t
-  val deploy : ?delegatable:bool -> ?spendable:bool ->
-    from -> string list -> (string * (string, exn) result) t
+  val forge_deploy : from -> string list -> string t
+  val deploy : from -> string list -> (string * (string, exn) result) t
   val get_storage : from -> string -> LiquidTypes.typed_const t
   val get_big_map_value :
     from -> string -> string -> LiquidTypes.typed_const option t
@@ -127,10 +122,10 @@ module Dummy = struct
   let forge_deploy_script ~source:_ _ _ =
     failwith "mini version cannot deploy"
 
-  let forge_deploy ?(delegatable=false) ?(spendable=false) _ _ =
+  let forge_deploy _ _ =
     failwith "mini version cannot deploy"
 
-  let deploy ?(delegatable=false) ?(spendable=false) _ _ =
+  let deploy _ _ =
     failwith "mini version cannot deploy"
 
   let get_storage _ _ =

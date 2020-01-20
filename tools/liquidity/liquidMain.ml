@@ -448,8 +448,6 @@ let run () =
 let forge_deploy () =
   let op =
     LiquidDeploy.Sync.forge_deploy
-      ~delegatable:!LiquidOptions.delegatable
-      ~spendable:!LiquidOptions.spendable
       (LiquidDeploy.From_files (Data.get_files ())) (Data.get_inputs ())
   in
   Printf.eprintf "Raw operation:\n--------------\n%!";
@@ -486,8 +484,6 @@ let init_storage () =
 let deploy () =
   match
     LiquidDeploy.Sync.deploy
-      ~delegatable:!LiquidOptions.delegatable
-      ~spendable:!LiquidOptions.spendable
       (LiquidDeploy.From_files (Data.get_files ())) (Data.get_inputs ())
   with
   | op_h, Ok contract_id ->
@@ -703,12 +699,6 @@ let main () =
          "ENTRY PARAMETER STORAGE Run Liquidity contract on %s node"
          (LiquidOptions.network_name ())
       );
-
-      "--delegatable", Arg.Set LiquidOptions.delegatable,
-      " With --[forge-]deploy, deploy a delegatable contract";
-
-      "--spendable", Arg.Set LiquidOptions.spendable,
-      " With --[forge-]deploy, deploy a spendable contract";
 
       "--init-storage", Arg.Tuple [
         Arg.Rest Data.register_deploy_input;

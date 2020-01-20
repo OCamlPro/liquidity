@@ -58,11 +58,8 @@ type internal_operation =
       parameters : typed_const option;
     }
   | Origination of {
-      manager: string ;
       delegate: string option ;
       script: (typed_contract * typed_const) option ;
-      spendable: bool ;
-      delegatable: bool ;
       balance: string ;
     }
   | Delegation of string option
@@ -89,9 +86,9 @@ module type S = sig
   val forge_deploy_script :
     source:string -> from -> string list ->
     (string * string * LiquidToMicheline.loc_table) t
-  val forge_deploy : ?delegatable:bool -> ?spendable:bool ->
+  val forge_deploy :
     from -> string list -> string t
-  val deploy : ?delegatable:bool -> ?spendable:bool ->
+  val deploy :
     from -> string list -> (string * (string, exn) result) t
   val get_storage : from -> string -> LiquidTypes.typed_const t
   val get_big_map_value :
@@ -731,12 +728,7 @@ let operation_of_json ~head r =
           Some (code, storage)
         with Not_found -> None in
       Origination {
-        manager = find r ["manager_pubkey"] |> get_string;
         script;
-        spendable =
-          (try find r ["spendable"] |> get_bool with Not_found -> true);
-        delegatable =
-          (try find r ["delegatable"] |> get_bool with Not_found -> true);
         balance = find r ["balance"] |> get_string;
         delegate =
           Option.try_with (fun () -> find r ["delegate"] |> get_string);
@@ -1175,7 +1167,6 @@ let forge_deploy_script ~source liquid init_params_strings =
 
 let rec forge_deploy_json ?head ?source ?public_key
     ?fee ?gas_limit ?storage_limit ?real_op_size
-    ?(delegatable=false) ?(spendable=false)
     liquid init_params_strings =
   let source = match source, !LiquidOptions.source with
     | Some source, _ | _, Some source -> source
@@ -1218,7 +1209,6 @@ let rec forge_deploy_json ?head ?source ?public_key
         LiquidNumber.(liq_of_tez @@ tez_of_mic_mutez (Z.of_string fee))
         LiquidNumber.(liq_of_tez @@ tez_of_mic_mutez computed_fee)
     | Some fee -> fee in
-  get_manager source >>= fun manager ->
   let origination_json counter = [
     "kind", "\"origination\"";
     "source", Printf.sprintf "%S" source;
@@ -1226,10 +1216,7 @@ let rec forge_deploy_json ?head ?source ?public_key
     "counter", Printf.sprintf "\"%d\"" counter;
     "gas_limit", Printf.sprintf "\"%d\"" gas_limit;
     "storage_limit", Printf.sprintf "\"%d\"" storage_limit;
-    "manager_pubkey", Printf.sprintf "%S" manager;
     "balance", Printf.sprintf "%S" !LiquidOptions.amount;
-    "spendable", string_of_bool spendable;
-    "delegatable", string_of_bool delegatable;
     "script", script_json;
   ] |> mk_json_obj
   in
@@ -1276,15 +1263,12 @@ let rec forge_deploy_json ?head ?source ?public_key
          which depends on size of operation *rolleyes* *)
       forge_deploy_json ~head ~source ?public_key ~real_op_size:actual_size
         ?fee ~gas_limit ~storage_limit
-        ~delegatable ~spendable
         liquid init_params_strings
 
 
 let forge_deploy ?head ?source ?public_key
-    ?(delegatable=false) ?(spendable=false)
     liquid init_params_strings =
   forge_deploy_json ?head ?source ?public_key
-    ~delegatable ~spendable
     liquid init_params_strings >>= fun (data, _, loc_table) ->
   estimate_gas_storage ~loc_table data >>= fun (est_gas_limit, est_storage_limit) ->
   let gas_limit = match !LiquidOptions.gas_limit with
@@ -1295,7 +1279,6 @@ let forge_deploy ?head ?source ?public_key
     | Some l -> l in
   forge_deploy_json ?head ?source ?public_key ~real_op_size:0
     ?fee:!LiquidOptions.fee ~gas_limit ~storage_limit
-    ~delegatable ~spendable
     liquid init_params_strings
   >>= fun (data, operations_json, loc_table) ->
   send_post ~loc_table ~data
@@ -1401,7 +1384,7 @@ let inject_operation ?(force=false) ?loc_table ?sk ~head json_op op =
   return (injected_op_hash, result)
 
 
-let deploy ?(delegatable=false) ?(spendable=false) liquid init_params_strings =
+let deploy liquid init_params_strings =
   let sk = match !LiquidOptions.private_key with
     | None -> raise (ResponseError "deploy: Missing private key")
     | Some sk -> match Ed25519.Secret_key.of_b58check sk with
@@ -1414,7 +1397,7 @@ let deploy ?(delegatable=false) ?(spendable=false) liquid init_params_strings =
   in
   let public_key = get_public_key_from_secret_key sk in
   get_head () >>= fun head ->
-  forge_deploy ~head ~source ~public_key ~delegatable ~spendable
+  forge_deploy ~head ~source ~public_key
     liquid init_params_strings
   >>= fun (op, op_json, loc_table) ->
   inject_operation ~loc_table ~sk ~head op_json (`Hex op) >>= function
@@ -1741,9 +1724,8 @@ module Async = struct
   let forge_deploy_script ~source liquid init_params_strings =
     forge_deploy_script ~source liquid init_params_strings
 
-  let forge_deploy ?(delegatable=false) ?(spendable=false)
-      liquid init_params_strings =
-    forge_deploy ~delegatable ~spendable liquid init_params_strings
+  let forge_deploy liquid init_params_strings =
+    forge_deploy liquid init_params_strings
     >>= fun (op, _, _) -> return op
 
   let forge_call_parameter = forge_call_parameter
@@ -1758,9 +1740,8 @@ module Async = struct
   let run_debug liquid entry_name input_string storage_string =
     run_debug liquid entry_name input_string storage_string
 
-  let deploy ?(delegatable=false) ?(spendable=false)
-      liquid init_params_strings =
-    deploy ~delegatable ~spendable liquid init_params_strings
+  let deploy liquid init_params_strings =
+    deploy liquid init_params_strings
 
   let get_storage liquid address =
     get_storage liquid address
@@ -1791,8 +1772,7 @@ module Sync = struct
   let forge_deploy_script ~source liquid init_params_strings =
     Lwt_main.run (forge_deploy_script ~source liquid init_params_strings)
 
-  let forge_deploy ?(delegatable=false) ?(spendable=false)
-      liquid init_params_strings =
+  let forge_deploy liquid init_params_strings =
     Lwt_main.run (forge_deploy liquid init_params_strings
                   >>= fun (op, _, _) -> return op)
 
@@ -1808,9 +1788,8 @@ module Sync = struct
   let run_debug liquid entry_name input_string storage_string =
     Lwt_main.run (run_debug liquid entry_name input_string storage_string)
 
-  let deploy ?(delegatable=false) ?(spendable=false)
-      liquid init_params_strings =
-    Lwt_main.run (deploy ~delegatable ~spendable liquid init_params_strings)
+  let deploy liquid init_params_strings =
+    Lwt_main.run (deploy liquid init_params_strings)
 
   let get_storage liquid address =
     Lwt_main.run (get_storage liquid address)
