@@ -198,6 +198,8 @@ let rec emit_code ~expand code =
   | IS_IMPLICIT -> M_INS ("IS_IMPLICIT", var_annot name)
   | BLOCK_LEVEL -> M_INS ("BLOCK_LEVEL", var_annot name)
   | COLLECT_CALL -> M_INS ("COLLECT_CALL", var_annot name)
+  | EMPTY_BIG_MAP (k, v) ->
+    M_INS_EXP ("EMPTY_BIG_MAP", [k; v], [], var_annot name)
 
 and emit_const ~expand cst = match cst with
   | ( CUnit

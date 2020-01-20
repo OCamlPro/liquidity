@@ -510,6 +510,12 @@ and compile_prim ~loc depth env prim args =
   | Prim_block_level, _ -> [ ii BLOCK_LEVEL ]
   | Prim_collect_call, _ -> [ ii COLLECT_CALL ]
 
+  | Prim_big_map_create, [
+      { desc = Apply { prim = Prim_unused None }; ty = k_ty };
+      { desc = Apply { prim = Prim_unused None }; ty = v_ty }
+    ] -> [ ii @@ EMPTY_BIG_MAP (k_ty, v_ty) ]
+  | Prim_big_map_create, _ -> assert false
+
   | Prim_Left, [ arg; { desc = Apply { prim = Prim_unused constr };
                         ty = right_ty }] ->
     let right_ty = LiquidEncode.encode_type right_ty in
@@ -676,7 +682,7 @@ and compile_prim ~loc depth env prim args =
         | Prim_coll_find|Prim_coll_update|Prim_coll_mem
         | Prim_coll_size|Prim_list_rev|Prim_slice
         | Prim_concat|Prim_concat_two
-        | Prim_block_level|Prim_collect_call), _ ->
+        | Prim_block_level|Prim_collect_call|Prim_big_map_create), _ ->
         (* already filtered out *)
         Printf.eprintf "Primitive %S ?\n%!"
           (LiquidTypes.string_of_primitive prim)

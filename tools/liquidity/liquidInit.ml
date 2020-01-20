@@ -43,7 +43,7 @@ let rec subst_empty_big_map storage_ty code =
   let desc = code.desc in
   let loc = code.loc in
   let desc = match desc with
-    | Const { const = CBigMap [] } ->
+    | Const { const = CBigMap [] } | Apply { prim = Prim_big_map_create }->
       empty_big_map loc
     | Const { const = CBigMap _ } ->
       LiquidLoc.raise_error ~loc

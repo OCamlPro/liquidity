@@ -1104,6 +1104,10 @@ and decompile_aux stack (seq : node) ins =
     let x = node ins.loc (N_PRIM "IS_IMPLICIT") [x] [seq] in
     x :: stack, x
 
+  | EMPTY_BIG_MAP (k, v), stack ->
+    let x = node ins.loc (N_CONST (Tbigmap (k, v), CBigMap [])) []  [seq] in
+    x :: stack, x
+
   | _ ->
     (* let ins = LiquidEmit.emit_code ins in *)
     let s = LiquidPrinter.Michelson.string_of_loc_michelson ins in

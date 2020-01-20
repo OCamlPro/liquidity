@@ -1520,6 +1520,10 @@ and typecheck_prim2i env prim loc args =
   | Prim_map_size, [ ty ] ->
     unify ty (Tmap (fresh_tvar (), fresh_tvar ())); Tnat
 
+  | Prim_big_map_create, [ ty ] ->
+    unify ty Tunit;
+    Tbigmap (fresh_tvar (), fresh_tvar ())
+
   | Prim_Some, [ ty ] -> Toption ty
 
   | Prim_now, [ ty ] -> unify ty Tunit; Ttimestamp
@@ -1721,6 +1725,9 @@ and typecheck_prim2t env prim loc args =
   | Prim_set_size, [ Tset _]  ->  Tnat
   | Prim_map_size, [ Tmap _]  ->  Tnat
 
+  | Prim_big_map_create, [ Tunit ] ->
+    Tbigmap (fresh_tvar (), fresh_tvar ())
+
   | Prim_set_update, [ key_ty; Tbool; Tset expected_key_ty]
     ->
     fail_neq ~loc ~expected_ty:expected_key_ty key_ty
@@ -1877,7 +1884,8 @@ and expected_prim_types = function
   | Prim_amount
   | Prim_gas
   | Prim_block_level
-  | Prim_collect_call ->
+  | Prim_collect_call
+  | Prim_big_map_create ->
     1, "unit"
 
   | Prim_blake2b

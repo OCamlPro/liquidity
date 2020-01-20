@@ -735,6 +735,11 @@ and convert_code env expr =
   | Prim(index, "GET_BALANCE", [], annot) ->
     mic_loc env index annot (GET_BALANCE)
 
+  | Prim(index, "EMPTY_BIG_MAP", [ k; v ], annot) ->
+    let k = convert_type env k in
+    let v = convert_type env v in
+    mic_loc env index annot (EMPTY_BIG_MAP (k, v))
+
   | _ -> unknown_expr env "convert_code" expr
 
 and convert_raw_contract env c =

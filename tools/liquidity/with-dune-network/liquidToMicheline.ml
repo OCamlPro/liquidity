@@ -412,6 +412,8 @@ and convert_code expand expr =
   | COLLECT_CALL -> prim "COLLECT_CALL" [] name
   | GET_BALANCE -> prim "GET_BALANCE" [] name
   | IS_IMPLICIT -> prim "IS_IMPLICIT" [] name
+  | EMPTY_BIG_MAP (k, v) ->
+    prim "EMPTY_BIG_MAP" [convert_type k; convert_type v] name
 
 and convert_contract_raw expand c =
   let loc = LiquidLoc.noloc in

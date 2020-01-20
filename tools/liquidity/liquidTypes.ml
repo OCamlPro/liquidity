@@ -494,6 +494,8 @@ type primitive =
   | Prim_map_mem
   | Prim_map_size
 
+  | Prim_big_map_create
+
   | Prim_set_update
   | Prim_set_add
   | Prim_set_remove
@@ -632,6 +634,9 @@ let () =
        "Map.mem", Prim_map_mem;
        "Map.cardinal", Prim_map_size;
        "Map.size", Prim_map_size;
+
+       "BigMap.empty", Prim_big_map_create; (* same as BigMap.create *)
+       "BigMap.create", Prim_big_map_create;
 
        "Set.update", Prim_set_update;
        "Set.add", Prim_set_add;
@@ -1423,6 +1428,8 @@ type 'a pre_michelson =
   | UNPACK of datatype
 
   | EXTENSION of string * datatype list
+
+  | EMPTY_BIG_MAP of datatype * datatype
 
   (* obsolete *)
   | MOD

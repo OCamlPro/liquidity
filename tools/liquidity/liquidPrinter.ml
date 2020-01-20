@@ -543,6 +543,11 @@ module Michelson = struct
       bprint_type fmt b "" ty;
       Printf.bprintf b " ";
       bprint_const (fun fmt b ident a -> bprint_arg fmt b a) fmt b "" c;
+    | EMPTY_BIG_MAP (k, v) ->
+      Printf.bprintf b "EMPTY_BIG_MAP ";
+      bprint_pre_name b name;
+      bprint_type fmt b "" k;
+      bprint_type fmt b "" v;
     | PAIR ->
       Printf.bprintf b "PAIR";
       bprint_pre_name b name;

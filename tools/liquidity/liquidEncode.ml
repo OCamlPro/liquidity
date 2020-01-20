@@ -434,7 +434,10 @@ let rec deconstify env loc ty c =
             ~loc ty
         )
         cs
-        (mk ~loc (Const { ty; const = CBigMap [] }) ty)
+        (* (mk ~loc (Const { ty; const = CBigMap [] }) ty) *)
+        (mk ~loc (Apply { prim = Prim_big_map_create;
+                          (* Ghost unused arguments to carry big map type *)
+                          args = [unused env ~loc tk; unused env ~loc te] }) ty)
 
     (* Removed by encode const *)
     | CRecord _, _
@@ -754,6 +757,16 @@ and encode env ( exp : typed_exp ) : encoded_exp =
                      Apply { prim = Prim_Cons;
                              args = [y; mk_typed_nil ~loc ty] }) ty] }) ty in
     encode env { exp with desc = Apply { prim; args = [l] } }
+
+  | Apply { prim = Prim_big_map_create; args = [ _unit ] } ->
+    let k_ty, v_ty = match exp.ty with
+      | Tbigmap (k, v) -> k, v
+      | _ -> assert false in
+    (* Ghost unused arguments to carry big map type *)
+    let k = unused env ~loc k_ty in
+    let v = unused env ~loc v_ty in
+    let desc = Apply { prim = Prim_big_map_create; args = [k; v] } in
+    mk ?name:exp.name ~loc desc exp.ty
 
   | Apply { prim; args } ->
     encode_apply exp.name env prim loc args exp.ty
