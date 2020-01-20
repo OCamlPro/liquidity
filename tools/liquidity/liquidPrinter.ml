@@ -623,9 +623,6 @@ module Michelson = struct
     | ADDRESS ->
       Printf.bprintf b "ADDRESS";
       bprint_pre_name b name;
-    | CREATE_ACCOUNT ->
-      Printf.bprintf b "CREATE_ACCOUNT";
-      bprint_pre_name b name;
     | CREATE_CONTRACT contract ->
       Printf.bprintf b "CREATE_CONTRACT { parameter ";
       bprint_type fmt b "" contract.mic_parameter;

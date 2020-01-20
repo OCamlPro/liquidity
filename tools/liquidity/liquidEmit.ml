@@ -162,7 +162,6 @@ let rec emit_code ~expand code =
   | AMOUNT -> M_INS ("AMOUNT", var_annot name)
   | STEPS_TO_QUOTA -> M_INS ("STEPS_TO_QUOTA", var_annot name)
   | ADDRESS -> M_INS ("ADDRESS", var_annot name)
-  | CREATE_ACCOUNT -> M_INS ("CREATE_ACCOUNT", var_annot name)
   | PACK -> M_INS ("PACK", var_annot name)
   | BLAKE2B -> M_INS ("BLAKE2B", var_annot name)
   | SHA256 -> M_INS ("SHA256", var_annot name)

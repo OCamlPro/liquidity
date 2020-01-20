@@ -1290,24 +1290,6 @@ and translate_code contracts env exp =
       let arg_name = { nname = arg_name ; nloc = vloc } in
       MapFold { prim; arg_name; body; arg; acc }
 
-    | { pexp_desc = Pexp_apply (
-        { pexp_desc = Pexp_ident { txt = Ldot(Lident "Account", "create") } },
-        args);
-        pexp_loc } ->
-      let manager, delegate, delegatable, amount =
-        match order_labelled_args pexp_loc
-                ["manager"; "delegate"; "delegatable"; "amount"] args
-        with
-        | [m; d; de; a] -> (m, d, de, a)
-        | _ -> error_loc pexp_loc "wrong arguments for Account.create" in
-      Apply { prim = Prim_create_account;
-              args = [
-                translate_code contracts env manager;
-                translate_code contracts env delegate;
-                translate_code contracts env delegatable;
-                translate_code contracts env amount;
-              ] }
-
     (* Self.entry param ~amount *)
     | { pexp_desc = Pexp_apply (
         { pexp_desc = Pexp_ident { txt = Ldot(Lident "Self", entry) } },

@@ -1542,11 +1542,6 @@ and typecheck_prim2i env prim loc args =
     unify ty (Tpartial (Pcont None));
     Taddress
 
-  | Prim_create_account, [ ty1; ty2; ty3; ty4 ] ->
-    unify ty1 Tkey_hash; unify ty2 (Toption Tkey_hash);
-    unify ty3 Tbool; unify ty4 Ttez;
-    Ttuple [Toperation; Taddress]
-
   | Prim_default_account, [ ty ] ->
     unify ty Tkey_hash; unit_contract_ty
 
@@ -1763,12 +1758,6 @@ and typecheck_prim2t env prim loc args =
   | Prim_address, [ Tcontract _ ] ->
     Taddress
 
-  | Prim_create_account, [ Tkey_hash; Toption Tkey_hash; Tbool; Ttez ] ->
-    Ttuple [Toperation; Taddress]
-  | Prim_create_account, _ ->
-    error_prim loc Prim_create_account args
-      [ Tkey_hash; Toption Tkey_hash; Tbool; Ttez ]
-
   | Prim_default_account, [ Tkey_hash ] -> unit_contract_ty
 
   | Prim_set_delegate, [ Toption Tkey_hash ] ->
@@ -1904,12 +1893,6 @@ and expected_prim_types = function
 
   | Prim_address | Prim_get_balance ->
     1, "<Contract handle>"
-
-  | Prim_create_account ->
-    4, Printf.sprintf
-      "manager:key_hash, delegate:(key_hash option), \
-       delegatable:bool, amount:%s"
-      (LiquidOptions.amount_type ())
 
   | Prim_default_account ->
     1, "key_hash"

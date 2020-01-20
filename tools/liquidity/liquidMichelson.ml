@@ -575,7 +575,6 @@ and compile_prim ~loc depth env prim args =
     | Prim_string_concat|Prim_bytes_concat|Prim_concat|Prim_concat_two
     | Prim_string_size|Prim_bytes_size
     | Prim_string_sub|Prim_bytes_sub|Prim_slice
-    | Prim_create_account
     | Prim_blake2b|Prim_sha256|Prim_sha512|Prim_pack
     | Prim_hash_key|Prim_check|Prim_default_account|Prim_list_size
     | Prim_set_size|Prim_map_size|Prim_or|Prim_and|Prim_xor
@@ -616,7 +615,6 @@ and compile_prim ~loc depth env prim args =
       | Prim_bytes_concat, 1 -> [ ii CONCAT ]
 
       | Prim_address, 1 -> [ ii ADDRESS ]
-      | Prim_create_account, 4 -> [ ii CREATE_ACCOUNT; ii PAIR ]
       | Prim_blake2b, 1 -> [ ii BLAKE2B ]
       | Prim_sha256, 1 -> [ ii SHA256 ]
       | Prim_sha512, 1 -> [ ii SHA512 ]
@@ -659,7 +657,6 @@ and compile_prim ~loc depth env prim args =
         | Prim_string_size|Prim_bytes_size
         | Prim_string_sub|Prim_bytes_sub
         | Prim_string_concat|Prim_bytes_concat
-        | Prim_create_account
         | Prim_blake2b|Prim_sha256|Prim_sha512|Prim_pack
         | Prim_hash_key|Prim_check|Prim_default_account|Prim_list_size
         | Prim_set_size|Prim_map_size|Prim_or|Prim_and|Prim_xor

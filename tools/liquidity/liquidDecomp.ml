@@ -394,7 +394,6 @@ let rec decompile_next (env : env) node =
             | "SHA512" -> Prim_sha512
             | "HASH_KEY" -> Prim_hash_key
             | "CHECK_SIGNATURE" -> Prim_check
-            | "CREATE_ACCOUNT" -> Prim_create_account
             | "ADDRESS" -> Prim_address
             | "XOR" -> Prim_xor
             | "NOT" -> Prim_not

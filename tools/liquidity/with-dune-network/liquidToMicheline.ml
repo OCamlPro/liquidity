@@ -359,7 +359,6 @@ and convert_code expand expr =
       | Some e -> [e] in
     prim "SELF" [] ~fields name
   | STEPS_TO_QUOTA -> prim "STEPS_TO_QUOTA" [] name
-  | CREATE_ACCOUNT -> prim "CREATE_ACCOUNT" [] name
   | CREATE_CONTRACT contract ->
     let p, s, c, f = convert_contract_raw expand contract in
     let p = Micheline.map_node (fun l -> l, None) (fun n -> n) p in

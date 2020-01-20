@@ -505,7 +505,6 @@ type primitive =
   | Prim_list_size
   | Prim_list_rev
 
-  | Prim_create_account
   | Prim_blake2b
   | Prim_sha256
   | Prim_sha512
@@ -650,7 +649,6 @@ let () =
        "Contract.set_delegate", Prim_set_delegate;
        "Contract.address", Prim_address;
 
-       "Account.create", Prim_create_account;
        "Account.default", Prim_default_account;
 
        "Crypto.blake2b", Prim_blake2b;
@@ -1045,7 +1043,7 @@ and ('ty, 'a) exp_desc =
   | ContractAt of { arg: ('ty, 'a) exp;
                     entry: string option;
                     entry_param: datatype }
-  (** Contract from address: {[ (Contract.at arg : (contract C_sig) option ]} *)
+  (** Contract handle from address: {[%handle <sig>] arg} *)
 
   | Unpack of { arg: ('ty, 'a) exp;
                 ty: datatype }
@@ -1137,7 +1135,6 @@ let mk =
           | _ -> false in
         prim_eff || List.exists (fun e -> e.effect) args,
         prim = Prim_set_delegate
-        || prim = Prim_create_account
       (* || List.exists (fun e -> e.transfer) args *)
 
       | Closure { call_env; body } ->
@@ -1386,7 +1383,6 @@ type 'a pre_michelson =
   | SELF of string option
   | AMOUNT
   | STEPS_TO_QUOTA
-  | CREATE_ACCOUNT
   | BLAKE2B
   | SHA256
   | SHA512

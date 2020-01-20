@@ -275,7 +275,7 @@ let rec constrlabel_is_in_code c code =
   | EXEC | DUP _ | DIP_DROP _ | DROP | CAR _ | CDR _ | CDAR _ | CDDR _
   | PAIR | RECORD _ | COMPARE | LE | LT | GE | GT | NEQ | EQ | FAILWITH
   | NOW | TRANSFER_TOKENS | ADD | SUB | BALANCE | SWAP | GET | UPDATE | SOME
-  | CONCAT | MEM | SLICE | SELF _ | AMOUNT | STEPS_TO_QUOTA | CREATE_ACCOUNT
+  | CONCAT | MEM | SLICE | SELF _ | AMOUNT | STEPS_TO_QUOTA
   | BLAKE2B | SHA256 | SHA512 | HASH_KEY | CHECK_SIGNATURE | ADDRESS | CONS
   | OR | XOR | AND | NOT | INT | ABS | ISNAT | NEG | MUL | EDIV | LSL | LSR
   | SOURCE | SENDER | SIZE | IMPLICIT_ACCOUNT | SET_DELEGATE | PACK | MOD | DIV
@@ -1080,21 +1080,10 @@ and decompile_aux stack (seq : node) ins =
     let x = node ins.loc (N_PRIM "STEPS_TO_QUOTA") [] [seq] in
     x :: stack, x
 
-  | CREATE_ACCOUNT, manager :: delegate :: delegatable :: amount :: stack ->
-    let x = node ins.loc (N_PRIM "CREATE_ACCOUNT")
-        [manager; delegate; delegatable; amount] [seq] in
-    let res_op = node ins.loc (N_RESULT (x, 0)) [] [] in
-    let res_cont = node ins.loc (N_RESULT (x, 1)) [] [] in
-    res_op :: res_cont :: stack, x
-
-  | CREATE_CONTRACT contract, manager :: delegate ::
-                              spendable :: delegatable ::
-                              amount :: storage :: stack ->
+  | CREATE_CONTRACT contract, delegate :: amount :: storage :: stack ->
     let contract = interp contract in
     let x = node ins.loc (N_CREATE_CONTRACT contract)
-        [manager; delegate;
-         spendable; delegatable;
-         amount; storage] [seq] in
+        [delegate; amount; storage] [seq] in
     let res_op = node ins.loc (N_RESULT (x, 0)) [] [] in
     let res_addr = node ins.loc (N_RESULT (x, 1)) [] [] in
     res_op :: res_addr :: stack, x
