@@ -45,10 +45,13 @@ exception Stop of syntax_contract
 let ident_counter = ref 0
 
 (* The minimal version of liquidity files that are accepted by this compiler *)
-let minimal_version = 0.9
+let minimal_version = 2.0
 
 (* The maximal version of liquidity files that are accepted by this compiler *)
-let maximal_version = 1.057
+let maximal_version =
+  match String.split_on_char '-' LiquidVersion.version with
+  | x :: _ -> float_of_string x
+  | [] -> assert false
 
 
 open Asttypes

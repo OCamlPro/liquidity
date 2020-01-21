@@ -22,7 +22,10 @@
 (****************************************************************************)
 
 (* The version that will be required to compile the generated files. *)
-let output_version = "1.057"
+let output_version =
+  match String.split_on_char '-' LiquidVersion.version with
+  | x :: _ -> x
+  | [] -> assert false
 
 open Asttypes
 open Longident
@@ -858,7 +861,8 @@ and structure_of_contract
         | ContractType typ -> Str.modtype (Mtd.mk (id txt) ~typ)
       )
   in
-  [ version_caml ] @ types_caml @
+  (if output_version = "inf" then [] else [ version_caml ] ) @
+  types_caml @
   List.rev !top_level_contracts @ values @ entries
 
 

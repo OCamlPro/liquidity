@@ -1,4 +1,4 @@
-[%%version 1.057]
+[%%version 2.0]
 
 type accounts = (address, nat) big_map
 

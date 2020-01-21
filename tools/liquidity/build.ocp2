@@ -41,29 +41,37 @@
 
 *)
 
+version = "2.0-alpha1";
+
 if(with_version){
-  version_info = { ocp2ml=true;
-                             env_strings = [
-                                "ocp::commit";
-                                "ocp::dates";
-                                ]; };
-} else {
+    version_info = { ocp2ml=true;
+                     env_strings = [
+                       "ocp::commit";
+                       "ocp::dates";
+                     ]; };
+  } else {
   version_info = {};
 }
+
+OCaml.library("ocplib-liquidity-version",
+   ocaml + {
+     version=version;
+     files = [
+       "liquidVersion.ml", version_info;
+     ];
+   });
 
 OCaml.library("ocplib-liquidity-bare",
    ocaml + {
      files = [
-
        "liquidOptions.ml";
-       "liquidVersion.ml", version_info;
        "liquidMisc.ml";
-
        "liquidTypes.ml";
        "liquidNumber.ml";
      ];
      requires = [
        "zarith";
+       "ocplib-liquidity-version";
      ];
 
    });

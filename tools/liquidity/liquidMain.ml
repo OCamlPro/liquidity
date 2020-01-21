@@ -599,7 +599,7 @@ let main () =
           work_done := true), " Switch between OCaml and ReasonML syntax (stdout)";
 
       "--version", Arg.Unit (fun () ->
-          Format.printf "%s" LiquidToParsetree.output_version;
+          Format.printf "%s" LiquidVersion.version;
           if !LiquidOptions.verbosity > 0 then
             Format.printf " (%s)" LiquidVersion.commit;
           if !LiquidOptions.verbosity > 1 then
