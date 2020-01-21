@@ -50,10 +50,17 @@ let ii ~loc ins = { ins; loc; loc_name = None }
 
 let seq exprs = ii ~loc:(loc_of_many exprs) (SEQ exprs)
 
-let dup ~loc n = ii ~loc (DUP n)
-
 (* n = size of preserved head of stack *)
 let dip ~loc n exprs = ii ~loc (DIP (n, seq exprs))
+
+let dup ~loc n =
+  (* ii ~loc @@ DUP n *)
+  (* Better expansion than the one in Michelson_v1_macros *)
+  match n with
+  | 0 -> assert false
+  | 1 -> ii ~loc @@ DUP 1
+  | 2 -> seq [dip ~loc 1 [ii ~loc @@ DUP 1]; ii ~loc SWAP]
+  | _ -> seq [dip ~loc (n-1) [ii ~loc @@ DUP 1]; ii ~loc @@ DIG (n-1)]
 
 let push ~loc ty cst = ii ~loc (PUSH (LiquidEncode.encode_type ty, cst))
 
@@ -828,6 +835,8 @@ and compile_name ~annotafter name code =
        these are used by the Michelson pretty printer (or
        translator) to produce variable annotations @name. *)
     match List.rev code with
+    | [{ ins = SEQ ({ ins = DIP(_, { ins = SEQ ({ ins = DUP _} as c :: _) }) } :: _) }]
+    (* ^- special case for duuup expansion *)
     | c :: _ when name <> None ->
       c.loc_name <- sanitize_opt name;
       code

@@ -244,20 +244,21 @@ and convert_code expand expr =
   | RENAME a -> prim "RENAME" [] a
   | SEQ exprs -> seq (List.map (convert_code expand) exprs)
 
-  | FAILWITH -> prim "FAILWITH" [] name
+  | FAILWITH -> prim "FAILWITH" [] None
 
-  | DROP 1 -> prim "DROP" [] name
-  | DROP n -> prim "DROP" [int n] name
+  | DROP 1 -> prim "DROP" [] None
+  | DROP n -> prim "DROP" [int n] None
   | DIP (0, arg) -> convert_code expand arg
-  | DIP (1, arg) -> prim "DIP" [ convert_code expand arg ] name
-  | DIP (n, arg) -> prim "DIP" [ int n; convert_code expand arg ] name
-  | DIG n -> prim "DIG" [int n] name
-  | DUG n -> prim "DUG" [int n] name
+  | DIP (1, arg) -> prim "DIP" [ convert_code expand arg ] None
+  | DIP (n, arg) -> prim "DIP" [ int n; convert_code expand arg ] None
+  | DIG 1 -> convert_code expand { expr with ins = SWAP }
+  | DIG n -> prim "DIG" [int n] None
+  | DUG n -> prim "DUG" [int n] None
   | CAR None -> prim "CAR" []  name
   | CAR (Some field) -> prim "CAR" [] ~fields:[field] name
   | CDR None -> prim "CDR" []  name
   | CDR (Some field) -> prim "CDR" [] ~fields:[field] name
-  | SWAP -> prim "SWAP" [] name
+  | SWAP -> prim "SWAP" [] None
   | IF (x,y) ->
     prim "IF" [convert_code expand x; convert_code expand y] name
   | IF_NONE (x,y) ->
@@ -347,8 +348,8 @@ and convert_code expand expr =
     if expand then
       convert_code expand @@ ii @@
       SEQ [
-        ii @@ DIP(1, ii @@ SEQ [{ expr with ins = DUP(n-1) }]);
-        ii SWAP
+        ii @@ DIP (n - 1, ii @@ SEQ [{ expr with ins = DUP 1 }]);
+        ii @@ DIG (n-1);
       ]
     else
       prim (Printf.sprintf "D%sP" (String.make n 'U')) [] name

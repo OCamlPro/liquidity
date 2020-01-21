@@ -93,21 +93,22 @@ let rec emit_code ~expand code =
     M_INS_CST ("PUSH", ty, cst, var_annot name)
 
   | DIP (0, exp) -> emit_code ~expand exp
-  | DIP (1, exp) -> M_INS_EXP ("DIP", [], [emit_code ~expand exp], var_annot name)
+  | DIP (1, exp) -> M_INS_EXP ("DIP", [], [emit_code ~expand exp], [])
   | DIP (n, exp) ->
-    M_INS_EXP ("DIP", [], [ins_int n; emit_code ~expand exp], var_annot name)
+    M_INS_EXP ("DIP", [], [ins_int n; emit_code ~expand exp], [])
   | DUP 0 -> assert false
   | DUP 1 -> M_INS ("DUP", var_annot name)
   | DUP n ->
     if expand then
       emit_code ~expand @@ i @@
       SEQ [
-        i @@ DIP(1, i @@ SEQ [i @@ DUP(n-1)]);
-        {ins = SWAP; loc = code.loc; loc_name = name }
+        i @@ DIP (n - 1, i @@ SEQ [{ code with ins = DUP 1 }]);
+        i @@ DIG (n-1);
       ]
     else M_INS (Printf.sprintf "D%sP" (String.make n 'U'), var_annot name)
-  | DIG n -> M_INS_EXP ("DIG", [], [ins_int n], var_annot name)
-  | DUG n -> M_INS_EXP ("DUG", [], [ins_int n], var_annot name)
+  | DIG 1 -> M_INS ("SWAP", [])
+  | DIG n -> M_INS_EXP ("DIG", [], [ins_int n], [])
+  | DUG n -> M_INS_EXP ("DUG", [], [ins_int n], [])
 
   | CDAR (0, field) -> emit_code expand { code with ins = CAR field }
   | CDDR (0, field) -> emit_code expand { code with ins = CDR field }
@@ -146,7 +147,7 @@ let rec emit_code ~expand code =
   | ADD -> M_INS ("ADD", var_annot name)
   | SUB -> M_INS ("SUB", var_annot name)
   | BALANCE -> M_INS ("BALANCE", var_annot name)
-  | SWAP -> M_INS ("SWAP", var_annot name)
+  | SWAP -> M_INS ("SWAP", [])
   | DIP_DROP (n,m) -> emit_code ~expand @@ i @@ DIP (n, i @@ SEQ [ i (DROP m) ])
   | SOME -> M_INS ("SOME", var_annot name)
   | GET -> M_INS ("GET", var_annot name)
