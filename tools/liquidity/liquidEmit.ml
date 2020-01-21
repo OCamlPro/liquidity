@@ -106,6 +106,8 @@ let rec emit_code ~expand code =
         {ins = SWAP; loc = code.loc; loc_name = name }
       ]
     else M_INS (Printf.sprintf "D%sP" (String.make n 'U'), var_annot name)
+  | DIG n -> M_INS_EXP ("DIG", [], [ins_int n], var_annot name)
+  | DUG n -> M_INS_EXP ("DUG", [], [ins_int n], var_annot name)
 
   | CDAR (0, field) -> emit_code expand { code with ins = CAR field }
   | CDDR (0, field) -> emit_code expand { code with ins = CDR field }

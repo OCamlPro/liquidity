@@ -251,6 +251,8 @@ and convert_code expand expr =
   | DIP (0, arg) -> convert_code expand arg
   | DIP (1, arg) -> prim "DIP" [ convert_code expand arg ] name
   | DIP (n, arg) -> prim "DIP" [ int n; convert_code expand arg ] name
+  | DIG n -> prim "DIG" [int n] name
+  | DUG n -> prim "DUG" [int n] name
   | CAR None -> prim "CAR" []  name
   | CAR (Some field) -> prim "CAR" [] ~fields:[field] name
   | CDR None -> prim "CDR" []  name

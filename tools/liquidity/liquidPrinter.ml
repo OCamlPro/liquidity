@@ -524,6 +524,12 @@ module Michelson = struct
     | DROP n ->
       Printf.bprintf b "DROP %d" n;
       bprint_pre_name b name;
+    | DIG n ->
+      Printf.bprintf b "DIG %d" n;
+      bprint_pre_name b name;
+    | DUG n ->
+      Printf.bprintf b "DUG %d" n;
+      bprint_pre_name b name;
     | CAR field ->
       Printf.bprintf b "CAR";
       bprint_pre_name b name;

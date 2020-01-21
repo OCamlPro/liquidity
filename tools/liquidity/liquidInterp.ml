@@ -280,6 +280,7 @@ let rec constrlabel_is_in_code c code =
   | OR | XOR | AND | NOT | INT | ABS | ISNAT | NEG | MUL | EDIV | LSL | LSR
   | SOURCE | SENDER | SIZE | IMPLICIT_ACCOUNT | SET_DELEGATE | PACK | MOD | DIV
   | BLOCK_LEVEL | IS_IMPLICIT | COLLECT_CALL | GET_BALANCE | EMPTY_BIG_MAP _
+  | DIG _ | DUG _
     -> false
   | UNPACK ty
   | PUSH (ty, _)
@@ -796,7 +797,20 @@ and decompile_aux stack (seq : node) ins =
     top @ stack, seq
   | SWAP, x :: y :: stack ->
     y :: x :: stack, seq
-
+  | DIG n, stack when n <= List.length stack ->
+    let rec dig n acc stack = match n, stack with
+      | 0, v :: stack -> v, List.rev_append acc stack
+      | _, x :: stack -> dig (n - 1) (x :: acc) stack
+      | _, [] -> assert false in
+    let v, stack = dig n [] stack in
+    v :: stack, seq
+  | DUG n, v :: stack when n <= List.length stack ->
+    let rec dug n acc stack = match n, stack with
+      | 0, _ -> List.rev acc, stack
+      | _, x :: stack -> dug (n - 1) (x :: acc) stack
+      | _, [] -> assert false in
+    let top, stack = dug n [] stack in
+    top @ (v :: stack), seq
 
 
   (* Primitives *)
