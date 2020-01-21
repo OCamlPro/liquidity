@@ -529,9 +529,13 @@ and convert_code env expr =
   | Prim(index, "DUP", [], annot) ->
     mic_loc env index annot (DUP 1)
   | Prim(index, "DROP", [], annot) ->
-    mic_loc env index annot (DROP)
+    mic_loc env index annot (DROP 1)
+  | Prim(index, "DROP", [ Int (_, i) ], annot) ->
+    mic_loc env index annot (DROP (Z.to_int i))
   | Prim(index, "DIP", [ arg ], annot) ->
     mic_loc env index annot (DIP (1, convert_code env arg))
+  | Prim(index, "DIP", [ Int (_, i); arg ], annot) ->
+    mic_loc env index annot (DIP (Z.to_int i, convert_code env arg))
   | Prim(index, "CAR", [], annot) ->
     begin match type_label_of_annots annot with
       | [f] -> mic_loc env index annot (CAR (Some f))

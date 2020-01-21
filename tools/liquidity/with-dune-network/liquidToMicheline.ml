@@ -84,6 +84,8 @@ let seq ~loc exprs =
 let prim_type ~loc ?(annots=[]) name args =
   Micheline.Prim(loc, name, args, convert_annots annots)
 
+let int ~loc n =
+  Micheline.Int (loc, LiquidNumber.(mic_of_integer @@ integer_of_int n))
 
 let rec convert_type ~loc expr =
   match expr with
@@ -235,6 +237,7 @@ and convert_code expand expr =
   let ii = ii ~loc:expr.loc in
   let seq = seq ~loc:(expr.loc, None) in
   let prim = prim ~loc:(expr.loc, None) in
+  let int = int ~loc:(expr.loc, None)  in
   let convert_type ty = convert_type ~loc:(expr.loc, None) ty in
   let convert_const c = convert_const ~loc:(expr.loc, None) expand c in
   match expr.ins with
@@ -243,17 +246,11 @@ and convert_code expand expr =
 
   | FAILWITH -> prim "FAILWITH" [] name
 
-  | DROP -> prim "DROP" [] name
-  | DIP (0, arg) -> assert false
+  | DROP 1 -> prim "DROP" [] name
+  | DROP n -> prim "DROP" [int n] name
+  | DIP (0, arg) -> convert_code expand arg
   | DIP (1, arg) -> prim "DIP" [ convert_code expand arg ] name
-  | DIP (n, arg) ->
-    if expand then
-      prim "DIP" [ convert_code expand @@ ii @@
-                   SEQ [{ expr with ins = DIP(n-1, arg)}]
-                 ] None
-    else
-      prim (Printf.sprintf "D%sP" (String.make n 'I'))
-        [ convert_code expand arg ] name
+  | DIP (n, arg) -> prim "DIP" [ int n; convert_code expand arg ] name
   | CAR None -> prim "CAR" []  name
   | CAR (Some field) -> prim "CAR" [] ~fields:[field] name
   | CDR None -> prim "CDR" []  name
@@ -373,8 +370,7 @@ and convert_code expand expr =
   | LSL -> prim "LSL" [] name
   | LSR -> prim "LSR"  [] name
   | DIP_DROP (ndip, ndrop) ->
-    convert_code expand @@
-    ii @@ DIP (ndip, ii @@ SEQ (LiquidMisc.list_init ndrop (fun _ -> ii DROP)))
+    convert_code expand @@ ii @@ DIP (ndip, ii @@ SEQ [ii @@ DROP ndrop])
 
   | CDAR (0, field) -> convert_code expand { expr with ins = CAR field }
   | CDDR (0, field) -> convert_code expand { expr with ins = CDR field }

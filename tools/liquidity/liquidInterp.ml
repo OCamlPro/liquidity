@@ -272,7 +272,7 @@ let rec constrlabel_is_in_type c = function
 let rec constrlabel_is_in_code c code =
   match code.ins with
   | RENAME _ | EXTENSION _
-  | EXEC | DUP _ | DIP_DROP _ | DROP | CAR _ | CDR _ | CDAR _ | CDDR _
+  | EXEC | DUP _ | DIP_DROP _ | DROP _ | CAR _ | CDR _ | CDAR _ | CDDR _
   | PAIR | RECORD _ | COMPARE | LE | LT | GE | GT | NEQ | EQ | FAILWITH
   | NOW | TRANSFER_TOKENS | ADD | SUB | BALANCE | SWAP | GET | UPDATE | SOME
   | CONCAT | MEM | SLICE | SELF _ | AMOUNT | STEPS_TO_QUOTA
@@ -772,13 +772,28 @@ and decompile_aux stack (seq : node) ins =
     lambda_node :: stack, lambda_node
 
   (* Stack modifications *)
-  | DUP 1, v :: _ ->
+  | DUP 0, stack -> stack, seq
+  | DUP n, stack when n <= List.length stack ->
+    let rec dup n stack = match n, stack with
+      | 1, v :: _ -> v
+      | _, _ :: stack -> dup (n - 1) stack
+      | _, [] -> assert false in
+    let v = dup n stack in
     v :: stack, seq
-  | DROP, _ :: stack ->
-    stack, seq
-  | DIP (1, code), x :: stack ->
+  | DROP n, stack when n <= List.length stack ->
+    let rec drop n stack = match n, stack with
+      | 0, _ -> stack
+      | _, _ :: stack -> drop (n - 1) stack
+      | _, [] -> assert false in
+    drop n stack, seq
+  | DIP (n, code), stack when n <= List.length stack ->
+    let rec dip n acc stack = match n, stack with
+      | 0, _ -> List.rev acc, stack
+      | _, x :: stack -> dip (n - 1) (x :: acc) stack
+      | _, [] -> assert false in
+    let top, stack = dip n [] stack in
     let stack, seq = decompile stack seq code in
-    x :: stack, seq
+    top @ stack, seq
   | SWAP, x :: y :: stack ->
     y :: x :: stack, seq
 

@@ -1365,7 +1365,7 @@ type 'a pre_michelson =
 
   | DUP of int
   | DIP_DROP of int * int
-  | DROP
+  | DROP of int
   | CAR of string option
   | CDR of string option
   | CDAR of int * string option

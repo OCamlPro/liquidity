@@ -39,6 +39,8 @@ let field_annot = function
 
 let entrypoint_annot = field_annot
 
+let ins_int n = M_INS (string_of_int n, [])
+
 let rec emit_code ~expand code =
   let name = code.loc_name in
   let i = i ~loc:code.loc in
@@ -90,16 +92,10 @@ let rec emit_code ~expand code =
     let cst = emit_const ~expand cst in
     M_INS_CST ("PUSH", ty, cst, var_annot name)
 
-  | DIP (0, exp) -> assert false
+  | DIP (0, exp) -> emit_code ~expand exp
   | DIP (1, exp) -> M_INS_EXP ("DIP", [], [emit_code ~expand exp], var_annot name)
   | DIP (n, exp) ->
-    if expand then
-      M_INS_EXP ("DIP", [],
-                 [emit_code ~expand @@ i @@
-                  SEQ [{ code with ins = DIP(n-1, exp) }]], [])
-    else
-      M_INS_EXP (Printf.sprintf "D%sP" (String.make n 'I'), [],
-                 [emit_code ~expand exp], var_annot name)
+    M_INS_EXP ("DIP", [], [ins_int n; emit_code ~expand exp], var_annot name)
   | DUP 0 -> assert false
   | DUP 1 -> M_INS ("DUP", var_annot name)
   | DUP n ->
@@ -127,7 +123,8 @@ let rec emit_code ~expand code =
              (fun _ -> i @@ CDR None) @ [{ code with ins = CDR field }])
     else M_INS (Printf.sprintf "C%sDR" (String.make n 'D'),
                 var_annot name @ field_annot field)
-  | DROP -> M_INS ("DROP", var_annot name)
+  | DROP 1 -> M_INS ("DROP", var_annot name)
+  | DROP n -> M_INS_EXP ("DROP", [], [ins_int n], var_annot name)
   | CAR field -> M_INS ("CAR", var_annot name @ field_annot field)
   | CDR field -> M_INS ("CDR", var_annot name @ field_annot field)
   | PAIR -> M_INS ("PAIR", var_annot name)
@@ -148,9 +145,7 @@ let rec emit_code ~expand code =
   | SUB -> M_INS ("SUB", var_annot name)
   | BALANCE -> M_INS ("BALANCE", var_annot name)
   | SWAP -> M_INS ("SWAP", var_annot name)
-  | DIP_DROP (n,m) ->
-    emit_code ~expand @@
-    i @@ DIP (n, i @@ SEQ (LiquidMisc.list_init m (fun _ -> i DROP)))
+  | DIP_DROP (n,m) -> emit_code ~expand @@ i @@ DIP (n, i @@ SEQ [ i (DROP m) ])
   | SOME -> M_INS ("SOME", var_annot name)
   | GET -> M_INS ("GET", var_annot name)
   | UPDATE -> M_INS ("UPDATE", var_annot name)

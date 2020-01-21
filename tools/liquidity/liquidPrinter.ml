@@ -460,9 +460,12 @@ module Michelson = struct
       Printf.bprintf b "{ ";
       List.iter (fun a -> bprint_arg fmt b a; Printf.bprintf b " ; ") args;
       Printf.bprintf b " }";
+    | DIP (1, a) ->
+      Printf.bprintf b "DIP ";
+      bprint_pre_name b name;
+      bprint_arg fmt b a;
     | DIP (i, a) ->
-      Printf.bprintf b "D%sP "
-        (String.concat "" (LiquidMisc.list_init i (fun _ -> "I")));
+      Printf.bprintf b "DIP %n " i;
       bprint_pre_name b name;
       bprint_arg fmt b a;
     | IF (a1, a2) ->
@@ -516,10 +519,10 @@ module Michelson = struct
         (String.concat "" (LiquidMisc.list_init i (fun _ -> "U")));
       bprint_pre_name b name;
     | DIP_DROP (i, r) ->
-      Printf.bprintf b "DIP_DROP (%d, %d)" i r;
+      Printf.bprintf b "DIP %d { DROP %d }" i r;
       bprint_pre_name b name;
-    | DROP ->
-      Printf.bprintf b "DROP";
+    | DROP n ->
+      Printf.bprintf b "DROP %d" n;
       bprint_pre_name b name;
     | CAR field ->
       Printf.bprintf b "CAR";

@@ -33,10 +33,10 @@ open LiquidTypes
 let ii ~loc ins = { ins; loc; loc_name = None }
 let lii = ii
 
-let drops ~loc n = LiquidMisc.list_init n (fun _ -> ii ~loc DROP)
+let drop ~loc n = ii ~loc (DROP n)
 
 let dip_drop ~loc (a,b)=
-  if a = 0 then drops ~loc b else [ii ~loc (DIP_DROP(a,b))]
+  if a = 0 then drop ~loc b else ii ~loc (DIP_DROP(a,b))
 
 let rec simplify_pre ({ ins } as e) =
   { e with
@@ -74,10 +74,13 @@ and simplify_step e exprs =
   match e.ins, exprs with
 
   | SEQ e, exprs -> simplify_steps e exprs
-  | DIP_DROP(n,0), exprs -> exprs
+  | DIP_DROP(n, 0), exprs -> exprs
+  | DIP_DROP(0, n), exprs -> simplify_step { e with ins = DROP n } exprs
   | DIP (0, e), exprs -> simplify_step e exprs
-  | DUP _, {ins=DROP} :: exprs -> exprs
-  | DUP 1, {ins=SWAP} :: {ins=DROP} :: exprs -> exprs
+  | DROP 0, exprs -> exprs
+  | DUP _, {ins=DROP 1} :: exprs -> exprs
+  | DUP _, ({ins=DROP n} as e) :: exprs -> { e with ins = DROP (n-1) } :: exprs
+  | DUP 1, {ins=SWAP} :: {ins=DROP 1} :: exprs -> exprs
   | SWAP, {ins=SWAP} :: exprs -> exprs
   | SWAP, ({ins= (ADD|MUL|AND|OR|XOR)} as e) :: exprs -> simplify_step e exprs
   | EQ, { ins = NOT } :: exprs -> simplify_step { e with ins = NEQ } exprs
@@ -97,8 +100,9 @@ and simplify_step e exprs =
   | IF(i1,i2), exprs ->
     begin
       match i1.ins, i2.ins, exprs with
-      | SEQ ({ins=DROP} :: e1), SEQ ({ins=DROP} :: e2), exprs ->
-        simplify_stepi ~loc:e.loc (DIP_DROP(1,1))
+      | SEQ ({ins=DROP n1} :: e1), SEQ ({ins=DROP n2} :: e2), exprs
+        when n1 = n2 ->
+        simplify_stepi ~loc:e.loc (DIP_DROP(1, n1))
           (simplify_stepi ~loc:e.loc (IF ( lii ~loc:i1.loc @@ SEQ e1,
                                            lii ~loc:i2.loc @@ SEQ e2 )) exprs)
 
@@ -123,7 +127,7 @@ and simplify_step e exprs =
     ),
     {ins=DIP_DROP (n,m); loc} :: exprs ->
     if n > 0 then
-      dip_drop ~loc (n-1,m) @ simplify_step e exprs
+      dip_drop ~loc (n-1, m) :: simplify_step e exprs
     else
     if m = 1 then
       exprs
@@ -132,7 +136,8 @@ and simplify_step e exprs =
 
   | (PUSH _ | NOW | BALANCE | SELF _ | SOURCE | SENDER | AMOUNT | STEPS_TO_QUOTA
     | LAMBDA _
-    ), {ins=DROP} :: exprs -> exprs
+    ), ({ins=DROP n} as e) :: exprs when n > 0 ->
+    if n = 1 then exprs else { e with ins = DROP (n-1) } :: exprs
 
 
   (* takes one item on stack, creates one :  1 -> 1 *)
@@ -156,7 +161,7 @@ and simplify_step e exprs =
     | BLAKE2B | SHA256 | SHA512
     | CONCAT | RENAME _ | PACK | UNPACK _
     ),
-    {ins=DROP; loc} :: exprs -> lii ~loc DROP :: exprs
+    {ins = DROP n; loc} :: exprs -> lii ~loc (DROP n) :: exprs
 
 
   (* takes two items on stack, creates one : 2 -> 1 *)
@@ -188,8 +193,8 @@ and simplify_step e exprs =
       (simplify_step e exprs)
 
 
-  | DIP (n,e), {ins=DROP; loc} :: exprs when n > 0 ->
-    ii DROP :: simplify_stepi ~loc (DIP(n-1,e)) exprs
+  | DIP (n,e), {ins = DROP m; loc} :: exprs when n >= m ->
+    ii (DROP m) :: simplify_stepi ~loc (DIP(n-m,e)) exprs
 
 
   | DIP_DROP (n,m), {ins=DIP_DROP (n',m')} :: exprs when n = n' ->
@@ -204,19 +209,19 @@ and simplify_step e exprs =
   | DUP 1, {ins=DIP_DROP (1,m)} :: exprs when m > 1 ->
     simplify_stepi ~loc:e.loc (DIP_DROP (1, m-1)) exprs
 
-  | DUP 2, {ins=DIP_DROP (1,1); loc} :: exprs ->
-    simplify_stepi ~loc DROP (simplify_stepi ~loc:e.loc (DUP 1) exprs)
+  | DUP n, {ins=DIP_DROP (1, m); loc} :: exprs when m = n - 1 && n > 1 ->
+    simplify_stepi ~loc (DROP m) (simplify_stepi ~loc:e.loc (DUP 1) exprs)
 
-  | DUP 2, {ins=DIP_DROP (1,2); loc} :: exprs ->
-    simplify_stepi ~loc DROP exprs
+  | DUP n, {ins=DIP_DROP (1, m); loc} :: exprs when m >= n && n > 1 ->
+    simplify_stepi ~loc (DROP (m - n)) exprs
 
   | DUP 3, {ins=DIP_DROP (2,2); loc} :: exprs ->
     simplify_stepi ~loc:e.loc SWAP
-      (simplify_stepi ~loc DROP
+      (simplify_stepi ~loc (DROP 1)
          (simplify_stepi ~loc:e.loc SWAP exprs))
 
-  | DUP 2, {ins=SWAP} :: {ins=DROP; loc} :: exprs ->
-    simplify_stepi ~loc DROP
+  | DUP 2, {ins=SWAP} :: {ins=DROP 1; loc} :: exprs ->
+    simplify_stepi ~loc (DROP 1)
       (simplify_stepi ~loc:e.loc (DUP 1) exprs)
 
   | DUP 2, {ins=DIP_DROP (2,1)} :: exprs ->
@@ -226,14 +231,14 @@ and simplify_step e exprs =
     let after =
       if n<m then
         if m =1 then
-          drops ~loc p @ (simplify_stepi ~loc:e.loc (DUP n) exprs)
+          drop ~loc p :: simplify_stepi ~loc:e.loc (DUP n) exprs
         else
           simplify_stepi ~loc (DIP_DROP(m-1,p))
             (simplify_stepi ~loc:e.loc (DUP n) exprs)
       else
       if n >= m+p then
         if m = 1 then
-          drops ~loc p @ (simplify_stepi ~loc:e.loc (DUP (n-p)) exprs)
+          drop ~loc p :: simplify_stepi ~loc:e.loc (DUP (n-p)) exprs
         else
           simplify_stepi ~loc (DIP_DROP (m-1,p))
             (simplify_stepi ~loc:e.loc (DUP (n-p)) exprs)
@@ -254,7 +259,7 @@ and simplify_step e exprs =
         in
         let code =
           if x > 0 then
-            dip_drop ~loc (m-1, x) @ code
+            dip_drop ~loc (m-1, x) :: code
           else code
         in
         code

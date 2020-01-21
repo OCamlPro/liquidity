@@ -87,14 +87,7 @@ let sanitize_opt = function
 
 (* n = size of preserved head of stack *)
 let drop_stack ~loc n depth =
-  if depth = 0 then [] else
-    let rec drop_stack depth =
-      if depth = 0 then [] else
-        ii ~loc DROP :: (drop_stack (depth-1))
-    in
-    let exps = drop_stack depth in
-    if n = 0 then exps else [ii ~loc @@ DIP_DROP (n, List.length exps)]
-
+  ii ~loc @@ DIP_DROP (n, depth)
 
 (*******************
  * Code generation *
@@ -164,7 +157,7 @@ let rec compile_desc depth env ~loc desc =
        the result of e1 is droped (ignored) *)
     let e1 = compile depth env e1 in
     let e2 = compile depth env e2 in
-    e1 @ [ ii ~loc:LiquidLoc.noloc DROP ] @ e2
+    e1 @ [ ii ~loc:LiquidLoc.noloc @@ DROP 1 ] @ e2
 
   | Let { bnd_var; bnd_val; body } ->
     (* Compiling a let binding is compiling the bound value and
@@ -314,12 +307,12 @@ let rec compile_desc depth env ~loc desc =
     let arg = compile depth env arg in
     let rec iter cases =
       match cases with
-      | [] -> [ii ~loc DROP]
+      | [] -> [ii ~loc (DROP 1)]
       | (PConstr (_, args), e) :: cases ->
         let env, depth, left_start, left_end =
           match args with
           | _ :: _ :: _ -> assert false
-          | [] -> env, depth, [ii ~loc DROP], []
+          | [] -> env, depth, [ii ~loc (DROP 1)], []
           | [arg_name] ->
             let env = register_var arg_name depth env in
             let depth = depth + 1 in
@@ -333,7 +326,7 @@ let rec compile_desc depth env ~loc desc =
             let right = iter cases in
             [ii ~loc @@ IF_LEFT( seq (left), seq right )]
         end
-      | [PAny, e] -> [ii ~loc DROP] @ compile depth env e
+      | [PAny, e] -> [ii ~loc (DROP 1)] @ compile depth env e
       | _ -> assert false
     in
     arg @ iter cases
@@ -553,7 +546,7 @@ and compile_prim ~loc depth env prim args =
   | Prim_extension (_, _, targs, nb_arg, nb_ret, minst), _ ->
     let _depth, args_code = compile_args depth env args in
     let args_code =
-      if nb_arg = 0 then args_code @ [ ii DROP ]
+      if nb_arg = 0 then args_code @ [ ii @@ DROP 1 ]
       else args_code
     in
     let res_code =
@@ -697,7 +690,7 @@ and compile_tuple_set ~loc last depth env n y =
   let ii = ii ~loc in
   if n = 0 then
     if last then
-      [ ii DROP ]
+      [ ii @@ DROP 1 ]
       @ compile (depth-1) env y
     else
       [ ii @@ CDR None ] @ compile depth env y @ [ ii PAIR ]
@@ -876,7 +869,7 @@ and translate_code ~parameter_name ~storage_name code =
   (* at the end of the code, drop everything excepted for the top-most
      element *)
   let trailer = drop_stack ~loc 1 depth in
-  seq (header @ exprs @ trailer)
+  seq (header @ exprs @ [ trailer ])
 
 (* FAILWITH must appear in tail position in Michelson, this function
    removes instructions that appear after FAILWITH in a code block *)
