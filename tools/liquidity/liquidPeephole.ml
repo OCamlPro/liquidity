@@ -65,6 +65,7 @@ and simplify_seq exprs =
     let e = simplify_pre e in
     match e.ins with
     | FAILWITH -> [e]
+    | SEQ e_exprs -> simplify_seq (e_exprs @ exprs)
     | _ ->
       let exprs = simplify_seq exprs in
       simplify_step e exprs
