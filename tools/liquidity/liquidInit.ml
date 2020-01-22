@@ -76,7 +76,7 @@ let tmp_contract_of_init ~loc env (init : encoded_exp LiquidTypes.init) storage_
   { contract_name = "_dummy_init";
     storage;
     values = [];
-    entries = [{ entry_sig = { entry_name = "main";
+    entries = [{ entry_sig = { entry_name = "default";
                                parameter;
                                parameter_name = "_parameter";
                                storage_name = "_storage" };

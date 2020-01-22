@@ -794,7 +794,7 @@ and decompile env contract =
   { contract_name = "_dummy_";
     storage = contract.mic_storage;
     values = [];
-    entries = [{ entry_sig = { entry_name = "main";
+    entries = [{ entry_sig = { entry_name = "default";
                                parameter = contract.mic_parameter;
                                parameter_name ;
                                storage_name  };

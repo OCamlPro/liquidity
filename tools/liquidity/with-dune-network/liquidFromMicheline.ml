@@ -268,7 +268,7 @@ let rec convert_type ?(parameter=false) env expr =
     | Prim(_, "contract", [x], annots) ->
       (* XXX should not appear *)
       let parameter = convert_type env x in
-      Tcontract ("_", parameter)
+      Tcontract ("default", parameter)
 
     | Prim(_, "lambda", [x;y], _debug) ->
       Tlambda

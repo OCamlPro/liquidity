@@ -2028,7 +2028,7 @@ and typecheck_contract ~others ~warnings ~decompiling contract =
     (* when decompiling recover signature of encoded Contract.self *)
     if not decompiling then t_contract_sig
     else match t_contract_sig.f_entries_sig with
-      | [{ entry_name = "root" } as e] ->
+      | [{ entry_name = "default" } as e] ->
         begin match expand e.parameter with
           | Tsum ("_entries", l) ->
             let f_entries_sig = List.map (fun (c, parameter) ->

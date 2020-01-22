@@ -1327,7 +1327,7 @@ and encode_rec_fun env ~loc ?name f arg_name arg_ty ret_ty lam_ty body =
       lam_ty in
   encode env lam
 
-(* Contract is encoded to single entry point form (with name "root"):
+(* Contract is encoded to single entry point form (with name "default"):
    {contract C = struct
       ...
       let%entry e1 (p1 : ty1) s1 = code_entry_1
@@ -1562,7 +1562,7 @@ and encode_contract ?(annot=false) ?(decompiling=false) contract =
     storage = encode_storage_type env contract.storage;
     entries = [{
         entry_sig = {
-          entry_name = "root";
+          entry_name = "default";
           parameter_name = pname;
           storage_name;
           parameter = encode_parameter_type env parameter;

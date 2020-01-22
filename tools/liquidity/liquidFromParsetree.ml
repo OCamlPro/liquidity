@@ -959,9 +959,12 @@ and translate_code contracts env exp =
             [
               Nolabel, addr_exp;
             ]) }
-      when StringMap.mem (str_of_id contract_id) env.contract_types ->
+      (* when StringMap.mem (str_of_id contract_id) env.contract_types *) ->
       let contract_name = str_of_id contract_id in
-      let c_sig = StringMap.find contract_name env.contract_types in
+      let c_sig =
+        try find_contract_type ~loc contract_name env
+        with Not_found ->
+          error_loc c_loc "Unknown contract type %s" contract_name  in
       let { parameter = entry_param } =
         try List.find (fun { entry_name } -> entry_name = entry_point )
               c_sig.entries_sig

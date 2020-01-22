@@ -299,7 +299,7 @@ module Data = struct
   let files = ref []
   let parameter = ref ""
   let storage = ref ""
-  let entry_name = ref "main"
+  let entry_name = ref "default"
 
   let contract_address = ref ""
   let init_inputs = ref []

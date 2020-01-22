@@ -1811,7 +1811,7 @@ module Sync = struct
 
 end
 
-let forge_call_arg ?(entry_name="main") liquid input_string =
+let forge_call_arg ?(entry_name="default") liquid input_string =
   let contract, pre_michelson, pre_init_infos = compile_liquid liquid in
   let contract_sig = full_sig_of_contract contract in
   let entry =

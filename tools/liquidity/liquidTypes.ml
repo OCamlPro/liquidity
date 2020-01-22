@@ -1227,6 +1227,10 @@ let rec eq_exp_desc eq_ty eq_var e1 e2 = match e1, e2 with
     eq_exp eq_ty eq_var t1.contract t2.contract &&
     eq_exp eq_ty eq_var t1.amount t2.amount &&
     eq_exp eq_ty eq_var t1.arg t2.arg
+  | SelfCall t1, SelfCall t2 ->
+    t1.entry = t2.entry &&
+    eq_exp eq_ty eq_var t1.amount t2.amount &&
+    eq_exp eq_ty eq_var t1.arg t2.arg
   | Transfer t1, Transfer t2 ->
     eq_exp eq_ty eq_var t1.dest t2.dest &&
     eq_exp eq_ty eq_var t1.amount t2.amount
@@ -1676,8 +1680,7 @@ let reserved_keywords = [
   "let"; "in"; "match" ; "int"; "bool"; "string"; "bytes";
   "get"; "set"; "tuple"; "with"; "fun"; "or"; "and"; "land";
   "lor"; "xor"; "not"; "lsl"; "lsr"; "lxor"; "abs"; "type";
-  "is_nat";
-  "at"; (* Reserved for ContractSig.at *)
+  "is_nat"; "do"
 ]
 
 let has_reserved_prefix s =
@@ -1706,7 +1709,7 @@ let prefixes_entry = ["_Liq_entry_"]
 (** Prefix for constructor used to encode contracts *)
 let prefix_contract = "_Liq_contract_"
 
-let entry_name_of_case s =
+let entry_name_of_case ?(allow_capital=false) s =
   let rec iter = function
     | [] -> raise Not_found
     | prefix_entry :: prefixes ->
@@ -1719,12 +1722,13 @@ let entry_name_of_case s =
   with _ ->
         if String.length s = 0 then raise Not_found
         else match s.[0] with
-             | '_' | 'a' .. 'z' -> s
-             | _ -> raise Not_found
+          | '_' | 'a' .. 'z' -> s
+          | 'A' .. 'Z' when allow_capital -> "_" ^ s
+          | _ -> raise Not_found
 
-let is_entry_case s =
+let is_entry_case ?allow_capital s =
   try
-    ignore (entry_name_of_case s);
+    ignore (entry_name_of_case ?allow_capital s);
     true
   with _ -> false
 
