@@ -26,6 +26,8 @@
 
 open LiquidTypes
 
+let fixpoint_limit = 500_000
+
 let rec compute decompile code to_inline =
 
   let old_to_inline = to_inline in
@@ -378,8 +380,13 @@ let rec compute decompile code to_inline =
       CLambda { arg_name; arg_ty; body; ret_ty; recursive }
   in
 
+  let cpt = ref 0 in
 
   let rec fixpoint code =
+    incr cpt;
+    if !cpt > fixpoint_limit then
+      Format.kasprintf failwith
+        "Reached fixpoint limit (%d) in inlining" fixpoint_limit;
     let c = iter code in
     if eq_syntax_exp c code then c else fixpoint c
   in
@@ -394,7 +401,7 @@ and simplify_contract ?(decompile_annoted=false) contract (to_inline, to_inline_
       (LiquidNamespace.qual_contract_name contract);
 
   match contract.entries with
-  | [{ entry_sig = { entry_name = "root" };
+  | [{ entry_sig = { entry_name = _ };
        code; fee_code } as entry ] ->
     { contract with
       entries = [{ entry with
