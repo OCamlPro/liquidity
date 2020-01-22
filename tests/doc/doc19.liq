@@ -4,6 +4,6 @@ type storage = {
 }
 
 let%entry main () storage =
-  let addr = Contract.address (Contract.self ()) in
+  let addr = Contract.self () in
   let storage = storage.my_address <- addr in
   [], storage

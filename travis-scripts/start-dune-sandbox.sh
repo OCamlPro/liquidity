@@ -31,11 +31,11 @@ DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 rm -f $DUNE_PID_FILE
 eval `opam config env`
 
-$DUNE/src/bin_node/tezos-sandboxed-node.sh 5 &> /tmp/dune-log &
+$DUNE/src/bin_node/dune-sandboxed-node.sh 5 &> /tmp/dune-log &
 echo $! > $DUNE_PID_FILE
 
 echo "Waiting a bit for node to be started"
 sleep 5
-eval `$DUNE/src/bin_client/tezos-init-sandboxed-client.sh 5`
+eval `$DUNE/src/bin_client/dune-init-sandboxed-client.sh 5`
 
-tezos-activate-alpha
+dune-activate-alpha

@@ -1,6 +1,6 @@
 type storage = unit
 
-let%entry main () () = (* accept funds *)
+let%entry default () () = (* accept funds *)
   [], ()
 
 let%entry change_delegate (new_del : key_hash) () =
