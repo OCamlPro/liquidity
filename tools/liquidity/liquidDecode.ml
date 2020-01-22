@@ -259,9 +259,9 @@ and entry_of_case param_constrs top_storage (pat, body, fee_body) =
     | _ -> top_storage, body
   in
   match pat with
-  | PConstr (s, [parameter_name]) when is_entry_case s ->
+  | PConstr (s, [parameter_name]) when is_entry_case ~allow_capital:true s ->
     let storage_name, body = extract_storage_name body in
-    let entry_name = entry_name_of_case s in
+    let entry_name = entry_name_of_case ~allow_capital:true s in
     let parameter = List.assoc s param_constrs in
     let fee_code = match fee_body with
       | None -> None
@@ -348,6 +348,33 @@ and decode_entries param_constrs top_parameter top_storage values exp fee_exp =
          val_private = false;
          inline;
          val_exp = decode bnd_val } :: values) body fee_exp
+
+  | Apply { prim = Prim_tuple; args = [ { desc = Const { const = CList [] } } as le;
+                                        exp_sto ] } ->
+    let values, entries =
+      decode_entries param_constrs top_parameter top_storage values exp_sto fee_exp in
+    let le = decode le in
+    let entries = List.map (fun e ->
+        { e with
+          code = { e.code with
+                   desc = Apply { prim = Prim_tuple; args = [le; e.code] } }
+        }
+      ) entries in
+    values, entries
+
+  | Apply { prim = Prim_tuple; args = [ { desc = MatchVariant _ } as exp_ops ;
+                                        sto ] } ->
+    let values, entries =
+      decode_entries param_constrs top_parameter top_storage values exp_ops fee_exp in
+    let sto = decode sto in
+    let entries = List.map (fun e ->
+        { e with
+          code = { e.code with
+                   desc = Apply { prim = Prim_tuple; args = [e.code; sto] } }
+        }
+      ) entries in
+    values, entries
+
   | _ -> raise Exit
 
 and move_outer_lets parameter storage values exp =
