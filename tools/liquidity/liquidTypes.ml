@@ -608,7 +608,7 @@ let () =
        "Current.balance", Prim_balance;
        "Current.time", Prim_now;
        "Current.amount", Prim_amount;
-       "Current.gas", Prim_gas;
+       "[%deprecated Current.gas]", Prim_gas;
        "Current.source", Prim_source;
        "Current.sender", Prim_sender;
 
