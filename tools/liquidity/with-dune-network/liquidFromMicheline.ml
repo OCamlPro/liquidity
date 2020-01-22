@@ -179,8 +179,8 @@ let type_name_of_annots ?(allow_capital=false) annots =
   | Found s -> Some (sanitize_name ~allow_capital s)
 
 
-let type_constr_or_label_of_annots ~allow_capital ?(keep_empty=false) annots =
-  if !LiquidOptions.ignore_annots then []
+let type_constr_or_label_of_annots ~allow_capital ?(keep_empty=false) ?(no_ignore=false) annots =
+  if not no_ignore && !LiquidOptions.ignore_annots then []
   else
     let exception Found of string in
     List.fold_left (fun acc a ->
@@ -200,7 +200,7 @@ let type_label_of_annots annots =
   type_constr_or_label_of_annots ~allow_capital:false annots
 
 let entryname_of_annots annots =
-  type_constr_or_label_of_annots ~allow_capital:false ~keep_empty:false annots
+  type_constr_or_label_of_annots ~allow_capital:false ~keep_empty:false ~no_ignore:true annots
 
 
 let add_generalize_to_env =

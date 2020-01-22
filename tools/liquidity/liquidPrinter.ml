@@ -1161,7 +1161,6 @@ module LiquidDebug = struct
       bprint_code_rec ~debug b indent2 amount;
       Printf.bprintf b ")"
     | Call { contract; amount; entry; arg } ->
-      let entry = match entry with None -> "default" | Some e -> e in
       Printf.bprintf b "\n%s(" indent;
       bprint_code_rec ~debug b indent contract;
       Printf.bprintf b ".%s" entry;
@@ -1170,7 +1169,6 @@ module LiquidDebug = struct
       bprint_code_rec ~debug b indent2 amount;
       Printf.bprintf b ")"
     | SelfCall { amount; entry; arg } ->
-      let entry = match entry with None -> "default" | Some e -> e in
       Printf.bprintf b "\n%s(Self.%s" indent entry;
       let indent2 = indent ^ "  " in
       bprint_code_rec ~debug b indent2 arg;
@@ -1339,7 +1337,6 @@ module LiquidDebug = struct
         ) args;
       Printf.bprintf b "\n%s(contract %s)" indent contract.contract_name;
     | ContractAt { arg; entry; entry_param } ->
-      let entry = match entry with None -> "default" | Some e -> e in
       Printf.bprintf b "\n%s[%%%%handle val%%entry %s : " indent entry;
       bprint_type b (indent ^ "  ") entry_param;
       Printf.bprintf b " -> _ ]"

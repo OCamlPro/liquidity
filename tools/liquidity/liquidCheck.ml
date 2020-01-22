@@ -581,18 +581,17 @@ and typecheck env ( exp : syntax_exp ) : typed_exp =
 
   | SelfCall { amount; entry; arg } ->
     let amount = typecheck_expected "call amount" env Ttez amount in
-    let entry' = match entry with None -> "default" | Some e -> e in
     let self_entries = env.t_contract_sig.f_entries_sig in
     let arg =
       try
         let { parameter = arg_ty } =
-          List.find (fun { entry_name } -> entry_name = entry')
+          List.find (fun { entry_name } -> entry_name = entry)
             self_entries in
         typecheck_expected "call argument" env arg_ty arg
       with Not_found ->
         error loc
           "contract has no entry point %s (available entry points: %a)"
-          entry'
+          entry
           (Format.pp_print_list
              ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ")
              Format.pp_print_string)
@@ -604,18 +603,14 @@ and typecheck env ( exp : syntax_exp ) : typed_exp =
   | Call { contract; amount; entry; arg } ->
     let amount = typecheck_expected "call amount" env Ttez amount in
     let contract = typecheck env contract in
-    let entry' = match entry with None -> "default" | Some e -> e in
     let arg =
       match expand contract.ty with
       | Tcontract (c_entry, arg_ty) ->
-        begin match entry with
-          | Some e when e <> c_entry ->
-            error loc
-              "contract handle is for entry point %s, \
-               but is called with entry point %s"
-              c_entry e
-          | _ -> ()
-        end;
+        if not env.decompiling && entry <> c_entry then
+          error loc
+            "contract handle is for entry point %s, \
+             but is called with entry point %s"
+            c_entry entry;
         typecheck_expected "call argument" env arg_ty arg
       | Taddress -> typecheck env arg
       | Tvar _ ->
@@ -624,7 +619,7 @@ and typecheck env ( exp : syntax_exp ) : typed_exp =
         arg
       | Tpartial (Pcont _) ->
         let arg = typecheck env arg in
-        unify contract.ty (Tcontract (entry', arg.ty));
+        unify contract.ty (Tcontract (entry, arg.ty));
         arg
       | ty ->
         error contract.loc
@@ -632,7 +627,7 @@ and typecheck env ( exp : syntax_exp ) : typed_exp =
            - Contract handle for entry point %s\n  \
            - address\n\
            Actual type:\n  %s"
-          entry'
+          entry
           (string_of_type ty)
     in
     let desc = Call { contract; amount; entry; arg } in
@@ -647,7 +642,7 @@ and typecheck env ( exp : syntax_exp ) : typed_exp =
       | _ -> false
     ->
     typecheck env
-      (mk (Call { contract; amount; entry = Some entry; arg = param })
+      (mk (Call { contract; amount; entry; arg = param })
          ~loc ())
 
   | Apply { prim = Prim_exec _;
@@ -1236,8 +1231,7 @@ and typecheck env ( exp : syntax_exp ) : typed_exp =
   | ContractAt { arg; entry; entry_param } ->
     let arg = typecheck_expected "[%%handle ...] argument" env Taddress arg in
     let desc = ContractAt { arg; entry; entry_param } in
-    let e = match entry with None -> "default" | Some e -> e in
-    mk ?name:exp.name ~loc desc (Toption (Tcontract (e, entry_param)))
+    mk ?name:exp.name ~loc desc (Toption (Tcontract (entry, entry_param)))
 
   | CreateContract { args; contract } ->
     let contract = typecheck_contract ~warnings:env.warnings

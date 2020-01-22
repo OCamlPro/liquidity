@@ -448,6 +448,7 @@ let rec decompile_next (env : env) node =
       mklet env node (Constructor {constr = Constr c; arg = arg_of arg })
 
     | N_CONTRACT (entry, entry_param), [arg] ->
+      let entry = match entry with None -> "default" | Some e -> e in
       mklet env node (ContractAt { arg = arg_of arg; entry; entry_param })
 
     | N_UNPACK ty, [arg] ->
@@ -631,23 +632,18 @@ let rec decompile_next (env : env) node =
 
 
     | N_CALL, [ { kind = N_SELF entry }; amount; arg] ->
+      let entry = match entry with None -> "default" | Some e -> e in
       mklet env node
         (SelfCall { amount = arg_of amount;
                     entry;
                     arg = arg_of arg })
 
     | N_CALL, [contract; amount; arg] ->
-      let entry, arg = match arg.kind, arg.args with
-        (* TODO not necessary *)
-        | N_CONSTR c, [arg] when is_entry_case c ->
-          Some (entry_name_of_case c), arg
-        | _ -> None, arg in
       mklet env node
         (Call { contract = arg_of contract;
                 amount = arg_of amount;
-                entry;
+                entry = "[%unknown entry]";
                 arg = arg_of arg })
-    (* TODO *)
 
     | N_CREATE_CONTRACT contract, args ->
       (* Hack: using annotation to represent contract name *)

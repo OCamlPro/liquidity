@@ -500,15 +500,7 @@ and convert_code ~abbrev (expr : (datatype, 'a) exp) =
         Labelled "amount", convert_code ~abbrev amount;
       ]
 
-  | Call { contract; amount; entry = None; arg } ->
-    Exp.apply ~loc (Exp.ident (lid "Contract.call"))
-      [
-        Labelled "dest", convert_code ~abbrev contract;
-        Labelled "amount", convert_code ~abbrev amount;
-        Labelled "parameter", convert_code ~abbrev arg;
-      ]
-
-  | Call { contract; amount; entry = Some entry; arg } ->
+  | Call { contract; amount; entry; arg } ->
     let contract_exp = convert_code ~abbrev contract in
     Exp.apply ~loc
       (Exp.field contract_exp (lid entry))
@@ -518,7 +510,6 @@ and convert_code ~abbrev (expr : (datatype, 'a) exp) =
       ]
 
   | SelfCall { amount; entry; arg } ->
-    let entry = match entry with None -> "default" | Some e -> e in
     Exp.apply ~loc
       (Exp.ident (lid ("Self." ^ entry)))
       [
@@ -720,7 +711,6 @@ and convert_code ~abbrev (expr : (datatype, 'a) exp) =
   | CreateContract _ -> assert false
 
   | ContractAt { arg; entry; entry_param } ->
-    let entry = match entry with None -> "default" | Some e -> e in
     Exp.apply ~loc
       (Exp.extension (
           id ~loc "handle",

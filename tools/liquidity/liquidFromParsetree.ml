@@ -877,7 +877,7 @@ and translate_code contracts env exp =
         | _ -> assert false in
       Call { contract = translate_code contracts env contract;
              amount = translate_code contracts env amount;
-             entry = None;
+             entry = "default";
              arg = translate_code contracts env arg }
 
     | { pexp_desc =
@@ -895,7 +895,7 @@ and translate_code contracts env exp =
         | _ -> error_loc pexp_loc "wrong arguments" in
       Call { contract = translate_code contracts env contract;
              amount = translate_code contracts env amount;
-             entry = Some entry;
+             entry;
              arg = translate_code contracts env arg }
 
     | { pexp_desc =
@@ -969,7 +969,7 @@ and translate_code contracts env exp =
           error_loc c_loc "%s has no entry point %s" contract_name entry_point
       in
       ContractAt { arg = translate_code contracts env addr_exp;
-                   entry = Some entry_point ;
+                   entry = entry_point ;
                    entry_param }
 
     (* [%handle: val%entry entry_name : param_ty ] *)
@@ -997,7 +997,7 @@ and translate_code contracts env exp =
       if List.mem entry_name reserved_keywords then
         error_loc name_loc "entry point %S forbidden" entry_name;
       ContractAt { arg =  translate_code contracts env addr_exp;
-                   entry = Some entry_name;
+                   entry = entry_name;
                    entry_param }
 
     | { pexp_desc =
@@ -1306,7 +1306,7 @@ and translate_code contracts env exp =
         | [Labelled "amount", amount; Nolabel, param] )
       ) } ->
       SelfCall { amount = translate_code contracts env amount;
-                 entry = Some entry;
+                 entry;
                  arg = translate_code contracts env param }
 
     (* special case for contract call with contract.entry param ~amount *)
@@ -1317,7 +1317,7 @@ and translate_code contracts env exp =
       ) } ->
       Call { contract = translate_code contracts env contract;
              amount = translate_code contracts env amount;
-             entry = Some entry;
+             entry;
              arg = translate_code contracts env param }
 
     (* f @@ x -> f x *)

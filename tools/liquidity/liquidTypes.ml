@@ -935,14 +935,14 @@ and ('ty, 'a) exp_desc =
       - {[ Account.transfer ~dest ~amount ]} *)
 
   | SelfCall of { amount: ('ty, 'a) exp;
-                  entry: string option;
+                  entry: string;
                   arg: ('ty, 'a) exp }
   (** Self contract calls:
       - {[ Self.entry arg ~amount ]} *)
 
   | Call of { contract: ('ty, 'a) exp;
               amount: ('ty, 'a) exp;
-              entry: string option;
+              entry: string;
               arg: ('ty, 'a) exp }
   (** Contract calls:
       - {[ contract.entry arg ~amount ]} *)
@@ -1052,7 +1052,7 @@ and ('ty, 'a) exp_desc =
       {[ Contract.create ~delegate~amount (contract C) ]} *)
 
   | ContractAt of { arg: ('ty, 'a) exp;
-                    entry: string option;
+                    entry: string;
                     entry_param: datatype }
   (** Contract handle from address: {[%handle <sig>] arg} *)
 

@@ -226,8 +226,9 @@ let rec compile_desc depth env ~loc desc =
     let address = compile depth env address in
     let ty = LiquidEncode.encode_type arg.ty in
     let error_msg = Printf.sprintf "No entrypoint %s with parameter type %s"
-        (match entry with None -> "default" | Some e -> e)
+        entry
         (LiquidPrinter.Liquid.string_of_type arg.ty) in
+    let entry = match entry with "default" -> None | _ -> Some entry in
     let contract =
       address @
       [ ii ~loc (CONTRACT (entry, ty));
@@ -247,6 +248,7 @@ let rec compile_desc depth env ~loc desc =
       LiquidLoc.raise_error ~loc
         "Typing error: \
          Self call is not allowed inside non-inlined functions\n%!";
+    let entry = match entry with "default" -> None | _ -> Some entry in
     let contract = [ ii ~loc (SELF entry) ] in
     let amount = compile (depth+1) env amount in
     let arg = compile (depth+2) env arg in
@@ -451,6 +453,7 @@ let rec compile_desc depth env ~loc desc =
 
   | ContractAt { arg; entry; entry_param } ->
     let param_ty = LiquidEncode.encode_type entry_param in
+    let entry = match entry with "default" -> None | _ -> Some entry in
     compile depth env arg @
     [ ii ~loc (CONTRACT (entry, param_ty)) ]
 
