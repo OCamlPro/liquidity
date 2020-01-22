@@ -9,7 +9,7 @@ type storage = {
 
 let%init storage : storage = { bm = BigMap []; r = None }
 
-let%entry main
+let%entry default
       (parameter : string)
       storage =
   let storage =

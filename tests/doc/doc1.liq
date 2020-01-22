@@ -1,5 +1,5 @@
 type storage = dun
 
-let%entry main () s =
+let%entry default () s =
   let bal = Current.balance() in
   [], bal

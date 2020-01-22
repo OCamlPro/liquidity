@@ -13,7 +13,7 @@ let[@noinline] list_mem k l =
           else acc
     ) l None
 
-let%entry main (i, a) s =
+let%entry default (i, a) s =
   let s = match list_mem i s.mile_id with
     | Some _ -> { mile_id = []; owner_addr = [] }
     | None -> s in

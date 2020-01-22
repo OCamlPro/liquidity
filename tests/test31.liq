@@ -2,13 +2,12 @@
 type storage = int
 
 contract type I = sig
-  type storage
-  val%entry main : int -> storage -> (operation list * storage)
+  val%entry default : int
 end
 
 
-let%entry main
-    (parameter : I.instance * int option)
+let%entry default
+    (parameter : address * int option)
     storage =
 
   let (c, l) = parameter in
@@ -16,5 +15,5 @@ let%entry main
   | None ->
     ([], storage)
   | Some x  ->
-    let op = Contract.call c 0tz x in
+    let op = Contract.call c ~entry:default 0tz x in
     ([op], storage)

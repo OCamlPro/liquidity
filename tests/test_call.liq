@@ -4,8 +4,8 @@
 
 type storage = tez
 
-let%entry main
-      (parameter : UnitContract.instance)
+let%entry default
+      (parameter : address)
       storage =
 
       let amount = Current.amount () in

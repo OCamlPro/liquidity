@@ -1,6 +1,6 @@
 type storage = tez * int * ((nat * unit) * bool)
 
-let%entry main
+let%entry default
     (_parameter : unit)
     storage =
 

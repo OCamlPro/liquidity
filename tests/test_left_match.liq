@@ -1,6 +1,6 @@
 type storage = (string, int) variant
 
-let%entry main
+let%entry default
       (parameter : (int, string) variant)
       _storage =
 

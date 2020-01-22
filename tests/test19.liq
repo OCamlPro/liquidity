@@ -22,17 +22,17 @@ contract PlusOne = struct
 
   let%init init_storage (x : bool) (y : int) = if x = false then 0 else y
 
-  let%entry main (_ : unit) s =
+  let%entry default (_ : unit) s =
     [], s + 1
 end
 
 (* contract type PS = sig
  *   type storage
  *
- *   val%entry main : unit -> storage -> operation list * storage
+ *   val%entry default : unit -> storage -> operation list * storage
  * end *)
 
-let%entry main
+let%entry default
     (sign : signature)
     storage =
   let x = PlusOne.A in
@@ -54,27 +54,19 @@ let%entry main
     | Some qr -> qr
   in
   let delegatable = false in
-  let _cocococ = (Contract.at storage.c : PlusOne.instance option) in
-  let _cocococ2 = PlusOne.at storage.c in
-  let _op1 = (Contract.self ()).main sign ~amount:0tz in
-  let account_op, _account =
-    Account.create
-      key_hash delegate delegatable
-      (amount.(0) + amount.(1)) in
+  let _cocococ = [%handle PlusOne.default] storage.c in
+  let _op1 = Self.default sign ~amount:0tz in
   let c_op, c_addr =
     Contract.create
-      ~manager:key_hash
       ~delegate
-      ~spendable
-      ~delegatable:true
       ~amount:amount.(0)
       ~storage:9
       (contract PlusOne)
       (* (contract struct
        *   type storage = int
-       *   let%entry main (parameter : unit) (storage : storage) =
+       *   let%entry default (parameter : unit) (storage : storage) =
        *     ([] : operation list), storage + 1
        * end) *)
   in
   let storage = storage.c <- c_addr in
-  ( [account_op; c_op], storage )
+  ( [c_op], storage )

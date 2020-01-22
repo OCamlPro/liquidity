@@ -3,7 +3,7 @@ type t = A of int | B of (int * ((bool * unit) * nat))
 
 type storage = int
 
-let%entry main
+let%entry default
     (parameter : t)
     storage =
 

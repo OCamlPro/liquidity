@@ -1,5 +1,5 @@
 type storage = unit
-let%entry main () _ =
+let%entry default () _ =
   let list = List.rev [7; 5; 10] in
   (* list = [10; 5; 7] *)
   begin match list with

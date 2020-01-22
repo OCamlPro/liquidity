@@ -12,7 +12,7 @@ external many : unit -> [%stack: int] * [%stack: nat]
 
 type storage = (nat * int) * (int * nat * int * nat)
 
-let%entry main (parameter : nat) _storage =
+let%entry default (parameter : nat) _storage =
 
   let _ = ignore 42 in
   let x = random () in

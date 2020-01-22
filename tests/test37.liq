@@ -1,7 +1,7 @@
 
-type storage = (int, tez) map * UnitContract.instance
+type storage = (int, tez) map * address
 
-let%entry main (_parameter : UnitContract.instance) storage =
+let%entry default (_parameter : address) storage =
   let _foo = storage.(0) in
   let acc =
     Loop.loop (fun acc ->

@@ -66,7 +66,7 @@ type return_t =
 
 type parameter_t = (token * odd_index * odd_decimal) * (mod_parameter_t, return_t) contract * (bet_parameter_t, bet_return_t) contract
 
-let%entry main (parameter : parameter_t) (storage : parameter_t): return_t * parameter_t =
+let%entry default (parameter : parameter_t) (storage : parameter_t): return_t * parameter_t =
   (* let bet_contract = parameter.(2) in
   let (result, parameter) = Contract.call bet_contract 0tz parameter Check in *)
 

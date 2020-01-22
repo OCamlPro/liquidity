@@ -4,12 +4,12 @@ type storage = {
   state : string;
   timeout : timestamp;
   pn : tez * tez;
-  x : UnitContract.instance;
-  a : UnitContract.instance;
-  b : UnitContract.instance;
+  x : address;
+  a : address;
+  b : address;
 }
 
-let%entry main
+let%entry default
       (parameter : timestamp)
       (storage : storage) =
 

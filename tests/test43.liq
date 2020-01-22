@@ -3,17 +3,16 @@ contract C = struct
   type storage = nat
 
   contract type NatContract = sig
-    type storage
-    val%entry main : nat -> _
+    val%entry default : nat
   end
 
   let%entry c_entry1 forward storage =
-    [ forward.main storage ~amount:0tz ], storage
+    [ forward.default storage ~amount:0tz ], storage
 
   let%entry c_entry2 forward storage =
-    [ forward.main storage ~amount:1tz ], storage
+    [ forward.default storage ~amount:1tz ], storage
 
-  let%entry main (_: int) storage =
+  let%entry default (_: int) storage =
     [], storage
 
 end

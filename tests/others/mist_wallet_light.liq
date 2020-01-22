@@ -13,7 +13,7 @@ type pending_state = {
 }
 
 type transaction = {
-  destination : UnitContract.instance;
+  destination : address;
   amount : tez;
 }
 
@@ -168,5 +168,5 @@ let%entry withdraw (t: transaction) storage =
   match confirmAndCheck (Withdraw t, storage) with
   | Confirmations_Needed storage -> no_op, storage
   | Execute storage ->
-    let op = Contract.call t.destination t.amount () in
+    let op = t.destination.default ~amount:t.amount () in
     [op], storage

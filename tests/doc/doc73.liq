@@ -11,7 +11,7 @@ contract C = struct
   let succ x = M.f x [@@inline]
   let[@private] prev x = x + 1 [@@inline]
 
-  let%entry main () storage =
+  let%entry default () storage =
     [], prev (succ storage)
 end
 
@@ -29,5 +29,5 @@ contract C_alias = C
 
 type storage = M.t
 
-let%entry main (c : C.instance) s =
+let%entry default (c : address) s =
   [c.main () ~amount:0DUN], C.succ (M.f (2 * s))

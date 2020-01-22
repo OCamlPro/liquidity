@@ -4,7 +4,7 @@ let f (x, _) = x
 
 type storage = unit
 
-let%entry main
+let%entry default
       (parameter : int)
       storage =
   let storage = f (storage, parameter) in

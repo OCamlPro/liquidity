@@ -17,18 +17,17 @@ type storage = int
 
 (* contract type NatContract = sig
  *   type storage
- *   val%entry main : nat -> _
+ *   val%entry default : nat
  * end
  * 
  * contract type NatNatContract = sig
  *   type storage
- *   val%entry main : nat * nat -> _
+ *   val%entry default : nat * nat
  * end *)
 
 
 
-(* let%entry main (parameter : UnitContract.instance) storage = *)
-let%entry main (_parameter : int) storage =
+let%entry default (_parameter : int) storage =
 
   let g x = if x < 10p then failwith "error, element two small" in
   let f l = List.iter g l in

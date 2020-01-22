@@ -13,7 +13,7 @@ let op = Contract.call (Contract.self ()) 0tz () [@@inline]
 
 type storage = int
 
-let%entry main (_parameter : unit) storage =
+let%entry default (_parameter : unit) storage =
   let a = f storage in
   let b = g storage in
   let c = g storage in

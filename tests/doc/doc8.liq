@@ -1,6 +1,6 @@
 type storage = unit
 
-let%entry main () _ =
+let%entry default () _ =
   let x = (1, 2, 3, 4) in
   let car = x.(0) in
   let cdr = x.(1) in

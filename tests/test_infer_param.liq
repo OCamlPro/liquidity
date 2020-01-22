@@ -1,5 +1,5 @@
 type storage = tez * string
-let%entry main () s  = [], s
+let%entry default () s  = [], s
 
 (* type storage = int
  *

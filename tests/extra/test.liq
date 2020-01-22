@@ -5,7 +5,7 @@ end
 
 type storage = tez
 
-let%entry main (c, k, a) (* ((c : UnitContract.instance), (k:key), (a:address)) *) s =
+let%entry default (c, k, a) s =
   let s = Extra.get_balance c in
   let op = Extra.reveal a k in
   Extra.increase_balance 1_000_000tz;

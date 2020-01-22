@@ -1,6 +1,6 @@
 type storage = int * nat
 
-let%entry main
+let%entry default
       (parameter : int)
       (storage : (int * nat)) =
 

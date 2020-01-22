@@ -4,7 +4,7 @@ type storage = (string, int) map
 let%init initial_votes (myname : string) =
   Map.add myname 0 (Map ["ocaml", 0; "pro", 0])
 
-let%entry main (choice : string) votes =
+let%entry default (choice : string) votes =
 
   let amount = Current.amount() in
 

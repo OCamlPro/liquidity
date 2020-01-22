@@ -8,7 +8,7 @@ type storage = {
   whatever : unit;
 }
 
-let%entry main
+let%entry default
       (parameter : int)
       (storage : storage) =
 

@@ -2,7 +2,7 @@
 
 type storage = tez * tez
 
-let%entry main
+let%entry default
       (parameter : timestamp)
       storage = (* 2: P N *)
       let p =

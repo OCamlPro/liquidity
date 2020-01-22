@@ -1,5 +1,5 @@
 type storage = (string, int) map
-let%entry main () map =
+let%entry default () map =
   let negated_values, min_key = Map.map_fold (fun ((key, v) , min_key) ->
       let min_key = match min_key with
         | None -> Some key

@@ -93,7 +93,7 @@ MORE_TESTS=test_ifcons test_if test_loop test_option test_transfer test_call tes
   test_mapmap_closure test_setreduce_closure test_left_match test_loop_left \
   test_fold test_iter test_big_map test_map_fold_closure test_inline test_rec_fun \
   bug_annot0 inline_fail bug_annot1 test_infer_unpack test_infer_param test_record \
-  bug187 test_modules lambda_const votes bug_197 curry bug_210 bug_213 bug_213_0 \
+  bug187 test_modules lambda_const votes bug_197 curry bug_210 bug_213 \
   bug_214 bug_216 bug_steven1 bug_steven2 bug_inline2
 RE_TESTS=bug202
 OTHER_TESTS=others/broker others/demo others/auction others/multisig others/alias others/game others/mist_wallet_current others/token others/token_vote others/token_no_fee others/new_token
@@ -102,7 +102,11 @@ REV_TESTS=`find tests/reverse -regex "[^\.]+.tz" | sort -V`
 
 NEW_DUNE_TESTS= fail weather_insurance
 FAILING_DUNE_TESTS= originator
-DUNE_TESTS=`find dune-network/src/bin_client/test/contracts -regex "[^\.]+.tz" ! -path "*concat_hello.tz"| sort -V`
+DUNE_TESTS=`find dune-network/src/bin_client/test/contracts -regex "[^\.]+.tz" \
+            ! -path "*concat_hello.tz" \
+            ! -path "*/deprecated/*" \
+            ! -path "*pexec*.tz" \
+            | sort -V`
 
 TESTS=$(DOC_TESTS) $(SIMPLE_TESTS) $(MORE_TESTS:=.liq) $(RE_TESTS:=.reliq) $(OTHER_TESTS:=.liq)
 

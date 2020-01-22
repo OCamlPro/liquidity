@@ -26,23 +26,11 @@ let init_storage = (name: string) =>
   Map([("name", { Appstore.name : "test" ,
                   Appstore.owner : tz1XEKgRQtqV2XamF9CR7avwNq1V2hPDgNbL })]);
 
-let deploy_account_op = (amount: tez): (operation, address) => {
-  let delegate: option(key_hash) = None;
-  Account.create(
-    ~manager=tz1YLtLqD1fWHthSVHPD116oYvsd4PTAHUoc,
-    ~delegate,
-    ~delegatable=true,
-    ~amount,
-  );
-};
 
 let deploy_contract_op = (storage: Appstore.storage): (operation, address) => {
   let delegate: option(key_hash) = None;
   Contract.create(
-    ~manager=tz1YLtLqD1fWHthSVHPD116oYvsd4PTAHUoc,
     ~delegate,
-    ~delegatable=true,
-    ~spendable=false,
     ~amount=0tz,
     ~storage,
     ~code=(contract Appstore),
@@ -52,7 +40,6 @@ let deploy_contract_op = (storage: Appstore.storage): (operation, address) => {
 type storage = unit;
 
 let%entry test = (_param: unit, _storage: unit) => {
-  let (fund_op, address) = deploy_account_op(10tz);
   let (main_op, main) = deploy_contract_op(init_storage("eple"));
-  ([fund_op, main_op], ())
+  ([main_op], ())
 };

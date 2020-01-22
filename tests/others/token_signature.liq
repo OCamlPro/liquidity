@@ -1,15 +1,3 @@
-
-contract type NatContract = sig
-  type storage
-  val%entry main : nat -> _
-end
-
-contract type NatNatContract = sig
-  type storage
-  val%entry main : nat * nat -> _
-end
-
-
 contract type Token = sig
 
   type account = {
@@ -27,12 +15,10 @@ contract type Token = sig
     owner : address;
   }
 
-  val%entry transfer : (address * nat) -> _
-  val%entry approve : (address * nat) -> _
-  val%entry transferFrom : (address * address * nat) -> _
-  val%entry balanceOf : (address * NatContract.instance) -> _
-  val%entry allowance : (address * address * NatNatContract.instance) -> _
-  val%entry createAccount : (address * nat) -> _
-  val%entry createAccounts : (address * nat) list -> _
+  val%entry transfer : (address * nat)
+  val%entry approve : (address * nat)
+  val%entry transferFrom : (address * address * nat)
+  val%entry balanceOf : (address * address)
+  val%entry allowance : (address * address * address)
 
 end

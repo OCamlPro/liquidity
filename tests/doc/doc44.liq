@@ -1,5 +1,5 @@
 type storage = unit
-let%entry main () _ =
+let%entry default () _ =
   let sum = List.fold (fun (elt, acc) ->
       elt + acc
     ) [1; 2; 3; 4; 5] 0

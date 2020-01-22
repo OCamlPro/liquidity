@@ -8,7 +8,7 @@ type storage = bool *
                int set *
                int list
 
-let%entry main
+let%entry default
       (parameter : bool)
       storage =
 

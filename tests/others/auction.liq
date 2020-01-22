@@ -7,7 +7,7 @@ type storage = {
   bidder : key_hash;
 }
 
-let%entry main
+let%entry default
     (parameter : key_hash)
     (storage : storage) =
 

@@ -1,7 +1,7 @@
 
-type storage = ((int, tez) map * UnitContract.instance)
+type storage = ((int, tez) map * address)
 
-let%entry main (_parameter : unit) storage =
+let%entry default (_parameter : unit) storage =
   let foo = storage.(0) in
   let acc =
     Map.fold (fun ((_i, j), acc) ->

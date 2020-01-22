@@ -2,7 +2,7 @@ type storage = (bool -> unit -> int) * bytes
 
 let g (x:unit) (x:unit) (x:unit) (x:unit) (x:unit) = 0
 
-let%entry main (f : tez -> bool -> int) (s, b) =
+let%entry default (f : tez -> bool -> int) (s, b) =
   (* let g (x:unit) (x:unit) (x:unit) (x:unit) (x:unit) = 0 in *)
   (* let a = 9tz in *)
   let l = [] in

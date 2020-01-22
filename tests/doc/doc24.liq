@@ -1,5 +1,5 @@
 type storage = bytes
-let%entry main () _ =
+let%entry default () _ =
   let b = 0xdeadbeef in
   let h = Crypto.blake2b b in
   if Bytes.length h <> 32p then failwith "incorrect size";
