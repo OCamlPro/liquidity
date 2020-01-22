@@ -467,6 +467,7 @@ type primitive =
   | Prim_tuple_set
   | Prim_tuple
 
+  | Prim_self
   | Prim_balance
   | Prim_now
   | Prim_amount
@@ -605,7 +606,9 @@ let () =
        "Array.get", Prim_tuple_get;
        "Array.set", Prim_tuple_set;
 
+       "Contract.self", Prim_self;
        "Current.balance", Prim_balance;
+       "Contract.balance", Prim_balance;
        "Current.time", Prim_now;
        "Current.amount", Prim_amount;
        "[%deprecated Current.gas]", Prim_gas;

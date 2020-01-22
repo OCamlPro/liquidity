@@ -1531,6 +1531,8 @@ and typecheck_prim2i env prim loc args =
 
   | Prim_Some, [ ty ] -> Toption ty
 
+  | Prim_self, [ ty ] -> unify ty Tunit; Taddress
+
   | Prim_now, [ ty ] -> unify ty Tunit; Ttimestamp
   | ( Prim_balance | Prim_amount ), [ ty ] -> unify ty Tunit; Ttez
   | ( Prim_source | Prim_sender ), [ ty ] -> unify ty Tunit; Taddress
@@ -1750,6 +1752,7 @@ and typecheck_prim2t env prim loc args =
     Tset key_ty
 
   | Prim_Some, [ ty ] -> Toption ty
+  | Prim_self, [ Tunit ] -> Taddress
   | Prim_now, [ Tunit ] -> Ttimestamp
   | Prim_balance, [ Tunit ] -> Ttez
   | Prim_source, [ Tunit ] -> Taddress
@@ -1882,6 +1885,7 @@ and expected_prim_types = function
   | Prim_Some | Prim_pack ->
     1, "'a"
 
+  | Prim_self
   | Prim_now
   | Prim_balance
   | Prim_source

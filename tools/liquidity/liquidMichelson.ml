@@ -243,6 +243,10 @@ let rec compile_desc depth env ~loc desc =
   | Call _ -> assert false
 
   | SelfCall { amount; entry; arg } ->
+    if env.in_lambda then
+      LiquidLoc.raise_error ~loc
+        "Typing error: \
+         Self call is not allowed inside non-inlined functions\n%!";
     let contract = [ ii ~loc (SELF entry) ] in
     let amount = compile (depth+1) env amount in
     let arg = compile (depth+2) env arg in
@@ -501,6 +505,12 @@ and compile_prim ~loc depth env prim args =
     x_code @ set_code
   | Prim_tuple_set, _ -> assert false
 
+  | Prim_self, _ when env.in_lambda ->
+    LiquidLoc.raise_error ~loc
+      "Typing error: \
+       Current.self is not allowed inside non-inlined functions\n%!"
+  | Prim_self, _ -> [ ii (SELF None); ii ADDRESS ]
+
   | Prim_balance, _ -> [ ii BALANCE ]
   | Prim_now, _ -> [ ii NOW ]
   | Prim_amount, _ -> [ ii AMOUNT ]
@@ -676,7 +686,7 @@ and compile_prim ~loc depth env prim args =
       (*                           | prim, args -> *)
 
       | (Prim_extension _|Prim_tuple_get
-        | Prim_tuple_set|Prim_tuple
+        | Prim_tuple_set|Prim_tuple|Prim_self
         | Prim_balance|Prim_now|Prim_amount|Prim_gas
         | Prim_Left|Prim_Right|Prim_source|Prim_sender|Prim_unused _
         | Prim_coll_find|Prim_coll_update|Prim_coll_mem

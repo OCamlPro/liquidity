@@ -297,8 +297,6 @@ let lookup_global_value ~loc s env =
   | Current_namespace -> raise Not_found
   | Contract_namespace (c, _)  ->
     let v = List.find (fun v -> not v.val_private && v.val_name = s) c.values in
-    Format.eprintf "Normalize %s@."
-      (LiquidPrinter.Liquid.string_of_type v.val_exp.ty);
     let ty = normalize_type
         ~from_env:env.env
         ~in_env:c.ty_env v.val_exp.ty in
