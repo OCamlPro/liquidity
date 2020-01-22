@@ -38,10 +38,6 @@ function pp_dune_network(file){
   return file, { more_deps = [ dune_network_dir + file ] };
 }
 
-function pp_proto_client(file){
-  return file, { more_deps = [ dune_network_dir + "proto_004_Pt24m4xi/lib_client/" + file ] };
-}
-
 function pp_stdlib(file){
   return file, { more_deps = [ dune_network_dir + "lib_stdlib/" + file ] };
 }
@@ -71,6 +67,7 @@ OCaml.library("dune-network-lib",
         from_dune_network("lib_stdlib/tzString.ml");
         from_dune_network("lib_stdlib/utils.ml");
         from_dune_network("lib_stdlib/binary_stream.ml");
+        "ocplib_ironmin.ml";
         from_dune_network("lib_data_encoding/binary_size.ml");
         from_dune_network("lib_data_encoding/encoding.ml");
         from_dune_network("lib_data_encoding/binary_error.ml");
@@ -90,6 +87,7 @@ OCaml.library("dune-network-lib",
         from_dune_network("lib_stdlib/weakRingTable.ml");
         from_dune_network("lib_error_monad/error_monad_sig.ml");
         from_dune_network("lib_error_monad/error_monad.ml");
+        from_dune_network("lib_error_monad/error_table.ml");
         from_dune_network("lib_micheline/micheline.ml");
         from_dune_network("lib_micheline/micheline_parser.ml");
         from_dune_network("lib_micheline/micheline_printer.ml");
@@ -103,7 +101,7 @@ OCaml.library("dune-network-lib",
         "ed25519.ml";
         from_dune_network("lib_crypto/s.ml");
         from_dune_network("lib_crypto/operation_hash.ml");
-        pp_proto_client("michelson_v1_macros.ml");
+        "michelson_v1_macros.ml";
      ]);
      requires = [
               "dune-network-deps";

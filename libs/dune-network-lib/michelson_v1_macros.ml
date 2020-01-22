@@ -27,5 +27,6 @@ open Error_monad
 (* open Tezos_data *)
 module Proto_alpha = struct end
 module Tezos_micheline = struct end
+module Protocol_client_context = struct end
 
-#include "../../dune-network/src/proto_004_Pt24m4xi/lib_client/michelson_v1_macros.ml"
+#include "../../dune-network/src/proto_005_PsBabyM1/lib_client/michelson_v1_macros.ml"
