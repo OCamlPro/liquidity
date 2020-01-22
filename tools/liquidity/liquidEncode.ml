@@ -294,7 +294,7 @@ and encode_contract_sig csig =
      *    | None -> "") *)
   | [{ parameter }] -> parameter
   | entries ->
-    Tsum ("_entries",
+    Tsum (None,
           List.map (fun { entry_name; parameter = t } ->
               (entry_name, t)
             ) entries)
@@ -602,21 +602,21 @@ let rec encode_const env (c : typed_const) : encoded_const = match c with
   | CConstr (constr, x) when env.decompiling ->
     CConstr (constr, encode_const env x)
 
-  | CConstr (constr, x) when is_entry_case constr ->
-    (* TODO maybe remove *)
-    let entry_name = entry_name_of_case constr in
-    let rec iter entries =
-      match entries with
-      | [] -> assert false
-      | [e] ->
-        if e.entry_name <> entry_name then
-          error (noloc env)  "unknown entry point %s" entry_name;
-        encode_const env x
-      | e :: entries ->
-        if e.entry_name = entry_name then CLeft (encode_const env x)
-        else CRight (iter entries)
-    in
-    iter env.t_contract_sig.f_entries_sig
+  (* | CConstr (constr, x) when is_entry_case constr ->
+   *   (\* TODO maybe remove *\)
+   *   let entry_name = entry_name_of_case constr in
+   *   let rec iter entries =
+   *     match entries with
+   *     | [] -> assert false
+   *     | [e] ->
+   *       if e.entry_name <> entry_name then
+   *         error (noloc env)  "unknown entry point %s" entry_name;
+   *       encode_const env x
+   *     | e :: entries ->
+   *       if e.entry_name = entry_name then CLeft (encode_const env x)
+   *       else CRight (iter entries)
+   *   in
+   *   iter env.t_contract_sig.f_entries_sig *)
 
   | CConstr (constr, x) ->
     begin try
@@ -1064,7 +1064,7 @@ and encode env ( exp : typed_exp ) : encoded_exp =
               | Tor (left_ty, right_ty) -> left_ty, right_ty
               | Tsum (_, [_, left_ty; _, right_ty]) -> left_ty, right_ty
               | Tsum (_, (_, left_ty) :: rcstrs) ->
-                left_ty, Tsum ("", rcstrs)
+                left_ty, Tsum (None, rcstrs)
               | _ -> assert false
             in
             let desc =
@@ -1461,13 +1461,13 @@ and encode_contract ?(annot=false) ?(decompiling=false) contract =
       e.entry_sig.parameter_name, e.entry_sig.storage_name
     | _ ->
       let parameter = mk_typed ~loc (Var "parameter") parameter in
-      let ecstrs = List.mapi (fun i e ->
-          let constr = e.entry_sig.entry_name in
-          env.env.constrs <- StringMap.add constr ("_entries", i) env.env.constrs;
-          constr, e.entry_sig.parameter
-        ) contract.entries in
-      env.env.types <-
-        StringMap.add "_entries" (fun _ -> Tsum("_entries", ecstrs)) env.env.types;
+      (* let ecstrs = List.mapi (fun i e ->
+       *     let constr = e.entry_sig.entry_name in
+       *     env.env.constrs <- StringMap.add constr ("_entries", i) env.env.constrs;
+       *     constr, e.entry_sig.parameter
+       *   ) contract.entries in
+       * env.env.types <-
+       *   StringMap.add "_entries" (fun _ -> Tsum("_entries", ecstrs)) env.env.types; *)
       let mk_pattern_matching_case entry_name parameter_name storage_name code =
         let constr = entry_name in
         let pat =

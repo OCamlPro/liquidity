@@ -203,6 +203,13 @@ module Michelson = struct
         ()
 
     and bprint_type_composed ty_c name fmt b indent labels annots =
+      let annots = match name with
+        | None | Some "" -> annots
+        | Some name ->
+          let name =
+            if name.[0] = '`' then String.sub name 1 (String.length name - 1)
+            else name in
+          (":" ^ name) :: annots in
       match labels with
       | [] -> assert false
       | [label, ty] ->
@@ -213,7 +220,6 @@ module Michelson = struct
       | [label_bigmap, (Tbigmap _ as ty_b); label_r, ty_r] ->
         let indent = fmt.increase_indent indent in
         Printf.bprintf b "(%s" ty_c;
-        let annots = if name = "" then annots else (":" ^ name) :: annots in
         bprint_annots b annots;
         Printf.bprintf b "%c%s" fmt.newline indent;
         bprint_type fmt b indent ty_b [];
@@ -221,7 +227,6 @@ module Michelson = struct
         bprint_type fmt b indent ty_r [];
         Printf.bprintf b ")"
       | (label, ty) :: labels ->
-        let annots = if name = "" then annots else (":" ^ name) :: annots in
         let indent = fmt.increase_indent indent in
         Printf.bprintf b "(%s" ty_c;
         bprint_annots b annots;
@@ -231,11 +236,11 @@ module Michelson = struct
           | _ -> ["%" ^ label] in
         bprint_type fmt b indent ty annots;
         Printf.bprintf b "%c%s" fmt.newline indent;
-        bprint_type_composed ty_c "" fmt b indent labels [];
+        bprint_type_composed ty_c None fmt b indent labels [];
         Printf.bprintf b ")"
 
     and bprint_type_record name fmt b indent labels annots =
-      bprint_type_composed "pair" name fmt b indent labels annots
+      bprint_type_composed "pair" (Some name) fmt b indent labels annots
 
     and bprint_type_sum name fmt b indent constrs annots =
       bprint_type_composed "or" name fmt b indent constrs annots
@@ -886,6 +891,16 @@ module LiquidDebug = struct
         Printf.bprintf b " }";
       | Trecord (name, _) ->
         Printf.bprintf b "%s" name;
+      | Tsum (None, []) ->
+        Printf.bprintf b "[]";
+      | Tsum (None, (c, ty) :: rtys) ->
+        Printf.bprintf b "[ %s of " c;
+        bprint_type b "" ty;
+        List.iter (fun (c, ty) ->
+            Printf.bprintf b " | %s of " c;
+            bprint_type b "" ty;
+          ) rtys;
+        Printf.bprintf b " ]";
       | Tsum (_, (c, ty) :: rtys) when expand ->
         Printf.bprintf b "%s of " c;
         bprint_type b "" ty;
@@ -893,7 +908,7 @@ module LiquidDebug = struct
             Printf.bprintf b " | %s of " c;
             bprint_type b "" ty;
           ) rtys;
-      | Tsum (name, _) ->
+      | Tsum (Some name, _) ->
         Printf.bprintf b "%s" name;
       | Tcontract (entry, ty) ->
         Printf.bprintf b "[%%handle %s : " entry;

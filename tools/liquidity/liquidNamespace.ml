@@ -187,11 +187,15 @@ let rec normalize_type ?from_env ~in_env ty =
              List.map (fun (f, ty) ->
                  qualify_name ?from_env ~at:found_env.path f,
                  normalize_type ?from_env ~in_env ty) fields)
-  | Tsum (name, constrs) ->
+  | Tsum (None, constrs) ->
+    Tsum (None,
+          List.map (fun (c, ty) ->
+              c, normalize_type ?from_env ~in_env ty) constrs)
+  | Tsum (Some name, constrs) ->
     let _, found_env =
       try find_type_loose ~loc:noloc name in_env []
       with Not_found | Unknown_namespace _ -> assert false in
-    Tsum (qualify_name ?from_env ~at:found_env.path name,
+    Tsum (Some (qualify_name ?from_env ~at:found_env.path name),
           List.map (fun (c, ty) ->
               qualify_name ?from_env ~at:found_env.path c,
               normalize_type ?from_env ~in_env ty) constrs)

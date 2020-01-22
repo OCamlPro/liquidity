@@ -254,13 +254,15 @@ let rec convert_type ?(parameter=false) env expr =
 
     | Prim(_, "or", [x;y], _debug) ->
       begin match name with
-        | None when not parameter -> Tor (convert_type env x, convert_type env y)
+        (* | None when not parameter -> Tor (convert_type env x, convert_type env y) *)
         | _ ->
-          let name = match name with None -> "_entries" | Some n -> n in
+          let is_variant = match name with None -> true | Some _ -> false in
           try
-            let ty = Tsum (name, type_constrs ~gen:false env expr) in
-            let ty_gen = Tsum (name, type_constrs ~gen:true env expr) in
-            add_generalize_to_env name ty_gen env;
+            let ty = Tsum (name, type_constrs ~gen:false ~is_variant env expr) in
+            let ty_gen = Tsum (name, type_constrs ~gen:true ~is_variant env expr) in
+            (match name with
+             | None -> ()
+             | Some name -> add_generalize_to_env name ty_gen env);
             ty
           with Exit -> Tor (convert_type env x, convert_type env y)
       end
@@ -322,8 +324,14 @@ and type_components ~allow_capital ~gen env t =
     end
   | _ -> raise Exit
 
-and type_constrs ~gen env t = type_components ~allow_capital:true ~gen env t
-and type_labels ~gen env t = type_components ~allow_capital:false ~gen env t
+and type_constrs ~gen ~is_variant env t =
+  let constrs = type_components ~allow_capital:true ~gen env t in
+  if is_variant then
+    List.map (fun (c, ty) -> ("`" ^ c, ty)) constrs
+  else constrs
+
+and type_labels ~gen env t =
+  type_components ~allow_capital:false ~gen env t
 
 
 (*
@@ -836,7 +844,7 @@ let convert_env env =
             List.iteri (fun i (label, l_ty) ->
                 ty_env.labels <- StringMap.add label (name, i) ty_env.labels;
               ) labels;
-          | Tsum (name, constrs) ->
+          | Tsum (Some name, constrs) ->
             List.iteri (fun i (constr, c_ty) ->
                 ty_env.constrs <-
                   StringMap.add constr (name, i) ty_env.constrs;

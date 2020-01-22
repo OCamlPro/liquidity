@@ -96,7 +96,7 @@ module HAbbrev = Hashtbl.Make (struct
       | Trecord (_rn, fl) ->
         Trecord ("", List.map (fun (fn, fty) -> (fn, erase_names fty)) fl)
       | Tsum (_sn, cl) ->
-        Tsum ("", List.map (fun (cn, cty) -> (cn, erase_names cty)) cl)
+        Tsum (None, List.map (fun (cn, cty) -> (cn, erase_names cty)) cl)
       | Tcontract (entry, ty) -> Tcontract (entry, erase_names ty)
     let hash ty = Hashtbl.hash (erase_names ty)
     let equal ty1 ty2 = eq_types (erase_names ty1) (erase_names ty2)
@@ -185,7 +185,16 @@ let rec convert_type ~abbrev ?name ty =
   | Tbytes -> typ_constr "bytes" []
   | Toperation -> typ_constr "operation" []
   | Taddress -> typ_constr "address" []
-  | Tsum (name, _)
+  | Tsum (None, constrs) ->
+    let rows = List.map (fun (n, ty) ->
+        let n = match n.[0] with
+          | '`' -> String.sub n 1 (String.length n - 1)
+          | _ -> n in
+        let ty = convert_type ~abbrev ty in
+        Rtag (id n, [], false, [ty])
+      ) constrs in
+    Typ.variant rows Closed None
+  | Tsum (Some name, _)
   | Trecord (name, _) ->
     let args =
       try
@@ -782,7 +791,8 @@ and structure_of_contract
   reset_env ();
   let ignore_type s =
     StringMap.mem s predefined_types
-    || String.length s >= 8 && String.sub s 0 8 = "_entries" in
+    || (List.length contract.entries > 1 &&
+        String.length s >= 8 && String.sub s 0 8 = "_entries") in
   List.iter (fun (s, ty) ->
       if not (ignore_type s) then
         ignore (add_abbrev s ty (TypeName (convert_type ~abbrev:false ty)))
@@ -836,7 +846,7 @@ and structure_of_contract
                     List.map (fun (label, ty) ->
                         Type.field (id label) (convert_type ~abbrev:false ty)
                       ) fields))
-            | Tsum (name, cstrs) when not @@ StringSet.mem name !seen ->
+            | Tsum (Some name, cstrs) when not @@ StringSet.mem name !seen ->
               seen := StringSet.add name !seen;
               Type.mk (id txt)
                 ~params

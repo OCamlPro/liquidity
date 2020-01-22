@@ -343,6 +343,9 @@ and decode_entries param_constrs top_parameter top_storage values exp fee_exp =
     List.map (entry_of_case param_constrs top_storage) cases
 
   | Let { bnd_var; inline; bnd_val; body } ->
+    let bv_val = LiquidBoundVariables.bv bnd_val in
+    if StringSet.mem top_parameter bv_val ||
+       StringSet.mem top_storage bv_val then raise Exit;
     decode_entries param_constrs top_parameter top_storage
       ({ val_name = bnd_var.nname;
          val_private = false;

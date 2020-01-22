@@ -41,9 +41,15 @@ let loc_of_many (l : loc_michelson list) = match l, List.rev l with
   | [], _ | _, [] -> LiquidLoc.noloc
   | first :: _, last :: _ -> LiquidLoc.merge first.loc last.loc
 
+let drop_bq l =
+  if l = "" then l
+  else match l.[0] with
+    | '`' -> String.sub l 1 (String.length l - 1)
+    | _ -> l
+
 let convert_annot = function
   | Tannot l -> ":" ^ l
-  | Fannot l | Eannot l -> "%" ^ l
+  | Fannot l | Eannot l -> "%" ^ drop_bq l
   | Nannot l -> "@" ^ l
 
 let convert_annots annots =
@@ -129,13 +135,15 @@ let rec convert_type ~loc expr =
   | Tvar _ | Tpartial _ -> assert false
 
 and convert_record_type ~loc name labels =
-  convert_composed_type "pair" ~loc name labels
+  convert_composed_type "pair" ~loc (Some name) labels
 
 and convert_sum_type ~loc name constrs =
   convert_composed_type "or" ~loc name constrs
 
 and convert_composed_type ty_c ~loc ?(parameter=false) name labels =
-  let parameter = parameter || name = "_entries" in
+  let annots = match name with
+    | None -> []
+    | Some name -> [Tannot name] in
   match labels with
   | [] -> assert false
   | [l, ty] ->
@@ -150,12 +158,10 @@ and convert_composed_type ty_c ~loc ?(parameter=false) name labels =
     end
   | [lb, (Tbigmap _ as ty_b); lr, ty_r] ->
     (* workaround for { lb : _ big_map; lr : _ } => pair *)
-    let annots = if name = "" then [] else [Tannot name] in
     let ty_b = convert_type ~loc ty_b in
     let ty_r = convert_type ~loc ty_r in
     prim_type ~loc ~annots ty_c [ty_b; ty_r]
   | (l, ty) :: labels ->
-    let annots = if name = "" then [] else [Tannot name] in
     let ty = match convert_type ~loc ty with
       | Micheline.Prim(loc, "big_map", args, annots) ->
         prim_type ~loc "big_map" args ~annots:[Tannot l]
@@ -165,7 +171,7 @@ and convert_composed_type ty_c ~loc ?(parameter=false) name labels =
           ])
       | _ -> assert false in
     prim_type ~loc ~annots ty_c
-      [ty; convert_composed_type ty_c ~loc ~parameter "" labels]
+      [ty; convert_composed_type ty_c ~loc ~parameter None labels]
 
 let rec convert_const ~loc expand (expr : loc_michelson const) =
   let bytes_of_hex s =

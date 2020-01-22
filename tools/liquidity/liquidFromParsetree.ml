@@ -122,6 +122,30 @@ let remove_stack typ = match typ.ptyp_desc with
   | Ptyp_extension ( { txt = "stack" }, PTyp  t ) -> t
   | _ -> typ
 
+let add_type_alias ~loc ty_name params ty env =
+  let pset, params = List.fold_left (fun (acc, params) -> function
+      | { ptyp_desc = Ptyp_var alpha; ptyp_loc }, Invariant ->
+        if StringSet.mem alpha acc then
+          error_loc ptyp_loc "Type parameter '%s occurs several times" alpha;
+          if ty_name = "storage" && alpha.[0] <> '_' then
+            LiquidLoc.warn (loc_of_loc ptyp_loc) (WeakParam alpha);
+        StringSet.add alpha acc, alpha :: params
+      | { ptyp_loc }, _ ->
+        error_loc ptyp_loc "Type parameter not allowed";
+    ) (StringSet.empty, []) params in
+  let params = List.rev params in
+  if StringMap.mem ty_name env.types then
+    error_loc loc "type %s already defined" ty_name;
+  let tvars = free_tvars ty in
+  StringSet.iter (fun v ->
+      if not @@ StringSet.mem v pset then
+        error_loc loc "Unbound type parameter '%s" v) tvars;
+  let mk_ty pvals =
+    let subst = make_subst params pvals in
+    instantiate_to subst ty
+  in
+  env.types <- StringMap.add ty_name mk_ty env.types
+
 let rec translate_type env ?expected typ =
   if has_stack typ then
     error_loc typ.ptyp_loc "Attribute [%%stack] forbidden in this context";
@@ -246,6 +270,31 @@ let rec translate_type env ?expected typ =
 
   | { ptyp_desc = Ptyp_var id; ptyp_loc } -> mk_tvar id
 
+  | { ptyp_desc = Ptyp_variant (fields, Closed, None); ptyp_loc } ->
+    let constrs = List.map (function
+        | Rtag ({ txt = c }, [] , _, []) ->
+          let c = "`" ^  c in
+          (c, Tunit)
+        | Rtag ({ txt = c }, [] , _, [arg]) ->
+          let c = "`" ^  c in
+          (c, translate_type env arg)
+        | Rtag _ ->
+          error_loc ptyp_loc "Only variants of the form `A of x allowed"
+        | Rinherit _ -> error_loc ptyp_loc "Only variant tags allowed"
+      ) fields in
+    let ty = Tsum (None, constrs) in
+    (* genereate static name *)
+    let tname = LiquidPrinter.Liquid.string_of_type ty in
+    List.iteri (fun i (c, _) ->
+        env.constrs <- StringMap.add c (tname, i) env.constrs;
+      ) constrs;
+    let params = StringSet.elements (free_tvars ty) |> List.map (fun v ->
+        { ptyp_desc = Ptyp_var v; ptyp_loc;
+          ptyp_attributes = [] }, Invariant
+      ) in
+    add_type_alias ~loc:ptyp_loc tname params ty env;
+    ty
+
   | { ptyp_loc } -> error_loc ptyp_loc "in type"
 
 let translate_ext_type env typ =
@@ -367,28 +416,28 @@ let access_of_deconstruct var_name loc indexes =
           ] })
     ) indexes a
 
-let deconstruct_pat env pat e =
+let deconstruct_pat env pat =
   let vars_infos, ty = vars_info_pat env pat in
-  match vars_infos with
-  | [] -> assert false
-  | [nname, nloc, []] -> { nname; nloc }, ty, e
-  | _ ->
-    let var_name =
-      String.concat "_" ( "" :: (List.rev_map (fun (v,_,_) -> v) vars_infos)) in
-    let e =
-      List.fold_left (fun e (v, loc, indexes) ->
-          let access = access_of_deconstruct var_name loc indexes in
-          mk ~loc (Let { bnd_var = { nname = v; nloc = loc };
-                         inline = InAuto;
-                         bnd_val = access; body = e })
-        ) e vars_infos
-    in
-    let nloc = match vars_infos, List.rev vars_infos with
-      | (_, first_loc, _) :: _, (_, last_loc, _) :: _ ->
-        LiquidLoc.merge first_loc last_loc
-      | _ -> assert false
-    in
-    ({ nname = var_name; nloc }, ty, e)
+  fun e -> match vars_infos with
+    | [] -> assert false
+    | [nname, nloc, []] -> { nname; nloc }, ty, e
+    | _ ->
+      let var_name =
+        String.concat "_" ( "" :: (List.rev_map (fun (v,_,_) -> v) vars_infos)) in
+      let e =
+        List.fold_left (fun e (v, loc, indexes) ->
+            let access = access_of_deconstruct var_name loc indexes in
+            mk ~loc (Let { bnd_var = { nname = v; nloc = loc };
+                           inline = InAuto;
+                           bnd_val = access; body = e })
+          ) e vars_infos
+      in
+      let nloc = match vars_infos, List.rev vars_infos with
+        | (_, first_loc, _) :: _, (_, last_loc, _) :: _ ->
+          LiquidLoc.merge first_loc last_loc
+        | _ -> assert false
+      in
+      ({ nname = var_name; nloc }, ty, e)
 
 let order_labelled_args loc labels args =
   let labelled_exps, args =
@@ -415,30 +464,6 @@ let order_labelled_args loc labels args =
   match extra_args with
   | [] -> List.rev args
   | _ -> error_loc loc "too many arguments"
-
-let add_type_alias ~loc ty_name params ty env =
-  let pset, params = List.fold_left (fun (acc, params) -> function
-      | { ptyp_desc = Ptyp_var alpha; ptyp_loc }, Invariant ->
-        if StringSet.mem alpha acc then
-          error_loc ptyp_loc "Type parameter '%s occurs several times" alpha;
-          if ty_name = "storage" && alpha.[0] <> '_' then
-            LiquidLoc.warn (loc_of_loc ptyp_loc) (WeakParam alpha);
-        StringSet.add alpha acc, alpha :: params
-      | { ptyp_loc }, _ ->
-        error_loc ptyp_loc "Type parameter not allowed";
-    ) (StringSet.empty, []) params in
-  let params = List.rev params in
-  if StringMap.mem ty_name env.types then
-    error_loc loc "type %s already defined" ty_name;
-  let tvars = free_tvars ty in
-  StringSet.iter (fun v ->
-      if not @@ StringSet.mem v pset then
-        error_loc loc "Unbound type parameter '%s" v) tvars;
-  let mk_ty pvals =
-    let subst = make_subst params pvals in
-    instantiate_to subst ty
-  in
-  env.types <- StringMap.add ty_name mk_ty env.types
 
 let translate_record ~loc ty_name params labels env =
   let rtys = List.mapi
@@ -472,7 +497,7 @@ let translate_variant ~loc ty_name params constrs env =
            (constr, ty)
       ) constrs
   in
-  let ty = Tsum (ty_name, constrs) in
+  let ty = Tsum (Some ty_name, constrs) in
   add_type_alias ~loc ty_name params ty env
 
 let check_version = function
@@ -757,6 +782,21 @@ let rec translate_const env exp =
     in
     CConstr (lid, c), ty
 
+  | { pexp_desc = Pexp_variant (lid, args); pexp_loc } ->
+    let loc = loc_of_loc pexp_loc in
+    let lid = "`" ^ lid in
+    let c, c_ty =
+      match args with
+      | None -> CUnit, Some Tunit
+      | Some args -> translate_const env args
+    in
+    let ty =
+      try
+        Some (fst (find_constr ~loc lid env))
+      with Not_found -> None
+    in
+    CConstr (lid, c), ty
+
   | { pexp_desc = Pexp_record (lab_x_exp_list, None) } ->
     let lab_x_exp_list =
       List.map (fun ({ txt = label; loc }, exp) ->
@@ -892,11 +932,18 @@ and translate_code contracts env exp =
         with
         | [c; t; { pexp_desc = Pexp_ident { txt = e }}; a] ->
           c, t, str_of_id e, a
+        | [c; t; { pexp_desc = Pexp_constant (Pconst_string (e, None)) }; a] ->
+          c, t, e, a
         | _ -> error_loc pexp_loc "wrong arguments" in
-      Call { contract = translate_code contracts env contract;
-             amount = translate_code contracts env amount;
-             entry;
-             arg = translate_code contracts env arg }
+      let amount = translate_code contracts env amount in
+      let arg = translate_code contracts env arg in
+      begin match contract with
+        | { pexp_desc = Pexp_construct ({ txt = Lident "Self" }, None) } ->
+          SelfCall { amount; entry; arg }
+        | _ ->
+          Call { contract = translate_code contracts env contract;
+                 amount; entry; arg }
+      end
 
     | { pexp_desc =
           Pexp_apply (
@@ -1522,6 +1569,14 @@ and translate_code contracts env exp =
                 error_loc exp.pexp_loc "unknown constructor: %s" lid
           end
 
+        | { pexp_desc = Pexp_variant (lid, args) } ->
+          let lid = "`" ^ lid in
+          Constructor { constr = Constr lid;
+                        arg = match args with
+                          | None ->
+                            mk ~loc (Const { ty = Tunit; const = CUnit })
+                          | Some arg -> translate_code contracts env arg }
+
         | { pexp_desc =
               Pexp_constraint (
                 { pexp_desc =
@@ -1633,8 +1688,13 @@ and translate_case contracts env case : (pattern * syntax_exp * location) =
           Ppat_construct ( { txt = Lident ("None" | "[]" as c) }, Some _);
         ppat_loc }  ->
       error_loc ppat_loc "Constructor %S takes no arguments" c
+
     | { ppat_desc = Ppat_construct ( { txt = name } , None); ppat_loc }  ->
       (PConstr (str_of_id name, []), e, loc_of_loc ppat_loc)
+
+    | { ppat_desc = Ppat_variant (name , None); ppat_loc }  ->
+      (PConstr ("`" ^ name, []), e, loc_of_loc ppat_loc)
+
     | { ppat_desc =
           Ppat_construct (
             { txt = Lident "::" } ,
@@ -1646,6 +1706,10 @@ and translate_case contracts env case : (pattern * syntax_exp * location) =
     | { ppat_desc = Ppat_construct ({ txt = name } , Some pat); ppat_loc }  ->
       let var_name, _, e = deconstruct_pat env pat e in
       (PConstr (str_of_id name, [var_name.nname]), e, loc_of_loc ppat_loc)
+
+    | { ppat_desc = Ppat_variant (name , Some pat); ppat_loc }  ->
+      let var_name, _, e = deconstruct_pat env pat e in
+      (PConstr ("`" ^ name, [var_name.nname]), e, loc_of_loc ppat_loc)
 
     | { ppat_loc } ->
       error_loc ppat_loc "bad pattern"

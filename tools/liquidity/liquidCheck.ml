@@ -429,7 +429,24 @@ let rec typecheck_const ~loc env cst ty =
     let labels, fields = List.split (mk labels csts) in
     Trecord (rname, labels), CRecord fields
 
-  | Tsum (sname, constrs), CConstr (c, cst) ->
+  | Tsum (None, constrs), CConstr (c, cst) ->
+    let constrs, cst = try
+      let ty = List.assoc c constrs in
+      let ty, cst = typecheck_const ~loc env cst ty in
+      let constrs =
+        List.map (fun (c, t) -> if eq_types t ty then (c, ty) else (c, t)) constrs in
+      constrs, cst
+      with Not_found ->
+        let ty, cst =
+          typecheck_const ~loc env cst (type_of_const ~loc env cst) in
+        let constrs = constrs @ [c, ty] in
+        constrs, cst
+    in
+    let ty = Tsum (None, constrs) in
+    let c = CConstr (c, cst) in
+    (ty, c)
+
+  | Tsum (Some sname, constrs), CConstr (c, cst) ->
     let ty =
       try List.assoc c constrs
       with Not_found ->
@@ -437,7 +454,7 @@ let rec typecheck_const ~loc env cst ty =
     let ty, cst = typecheck_const ~loc env cst ty in
     let constrs =
       List.map (fun (c, t) -> if eq_types t ty then (c, ty) else (c, t)) constrs in
-    let ty = Tsum (sname, constrs) in
+    let ty = Tsum (Some sname, constrs) in
     let c = CConstr (c, cst) in
     (ty, c)
 
@@ -449,7 +466,7 @@ let rec typecheck_const ~loc env cst ty =
         (c, ty, cst)
       | _ :: constrs, CRight cst -> seek constrs cst
       | _, _ ->
-        error loc "Constant cannot be converted to type %s" sname
+        error loc "Constant cannot be converted to type %s" (string_of_type ty)
     in
     let c, ty, cst = seek constrs cst in
     let constrs =
@@ -2030,7 +2047,7 @@ and typecheck_contract ~others ~warnings ~decompiling contract =
     else match t_contract_sig.f_entries_sig with
       | [{ entry_name = "default" } as e] ->
         begin match expand e.parameter with
-          | Tsum ("_entries", l) ->
+          | Tsum (_, l) ->
             let f_entries_sig = List.map (fun (c, parameter) ->
                 { entry_name = entry_name_of_case c;
                   parameter;
@@ -2157,4 +2174,4 @@ let rec type_of_const = function
 
   (* XXX just for printing *)
   | CRecord _ -> Trecord ("<record>", [])
-  | CConstr _ -> Tsum ("<sum>", [])
+  | CConstr _ -> Tsum (None, [])

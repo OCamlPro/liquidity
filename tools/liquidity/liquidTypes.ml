@@ -103,7 +103,7 @@ type datatype =
 
   (* liquidity extensions *)
   | Trecord of string * (string * datatype) list
-  | Tsum of string * (string * datatype) list
+  | Tsum of string option * (string * datatype) list
   | Tclosure of (datatype * datatype) * datatype * uncurry_flag
   | Tfail
 
@@ -309,7 +309,13 @@ let rec eq_types ty1 ty2 = match expand ty1, expand ty2 with
   | Tclosure ((a1, b1), c1, u2), Tclosure ((a2, b2), c2, u1) ->
     eq_types a1 a2 && eq_types b1 b2 && eq_types c1 c2
 
-  | Trecord (n1, l1), Trecord (n2, l2)
+  | Trecord (n1, l1), Trecord (n2, l2) ->
+    n1 = n2 &&
+    begin try
+        List.for_all2 (fun (x1, t1) (x2, t2) -> x1 = x2 && eq_types t1 t2) l1 l2
+      with Invalid_argument _ -> false
+    end
+
   | Tsum (n1, l1), Tsum (n2, l2) ->
     n1 = n2 &&
     begin try
@@ -1724,6 +1730,7 @@ let entry_name_of_case ?(allow_capital=false) s =
         else match s.[0] with
           | '_' | 'a' .. 'z' -> s
           | 'A' .. 'Z' when allow_capital -> "_" ^ s
+          | '`' -> String.sub s 1 (String.length s - 1)
           | _ -> raise Not_found
 
 let is_entry_case ?allow_capital s =
