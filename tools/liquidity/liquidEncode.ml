@@ -381,7 +381,7 @@ let encode_parameter_type env ty =
    constant expressions. For instance (Set [op]) is turned into
    Set.add op (Set : operation set) *)
 let rec deconstify env loc ty c =
-  if not @@ type_contains_nonlambda_operation ty then
+  if env.decompiling || not @@ forbidden_constant_ty ty then
     mk ~loc (Const { ty; const = c }) ty
   else match c, (encode_qual_type env ty) with
     | (CUnit | CBool _ | CInt _ | CNat _ | CTez _ | CTimestamp _ | CString _
@@ -401,6 +401,11 @@ let rec deconstify env loc ty c =
     | CTuple cs, Ttuple tys ->
       mk ~loc (Apply { prim = Prim_tuple;
                        args = List.map2 (deconstify env loc) tys cs }) ty
+
+    | CTuple cs, Trecord (_, ltys) ->
+      mk ~loc (Apply { prim = Prim_tuple;
+                       args = List.map2 (fun (_, ty) ->
+                           deconstify env loc ty) ltys cs }) ty
 
     | CList cs, Tlist ty' ->
       List.fold_right (fun c acc ->
@@ -449,7 +454,7 @@ let rec deconstify env loc ty c =
     | _, _ ->
       Format.eprintf "%s : %s@."
         (LiquidPrinter.Liquid.string_of_const c)
-        (LiquidPrinter.Liquid.string_of_type ty);
+        (LiquidPrinter.Liquid.string_of_type ((encode_qual_type env ty)));
       assert false
 
 (* Decrement counters for variables that appear in an expression *)
@@ -658,7 +663,7 @@ and encode env ( exp : typed_exp ) : encoded_exp =
     let const = encode_const env const in
     (* normalize wrt to top level env *)
     let ty = normalize_type ~in_env:env.env ty in
-    (* use functions instead of constants if contains operations *)
+    (* use functions instead of constants if contains operations or big maps *)
     let c = deconstify env loc ty const in
     mk ?name:exp.name ~loc c.desc ty
 

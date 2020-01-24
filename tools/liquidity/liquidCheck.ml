@@ -2053,7 +2053,7 @@ and typecheck_contract ~others ~warnings ~decompiling contract =
     else match t_contract_sig.f_entries_sig with
       | [{ entry_name = "default" } as e] ->
         begin match expand e.parameter with
-          | Tsum (_, l) ->
+          | Tsum (_, l) when List.for_all (fun (e,_) -> is_entry_case e) l ->
             let f_entries_sig = List.map (fun (c, parameter) ->
                 { entry_name = entry_name_of_case c;
                   parameter;

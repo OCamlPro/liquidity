@@ -344,23 +344,25 @@ and eq_signature { entries_sig = s1 } { entries_sig = s2 } =
       ) s1 s2
   with Invalid_argument _ -> false
 
-(** Returns true if a type contains an operation (excepted in lambda's
-    where they are allowed in Michelson). *)
-let rec type_contains_nonlambda_operation ty = match expand ty with
+(** Returns true if a type contains is forbidden for a constant:
+    - operation (excepted in lambda's where they are allowed in Michelson)
+    - big maps *)
+let rec forbidden_constant_ty ty = match expand ty with
   | Toperation -> true
+  | Tbigmap _ -> true
   | Tunit | Tbool | Tint | Tnat | Ttez | Tstring | Tbytes
   | Ttimestamp | Tkey | Tkey_hash | Tsignature | Taddress | Tfail | Tchainid ->
     false
-  | Ttuple l -> List.exists type_contains_nonlambda_operation l
+  | Ttuple l -> List.exists forbidden_constant_ty l
   | Toption ty | Tlist ty | Tset ty | Tcontract (_, ty) ->
-    type_contains_nonlambda_operation ty
-  | Tmap (t1, t2) | Tbigmap (t1, t2) | Tor (t1, t2) ->
-    type_contains_nonlambda_operation t1 || type_contains_nonlambda_operation t2
+    forbidden_constant_ty ty
+  | Tmap (t1, t2) | Tor (t1, t2) ->
+    forbidden_constant_ty t1 || forbidden_constant_ty t2
   | Trecord (_, l) | Tsum (_, l) ->
-    List.exists (fun (_, t) -> type_contains_nonlambda_operation t) l
+    List.exists (fun (_, t) -> forbidden_constant_ty t) l
   | Tlambda _ | Tclosure _ -> false
   | Tvar _ | Tpartial _ ->
-    raise (Invalid_argument "type_contains_nonlambda_operation")
+    raise (Invalid_argument "forbidden_constant_ty")
 
 (** Extract the signature of a contract *)
 let sig_of_contract c = {
