@@ -96,10 +96,10 @@ OCaml.library("dune-network-lib",
         "RPC_arg.ml";
         "clic.ml";
         from_dune_network("lib_crypto/base58.ml");
+        from_dune_network("lib_crypto/s.ml");
         from_dune_network("lib_crypto/helpers.ml");
         from_dune_network("lib_crypto/blake2B.ml");
         "ed25519.ml";
-        from_dune_network("lib_crypto/s.ml");
         from_dune_network("lib_crypto/operation_hash.ml");
         "michelson_v1_macros.ml";
      ]);

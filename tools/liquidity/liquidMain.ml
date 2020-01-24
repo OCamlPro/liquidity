@@ -376,15 +376,10 @@ let translate () =
     with Not_found ->
       Format.eprintf "Contract has no entry point %s@." entry_name; exit 2
   in
-  let input =
+  let parameter_const =
     LiquidData.translate { contract.ty_env with filename = "parameter" }
       contract_sig parameter
       entry.entry_sig.parameter in
-  let parameter_const = match contract_sig.f_entries_sig with
-    | [_] -> input
-    | _ -> LiquidEncode.encode_const contract.ty_env contract_sig
-             (CConstr (entry_name,
-                       (LiquidDecode.decode_const input))) in
   let to_str mic_data =
     let mic_data = LiquidMichelson.compile_const mic_data in
     if !LiquidOptions.json then
@@ -399,11 +394,11 @@ let translate () =
       LiquidData.translate { contract.ty_env with filename = "storage" }
         contract_sig storage contract.storage in
     if !LiquidOptions.json then
-      Printf.printf "{\n  \"parameter\": %s; \n  \"storage\": %s\n}\n%!"
-        (to_str parameter_const) (to_str storage_const)
+      Printf.printf "{\n  \"entrypoint\": %s,\n  \"parameter\": %s,\n  \"storage\": %s\n}\n%!"
+        entry_name (to_str parameter_const) (to_str storage_const)
     else
-      Printf.printf "parameter: %s \nstorage: %s\n%!"
-        (to_str parameter_const) (to_str storage_const)
+      Printf.printf "entrypoint: %s\nparameter: %s\nstorage: %s\n%!"
+        entry_name (to_str parameter_const) (to_str storage_const)
 
 let inject file =
   let signature = match !LiquidOptions.signature with
@@ -427,21 +422,27 @@ let run () =
     (LiquidPrinter.Liquid.string_of_const r_storage)
     (List.length ops);
   match big_map_diff with
-  | None -> ()
-  | Some diff ->
+  | [] -> ()
+  | diff ->
     Printf.printf "\nBig map diff:\n";
-    List.iter (function
-        | Big_map_add (k, v) ->
-          Printf.printf "+  %s --> %s\n"
-            (match k with
-             | DiffKeyHash h -> h
-             | DiffKey k -> LiquidPrinter.Liquid.string_of_const k)
-            (LiquidPrinter.Liquid.string_of_const v)
-        | Big_map_remove k ->
-          Printf.printf "-  %s\n"
-            (match k with
-             | DiffKeyHash h -> h
-             | DiffKey k -> LiquidPrinter.Liquid.string_of_const k)
+    let pp_id fmt = function
+      | Bm_id id -> Format.fprintf fmt "[ID: %d]" id
+      | Bm_name (id, name) -> Format.fprintf fmt "[%s (%d)]" name id in
+    List.iter (fun item ->
+        match item with
+        | Big_map_add { id; key; value } ->
+          Format.printf "%a +  %s --> %s\n" pp_id id
+            (LiquidPrinter.Liquid.string_of_const key)
+            (LiquidPrinter.Liquid.string_of_const value)
+        | Big_map_remove { id; key } ->
+          Format.printf "%a -  %s\n" pp_id id
+            (LiquidPrinter.Liquid.string_of_const key)
+        | Big_map_delete { id } ->
+          Format.printf "%a DELETE\n" pp_id id
+        | Big_map_alloc { id } ->
+          Format.printf "%a ALLOC\n" pp_id id
+        | Big_map_copy { source_id; destination_id } ->
+          Format.printf "%a COPY to %a\n" pp_id source_id pp_id destination_id
       ) diff;
     Printf.printf "%!"
 

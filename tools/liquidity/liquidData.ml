@@ -132,7 +132,7 @@ let rec default_empty_const = function
   | Tcontract _ -> raise Not_found
   | Tvar _ | Tpartial _ -> raise Not_found
 
-let rec translate_const_exp (exp : encoded_exp) =
+let rec translate_const_exp (exp : (datatype, 'b) exp) =
   let loc = exp.loc in
   match exp.desc with
   | Let _ ->
@@ -154,7 +154,7 @@ let rec translate_const_exp (exp : encoded_exp) =
     CList (List.map translate_const_exp args)
   | Apply { prim = Prim_tuple; args } ->
     CTuple (List.map translate_const_exp args)
-  | Apply { prim = Prim_big_map_create; args = [_] } ->
+  | Apply { prim = Prim_big_map_create } ->
     CBigMap (BMList [])
 
   | TypeAnnot { e } -> translate_const_exp e
@@ -186,7 +186,8 @@ let rec translate_const_exp (exp : encoded_exp) =
   | Unpack _
   | Type _
     ->
-    LiquidLoc.raise_error ~loc "non-constant expression"
+    LiquidLoc.raise_error ~loc "non-constant expression: %s"
+      (LiquidPrinter.Liquid.string_of_code exp)
 
 
 let translate env contract_sig s ty =
@@ -198,6 +199,7 @@ let translate env contract_sig s ty =
       ~loc:(Location.in_file env.filename) ml_exp ml_ty in
   let sy_exp = LiquidFromParsetree.translate_expression env ml_exp in
   let tenv = empty_typecheck_env ~warnings:true contract_sig env in
-  let ty_exp = LiquidCheck.typecheck_code tenv ~expected_ty:ty sy_exp in
-  let enc_exp = LiquidEncode.encode_code tenv ty_exp in
-  translate_const_exp enc_exp
+  sy_exp
+  |> LiquidCheck.typecheck_code tenv ~expected_ty:ty
+  |> translate_const_exp
+  |> LiquidEncode.encode_const env contract_sig

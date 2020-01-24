@@ -33,15 +33,26 @@ let post = ref (fun ~data _ ->
 let get = ref (fun _ ->
     failwith "mini version cannot do get request")
 
-type key_diff =
-  | DiffKeyHash of string
-  | DiffKey of typed_const
+type bm_id =
+  | Bm_id of int
+  | Bm_name of int * string
 
-type big_map_diff_item =
-  | Big_map_add of key_diff * typed_const
-  | Big_map_remove of key_diff
+type ('id, 'const) big_map_diff_item =
+  | Big_map_add of { id : 'id;
+                     key_hash : string;
+                     key : 'const;
+                     value : 'const }
+  | Big_map_remove of { id : 'id;
+                        key_hash : string;
+                        key : 'const }
+  | Big_map_delete of { id : 'id }
+  | Big_map_alloc of { id : 'id }
+  | Big_map_copy of { source_id : 'id;
+                      destination_id : 'id }
 
-type big_map_diff = big_map_diff_item list
+type ('id, 'const) big_map_diff = ('id, 'const) big_map_diff_item list
+
+type liq_big_map_diff = (bm_id, typed_const) big_map_diff_item list
 
 type stack_item =
   | StackConst of typed_const
@@ -60,6 +71,7 @@ type internal_operation =
   | Transaction of {
       amount : string;
       destination : string;
+      entrypoint : string;
       parameters : typed_const option;
     }
   | Origination of {
@@ -86,9 +98,9 @@ exception RuntimeFailure of error * string option * trace option
 module type S = sig
   type 'a t
   val run : from -> string -> string -> string ->
-    (operation list * LiquidTypes.typed_const * big_map_diff option) t
+    (operation list * LiquidTypes.typed_const * liq_big_map_diff) t
   val run_debug : from -> string -> string -> string ->
-    (operation list * LiquidTypes.typed_const * big_map_diff option * trace) t
+    (operation list * LiquidTypes.typed_const * liq_big_map_diff * trace) t
   val init_storage : from -> string list -> LiquidTypes.encoded_const t
   val forge_deploy_script :
     source:string -> from -> string list ->
@@ -97,7 +109,8 @@ module type S = sig
   val deploy : from -> string list -> (string * (string, exn) result) t
   val get_storage : from -> string -> LiquidTypes.typed_const t
   val get_big_map_value :
-    from -> string -> string -> LiquidTypes.typed_const option t
+    from -> bm_id * LiquidTypes.datatype * LiquidTypes.datatype -> string ->
+    LiquidTypes.typed_const option t
   val forge_call_parameter :
     from -> string -> string -> string * LiquidToMicheline.loc_table
   val forge_call : from -> string -> string -> string -> string t
@@ -158,3 +171,5 @@ module Async = struct include Dummy type 'a t = 'a Lwt.t end
 module Sync = struct include Dummy type 'a t = 'a end
 
 let forge_call_arg ?entry_name liquid arg = ""
+
+let list_big_maps _ _ = assert false
