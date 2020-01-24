@@ -349,13 +349,6 @@ The ``Current`` module
   .. tryliquidity:: ../../../../tests/doc/doc3.liq
   .. literalinclude:: ../../../../tests/doc/doc3.liq
 
-* ``Current.gas: unit -> nat``: returns the amount of gas available to
-  execute the rest of the transaction. It is translated to
-  ``STEPS_TO_QUOTA`` in Michelson.
-
-  .. tryliquidity:: ../../../../tests/doc/doc4.liq
-  .. literalinclude:: ../../../../tests/doc/doc4.liq
-
 * ``Current.source: unit -> address``: returns the address that
   initiated the current top-level transaction in the blockchain. It is
   the same one for all the transactions resulting from the top-level
@@ -551,16 +544,6 @@ Operations on contracts
 
   .. tryliquidity:: ../../../../tests/doc/doc15.liq
   .. literalinclude:: ../../../../tests/doc/doc15.liq
-
-* ``Account.create: manager:key_hash -> delegate:key_hash option ->
-  delegatable:bool -> amount:dun -> operation * address``. Forge an
-  operation to create a new (originated) account and returns its
-  address. It is translated to ``CREATE_ACCOUNT`` in
-  Michelson. Arguments can be labeled, in which case they can be given
-  in any order.
-
-  .. tryliquidity:: ../../../../tests/doc/doc16.liq
-  .. literalinclude:: ../../../../tests/doc/doc16.liq
 
 * ``Account.default: key_hash -> UnitContract.instance``. Returns
   the contract associated to the given ``key_hash``. Since this
