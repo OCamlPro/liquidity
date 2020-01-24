@@ -105,15 +105,15 @@ and decode ( exp : encoded_exp ) : typed_exp =
     let amount = decode amount in
     let contract = decode addr in
     let arg = decode arg in
-    let desc = Call { contract; amount; entry; arg } in
+    let desc = Call { contract; amount; entry = Some entry; arg } in
     mk ?name:exp.name ~loc desc exp.ty
 
   | Call { contract; amount; entry; arg } ->
     let amount = decode amount in
     let contract = decode contract in
-    let entry = match contract.ty with
-      | Tcontract (Some e, _ ) -> e
-      | _ -> entry in
+    let entry = match contract.ty, entry with
+      | Tcontract (Some e, _ ), _ | _, Some e -> Some e
+      | _, None -> None in
     let arg = decode arg in
     let desc = Call { contract; amount; entry; arg } in
     mk ?name:exp.name ~loc desc exp.ty

@@ -644,7 +644,7 @@ let rec decompile_next (env : env) node =
       mklet env node
         (Call { contract = arg_of contract;
                 amount = arg_of amount;
-                entry = "[%unknown entry]";
+                entry = None;
                 arg = arg_of arg })
 
     | N_CREATE_CONTRACT contract, args ->

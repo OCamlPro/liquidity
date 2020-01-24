@@ -960,7 +960,7 @@ and ('ty, 'a) exp_desc =
 
   | Call of { contract: ('ty, 'a) exp;
               amount: ('ty, 'a) exp;
-              entry: string;
+              entry: string option;
               arg: ('ty, 'a) exp }
   (** Contract calls:
       - {[ contract.entry arg ~amount ]} *)

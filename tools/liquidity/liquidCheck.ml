@@ -626,32 +626,42 @@ and typecheck env ( exp : syntax_exp ) : typed_exp =
   | Call { contract; amount; entry; arg } ->
     let amount = typecheck_expected "call amount" env Ttez amount in
     let contract = typecheck env contract in
-    let arg =
-      match expand contract.ty with
-      | Tcontract (Some c_entry, arg_ty)
+    let arg, entry =
+      match expand contract.ty, entry with
+      | Tcontract (Some c_entry, arg_ty), Some entry
         when not env.decompiling && entry <> c_entry ->
         error loc
           "contract handle is for entry point %s, \
            but is called with entry point %s"
           c_entry entry
-      | Tcontract (_, arg_ty) ->
-        typecheck_expected "call argument" env arg_ty arg
-      | Taddress -> typecheck env arg
-      | Tvar _ ->
+      | Tcontract (e, arg_ty), entry ->
+        let entry = match e, entry with
+          | None, None -> None
+          | Some e, _ | _, Some e -> Some e in
+        typecheck_expected "call argument" env arg_ty arg, entry
+      | Taddress, Some _ -> typecheck env arg, entry
+      | Tvar _, Some _ ->
         let arg = typecheck env arg in
         unify contract.ty Taddress;
-        arg
-      | Tpartial (Pcont _) ->
+        arg, entry
+      | (Taddress | Tvar _), None ->
+        error loc "contract call on address must specify an entry point"
+      | Tpartial (Pcont pe), _ ->
+        let entry = match pe, entry with
+          | None, None -> None
+          | _, Some e | Some (e, _), _ -> Some e in
         let arg = typecheck env arg in
-        unify contract.ty (Tcontract (Some entry, arg.ty));
-        arg
-      | ty ->
+        unify contract.ty (Tcontract (entry, arg.ty));
+        arg, entry
+      | ty, _ ->
         error contract.loc
           "Bad contract type.\nAllowed types:\n  \
-           - Contract handle for entry point %s\n  \
+           - Contract handle%s\n  \
            - address\n\
            Actual type:\n  %s"
-          entry
+          (match entry with
+           | None -> ""
+           | Some e -> " for entry point " ^ e)
           (string_of_type ty)
     in
     let desc = Call { contract; amount; entry; arg } in
@@ -666,7 +676,7 @@ and typecheck env ( exp : syntax_exp ) : typed_exp =
       | _ -> false
     ->
     typecheck env
-      (mk (Call { contract; amount; entry; arg = param })
+      (mk (Call { contract; amount; entry = Some entry; arg = param })
          ~loc ())
 
   | Apply { prim = Prim_exec _;

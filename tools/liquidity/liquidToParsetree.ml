@@ -510,7 +510,17 @@ and convert_code ~abbrev (expr : (datatype, 'a) exp) =
         Labelled "amount", convert_code ~abbrev amount;
       ]
 
-  | Call { contract; amount; entry; arg } ->
+  | Call { contract; amount; entry = None; arg } ->
+    let contract_exp = convert_code ~abbrev contract in
+    Exp.apply ~loc
+      (Exp.ident (lid "Contract.call"))
+      [
+        Labelled "dest", contract_exp;
+        Nolabel, convert_code ~abbrev arg;
+        Labelled "amount", convert_code ~abbrev amount;
+      ]
+
+  | Call { contract; amount; entry = Some entry; arg } ->
     let contract_exp = convert_code ~abbrev contract in
     Exp.apply ~loc
       (Exp.field contract_exp (lid entry))

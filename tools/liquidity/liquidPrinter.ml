@@ -1184,7 +1184,14 @@ module LiquidDebug = struct
       bprint_code_rec ~debug b indent2 dest;
       bprint_code_rec ~debug b indent2 amount;
       Printf.bprintf b ")"
-    | Call { contract; amount; entry; arg } ->
+    | Call { contract; amount; entry = None; arg } ->
+      Printf.bprintf b "\n%s(Contract.call" indent;
+      bprint_code_rec ~debug b indent contract;
+      let indent2 = indent ^ "  " in
+      bprint_code_rec ~debug b indent2 arg;
+      bprint_code_rec ~debug b indent2 amount;
+      Printf.bprintf b ")"
+    | Call { contract; amount; entry = Some entry; arg } ->
       Printf.bprintf b "\n%s(" indent;
       bprint_code_rec ~debug b indent contract;
       Printf.bprintf b ".%s" entry;

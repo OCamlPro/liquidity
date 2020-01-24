@@ -221,7 +221,7 @@ let rec compile_desc depth env ~loc desc =
     contract @ amount @ arg @ [ ii ~loc TRANSFER_TOKENS ]
 
   | Call { contract = ({ ty = Taddress } as address);
-           amount; entry; arg } ->
+           amount; entry = Some entry; arg } ->
     (* Contract.call on addresses compiled to CONTRACT + TRANSFER_TOKENS *)
     let address = compile depth env address in
     let ty = LiquidEncode.encode_type arg.ty in

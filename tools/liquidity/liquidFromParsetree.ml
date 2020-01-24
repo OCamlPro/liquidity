@@ -924,7 +924,7 @@ and translate_code contracts env exp =
         | _ -> assert false in
       Call { contract = translate_code contracts env contract;
              amount = translate_code contracts env amount;
-             entry = "default";
+             entry = None;
              arg = translate_code contracts env arg }
 
     | { pexp_desc =
@@ -949,7 +949,7 @@ and translate_code contracts env exp =
           SelfCall { amount; entry; arg }
         | _ ->
           Call { contract = translate_code contracts env contract;
-                 amount; entry; arg }
+                 amount; entry = Some entry; arg }
       end
 
     | { pexp_desc =
@@ -1374,7 +1374,7 @@ and translate_code contracts env exp =
       ) } ->
       Call { contract = translate_code contracts env contract;
              amount = translate_code contracts env amount;
-             entry;
+             entry = Some entry;
              arg = translate_code contracts env param }
 
     (* f @@ x -> f x *)
