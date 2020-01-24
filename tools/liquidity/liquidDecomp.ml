@@ -791,14 +791,18 @@ and decompile env contract =
     | None -> "parameter", "storage"
     | Some ps -> ps in
 
+  let entry_name = match contract.mic_root with
+    | Some r -> r
+    | None -> "default" in
+
   { contract_name = "_dummy_";
     storage = contract.mic_storage;
     values = [];
-    entries = [{ entry_sig = { entry_name = "default";
+    entries = [{ entry_sig = { entry_name;
                                parameter = contract.mic_parameter;
-                               parameter_name ;
-                               storage_name  };
-                 code ;
+                               parameter_name;
+                               storage_name };
+                 code;
                  fee_code }];
     c_init = None;
     subs = [];

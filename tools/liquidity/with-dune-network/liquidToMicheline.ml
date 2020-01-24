@@ -424,12 +424,15 @@ and convert_code expand expr =
 and convert_contract_raw expand c =
   let loc = LiquidLoc.noloc in
   let arg_type = convert_type ~loc c.mic_parameter in
+  let root_annots = match c.mic_root with
+    | None -> []
+    | Some r -> convert_annots [Fannot r] in
   let storage_type = convert_type ~loc c.mic_storage in
   let code = convert_code expand c.mic_code in
   let fee_code = match c.mic_fee_code with
     | None -> None
     | Some mic_fee -> Some (convert_code expand mic_fee) in
-  let p = Micheline.Prim(loc, "parameter", [arg_type], []) in
+  let p = Micheline.Prim(loc, "parameter", [arg_type], root_annots) in
   let s = Micheline.Prim(loc, "storage", [storage_type], []) in
   let c = Micheline.Prim((loc, None), "code", [code], []) in
   let f = match fee_code with

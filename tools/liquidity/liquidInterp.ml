@@ -313,6 +313,7 @@ and constrlabel_is_in_contract c contract =
 
 
 let curr_contract = ref { mic_parameter = Tunit;
+                          mic_root = None;
                           mic_storage = Tunit;
                           mic_code = { loc = noloc;
                                        loc_name = None;

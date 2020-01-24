@@ -200,7 +200,11 @@ let type_label_of_annots annots =
   type_constr_or_label_of_annots ~allow_capital:false annots
 
 let entryname_of_annots annots =
-  type_constr_or_label_of_annots ~allow_capital:false ~keep_empty:false ~no_ignore:true annots
+  let cstrs =
+    type_constr_or_label_of_annots ~allow_capital:false ~keep_empty:false ~no_ignore:true annots in
+  match cstrs with
+  | [] -> None
+  | x :: _ -> Some x
 
 
 let add_generalize_to_env =
@@ -359,8 +363,8 @@ let rec find nodes ?annots name =
   | Prim(_, name_maybe, [ v ], a) :: nodes ->
     if name_maybe = name then
       match annots with
-      | None -> v
-      | Some a' when a = a' -> v
+      | None -> v, a
+      | Some a' when a = a' -> v, a
       | Some _ ->
         find nodes ?annots name
     else find nodes ?annots name
@@ -613,9 +617,7 @@ and convert_code env expr =
   | Prim(index, "SENDER", [], annot) ->
     mic_loc env index annot (SENDER)
   | Prim(index, "SELF", [], annot) ->
-    let entry = match entryname_of_annots annot with
-      | [] -> None
-      | e :: _ -> Some e  in
+    let entry = entryname_of_annots annot in
     mic_loc env index annot (SELF entry)
   | Prim(index, "OR", [], annot) ->
     mic_loc env index annot (OR)
@@ -693,9 +695,7 @@ and convert_code env expr =
       | _ -> mic_loc env index annot (RIGHT (ty, None))
     end
   | Prim(index, "CONTRACT", [ty], annot) ->
-    let entry = match entryname_of_annots annot with
-      | [] -> None
-      | e :: _ -> Some e  in
+    let entry = entryname_of_annots annot in
     mic_loc env index annot (CONTRACT (entry, convert_type env ty))
   | Prim(index, "UNPACK", [ty], annot) ->
     mic_loc env index annot
@@ -760,15 +760,24 @@ and convert_code env expr =
 
   | _ -> unknown_expr env "convert_code" expr
 
+and root_name_of_param p annots =
+  match entryname_of_annots annots with
+  | Some _ as e -> e
+  | None -> match p with
+    | Prim(_, "or", [_; _], annots) -> entryname_of_annots annots
+    | _ -> None
+
 and convert_raw_contract env c =
-  let mic_parameter = convert_type env ~parameter:true (find c "parameter") in
-  let mic_storage = convert_type env (find c "storage") in
-  let mic_code = convert_code env (find c "code" ~annots:[]) in
+  let param_node, param_annots = find c "parameter" in
+  let mic_parameter = convert_type env ~parameter:true param_node in
+  let mic_root = root_name_of_param param_node param_annots in
+  let mic_storage = convert_type env (find c "storage" |> fst) in
+  let mic_code = convert_code env (find c "code" ~annots:[] |> fst) in
   let mic_fee_code =
     try
-      Some (convert_code env (find c "code" ~annots:["@fee"]))
+      Some (convert_code env (find c "code" ~annots:["@fee"] |> fst))
     with Missing_program_field _ -> None in
-  { mic_storage; mic_parameter; mic_code; mic_fee_code }
+  { mic_storage; mic_parameter; mic_code; mic_fee_code; mic_root }
 
 let convert_contract env c =
   if !LiquidOptions.verbosity > 0 then

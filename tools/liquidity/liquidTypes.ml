@@ -449,6 +449,7 @@ exception LiquidError of error
 (** Type of Michelson contracts *)
 type 'a mic_contract = {
   mic_parameter : datatype;
+  mic_root : string option;
   mic_storage : datatype;
   mic_code : 'a;
   mic_fee_code : 'a option;

@@ -1556,13 +1556,16 @@ and encode_contract ?(annot=false) ?(decompiling=false) contract =
       let init_body = encode env i.init_body in
       Some { i with init_body; init_args }
   in
+  let root_name = match contract.entries with
+    | [e] -> e.entry_sig.entry_name (* Keep entry name as root if only one entry *)
+    | _ -> "__root__" in
   let contract = {
     contract_name = contract.contract_name;
     values = [];
     storage = encode_storage_type env contract.storage;
     entries = [{
         entry_sig = {
-          entry_name = "default";
+          entry_name = root_name;
           parameter_name = pname;
           storage_name;
           parameter = encode_parameter_type env parameter;
