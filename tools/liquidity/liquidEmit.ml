@@ -39,8 +39,6 @@ let field_annot = function
 
 let entrypoint_annot = field_annot
 
-let ins_int n = M_INS (string_of_int n, [])
-
 let rec emit_code ~expand code =
   let name = code.loc_name in
   let i = i ~loc:code.loc in
@@ -94,8 +92,7 @@ let rec emit_code ~expand code =
 
   | DIP (0, exp) -> emit_code ~expand exp
   | DIP (1, exp) -> M_INS_EXP ("DIP", [], [emit_code ~expand exp], [])
-  | DIP (n, exp) ->
-    M_INS_EXP ("DIP", [], [ins_int n; emit_code ~expand exp], [])
+  | DIP (n, exp) -> M_INS_EXP_N ("DIP", n, [emit_code ~expand exp], [])
   | DUP 0 -> assert false
   | DUP 1 -> M_INS ("DUP", var_annot name)
   | DUP n ->
@@ -107,8 +104,8 @@ let rec emit_code ~expand code =
       ]
     else M_INS (Printf.sprintf "D%sP" (String.make n 'U'), var_annot name)
   | DIG 1 -> M_INS ("SWAP", [])
-  | DIG n -> M_INS_EXP ("DIG", [], [ins_int n], [])
-  | DUG n -> M_INS_EXP ("DUG", [], [ins_int n], [])
+  | DIG n -> M_INS_N ("DIG", n, [])
+  | DUG n -> M_INS_N ("DUG", n, [])
 
   | CDAR (0, field) -> emit_code expand { code with ins = CAR field }
   | CDDR (0, field) -> emit_code expand { code with ins = CDR field }
@@ -126,8 +123,8 @@ let rec emit_code ~expand code =
              (fun _ -> i @@ CDR None) @ [{ code with ins = CDR field }])
     else M_INS (Printf.sprintf "C%sDR" (String.make n 'D'),
                 var_annot name @ field_annot field)
-  | DROP 1 -> M_INS ("DROP", var_annot name)
-  | DROP n -> M_INS_EXP ("DROP", [], [ins_int n], var_annot name)
+  | DROP 1 -> M_INS ("DROP", [])
+  | DROP n -> M_INS_N ("DROP", n, [])
   | CAR field -> M_INS ("CAR", var_annot name @ field_annot field)
   | CDR field -> M_INS ("CDR", var_annot name @ field_annot field)
   | PAIR -> M_INS ("PAIR", var_annot name)

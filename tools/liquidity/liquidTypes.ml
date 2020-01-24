@@ -1367,8 +1367,10 @@ let eq_syntax_exp e1 e2 = eq_exp (fun _ _ -> true) (=) e1 e2
 (** Type of Michelson expression *)
 type michelson_exp =
   | M_INS of string * string list
+  | M_INS_N of string * int * string list
   | M_INS_CST of string * datatype * michelson_exp const * string list
   | M_INS_EXP of string * datatype list * michelson_exp list * string list
+  | M_INS_EXP_N of string * int * michelson_exp list * string list
 
 (** Intermediate representation for Michelson expressions, the first
     parameter to allow annotated (or not) expressions *)

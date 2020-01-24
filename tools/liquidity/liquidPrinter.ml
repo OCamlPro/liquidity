@@ -361,6 +361,8 @@ module Michelson = struct
     match code with
     | M_INS (ins, annots) ->
       Printf.bprintf b "%s%s ;" ins (annots_to_string annots)
+    | M_INS_N (ins, n, annots) ->
+      Printf.bprintf b "%s%s %d ;" ins (annots_to_string annots) n
     | M_INS_CST (ins, ty, cst, annots) ->
       let indent = fmt.increase_indent indent in
       Printf.bprintf b "%s%s%c%s"
@@ -384,6 +386,14 @@ module Michelson = struct
       List.iter (fun ty ->
           Printf.bprintf b "%c%s" fmt.newline indent;
           bprint_type fmt b indent ty) tys;
+      List.iter (fun exp ->
+          Printf.bprintf b "%c%s" fmt.newline indent;
+          bprint_code fmt b indent exp) exps;
+      Printf.bprintf b "%c%s;" fmt.newline indent;
+    | M_INS_EXP_N (ins, n, exps, annots) ->
+      let indent = fmt.increase_indent indent in
+      Printf.bprintf b "%s%s" ins (annots_to_string annots);
+      Printf.bprintf b "%c%s%d" fmt.newline indent n;
       List.iter (fun exp ->
           Printf.bprintf b "%c%s" fmt.newline indent;
           bprint_code fmt b indent exp) exps;
