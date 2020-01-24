@@ -526,21 +526,19 @@ let effect_binding env bnd_val = match bnd_val.desc with
   | _ -> bnd_val.effect
 
 let register_inlining ~loc env new_name count inline bnd_val =
-  if not bnd_val.transfer (* no inlining of values with transfer *) then begin
-    match !count with
-    | c when c <= 0 ->
-      if effect_binding env bnd_val then
-        () (* No inling of values with side effects which don't
-              appear later on *)
-      else begin
-        decr_counts_vars env bnd_val;
-        env.to_inline :=
-          StringMap.add new_name (const_unit ~loc) !(env.to_inline)
-      end
-    | c when (c = 1 && inline = InAuto) || inline = InForced ->
-      env.to_inline := StringMap.add new_name bnd_val !(env.to_inline)
-    | _ -> ()
-  end
+  match !count with
+  | c when c <= 0 ->
+    if effect_binding env bnd_val then
+      () (* No inling of values with side effects which don't
+            appear later on *)
+    else begin
+      decr_counts_vars env bnd_val;
+      env.to_inline :=
+        StringMap.add new_name (const_unit ~loc) !(env.to_inline)
+    end
+  | c when (c = 1 && inline = InAuto) || inline = InForced ->
+    env.to_inline := StringMap.add new_name bnd_val !(env.to_inline)
+  | _ -> ()
 
 let register_inlining_value env v =
   try
