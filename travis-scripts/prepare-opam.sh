@@ -35,4 +35,3 @@ eval $(opam config env)
 
 opam update
 make build-deps
-make clone-dune-network
