@@ -112,7 +112,7 @@ and decode ( exp : encoded_exp ) : typed_exp =
     let amount = decode amount in
     let contract = decode contract in
     let entry = match contract.ty with
-      | Tcontract (e, _ ) -> e
+      | Tcontract (Some e, _ ) -> e
       | _ -> entry in
     let arg = decode arg in
     let desc = Call { contract; amount; entry; arg } in

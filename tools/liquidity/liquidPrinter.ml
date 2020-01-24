@@ -915,8 +915,12 @@ module LiquidDebug = struct
           ) rtys;
       | Tsum (Some name, _) ->
         Printf.bprintf b "%s" name;
-      | Tcontract (entry, ty) ->
+      | Tcontract (Some entry, ty) ->
         Printf.bprintf b "[%%handle %s : " entry;
+        bprint_type b "" ty;
+        Printf.bprintf b "]";
+      | Tcontract (None, ty) ->
+        Printf.bprintf b "[%%handle ";
         bprint_type b "" ty;
         Printf.bprintf b "]";
       | Tor (ty1, ty2) ->

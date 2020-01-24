@@ -252,6 +252,12 @@ let rec translate_type env ?expected typ =
     Ttuple (List.map2 (fun ty expected -> translate_type env ?expected ty)
               types expecteds)
 
+  | { ptyp_desc = Ptyp_extension ({ txt = "handle" }, PTyp t) } ->
+    let expected = match expected with
+      | Some Tcontract (_, t) -> Some t
+      | _ -> None in
+    Tcontract (None, translate_type env ?expected t)
+
   | { ptyp_desc = Ptyp_constr ({ txt = ty_name; loc }, params); ptyp_loc } ->
     let ty_name = str_of_id ty_name in
     let loc = loc_of_loc loc in

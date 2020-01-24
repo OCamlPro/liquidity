@@ -795,7 +795,7 @@ and decompile env contract =
 
   let entry_name = match contract.mic_root with
     | Some r -> r
-    | None -> "default" in
+    | None -> "__root__" in
 
   { contract_name = "_dummy_";
     storage = contract.mic_storage;

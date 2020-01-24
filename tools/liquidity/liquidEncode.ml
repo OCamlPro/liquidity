@@ -329,7 +329,7 @@ let rec allowed_type
     allowed_type ~allow_big_map ~allow_operation ~allow_contract t
   | Tcontract (_, t) ->
     allow_contract &&
-    allowed_type ~allow_big_map ~allow_operation ~allow_contract t
+    allowed_type ~allow_big_map ~allow_operation:false ~allow_contract:true t
   | Tor (t1, t2) ->
     allowed_type ~allow_big_map ~allow_operation ~allow_contract t1 &&
     allowed_type ~allow_big_map ~allow_operation ~allow_contract t2

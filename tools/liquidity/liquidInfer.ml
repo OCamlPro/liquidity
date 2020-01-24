@@ -298,11 +298,12 @@ let rec unify loc ty1 ty2 =
         begin match ty, c with
           | Tcontract (e, ty), None ->
             Tcontract (e, ty), []
-          | Tcontract (e, ty), Some (ep, typ) ->
-            if e <> ep then
-              error loc "Handles for different entry points (%s and %s)" e ep;
+          | Tcontract (Some e, ty), Some (ep, typ) ->
             unify typ ty;
+            let e = if e <> ep then None else Some e in
             Tcontract (e, ty), []
+          | Tcontract (None, ty), Some (ep, typ) ->
+            Tcontract (Some ep, ty), []
           | _, _ -> error loc "Partial contract incompatible with %S"
                    (string_of_type ty)
         end
@@ -372,9 +373,12 @@ let rec unify loc ty1 ty2 =
         tyx1, []
 
       | Tcontract (e1, ty1), Tcontract (e2, ty2) ->
-        if e1 <> e2 then
-          error loc "Handles for different entry points (%s and %s)"
-            e1 e2;
+        (match e1, e2 with
+         | Some e1, Some e2 when e1 <> e2 ->
+           error loc "Handles for different entry points (%s and %s)"
+             e1 e2
+         | _ -> ()
+        );
         unify ty1 ty2;
         tyx1, []
 
@@ -594,7 +598,7 @@ let get_type env loc ty =
         | Tpartial (Pcont c) ->
           let tyo = match c with
             | None -> unit_contract_ty
-            | Some (e, ty) -> Tcontract (e, ty) in
+            | Some (e, ty) -> Tcontract (Some e, ty) in
           Ref.set tvr { tv with tyo = Some tyo }; ty
 
         | Tpartial (Peqn _) as ty ->

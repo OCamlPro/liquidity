@@ -272,9 +272,8 @@ let rec convert_type ?(parameter=false) env expr =
       end
 
     | Prim(_, "contract", [x], annots) ->
-      (* XXX should not appear *)
       let parameter = convert_type env x in
-      Tcontract ("default", parameter)
+      Tcontract (None, parameter)
 
     | Prim(_, "lambda", [x;y], _debug) ->
       Tlambda
@@ -578,6 +577,8 @@ and convert_code env expr =
       (IF_CONS (convert_code env x, convert_code env y))
   | Prim(index, "NOW", [], annot) ->
     mic_loc env index annot (NOW)
+  | Prim(index, "CHAIN_ID", [], annot) ->
+    mic_loc env index annot (CHAIN_ID)
   | Prim(index, "PAIR", [], annot) ->
     begin match type_label_of_annots annot with
       | [x] -> mic_loc env index annot (RECORD (x, None))

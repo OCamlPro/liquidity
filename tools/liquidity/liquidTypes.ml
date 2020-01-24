@@ -98,7 +98,7 @@ type datatype =
 
   | Tmap of datatype * datatype
   | Tbigmap of datatype * datatype
-  | Tcontract of string * datatype
+  | Tcontract of string option * datatype
   | Tor of datatype * datatype
   | Tlambda of datatype * datatype * uncurry_flag
 
@@ -326,7 +326,8 @@ let rec eq_types ty1 ty2 = match expand ty1, expand ty2 with
       with Invalid_argument _ -> false
     end
 
-  | Tcontract (e1, ty1), Tcontract (e2, ty2) -> e1 = e2 && eq_types ty1 ty2
+  | Tcontract (Some e1, ty1), Tcontract (Some e2, ty2) -> e1 = e2 && eq_types ty1 ty2
+  | Tcontract (_, ty1), Tcontract (_, ty2) -> eq_types ty1 ty2
 
   | Tvar tvr1, Tvar tvr2 -> (Ref.get tvr1).id = (Ref.get tvr2).id
 
@@ -1635,7 +1636,7 @@ let contract_sig_of_default ?sig_name parameter = {
     }];
 }
 
-let contract_type_of_default ty = Tcontract ("default", ty)
+let contract_type_of_default ty = Tcontract (Some "default", ty)
 
 let dummy_contract_sig = {
   f_sig_name = None;

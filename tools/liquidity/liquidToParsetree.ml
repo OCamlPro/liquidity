@@ -205,8 +205,8 @@ let rec convert_type ~abbrev ?name ty =
           (StringMap.bindings subst)
       with Not_found -> params in
     typ_constr name args
-  | Tcontract _ ->
-    failwith "Cannot produce contract handle types in source"
+  | Tcontract (_, ty) ->
+    Typ.extension (id "handle", PTyp (convert_type ~abbrev ty))
   | Tvar { contents = { contents = { id; tyo = None | Some Tpartial _ }}} ->
     Typ.var id
   | Tvar { contents = { contents = { tyo = Some ty }}} ->

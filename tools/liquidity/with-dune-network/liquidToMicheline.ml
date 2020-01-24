@@ -117,7 +117,6 @@ let rec convert_type ~loc expr =
     prim_type ~loc "pair" [convert_type ~loc x; convert_type ~loc (Ttuple tys)]
   | Tor (x,y) -> prim_type ~loc "or" [convert_type ~loc x; convert_type ~loc y]
   | Tcontract (e, parameter) ->
-    (* XXX Should not appear! *)
     prim_type ~loc "contract" [convert_type ~loc parameter]
   | Tlambda (x,y, _) ->
     prim_type ~loc "lambda" [convert_type ~loc x;
