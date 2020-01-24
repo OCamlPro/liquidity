@@ -224,7 +224,7 @@ let%entry kill (dest: address) storage =
   match confirmAndCheck (Kill dest, storage) with
   | Confirmations_Needed storage -> no_op, storage
   | Execute storage ->
-    let trans_all = Contract.call dest (Current.balance ()) () in
+    let trans_all = dest.default () ~amount:(Current.balance ()) in
     [trans_all], storage
 
 let%entry withdraw (t: transaction) storage =
@@ -232,7 +232,7 @@ let%entry withdraw (t: transaction) storage =
   (* execute directly if under limit *)
   let under, storage = underLimit (t.amount, storage) in
   if under then
-    let op = Contract.call t.destination t.amount () in
+    let op = t.destination.default () ~amount:t.amount in
     [op], storage
   else
     match confirmAndCheck (Withdraw t, storage) with

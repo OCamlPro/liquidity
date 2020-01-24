@@ -3,7 +3,7 @@ type t = A of int | B | C of (int * nat)
 type storage = int
 
 let%entry default
-    (parameter : address * t)
+    (parameter : [%handle: unit] * t)
     _storage =
 
   let (c, m) = parameter in

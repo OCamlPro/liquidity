@@ -5,7 +5,7 @@
 type storage = tez
 
 let%entry default
-      (parameter : address)
+      (parameter : [%handle: unit] )
       storage =
 
       let amount = Current.amount () in

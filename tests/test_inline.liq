@@ -9,7 +9,7 @@ let g x = x + 2
 let h x = x + 3 [@@inline]
 
 (* Will not be inlined, even with attribute *)
-let op = Contract.call (Contract.self ()) 0tz () [@@inline]
+let op = Contract.call (Contract.self ()) 0DUN default () [@@inline]
 
 type storage = int
 

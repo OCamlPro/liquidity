@@ -29,9 +29,9 @@ let%entry default
                    # We update the global*)
         let storage = storage.state <- "success" in
         let (pn0, _) = storage.pn in
-        let op1 = Contract.call storage.x pn0 () in
+        let op1 = Contract.call storage.x pn0 default () in
         let (_, pn1) = storage.pn in
-        let op2 = Contract.call storage.a pn1 () in
+        let op2 = Contract.call storage.a pn1 default () in
         ( [op1; op2], storage )
     else
       (* # After timeout, we refund
@@ -45,9 +45,9 @@ let%entry default
         if available < p then available
         else p
       in
-      let op1 = Contract.call storage.x transfer () in
+      let op1 = Contract.call storage.x transfer default () in
       (* # We transfer the rest to B *)
       let transfer = Current.balance () - 1.00tz in
-      let op2 = Contract.call storage.b transfer () in
+      let op2 = Contract.call storage.b transfer default () in
 
       ( [op1; op2], storage )
