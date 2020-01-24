@@ -81,7 +81,7 @@ module HAbbrev = Hashtbl.Make (struct
       | Tvar { contents  = { contents = { tyo = Some ty }}} -> erase_names ty
       | Tunit|Tbool|Tint|Tnat|Ttez
       | Tstring|Tbytes|Ttimestamp|Tkey|Tkey_hash|Tsignature|Toperation|Taddress
-      | Tfail | Tpartial _ | Tvar _ -> ty
+      | Tfail | Tpartial _ | Tvar _ | Tchainid -> ty
       | Ttuple tyl -> Ttuple (List.map erase_names tyl)
       | Toption ty -> Toption (erase_names ty)
       | Tlist ty -> Tlist (erase_names ty)
@@ -185,6 +185,7 @@ let rec convert_type ~abbrev ?name ty =
   | Tbytes -> typ_constr "bytes" []
   | Toperation -> typ_constr "operation" []
   | Taddress -> typ_constr "address" []
+  | Tchainid -> typ_constr "chain_id" []
   | Tsum (None, constrs) ->
     let rows = List.map (fun (n, ty) ->
         let n = match n.[0] with
@@ -218,7 +219,7 @@ let rec convert_type ~abbrev ?name ty =
       let caml_ty, t_name = match ty with
         | Ttez | Tunit | Ttimestamp | Tint | Tnat | Tbool
         | Tkey | Tkey_hash | Tsignature | Tstring | Tbytes | Toperation | Taddress
-        | Tfail | Trecord _ | Tsum _ | Tcontract _ -> assert false
+        | Tfail | Trecord _ | Tsum _ | Tcontract _ | Tchainid -> assert false
         | Ttuple args ->
           Typ.tuple (List.map (convert_type ~abbrev) args), "pair_t"
         | Tor (x,y) ->

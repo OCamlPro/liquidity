@@ -50,6 +50,7 @@ let rec default_const = function
       "edsigthTzJ8X7MPmNeEwybRAvdxS1pupqcM5Mk4uCuyZAe7uEk\
        68YpuGDeViW8wSXMrCi5CwoNgqs8V2w8ayB5dMJzrYCHhD8C7"
   | Taddress -> CAddress "KT1BEqzn5Wx8uJrZNvuS9DVHmLvG9td3fDLi"
+  | Tchainid -> CString "NetXwhYbWGa82xo"
   | Ttuple l ->
     CTuple (List.map default_const l)
   | Toption ty -> CSome (default_const ty)
@@ -97,6 +98,7 @@ let rec default_empty_const = function
       "edsigthTzJ8X7MPmNeEwybRAvdxS1pupqcM5Mk4uCuyZAe7uEk\
        68YpuGDeViW8wSXMrCi5CwoNgqs8V2w8ayB5dMJzrYCHhD8C7"
   | Taddress -> CAddress "KT1GE2AZhazRxGsAjRVkQccHcB2pvANXQWd7"
+  | Tchainid -> CString "NetXwhYbWGa82xo"
   | Ttuple l ->
     CTuple (List.map default_empty_const l)
   | Toption ty -> CNone

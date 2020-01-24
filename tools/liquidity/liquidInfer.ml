@@ -675,7 +675,7 @@ let rec vars_to_unit ?loc ty = match ty with
       "Type cannot be inferred, please add an annotation : %s"
       (string_of_type ty)
   | Tunit | Tbool | Tint | Tnat | Ttez | Tstring | Tbytes | Ttimestamp | Tkey
-  | Tkey_hash | Tsignature | Toperation | Taddress | Tfail -> ty
+  | Tkey_hash | Tsignature | Toperation | Taddress | Tfail | Tchainid -> ty
 
 and sig_vars_to_unit ?loc c =
   { c with entries_sig =
@@ -1161,7 +1161,7 @@ let copy_ty ty =
   let rec copy_ty ty = match ty with
     |Tunit|Tbool|Tint|Tnat|Ttez|
      Tstring|Tbytes|Ttimestamp|Tkey|Tkey_hash|Tsignature|Toperation|Taddress|
-     Tfail -> ty
+     Tfail | Tchainid -> ty
     | Ttuple tyl -> Ttuple (List.map copy_ty tyl)
     | Toption ty -> Toption (copy_ty ty)
     | Tlist ty -> Tlist (copy_ty ty)

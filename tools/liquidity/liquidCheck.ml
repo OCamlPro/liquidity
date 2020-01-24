@@ -297,7 +297,7 @@ let rec set_uncurry exp =
     set_uncurry f
   | _ -> ()
 
-let rec typecheck_const ~loc env cst ty =
+let rec typecheck_const ~loc env (cst : syntax_const) ty : datatype * typed_const =
   match ty, cst with
   (* No implicit conversions *)
   | ( Tunit, CUnit
@@ -329,6 +329,9 @@ let rec typecheck_const ~loc env cst ty =
   | Tkey_hash, CString s -> ty, CKey_hash s
   | Tkey, CString s -> ty, CKey s
   | Tsignature, CString s -> ty, CSignature s
+
+  | Tchainid, CString s -> ty, CString s
+  | Tchainid, CBytes s -> ty, CBytes s
 
   (* Structures *)
   | Ttuple tys, CTuple csts ->
@@ -1548,6 +1551,7 @@ and typecheck_prim2i env prim loc args =
   | ( Prim_balance | Prim_amount ), [ ty ] -> unify ty Tunit; Ttez
   | ( Prim_source | Prim_sender ), [ ty ] -> unify ty Tunit; Taddress
   | Prim_gas, [ ty ] -> unify ty Tunit; Tnat
+  | Prim_chain_id, [ ty ] -> unify ty Tunit; Tchainid
 
   | Prim_pack, [ ty ] ->
     Tbytes
@@ -1775,6 +1779,7 @@ and typecheck_prim2t env prim loc args =
   | Prim_sha256, [ Tbytes ] -> Tbytes
   | Prim_sha512, [ Tbytes ] -> Tbytes
   | Prim_hash_key, [ Tkey ] -> Tkey_hash
+  | Prim_chain_id, [ Tunit ] -> Tchainid
 
   | Prim_check, [ Tkey; Tsignature; Tbytes ] ->
     Tbool
@@ -1903,6 +1908,7 @@ and expected_prim_types = function
   | Prim_sender
   | Prim_amount
   | Prim_gas
+  | Prim_chain_id
   | Prim_block_level
   | Prim_collect_call
   | Prim_big_map_create ->

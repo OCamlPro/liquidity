@@ -108,6 +108,7 @@ let rec convert_type ~loc expr =
   | Tbytes -> prim_type ~loc "bytes" []
   | Toperation -> prim_type ~loc "operation" []
   | Taddress -> prim_type ~loc "address" []
+  | Tchainid -> prim_type ~loc "chain_id" []
   | Ttuple [x] -> assert false
   | Ttuple [] -> assert false
   | Ttuple [x;y] ->
@@ -317,6 +318,7 @@ and convert_code expand expr =
   | MOD -> prim "MOD" [] name
   | DIV -> prim "DIV" [] name
   | AMOUNT -> prim "AMOUNT" [] name
+  | CHAIN_ID -> prim "CHAIN_ID" [] name
                    (*
   | prim "EMPTY_MAP" [ty1; ty2] ->
      PUSH (Tmap (convert_type ty1, convert_type ty2), CMap [])

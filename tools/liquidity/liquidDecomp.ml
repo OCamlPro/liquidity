@@ -53,6 +53,7 @@ let const_name_of_datatype = function
   | Tfail -> "fail"
   | Toperation -> "op"
   | Taddress -> "addr"
+  | Tchainid -> "chain"
   | Tvar _ | Tpartial _ -> assert false
 
 
@@ -366,6 +367,7 @@ let rec decompile_next (env : env) node =
         | "BALANCE", [] -> Prim_balance, [unit ~loc]
         | "AMOUNT",[] -> Prim_amount, [unit ~loc]
         | "STEPS_TO_QUOTA",[] -> Prim_gas, [unit ~loc]
+        | "CHAIN_ID",[] -> Prim_chain_id, [unit ~loc]
         | "SOURCE",[] -> Prim_source, [unit ~loc]
         | "SENDER",[] -> Prim_sender, [unit ~loc]
         | "BLOCK_LEVEL", [] -> Prim_block_level, [unit ~loc]

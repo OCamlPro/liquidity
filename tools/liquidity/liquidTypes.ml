@@ -87,6 +87,7 @@ type datatype =
   | Tkey_hash
   | Tsignature
   | Toperation
+  | Tchainid
   | Taddress
 
   | Ttuple of datatype list
@@ -257,7 +258,8 @@ let is_arrow_type = function
 let rec may_contain_arrow_type ty = match expand ty with
   | Tlambda _ | Tclosure _ -> true
   | Toperation | Tunit | Tbool | Tint | Tnat | Ttez | Tstring | Tbytes
-  | Ttimestamp | Tkey | Tkey_hash | Tsignature | Taddress | Tfail -> false
+  | Ttimestamp | Tkey | Tkey_hash | Tsignature | Taddress | Tfail | Tchainid ->
+    false
   | Ttuple l -> List.exists may_contain_arrow_type l
   | Toption ty | Tlist ty | Tset ty | Tcontract (_, ty) ->
     may_contain_arrow_type ty
@@ -284,6 +286,7 @@ let rec eq_types ty1 ty2 = match expand ty1, expand ty2 with
   | Tsignature, Tsignature
   | Toperation, Toperation
   | Taddress, Taddress
+  | Tchainid, Tchainid
   | Tfail, Tfail ->
     true
 
@@ -346,7 +349,8 @@ and eq_signature { entries_sig = s1 } { entries_sig = s2 } =
 let rec type_contains_nonlambda_operation ty = match expand ty with
   | Toperation -> true
   | Tunit | Tbool | Tint | Tnat | Ttez | Tstring | Tbytes
-  | Ttimestamp | Tkey | Tkey_hash | Tsignature | Taddress | Tfail -> false
+  | Ttimestamp | Tkey | Tkey_hash | Tsignature | Taddress | Tfail | Tchainid ->
+    false
   | Ttuple l -> List.exists type_contains_nonlambda_operation l
   | Toption ty | Tlist ty | Tset ty | Tcontract (_, ty) ->
     type_contains_nonlambda_operation ty
@@ -551,6 +555,8 @@ type primitive =
   | Prim_string_concat
   | Prim_bytes_concat
 
+  | Prim_chain_id
+
   (* Dune specific *)
   | Prim_block_level
   | Prim_get_balance
@@ -684,6 +690,8 @@ let () =
        "String.concat", Prim_string_concat;
        "String.slice", Prim_string_sub;
        "String.sub", Prim_string_sub;
+
+       "Chain.id", Prim_chain_id;
 
        "@", Prim_concat_two;
 
@@ -1414,6 +1422,7 @@ type 'a pre_michelson =
   | HASH_KEY
   | CHECK_SIGNATURE
   | ADDRESS
+  | CHAIN_ID
 
   | CONS
   | OR
@@ -1669,7 +1678,7 @@ let predefined_types =
       "set", Tunit;
       "big_map", Tunit;
       "variant", Tunit;
-      "instance", Tunit;
+      "chain_id", Tunit;
     ]
 
 (** Predefined signature for contract with unit parameter *)
@@ -1687,7 +1696,7 @@ let reserved_keywords = [
   "let"; "in"; "match" ; "int"; "bool"; "string"; "bytes";
   "get"; "set"; "tuple"; "with"; "fun"; "or"; "and"; "land";
   "lor"; "xor"; "not"; "lsl"; "lsr"; "lxor"; "abs"; "type";
-  "is_nat"; "do"
+  "is_nat"; "do"; "done"; "for"; "while"; "to";
 ]
 
 let has_reserved_prefix s =

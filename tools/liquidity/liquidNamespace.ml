@@ -160,7 +160,8 @@ let rec find_contract_type_aux ~loc s env =
 let rec normalize_type ?from_env ~in_env ty =
   match ty with
   | Tunit | Tbool | Tint | Tnat | Ttez | Tstring | Tbytes | Ttimestamp
-  | Tkey | Tkey_hash | Tsignature | Toperation | Taddress | Tfail -> ty
+  | Tkey | Tkey_hash | Tsignature | Toperation | Taddress | Tfail | Tchainid ->
+    ty
   | Ttuple l -> Ttuple (List.map (normalize_type ?from_env ~in_env) l)
   | Toption t -> Toption (normalize_type ?from_env ~in_env t)
   | Tlist t -> Tlist (normalize_type ?from_env ~in_env t)

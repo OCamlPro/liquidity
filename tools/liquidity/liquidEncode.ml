@@ -234,7 +234,7 @@ let rec encode_type ?(decompiling=false) ty =
   (* else *)
   match ty with
   | Ttez | Tunit | Ttimestamp | Tint | Tnat | Tbool | Tkey | Tkey_hash
-  | Tsignature | Tstring | Tbytes | Toperation | Taddress | Tfail -> ty
+  | Tsignature | Tstring | Tbytes | Toperation | Taddress | Tfail | Tchainid -> ty
   | Ttuple tys ->
     let tys' = List.map (encode_type ~decompiling) tys in
     if List.for_all2 (==) tys tys' then ty
@@ -315,7 +315,7 @@ let rec allowed_type
     ?(allow_operation=true)
     ?(allow_contract=true) = function
   | Ttez | Tunit | Ttimestamp | Tint | Tnat | Tbool | Tkey | Tkey_hash
-  | Tsignature | Tstring | Taddress | Tbytes -> true
+  | Tsignature | Tstring | Taddress | Tbytes | Tchainid -> true
   | Toperation -> allow_operation
   | Tfail -> false
   | Ttuple tys ->

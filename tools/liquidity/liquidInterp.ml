@@ -252,7 +252,7 @@ let rec undo_cdr acc node =
 
 let rec constrlabel_is_in_type c = function
   | Tunit | Tbool | Tint | Tnat | Ttez | Tstring | Tbytes | Ttimestamp
-  | Tkey | Tkey_hash | Tsignature | Toperation | Taddress | Tfail ->
+  | Tkey | Tkey_hash | Tsignature | Toperation | Taddress | Tfail | Tchainid ->
     false
   | Ttuple tys -> List.exists (constrlabel_is_in_type c) tys
   | Toption ty | Tlist ty | Tset ty | Tcontract (_, ty) -> constrlabel_is_in_type c ty
@@ -280,7 +280,7 @@ let rec constrlabel_is_in_code c code =
   | OR | XOR | AND | NOT | INT | ABS | ISNAT | NEG | MUL | EDIV | LSL | LSR
   | SOURCE | SENDER | SIZE | IMPLICIT_ACCOUNT | SET_DELEGATE | PACK | MOD | DIV
   | BLOCK_LEVEL | IS_IMPLICIT | COLLECT_CALL | GET_BALANCE | EMPTY_BIG_MAP _
-  | DIG _ | DUG _
+  | DIG _ | DUG _ | CHAIN_ID
     -> false
   | UNPACK ty
   | PUSH (ty, _)
@@ -849,6 +849,9 @@ and decompile_aux stack (seq : node) ins =
     x :: stack, x
   | AMOUNT, stack ->
     let x = node ins.loc (N_PRIM "AMOUNT") [] [seq] in
+    x :: stack, x
+  | CHAIN_ID, stack ->
+    let x = node ins.loc (N_PRIM "CHAIN_ID") [] [seq] in
     x :: stack, x
 
   | IMPLICIT_ACCOUNT, key :: stack ->

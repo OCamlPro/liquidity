@@ -163,6 +163,7 @@ let rec translate_type env ?expected typ =
   | { ptyp_desc = Ptyp_constr ({ txt = Lident "signature" }, []) } -> Tsignature
   | { ptyp_desc = Ptyp_constr ({ txt = Lident "operation" }, []) } -> Toperation
   | { ptyp_desc = Ptyp_constr ({ txt = Lident "address" }, []) } -> Taddress
+  | { ptyp_desc = Ptyp_constr ({ txt = Lident "chain_id" }, []) } -> Tchainid
 
   | { ptyp_desc = Ptyp_constr ({ txt = Lident "option" }, [param_type]) } ->
     let expected = match expected with
@@ -350,7 +351,7 @@ let translate_ext_type env typ =
 (* Prevent uncurring of lambda's in a type *)
 let rec set_curry_flag ty = match ty with
   | Tunit | Tbool | Tint | Tnat | Ttez | Tstring | Tbytes | Ttimestamp | Tkey
-  | Tkey_hash | Tsignature | Toperation | Taddress | Tfail -> ()
+  | Tkey_hash | Tsignature | Toperation | Taddress | Tfail | Tchainid -> ()
   | Ttuple tyl -> List.iter set_curry_flag tyl
   | Toption ty | Tlist ty | Tset ty | Tcontract (_, ty) -> set_curry_flag ty
   | Tmap (ty1, ty2) | Tbigmap (ty1, ty2) | Tor (ty1, ty2) ->

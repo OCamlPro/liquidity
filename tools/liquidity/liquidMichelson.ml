@@ -518,6 +518,7 @@ and compile_prim ~loc depth env prim args =
   | Prim_now, _ -> [ ii NOW ]
   | Prim_amount, _ -> [ ii AMOUNT ]
   | Prim_gas, _ -> [ ii STEPS_TO_QUOTA ]
+  | Prim_chain_id, _ -> [ ii CHAIN_ID ]
   | Prim_source, _ -> [ ii SOURCE ]
   | Prim_sender, _ -> [ ii SENDER ]
   | Prim_block_level, _ -> [ ii BLOCK_LEVEL ]
@@ -690,7 +691,7 @@ and compile_prim ~loc depth env prim args =
 
       | (Prim_extension _|Prim_tuple_get
         | Prim_tuple_set|Prim_tuple|Prim_self
-        | Prim_balance|Prim_now|Prim_amount|Prim_gas
+        | Prim_balance|Prim_now|Prim_amount|Prim_gas|Prim_chain_id
         | Prim_Left|Prim_Right|Prim_source|Prim_sender|Prim_unused _
         | Prim_coll_find|Prim_coll_update|Prim_coll_mem
         | Prim_coll_size|Prim_list_rev|Prim_slice

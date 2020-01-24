@@ -71,7 +71,7 @@ module Michelson = struct
 
   let is_word_type = function
     | Tfail | Tunit | Tbool | Tint   | Tnat | Ttez | Tstring | Tbytes
-    | Ttimestamp | Tkey | Tkey_hash | Tsignature | Toperation | Taddress ->
+    | Ttimestamp | Tkey | Tkey_hash | Tsignature | Toperation | Taddress | Tchainid ->
       true
     | Ttuple _ | Trecord _ | Tsum _ | Tcontract _ | Tor _ | Toption _ | Tlist _
     | Tset _ | Tmap _ | Tbigmap _ | Tlambda _ | Tclosure _ ->
@@ -96,6 +96,7 @@ module Michelson = struct
       | Tsignature  -> Printf.bprintf b "signature"
       | Toperation  -> Printf.bprintf b "operation"
       | Taddress  -> Printf.bprintf b "address"
+      | Tchainid  -> Printf.bprintf b "chain_id"
       | Ttuple tys ->
         bprint_type_pairs fmt b indent tys annots
       | Trecord (name, labels) ->
@@ -644,6 +645,9 @@ module Michelson = struct
     | ADDRESS ->
       Printf.bprintf b "ADDRESS";
       bprint_pre_name b name;
+    | CHAIN_ID ->
+      Printf.bprintf b "CHAIN_ID";
+      bprint_pre_name b name;
     | CREATE_CONTRACT contract ->
       Printf.bprintf b "CREATE_CONTRACT { parameter ";
       bprint_type fmt b "" contract.mic_parameter;
@@ -871,6 +875,7 @@ module LiquidDebug = struct
       | Tsignature  -> Printf.bprintf b "signature"
       | Toperation  -> Printf.bprintf b "operation"
       | Taddress  -> Printf.bprintf b "address"
+      | Tchainid  -> Printf.bprintf b "chain_id"
       | Ttuple [] -> assert false
       | Ttuple (ty :: tys) ->
         Printf.bprintf b "(";
