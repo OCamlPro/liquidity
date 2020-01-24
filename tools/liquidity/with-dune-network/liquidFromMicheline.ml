@@ -201,10 +201,10 @@ let type_label_of_annots annots =
 
 let entryname_of_annots annots =
   let cstrs =
-    type_constr_or_label_of_annots ~allow_capital:false ~keep_empty:false ~no_ignore:true annots in
+    type_constr_or_label_of_annots ~allow_capital:true ~keep_empty:false ~no_ignore:true annots in
   match cstrs with
   | [] -> None
-  | x :: _ -> Some x
+  | x :: _ -> Some (String.uncapitalize_ascii x)
 
 
 let add_generalize_to_env =

@@ -1742,8 +1742,8 @@ let entry_name_of_case ?(allow_capital=false) s =
         if String.length s = 0 then raise Not_found
         else match s.[0] with
           | '_' | 'a' .. 'z' -> s
-          | 'A' .. 'Z' when allow_capital -> "_" ^ s
-          | '`' -> String.sub s 1 (String.length s - 1)
+          (* | 'A' .. 'Z' when allow_capital -> "_" ^ s *)
+          | '`' -> String.sub s 1 (String.length s - 1) |> String.uncapitalize_ascii
           | _ -> raise Not_found
 
 let is_entry_case ?allow_capital s =

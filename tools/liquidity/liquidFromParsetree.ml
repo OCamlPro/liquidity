@@ -2005,6 +2005,7 @@ and translate_structure env acc ast : syntax_exp parsed_struct =
     in
     translate_structure env (init :: acc) ast
 
+  (* let%entry name = head_exp *)
   | { pstr_desc =
         Pstr_extension
           (({ txt = "entry" },
@@ -2014,7 +2015,9 @@ and translate_structure env acc ast : syntax_exp parsed_struct =
                      Nonrecursive,
                      [ {
                        pvb_pat = { ppat_desc =
-                                     Ppat_var { txt = name; loc = name_loc } };
+                                   ( Ppat_var { txt = name }
+                                   | Ppat_variant (name , None));
+                                   ppat_loc = name_loc };
                        pvb_expr = head_exp;
                      }
                      ]) } ]

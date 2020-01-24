@@ -609,16 +609,16 @@ and typecheck env ( exp : syntax_exp ) : typed_exp =
             self_entries in
         typecheck_expected "call argument" env arg_ty arg
       with Not_found ->
-        if env.decompiling then
-          typecheck env arg
-        else
-          error loc
-            "contract has no entry point %s (available entry points: %a)"
-            entry
-            (Format.pp_print_list
-               ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ")
-               (fun fmt e -> Format.pp_print_string fmt e.entry_name))
-            self_entries;
+        (* if env.decompiling then
+         *   typecheck env arg
+         * else *)
+        error loc
+          "contract has no entry point %s (available entry points: %a)"
+          entry
+          (Format.pp_print_list
+             ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ")
+             (fun fmt e -> Format.pp_print_string fmt e.entry_name))
+          self_entries;
     in
     let desc = SelfCall { amount; entry; arg } in
     mk ?name:exp.name ~loc desc Toperation
@@ -2055,7 +2055,7 @@ and typecheck_contract ~others ~warnings ~decompiling contract =
     (* when decompiling recover signature of encoded Contract.self *)
     if not decompiling then t_contract_sig
     else match t_contract_sig.f_entries_sig with
-      | [{ entry_name = "default" } as e] ->
+      | [e] ->
         begin match expand e.parameter with
           | Tsum (_, l) when List.for_all (fun (e,_) -> is_entry_case e) l ->
             let f_entries_sig = List.map (fun (c, parameter) ->
