@@ -793,9 +793,17 @@ and decompile env contract =
     | None -> "parameter", "storage"
     | Some ps -> ps in
 
+  let rec get_type ty = match ty with
+    | Tvar { contents = { contents = { tyo = Some ty }}} -> get_type ty
+    | _ -> ty in
+
   let entry_name = match contract.mic_root with
     | Some r -> r
-    | None -> "__root__" in
+    | None ->
+      match get_type contract.mic_parameter with
+      | Tsum (_, l) when List.for_all (fun (e, _) -> is_entry_case e) l ->
+        "__root__"
+      | _ -> "default" in
 
   { contract_name = "_dummy_";
     storage = contract.mic_storage;
