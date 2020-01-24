@@ -232,6 +232,7 @@ let compile_tezos_file filename =
         (LiquidToParsetree.structure_of_contract ~type_annots ~types untyped_ast) []
     with LiquidError _ ->
       DebugPrint.string_of_contract untyped_ast in
+  let s = s ^ "\n" in
   match output with
   | "-" ->
     Format.printf "%s%!" s
