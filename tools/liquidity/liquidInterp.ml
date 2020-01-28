@@ -1165,7 +1165,7 @@ and decompile_lambda loc arg_ty res_ty code =
 and decompile_const loc cst = match cst with
   | ( CUnit | CBool _ | CInt _ | CNat _ | CTez _ | CTimestamp _ | CString _
     | CBytes _ | CKey _ | CSignature _ | CNone  | CKey_hash _
-    | CAddress _ ) as c -> c
+    | CAddress _ | CContract _ ) as c -> c
   | CSome x -> CSome (decompile_const loc x)
   | CLeft x -> CLeft (decompile_const loc x)
   | CRight x -> CRight (decompile_const loc x)

@@ -328,6 +328,8 @@ let rec convert_const ~abbrev (expr : (datatype, 'a) exp const) =
       (convert_type ~abbrev Taddress), true
   | CAddress n ->
     Exp.constant (Pconst_integer (n, Some '\236')), true
+  | CContract n ->
+    Exp.constant (Pconst_integer (n, Some '\236')), false
   | CBytes n -> Exp.constant (Pconst_integer (n, Some '\237')), true
 
   | CList [] -> Exp.construct (lid "[]") None, false

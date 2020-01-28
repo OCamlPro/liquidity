@@ -798,7 +798,7 @@ and compile_lambda ~loc { arg_name; arg_ty; body; ret_ty; recursive } =
 and compile_const ~loc c = match c with
   | ( CUnit | CBool _ | CInt _ | CNat _ | CTez _ | CTimestamp _ | CString _
     | CBytes _ | CKey _ | CSignature _ | CNone  | CKey_hash _
-    | CAddress _ ) as c -> c
+    | CAddress _ | CContract _) as c -> c
   | CSome x -> CSome (compile_const ~loc x)
   | CLeft x -> CLeft (compile_const ~loc x)
   | CRight x -> CRight (compile_const ~loc x)

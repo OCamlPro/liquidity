@@ -817,6 +817,7 @@ let rec list_big_maps name acc storage storage_ty =
     | CSignature _
     | CKey_hash _
     | CAddress _
+    | CContract _
     | CLambda _), _ -> acc
   | CTuple l, Ttuple tys ->
     List.fold_left2 (list_big_maps name) acc l tys
@@ -1122,6 +1123,7 @@ let rec replace_init_big_maps big_map_diff storage =
     | CSignature _
     | CKey_hash _
     | CAddress _
+    | CContract _
     | CLambda _) as c -> c
   | CTuple l -> CTuple (List.map replace l)
   | CSome c -> CSome (replace c)

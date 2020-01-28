@@ -227,6 +227,7 @@ let rec type_of_const ~loc env = function
   | CKey _ -> Tkey
   | CSignature _ -> Tsignature
   | CAddress _ -> Taddress
+  | CContract _ -> Tcontract (None, fresh_tvar ())
   | CTuple l ->
     Ttuple (List.map (type_of_const ~loc env) l)
   | CNone -> Toption (fresh_tvar ())
@@ -310,6 +311,7 @@ let rec typecheck_const ~loc env (cst : syntax_const) ty : datatype * typed_cons
     | Tkey, CKey _
     | Tkey_hash, CKey_hash _
     | Taddress, CAddress _
+    | Tcontract _, CContract _
     | Ttimestamp, CTimestamp _
     | Tsignature, CSignature _
     | Toption _, CNone) as ty_cst
@@ -323,6 +325,13 @@ let rec typecheck_const ~loc env (cst : syntax_const) ty : datatype * typed_cons
   | Taddress, CKey_hash s -> ty, CKey_hash s
   | Taddress, CBytes s -> ty, CAddress s
   | Tsignature, CBytes s -> ty, CSignature s
+
+  | Tcontract _, CAddress s -> ty, CAddress s
+  | Tcontract ((None | Some "default"), (Tunit  | Tvar _  as p)), CKey_hash s ->
+    unify loc p Tunit;
+    ty, CKey_hash s
+  | Tcontract _, CBytes s -> ty, CContract s
+  | Taddress, CContract s -> ty, CContract s
 
   | Ttimestamp, CString s -> ty, CTimestamp (ISO8601.of_string s)
   | Ttez, CString s -> ty, CTez (LiquidNumber.tez_of_liq s)
@@ -2169,6 +2178,7 @@ let rec type_of_const = function
   | CKey _ -> Tkey
   | CSignature _ -> Tsignature
   | CAddress _ -> Taddress
+  | CContract _ -> unit_contract_ty
   | CTuple l ->
     Ttuple (List.map type_of_const l)
   | CNone -> Toption Tunit

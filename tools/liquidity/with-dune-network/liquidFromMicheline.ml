@@ -408,6 +408,7 @@ let rec convert_const env ?ty expr =
         | Some Tkey -> CKey s
         | Some Tkey_hash -> CKey_hash s
         | Some Taddress -> CAddress s
+        | Some Tcontract _ -> CContract s
         | Some Tsignature -> CSignature s
         | Some Tstring | None -> CString s
         | Some ty -> wrong_type env expr ty
@@ -429,6 +430,8 @@ let rec convert_const env ?ty expr =
           CSignature (to_hex s)
         | Some Taddress ->
           CAddress (to_hex s)
+        | Some (Tcontract _) ->
+          CContract (to_hex s)
         | Some ty -> wrong_type env expr ty
       end
 

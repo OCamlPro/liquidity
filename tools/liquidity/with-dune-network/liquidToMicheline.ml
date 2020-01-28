@@ -225,6 +225,8 @@ let rec convert_const ~loc expand (expr : loc_michelson const) =
   | CKey_hash s -> Micheline.String (loc, s)
   | CAddress s when s.[0] = '0' -> Micheline.Bytes (loc, bytes_of_hex s)
   | CAddress s -> Micheline.String (loc, s)
+  | CContract s when s.[0] = '0' -> Micheline.Bytes (loc, bytes_of_hex s)
+  | CContract s -> Micheline.String (loc, s)
   | CSignature s when s.[0] = '0' -> Micheline.Bytes (loc, bytes_of_hex s)
   | CSignature s -> Micheline.String (loc, s)
 

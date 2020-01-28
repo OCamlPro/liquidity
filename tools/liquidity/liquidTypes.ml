@@ -892,6 +892,7 @@ and 'exp const =
 
   | CKey_hash of string
   | CAddress of string
+  | CContract of string
 
   | CRecord of (string * 'exp const) list
   | CConstr of string * 'exp const
@@ -1317,10 +1318,10 @@ let rec eq_exp_desc eq_ty eq_var e1 e2 = match e1, e2 with
 and eq_const eq_ty eq_var c1 c2 = match c1, c2 with
   | ( CUnit | CBool _ | CInt _ | CNat _ | CTez _ | CTimestamp _ | CString _
     | CBytes _ | CKey _ | CSignature _ | CNone  | CKey_hash _
-    | CAddress _ ),
+    | CAddress _ | CContract _),
     ( CUnit | CBool _ | CInt _ | CNat _ | CTez _ | CTimestamp _ | CString _
     | CBytes _ | CKey _ | CSignature _ | CNone  | CKey_hash _
-    | CAddress _ ) -> c1 = c2
+    | CAddress _ | CContract _ ) -> c1 = c2
   | CSome c1, CSome c2
   | CLeft c1, CLeft c2
   | CRight c1, CRight c2

@@ -280,6 +280,7 @@ module Michelson = struct
     | CKey_hash s -> Printf.bprintf b "%S" s
     | CAddress s -> Printf.bprintf b "%S" s
     | CSignature s -> Printf.bprintf b "%S" s
+    | CContract s -> Printf.bprintf b "%S" s
     | CTez s -> Printf.bprintf b "%s" (Z.to_string (LiquidNumber.mic_mutez_of_tez s))
     | CInt n -> Printf.bprintf b "%s" (Z.to_string (LiquidNumber.mic_of_integer n))
     | CNat n -> Printf.bprintf b "%s" (Z.to_string (LiquidNumber.mic_of_integer n))
@@ -1032,6 +1033,7 @@ module LiquidDebug = struct
     | CKey s -> Printf.bprintf b "%s" s
     | CKey_hash s -> Printf.bprintf b "%s" s
     | CAddress s -> Printf.bprintf b "%s" s
+    | CContract s -> Printf.bprintf b "%s" s
     | CSignature s -> Printf.bprintf b "%s" s
     | CTez s -> Printf.bprintf b "%s%s" (LiquidNumber.liq_of_tez s)
                   (LiquidOptions.curreny ())

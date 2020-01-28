@@ -359,7 +359,7 @@ let rec compute decompile code to_inline =
   and iter_const c = match c with
     | ( CUnit | CBool _ | CInt _ | CNat _ | CTez _ | CTimestamp _ | CString _
       | CBytes _ | CKey _ | CSignature _ | CNone  | CKey_hash _
-      | CAddress _ ) as c -> c
+      | CAddress _ | CContract _) as c -> c
     | CSome x -> CSome (iter_const x)
     | CLeft x -> CLeft (iter_const x)
     | CRight x -> CRight (iter_const x)
