@@ -1,10 +1,11 @@
-[%%version 0.3]
 
 type t = A of int | B of (int * ((bool * unit) * nat))
 
+type storage = int
+
 let%entry main
     (parameter : t)
-    (storage : int) =
+    storage =
 
   let s = match parameter with
   | A i ->
@@ -13,4 +14,4 @@ let%entry main
     if b then int n
     else storage
   in
-  ([]:operation list), s
+  [], s

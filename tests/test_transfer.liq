@@ -1,14 +1,15 @@
 
 (* transfers *)
 
-[%%version 0.3]
+
+type storage = tez
 
 let%entry main
-      (parameter : unit contract)
-      (storage : tez) =
+      (dest : key_hash)
+      storage =
 
-      let amount = Current.amount () in
-      let storage = storage + amount in
-      let op = Contract.call parameter amount () in
+      let storage = storage + Current.amount () in
+      let amount = storage in
+      let op = Account.transfer dest amount in
 
       ( [op], storage )

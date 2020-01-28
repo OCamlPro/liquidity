@@ -1,27 +1,43 @@
-(**************************************************************************)
-(*                                                                        *)
-(*    Copyright (c) 2017 - OCamlPro SAS                                   *)
-(*                                                                        *)
-(*    All rights reserved. No warranty, explicit or implicit, provided.   *)
-(*                                                                        *)
-(**************************************************************************)
+(****************************************************************************)
+(*                               Liquidity                                  *)
+(*                                                                          *)
+(*                  Copyright (C) 2017-2019 OCamlPro SAS                    *)
+(*                                                                          *)
+(*                    Authors: Fabrice Le Fessant                           *)
+(*                             Alain Mebsout                                *)
+(*                             David Declerck                               *)
+(*                                                                          *)
+(*  This program is free software: you can redistribute it and/or modify    *)
+(*  it under the terms of the GNU General Public License as published by    *)
+(*  the Free Software Foundation, either version 3 of the License, or       *)
+(*  (at your option) any later version.                                     *)
+(*                                                                          *)
+(*  This program is distributed in the hope that it will be useful,         *)
+(*  but WITHOUT ANY WARRANTY; without even the implied warranty of          *)
+(*  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the           *)
+(*  GNU General Public License for more details.                            *)
+(*                                                                          *)
+(*  You should have received a copy of the GNU General Public License       *)
+(*  along with this program.  If not, see <https://www.gnu.org/licenses/>.  *)
+(****************************************************************************)
+
 
 type from =
-  | From_string of string
-  | From_file of string
+  | From_strings of string list
+  | From_files of string list
 
 type key_diff =
   | DiffKeyHash of string
-  | DiffKey of LiquidTypes.const
+  | DiffKey of LiquidTypes.typed_const
 
 type big_map_diff_item =
-  | Big_map_add of key_diff * LiquidTypes.const
+  | Big_map_add of key_diff * LiquidTypes.typed_const
   | Big_map_remove of key_diff
 
 type big_map_diff = big_map_diff_item list
 
 type stack_item =
-  | StackConst of LiquidTypes.const
+  | StackConst of LiquidTypes.typed_const
   | StackCode of int
 
 type trace_item = {
@@ -37,12 +53,12 @@ type internal_operation =
   | Transaction of {
       amount : string;
       destination : string;
-      parameters : LiquidTypes.const option;
+      parameters : LiquidTypes.typed_const option;
     }
   | Origination of {
       manager: string ;
       delegate: string option ;
-      script: (LiquidTypes.typed_contract * LiquidTypes.const) option ;
+      script: (LiquidTypes.typed_contract * LiquidTypes.typed_const) option ;
       spendable: bool ;
       delegatable: bool ;
       balance: string ;
@@ -67,48 +83,64 @@ val get : (string -> string Lwt.t) ref
 module type S = sig
   type 'a t
 
-  (** Run contract with given parameter and storage on the Tezos node specified
-     in ![LiquidOptions], returns the return value, the storage and a diff of a
-     big map id the contract contains any *)
+  (** Run contract with given parameter and storage on the Dune node specified
+      in ![LiquidOptions], returns the return value, the storage and a diff of a
+      big map id the contract contains any *)
   val run :
-    from -> string -> string ->
-    (operation list * LiquidTypes.const * big_map_diff option) t
+    from -> string -> string -> string ->
+    (operation list * LiquidTypes.typed_const * big_map_diff option) t
 
   val run_debug :
-    from -> string -> string ->
-    (operation list * LiquidTypes.const * big_map_diff option * trace) t
+    from -> string -> string -> string ->
+    (operation list * LiquidTypes.typed_const * big_map_diff option * trace) t
 
   (** Compute the initial storage for a specific script, returns storage data *)
-  val init_storage : from -> string list -> LiquidTypes.const t
+  val init_storage : from -> string list -> LiquidTypes.encoded_const t
 
-  (** Forge a deployment operation contract on the Tezos node specified in
+  val forge_deploy_script :
+    source:string -> from -> string list ->
+    (string * string * LiquidToMicheline.loc_table) t
+
+  (** Forge a deployment operation contract on the Dune node specified in
       ![LiquidOptions], returns the hex-encoded operation *)
   val forge_deploy :
     ?delegatable:bool -> ?spendable:bool -> from -> string list -> string t
 
-  (** Deploy a Liquidity contract on the Tezos node specified in
+  (** Deploy a Liquidity contract on the Dune node specified in
       ![LiquidOptions], returns the operation hash and the contract address *)
   val deploy :
     ?delegatable:bool -> ?spendable:bool -> from -> string list ->
     (string * (string, exn) result) t
 
-  val get_storage : from -> string -> LiquidTypes.const t
+  val get_storage : from -> string -> LiquidTypes.typed_const t
+
+  val get_big_map_value :
+    from -> string -> string -> LiquidTypes.typed_const option t
+
+  val forge_call_parameter :
+    from -> string -> string -> string * LiquidToMicheline.loc_table
 
   (** Forge an operation to call a deploy contract, returns the hex-encoded
       operation *)
-  val forge_call : from -> string -> string -> string t
+  val forge_call : from -> string -> string -> string -> string t
 
-  (** Calls a deployed Liquidity contract on the Tezos node specified in
+  (** Calls a deployed Liquidity contract on the Dune node specified in
       ![LiquidOptions], returns the operation hash *)
-  val call : from -> string -> string -> (string * (unit, exn) result) t
+  val call : from -> string -> string -> string ->
+    (string * (unit, exn) result) t
 
   val activate : secret:string -> string t
 
   (** Inject an operation in hexa with its signature, and returns an
       operation hash *)
   val inject : operation:string -> signature:string -> string t
+
+  (** Packs data as bytes *)
+  val pack : ?liquid:from -> const:string -> ty:string -> string t
 end
 
 module Async : S with type 'a t = 'a Lwt.t
 
 module Sync : S with type 'a t = 'a
+
+val forge_call_arg : ?entry_name:string ->  from -> string -> string

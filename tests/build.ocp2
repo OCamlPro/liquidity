@@ -1,3 +1,6 @@
+List = module("ocp-build:List", "1.0");
+
+test_dir = "../dune-network/src/bin_client/test/contracts/";
 
 OCaml.library("ocplib-liquidity-examples",
   ocaml + {
@@ -46,12 +49,14 @@ OCaml.library("ocplib-liquidity-examples",
                   "test_extfun.liq";
                   "test_ifcons.liq";
                   "test_if.liq";
+                  "test_iter.liq";
                   "test_left_constr.liq";
                   "test_left.liq";
                   "test_left_match.liq";
                   "test_loop.liq";
                   "test_option.liq";
                   "test_right_constr.liq";
+                  "test_call.liq";
                   "test_transfer.liq";
                   "test_closure.liq";
                   "test_closure2.liq";
@@ -63,15 +68,24 @@ OCaml.library("ocplib-liquidity-examples",
                   "test_mapreduce_closure.liq";
                   "test_mapmap_closure.liq";
                   "test_setreduce_closure.liq";
+                  "test_inline.liq";
+                  "test_rec_fun.liq";
+                  "test19.liq";
          ];
        };
 
        "liquidTestOthers.ml", {
          file2string = [
+                  "votes.liq";
                   "others/demo.liq";
                   "others/broker.liq";
                   "others/auction.liq";
                   "others/multisig.liq";
+                  "others/game.liq";
+                  "others/mist_wallet_current.liq";
+                  "others/mist_wallet_light.liq";
+                  "others/token.liq";
+                  "others/token_no_fee.liq";
           ];
        };
 
@@ -83,9 +97,160 @@ OCaml.library("ocplib-liquidity-examples",
                      "reverse/test3.tz";
                      "reverse/test4.tz";
                      "reverse/test5.tz";
+                     "reverse/test6.tz";
+                     "reverse/test7.tz";
+                     "reverse/test8.tz";
+                     "reverse/test9.tz";
           ];
        };
+    ];
+  });
 
+if( with_dune_network ) {
+
+  OCaml.library("ocplib-michelson-examples",
+    ocaml + {
+    files = [
+
+       "liquidTestMichelson.ml", {
+         file2string = List.map (function (file){
+             return test_dir + file;
+           }, [
+           "attic/accounts.tz";
+           "attic/add1.tz";
+           "attic/add1_list.tz";
+           "attic/after_strategy.tz";
+           "attic/always.tz";
+           "attic/append.tz";
+           "attic/at_least.tz";
+           "attic/auction.tz";
+           "attic/bad_lockup.tz";
+           "attic/big_map_union.tz";
+           "attic/cadr_annotation.tz";
+           "attic/concat.tz";
+           "attic/conditionals.tz";
+           "attic/cons_twice.tz";
+           "attic/cps_fact.tz";
+           "attic/create_add1_lists.tz";
+           "attic/data_publisher.tz";
+           "attic/dispatch.tz";
+           "attic/empty.tz";
+           "attic/fail_amount.tz";
+           "attic/faucet.tz";
+           "attic/forward.tz";
+           "attic/id.tz";
+           "attic/infinite_loop.tz";
+           "attic/insertion_sort.tz";
+           "attic/int_publisher.tz";
+           "attic/king_of_tez.tz";
+           "attic/list_of_transactions.tz";
+           "attic/queue.tz";
+           "attic/reduce_map.tz";
+           "attic/reentrancy.tz";
+           "attic/spawn_identities.tz";
+           "macros/assert.tz";
+           "macros/assert_cmpeq.tz";
+           "macros/assert_cmpge.tz";
+           "macros/assert_cmpgt.tz";
+           "macros/assert_cmple.tz";
+           "macros/assert_cmplt.tz";
+           "macros/assert_cmpneq.tz";
+           "macros/assert_eq.tz";
+           "macros/assert_ge.tz";
+           "macros/assert_gt.tz";
+           "macros/assert_le.tz";
+           "macros/assert_lt.tz";
+           "macros/assert_neq.tz";
+           "macros/big_map_get_add.tz";
+           "macros/big_map_mem.tz";
+           "macros/build_list.tz";
+           "macros/compare.tz";
+           "macros/compare_bytes.tz";
+           "macros/fail.tz";
+           "macros/guestbook.tz";
+           "macros/macro_annotations.tz";
+           "macros/map_caddaadr.tz";
+           "macros/max_in_list.tz";
+           "macros/min.tz";
+           "macros/pair_macro.tz";
+           "macros/set_caddaadr.tz";
+           "macros/take_my_money.tz";
+           "macros/unpair_macro.tz";
+           "mini_scenarios/create_account.tz";
+           "mini_scenarios/create_contract.tz";
+           "mini_scenarios/default_account.tz";
+           "mini_scenarios/hardlimit.tz";
+           "mini_scenarios/lockup.tz";
+           "mini_scenarios/originator.tz";
+           "mini_scenarios/parameterized_multisig.tz";
+           "mini_scenarios/replay.tz";
+           "mini_scenarios/reservoir.tz";
+           "mini_scenarios/reveal_signed_preimage.tz";
+           "mini_scenarios/scrutable_reservoir.tz";
+           "mini_scenarios/vote_for_delegate.tz";
+           "mini_scenarios/weather_insurance.tz";
+           "mini_scenarios/xcat.tz";
+           "mini_scenarios/xcat_dapp.tz";
+           "opcodes/add_delta_timestamp.tz";
+           "opcodes/add_timestamp_delta.tz";
+           "opcodes/and.tz";
+           "opcodes/balance.tz";
+           "opcodes/check_signature.tz";
+           "opcodes/concat_list.tz";
+           "opcodes/contains_all.tz";
+           "opcodes/diff_timestamps.tz";
+           "opcodes/empty_map.tz";
+           "opcodes/exec_concat.tz";
+           "opcodes/first.tz";
+           "opcodes/get_map_value.tz";
+           "opcodes/hash_consistency_checker.tz";
+           "opcodes/hash_key.tz";
+           "opcodes/hash_string.tz";
+           "opcodes/if.tz";
+           "opcodes/if_some.tz";
+           "opcodes/left_right.tz";
+           "opcodes/list_concat.tz";
+           "opcodes/list_concat_bytes.tz";
+           "opcodes/list_id.tz";
+           "opcodes/list_id_map.tz";
+           "opcodes/list_iter.tz";
+           "opcodes/list_map_block.tz";
+           "opcodes/loop_left.tz";
+           "opcodes/map_car.tz";
+           "opcodes/map_id.tz";
+           "opcodes/map_iter.tz";
+           "opcodes/map_size.tz";
+           "opcodes/noop.tz";
+           "opcodes/not.tz";
+           "opcodes/or.tz";
+           "opcodes/packunpack.tz";
+           "opcodes/pair_id.tz";
+           "opcodes/ret_int.tz";
+           "opcodes/reverse.tz";
+           "opcodes/reverse_loop.tz";
+           "opcodes/self.tz";
+           "opcodes/set_car.tz";
+           "opcodes/set_cdr.tz";
+           "opcodes/set_id.tz";
+           "opcodes/set_iter.tz";
+           "opcodes/set_member.tz";
+           "opcodes/set_size.tz";
+           "opcodes/slices.tz";
+           "opcodes/split_bytes.tz";
+           "opcodes/split_string.tz";
+           "opcodes/steps_to_quota.tz";
+           "opcodes/store_input.tz";
+           "opcodes/store_now.tz";
+           "opcodes/str_id.tz";
+           "opcodes/subset.tz";
+           "opcodes/sub_timestamp_delta.tz";
+           "opcodes/tez_add_sub.tz";
+           "opcodes/transfer_amount.tz";
+           "opcodes/transfer_tokens.tz";
+           "opcodes/xor.tz";
+              ]);
+       };
 
     ];
   });
+}

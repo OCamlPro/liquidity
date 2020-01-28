@@ -3,12 +3,13 @@ next | master
 [![Travis-CI Build Status](https://travis-ci.org/OCamlPro/liquidity.svg?branch=next)](https://travis-ci.org/OCamlPro/liquidity) | [![Travis-CI Build Status](https://travis-ci.org/OCamlPro/liquidity.svg?branch=master)](https://travis-ci.org/OCamlPro/liquidity) 
 
 
-Liquidity: a Smart Contract Language for Tezos
+Liquidity: a Smart Contract Language for Dune Network
 ==============================================
 
-Liquidity is a language to program Smart Contracts for Tezos. It uses
-the syntax of OCaml, and strictly complies to Michelson security
-restrictions.
+Liquidity is a language to program Smart Contracts for Dune Network
+(and Tezos). It uses the syntax of OCaml (and ReasonML), and strictly
+complies to Michelson security restrictions. Liquidity is distributed
+under the terms of the [GPLv3 license](LICENSE).
 
 The Liquidity Project
 ---------------------
@@ -16,20 +17,18 @@ The Liquidity Project
 The Liquidity project contains:
 * A compiler from Liquidity files (.liq extension) to Michelson
 * A de-compiler from Michelson files (.tz extension) to Liquidity
-* An evaluator of Michelson contracts
+* A Tezos client to deploy and interact with Liquidity contracts
 
 The Liquidity Language
 ----------------------
 
 The Liquidity language provides the following features:
 
-* Full coverage of the Michelson language: Anything that can be written in
-  Michelson can be written in Liquidity
+* Full coverage of the Michelson language: anything that can be written in
+  Michelson can be written in Liquidity.
 
 * Local variables instead of stack manipulations: values can be stored
-  in local variables. The only restriction is that local variables do
-  not survive to `Contract.call`, following the philosophy of Michelson
-  to force explicite storage of values to limit reentrancy bugs.
+  in local variables.
 
 * High-level types: types like sum-types and record-types can be defined
   and used in Liquidity programs.
@@ -46,12 +45,13 @@ next release.
 Installation and Usage
 ----------------------
 
-See [USAGE.md](USAGE.md).
+See [installation instructions](docs/sphinx/src/installation/index.rst) and
+[usage documentation](docs/sphinx/src/usage/index.rst).
 
 Documentation
 -------------
 
-Documentation can be found in [docs/liquidity.md](docs/liquidity.md)
+Documentation can be found in [the reference](docs/sphinx/src/reference/liquidity.rst)
 and many examples are in the [tests](tests/) and
 [tests/others](tests/others/) directories.
 
@@ -59,15 +59,5 @@ Status
 ------
 
 All features of Michelson are supported in Liquidity. All tests from
-https://github.com/tezos/tezos/tree/alphanet/test/contracts can be
+https://github.com/dune-network/dune-network/tree/mainnet/test/contracts can be
 decompiled to Liquidity and recompiled to Michelson.
-
-Roadmap
--------
-
-The current roadmap is:
-
-* Development of an online editor for Liquidity
-
-* Development of a proof assistant for Liquidity contracts
-

@@ -1,11 +1,12 @@
 
 (* loops *)
 
-[%%version 0.3]
+
+type storage = int
 
 let%entry main
       (parameter : int)
-      (storage : int) =
+      storage =
 
       let storage =
         Loop.loop (fun x ->
@@ -13,5 +14,5 @@ let%entry main
         ) parameter
       in
 
-      ( ([] : operation list), storage )
+      ( [], storage )
 

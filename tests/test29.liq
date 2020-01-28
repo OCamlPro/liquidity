@@ -1,13 +1,20 @@
-[%%version 0.3]
+
+type storage = int
+
+contract type I = sig
+  type storage
+  val%entry main : int -> storage -> (operation list * storage)
+end
+
 
 let%entry main
-    (parameter : int contract * int list)
-    (storage : int) =
+    (parameter : I.instance * int list)
+    storage =
 
   let (c, l) = parameter in
   match l with
   | [] ->
-    (([]:operation list), storage)
+    ([], storage)
   | x :: _ ->
     let op = Contract.call c 0tz x in
     [op], storage

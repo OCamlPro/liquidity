@@ -335,7 +335,7 @@ let int_literal =
 let base58_char =
   ['1'-'9' 'A'-'H' 'J'-'N' 'P'-'Z' 'a'-'k' 'm'-'z' ]
 let keyhash_literal =
-  ("tz1" | "tz2" | "tz3") base58_char* (* 36 *)
+  ("tz1" | "tz2" | "tz3" | "dn1" | "dn2" | "dn3") base58_char* (* 36 *)
 let contract_literal =
   "KT1" base58_char* (* 36 *)
 let key_literal =
@@ -459,13 +459,13 @@ rule token = parse
   | uppercase_latin1 identchar_latin1 *
       { warn_latin1 lexbuf; UIDENT(Lexing.lexeme lexbuf) }
   | int_literal { INT (Lexing.lexeme lexbuf, None) }
-  | (int_literal as lit) "tz"
+  | (int_literal as lit) ("tz" | "DUN" | "dun" | "dn")
       { INT (lit, Some tez_char) }
   | (int_literal as lit) (literal_modifier as modif)
       { INT (lit, Some modif) }
   | float_literal
       { FLOAT (Lexing.lexeme lexbuf, None) }
-  | ((float_literal) as lit) "tz"
+  | ((float_literal) as lit) ("tz" | "DUN" | "dun" | "dn")
       { FLOAT (lit, Some tez_char) }
   | ((float_literal) as lit) (literal_modifier as modif)
       { FLOAT (lit, Some modif) }

@@ -1,0 +1,4 @@
+[submodule "dune-network"]
+	path = dune-network
+	url = https://gitlab.com/dune-network/dune-network.git
+	branch = mainnet

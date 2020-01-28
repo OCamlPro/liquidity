@@ -1,7 +1,8 @@
 
 (* strings *)
 
-[%%version 0.3]
+
+type storage = string
 
 let%entry main
       (parameter : string)
@@ -14,4 +15,4 @@ let%entry main
            storage @ parameter
        in
 
-      ( ([] : operation list), storage )
+      ( [], storage )

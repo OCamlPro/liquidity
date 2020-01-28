@@ -1,7 +1,8 @@
 
 (* loops *)
 
-[%%version 0.3]
+
+type storage = int set
 
 let%entry main
       (parameter : int)
@@ -19,5 +20,5 @@ let%entry main
         ) (parameter, storage)
       in
       let storage = Array.get x 1 in
-      ( ([] : operation list), storage )
+      ( [], storage )
 

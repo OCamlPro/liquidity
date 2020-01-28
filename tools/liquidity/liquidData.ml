@@ -1,37 +1,56 @@
-(**************************************************************************)
-(*                                                                        *)
-(*    Copyright (c) 2017       .                                          *)
-(*    Fabrice Le Fessant, OCamlPro SAS <fabrice@lefessant.net>            *)
-(*                                                                        *)
-(*    All rights reserved. No warranty, explicit or implicit, provided.   *)
-(*                                                                        *)
-(**************************************************************************)
+(****************************************************************************)
+(*                               Liquidity                                  *)
+(*                                                                          *)
+(*                  Copyright (C) 2017-2019 OCamlPro SAS                    *)
+(*                                                                          *)
+(*                    Authors: Fabrice Le Fessant                           *)
+(*                             Alain Mebsout                                *)
+(*                             David Declerck                               *)
+(*                                                                          *)
+(*  This program is free software: you can redistribute it and/or modify    *)
+(*  it under the terms of the GNU General Public License as published by    *)
+(*  the Free Software Foundation, either version 3 of the License, or       *)
+(*  (at your option) any later version.                                     *)
+(*                                                                          *)
+(*  This program is distributed in the hope that it will be useful,         *)
+(*  but WITHOUT ANY WARRANTY; without even the implied warranty of          *)
+(*  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the           *)
+(*  GNU General Public License for more details.                            *)
+(*                                                                          *)
+(*  You should have received a copy of the GNU General Public License       *)
+(*  along with this program.  If not, see <https://www.gnu.org/licenses/>.  *)
+(****************************************************************************)
 
 (* TODO: We could use a simplify pass to propagate the no-effect
-  defining expression of once-used variables to their uniq use
-  site. It could dramatically decrease the size of the stack.  *)
+   defining expression of once-used variables to their uniq use
+   site. It could dramatically decrease the size of the stack.  *)
 
 
 open LiquidTypes
 
 
+let default_key_hash () =
+  match !LiquidOptions.network with
+  | LiquidOptions.Dune_network -> "dn1UqnHgHFe8ezEgsoow4hERctPssuWiw9h8"
+  | LiquidOptions.Tezos_network -> "tz1YLtLqD1fWHthSVHPD116oYvsd4PTAHUoc"
+
 let rec default_const = function
   | Tunit -> CUnit
   | Tbool -> CBool false
-  | Tint -> CInt (LiquidPrinter.integer_of_int 0)
-  | Tnat -> CNat (LiquidPrinter.integer_of_int 0)
-  | Ttez -> CTez (LiquidPrinter.tez_of_liq "0")
+  | Tint -> CInt (LiquidNumber.integer_of_int 0)
+  | Tnat -> CNat (LiquidNumber.integer_of_int 0)
+  | Ttez -> CTez (LiquidNumber.tez_of_liq "0")
   | Tstring -> CString ""
   | Tbytes -> CBytes "0x"
   | Ttimestamp -> CTimestamp "1970-01-01T00:00:00Z"
   | Tkey -> CKey "edpkuit3FiCUhd6pmqf9ztUTdUs1isMTbF9RBGfwKk1ZrdTmeP9ypN"
-  | Tkey_hash -> CKey_hash "tz1YLtLqD1fWHthSVHPD116oYvsd4PTAHUoc"
+  | Tkey_hash -> CKey_hash (default_key_hash ())
   | Tsignature ->
     CSignature
       "edsigthTzJ8X7MPmNeEwybRAvdxS1pupqcM5Mk4uCuyZAe7uEk\
        68YpuGDeViW8wSXMrCi5CwoNgqs8V2w8ayB5dMJzrYCHhD8C7"
-  | Tcontract _ -> CContract "KT1GE2AZhazRxGsAjRVkQccHcB2pvANXQWd7"
-  | Taddress -> CAddress "KT1GE2AZhazRxGsAjRVkQccHcB2pvANXQWd7"
+  | Tcontract _ -> CContract "KT1BEqzn5Wx8uJrZNvuS9DVHmLvG9td3fDLi"
+  | Taddress -> CAddress "KT1BEqzn5Wx8uJrZNvuS9DVHmLvG9td3fDLi"
   | Ttuple l ->
     CTuple (List.map default_const l)
   | Toption ty -> CSome (default_const ty)
@@ -50,97 +69,130 @@ let rec default_const = function
   | Tsum (_, (c, ty) :: _) ->
     CConstr (c, default_const ty)
 
+  | Tlambda (arg_ty, ret_ty, _) as ty ->
+    CLambda { arg_ty; ret_ty; recursive = None;
+              arg_name = { nname = "_"; nloc = noloc };
+              body = mk ~loc:noloc
+                  (Const { ty = ret_ty; const = default_const ret_ty }) ty }
+
   | Tsum (_, [])
   | Tfail
   | Tclosure _
-  | Tlambda _
   | Toperation -> raise Not_found
+  | Tvar _ | Tpartial _ -> raise Not_found
 
-let rec translate_const_exp loc (exp : encoded_exp) =
+let rec default_empty_const = function
+  | Tunit -> CUnit
+  | Tbool -> CBool false
+  | Tint -> CInt (LiquidNumber.integer_of_int 0)
+  | Tnat -> CNat (LiquidNumber.integer_of_int 0)
+  | Ttez -> CTez (LiquidNumber.tez_of_liq "0")
+  | Tstring -> CString ""
+  | Tbytes -> CBytes "0x"
+  | Ttimestamp -> CTimestamp "1970-01-01T00:00:00Z"
+  | Tkey -> CKey "edpkuit3FiCUhd6pmqf9ztUTdUs1isMTbF9RBGfwKk1ZrdTmeP9ypN"
+  | Tkey_hash -> CKey_hash (default_key_hash ())
+  | Tsignature ->
+    CSignature
+      "edsigthTzJ8X7MPmNeEwybRAvdxS1pupqcM5Mk4uCuyZAe7uEk\
+       68YpuGDeViW8wSXMrCi5CwoNgqs8V2w8ayB5dMJzrYCHhD8C7"
+  | Tcontract _ -> CContract "KT1GE2AZhazRxGsAjRVkQccHcB2pvANXQWd7"
+  | Taddress -> CAddress "KT1GE2AZhazRxGsAjRVkQccHcB2pvANXQWd7"
+  | Ttuple l ->
+    CTuple (List.map default_empty_const l)
+  | Toption ty -> CNone
+  | Tlist ty -> CList []
+  | Tset ty -> CSet []
+  | Tmap (ty1, ty2) -> CMap []
+  | Tbigmap  (ty1, ty2) -> CBigMap []
+  | Tor (ty, _) -> CLeft (default_empty_const ty)
+  | Trecord (_, fields) ->
+    CRecord (
+      List.map (fun (name, ty) ->
+          name, default_empty_const ty) fields
+    )
+  | Tsum (_, (c, ty) :: _) ->
+    CConstr (c, default_empty_const ty)
+
+
+  | Tlambda (arg_ty, ret_ty, _) as ty ->
+    CLambda { arg_ty; ret_ty; recursive = None;
+              arg_name = { nname = "_"; nloc = noloc };
+              body = mk ~loc:noloc
+                  (Failwith
+                     (mk ~loc:noloc (Const { ty = ret_ty; const = CUnit })
+                        Tunit
+                     )) ty }
+
+  | Tsum (_, [])
+  | Tfail
+  | Tclosure _
+  | Toperation -> raise Not_found
+  | Tvar _ | Tpartial _ -> raise Not_found
+
+let rec translate_const_exp (exp : encoded_exp) =
+  let loc = exp.loc in
   match exp.desc with
-  | Let (_, _, loc, _, _) ->
-     LiquidLoc.raise_error ~loc "'let' forbidden in constant"
-  | Const (_loc, ty, c) -> c
+  | Let _ ->
+    LiquidLoc.raise_error ~loc "'let' forbidden in constant"
+  | Const { const } -> const
 
-  (* removed during typechecking *)
-  | Record (_, _)
-  | Constructor (_, _, _) -> assert false
+  | Record fields ->
+    CRecord (List.map (fun (f, e) -> (f, translate_const_exp e)) fields)
 
-  | Apply (Prim_Left, _, [x]) -> CLeft (translate_const_exp loc x)
-  | Apply (Prim_Right, _, [x]) -> CRight (translate_const_exp loc x)
-  | Apply (Prim_Some, _, [x]) -> CSome (translate_const_exp loc x)
-  | Apply (Prim_Cons, _, list) ->
-     CList (List.map (translate_const_exp loc) list)
-  | Apply (Prim_tuple, _, list) ->
-     CTuple (List.map (translate_const_exp loc) list)
+  | Constructor { constr = Constr c; arg } ->
+    CConstr (c, translate_const_exp arg)
+  | Constructor { constr = Left _; arg } -> CLeft (translate_const_exp arg)
+  | Constructor { constr = Right _; arg } -> CRight (translate_const_exp arg)
 
+  | Apply { prim = Prim_Left; args = [x] } -> CLeft (translate_const_exp x)
+  | Apply { prim = Prim_Right; args = [x] } -> CRight (translate_const_exp  x)
+  | Apply { prim = Prim_Some; args = [x] } -> CSome (translate_const_exp x)
+  | Apply { prim = Prim_Cons; args } ->
+    CList (List.map translate_const_exp args)
+  | Apply { prim = Prim_tuple; args } ->
+    CTuple (List.map translate_const_exp args)
 
-  | Apply (prim, _, args)
-    -> LiquidLoc.raise_error ~loc "<apply %s(%d) not yet implemented>"
-                             (LiquidTypes.string_of_primitive prim)
-                             (List.length args)
-  | Var (_, _, _)
-  | SetVar (_, _, _, _)
-  | If (_, _, _)
-  | Seq (_, _)
-  | Transfer (_, _, _, _)
-  | MatchOption (_, _, _, _, _)
-  | MatchNat (_, _, _, _, _, _)
-  | MatchList (_, _, _, _, _, _)
-  | Loop (_, _, _, _)
-  | Fold (_, _, _, _, _, _)
-  | Map (_, _, _, _, _)
-  | MapFold (_, _, _, _, _, _)
-  | Lambda (_, _, _, _, _)
-  | Closure (_, _, _, _, _, _)
-  | MatchVariant (_, _, _)
-  | Failwith (_, _)
-  | CreateContract (_, _, _)
-  | ContractAt (_, _, _)
-  | Unpack (_, _, _)
+  | TypeAnnot { e } -> translate_const_exp e
+
+  | Lambda lam -> CLambda lam
+
+  | Apply _
+  | Var _
+  | SetField _
+  | Project _
+  | If _
+  | Seq _
+  | Transfer _
+  | Call _
+  | MatchOption _
+  | MatchNat _
+  | MatchList _
+  | Loop _
+  | LoopLeft _
+  | Fold _
+  | Map _
+  | MapFold _
+  | Closure _
+  | MatchVariant _
+  | Failwith _
+  | CreateContract _
+  | ContractAt _
+  | Unpack _
+  | Type _
     ->
     LiquidLoc.raise_error ~loc "non-constant expression"
 
 
 let translate env contract_sig s ty =
   let ml_exp =
-    LiquidFromOCaml.expression_of_string ~filename:env.filename s in
+    LiquidFromParsetree.expression_of_string ~filename:env.filename s in
   (* hackish: add type annotation for constants *)
-  let ml_ty = LiquidToOCaml.convert_type ~abbrev:false ty in
-  let ml_exp = Ast_helper.Exp.constraint_ ml_exp ml_ty in
-  let sy_exp = LiquidFromOCaml.translate_expression env ml_exp in
+  let ml_ty = LiquidToParsetree.convert_type ~abbrev:false ty in
+  let ml_exp = Ast_helper.Exp.constraint_
+      ~loc:(Location.in_file env.filename) ml_exp ml_ty in
+  let sy_exp = LiquidFromParsetree.translate_expression env ml_exp in
   let tenv = empty_typecheck_env ~warnings:true contract_sig env in
   let ty_exp = LiquidCheck.typecheck_code tenv ~expected_ty:ty sy_exp in
   let enc_exp = LiquidEncode.encode_code tenv ty_exp in
-  let loc = LiquidLoc.loc_in_file env.filename in
-  translate_const_exp loc enc_exp
-
-
-let data_of_liq ~filename ~contract ~typ ~parameter =
-    (* first, extract the types *)
-    let ocaml_ast = LiquidFromOCaml.structure_of_string
-                      ~filename contract in
-    let contract, _, env = LiquidFromOCaml.translate ~filename ocaml_ast in
-    let _ = LiquidCheck.typecheck_contract
-        ~warnings:true env contract in
-    let translate filename s typ =
-      try
-        let c = translate { env with filename } contract.contract_sig s typ in
-        Ok c
-      with LiquidError error ->
-        Error error in
-    match typ with
-     | "parameter" ->  translate typ parameter contract.contract_sig.parameter
-     | "storage" ->  translate typ parameter contract.contract_sig.storage
-     | _ -> raise (Invalid_argument typ)
-    
-
-
-let string_of_const ?ty c =
-  let e = LiquidToOCaml.convert_const c in
-  let e = match ty with
-    | None -> e
-    | Some ty ->
-      Ast_helper.Exp.constraint_ e (LiquidToOCaml.convert_type ty)
-  in
-  LiquidToOCaml.string_of_expression e
+  translate_const_exp enc_exp

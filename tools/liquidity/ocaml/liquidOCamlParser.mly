@@ -1942,12 +1942,13 @@ optional_type_variable:
   | UNDERSCORE                                  { mktyp(Ptyp_any) }
 ;
 
-
+/*
 type_parameters:
-    /*empty*/                                   { [] }
+    / *empty* /                                   { [] }
   | type_parameter                              { [$1] }
   | LPAREN type_parameter_list RPAREN           { List.rev $2 }
 ;
+*/
 type_parameter:
     type_variance type_variable                   { $2, $1 }
 ;

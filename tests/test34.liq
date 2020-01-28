@@ -1,10 +1,11 @@
-[%%version 0.3]
+
+type storage = bool
 
 let%entry main
     (parameter : bool)
-    (storage : bool) =
+    storage =
 
-  ([] : operation list),
+  [],
   (parameter <> storage)
   &&
   (parameter = storage)

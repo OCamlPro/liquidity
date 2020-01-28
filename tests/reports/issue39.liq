@@ -1,4 +1,3 @@
-[%%version 0.12]
 
 type token_p = 
 | Token_info

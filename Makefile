@@ -1,11 +1,45 @@
+############################################################################
+#                               Liquidity                                  #
+#                                                                          #
+#                  Copyright (C) 2017-2019 OCamlPro SAS                    #
+#                                                                          #
+#                    Authors: Fabrice Le Fessant                           #
+#                             Alain Mebsout                                #
+#                             David Declerck                               #
+#                                                                          #
+#  This program is free software: you can redistribute it and/or modify    #
+#  it under the terms of the GNU General Public License as published by    #
+#  the Free Software Foundation, either version 3 of the License, or       #
+#  (at your option) any later version.                                     #
+#                                                                          #
+#  This program is distributed in the hope that it will be useful,         #
+#  but WITHOUT ANY WARRANTY; without even the implied warranty of          #
+#  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the           #
+#  GNU General Public License for more details.                            #
+#                                                                          #
+#  You should have received a copy of the GNU General Public License       #
+#  along with this program.  If not, see <https://www.gnu.org/licenses/>.  #
+############################################################################
 
 all: build
 
-clone-tezos:
-	git clone -b betanet https://gitlab.com/tezos/tezos.git # clone with https
+clone-dune-network:
+	git submodule update --init
 
-build: _obuild
-	ocp-build build
+_obuild/liquidity/liquidity.asm: _obuild
+	ocp-build build liquidity
+
+_obuild/liquidity-mini/liquidity-mini.asm: _obuild
+	ocp-build build liquidity-mini
+
+liquidity-mini: _obuild/liquidity-mini/liquidity-mini.asm
+	cp -f _obuild/liquidity-mini/liquidity-mini.asm liquidity-mini
+
+liquidity: _obuild/liquidity/liquidity.asm
+	cp -f _obuild/liquidity/liquidity.asm liquidity
+
+mini: liquidity-mini
+build: liquidity liquidity-mini
 
 install: _obuild
 	ocp-build install liquidity
@@ -21,54 +55,75 @@ clean-sources:
 
 clean: _obuild clean-tests clean-sources
 	ocp-build clean
+	rm -f liquidity
 
 build-deps:
-	opam install ocp-build ocplib-endian zarith calendar digestif hex ocurl lwt \
-	       lwt_log uri sodium bigstring ezjsonm
+	opam install . --deps-only --working-dir -y
 
 distclean: clean
 	rm -rf _obuild
 
 doc:
-	$(MAKE) -C docs/sphynx/
+	$(MAKE) -C docs/sphinx/
 
-# All of these tests must be run with with_tezos=true
+headers:
+	headache -h misc/header -c misc/headache_config \
+		Makefile build.ocp2 \
+		scripts/*.sh travis-scripts/*.sh \
+                tools/liquidity/build.ocp2 \
+		tools/liquidity/*.ml[ily] \
+		tools/liquidity/*.ml \
+		tools/liquidity/with*-dune-network/*.ml[ily] \
+		tools/liquidity/with*-dune-network/*.ml \
+		tools/liquidity/reason/liquidReasonParse.ml \
+		libs/*/build.ocp2 \
+		libs/*/*.ml[ily] \
+		libs/*/*.ml \
+		libs/*/*/*.ml
 
-NTESTS=41
-NREVTESTS=7
-SIMPLE_TESTS= `seq -f 'test%.0f' 0 $(NTESTS)`
-MORE_TESTS=test_ifcons test_if test_loop test_option test_transfer test_left \
+
+# All of these tests must be run with with_dune_network=true
+
+NTESTS=43
+NREVTESTS=10
+SIMPLE_TESTS=`seq -f 'test%.0f.liq' 0 $(NTESTS)`
+MORE_TESTS=test_ifcons test_if test_loop test_option test_transfer test_call test_left \
   test_extfun test_left_constr test_closure test_closure2 test_closure3 \
   test_map test_rev test_reduce_closure test_map_closure test_mapreduce_closure \
-  test_mapmap_closure test_setreduce_closure test_left_match \
-  test_fold test_iter test_big_map test_map_fold_closure test_inline
-OTHER_TESTS=others/broker others/demo others/auction others/multisig
-REV_TESTS=`seq -f  'test%.0f' 0 $(NREVTESTS)`
+  test_mapmap_closure test_setreduce_closure test_left_match test_loop_left \
+  test_fold test_iter test_big_map test_map_fold_closure test_inline test_rec_fun \
+  bug_annot0 inline_fail bug_annot1 test_infer_unpack test_infer_param test_record \
+  bug187 test_modules lambda_const votes bug_197 curry bug_210 bug_213 bug_213_0 \
+  bug_214 bug_216 bug_steven1 bug_steven2 bug_inline2
+RE_TESTS=bug202
+OTHER_TESTS=others/broker others/demo others/auction others/multisig others/alias others/game others/mist_wallet_current others/token others/token_vote others/token_no_fee
+DOC_TESTS=`cd tests; find doc -regex "[^\.]+.liq" | sort -V`
+REV_TESTS=`find tests/reverse -regex "[^\.]+.tz" | sort -V`
 
-NEW_TEZOS_TESTS= fail weather_insurance
-FAILING_TEZOS_TESTS= originator
-TEZOS_TESTS=accounts add1_list add1 add_delta_timestamp add_timestamp_delta after_strategy always and append assert_cmpeq assert_cmpge assert_cmpgt assert_cmple assert_cmplt assert_cmpneq assert_eq assert_ge assert_gt assert_le assert_lt assert_neq assert at_least auction bad_lockup balance big_map_get_add big_map_mem big_map_union build_list cadr_annotation check_signature compare concat_list concat conditionals cons_twice contains_all cps_fact create_account create_add1_lists create_contract data_publisher default_account diff_timestamps dispatch empty_map empty exec_concat fail_amount fail faucet first forward get_map_value hardlimit hash_consistency_checker hash_key hash_string id if_some if infinite_loop insertion_sort int_publisher king_of_tez list_id_map list_id list_iter2 list_iter list_map_block list_of_transactions lockup macro_annotations map_caddaadr map_car map_id map_iter map_size max_in_list min noop not originator or packunpack pair_id pair_macro parameterized_multisig queue reduce_map reentrancy replay reservoir ret_int reveal_signed_preimage reverse_loop reverse scrutable_reservoir self set_caddaadr set_car set_cdr set_id set_iter set_member set_size spawn_identities steps_to_quota store_input store_now str_id subset sub_timestamp_delta swap_left_right take_my_money tez_add_sub transfer_amount transfer_to unpair_macro vote_for_delegate weather_insurance xor
+NEW_DUNE_TESTS= fail weather_insurance
+FAILING_DUNE_TESTS= originator
+DUNE_TESTS=`find dune-network/src/bin_client/test/contracts -regex "[^\.]+.tz" ! -path "*concat_hello.tz"| sort -V`
 
-EXIT_ON_ERROR= || exit 2
-#EXIT_ON_ERROR= || echo Test $$i failed
+TESTS=$(DOC_TESTS) $(SIMPLE_TESTS) $(MORE_TESTS:=.liq) $(RE_TESTS:=.reliq) $(OTHER_TESTS:=.liq)
+
 tests: build
-	for i in $(SIMPLE_TESTS) \
-		$(MORE_TESTS) $(OTHER_TESTS); do \
-		./check.sh $$i $(EXIT_ON_ERROR); \
-	done
+	@echo ---------------------
+	@echo Run full tests
+	@echo ---------------------
+	@scripts/run-list.sh scripts/check.sh $(TESTS)
 
-tests-mini: build
-	for i in $(SIMPLE_TESTS) \
-		$(MORE_TESTS) $(OTHER_TESTS); do \
-		./check-mini.sh $$i $(EXIT_ON_ERROR); \
-	done
+tests-mini: mini
+	@echo ---------------------
+	@echo Run mini tests
+	@echo ---------------------
+	@scripts/run-list.sh scripts/check-mini.sh $(TESTS)
+
+RTESTS=$(REV_TESTS) $(DUNE_TESTS)
 
 rev-tests: build
-	for i in $(REV_TESTS); do \
-		./check-rev.sh tests/reverse $$i $(EXIT_ON_ERROR); \
-	done
-	for i in $(TEZOS_TESTS); do \
-		./check-rev.sh tezos/src/bin_client/test/contracts/ $$i $(EXIT_ON_ERROR); \
-	done
+	@echo ---------------------
+	@echo Run reverse tests
+	@echo ---------------------
+	@scripts/run-list.sh scripts/check-rev.sh $(RTESTS)
 
-
+all-tests: tests tests-mini rev-tests

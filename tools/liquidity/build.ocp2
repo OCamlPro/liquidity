@@ -1,11 +1,25 @@
-(**************************************************************************)
-(*                                                                        *)
-(*    Copyright (c) 2017       .                                          *)
-(*    Fabrice Le Fessant, OCamlPro SAS <fabrice@lefessant.net>            *)
-(*                                                                        *)
-(*    All rights reserved. No warranty, explicit or implicit, provided.   *)
-(*                                                                        *)
-(**************************************************************************)
+(****************************************************************************)
+(*                               Liquidity                                  *)
+(*                                                                          *)
+(*                  Copyright (C) 2017-2019 OCamlPro SAS                    *)
+(*                                                                          *)
+(*                    Authors: Fabrice Le Fessant                           *)
+(*                             Alain Mebsout                                *)
+(*                             David Declerck                               *)
+(*                                                                          *)
+(*  This program is free software: you can redistribute it and/or modify    *)
+(*  it under the terms of the GNU General Public License as published by    *)
+(*  the Free Software Foundation, either version 3 of the License, or       *)
+(*  (at your option) any later version.                                     *)
+(*                                                                          *)
+(*  This program is distributed in the hope that it will be useful,         *)
+(*  but WITHOUT ANY WARRANTY; without even the implied warranty of          *)
+(*  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the           *)
+(*  GNU General Public License for more details.                            *)
+(*                                                                          *)
+(*  You should have received a copy of the GNU General Public License       *)
+(*  along with this program.  If not, see <https://www.gnu.org/licenses/>.  *)
+(****************************************************************************)
 
 (*
    A contract is compiled as followed:
@@ -37,44 +51,25 @@ if(with_version){
   version_info = {};
 }
 
-OCaml.library("ocplib-liquidity",
+OCaml.library("ocplib-liquidity-bare",
    ocaml + {
      files = [
-
-       "iSO8601.ml";
 
        "liquidOptions.ml";
        "liquidVersion.ml", version_info;
        "liquidMisc.ml";
 
        "liquidTypes.ml";
-       "liquidLoc.ml";
-
-       "liquidBoundVariables.ml";
-       "liquidPrinter.ml";
-       "liquidDot.ml";
-
-       "liquidEmit.ml";
-       "liquidPeephole.ml";
-       "liquidCheck.ml";
-       "liquidSimplify.ml";
-       "liquidEncode.ml";
-       "liquidMichelson.ml";
-
-       "liquidClean.ml";
-       "liquidInterp.ml";
-       "liquidDecomp.ml";
-       "liquidUntype.ml";
+       "liquidNumber.ml";
      ];
      requires = [
-       "ocplib-dot";
        "zarith";
      ];
 
    });
 
 
-OCaml.library("ocplib-liquidity-ocaml",
+OCaml.library("ocplib-liquidity-parser",
    ocaml + {
      files = [
        "ocaml/liquidOCamlParser.mly";
@@ -82,45 +77,83 @@ OCaml.library("ocplib-liquidity-ocaml",
        "ocaml/liquidOCamlParse.ml";
        "ocaml/liquidOCamlPrinter.ml";
 
-       "liquidFromOCaml.ml";
-       "liquidToOCaml.ml";
-       "liquidData.ml";
+       "reason/reason_string.ml";
+       "reason/reason_attributes.ml";
+       "reason/reason_syntax_util.mli";
+       "reason/reason_syntax_util.ml";
+       "reason/reason_config.ml";
+       "reason/reason_parser.mly", { ocamlyacc= [ "menhir"; "--table"] };
+       "reason/reason_comment.ml";
+       "reason/lexer_warning.ml";
+       "reason/reason_lexer.mll";
+       "reason/reason_location.ml";
+       "reason/reason_layout.ml";
+       "reason/reason_heuristics.ml";
+       "reason/reason_pprint_ast.ml"; 
+       "reason/reason_toolchain.ml";
+       "reason/liquidReasonParse.ml";
+
+       "liquidLoc.ml";
+       "liquidParse.ml";
      ];
      requires = [
-        "ocplib-liquidity";
+        "easy-format";
+        "ocaml-migrate-parsetree";
+        "menhirLib";
+        "ocplib-liquidity-bare";
         "compiler-libs.common";
-        "compiler-libs.bytecomp";
      ];
 
    });
 
-OCaml.program("ocp-liquidity-comp",
-  ocaml + {
-    requires = [ "ocplib-liquidity-ocaml" ];
-    files = [
-       "liquidInit.ml";
 
-       "ocaml/liquidOCamlPparse.ml";
 
-       "ocaml/liquidOCamlTranslate.ml";
-       
-
-       "ocaml/liquidOCamlCompile.ml";
-       "ocaml/liquidOCamlMain.ml";
-    ];
-  });
-
-if ( with_tezos ) {
-OCaml.library("ocplib-liquidity-with-tezos",
+OCaml.library("ocplib-liquidity-base",
    ocaml + {
      files = [
-       "with-tezos/liquidTezosTypes.ml";
-       "with-tezos/liquidFromTezos.ml";
-       "with-tezos/liquidToTezos.ml";
+
+       "iSO8601.ml";
+
+       "liquidBoundVariables.ml";
+
+       "liquidEmit.ml";
+       "liquidPeephole.ml";
+       "liquidToParsetree.ml";
+       "liquidPrinter.ml";
+       "liquidNamespace.ml";
+       "liquidInfer.ml";
+       "liquidCheck.ml";
+       "liquidSimplify.ml";
+       "liquidEncode.ml";
+       "liquidDecode.ml";
+       "liquidMichelson.ml";
+       "liquidFromParsetree.ml";
+       "liquidData.ml";
+
+       "liquidClean.ml";
+       "liquidInterp.ml";
+       "liquidUntype.ml";
      ];
      requires = [
-        "ocplib-liquidity";
-        "michelson";
+       "ocplib-liquidity-parser";
+     ];
+
+   });
+
+
+if ( with_dune_network ) {
+OCaml.library("ocplib-liquidity-with-dune-network",
+   ocaml + {
+     files = [
+       "with-dune-network/liquidMichelineTypes.ml";
+       "with-dune-network/liquidFromMicheline.ml";
+       "with-dune-network/liquidToMicheline.ml";
+       "liquidDecomp.ml";
+     ];
+     requires = [
+        "ocplib-liquidity-base";
+        "ocplib-liquidity-parser";
+        "dune-network-lib";
      ];
    });
 
@@ -131,8 +164,8 @@ OCaml.library("ocplib-liquidity-deploy",
        "liquidDeploy.ml";
      ];
      requires = [
-       "ocplib-liquidity-with-tezos";
-       "ocplib-liquidity-ocaml";
+       "ocplib-liquidity-with-dune-network";
+       "ocplib-liquidity-parser";
        "curl";
        "curl.lwt";
      ];
@@ -142,9 +175,11 @@ if (for_javascript) {
 OCaml.program("liquidity",
    ocaml + {
      files = [
+       "liquidDot.ml";
        "liquidMain.ml";
      ];
      requires = [
+       "ocplib-dot";
        "ocplib-liquidity-deploy";
        "ocplib-file";
      ];
@@ -154,9 +189,11 @@ OCaml.program("liquidity",
    ocaml + {
      bytelink = ["-cclib"; "-lsodium_stubs -lsodium"];
      files = [
+       "liquidDot.ml";
        "liquidMain.ml";
      ];
      requires = [
+       "ocplib-dot";
        "ocplib-liquidity-deploy";
        "ocplib-file";
      ];
@@ -164,25 +201,28 @@ OCaml.program("liquidity",
 }
 }
 
-OCaml.library("ocplib-liquidity-without-tezos",
+OCaml.library("ocplib-liquidity-without-dune-network",
    ocaml + {
      files = [
-       "without-tezos/liquidTezosTypes.ml";
-       "without-tezos/liquidFromTezos.ml";
-       "without-tezos/liquidToTezos.ml";
+       "without-dune-network/liquidMichelineTypes.ml";
+       "without-dune-network/liquidFromMicheline.ml";
+       "without-dune-network/liquidToMicheline.ml";
+       "liquidDecomp.ml";
      ];
      requires = [
-        "ocplib-liquidity";
+        "ocplib-liquidity-base";
+        "ocplib-liquidity-parser";
      ];
    });
 
-OCaml.library("ocplib-liquidity-deploy-without-tezos",
+OCaml.library("ocplib-liquidity-deploy-without-dune-network",
    ocaml + {
      files = [
-       "without-tezos/liquidDeploy.ml";
+       "without-dune-network/liquidDeploy.ml";
      ];
      requires = [
-       "ocplib-liquidity";
+       "ocplib-liquidity-base";
+       "ocplib-liquidity-without-dune-network";
        "ocplib-fake-lwt"
      ];
    });
@@ -191,19 +231,15 @@ OCaml.program("liquidity-mini",
    ocaml + {
      files = [
        "liquidInit.ml";
+       "liquidDot.ml";
        "liquidMain.ml";
      ];
      requires = [
-       "ocplib-liquidity-deploy-without-tezos";
-       "ocplib-liquidity-without-tezos";
-       "ocplib-liquidity-ocaml";
+       "ocplib-dot";
+       "ocplib-liquidity-deploy-without-dune-network";
+       "ocplib-liquidity-without-dune-network";
+       "ocplib-liquidity-base";
        "ocplib-file";
      ];
 
    });
-
-OCaml.library("liquidity-env",
-  ocaml + {
-    files = [ "env/liquidityEnv.ml" ];
-    requires = [ "zarith" ];
-  });

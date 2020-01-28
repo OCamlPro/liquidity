@@ -1,0 +1,5 @@
+PKG digestif.ocaml
+PKG cstruct
+PKG bigstring
+PKG sodium
+PKG ocplib-endian

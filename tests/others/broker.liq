@@ -1,13 +1,12 @@
 
-[%%version 0.3]
 
 type storage = {
   state : string;
   timeout : timestamp;
   pn : tez * tez;
-  x : unit contract;
-  a : unit contract;
-  b : unit contract;
+  x : UnitContract.instance;
+  a : UnitContract.instance;
+  b : UnitContract.instance;
 }
 
 let%entry main
@@ -24,7 +23,7 @@ let%entry main
       if cost < b then
         (* # Not enough cash, we just accept the transaction
            # and leave the global untouched *)
-        ( ([]: operation list), storage )
+        ( [], storage )
       else
         (* # Enough cash, successful ending
                    # We update the global*)

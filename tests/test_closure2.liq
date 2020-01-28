@@ -1,12 +1,15 @@
 
-[%%version 0.3]
+
+type storage = int
 
 let%entry main
-      (parameter : int)
-      (storage : int) =
-  let x = parameter + 10 in
-  let f ( arg : int * int ) (y : int) =
-    arg.(0) + x + y
+      (parameter : bool)
+      storage =
+  let x = if parameter  then 10 else 0 in
+  let[@noinline] f (arg, _) (y:int) =
+    if arg then x + y else y - x
   in
+  let p = f (parameter, storage) in
   let storage = f (parameter, storage) 199 in
-  ( ([] : operation list), storage )
+  let storage = p (199 + storage) in
+  ( [], storage )

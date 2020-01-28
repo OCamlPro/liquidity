@@ -1,3 +1,26 @@
+(****************************************************************************)
+(*                               Liquidity                                  *)
+(*                                                                          *)
+(*                  Copyright (C) 2017-2019 OCamlPro SAS                    *)
+(*                                                                          *)
+(*                    Authors: Fabrice Le Fessant                           *)
+(*                             Alain Mebsout                                *)
+(*                             David Declerck                               *)
+(*                                                                          *)
+(*  This program is free software: you can redistribute it and/or modify    *)
+(*  it under the terms of the GNU General Public License as published by    *)
+(*  the Free Software Foundation, either version 3 of the License, or       *)
+(*  (at your option) any later version.                                     *)
+(*                                                                          *)
+(*  This program is distributed in the hope that it will be useful,         *)
+(*  but WITHOUT ANY WARRANTY; without even the implied warranty of          *)
+(*  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the           *)
+(*  GNU General Public License for more details.                            *)
+(*                                                                          *)
+(*  You should have received a copy of the GNU General Public License       *)
+(*  along with this program.  If not, see <https://www.gnu.org/licenses/>.  *)
+(****************************************************************************)
+
 (* Disable to compile without the sources of Tezos.
    The following features with be disabled:
    * Decompilation of Michelson files
@@ -6,11 +29,11 @@
 
 Sys = module("ocp-build:Sys", "1.0");
 
-(* This value is used if with_tezos is not set before *)
-default_with_tezos = Sys.file_exists("tezos/README.md");
+(* This value is used if with_dune_network is not set before *)
+default_with_dune_network = Sys.file_exists("dune-network/README.md");
 
-try { with_tezos = with_tezos; }
-  catch("unknown-variable",x){ with_tezos = default_with_tezos; }
+try { with_dune_network = with_dune_network; }
+  catch("unknown-variable",x){ with_dune_network = default_with_dune_network; }
 
 (* By default, liquidity will contain some version information
   (Git commit, build date, etc.). However, during development, it
@@ -29,35 +52,3 @@ default_for_javascript = false;
 
 try { for_javascript = for_javascript; }
   catch("unknown-variable",x){ for_javascript = default_for_javascript; }
-
-ojt_dir = "tezos/vendors/ocplib-json-typed/";
-
-OCaml.library("ocplib-json-typed",
-        ocaml + {
-          files = [
-          ojt_dir + "lib_json_typed/json_repr.ml";
-          ojt_dir + "lib_json_typed/json_query.ml";
-          ojt_dir + "lib_json_typed/json_schema.ml";
-          ojt_dir + "lib_json_typed/json_encoding.ml";
-          ];
-          requires = '[
-                   ezjsonm
-                   ocplib-endian
-                   uri
-          ];
-          }
-   );
-
-
-OCaml.library("ocplib-json-typed-bson",
-        ocaml + {
-          files = [
-             ojt_dir + "lib_json_typed_bson/json_repr_bson.ml";
-          ];
-          requires = '[
-                   ocplib-json-typed
-                   ocplib-endian
-          ];
-          }
-   );
-

@@ -1,11 +1,25 @@
-(**************************************************************************)
-(*                                                                        *)
-(*    Copyright (c) 2017       .                                          *)
-(*    Fabrice Le Fessant, OCamlPro SAS <fabrice@lefessant.net>            *)
-(*                                                                        *)
-(*    All rights reserved. No warranty, explicit or implicit, provided.   *)
-(*                                                                        *)
-(**************************************************************************)
+(****************************************************************************)
+(*                               Liquidity                                  *)
+(*                                                                          *)
+(*                  Copyright (C) 2017-2019 OCamlPro SAS                    *)
+(*                                                                          *)
+(*                    Authors: Fabrice Le Fessant                           *)
+(*                             Alain Mebsout                                *)
+(*                             David Declerck                               *)
+(*                                                                          *)
+(*  This program is free software: you can redistribute it and/or modify    *)
+(*  it under the terms of the GNU General Public License as published by    *)
+(*  the Free Software Foundation, either version 3 of the License, or       *)
+(*  (at your option) any later version.                                     *)
+(*                                                                          *)
+(*  This program is distributed in the hope that it will be useful,         *)
+(*  but WITHOUT ANY WARRANTY; without even the implied warranty of          *)
+(*  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the           *)
+(*  GNU General Public License for more details.                            *)
+(*                                                                          *)
+(*  You should have received a copy of the GNU General Public License       *)
+(*  along with this program.  If not, see <https://www.gnu.org/licenses/>.  *)
+(****************************************************************************)
 
 open LiquidTypes
 open Ocamldot.TYPES
@@ -25,8 +39,6 @@ let rec to_dot ~sub_contract_of contract =
         ("Contract_sub_" ^ (string_of_int !subgraph_counter)) [],
       nodes
   in
-
-  let (begin_node, end_node) = contract.code in
 
   let node_of node =
     try
@@ -52,19 +64,14 @@ let rec to_dot ~sub_contract_of contract =
     Ocamldot.add_edge (node_of n1) (node_of n2) attrs
   in
 
-  Ocamldot.add_node_attrs (node_of begin_node)
-                          [NodeColor "green"; NodeStyle Filled];
-  Ocamldot.add_node_attrs (node_of end_node)
-                          [NodeColor "red"; NodeStyle Filled];
-
   let done_set = Hashtbl.create 1000 in
 
   let rec iter_next node =
     match node.next with
     | None -> ()
     | Some next ->
-       add_edge node next [ EdgeStyle Bold ];
-       iter next
+      add_edge node next [ EdgeStyle Bold ];
+      iter next
 
   and iter node =
     if not (Hashtbl.mem done_set node.num) then begin
@@ -87,17 +94,24 @@ let rec to_dot ~sub_contract_of contract =
         | N_RIGHT _
         | N_ABS
         | N_TRANSFER
+        | N_CALL
         | N_CONTRACT _
         | N_UNPACK _
+        | N_PROJ _
+        | N_RECORD _
+        | N_CONSTR _
+        | N_SETFIELD _
           -> ()
 
         | N_LOOP_END (x,y,z)
         | N_FOLD_END (x,y,z)
         | N_MAP_END (x,y,z)
-        | N_IF_CONS (x, y, z) ->
+        | N_IF_CONS (x, y, z)
+        | N_LOOP_LEFT_END (x, y, z) ->
           add_edge_deps [x;y;z]
 
         | N_LOOP_RESULT (x,y,_)
+        | N_LOOP_LEFT_RESULT (x,y,_)
         | N_FOLD_RESULT (x,y,_)
         | N_MAP_RESULT (x,y,_)
         | N_IF_SOME (x,y)
@@ -111,7 +125,8 @@ let rec to_dot ~sub_contract_of contract =
         | N_LOOP (x,y)
         | N_FOLD (x,y)
         | N_MAP (x,y)
-        | N_LAMBDA (x,y,_,_) ->
+        | N_LAMBDA (x,y,_,_)
+        | N_LOOP_LEFT (x, y) ->
           add_edge_deps [x;y]
 
         | N_IF_END_RESULT (x,None,_)
@@ -121,6 +136,7 @@ let rec to_dot ~sub_contract_of contract =
         | N_IF_NONE x
         | N_IF_NIL x
         | N_LOOP_BEGIN x
+        | N_LOOP_LEFT_BEGIN x
         | N_ARG (x,_)
         | N_FOLD_BEGIN x
         | N_MAP_BEGIN x
@@ -130,7 +146,7 @@ let rec to_dot ~sub_contract_of contract =
 
         | N_CREATE_CONTRACT c ->
           let _cg = to_dot ~sub_contract_of:(Some (g, nodes)) c in
-          let (begin_c, _) = c.code in
+          let (begin_c, _) = c.mic_code in
           add_edge_deps [begin_c];
       end;
       List.iter (fun arg ->
@@ -140,9 +156,29 @@ let rec to_dot ~sub_contract_of contract =
       iter_next node
     end
   in
+
+  let (begin_node, end_node) = contract.mic_code in
+  Ocamldot.add_node_attrs (node_of begin_node)
+    [NodeColor "green"; NodeStyle Filled];
+  Ocamldot.add_node_attrs (node_of end_node)
+    [NodeColor "red"; NodeStyle Filled];
   iter begin_node;
+
+  begin match contract.mic_fee_code with
+    | None -> ()
+    | Some (begin_fee_node, end_fee_node) ->
+      Ocamldot.add_node_attrs (node_of begin_fee_node)
+        [NodeColor "turquoise"; NodeStyle Filled];
+      Ocamldot.add_node_attrs (node_of end_fee_node)
+        [NodeColor "purple"; NodeStyle Filled];
+      iter begin_fee_node;
+  end;
+
+  (* Return graph *)
   g
 
 let to_string contract =
+  if !LiquidOptions.verbosity > 0 then
+    Format.eprintf "Produce decompilation graph as graphviz file@.";
   subgraph_counter := 0;
   Ocamldot.to_string (to_dot ~sub_contract_of:None contract)

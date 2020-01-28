@@ -1,19 +1,18 @@
 
-[%%version 0.3]
 
 type storage =  string * (* 0: S *)
                 timestamp * (* 1: T *)
                 (tez * tez) * (* 2: P N *)
-                unit contract * (* 3: X *)
-                unit contract * (* 4: A *)
-                unit contract  (* 5: B *)
+                UnitContract.instance * (* 3: X *)
+                UnitContract.instance * (* 4: A *)
+                UnitContract.instance  (* 5: B *)
 
 let%entry main
-      (parameter : timestamp)
-      (storage : storage) =
+      (_parameter : timestamp)
+      storage =
    let pn = get storage 2 in
    let p = get pn 0 in
    let p = p + 1tz in
    let pn = set pn 0 p in
    let storage = set storage 2 pn in
-   ( ([] : operation list), storage )
+   ( [], storage )

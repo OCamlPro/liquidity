@@ -1,21 +1,26 @@
 
 (* constructors *)
 
-[%%version 0.3]
 
-type s =
+type storage =
         bool *
         int option *
         (string,int) map
 
+let x = if true then 3 else 4
+
 let%entry main
-      (parameter : bool)
-      (storage : s)
-      : operation list * s =
+      (p : bool)
+      (storage : storage)
+      =
+      begin [@fee
+        if x > 3 && storage.(0) && p then (10tz, 10p) else (0tz, 0p)
+      ]
 
-(* options *)
-      let x = 3 in
-      let option = Some x in
-      let storage  = Array.set storage 1 option in
+        (* options *)
+        let option = Some x in
+        let storage  = Array.set storage 1 option in
 
-      ( ([] : operation list), storage )
+        ( [], storage )
+
+      end

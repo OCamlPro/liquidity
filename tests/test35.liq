@@ -1,8 +1,10 @@
 type t = A | B | C
 
+type storage = int
+
 let%entry main
     (parameter : t)
-    (storage : int) =
+    _storage =
   let r = match parameter with
     | A -> 1
     | B -> Current.failwith ()
@@ -11,4 +13,4 @@ let%entry main
 
   (* let x = if true then Current.fail() else Current.fail() in *)
 
-  ([] : operation list), r
+  [], r

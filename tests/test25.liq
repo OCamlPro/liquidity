@@ -1,8 +1,14 @@
-[%%version 0.3]
+
+type storage = int
+
+contract type N = sig
+  type storage
+  val%entry main : nat -> storage -> (operation list * storage)
+end
 
 let%entry main
-    (parameter : nat contract)
-    (storage : int) =
+    (parameter : N.instance)
+    storage =
 
   let r, op = match%nat (storage + 1)  with
     | Plus x ->

@@ -1,0 +1,15 @@
+parameter unit;
+storage (option (lambda int mutez));
+code { DROP ;
+       PUSH @f
+         (lambda int mutez)
+         { RENAME @x_slash_3 ;
+           PUSH int 0 ;
+           DUUP @x ;
+           COMPARE ;
+           GT ;
+           IF { PUSH mutez 1000000 } { PUSH mutez 2000000 } ;
+           DIP { DROP } } ;
+       SOME ;
+       NIL operation ;
+       PAIR };

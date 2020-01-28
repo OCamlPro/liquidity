@@ -1,2 +1,4 @@
-let%entry main (parameter : key) (storage : key_hash) =
-   ([] : operation list), Crypto.hash_key parameter
+type storage = key_hash
+
+let%entry main (parameter : key) _storage =
+   [], Crypto.hash_key parameter
