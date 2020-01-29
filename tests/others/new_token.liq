@@ -31,7 +31,7 @@ let%init storage owner decimals name symbol =
     accounts = BigMap;
     totalSupply = 0p;
     metadata = {
-      version = 1p, 1p; (* Version of standard : 1.1 *)
+      version = 1p, 2p; (* Version of standard : 1.2 *)
       decimals;
       name;
       symbol;
@@ -61,10 +61,10 @@ let perform_transfer (dest, tokens, (accounts : accounts)) =
   (* Decrease balance of sender *)
   let sender_balance = get_balance (Current.sender (), accounts) in
   let new_sender_balance = match is_nat (sender_balance - tokens) with
-    | None ->
-      failwith ("Not enough tokens for transfer", sender_balance)
+    | None -> failwith ("Not enough tokens for transfer", sender_balance)
     | Some b -> b in
-  let accounts = set_balance (Current.sender (), new_sender_balance, accounts) in
+  let accounts =
+    set_balance (Current.sender (), new_sender_balance, accounts) in
   (* Increase balance of destination *)
   let dest_balance = get_balance (dest, accounts) in
   let new_dest_balance = dest_balance + tokens in
@@ -101,11 +101,14 @@ let%entry transfer (dest, tokens, data) storage =
 
 (* --------------- Storage access from outside ---------------- *)
 
-let%entry balanceOf (addr, forward) storage =
+let%entry balanceOf (addr, (balanceOf_handler : [%handle: address * nat])) storage =
   no_base_currency ();
   let balance = get_balance (addr, storage.accounts) in
-  [ forward.readBalance (addr, balance) ~amount:0DUN ], storage
+  [ Contract.call balanceOf_handler (addr, balance) ~amount:0DUN ], storage
 
+let%entry totalSupply (totalSupply_handler : [%handle: nat]) storage =
+  no_base_currency ();
+  [ Contract.call totalSupply_handler storage.totalSupply ~amount:0DUN ], storage
 
 (* ------------------ Burning tokens  ------------------------ *)
 

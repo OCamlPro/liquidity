@@ -1561,7 +1561,7 @@ and encode_contract ?(annot=false) ?(decompiling=false) contract =
   in
   let root_name = match contract.entries with
     | [e] -> e.entry_sig.entry_name (* Keep entry name as root if only one entry *)
-    | _ -> "__root__" in
+    | _ -> "" in
   let contract = {
     contract_name = contract.contract_name;
     values = [];

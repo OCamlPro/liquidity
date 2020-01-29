@@ -958,9 +958,10 @@ and translate contract =
   match contract.entries with
   | [{ entry_sig = { entry_name; parameter = mic_parameter; parameter_name; storage_name };
        code; fee_code }] ->
+    let mic_root = match entry_name with "" -> None | _ -> Some entry_name in
     { mic_parameter;
       mic_storage;
-      mic_root = Some entry_name;
+      mic_root;
       mic_code = translate_code ~parameter_name ~storage_name code
                  |> finalize_fail_pre ;
       mic_fee_code = match fee_code with
