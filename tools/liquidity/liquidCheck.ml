@@ -602,6 +602,24 @@ and typecheck env ( exp : syntax_exp ) : typed_exp =
     let desc = If { cond; ifthen; ifelse } in
     mk ?name:exp.name ~loc desc ty
 
+  | Self { entry } ->
+    let self_entries = env.t_contract_sig.f_entries_sig in
+    let parameter  =
+      match List.find_opt (fun e -> e.entry_name = entry) self_entries with
+      | Some e -> e.parameter
+      | None ->
+        error loc
+          "contract has no entry point %s (available entry points: %a)"
+          entry
+          (Format.pp_print_list
+             ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ")
+             (fun fmt e -> Format.pp_print_string fmt e.entry_name))
+          self_entries;
+    in
+    let ty = Tcontract (Some entry, parameter) in
+    let desc = Self { entry } in
+    mk ?name:exp.name ~loc desc ty
+
   | Transfer { dest; amount } ->
     let amount = typecheck_expected "transfer amount" env Ttez amount in
     let dest = typecheck_expected "transfer destination" env Tkey_hash dest in
@@ -611,13 +629,9 @@ and typecheck env ( exp : syntax_exp ) : typed_exp =
   | SelfCall { amount; entry; arg } ->
     let amount = typecheck_expected "call amount" env Ttez amount in
     let self_entries = env.t_contract_sig.f_entries_sig in
-    let arg =
-      try
-        let { parameter = arg_ty } =
-          List.find (fun { entry_name } -> entry_name = entry)
-            self_entries in
-        typecheck_expected "call argument" env arg_ty arg
-      with Not_found ->
+    let arg = match List.find_opt (fun e -> e.entry_name = entry) self_entries with
+      | Some e -> typecheck_expected "call argument" env e.parameter arg
+      | None ->
         (* if env.decompiling then
          *   typecheck env arg
          * else *)

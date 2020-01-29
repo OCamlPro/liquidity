@@ -863,9 +863,8 @@ and decompile_aux stack (seq : node) ins =
     x :: stack, x
 
   | SELF entry, stack ->
-    (* drop instruction from sequence, just put on the stack *)
-    let x = node ins.loc (N_SELF entry) [] [] in
-    x :: stack, seq
+    let x = node ins.loc (N_SELF entry) [] [seq] in
+    x :: stack, x
 
   | ADDRESS, { kind = N_SELF _ } :: stack ->
     let x = node ins.loc (N_PRIM "ADDRESS_SELF") [] [seq] in

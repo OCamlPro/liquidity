@@ -76,6 +76,8 @@ let rec bv code =
             (StringSet.remove tail_name.nname
                (bv ifcons))))
 
+  | Self _ -> StringSet.empty
+
   | Transfer { dest; amount } -> StringSet.union (bv dest) (bv amount)
 
   | SelfCall { amount; arg } -> StringSet.union (bv arg) (bv amount)
@@ -296,6 +298,10 @@ let rec bound code =
     in
     let desc = MatchList { arg; head_name; tail_name; ifcons; ifnil } in
     mk desc code bv
+
+  | Self { entry } ->
+    let desc = Self { entry } in
+    mk desc code StringSet.empty
 
   | Transfer { dest; amount } ->
     let dest = bound dest in

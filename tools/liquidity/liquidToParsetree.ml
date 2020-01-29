@@ -531,6 +531,13 @@ and convert_code ~abbrev (expr : (datatype, 'a) exp) =
         Labelled "amount", convert_code ~abbrev amount;
       ]
 
+  | Self { entry } ->
+    Exp.extension (
+      id ~loc "handle",
+      PStr [
+        Str.eval (Exp.ident (lid ("Self." ^ entry)))
+      ])
+
   | SelfCall { amount; entry; arg } ->
     Exp.apply ~loc
       (Exp.ident (lid ("Self." ^ entry)))

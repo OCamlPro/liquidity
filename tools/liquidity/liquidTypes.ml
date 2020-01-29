@@ -953,6 +953,8 @@ and ('ty, 'a) exp_desc =
   (** Transfers:
       - {[ Account.transfer ~dest ~amount ]} *)
 
+  | Self of { entry: string }
+
   | SelfCall of { amount: ('ty, 'a) exp;
                   entry: string;
                   arg: ('ty, 'a) exp }
@@ -1145,6 +1147,8 @@ let mk =
         contract.effect || amount.effect || arg.effect,
         true
 
+      | Self _ -> false, false
+
       | SelfCall { amount; arg } ->
         amount.effect || arg.effect,
         true
@@ -1246,6 +1250,7 @@ let rec eq_exp_desc eq_ty eq_var e1 e2 = match e1, e2 with
     eq_exp eq_ty eq_var t1.contract t2.contract &&
     eq_exp eq_ty eq_var t1.amount t2.amount &&
     eq_exp eq_ty eq_var t1.arg t2.arg
+  | Self e1, Self e2 -> e1.entry = e2.entry
   | SelfCall t1, SelfCall t2 ->
     t1.entry = t2.entry &&
     eq_exp eq_ty eq_var t1.amount t2.amount &&

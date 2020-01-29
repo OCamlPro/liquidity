@@ -627,6 +627,10 @@ let rec decompile_next (env : env) node =
       mklet env node desc
     | N_LAMBDA_END _, [arg] -> arg_of arg
 
+    | N_SELF entry, [] ->
+      let entry = match entry with None -> "default" | Some e -> e in
+      mklet env node (Self { entry })
+
     | N_TRANSFER, [dest; amount] ->
       mklet env node
         (Transfer { dest = arg_of dest;

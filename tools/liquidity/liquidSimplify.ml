@@ -38,7 +38,7 @@ let rec compute decompile code to_inline =
 
   let rec size exp =
     match exp.desc with
-    | Const _ | Var _ | SetField _ | Project _ -> 1
+    | Const _ | Var _ | SetField _ | Project _ | Self _ -> 1
 
     | Failwith arg
     | ContractAt { arg }
@@ -298,6 +298,9 @@ let rec compute decompile code to_inline =
     | Apply { prim; args } ->
       let args = List.map iter args in
       { exp with desc = Apply { prim; args } }
+
+    | Self { entry } ->
+      { exp with desc = Self { entry } }
 
     | Transfer { dest; amount } ->
       let dest = iter dest in

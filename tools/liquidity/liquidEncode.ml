@@ -468,7 +468,7 @@ let rec decr_counts_vars env e =
         with Not_found -> ()
       end
 
-    | Const _ -> ()
+    | Const _ | Self _ -> ()
 
     | Failwith e
     | Project { record = e }
@@ -703,6 +703,9 @@ and encode env ( exp : typed_exp ) : encoded_exp =
     let ifthen = encode env ifthen in
     let ifelse = encode env ifelse in
     mk ?name:exp.name ~loc (If { cond; ifthen; ifelse }) exp.ty
+
+  | Self { entry } ->
+    mk ?name:exp.name ~loc (Self { entry }) exp.ty
 
   | Transfer { dest; amount } ->
     let dest = encode env dest in

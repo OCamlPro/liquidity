@@ -106,7 +106,6 @@ DUNE_TESTS=`find dune-network/src/bin_client/test/contracts -regex "[^\.]+.tz" \
             ! -path "*concat_hello.tz" \
             ! -path "*/deprecated/*" \
             ! -path "*pexec*.tz" \
-            ! -path "*mini_scenarios/authentication.tz" \
             | sort -V`
 
 TESTS=$(DOC_TESTS) $(SIMPLE_TESTS) $(MORE_TESTS:=.liq) $(RE_TESTS:=.reliq) $(OTHER_TESTS:=.liq)

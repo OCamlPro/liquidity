@@ -220,6 +220,8 @@ let rec untype (env : env) (code : (datatype, 'a) exp) : (datatype, 'b) exp =
              entry;
              arg = untype env arg }
 
+    | Self { entry } -> Self { entry }
+
     | SelfCall { amount; entry; arg } ->
       SelfCall { amount = untype env amount;
              entry;

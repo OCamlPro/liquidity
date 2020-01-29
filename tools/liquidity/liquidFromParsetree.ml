@@ -692,7 +692,6 @@ let rec translate_const env exp =
     let csts, tys = List.split pair_list in
     let tys = match tys with
       | (Some ty1, Some ty2) :: tail ->
-
         List.iter (function
               (Some ty1', Some ty2') when ty1' = ty1 && ty2' = ty2
               -> ()
@@ -998,6 +997,27 @@ and translate_code contracts env exp =
         "Wrong number or order of arguements for Contract.create.\n\
          Expected syntax is : Contract.create <delegate> \
          <amount> <initial_storage> (contract <ContractName>)"
+
+
+    | { pexp_desc = Pexp_apply (
+        { pexp_desc = Pexp_ident { txt = Ldot(Lident "Contract", "self") }},
+        args);
+        pexp_loc } ->
+      begin match args with
+        | [_, { pexp_desc = Pexp_construct ( { txt = Lident "()" }, None ) }] ->
+          Self { entry = "default" }
+        | _ -> error_loc pexp_loc "Argument to Contract.self must be ()"
+      end
+
+    | { pexp_desc = Pexp_extension (
+        { txt = "handle" },
+        PStr [{ pstr_desc = Pstr_eval (
+            { pexp_desc = Pexp_ident
+                  { txt = Ldot(Lident "Self", entry_point);
+                    loc = c_loc } },
+            [])}]
+      )} ->
+      Self { entry = entry_point }
 
     | { pexp_desc =
           Pexp_apply (

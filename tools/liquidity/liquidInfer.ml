@@ -731,6 +731,7 @@ let rec tvars_to_unit ({ desc; ty; loc } as e) =
              amount = tvars_to_unit amount;
              entry;
              arg = tvars_to_unit arg }
+    | Self { entry } -> Self { entry }
     | SelfCall { amount; entry; arg } ->
       SelfCall { amount = tvars_to_unit amount;
                  entry;
@@ -973,6 +974,7 @@ let rec mono_exp env subst vtys (e:typed_exp) =
                        contract = mono_exp subst vtys c.contract;
                        amount = mono_exp subst vtys c.amount;
                        arg = mono_exp subst vtys c.arg }
+    | Self { entry } -> Self { entry }
     | SelfCall c -> SelfCall { entry = c.entry;
                                amount = mono_exp subst vtys c.amount;
                                arg = mono_exp subst vtys c.arg }

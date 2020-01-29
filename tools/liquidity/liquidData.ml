@@ -169,6 +169,7 @@ let rec translate_const_exp (exp : (datatype, 'b) exp) =
   | Seq _
   | Transfer _
   | Call _
+  | Self _
   | SelfCall _
   | MatchOption _
   | MatchNat _

@@ -118,6 +118,10 @@ and decode ( exp : encoded_exp ) : typed_exp =
     let desc = Call { contract; amount; entry; arg } in
     mk ?name:exp.name ~loc desc exp.ty
 
+  | Self { entry } ->
+    let desc = Self { entry } in
+    mk ?name:exp.name ~loc desc exp.ty
+
   | SelfCall { amount; entry; arg } ->
     let amount = decode amount in
     let arg = decode arg in
