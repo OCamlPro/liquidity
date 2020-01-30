@@ -138,7 +138,7 @@ and bv_const const =
   match const with
   | ( CUnit | CBool _ | CInt _ | CNat _ | CTez _ | CTimestamp _ | CString _
     | CBytes _ | CKey _ | CSignature _ | CNone  | CKey_hash _
-    | CAddress _ | CContract _ ) -> StringSet.empty
+    | CContract _ ) -> StringSet.empty
   | CSome x | CLeft x | CRight x | CConstr (_, x) -> bv_const x
   | CTuple xs | CList xs | CSet xs ->
     List.fold_left
@@ -441,7 +441,7 @@ let rec bound code =
 and bound_const = function
   | ( CUnit | CBool _ | CInt _ | CNat _ | CTez _ | CTimestamp _ | CString _
     | CBytes _ | CKey _ | CSignature _ | CNone  | CKey_hash _
-    | CAddress _ | CContract _) as c -> c
+    | CContract _) as c -> c
   | CSome x -> CSome (bound_const x)
   | CLeft x -> CLeft (bound_const x)
   | CRight x -> CRight (bound_const x)

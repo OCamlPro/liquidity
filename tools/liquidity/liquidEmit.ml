@@ -210,7 +210,6 @@ and emit_const ~expand cst = match cst with
     | CSignature _
     | CNone
     | CKey_hash _
-    | CAddress _
     | CContract _ ) as cst -> cst
   | CLambda l ->
     CLambda { l with body = emit_code ~expand l.body }

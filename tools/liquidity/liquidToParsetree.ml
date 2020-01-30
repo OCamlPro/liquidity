@@ -319,17 +319,15 @@ let rec convert_const ~abbrev (expr : (datatype, 'a) exp const) =
     let c = Exp.constant (Pconst_integer (n, Some '\235')) in
     if n.[0] <> '0' then c, true
     else Exp.constraint_ c (convert_type ~abbrev Tsignature), true
-  | CAddress n when
-      String.length n >= 2 &&
-      let pref = String.sub n 0 2 in pref = "tz" || pref = "dn"
-    ->
-    Exp.constraint_
-      (Exp.constant (Pconst_integer (n, Some '\236')))
-      (convert_type ~abbrev Taddress), true
-  | CAddress n ->
-    Exp.constant (Pconst_integer (n, Some '\236')), true
-  | CContract n ->
+  | CContract (n, (None | Some "default")) ->
     Exp.constant (Pconst_integer (n, Some '\236')), false
+  | CContract (n, Some entry) ->
+    Exp.ident (lid (String.concat "%" [n; entry])), false
+    (* Exp.apply
+     *   (Exp.ident (lid "%"))
+     *   [Nolabel, Exp.constant (Pconst_integer (n, Some '\236'));
+     *    Nolabel, Exp.ident (lid entry)],
+     * false *)
   | CBytes n -> Exp.constant (Pconst_integer (n, Some '\237')), true
 
   | CList [] -> Exp.construct (lid "[]") None, false

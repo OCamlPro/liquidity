@@ -144,6 +144,7 @@ OCaml.library("ocplib-liquidity-base",
      ];
      requires = [
        "ocplib-liquidity-parser";
+       "hex";
      ];
 
    });

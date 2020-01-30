@@ -386,7 +386,7 @@ let rec deconstify env loc ty c =
   else match c, (encode_qual_type env ty) with
     | ( CUnit | CBool _ | CInt _ | CNat _ | CTez _ | CTimestamp _ | CString _
       | CBytes _ | CKey _ | CSignature _ | CNone
-      | CKey_hash _ | CAddress _ | CContract _ ),
+      | CKey_hash _ | CContract _ ),
       _ ->
       mk ~loc (Const { ty; const = c }) ty
 
@@ -576,7 +576,7 @@ let record_field_name_in_env env field record =
 let rec encode_const env (c : typed_const) : encoded_const = match c with
   | ( CUnit | CBool _ | CInt _ | CNat _ | CTez _ | CTimestamp _ | CString _
     | CBytes _ | CKey _ | CSignature _ | CNone  | CKey_hash _
-    | CAddress _ | CContract _ ) as c -> c
+    | CContract _ ) as c -> c
 
   | CSome x -> CSome (encode_const env x)
   | CLeft x -> CLeft (encode_const env x)

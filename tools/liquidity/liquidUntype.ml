@@ -284,7 +284,7 @@ and untype_lambda { arg_name; arg_ty; body; ret_ty; recursive } =
 and untype_const c = match c with
   | ( CUnit | CBool _ | CInt _ | CNat _ | CTez _ | CTimestamp _ | CString _
     | CBytes _ | CKey _ | CSignature _ | CNone  | CKey_hash _
-    | CAddress _ | CContract _ ) as c -> c
+    | CContract _ ) as c -> c
   | CSome x -> CSome (untype_const x)
   | CLeft x -> CLeft (untype_const x)
   | CRight x -> CRight (untype_const x)

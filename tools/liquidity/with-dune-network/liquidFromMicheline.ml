@@ -407,8 +407,11 @@ let rec convert_const env ?ty expr =
           CTimestamp (ISO8601.of_string s)
         | Some Tkey -> CKey s
         | Some Tkey_hash -> CKey_hash s
-        | Some Taddress -> CAddress s
-        | Some Tcontract _ -> CContract s
+        | Some Taddress | Some Tcontract _ ->
+          (match String.split_on_char '%' s with
+           | [s] -> CContract (s, None)
+           | [s; e] -> CContract (s, Some e)
+           | _ -> assert false)
         | Some Tsignature -> CSignature s
         | Some Tstring | None -> CString s
         | Some ty -> wrong_type env expr ty
@@ -428,10 +431,13 @@ let rec convert_const env ?ty expr =
         | Some Tsignature ->
           (* CSignature Ed25519.Signature.(to_b58check s) *)
           CSignature (to_hex s)
-        | Some Taddress ->
-          CAddress (to_hex s)
-        | Some (Tcontract _) ->
-          CContract (to_hex s)
+        | Some (Taddress | Tcontract _) ->
+          let c = MBytes.sub s 0 22 in
+          let e = MBytes.sub s 22 (MBytes.length s - 22) in
+          let e =
+            if MBytes.equal e MBytes.empty then None
+            else Some (MBytes.to_string e) in
+          CContract (to_hex c, e)
         | Some ty -> wrong_type env expr ty
       end
 

@@ -278,9 +278,9 @@ module Michelson = struct
     | CBytes s -> Printf.bprintf b "%s" s
     | CKey s -> Printf.bprintf b "%S" s
     | CKey_hash s -> Printf.bprintf b "%S" s
-    | CAddress s -> Printf.bprintf b "%S" s
     | CSignature s -> Printf.bprintf b "%S" s
-    | CContract s -> Printf.bprintf b "%S" s
+    | CContract (s, None) -> Printf.bprintf b "%S" s
+    | CContract (s, Some entry) -> Printf.bprintf b "%S" (String.concat "%" [s; entry])
     | CTez s -> Printf.bprintf b "%s" (Z.to_string (LiquidNumber.mic_mutez_of_tez s))
     | CInt n -> Printf.bprintf b "%s" (Z.to_string (LiquidNumber.mic_of_integer n))
     | CNat n -> Printf.bprintf b "%s" (Z.to_string (LiquidNumber.mic_of_integer n))
@@ -1032,8 +1032,8 @@ module LiquidDebug = struct
     | CBytes s -> Printf.bprintf b "%s" s
     | CKey s -> Printf.bprintf b "%s" s
     | CKey_hash s -> Printf.bprintf b "%s" s
-    | CAddress s -> Printf.bprintf b "%s" s
-    | CContract s -> Printf.bprintf b "%s" s
+    | CContract (s, None) -> Printf.bprintf b "%s" s
+    | CContract (s, Some e) -> Printf.bprintf b "%s%%%s" s e
     | CSignature s -> Printf.bprintf b "%s" s
     | CTez s -> Printf.bprintf b "%s%s" (LiquidNumber.liq_of_tez s)
                   (LiquidOptions.curreny ())

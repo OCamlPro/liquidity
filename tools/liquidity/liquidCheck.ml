@@ -226,8 +226,7 @@ let rec type_of_const ~loc env = function
   | CBytes _ -> Tbytes
   | CKey _ -> Tkey
   | CSignature _ -> Tsignature
-  | CAddress _ -> Taddress
-  | CContract _ -> Tcontract (None, fresh_tvar ())
+  | CContract (_, entry) -> Tcontract (entry, fresh_tvar ())
   | CTuple l ->
     Ttuple (List.map (type_of_const ~loc env) l)
   | CNone -> Toption (fresh_tvar ())
@@ -310,7 +309,6 @@ let rec typecheck_const ~loc env (cst : syntax_const) ty : datatype * typed_cons
     | Ttez, CTez _
     | Tkey, CKey _
     | Tkey_hash, CKey_hash _
-    | Taddress, CAddress _
     | Tcontract _, CContract _
     | Ttimestamp, CTimestamp _
     | Tsignature, CSignature _
@@ -323,15 +321,36 @@ let rec typecheck_const ~loc env (cst : syntax_const) ty : datatype * typed_cons
   | Tkey, CBytes s -> ty, CKey s
   | Tkey_hash, CBytes s -> ty, CKey_hash s
   | Taddress, CKey_hash s -> ty, CKey_hash s
-  | Taddress, CBytes s -> ty, CAddress s
+  | Taddress, CBytes s -> ty, CContract(s, None)
   | Tsignature, CBytes s -> ty, CSignature s
 
-  | Tcontract _, CAddress s -> ty, CAddress s
   | Tcontract ((None | Some "default"), (Tunit  | Tvar _  as p)), CKey_hash s ->
     unify loc p Tunit;
     ty, CKey_hash s
-  | Tcontract _, CBytes s -> ty, CContract s
-  | Taddress, CContract s -> ty, CContract s
+  | Tcontract (entry,_), CBytes s ->
+    let len = String.length s in
+    if len < 46 then
+      error loc "constant %s is too short to be a contract" s;
+    let e = String.sub s 46 (len - 46) in
+    let e = Hex.to_string (`Hex e) in
+    begin if e = "" then
+        match entry with
+        | None | Some "default" -> ()
+        | Some entry ->
+          error loc "constant contract is for entry point default \
+                     but should be for entry point %s" entry
+      else
+        match entry with
+        | None ->
+          error loc "constant contract is for entry point %s \
+                     but should be for entry point default" e
+        | Some entry when e <> entry ->
+          error loc "constant contract is for entry point %s \
+                     but should be for entry point %s" e entry
+        | _ -> ()
+    end;
+    ty, CBytes s
+  | Taddress, CContract (s, e) -> ty, CContract (s, e)
 
   | Ttimestamp, CString s -> ty, CTimestamp (ISO8601.of_string s)
   | Ttez, CString s -> ty, CTez (LiquidNumber.tez_of_liq s)
@@ -2191,8 +2210,7 @@ let rec type_of_const = function
   | CBytes _ -> Tbytes
   | CKey _ -> Tkey
   | CSignature _ -> Tsignature
-  | CAddress _ -> Taddress
-  | CContract _ -> unit_contract_ty
+  | CContract (_, e) -> Tcontract (e, Tunit)
   | CTuple l ->
     Ttuple (List.map type_of_const l)
   | CNone -> Toption Tunit

@@ -35,7 +35,7 @@ let base_of_var arg =
 let rec decode_const (c : encoded_const) : typed_const = match c with
   | ( CUnit | CBool _ | CInt _ | CNat _ | CTez _ | CTimestamp _ | CString _
     | CBytes _ | CKey _ | CSignature _ | CNone  | CKey_hash _
-    | CAddress _ | CContract _) as c -> c
+    | CContract _) as c -> c
   | CSome x -> CSome (decode_const x)
   | CLeft x -> CLeft (decode_const x)
   | CRight x -> CRight (decode_const x)

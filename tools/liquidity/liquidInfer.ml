@@ -822,7 +822,7 @@ let rec tvars_to_unit ({ desc; ty; loc } as e) =
 and const_tvars_to_unit c = match c with
   | ( CUnit | CBool _ | CInt _ | CNat _ | CTez _ | CTimestamp _ | CString _
     | CBytes _ | CKey _ | CSignature _ | CNone  | CKey_hash _
-    | CAddress _ | CContract _) as c -> c
+    | CContract _) as c -> c
   | CSome x -> CSome (const_tvars_to_unit x)
   | CLeft x -> CLeft (const_tvars_to_unit x)
   | CRight x -> CRight (const_tvars_to_unit x)
@@ -1050,7 +1050,7 @@ let rec mono_exp env subst vtys (e:typed_exp) =
 and mono_const env subst vtys (c : typed_const) = match c with
   | ( CUnit | CBool _ | CInt _ | CNat _ | CTez _ | CTimestamp _ | CString _
     | CBytes _ | CKey _ | CSignature _ | CNone  | CKey_hash _
-    | CAddress _ | CContract _) as c -> c
+    | CContract _) as c -> c
   | CSome x -> CSome (mono_const env subst vtys x)
   | CLeft x -> CLeft (mono_const env subst vtys x)
   | CRight x -> CRight (mono_const env subst vtys x)

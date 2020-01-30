@@ -603,9 +603,18 @@ let rec translate_const env exp =
   | { pexp_desc = Pexp_constant (Pconst_integer (s, Some '\233')) } ->
     CKey_hash s, Some Tkey_hash
 
-  (* Address *)
+  (* Address / Contract *)
   | { pexp_desc = Pexp_constant (Pconst_integer (s, Some '\236')) } ->
-    CAddress s, Some Taddress
+    CContract (s, None), Some Taddress
+
+  (* Address / Contract with entrypoint *)
+  | { pexp_desc =
+        Pexp_apply (
+          { pexp_desc = Pexp_ident { txt = Lident "%" } },
+          [Nolabel, { pexp_desc = Pexp_constant (Pconst_integer (s, Some '\236')) };
+           Nolabel, { pexp_desc = Pexp_ident { txt = Lident entry } }]);
+    } ->
+    CContract (s, Some entry), Some Taddress
 
   (* Key *)
   | { pexp_desc = Pexp_constant (Pconst_integer (s, Some '\234')) } ->
