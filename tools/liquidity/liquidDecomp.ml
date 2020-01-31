@@ -363,7 +363,6 @@ let rec decompile_next (env : env) node =
         | "LE", [arg1;arg2] -> Prim_le, [arg_of arg1; arg_of arg2]
         | "LT", [arg1;arg2] -> Prim_lt, [arg_of arg1; arg_of arg2]
         | "NOW", [] -> Prim_now, [unit ~loc]
-        | "ADDRESS_SELF", [] -> Prim_self, [unit ~loc]
         | "BALANCE", [] -> Prim_balance, [unit ~loc]
         | "AMOUNT",[] -> Prim_amount, [unit ~loc]
         | "STEPS_TO_QUOTA",[] -> Prim_gas, [unit ~loc]
@@ -397,7 +396,7 @@ let rec decompile_next (env : env) node =
             | "SHA512" -> Prim_sha512
             | "HASH_KEY" -> Prim_hash_key
             | "CHECK_SIGNATURE" -> Prim_check
-            | "ADDRESS" -> Prim_address
+            | "ADDRESS" -> Prim_address_untype
             | "XOR" -> Prim_xor
             | "NOT" -> Prim_not
             | "OR" -> Prim_or

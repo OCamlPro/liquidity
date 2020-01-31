@@ -50,19 +50,19 @@ let rec emit_code ~expand code =
                [emit_code ~expand ifthen; emit_code ~expand ifelse], var_annot name)
   | IF_NONE (ifthen, ifelse) ->
     M_INS_EXP ("IF_NONE", [],
-               [emit_code ~expand ifthen; emit_code ~expand ifelse], var_annot name)
+               [emit_code ~expand ifthen; emit_code ~expand ifelse], [])
   | IF_CONS (ifcons, ifnil) ->
     M_INS_EXP ("IF_CONS", [],
-               [emit_code ~expand ifcons; emit_code ~expand ifnil], var_annot name)
+               [emit_code ~expand ifcons; emit_code ~expand ifnil], [])
   | IF_LEFT (left, right) ->
     M_INS_EXP ("IF_LEFT", [],
-               [emit_code ~expand left; emit_code ~expand right], var_annot name)
+               [emit_code ~expand left; emit_code ~expand right], [])
   | LOOP loop ->
-    M_INS_EXP ("LOOP", [], [emit_code ~expand loop], var_annot name)
+    M_INS_EXP ("LOOP", [], [emit_code ~expand loop], [])
   | LOOP_LEFT loop ->
     M_INS_EXP ("LOOP_LEFT", [], [emit_code ~expand loop], var_annot name)
   | ITER body ->
-    M_INS_EXP ("ITER", [], [emit_code ~expand body], var_annot name)
+    M_INS_EXP ("ITER", [], [emit_code ~expand body], [])
   | MAP body ->
     M_INS_EXP ("MAP", [], [emit_code ~expand body], var_annot name)
   | LAMBDA (arg_type, res_type, body) ->

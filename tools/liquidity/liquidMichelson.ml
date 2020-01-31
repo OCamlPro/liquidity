@@ -516,11 +516,17 @@ and compile_prim ~loc depth env prim args =
     x_code @ set_code
   | Prim_tuple_set, _ -> assert false
 
-  | Prim_self, _ when env.in_lambda ->
-    LiquidLoc.raise_error ~loc
-      "Typing error: \
-       Current.self is not allowed inside non-inlined functions\n%!"
-  | Prim_self, _ -> [ ii (SELF None); ii ADDRESS ]
+  | Prim_address, [contract] ->
+    compile depth env contract @
+    [
+      ii PACK;
+      ii @@ PUSH (Tnat, CNat (LiquidNumber.integer_of_int 22));
+      ii @@ PUSH (Tnat, CNat (LiquidNumber.integer_of_int 6));
+      ii SLICE;
+      ii @@ IF_NONE (seq [ ii @@ PUSH (Tunit, CUnit); ii FAILWITH ], seq []);
+      ii @@ UNPACK Taddress;
+      ii @@ IF_NONE (seq [ ii @@ PUSH (Tunit, CUnit); ii FAILWITH ], seq []);
+    ]
 
   | Prim_balance, _ -> [ ii BALANCE ]
   | Prim_now, _ -> [ ii NOW ]
@@ -607,7 +613,7 @@ and compile_prim ~loc depth env prim args =
     | Prim_hash_key|Prim_check|Prim_default_account|Prim_list_size
     | Prim_set_size|Prim_map_size|Prim_or|Prim_and|Prim_xor
     | Prim_not|Prim_abs|Prim_int|Prim_neg|Prim_lsr|Prim_lsl|Prim_is_nat
-    | Prim_exec _|Prim_Cons|Prim_set_delegate|Prim_address
+    | Prim_exec _|Prim_Cons|Prim_set_delegate|Prim_address|Prim_address_untype
     | Prim_get_balance|Prim_is_implicit),_ ->
     let _depth, args_code = compile_args depth env args in
     let prim_code = match prim, List.length args with
@@ -642,7 +648,8 @@ and compile_prim ~loc depth env prim args =
       | Prim_string_concat, 1 -> [ ii CONCAT ]
       | Prim_bytes_concat, 1 -> [ ii CONCAT ]
 
-      | Prim_address, 1 -> [ ii ADDRESS ]
+      | Prim_address_untype, 1 -> [ ii ADDRESS ]
+
       | Prim_blake2b, 1 -> [ ii BLAKE2B ]
       | Prim_sha256, 1 -> [ ii SHA256 ]
       | Prim_sha512, 1 -> [ ii SHA512 ]
@@ -690,6 +697,7 @@ and compile_prim ~loc depth env prim args =
         | Prim_set_size|Prim_map_size|Prim_or|Prim_and|Prim_xor
         | Prim_not|Prim_abs|Prim_int|Prim_neg|Prim_lsr|Prim_lsl|Prim_is_nat
         | Prim_exec _|Prim_Cons|Prim_set_delegate|Prim_address
+        | Prim_address_untype
         | Prim_get_balance|Prim_is_implicit),n ->
         Printf.eprintf "Primitive %S: wrong number of args(%d)\n%!"
           (LiquidTypes.string_of_primitive prim)
@@ -698,7 +706,7 @@ and compile_prim ~loc depth env prim args =
       (*                           | prim, args -> *)
 
       | (Prim_extension _|Prim_tuple_get
-        | Prim_tuple_set|Prim_tuple|Prim_self
+        | Prim_tuple_set|Prim_tuple
         | Prim_balance|Prim_now|Prim_amount|Prim_gas|Prim_chain_id
         | Prim_Left|Prim_Right|Prim_source|Prim_sender|Prim_unused _
         | Prim_coll_find|Prim_coll_update|Prim_coll_mem

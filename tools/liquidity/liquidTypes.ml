@@ -481,7 +481,6 @@ type primitive =
   | Prim_tuple_set
   | Prim_tuple
 
-  | Prim_self
   | Prim_balance
   | Prim_now
   | Prim_amount
@@ -529,6 +528,7 @@ type primitive =
   | Prim_check
   | Prim_default_account
   | Prim_set_delegate
+  | Prim_address_untype
   | Prim_address
   | Prim_pack
 
@@ -622,7 +622,6 @@ let () =
        "Array.get", Prim_tuple_get;
        "Array.set", Prim_tuple_set;
 
-       "Contract.self", Prim_self;
        "Current.balance", Prim_balance;
        "Contract.balance", Prim_balance;
        "Current.time", Prim_now;
@@ -671,6 +670,7 @@ let () =
        "List.size", Prim_list_size;
 
        "Contract.set_delegate", Prim_set_delegate;
+       "Contract.untype", Prim_address_untype;
        "Contract.address", Prim_address;
 
        "Account.default", Prim_default_account;

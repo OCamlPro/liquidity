@@ -91,6 +91,10 @@ let%entry transfer (dest, tokens, data) storage =
     (* [%handle: val%entry receiveTokens : address * nat * bytes option] dest *)
     with
     | Some dest ->
+      let dest = Contract.address dest in
+      let dest = match [%handle TokenReceiver.receiveTokens] dest with
+        | None -> failwith ()
+        | Some dest -> dest in
       [dest.receiveTokens (Current.sender (), tokens, data) ~amount:0DUN]
     | None -> match data with
       | None -> []

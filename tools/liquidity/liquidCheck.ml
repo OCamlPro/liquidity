@@ -226,6 +226,7 @@ let rec type_of_const ~loc env = function
   | CBytes _ -> Tbytes
   | CKey _ -> Tkey
   | CSignature _ -> Tsignature
+  | CContract (_, None) -> Taddress
   | CContract (_, entry) -> Tcontract (entry, fresh_tvar ())
   | CTuple l ->
     Ttuple (List.map (type_of_const ~loc env) l)
@@ -1601,8 +1602,6 @@ and typecheck_prim2i env prim loc args =
 
   | Prim_Some, [ ty ] -> Toption ty
 
-  | Prim_self, [ ty ] -> unify ty Tunit; Taddress
-
   | Prim_now, [ ty ] -> unify ty Tunit; Ttimestamp
   | ( Prim_balance | Prim_amount ), [ ty ] -> unify ty Tunit; Ttez
   | ( Prim_source | Prim_sender ), [ ty ] -> unify ty Tunit; Taddress
@@ -1620,7 +1619,7 @@ and typecheck_prim2i env prim loc args =
   | Prim_check, [ ty1; ty2; ty3 ] ->
     unify ty1 Tkey; unify ty2 Tsignature; unify ty3 Tbytes; Tbool
 
-  | Prim_address, [ ty ] ->
+  | (Prim_address | Prim_address_untype), [ ty ] ->
     unify ty (Tpartial (Pcont None));
     Taddress
 
@@ -1823,7 +1822,6 @@ and typecheck_prim2t env prim loc args =
     Tset key_ty
 
   | Prim_Some, [ ty ] -> Toption ty
-  | Prim_self, [ Tunit ] -> Taddress
   | Prim_now, [ Tunit ] -> Ttimestamp
   | Prim_balance, [ Tunit ] -> Ttez
   | Prim_source, [ Tunit ] -> Taddress
@@ -1842,7 +1840,7 @@ and typecheck_prim2t env prim loc args =
   | Prim_check, _ ->
     error_prim loc Prim_check args [Tkey; Tsignature; Tbytes]
 
-  | Prim_address, [ Tcontract _ ] ->
+  | (Prim_address | Prim_address_untype), [ Tcontract _ ] ->
     Taddress
 
   | Prim_default_account, [ Tkey_hash ] -> unit_contract_ty
@@ -1957,7 +1955,6 @@ and expected_prim_types = function
   | Prim_Some | Prim_pack ->
     1, "'a"
 
-  | Prim_self
   | Prim_now
   | Prim_balance
   | Prim_source
@@ -1981,7 +1978,7 @@ and expected_prim_types = function
   | Prim_check ->
     3, "key, signature, bytes"
 
-  | Prim_address | Prim_get_balance ->
+  | Prim_address | Prim_get_balance | Prim_address_untype ->
     1, "<Contract handle>"
 
   | Prim_default_account ->

@@ -9,7 +9,7 @@ contract Appstore = {
   let%entry main = (name: string, store) => {
     let amount = Current.amount();
 
-    if (amount < 5.00tz) {
+    if (amount < 5.00DUN) {
       Current.failwith("Not enough money, at least 5tz to vote");
     };
 

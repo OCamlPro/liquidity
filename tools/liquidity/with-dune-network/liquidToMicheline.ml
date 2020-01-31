@@ -274,11 +274,11 @@ and convert_code expand expr =
   | IF (x,y) ->
     prim "IF" [convert_code expand x; convert_code expand y] name
   | IF_NONE (x,y) ->
-    prim "IF_NONE" [convert_code expand x; convert_code expand y] name
+    prim "IF_NONE" [convert_code expand x; convert_code expand y] None
   | IF_LEFT (x,y) ->
-    prim "IF_LEFT" [convert_code expand x; convert_code expand y] name
+    prim "IF_LEFT" [convert_code expand x; convert_code expand y] None
   | IF_CONS (x,y) ->
-    prim "IF_CONS" [convert_code expand x; convert_code expand y] name
+    prim "IF_CONS" [convert_code expand x; convert_code expand y] None
   | NOW -> prim "NOW" [] name
   | PAIR -> prim "PAIR" [] name
   | RECORD (f1, None) -> prim "PAIR" [] ~fields:[f1] name
@@ -341,9 +341,9 @@ and convert_code expand expr =
     prim "RIGHT" [convert_type ty] name ~fields:[""; c]
 
   | CONS -> prim "CONS" [] name
-  | LOOP loop -> prim "LOOP" [convert_code expand loop] name
+  | LOOP loop -> prim "LOOP" [convert_code expand loop] None
   | LOOP_LEFT loop -> prim "LOOP_LEFT" [convert_code expand loop] name
-  | ITER body -> prim "ITER" [convert_code expand body] name
+  | ITER body -> prim "ITER" [convert_code expand body] None
   | MAP body -> prim "MAP" [convert_code expand body] name
   | CONTRACT (entry, ty) ->
     let fields = match entry with
