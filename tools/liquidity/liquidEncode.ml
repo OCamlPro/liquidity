@@ -23,7 +23,6 @@
 
 open LiquidTypes
 open LiquidNamespace
-open LiquidInfer
 open LiquidPrinter.Liquid
 
 (* Elements traversed by uncurrying transformation *)
@@ -452,10 +451,7 @@ let rec deconstify env loc ty c =
     | CConstr _, _ -> assert false
 
     | _, _ ->
-      Format.eprintf "%s : %s@."
-        (LiquidPrinter.Liquid.string_of_const c)
-        (LiquidPrinter.Liquid.string_of_type ((encode_qual_type env ty)));
-      assert false
+      error loc "Forbidden type %s in constants" (string_of_type ty)
 
 (* Decrement counters for variables that appear in an expression *)
 let rec decr_counts_vars env e =
@@ -604,22 +600,6 @@ let rec encode_const env (c : typed_const) : encoded_const = match c with
 
   | CConstr (constr, x) when env.decompiling ->
     CConstr (constr, encode_const env x)
-
-  (* | CConstr (constr, x) when is_entry_case constr ->
-   *   (\* TODO maybe remove *\)
-   *   let entry_name = entry_name_of_case constr in
-   *   let rec iter entries =
-   *     match entries with
-   *     | [] -> assert false
-   *     | [e] ->
-   *       if e.entry_name <> entry_name then
-   *         error (noloc env)  "unknown entry point %s" entry_name;
-   *       encode_const env x
-   *     | e :: entries ->
-   *       if e.entry_name = entry_name then CLeft (encode_const env x)
-   *       else CRight (iter entries)
-   *   in
-   *   iter env.t_contract_sig.f_entries_sig *)
 
   | CConstr (constr, x) ->
     begin try
@@ -1440,11 +1420,11 @@ and encode_contract ?(annot=false) ?(decompiling=false) contract =
     encode_modules env contract.subs in
   let values = List.map fst values in
 
-  let parameter = encode_contract_sig (sig_of_full_sig env.t_contract_sig) in
-  let loc = LiquidLoc.loc_in_file env.env.filename in
-
   if !LiquidOptions.verbosity > 0 then
     Format.eprintf "Encode contract %s@." (qual_contract_name contract);
+
+  let parameter = encode_contract_sig (sig_of_full_sig env.t_contract_sig) in
+  let loc = LiquidLoc.loc_in_file env.env.filename in
 
   let rec values_on_top mk l exp = match l with
     | [] -> exp

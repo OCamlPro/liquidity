@@ -1659,6 +1659,7 @@ type warning =
   | AlwaysFails
   | WeakParam of string
   | Partial_application
+  | WOther of string
 
 (** {2 Reserved symbols in parsing }  *)
 

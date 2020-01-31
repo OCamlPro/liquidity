@@ -85,6 +85,7 @@ let default_warning_printer loc w =
          Format.fprintf fmt "Type parameter '%s is weak" a
        | Partial_application ->
          Format.fprintf fmt "This function is partially applied"
+       | WOther s -> Format.pp_print_string fmt s
     ) w
 
 let warning_printer = ref default_warning_printer

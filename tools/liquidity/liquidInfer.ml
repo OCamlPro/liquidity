@@ -493,8 +493,6 @@ let rec find_variant_type ~loc env = function
 
 
 
-
-
 (* Monomorphisation *)
 
 let instantiate_to s ty =
@@ -681,14 +679,47 @@ let rec vars_to_unit ?loc ty = match ty with
   | Tunit | Tbool | Tint | Tnat | Ttez | Tstring | Tbytes | Ttimestamp | Tkey
   | Tkey_hash | Tsignature | Toperation | Taddress | Tfail | Tchainid -> ty
 
-and sig_vars_to_unit ?loc c =
+let sig_vars_to_unit ?loc c =
   { c with entries_sig =
              List.map (fun es ->
                  { es with parameter = vars_to_unit ?loc es.parameter }
                ) c.entries_sig
   }
 
-let rec tvars_to_unit ({ desc; ty; loc } as e) =
+let rec has_unresolved = function
+  | Ttuple tyl -> List.exists has_unresolved tyl
+  | Toption ty | Tlist ty | Tset ty | Tcontract (_, ty) -> has_unresolved ty
+  | Tmap (ty1, ty2) | Tbigmap (ty1, ty2) | Tor (ty1, ty2)
+  | Tlambda (ty1, ty2, _) -> has_unresolved ty1 || has_unresolved ty2
+  | Tclosure ((ty1, ty2), ty3, _) ->
+    has_unresolved ty1 || has_unresolved ty2 || has_unresolved ty3
+  | Trecord (_, fl) | Tsum (_, fl) ->
+    List.exists (fun (_, ty) -> has_unresolved ty) fl
+  | Tvar { contents = { contents = { tyo = Some t }} } -> has_unresolved t
+  | Tvar _ -> true
+  | Tpartial _ -> true
+  | _ -> false
+
+let vars_to_unit ?(warn=false) ?(err=false) ?loc ty =
+  if not (warn || err) then vars_to_unit ?loc ty
+  else
+    let warning = has_unresolved ty in
+    let tvars = free_tvars ty in
+    let str_ty = (string_of_type ty) in
+    let ty' = vars_to_unit ?loc ty in
+    if warning then begin
+      let loc = match loc with None -> noloc | Some loc -> loc in
+      if err then error loc "Unresolved type %s, add annotation" str_ty
+      else
+        let msg =
+          Printf.sprintf
+            "Unresolved type %s. Type variables '%s were replaced by unit."
+            str_ty (String.concat ", '" (StringSet.elements tvars)) in
+        LiquidLoc.warn loc (WOther msg)
+    end;
+    ty'
+
+let rec tvars_to_unit ?(err=false) ({ desc; ty; loc } as e) =
   let desc = match desc with
     | Var _ -> desc
     | Let { bnd_var; inline; bnd_val; body } ->
@@ -702,15 +733,19 @@ let rec tvars_to_unit ({ desc; ty; loc } as e) =
     | Project { field; record } ->
       Project { field; record = tvars_to_unit record }
     | Const { ty; const } ->
-      Const { ty = vars_to_unit ~loc ty; const = const_tvars_to_unit const }
+      let const = const_tvars_to_unit ~loc const in
+      (* if has_unresolved ty then
+       *   error loc "Unresolved constant type %S, add annotation. Constant:\n  %s"
+       *     (string_of_type ty) (string_of_const const); *)
+      Const { ty = vars_to_unit ~err ~warn:true ~loc ty; const }
     | Apply { prim = Prim_extension (prim_name, effect, targs,
                                      nb_arg, nb_ret, minst); args } ->
       List.iter (fun ty ->
-          if has_tvar ty then
+          if has_unresolved ty then
             error loc "Unresolved type parameter %S for %s, add annotation"
               (string_of_type ty) prim_name
         ) targs;
-      let targs = List.map vars_to_unit targs in
+      let targs = List.map (vars_to_unit ~loc) targs in
       let args = List.map tvars_to_unit args in
       Apply { prim = Prim_extension (prim_name, effect, targs,
                                      nb_arg, nb_ret, minst); args }
@@ -727,10 +762,10 @@ let rec tvars_to_unit ({ desc; ty; loc } as e) =
       Transfer { dest = tvars_to_unit dest;
                  amount = tvars_to_unit amount }
     | Call { contract; amount; entry; arg } ->
-      Call { contract = tvars_to_unit contract;
+      Call { contract = tvars_to_unit ~err:true contract;
              amount = tvars_to_unit amount;
              entry;
-             arg = tvars_to_unit arg }
+             arg = tvars_to_unit ~err:true arg }
     | Self { entry } -> Self { entry }
     | SelfCall { amount; entry; arg } ->
       SelfCall { amount = tvars_to_unit amount;
@@ -773,16 +808,16 @@ let rec tvars_to_unit ({ desc; ty; loc } as e) =
                 acc = tvars_to_unit acc }
     | Lambda { arg_name; recursive; arg_ty; body; ret_ty } ->
       Lambda { arg_name; recursive;
-               arg_ty = vars_to_unit ~loc:arg_name.nloc arg_ty ;
+               arg_ty = vars_to_unit ~err ~warn:true ~loc:arg_name.nloc arg_ty ;
                body = tvars_to_unit body;
-               ret_ty = vars_to_unit ~loc:body.loc ret_ty }
+               ret_ty = vars_to_unit ~err ~warn:true ~loc:body.loc ret_ty }
     | Closure { arg_name; arg_ty; call_env; body; ret_ty } ->
       Closure { arg_name;
-                arg_ty = vars_to_unit ~loc:arg_name.nloc arg_ty;
+                arg_ty = vars_to_unit ~err ~warn:true ~loc:arg_name.nloc arg_ty;
                 call_env =
                   List.map (fun (v, e) -> (v, tvars_to_unit e)) call_env;
                 body = tvars_to_unit body;
-                ret_ty = vars_to_unit ~loc:arg_name.nloc ret_ty }
+                ret_ty = vars_to_unit ~err ~warn:true ~loc:arg_name.nloc ret_ty }
     | Record l ->
       Record (List.map (fun (f, e) -> (f, tvars_to_unit e)) l)
     | Constructor { constr; arg } ->
@@ -805,47 +840,47 @@ let rec tvars_to_unit ({ desc; ty; loc } as e) =
       CreateContract { args = List.map tvars_to_unit args;
                        contract = contract_tvars_to_unit contract }
     | ContractAt { arg; entry; entry_param } ->
-      ContractAt { arg = tvars_to_unit arg;
+      ContractAt { arg = tvars_to_unit ~err:true arg;
                    entry;
-                   entry_param = vars_to_unit ~loc entry_param }
+                   entry_param = vars_to_unit ~err:true ~loc entry_param }
     | Unpack { arg; ty } ->
-      if has_tvar ty then
+      if has_unresolved ty then
         error loc "Unresolved unpack type %S, add annotation"
           (string_of_type ty) ;
       Unpack { arg = tvars_to_unit arg;
-               ty = vars_to_unit ~loc:arg.loc ty }
+               ty = vars_to_unit ~warn:true ~loc:arg.loc ty }
     | TypeAnnot _ -> assert false (* Removed during typechecking *)
     | Type _ -> assert false (* Removed during typechecking*)
   in
-  { e with desc; ty = vars_to_unit ~loc ty }
+  { e with desc; ty = vars_to_unit ~err ~loc ty }
 
-and const_tvars_to_unit c = match c with
+and const_tvars_to_unit ~loc c = match c with
   | ( CUnit | CBool _ | CInt _ | CNat _ | CTez _ | CTimestamp _ | CString _
     | CBytes _ | CKey _ | CSignature _ | CNone  | CKey_hash _
     | CContract _) as c -> c
-  | CSome x -> CSome (const_tvars_to_unit x)
-  | CLeft x -> CLeft (const_tvars_to_unit x)
-  | CRight x -> CRight (const_tvars_to_unit x)
-  | CTuple xs -> CTuple (List.map (const_tvars_to_unit) xs)
-  | CList xs -> CList (List.map (const_tvars_to_unit) xs)
-  | CSet xs -> CSet (List.map (const_tvars_to_unit) xs)
+  | CSome x -> CSome (const_tvars_to_unit ~loc x)
+  | CLeft x -> CLeft (const_tvars_to_unit ~loc x)
+  | CRight x -> CRight (const_tvars_to_unit ~loc x)
+  | CTuple xs -> CTuple (List.map (const_tvars_to_unit ~loc) xs)
+  | CList xs -> CList (List.map (const_tvars_to_unit ~loc) xs)
+  | CSet xs -> CSet (List.map (const_tvars_to_unit ~loc) xs)
   | CMap l ->
     CMap (List.map (fun (x,y) ->
-        const_tvars_to_unit x, const_tvars_to_unit y) l)
+        const_tvars_to_unit ~loc x, const_tvars_to_unit ~loc y) l)
   | CBigMap BMList l ->
     CBigMap (BMList (List.map (fun (x,y) ->
-        const_tvars_to_unit x, const_tvars_to_unit y) l))
+        const_tvars_to_unit ~loc x, const_tvars_to_unit ~loc y) l))
   | CBigMap BMId _ as c -> c
   | CRecord labels ->
     CRecord (List.map (fun (f, x) ->
-        f, const_tvars_to_unit x) labels)
+        f, const_tvars_to_unit ~loc x) labels)
   | CConstr (constr, x) ->
-    CConstr (constr, const_tvars_to_unit x)
+    CConstr (constr, const_tvars_to_unit ~loc x)
   | CLambda { arg_name; arg_ty; body; ret_ty; recursive } ->
     CLambda { arg_name; recursive;
-              arg_ty = vars_to_unit ~loc:arg_name.nloc arg_ty ;
+              arg_ty = vars_to_unit ~err:true ~loc:arg_name.nloc arg_ty ;
               body = tvars_to_unit body;
-              ret_ty = vars_to_unit ~loc:body.loc ret_ty }
+              ret_ty = vars_to_unit ~err:true ~loc:body.loc ret_ty }
 
 and contract_tvars_to_unit (contract : typed_contract) =
   let subs = List.map contract_tvars_to_unit contract.subs in
@@ -1093,7 +1128,7 @@ and mono_contract vtys c =
         | None -> None
         | Some fee_code -> Some (mono_exp env [] vtys fee_code) in
       let pty = get_type env code.loc e.entry_sig.parameter in
-      if not @@ StringSet.is_empty @@ free_tvars pty then
+      if has_unresolved pty then
         error e.code.loc
           "Parameter type for entry %s can't be inferred (%s), \
            add an annotation"
