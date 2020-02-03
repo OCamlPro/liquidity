@@ -154,6 +154,10 @@ let compile_liquid_files files =
       if !LiquidOptions.singleline
       then LiquidToMicheline.line_of_contract c
       else LiquidToMicheline.string_of_contract c in
+    let s =
+      if !LiquidOptions.writeinfo then
+        LiquidInfomark.gen_info ~decompile:false files ^ s
+      else s in
     match
       match !LiquidOptions.output with
       | Some output -> output
@@ -232,7 +236,10 @@ let compile_tezos_file filename =
         (LiquidToParsetree.structure_of_contract ~type_annots ~types untyped_ast) []
     with LiquidError _ ->
       DebugPrint.string_of_contract untyped_ast in
-  let s = s ^ "\n" in
+  let s =
+    if !LiquidOptions.writeinfo then
+      LiquidInfomark.gen_info ~decompile:true [filename] ^ s ^ "\n"
+    else s ^ "\n" in
   match output with
   | "-" ->
     Format.printf "%s%!" s
@@ -657,6 +664,9 @@ let main () =
 
       "--json", Arg.Set LiquidOptions.json,
       " Output Michelson in JSON representation";
+
+      "--no-info", Arg.Clear LiquidOptions.writeinfo,
+      " Don't produce compilation information in output";
 
       "--amount", Arg.String (fun amount ->
           LiquidOptions.amount := parse_tez_to_string "--amount" amount

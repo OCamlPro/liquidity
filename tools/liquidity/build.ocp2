@@ -41,7 +41,7 @@
 
 *)
 
-version = "2.0-beta4";
+version = "2.0-beta5";
 
 if(with_version){
     version_info = { ocp2ml=true;
@@ -121,6 +121,7 @@ OCaml.library("ocplib-liquidity-base",
      files = [
 
        "iSO8601.ml";
+       "liquidInfomark.ml";
 
        "liquidBoundVariables.ml";
 
@@ -144,6 +145,7 @@ OCaml.library("ocplib-liquidity-base",
      ];
      requires = [
        "ocplib-liquidity-parser";
+       "calendar";
        "hex";
      ];
 

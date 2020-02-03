@@ -103,6 +103,8 @@ let counter = ref (None : int option)
 
 let ocaml_syntax = ref true
 
+let writeinfo = ref true
+
 type network =
   | Dune_network
   | Tezos_network
