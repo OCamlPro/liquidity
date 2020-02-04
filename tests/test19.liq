@@ -8,7 +8,7 @@ type storage = {
 let%init storage : storage = {
   key = 0x0085b1e4560f47f089d7b97aabcf46937a4c137a9c3f96f73f20c83621694e36d5;
   hash = 0xabcdef;
-  c = KT1LLcCCB9Fr1hrkGzfdiJ9u3ZajbdckBFrF
+  c = KT1LLcCCB9Fr1hrkGzfdiJ9u3ZajbdckBFrF%default;
 }
 
 contract PlusOne = struct

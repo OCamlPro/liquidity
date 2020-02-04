@@ -1424,6 +1424,15 @@ and translate_code contracts env exp =
           { exp with pexp_desc = Pexp_apply (f, [x]) } in
       exp.desc
 
+    (* constant Address / Contract with entrypoint *)
+    | { pexp_desc =
+          Pexp_apply (
+            { pexp_desc = Pexp_ident { txt = Lident "%" } },
+            [Nolabel, { pexp_desc = Pexp_constant (Pconst_integer (s, Some '\236')) };
+             Nolabel, { pexp_desc = Pexp_ident { txt = Lident entry } }]);
+      } ->
+      Const { const = CContract (s, Some entry); ty =  Taddress }
+
     (* f x1 x2 ... xn *)
     | { pexp_desc = Pexp_apply (
         { pexp_desc = Pexp_ident ( { txt = var } );
