@@ -11,10 +11,6 @@ let%init storage : storage = {
   c = KT1LLcCCB9Fr1hrkGzfdiJ9u3ZajbdckBFrF
 }
 
-(*
-edsigtc766ouxRKCy6dfYMTanSB9NkaqnBk2eit2i1vNAcKAuMtQRZZUFWWcZ7NdhQgLkgXp9kYNKiXfKsBvpk6ebWwQkMbNvgk
-*)
-
 contract PlusOne = struct
   type storage = int
 
@@ -26,12 +22,6 @@ contract PlusOne = struct
     [], s + 1
 end
 
-(* contract type PS = sig
- *   type storage
- *
- *   val%entry default : unit -> storage -> operation list * storage
- * end *)
-
 let%entry default
     (sign : signature)
     storage =
@@ -39,7 +29,7 @@ let%entry default
   begin match x with
   | PlusOne.B -> failwith ()
   | _ -> () end;
-  (*  let c = Contract.self () in *)
+   let c = Contract.self () in
   let key_hash = Crypto.hash_key storage.key in
   if key_hash = tz1KqTpEZ7Yob7QbPE4Hy4Wo8fHG8LhKxZSx then
     Current.failwith ();
@@ -62,11 +52,6 @@ let%entry default
       ~amount:amount.(0)
       ~storage:9
       (contract PlusOne)
-      (* (contract struct
-       *   type storage = int
-       *   let%entry default (parameter : unit) (storage : storage) =
-       *     ([] : operation list), storage + 1
-       * end) *)
   in
   let storage = storage.c <- c_addr in
   ( [c_op], storage )

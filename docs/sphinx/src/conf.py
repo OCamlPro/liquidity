@@ -51,7 +51,7 @@ master_doc = 'index'
 
 # General information about the project.
 project = 'Liquidity'
-copyright = '2018, OCamlPro SAS. <contact@ocamlpro.com>'
+copyright = '2020, OCamlPro SAS. <contact@ocamlpro.com>'
 author = 'OCamlPro SAS. <contact@ocamlpro.com>'
 
 # The version info for the project you're documenting, acts as replacement for
@@ -60,7 +60,7 @@ author = 'OCamlPro SAS. <contact@ocamlpro.com>'
 #
 # The short X.Y version.
 
-version = subprocess.check_output("../../../_obuild/liquidity-mini/liquidity-mini.asm -v --version", shell=True).decode("utf-8")
+version = subprocess.check_output("grep 'version = \"' ../../../tools/liquidity/build.ocp2 | cut -d'\"' -f 2", shell=True).decode("utf-8")
 # version = os.environ.get('CI_COMMIT_REF_NAME', 'v1.0')
 # The full version, including alpha/beta/rc tags.
 release = version + datetime.datetime.now().strftime(" (%Y/%m/%d %H:%M)")
@@ -103,7 +103,7 @@ html_theme = "sphinx_rtd_theme"
 # documentation.
 #
 html_theme_options = {'logo_only': True}
-html_logo = "logo.svg"
+html_logo = "liquidity.svg"
 # Add any paths that contain custom static files (such as style sheets) here,
 # relative to this directory. They are copied after the builtin static files,
 # so a file named "default.css" will overwrite the builtin "default.css".

@@ -6,7 +6,7 @@ Contract Format
 
 All the contracts have the following form::
 
- [%%version 0.4]
+ [%%version 2.0]
  
  <... local declarations ...>
 
@@ -28,7 +28,7 @@ All the contracts have the following form::
      (s2 : TYPE) =
      BODY
 
- let%entry main
+ let%entry default
      (parameter : TYPE)
      (storage : TYPE) =
      BODY
@@ -51,9 +51,13 @@ is the storage (type annotation optional). The return type of the
 function can be specified but is not necessary. Each entry point must
 be given a unique name within the same contract.
 
-If there is an entry point named ``main``, it will be the default
+If there is an entry point named ``default``, it will be the default
 entry point for the contract, *i.e.* the one that is called when the
-entry point is not specified in ``Contract.call``.
+entry point is not specified in ``Contract.call``. It is generally a
+goof idea to make this entry point take a parameter of type unit, so
+that the code will be executed by any transfer made to it without
+arguments. (This can code to prevent accidental token transfers for
+instance.)
 
 An entry point always returns a pair ``(operations, storage)``, where
 ``operations`` is a list of internal operations to perform after
@@ -96,6 +100,7 @@ The built-in base types are:
 - ``signature``: cryptographic signatures
 - ``operation``: type of operations, can only be constructed
 - ``address``: abstract type of contract addresses
+- ``chain_id``: abstract type for chain ids
 
 Composite Types
 ~~~~~~~~~~~~~~~
@@ -204,9 +209,10 @@ type and another compatible type, using the notation
   ``address``, ``_ contract``, ``key_hash`` and ``signature``.
 * A ``bytes`` can be coerced to ``address``, ``_.instance``, ``key``,
   ``key_hash`` and ``signature``.
-* An ``address`` can be coerced to ``_.instance``.
-* A ``_.instance`` can be coerced to ``address``.
-* A ``key_hash`` can be coerced to ``UnitContract.instance`` and ``address``.
+* An constant ``address`` can be coerced to a contract handle.
+* A constant contract handle can be coerced to ``address``.
+* A ``key_hash`` can be coerced to an ``address`` and a contract
+  handle (to entry point ``default`` of parameter type ``unit``).
 
 Starting with version ``0.5``, constant values such as ``[]``,
 ``Map``, ``Set``, ``None`` do not need to be annotated with their type
@@ -518,11 +524,13 @@ Operations on numeric values
 Operations on contracts
 ~~~~~~~~~~~~~~~~~~~~~~~
 
-* ``Contract.call: dest:'S.instance -> amount:dun ->
-  ?entry:<entry_name> parameter:'a -> operation``. Forge an internal
+* ``Contract.call: dest:(address | [%handle 'a]) -> amount:dun ->
+  ?entry:<entry_name> -> parameter:'a -> operation``. Forge an internal
   contract call. It is translated to ``TRANSFER_TOKENS`` in Michelson.
   Arguments can be labeled, in which case they can be given
-  in any order. The entry point name is optional (``main`` by default).
+  in any order. The entry point name is optional (``default`` by
+  default). The destination is either a contract handle or an address
+  (in which case, an entry point must be specified).
 
   .. tryliquidity:: ../../../../tests/doc/doc13.liq
   .. literalinclude:: ../../../../tests/doc/doc13.liq
@@ -530,7 +538,8 @@ Operations on contracts
 * ``<c.entry>: 'parameter -> amount:dun -> operation``. Forge an
   internal contract call. It is translated to ``TRANSFER_TOKENS`` in
   Michelson.  The amount argument can be labeled, in which case it can
-  appear before the parameter.
+  appear before the parameter. ``c`` is either a contract handle (of
+  type ``[%handle 'parameter]``) or an address.
 
   .. tryliquidity:: ../../../../tests/doc/doc14.liq
   .. literalinclude:: ../../../../tests/doc/doc14.liq
@@ -545,11 +554,10 @@ Operations on contracts
   .. tryliquidity:: ../../../../tests/doc/doc15.liq
   .. literalinclude:: ../../../../tests/doc/doc15.liq
 
-* ``Account.default: key_hash -> UnitContract.instance``. Returns
-  the contract associated to the given ``key_hash``. Since this
-  contract is not originated, it cannot contains code, so transfers to
-  it cannot fail. It is translated to ``IMPLICIT_ACCOUNT`` in
-  Michelson.
+* ``Account.default: key_hash -> [%handle unit]``. Returns a contract
+  handle to the ``default`` entry point of the implicit account
+  associated to the given ``key_hash``. Transfers to it cannot
+  fail. It is translated to ``IMPLICIT_ACCOUNT`` in Michelson.
 
   .. tryliquidity:: ../../../../tests/doc/doc17.liq
   .. literalinclude:: ../../../../tests/doc/doc17.liq
@@ -558,61 +566,69 @@ Operations on contracts
   delegation operation for the current contract. A ``None`` argument
   means that the contract should have no delegate (it falls back to
   its manager). The delegation operation will only be executed in an
-  internal operation if it is returned at the end of the ``%entry``
-  function. It is translated to ``SET_DELEGATE`` in Michelson.
+  internal operation if it is returned at the end of the entry point
+  definition. It is translated to ``SET_DELEGATE`` in Michelson.
 
   .. tryliquidity:: ../../../../tests/doc/doc18.liq
   .. literalinclude:: ../../../../tests/doc/doc18.liq
 
-* ``Contract.address: _.instance -> address`` . Returns the address of
-  a contract. It is translated to ``ADDRESS`` in Michelson.
+* ``Contract.address: [%handle 'a] -> address`` . Returns the address of
+  a contract. The returned address can be converted to any entry point
+  handle of the contract (contrary to ``Contract.untype``).
 
   .. tryliquidity:: ../../../../tests/doc/doc19.liq
   .. literalinclude:: ../../../../tests/doc/doc19.liq
 
-* ``Contract.at: address -> _.instance option``. Returns the contract
-  associated with the address and type annotation, if any. Must be
-  annotated with the type of the contract. It is translated to
-  ``CREATE_CONTRACT`` in Michelson. For any contract or contract type
-  ``C``, you can also use the syntactic sugar ``C.at`` without any
-  type annotation.
+* ``Contract.untype: [%handle 'a] -> address``. Returns the address
+  corresponding to an untype version of the contract handle.
+
+  .. tryliquidity:: ../../../../tests/doc/doc16.liq
+  .. literalinclude:: ../../../../tests/doc/doc16.liq
+
+* ``[%handle: val%entry <entry_name> : 'a ] : address -> [%handle 'a]
+  option``. Returns a contract handle to the entry point
+  ``<entry_name>`` if the contract at the specified address has an
+  entry point named ``<entry_name>`` of parameter type ``'a``. If no
+  such entry point exists or the parameter type is different then this
+  function returns ``None``. It is translated to ``CONTRACT`` in
+  Michelson. For any contract or contract type ``C``, you can also use
+  the syntactic sugar ``[%handle C.<entry_name>]`` instead.
 
   .. tryliquidity:: ../../../../tests/doc/doc20.liq
   .. literalinclude:: ../../../../tests/doc/doc20.liq
 
-
-* ``Contract.get_balance: address -> dun``. Returns the balance of the
-  contract associated with the address (0 if it does not exist).
+* ``Contract.get_balance: [%handle 'a] -> dun``. Returns the balance
+  of the contract.
 
   .. tryliquidity:: ../../../../tests/doc/doc77.liq
   .. literalinclude:: ../../../../tests/doc/doc77.liq
 
-* ``Contract.is_implicit: UnitContract.instance -> key_hash
-  option``. Returns the key hash of a contract if it is an implicit
-  one, otherwise, returns ``None``.
+* ``Contract.is_implicit: [%handle unit] -> key_hash option``. Returns
+  the key hash of a contract handle if it is an implicit one,
+  otherwise, returns ``None``.
 
   .. tryliquidity:: ../../../../tests/doc/doc74.liq
   .. literalinclude:: ../../../../tests/doc/doc74.liq
 
 
-* ``Contract.self: unit -> _.instance``. Returns the current
-  executing contract. It is translated to ``SELF`` in Michelson.
+* ``[%handle Self.<entry>] -> [%handle 'a]``. Returns a handle
+  to the entry point ``<entry>`` of the currently executing
+  contract. It is translated to ``SELF`` in Michelson. You can use the
+  syntactic sugar ``Contract.self ()`` for ``[%handle Self.default]``.
 
   .. tryliquidity:: ../../../../tests/doc/doc21.liq
   .. literalinclude:: ../../../../tests/doc/doc21.liq
 
-* ``Contract.create: manager:key_hash -> delegate:key_hash option ->
-  spendable:bool -> delegatable:bool -> amount:dun -> storage:'storage
+* ``Contract.create: delegate:key_hash option -> amount:dun -> storage:'storage
   -> code:(contract _) -> (operation, address)``. Forge an operation
   to originate a contract with code. The contract is only created when
   the operation is executed, so it must be returned by the
   transaction. Note that the code must be specified as a contract
   structure (inlined or not). It is translated to ``CREATE_CONTRACT``
-  in Michelson.  ``Contract.create manager delegate_opt spendable
-  delegatable initial_amount initial_storage (contract C)`` forges an
-  an origination operation for contract `C` with manager ``manager``,
-  optional delegate ``delegate``, Boolean spendable flag
-  ``spendable``, Boolean delegatable flag ``delegatable``, initial
+  in Michelson.  ``Contract.create delegate_opt initial_amount
+  initial_storage (contract C)`` forges an
+  an origination operation for contract ``C`` with
+  optional delegate ``delegate``, initial
   balance ``initial_amount`` and initial storage
   ``initial_storage``. Arguments can be named and put in any order.
 
@@ -676,7 +692,7 @@ Operations on bytes
   .. literalinclude:: ../../../../tests/doc/doc29.liq
 
 * ``Bytes.unpack: bytes -> 'a option``. Deserialize a sequence of
-  bytes to a value from which it was serialized. The expression should
+  bytes to a value from which it was serialized. The expression must
   be annotated with the (option) type that it should return. It is
   translated to ``UNPACK`` in Michelson.
 
@@ -758,6 +774,8 @@ Operations on lambdas
 * ``Lambda.pipe`` or ``( |> )`` of type ``'a -> ('a -> 'b) -> 'b`` or ``'a
   -> ('a,'b) closure -> 'b``. Applies a function or closure to its
   argument.
+
+* ``( @@ ) : ('a -> 'b) -> 'a -> 'b`` is also function application.
 
   .. tryliquidity:: ../../../../tests/doc/doc39.liq
   .. literalinclude:: ../../../../tests/doc/doc39.liq
@@ -962,9 +980,8 @@ Operations on Big maps
 Big maps are a specific kind of maps, optimized for storing. They can
 be updated incrementally and scale to a high number of associations,
 whereas standard maps will have an expensive serialization and
-deserialization cost. You are limited by Michelson to one big map per
-smart contract, that should appear as the first element of the
-storage. Big maps cannot be iterated.
+deserialization cost. Big maps cannot be iterated and cannot have big
+maps as their keys or as their elements.
 
 * ``Map.find: 'key -> ('key,'val) big_map -> 'val option``. Return the
   value associated with a key in the map. It is translated to ``GET``
@@ -1058,7 +1075,7 @@ use it elsewhere).
 
 The toplevel contract can use elements from either structures. Here we
 use types and functions from both ``M`` and ``C`` and call the entry
-point ``main`` of a contract instance of type ``C``.
+point ``default`` of a contract instance of type ``C``.
 
 .. tryliquidity:: ../../../../tests/doc/doc73.liq
 .. literalinclude:: ../../../../tests/doc/doc73.liq
@@ -1083,13 +1100,14 @@ instances* here) can also be used as first class values:
 .. tryliquidity:: ../../../../tests/doc/doc23.liq
 .. literalinclude:: ../../../../tests/doc/doc23.liq
 
-**Instances** of contracts can be called with three different syntaxes:
+**Handles** to contracts can be called with three different syntaxes:
 
 - ``Contract.call ~dest:c ~amount:1DUN ~parameter:"hello"``
-- ``Contract.call ~dest:c ~amount:1DUN ~entry:main ~parameter:"hello"``
-- ``c.main "hello" ~amount:1DUN``
+- ``Contract.call ~dest:c ~amount:1DUN ~entry:default ~parameter:"hello"``
+- ``c.default "hello" ~amount:1DUN``
 
-These calls are all equivalent.
+These calls are all equivalent when c is an address or a handle to the
+default entry point.
 
 Toplevel Contracts
 ~~~~~~~~~~~~~~~~~~
@@ -1103,47 +1121,29 @@ Contract Types and Signatures
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 A contract is a first class object in Liquidity only for the
-instruction ``Contract.create``, while contract *instances* can be
+instruction ``Contract.create``, while contract *handles* can be
 used like any other values. Contract signatures are introduced with
 the keyword ``sig`` and defined with the keyword ``contract type``::
 
   contract type S = sig
-    type storage = int
-    val%entry entry1 : p1:TYPE -> s1:TYPE -> operation list * storage
-    val%entry entry2 : p2:TYPE -> s2:TYPE -> operation list * storage
-    val%entry main : TYPE -> TYPE -> operation list * storage
+    type t1 = ...
+    type t2 = ...
+    val%entry entry1 : TYPE
+    val%entry entry2 : TYPE
+    val%entry default : TYPE
     ...
   end
 
-A contract signature contains a declaration for the type ``storage``
-(this type can be abstract from the outside of the contract), and
+A contract signature can contain type declarations, and
 declarations for the entry point signatures with the special keyword
-``val%entry`` (names of argument can be specified).
-
-| You can use the following syntactic sugar if you don't want to write
-| storage and return types (as they are identical for all entries of a
-| smart contract.) : ``val%entry entry_name : p2:TYPE -> _``
-|
-
-The type of a contract (instance) whose signature is `S` is written
-``S.instance``. Note that ``S`` must be declared as a contract signature
-beforehand if we want to declare values of type ``S.instance``.
-
-For example::
-
-  type t = {
-    counter : int;
-    dest : S.instance;
-  }
-
-is a record type with a contract field ``dest`` of signature ``S``.
+``val%entry`` in which only the type parameter must be specified.
 
 
 Predefined Contract Signatures
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 The contract signature ``UnitContract`` is built-in, in Liquidity, and
-stands for contracts with a single entry point ``main`` whose
+stands for contracts with a single entry point ``default`` whose
 parameter is of type ``unit``:
 
 .. tryliquidity:: ../../../../tests/doc/doc70.liq
@@ -1233,84 +1233,76 @@ You can also convert a file from one syntax to another, using the
 be converted to ReasonML syntax::
 
   $ liquidity --convert test19.liq
-  %version
-  0.5;
-  
-  type storage = {
-    key,
-    hash: bytes,
-    c: address,
-  };
-  
-  let%init storage: storage = {
-    key: 0x0085b1e4560f47f089d7b97aabcf46937a4c137a9c3f96f73f20c83621694e36d5,
-    hash: 0xabcdef,
-    c: KT1LLcCCB9Fr1hrkGzfdiJ9u3ZajbdckBFrF,
-  };
-  
-  contract PlusOne = {
-    type storage = int;
-  
-    type t =
-      | A
-      | B;
-  
-    let%init init_storage = (x: bool, y: int) =>
-      if (x == false) {
-        0;
-      } else {
-        y;
+
+    type storage = {
+      key,
+      hash: bytes,
+      c: address,
+    };
+
+    let%init storage: storage = {
+      key: 0x0085b1e4560f47f089d7b97aabcf46937a4c137a9c3f96f73f20c83621694e36d5,
+      hash: 0xabcdef,
+      c: KT1LLcCCB9Fr1hrkGzfdiJ9u3ZajbdckBFrF,
+    };
+
+    contract PlusOne = {
+      type storage = int;
+
+      type t =
+        | A
+        | B;
+
+      let%init init_storage = (x: bool, y: int) =>
+        if (x == false) {
+          0;
+        } else {
+          y;
+        };
+
+      let%entry default = (_: unit, s) => ([], s + 1);
+    };
+
+    let%entry default = (sign: signature, storage) => {
+      let x = PlusOne.A;
+      switch (x) {
+      | PlusOne.B => failwith()
+      | _ => ()
       };
-  
-    let%entry main = (_: unit, s) => ([], s + 1);
-  };
-  
-  let%entry main = (sign: signature, storage) => {
-    let x = PlusOne.A;
-    switch (x) {
-    | PlusOne.B => failwith()
-    | _ => ()
-    };
-  
-    let key_hash = Crypto.hash_key(storage.key);
-    if (key_hash == dn1HieGdCFcT8Lg9jDANfEGbJyt6arqEuSJb) {
-      Current.failwith();
-    };
-    if (key_hash
-        == Crypto.hash_key(
-             edpkuTXkJDGcFd5nh6VvMz8phXxU3Bi7h6hqgywNFi1vZTfQNnS1RV,
-           )) {
-      Current.failwith();
-    };
-    let delegate = Some(key_hash);
-    let spendable = Crypto.check(storage.key, sign, storage.hash);
-    let amount = Current.amount();
-    let amount =
-      switch (amount / 2p) {
-      | None => Current.failwith()
-      | Some(qr) => qr
+      let c = Contract.self();
+      let key_hash = Crypto.hash_key(storage.key);
+      if (key_hash == tz1KqTpEZ7Yob7QbPE4Hy4Wo8fHG8LhKxZSx) {
+        Current.failwith();
       };
-  
-    let delegatable = false;
-    let _cocococ: option(PlusOne.instance) = Contract.at(storage.c);
-    let _cocococ2 = PlusOne.at(storage.c);
-    let _op1 = Contract.self().main(sign, ~amount=0DUN);
-    let (account_op, _account) =
-      Account.create(key_hash, delegate, delegatable, amount[0] + amount[1]);
-    let (c_op, c_addr) =
-      Contract.create(
-        ~manager=key_hash,
-        ~delegate,
-        ~spendable,
-        ~delegatable=true,
-        ~amount=amount[0],
-        ~storage=9,
-        (contract PlusOne),
-      );
-  
-    let storage = storage.c = c_addr;
-    ([account_op, c_op], storage);
-  };
+      if (key_hash
+          == Crypto.hash_key(
+               edpkuTXkJDGcFd5nh6VvMz8phXxU3Bi7h6hqgywNFi1vZTfQNnS1RV,
+             )) {
+        Current.failwith();
+      };
+      let delegate = Some(key_hash);
+      let spendable = Crypto.check(storage.key, sign, storage.hash);
+      let amount = Current.amount();
+      let amount =
+        switch (amount / 2p) {
+        | None => Current.failwith() /* not possible */
+        | Some(qr) => qr
+        };
+
+      let delegatable = false;
+      let _cocococ = [%handle PlusOne.default](storage.c);
+      let _op1 = Self.default(sign, ~amount=0DUN);
+      let (c_op, c_addr) =
+        Contract.create(
+          ~delegate,
+          ~amount=amount[0],
+          ~storage=9,
+          (contract PlusOne),
+        );
+
+      let storage = storage.c = c_addr;
+      ([c_op], storage);
+    };
 
 The same file can be converted back and forth::
 
@@ -1342,7 +1334,7 @@ From Michelson to Liquidity
 Here is a table of how Michelson instructions translate to Liquidity:
 
   
-* ``ADDRESS``: ``Contract.address addr``
+* ``ADDRESS``: ``Contract.untype c``
 * ``AMOUNT``: ``Current.amount()``
 * ``ABS``: ``match%nat x with Plus n -> | Minus n -> n``
 * ``ADD``: ``x + y``
@@ -1363,10 +1355,11 @@ Here is a table of how Michelson instructions translate to Liquidity:
 * ``DROP``: automatic stack management
 * ``DUP``: automatic stack management
 * ``EDIV``: ``x / y``
-* ``EMPTY_MAP``: ``(Map : (int, string) map)``
-* ``EMPTY_SET``: ``(Set : int set)``
+* ``EMPTY_BIG_MAP``: ``BigMap []``
+* ``EMPTY_MAP``: ``Map []``
+* ``EMPTY_SET``: ``Set []``
 * ``EQ``: ``x = y``
-* ``EXEC``: ``x |> f`` or ``f x``
+* ``EXEC``: ``x |> f`` or ``f x`` or ``f @@ x``
 * ``FAILWITH``: ``Current.failwith``
 * ``GE``: ``x >= y``
 * ``GET``: ``Map.find key map``
@@ -1376,7 +1369,7 @@ Here is a table of how Michelson instructions translate to Liquidity:
 * ``IF_CONS``: ``match list with [] -> EXPR | head :: tail -> EXPR``
 * ``IF_LEFT``: ``match variant with Left x -> EXPR | Right x -> EXPR``
 * ``IF_NONE``: ``match option with None -> EXPR | Some x -> EXPR``
-* ``IMPLICIT_ACCOUNT``: ``Account.default keyhash``
+* ``IMPLICIT_ACCOUNT``: ``Account.default``
 * ``INT``: ``int x``
 * ``ISNAT``:``is_nat x`` or ``match%int x with Plus x -> ... | Minus y -> ...``
 * ``ITER``: ``List.iter``, ``Set.iter``, ``Map.iter``,
@@ -1402,21 +1395,21 @@ Here is a table of how Michelson instructions translate to Liquidity:
 * ``OR``: ``x lor y``, or ``x || y``, or ``x or y``
 * ``PACK``: ``Bytes.pack x``
 * ``PAIR``: ``( x, y )``
-* ``PUSH``: automatic stack management
+* ``PUSH``, ``DIP``, ``DROP``, ``DIG``, ``DUG``, ``SWAP``: automatic stack management
 * ``RENAME``: automatic annotations management
 * ``RIGHT``: ``Right x``
 * ``SENDER``: ``Current.sender()``
 * ``SIZE``: ``List.size list``, ``String.size``, ``Bytes.size``, ``Set.size``
-* ``SELF``: ``Contract.self ()``
+* ``SELF %e``: ``[%handle Self.e]``
 * ``SET_DELEGATE``: ``Contract.set_delegate (Some keyhash)``
 * ``SHA256``: ``Crypto.sha256 bytes``
 * ``SHA512``: ``Crypto.sha512 bytes``
 * ``SLICE``: ``String.sub pos len string`` or ``Bytes.sub``
 * ``SOME``: ``Some x``
 * ``SOURCE``: ``Current.source()``
-* ``STEPS_TO_QUOTA``: ``Current.gas()``
+* ``STEPS_TO_QUOTA``: ``Current.gas()`` (deprecated, works for
+  decompilation only)
 * ``SUB``: ``x - y``
-* ``SWAP``: automatic stack management
 * ``TRANSFER_TOKENS``: ``Contract.call contract amount param``
 * ``UNIT``: ``()``
 * ``UNPACK``: ``(unpack bytes : int list option)``
@@ -1522,6 +1515,7 @@ Type:
 * ``signature``
 * ``operation``
 * ``address``
+* ``chain_id``
 * Type ``option``
 * Type ``list``
 * Type ``set``
