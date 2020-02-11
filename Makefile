@@ -32,14 +32,21 @@ _obuild/liquidity/liquidity.asm: _obuild
 _obuild/liquidity-mini/liquidity-mini.asm: _obuild
 	ocp-build build liquidity-mini
 
+_obuild/liquidity-client/liquidity-client.asm: _obuild
+	ocp-build build liquidity-client
+
+liquidity-client: _obuild/liquidity-client/liquidity-client.asm
+	cp -f _obuild/liquidity-client/liquidity-client.asm liquidity-client
+
 liquidity-mini: _obuild/liquidity-mini/liquidity-mini.asm
 	cp -f _obuild/liquidity-mini/liquidity-mini.asm liquidity-mini
 
 liquidity: _obuild/liquidity/liquidity.asm
 	cp -f _obuild/liquidity/liquidity.asm liquidity
 
+client: liquidity-mini
 mini: liquidity-mini
-build: liquidity liquidity-mini
+build: liquidity liquidity-mini liquidity-client
 
 install: _obuild
 	ocp-build install liquidity

@@ -23,10 +23,9 @@
 
 open LiquidTypes
 
-type init =
-  | Init_constant of LiquidTypes.encoded_const
-  | Init_code of (LiquidTypes.encoded_contract *
-                  LiquidTypes.loc_michelson_contract)
+type 'a init =
+  | Init_constant of (datatype, 'a) exp const
+  | Init_code of ((datatype, 'a) exp contract)
 
 let c_empty_op ~loc =
   mk ~loc (Const { ty = Tlist Toperation; const = CList []}) (Tlist Toperation)
@@ -36,7 +35,7 @@ let mk_nat ~loc i =
     Tnat
 
 
-let tmp_contract_of_init ~loc env (init : encoded_exp LiquidTypes.init) storage_ty =
+let tmp_contract_of_init ~loc env (init : (datatype, 'a) exp LiquidTypes.init) storage_ty =
   (* let init =
    *   { init with init_body = (LiquidUntype.untype_code init.init_body : syntax_exp) } in *)
   let storage = storage_ty in
@@ -86,7 +85,7 @@ let tmp_contract_of_init ~loc env (init : encoded_exp LiquidTypes.init) storage_
     subs = [];
   }
 
-let compile_liquid_init env contract_sig (init : encoded_exp LiquidTypes.init) (* ((args, sy_init) as init) *) =
+let compile_liquid_init env contract_sig (init : (datatype, 'a) exp LiquidTypes.init) =
   let loc = init.init_body.loc in
   if init.init_body.transfer then
     LiquidLoc.raise_error ~loc
@@ -97,5 +96,4 @@ let compile_liquid_init env contract_sig (init : encoded_exp LiquidTypes.init) (
   with LiquidError _ ->
     (* non constant initial value *)
     let init_contract = tmp_contract_of_init ~loc env init contract_sig.f_storage in
-    let pre_init = LiquidMichelson.translate init_contract in
-    Init_code (init_contract, pre_init)
+    Init_code init_contract

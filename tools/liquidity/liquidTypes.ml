@@ -21,6 +21,8 @@
 (*  along with this program.  If not, see <https://www.gnu.org/licenses/>.  *)
 (****************************************************************************)
 
+open LiquidNumber
+
 module StringMap = Map.Make(String)
 module StringSet = Set.Make(String)
 module IntMap = Map.Make(struct type t = int let compare = compare end)
@@ -51,12 +53,6 @@ type location = {
   loc_file : string;
   loc_pos : ((int * int) * (int * int)) option;
 }
-
-(** Tez constants are stored with strings *)
-type tez = { tezzies : string; mutez : string option }
-
-(** Unbounded integer constants *)
-type integer = { integer : Z.t }
 
 type inline =
   | InForced (** Force inlining *)

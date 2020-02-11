@@ -6,5 +6,6 @@ _opam*
 *-orig
 /liquidity
 /liquidity-mini
+/liquidity-client
 /docs/sphinx/src/_extensions/__pycache__/
 /DEVEL

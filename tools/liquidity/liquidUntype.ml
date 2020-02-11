@@ -52,8 +52,8 @@ let base_of_var arg =
   try
     let pos = String.index arg '/' in
     String.sub arg 0 pos
-  with Not_found ->
-    raise (Invalid_argument ("base_of_var: "^arg))
+  with Not_found -> arg
+    (* raise (Invalid_argument ("base_of_var: "^arg)) *)
 
 let base_of_lvar arg =
   { arg with nname = base_of_var arg.nname }
@@ -66,13 +66,6 @@ let find_name env name =
        might be lost in the decoding phase (when decompiling). This
        hacks allows to bypass this. *)
     base_of_var name
-
-let escape_var arg =
-  try
-    let pos = String.index arg '/' in
-    String.sub arg 0 pos ^ "_" ^
-    String.sub arg (pos+1) (String.length arg - pos - 1)
-  with Not_found -> assert false
 
 let find_free env var_arg bv =
   let var_arg' = base_of_var var_arg in
@@ -105,7 +98,7 @@ let find_lfree env v bv =
    scopes. Unfortunately, without hash-consing, this can be quite expensive.
 *)
 
-let rec untype (env : env) (code : (datatype, 'a) exp) : (datatype, 'b) exp =
+let rec untype (env : env) (code : (datatype, 'a) exp) : (unit, 'b) exp =
   let desc =
     match code.desc with
     | If { cond; ifthen; ifelse } ->
@@ -264,7 +257,7 @@ let rec untype (env : env) (code : (datatype, 'a) exp) : (datatype, 'b) exp =
      *      (LiquidPrinter.Liquid.string_of_code code) *)
 
   in
-  mk ~loc:code.loc desc code.ty
+  mk ~loc:code.loc desc ()(* code.ty *)
 
 and untype_lambda { arg_name; arg_ty; body; ret_ty; recursive } =
   let base = base_of_lvar arg_name in

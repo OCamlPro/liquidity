@@ -41,7 +41,7 @@
 
 *)
 
-version = "2.0-beta6";
+version = "2.0-beta8";
 
 if(with_version){
     version_info = { ocp2ml=true;
@@ -61,17 +61,52 @@ OCaml.library("ocplib-liquidity-version",
      ];
    });
 
-OCaml.library("ocplib-liquidity-bare",
+OCaml.library("ocplib-liquidity-options",
    ocaml + {
      files = [
        "liquidOptions.ml";
+     ];
+     requires = [
+       "ocplib-liquidity-number";
+     ];
+   });
+
+OCaml.library("ocplib-liquidity-misc",
+   ocaml + {
+     files = [
        "liquidMisc.ml";
-       "liquidTypes.ml";
+     ];
+   });
+
+OCaml.library("ocplib-liquidity-number",
+   ocaml + {
+     files = [
        "liquidNumber.ml";
      ];
      requires = [
        "zarith";
+     ];
+   });
+
+OCaml.library("ocplib-liquidity-types",
+   ocaml + {
+     files = [
+       "liquidTypes.ml";
+     ];
+     requires = [
+       "ocplib-liquidity-number";
+       "ocplib-liquidity-options";
+     ];
+   });
+
+OCaml.library("ocplib-liquidity-bare",
+   ocaml + {
+     requires = [
        "ocplib-liquidity-version";
+       "ocplib-liquidity-number";
+       "ocplib-liquidity-types";
+       "ocplib-liquidity-misc";
+       "ocplib-liquidity-options";
      ];
 
    });
@@ -168,31 +203,32 @@ OCaml.library("ocplib-liquidity-with-dune-network",
      ];
    });
 
-OCaml.library("ocplib-liquidity-deploy",
+OCaml.library("ocplib-liquidity-init",
    ocaml + {
      files = [
        "liquidInit.ml";
-       "liquidDeploy.ml";
      ];
      requires = [
-       "ocplib-liquidity-with-dune-network";
-       "ocplib-liquidity-parser";
-       "curl";
-       "curl.lwt";
+       "ocplib-liquidity-base";
      ];
    });
+
 
 if (for_javascript) {
 OCaml.program("liquidity",
    ocaml + {
      files = [
        "liquidDot.ml";
+       "liquidCommonArgs.ml";
        "liquidMain.ml";
      ];
      requires = [
        "ocplib-dot";
-       "ocplib-liquidity-deploy";
        "ocplib-file";
+       "ocplib-liquidity-with-dune-network";
+       "ocplib-liquidity-base";
+       "ocplib-liquidity-init";
+       "ezcmd";
      ];
    });
 } else {
@@ -201,12 +237,16 @@ OCaml.program("liquidity",
      bytelink = ["-cclib"; "-lsodium_stubs -lsodium"];
      files = [
        "liquidDot.ml";
+       "liquidCommonArgs.ml";
        "liquidMain.ml";
      ];
      requires = [
        "ocplib-dot";
-       "ocplib-liquidity-deploy";
        "ocplib-file";
+       "ocplib-liquidity-with-dune-network";
+       "ocplib-liquidity-base";
+       "ocplib-liquidity-init";
+       "ezcmd";
      ];
    });
 }
@@ -226,31 +266,21 @@ OCaml.library("ocplib-liquidity-without-dune-network",
      ];
    });
 
-OCaml.library("ocplib-liquidity-deploy-without-dune-network",
-   ocaml + {
-     files = [
-       "without-dune-network/liquidDeploy.ml";
-     ];
-     requires = [
-       "ocplib-liquidity-base";
-       "ocplib-liquidity-without-dune-network";
-       "ocplib-fake-lwt"
-     ];
-   });
-
 OCaml.program("liquidity-mini",
    ocaml + {
      files = [
        "liquidInit.ml";
        "liquidDot.ml";
+       "liquidCommonArgs.ml";
        "liquidMain.ml";
      ];
      requires = [
        "ocplib-dot";
-       "ocplib-liquidity-deploy-without-dune-network";
        "ocplib-liquidity-without-dune-network";
        "ocplib-liquidity-base";
+       "ocplib-liquidity-init";
        "ocplib-file";
+       "ezcmd";
      ];
 
    });

@@ -136,7 +136,59 @@ let rec default_empty_const = function
   | Toperation -> raise Not_found
   | Tvar _ | Tpartial _ -> raise Not_found
 
-let rec translate_const_exp (exp : (datatype, 'b) exp) =
+let rec default_empty_untyped_const = function
+  | Tunit -> CUnit
+  | Tbool -> CBool false
+  | Tint -> CInt (LiquidNumber.integer_of_int 0)
+  | Tnat -> CNat (LiquidNumber.integer_of_int 0)
+  | Ttez -> CTez (LiquidNumber.tez_of_liq "0")
+  | Tstring -> CString ""
+  | Tbytes -> CBytes "0x"
+  | Ttimestamp -> CTimestamp "1970-01-01T00:00:00Z"
+  | Tkey -> CKey "edpkuit3FiCUhd6pmqf9ztUTdUs1isMTbF9RBGfwKk1ZrdTmeP9ypN"
+  | Tkey_hash -> CKey_hash (default_key_hash ())
+  | Tsignature ->
+    CSignature
+      "edsigthTzJ8X7MPmNeEwybRAvdxS1pupqcM5Mk4uCuyZAe7uEk\
+       68YpuGDeViW8wSXMrCi5CwoNgqs8V2w8ayB5dMJzrYCHhD8C7"
+  | Taddress | Tcontract ((None | Some "default"), _) ->
+    CContract ("KT1BEqzn5Wx8uJrZNvuS9DVHmLvG9td3fDLi", None)
+  | Tcontract (e, _) ->
+    CContract ("KT1BEqzn5Wx8uJrZNvuS9DVHmLvG9td3fDLi", e)
+  | Tchainid -> CString "NetXwhYbWGa82xo"
+  | Ttuple l ->
+    CTuple (List.map default_empty_untyped_const l)
+  | Toption ty -> CNone
+  | Tlist ty -> CList []
+  | Tset ty -> CSet []
+  | Tmap (ty1, ty2) -> CMap []
+  | Tbigmap  (ty1, ty2) -> CBigMap (BMList [])
+  | Tor (ty, _) -> CLeft (default_empty_untyped_const ty)
+  | Trecord (_, fields) ->
+    CRecord (
+      List.map (fun (name, ty) ->
+          name, default_empty_untyped_const ty) fields
+    )
+  | Tsum (_, (c, ty) :: _) ->
+    CConstr (c, default_empty_untyped_const ty)
+
+
+  | Tlambda (arg_ty, ret_ty, _) ->
+    CLambda { arg_ty; ret_ty; recursive = None;
+              arg_name = { nname = "_"; nloc = noloc };
+              body = mk ~loc:noloc
+                  (Failwith
+                     (mk ~loc:noloc (Const { ty = ret_ty; const = CUnit })
+                        ()
+                     )) () }
+
+  | Tsum (_, [])
+  | Tfail
+  | Tclosure _
+  | Toperation -> raise Not_found
+  | Tvar _ | Tpartial _ -> raise Not_found
+
+let rec translate_const_exp (exp : ('a, 'b) exp) =
   let loc = exp.loc in
   match exp.desc with
   | Let _ ->
@@ -192,7 +244,7 @@ let rec translate_const_exp (exp : (datatype, 'b) exp) =
   | Type _
     ->
     LiquidLoc.raise_error ~loc "non-constant expression: %s"
-      (LiquidPrinter.Liquid.string_of_code exp)
+      (LiquidPrinter.LiquidDebug.string_of_code exp)
 
 
 let translate env contract_sig s ty =

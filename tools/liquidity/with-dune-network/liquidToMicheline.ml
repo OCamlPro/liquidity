@@ -616,9 +616,5 @@ let convert_const ~expand c =
 let convert_type ty =
   convert_type ~loc:(LiquidLoc.noloc, None) ty |> Micheline.strip_locations
 
-let arg_list work_done = [
-]
-
-(* force linking not anymore ?
-   let execute = Script_interpreter.execute
-*)
+let const_encoding = Data_encoding.Json.convert const_encoding
+let contract_encoding = Data_encoding.Json.convert contract_encoding

@@ -27,10 +27,8 @@
 
 
 open LiquidTypes
-
+open Ezcmd.Modules
 module DebugPrint = LiquidPrinter.LiquidDebug
-
-exception Bad_arg
 
 (* We use the parser of the OCaml compiler parser to parse the file,
    we then translate it to a simplified AST, before compiling it
@@ -115,7 +113,8 @@ let compile_liquid_files files =
         let output = outprefix ^ ".init.tz" in
         FileString.write_file output s;
         Printf.eprintf "Constant initial storage generated in %S\n%!" output
-      | LiquidInit.Init_code (_, pre_init) ->
+      | LiquidInit.Init_code init_sim ->
+        let pre_init = LiquidMichelson.translate init_sim in
         let mic_init, _ = LiquidToMicheline.convert_contract ~expand:true pre_init in
         let s, output =
           if !LiquidOptions.json then
@@ -145,7 +144,7 @@ let compile_liquid_files files =
       Printf.eprintf "File %S generated\n%!" output;
       Printf.eprintf "If you have a node running, \
                       you may want to typecheck with:\n";
-      Printf.eprintf "  curl http://127.0.0.1:8732/chains/main/blocks/head/\
+      Printf.eprintf "  curl http://127.0.0.1:8733/chains/main/blocks/head/\
                       helpers/scripts/typecheck_code -H \
                       \"Content-Type:application/json\" \
                       -d '{\"program\":'$(cat %s)'}'\n" output
@@ -232,6 +231,9 @@ let compile_tezos_file filename =
     | None -> outprefix ^
               if !LiquidOptions.ocaml_syntax then ".liq" else ".reliq" in
   let s = try
+      let untyped_ast =
+        LiquidCheck.typecheck_contract ~warnings:false ~decompiling:true untyped_ast
+      in
       LiquidPrinter.Syntax.string_of_structure
         (LiquidToParsetree.structure_of_contract ~type_annots ~types untyped_ast) []
     with LiquidError _ ->
@@ -248,37 +250,26 @@ let compile_tezos_file filename =
     Printf.eprintf "File %S generated\n%!" output;
     ()
 
+let report_err ?(kind="Error") fmt (err_loc, err_msg) =
+  Format.fprintf fmt "%a: %s: @[%s@]\n%!" LiquidLoc.print_loc err_loc kind err_msg
+
 let report_error = function
   | LiquidError error ->
-    LiquidLoc.report_error Format.err_formatter error;
+    report_err Format.err_formatter (error.err_loc, error.err_msg);
   | LiquidNamespace.Unknown_namespace (p, err_loc) as exn ->
     let backtrace = Printexc.get_backtrace () in
     Format.eprintf "Error: %s\nBacktrace:\n%s@."
-      (Printexc.to_string exn) backtrace
-;    LiquidLoc.report_error Format.err_formatter
-      { err_loc;
-        err_msg =
-          Printf.sprintf "Unknown module or contract %s" (String.concat "." p) };
+      (Printexc.to_string exn) backtrace ;
+    report_err Format.err_formatter
+      (err_loc,
+       Printf.sprintf "Unknown module or contract %s" (String.concat "." p));
   | LiquidFromMicheline.Missing_program_field f ->
     Format.eprintf "Missing script field %s@." f;
-  | LiquidDeploy.RequestError (code, msg) ->
-    Format.eprintf "Request Error (code %d):\n%s@." code msg;
-  | LiquidDeploy.ResponseError msg ->
-    Format.eprintf "Response Error:\n%s@." msg;
-  | LiquidDeploy.RuntimeError (error, _trace) ->
-    LiquidLoc.report_error ~kind:"Runtime error" Format.err_formatter error;
-  | LiquidDeploy.LocalizedError error ->
-    LiquidLoc.report_error ~kind:"Error" Format.err_formatter error;
-  | LiquidDeploy.RuntimeFailure (error, None, _trace) ->
-    LiquidLoc.report_error ~kind:"Failed at runtime" Format.err_formatter error;
-  | LiquidDeploy.RuntimeFailure (error, Some s, _trace) ->
-    LiquidLoc.report_error ~kind:"Failed at runtime" Format.err_formatter error;
-    Format.eprintf "Failed with %s@." s;
   | Failure f ->
     Format.eprintf "Failure: %s@." f
   | Syntaxerr.Error (Syntaxerr.Other loc) ->
-    LiquidLoc.report_error ~kind:"Syntax error" Format.err_formatter
-      { err_loc = LiquidLoc.loc_of_location loc; err_msg = "unknown" };
+    report_err ~kind:"Syntax error" Format.err_formatter
+      (LiquidLoc.loc_of_location loc, "unknown");
   | exn ->
     let backtrace = Printexc.get_backtrace () in
     Format.eprintf "Error: %s\nBacktrace:\n%s@."
@@ -303,39 +294,8 @@ let compile_tezos_files = List.iter compile_tezos_file
 
 
 module Data = struct
-
   let files = ref []
-  let parameter = ref ""
-  let storage = ref ""
-  let entry_name = ref "default"
-
-  let contract_address = ref ""
-  let init_inputs = ref []
-
-  let get_files () =
-    let l = List.rev !files in
-    if l = [] then raise Bad_arg;
-    l
-
-  let register_deploy_input s =
-    init_inputs := s :: !init_inputs
-
-  let get_inputs () = List.rev !init_inputs
-
-  let validate_contract_addr s =
-    if String.length s <> 36 || String.sub s 0 3 <> "KT1" then
-      failwith (s ^ " is not a valid contract address")
-
-  let validate_key_hash s =
-    if String.length s <> 36 ||
-       let pref = String.sub s 0 2 in
-       pref <> "tz" && pref <> "dn" then
-      failwith (s ^ " is not a valid key hash")
-
-  let validate_private_key s =
-    if (String.length s <> 54 || let p = String.sub s 0 4 in
-        p <> "edsk" && p <> "spsk" && p <> "p2sk") then
-      failwith (s ^ " is not a valid private key")
+  let get_files () = !files
 end
 
 let compile_files () =
@@ -353,8 +313,8 @@ let compile_files () =
     [] ->
     begin match liq_files, tz_files with
       | [], [] ->
-        Format.eprintf "No files given as arguments@.";
-        raise Bad_arg
+        Format.eprintf "Error: No files given as arguments@.";
+        exit 1
       | [], _ ->
         compile_tezos_files tz_files
       | _, _ ->
@@ -365,213 +325,6 @@ let compile_files () =
     Format.eprintf "Error: unknown extension for files: %a@."
       (Format.pp_print_list Format.pp_print_string) unknown;
     exit 2
-
-let translate () =
-  let files = Data.get_files () in
-  let parameter = !Data.parameter in
-  let storage = !Data.storage in
-  let entry_name = !Data.entry_name in
-  let ocaml_asts = List.map (fun f -> f, LiquidFromParsetree.read_file f) files in
-  (* first, extract the types *)
-  let contract = LiquidFromParsetree.translate_multi ocaml_asts in
-  let _ = LiquidCheck.typecheck_contract ~warnings:true contract in
-  let contract_sig = full_sig_of_contract contract in
-  let entry =
-    try
-      List.find (fun e -> e.entry_sig.entry_name = entry_name)
-        contract.entries
-    with Not_found ->
-      Format.eprintf "Contract has no entry point %s@." entry_name; exit 2
-  in
-  let parameter_const =
-    LiquidData.translate { contract.ty_env with filename = "parameter" }
-      contract_sig parameter
-      entry.entry_sig.parameter in
-  let to_str mic_data =
-    let mic_data = LiquidMichelson.compile_const mic_data in
-    if !LiquidOptions.json then
-      LiquidToMicheline.(json_of_const @@ convert_const ~expand:true mic_data)
-    else
-      LiquidToMicheline.(line_of_const @@ convert_const ~expand:false mic_data) in
-  if storage = "" then
-    (* Only translate parameter *)
-    Printf.printf "%s\n%!" (to_str parameter_const)
-  else
-    let storage_const =
-      LiquidData.translate { contract.ty_env with filename = "storage" }
-        contract_sig storage contract.storage in
-    if !LiquidOptions.json then
-      Printf.printf "{\n  \"entrypoint\": %s,\n  \"parameter\": %s,\n  \"storage\": %s\n}\n%!"
-        entry_name (to_str parameter_const) (to_str storage_const)
-    else
-      Printf.printf "entrypoint: %s\nparameter: %s\nstorage: %s\n%!"
-        entry_name (to_str parameter_const) (to_str storage_const)
-
-let inject file =
-  let signature = match !LiquidOptions.signature with
-    | None ->
-      Printf.eprintf "Error: missing --signature option for --inject\n%!";
-      exit 2
-    | Some signature -> signature
-  in
-  (* an hexa encoded operation *)
-  let operation = FileString.read_file file in
-  let op_h = LiquidDeploy.Sync.inject ~operation ~signature in
-  Printf.printf "Operation injected: %s\n%!" op_h
-
-let run () =
-  let open LiquidDeploy in
-  let ops, r_storage, big_map_diff =
-    Sync.run (From_files (Data.get_files ()))
-      !Data.entry_name !Data.parameter !Data.storage
-  in
-  Printf.printf "%s\n# Internal operations: %d\n%!"
-    (LiquidPrinter.Liquid.string_of_const r_storage)
-    (List.length ops);
-  match big_map_diff with
-  | [] -> ()
-  | diff ->
-    Printf.printf "\nBig map diff:\n";
-    let pp_id fmt = function
-      | Bm_id id -> Format.fprintf fmt "[ID: %d]" id
-      | Bm_name (id, name) -> Format.fprintf fmt "[%s (%d)]" name id in
-    List.iter (fun item ->
-        match item with
-        | Big_map_add { id; key; value } ->
-          Format.printf "%a +  %s --> %s\n" pp_id id
-            (LiquidPrinter.Liquid.string_of_const key)
-            (LiquidPrinter.Liquid.string_of_const value)
-        | Big_map_remove { id; key } ->
-          Format.printf "%a -  %s\n" pp_id id
-            (LiquidPrinter.Liquid.string_of_const key)
-        | Big_map_delete { id } ->
-          Format.printf "%a DELETE\n" pp_id id
-        | Big_map_alloc { id } ->
-          Format.printf "%a ALLOC\n" pp_id id
-        | Big_map_copy { source_id; destination_id } ->
-          Format.printf "%a COPY to %a\n" pp_id source_id pp_id destination_id
-      ) diff;
-    Printf.printf "%!"
-
-
-let forge_deploy () =
-  let op =
-    LiquidDeploy.Sync.forge_deploy
-      (LiquidDeploy.From_files (Data.get_files ())) (Data.get_inputs ())
-  in
-  Printf.eprintf "Raw operation:\n--------------\n%!";
-  Printf.printf "%s\n%!" op
-
-let init_storage () =
-  let storage =
-    LiquidDeploy.Sync.init_storage
-      (LiquidDeploy.From_files (Data.get_files ())) (Data.get_inputs ())
-  in
-  let outname =
-    let c = match !LiquidOptions.main with
-      | Some c -> c
-      | None -> match List.rev (Data.get_files ()) with
-        | c :: _ -> c
-        | [] -> assert false in
-    String.uncapitalize_ascii c in
-  let storage = LiquidMichelson.compile_const storage in
-  if !LiquidOptions.json then
-    let s = LiquidToMicheline.(json_of_const @@ convert_const ~expand:true storage) in
-    let output = match !LiquidOptions.output with
-      | Some output -> output
-      | None -> outname ^ ".init.json" in
-    FileString.write_file output s;
-    Printf.printf "Constant initial storage generated in %S\n%!" output
-  else
-    let s = LiquidToMicheline.(line_of_const @@ convert_const ~expand:false storage) in
-    let output = match !LiquidOptions.output with
-      | Some output -> output
-      | None -> outname ^ ".init.tz" in
-    FileString.write_file output s;
-    Printf.printf "Constant initial storage generated in %S\n%!" output
-
-let deploy () =
-  match
-    LiquidDeploy.Sync.deploy
-      (LiquidDeploy.From_files (Data.get_files ())) (Data.get_inputs ())
-  with
-  | op_h, Ok contract_id ->
-    Printf.printf "New contract %s deployed in operation %s\n%!"
-      contract_id op_h
-  | op_h, Error e ->
-    Printf.printf "Failed deployment in operation %s\n%!" op_h;
-    raise e
-
-let get_storage () =
-  let r_storage =
-    LiquidDeploy.Sync.get_storage
-      (LiquidDeploy.From_files (Data.get_files ()))
-      !Data.contract_address
-  in
-  Printf.printf "%s\n%!"
-    (LiquidPrinter.Liquid.string_of_const r_storage)
-
-let call_arg () =
-  let s =
-    LiquidDeploy.forge_call_arg
-      (LiquidDeploy.From_files (Data.get_files ()))
-      ~entry_name:!Data.entry_name
-      !Data.parameter
-  in
-  match !LiquidOptions.output with
-  | None ->
-    Printf.printf "Use --arg '%s'\n%!" s
-  | Some "-" ->
-    Printf.printf "'%s'%!" s
-  | Some file ->
-    FileString.write_file file s
-
-let call () =
-  match
-    LiquidDeploy.Sync.call
-      (LiquidDeploy.From_files (Data.get_files ()))
-      !Data.contract_address
-      !Data.entry_name
-      !Data.parameter
-  with
-  | op_h, Ok () ->
-    Printf.printf "Successful call to contract %s in operation %s\n%!"
-      !Data.contract_address op_h
-  | op_h, Error e ->
-    Printf.printf "Failed call to contract %s in operation %s\n%!"
-      !Data.contract_address op_h;
-    raise e
-
-let forge_call () =
-  let op =
-    LiquidDeploy.Sync.forge_call
-      (LiquidDeploy.From_files (Data.get_files ()))
-      !Data.contract_address
-      !Data.entry_name
-      !Data.parameter in
-  Printf.eprintf "Raw operation:\n--------------\n%!";
-  Printf.printf "%s\n%!" op
-
-let pack const ty =
-  let liquid =
-    try Some (LiquidDeploy.From_files (Data.get_files ()))
-    with Bad_arg -> None in
-  let bytes =
-    LiquidDeploy.Sync.pack ?liquid ~const ~ty in
-  Printf.printf "%s\n%!" bytes
-
-let parse_tez_to_string expl amount =
-  match LiquidData.translate (LiquidFromParsetree.initial_env expl)
-          dummy_contract_sig amount Ttez
-  with
-  | CTez t ->
-    let mutez = match t.mutez with
-      | Some mutez -> mutez
-      | None  -> "000000"
-    in
-    t.tezzies ^ mutez
-  | _ -> assert false
-
 
 let convert_file filename =
   let is_liq = Filename.check_suffix filename ".liq" in
@@ -591,249 +344,62 @@ let convert_file filename =
   LiquidOptions.ocaml_syntax := not is_liq;
   let s = LiquidPrinter.Syntax.string_of_structure str comments in
   LiquidOptions.ocaml_syntax := is_liq;
-  Printf.printf "%s%!" s;
-  ()
+  match !LiquidOptions.output with
+  | None | Some "-" ->
+    Format.printf "%s%!" s
+  | Some output ->
+    FileString.write_file output s;
+    Printf.eprintf "File %S generated\n%!" output;
+    ()
+
+let docs = Manpage.s_common_options
+
+let common_args =
+  LiquidCommonArgs.common @ [
+    ["o"; "output"],
+    Arg.String (fun o -> LiquidOptions.output := Some o),
+    Ezcmd.info ~docs:Manpage.s_options ~docv:"filename" "Output code in $(docv)";
+
+    ["json"; "j"],
+    Arg.Set LiquidOptions.json,
+    Ezcmd.info ~docs "Output Michelson in JSON representation";
+
+    ["type-only"],
+    Arg.Set LiquidOptions.typeonly,
+    Ezcmd.info ~docs "Stop after type checking";
+
+    ["parse-only"],
+    Arg.Set LiquidOptions.parseonly,
+    Ezcmd.info ~docs "Stop after parsing";
+
+  ]
 
 let main () =
-  let work_done = ref false in
-  let arg_list = Arg.align [
-      "--verbose", Arg.Unit (fun () -> incr LiquidOptions.verbosity),
-      " Increment verbosity";
-      "-v", Arg.Unit (fun () -> incr LiquidOptions.verbosity),
-      " Increment verbosity";
+  let name = "liquidity" in
+  let doc = "a compiler for the smart contract Language Liquidity \
+             for Dune Network and Tezos" in
+  let man = [
+    `S Manpage.s_description;
+    `P "Compile Liquidity files to Michelson, or decompile a Michelson file to \
+        a Liquidity one.";
+    `Blocks LiquidCommonArgs.help_secs;
+  ] in
+  Ezcmd.main {
+    Arg.cmd_name = name;
+    cmd_args = common_args @ [
+        ["convert"],
+        Arg.String (fun f -> convert_file f; exit 0),
+        Ezcmd.info ~docs:Manpage.s_options ~docv:"filename"
+          "Convert $(docv) to Liquidity or ReasonML syntax";
 
-      "--re", Arg.Clear LiquidOptions.ocaml_syntax, " Use ReasonML syntax";
-      "--convert", Arg.String (fun s ->
-          convert_file s;
-          work_done := true), " Switch between OCaml and ReasonML syntax (stdout)";
-
-      "--version", Arg.Unit (fun () ->
-          Format.printf "%s" LiquidVersion.version;
-          if !LiquidOptions.verbosity > 0 then
-            Format.printf " (%s)" LiquidVersion.commit;
-          if !LiquidOptions.verbosity > 1 then
-            Format.printf "\nCompiled on %s" LiquidVersion.en_date;
-          Format.printf "@.";
-          exit 0
-        ),
-      " Show version and exit";
-
-      "--network", Arg.String (function
-          | "dune" | "Dune" | "DUNE" ->
-            LiquidOptions.network := Dune_network
-          | "tezos" | "Tezos" | "TEZOS" ->
-            LiquidOptions.network := Tezos_network
-          | s ->
-            Format.eprintf "%s not allowed for network" s;
-            exit 1
-        ),
-      "<dune|tezos> Set the network to use";
-
-      "-o", Arg.String (fun o -> LiquidOptions.output := Some o),
-      "<filename> Output code in <filename>";
-
-      "--main", Arg.String (fun main -> LiquidOptions.main := Some main),
-      "<ContractName> Produce code for contract named <ContractName>";
-
-      "--no-inline", Arg.Clear LiquidOptions.inline,
-      " Disable inlining";
-
-      "--no-simplify", Arg.Clear LiquidOptions.simplify,
-      " Disable simplifications";
-
-      "--no-peephole", Arg.Clear LiquidOptions.peephole,
-      " Disable peephole optimizations";
-
-      "--type-only", Arg.Set LiquidOptions.typeonly,
-      " Stop after type checking";
-
-      "--parse-only", Arg.Set LiquidOptions.parseonly,
-      " Stop after parsing";
-
-      "--compact", Arg.Set LiquidOptions.singleline,
-      " Produce compact Michelson";
-
-      "--no-annot", Arg.Set LiquidOptions.no_annot,
-      " Don't produce any annotations when compiling";
-
-      "--no-ignore-annots", Arg.Clear LiquidOptions.retry_without_annots,
-      " Don't ignore annotations of failure when decompiling";
-
-      "--no-uncurry", Arg.Set LiquidOptions.no_uncurrying,
-      " Don't uncurry non partially applied lambdas";
-
-      "--json", Arg.Set LiquidOptions.json,
-      " Output Michelson in JSON representation";
-
-      "--no-info", Arg.Clear LiquidOptions.writeinfo,
-      " Don't produce compilation information in output";
-
-      "--amount", Arg.String (fun amount ->
-          LiquidOptions.amount := parse_tez_to_string "--amount" amount
-        ),
-      "<1.99DUN> Set amount for deploying or running a contract (default: 0DUN)";
-
-      "--fee", Arg.String (fun fee ->
-          LiquidOptions.fee := Some (parse_tez_to_string "--fee" fee)
-        ),
-      "<0.1DUN> Set fee for deploying a contract (default: computed automatically)";
-
-      "--source", Arg.String (fun s ->
-          Data.validate_key_hash s;
-          LiquidOptions.source := Some s),
-      "<dn1...> Set the source for deploying or running a contract (default: none)";
-
-      "--private-key", Arg.String (fun s ->
-          Data.validate_private_key s;
-          LiquidOptions.private_key := Some s),
-      "<edsk...> Set the private key for deploying a contract (default: none)";
-
-      "--counter", Arg.Int (fun n -> LiquidOptions.counter := Some n),
-      "N Set the counter for the operation instead of retrieving it";
-
-      "--node", Arg.String (fun s -> LiquidOptions.node := s),
-      "<addr:port> Set the address and port of a node to run or deploy \
-       contracts (default: 127.0.0.1:8733)\
-       \n\
-       \n\
-       Available commands:\
-      ";
-
-      "--run", Arg.Tuple [
-        Arg.String (fun s -> Data.entry_name := s);
-        Arg.String (fun s -> Data.parameter := s);
-        Arg.String (fun s -> Data.storage := s);
-        Arg.Unit (fun () ->
-            work_done := true;
-            run ());
-      ],
-      (Printf.sprintf
-         "ENTRY PARAMETER STORAGE Run Liquidity contract on %s node"
-         (LiquidOptions.network_name ())
-      );
-
-      "--init-storage", Arg.Tuple [
-        Arg.Rest Data.register_deploy_input;
-        Arg.Unit (fun () ->
-            work_done := true;
-            init_storage ());
-      ],
-      " [INPUT1 INPUT2 ...] Generate initial storage";
-
-      "--forge-deploy", Arg.Tuple [
-        Arg.Rest Data.register_deploy_input;
-        Arg.Unit (fun () ->
-            work_done := true;
-            forge_deploy ());
-      ],
-      " [INPUT1 INPUT2 ...] Forge deployment operation for contract";
-
-      "--deploy", Arg.Tuple [
-        Arg.Rest Data.register_deploy_input;
-        Arg.Unit (fun () ->
-            work_done := true;
-            deploy ());
-      ],
-      " [INPUT1 INPUT2 ...] Deploy contract";
-
-      "--get-storage", Arg.Tuple [
-        Arg.String (fun s ->
-            Data.validate_contract_addr s;
-            Data.contract_address := s);
-        Arg.Unit (fun () ->
-            work_done := true;
-            get_storage ());
-      ],
-      "<KT1...> Get deployed contract storage";
-
-      "--call", Arg.Tuple [
-        Arg.String (fun s ->
-            Data.validate_contract_addr s;
-            Data.contract_address := s);
-        Arg.String (fun s -> Data.entry_name := s);
-        Arg.String (fun s -> Data.parameter := s);
-        Arg.Unit (fun () ->
-            work_done := true;
-            call ());
-      ],
-      "<KT1...> ENTRY PARAMETER Call deployed contract";
-
-      "--call-arg", Arg.Tuple [
-        Arg.String (fun s -> Data.entry_name := s);
-        Arg.String (fun s -> Data.parameter := s);
-        Arg.Unit (fun () ->
-            work_done := true;
-            call_arg ());
-      ],
-      "ENTRY PARAMETER Call deployed contract";
-
-      "--forge-call", Arg.Tuple [
-        Arg.String (fun s ->
-            Data.validate_contract_addr s;
-            Data.contract_address := s);
-        Arg.String (fun s -> Data.entry_name := s);
-        Arg.String (fun s -> Data.parameter := s);
-        Arg.Unit (fun () ->
-            work_done := true;
-            forge_call ());
-      ],
-      "<KT1...> ENTRY PARAMETER Forge call transaction operation";
-
-      "--data",
-      (let data_args = ref [] in
-       Arg.Tuple [
-         Arg.String (fun s -> Data.entry_name := s);
-         Arg.Rest (fun s -> data_args := s :: !data_args);
-         Arg.Unit (fun () ->
-             begin match !data_args with
-               | [p] -> Data.parameter := p
-               | [s; p] -> Data.parameter := p; Data.storage := s
-               | _ -> raise Bad_arg
-             end;
-             work_done := true;
-             translate ());
-       ]),
-      "ENTRY PARAMETER [STORAGE] Translate to Michelson";
-
-      "--pack",
-      (let const = ref "" in
-       let ty = ref "" in
-       Arg.Tuple [
-         Arg.String (fun s -> const := s);
-         Arg.String (fun s -> ty := s);
-         Arg.Unit (fun () ->
-             work_done := true;
-             pack !const !ty);
-       ]),
-      "DATA TYPE Pack (serialize) data of type TYPE";
-
-      "--signature", Arg.String (fun s -> LiquidOptions.signature := Some s),
-      "SIGNATURE Set the signature for an operation";
-
-      "--inject", Arg.String (fun op ->
-          work_done := true;
-          inject op
-        ), "OPERATION.bytes Inject a sign operation\n\nMisc:";
-
-
-    ]
-  in
-  let arg_usage = String.concat "\n" [
-      "liquidity [OPTIONS] FILES [COMMAND]";
-      "";
-      "The liquidity compiler can translate files from Liquidity to Michelson";
-      "and from Michelson to Liquidity. Liquidity files must end with the .liq";
-      "extension. Michelson files must end with the .tz extension.";
-      "";
-      "Available options:";
-    ]
-  in
-  try
-    Arg.parse arg_list (fun s -> Data.files := s :: !Data.files) arg_usage;
-    (* if Data.get_files () = [] then raise Bad_arg; *)
-    if not !work_done then compile_files ();
-  with Bad_arg ->
-    Arg.usage arg_list arg_usage
+        [],
+        Arg.Anons (fun s -> Data.files := s),
+        Ezcmd.info ~docs:Manpage.s_options ~docv:"FILES" "Filenames to compile";
+      ];
+    cmd_doc = doc;
+    cmd_man = man;
+    cmd_action = compile_files;
+  }
 
 
 let () =

@@ -521,7 +521,14 @@ let rec convert_const env ?ty expr =
                     arg_ty; ret_ty;
                     body = convert_code env expr }
         | None ->
-          CList (List.map (convert_const env) elems)
+          (try CList (List.map (convert_const env) elems)
+           with _ ->
+             (* maybe it's a lambda *)
+             CLambda { arg_name = { nname = "_" ; nloc = loc };
+                       recursive = None;
+                       arg_ty = LiquidInfer.fresh_tvar ();
+                       ret_ty = LiquidInfer.fresh_tvar ();
+                       body = convert_code env expr })
         | Some ty ->  wrong_type env expr ty
       end
 

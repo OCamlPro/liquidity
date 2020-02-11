@@ -73,8 +73,17 @@ let main = ref (None : string option)
 (** Path/name of ouptut file for compiling/decompiling *)
 let output = ref (None : string option)
 
+let signature = ref (None : string option)
 
-(** {2 Options of the Liquidity Dune client } *)
+let ocaml_syntax = ref true
+
+let writeinfo = ref true
+
+type network =
+  | Dune_network
+  | Tezos_network
+
+let network = ref Dune_network
 
 (** Address of the node with the RPC port *)
 let node = ref "127.0.0.1:8733"
@@ -82,11 +91,11 @@ let node = ref "127.0.0.1:8733"
 (** Source (optional) of the transaction, a dn.. or a KT1... *)
 let source = ref (None : string option)
 
-(** Amount in DUN for the transaction or origination *)
-let amount = ref "0"
+(** Amount for the transaction or origination *)
+let amount = ref (LiquidNumber.{ tezzies = "0"; mutez = None })
 
 (** Fee in mudun *)
-let fee = ref (None : string option)
+let fee = ref (None : LiquidNumber.tez option)
 
 (** Gas limit for transactions and originations. *)
 let gas_limit = ref (None : int option)
@@ -98,28 +107,11 @@ let storage_limit = ref (None : int option)
     injecting signed transactions and originations directly. *)
 let private_key = ref (None : string option)
 
-let signature = ref (None : string option)
+(** Private key can be given to the liquidity dune-client for
+    revelations *)
+let public_key = ref (None : string option)
+
 let counter = ref (None : int option)
-
-let ocaml_syntax = ref true
-
-let writeinfo = ref true
-
-type network =
-  | Dune_network
-  | Tezos_network
-
-let network =
-  ref
-    (match Sys.getenv "LIQUID_NETWORK" with
-     | "dune" | "Dune" | "DUNE" -> Dune_network
-     | "tezos" | "Tezos" | "TEZOS" -> Tezos_network
-     | _ ->
-       Format.eprintf
-         "Warning: wrong value for LIQUID_NETWORK, defaulting to Dune@.";
-       Dune_network
-     | exception Not_found -> Dune_network
-    )
 
 let curreny () = match !network with
   | Dune_network -> "DUN"

@@ -35,7 +35,7 @@ let gen_info ~decompile files =
     %s\
     - Uncurrying: %b\n\
     **********************************************************************%s\n\n"
-    (if decompile then "(*" else "/*")
+    (if decompile && !LiquidOptions.ocaml_syntax then "(*" else "/*")
     (if decompile then "decompiler" else "compiler")
     LiquidVersion.version
     LiquidVersion.commit
