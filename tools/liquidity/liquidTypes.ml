@@ -268,7 +268,7 @@ let rec may_contain_arrow_type ty = match expand ty with
 (** Equality between types. Contract signatures are first order values
     in types, and equality between those is modulo renaming (of
     signatures). *)
-let rec eq_types ty1 ty2 = match expand ty1, expand ty2 with
+let rec eq_types ty1 ty2 = ty1 == ty2 || match expand ty1, expand ty2 with
   | Tunit, Tunit
   | Tbool, Tbool
   | Tint, Tint
@@ -1357,8 +1357,9 @@ and eq_const eq_ty eq_var c1 c2 = match c1, c2 with
 
 (** Generic equality between expressions modulo location, renaming, etc. *)
 and eq_exp eq_ty eq_var e1 e2 =
-  eq_ty e1.ty e2.ty &&
-  eq_exp_desc eq_ty eq_var e1.desc e2.desc
+  e1 == e2 ||
+  (eq_ty e1.ty e2.ty &&
+   eq_exp_desc eq_ty eq_var e1.desc e2.desc)
 
 (** Instances of above function {!eq_exp} *)
 let eq_typed_exp eq_var e1 e2 = eq_exp eq_types eq_var e1 e2

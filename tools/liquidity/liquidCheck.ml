@@ -251,7 +251,9 @@ let rec type_of_const ~loc env = function
 
   | CRecord [] -> assert false
   | CRecord ((label, _) :: _ as fields) ->
-    let ty, _ = find_label ~loc label env.env in
+    let ty, _ =
+      try find_label ~loc label env.env
+      with Not_found -> error loc "unbound record field %S" label in
     begin match ty with
       | Trecord (n, l) ->
         let l = List.map2 (fun (lab_c, c) (lab_t, t) ->
@@ -261,7 +263,10 @@ let rec type_of_const ~loc env = function
       | _ -> assert false
     end
   | CConstr (constr, c) ->
-    let ty, (constr, _, i) = find_constr ~loc constr env.env in
+    let ty, (constr, _, i) =
+      try find_constr ~loc constr env.env
+      with Not_found ->
+        error loc "unbound constructor %S" constr in
     begin match ty with
       | Tsum (n, l) ->
         let l = List.mapi (fun j ((constr, t) as ct) ->

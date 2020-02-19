@@ -26,7 +26,7 @@
 
 open LiquidTypes
 
-let fixpoint_limit = 500_000
+let fixpoint_limit = 5000
 
 let rec compute decompile code to_inline =
 
@@ -388,10 +388,12 @@ let rec compute decompile code to_inline =
   let rec fixpoint code =
     incr cpt;
     if !cpt > fixpoint_limit then
-      Format.kasprintf failwith
-        "Reached fixpoint limit (%d) in inlining" fixpoint_limit;
-    let c = iter code in
-    if eq_syntax_exp c code then c else fixpoint c
+      code
+      (* Format.kasprintf failwith
+       * "Reached fixpoint limit (%d) in inlining" fixpoint_limit *)
+    else
+      let c = iter code in
+      if eq_syntax_exp c code then c else fixpoint c
   in
 
   fixpoint code
