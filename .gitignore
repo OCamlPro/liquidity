@@ -8,4 +8,5 @@ _opam*
 /liquidity-mini
 /liquidity-client
 /docs/sphinx/src/_extensions/__pycache__/
+/docs/sphinx/src/man/liquidity*
 /DEVEL

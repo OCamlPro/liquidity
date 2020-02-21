@@ -50,7 +50,7 @@ let should_execute (p, storage) =
   in
   nb_agree >= storage.min_agree
 
-let%entry pay (parameter : unit) storage =
+let%entry pay () storage =
   begin[@fee
     failwith "I don't pay fees for the entry point pay"
   ]

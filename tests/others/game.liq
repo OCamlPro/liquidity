@@ -54,5 +54,5 @@ let%entry finish (random_number : nat) storage =
     (ops, storage)
 
 (* accept funds *)
-let%entry fund () storage =
+let%entry default () storage =
   [], storage

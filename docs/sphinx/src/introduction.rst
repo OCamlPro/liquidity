@@ -28,6 +28,7 @@ The Liquidity project contains:
 
 * A compiler from Liquidity files (.liq extension) to Michelson
 * A decompiler from Michelson files (.tz extension) to Liquidity
+* A client for Dune Network
 
 See `Examples <http://github.com/OCamlPro/liquidity/tree/master/tests>`__
 in the `Github <http://github.com/OCamlPro/liquidity>`__ project.

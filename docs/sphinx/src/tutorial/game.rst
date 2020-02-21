@@ -261,8 +261,8 @@ current game is erased. The list of generated operations and the
 reset storage is returned.
 
 
-A safety entry point: ``fund``
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+A safety entry point: ``default``
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 At anytime we authorize anyone (most likely the manager of the
 contract) to add funds to the contract's balance. This allows new
