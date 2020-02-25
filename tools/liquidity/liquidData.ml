@@ -78,11 +78,16 @@ let rec default_const = function
               body = mk ~loc:noloc
                   (Const { ty = ret_ty; const = default_const ret_ty }) ty }
 
+  | Tvar tv ->
+    (match (Ref.get tv).tyo with
+     | None -> raise Not_found
+     | Some ty -> default_const ty)
+
   | Tsum (_, [])
   | Tfail
   | Tclosure _
   | Toperation -> raise Not_found
-  | Tvar _ | Tpartial _ -> raise Not_found
+  | Tpartial _ -> raise Not_found
 
 let rec default_empty_const = function
   | Tunit -> CUnit
@@ -130,11 +135,16 @@ let rec default_empty_const = function
                         Tunit
                      )) ty }
 
+  | Tvar tv ->
+    (match (Ref.get tv).tyo with
+     | None -> raise Not_found
+     | Some ty -> default_empty_const ty)
+
   | Tsum (_, [])
   | Tfail
   | Tclosure _
   | Toperation -> raise Not_found
-  | Tvar _ | Tpartial _ -> raise Not_found
+  | Tpartial _ -> raise Not_found
 
 let rec default_empty_untyped_const = function
   | Tunit -> CUnit
@@ -182,11 +192,16 @@ let rec default_empty_untyped_const = function
                         ()
                      )) () }
 
+  | Tvar tv ->
+    (match (Ref.get tv).tyo with
+     | None -> raise Not_found
+     | Some ty -> default_empty_untyped_const ty)
+
   | Tsum (_, [])
   | Tfail
   | Tclosure _
   | Toperation -> raise Not_found
-  | Tvar _ | Tpartial _ -> raise Not_found
+  | Tpartial _ -> raise Not_found
 
 let rec translate_const_exp (exp : ('a, 'b) exp) =
   let loc = exp.loc in

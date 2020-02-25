@@ -515,9 +515,10 @@ let rec typecheck_const ~loc env (cst : syntax_const) ty : datatype * typed_cons
     ty, CLambda lam
 
   | Tvar tv, c ->
-    unify loc ty (type_of_const ~loc env c);
     let ty = match (Ref.get tv).tyo with
-      | None -> ty
+      | None ->
+        unify loc ty (type_of_const ~loc env c);
+        ty
       | Some ty -> ty in
     typecheck_const ~loc env c ty
 
