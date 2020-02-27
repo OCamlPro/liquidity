@@ -30,14 +30,16 @@ let i ~loc exp = {
 }
 
 let var_annot = function
-  | None -> []
-  | Some name -> ["@" ^ name]
+  | Some name when not !LiquidOptions.no_annot -> ["@" ^ name]
+  | _ -> []
 
 let field_annot = function
-  | None -> []
-  | Some field -> ["%" ^ field]
+  | Some field when not !LiquidOptions.no_annot -> ["%" ^ field]
+  | _ -> []
 
-let entrypoint_annot = field_annot
+let entrypoint_annot = function
+  | Some entry -> ["%" ^ entry]
+  | None -> []
 
 let rec emit_code ~expand code =
   let name = code.loc_name in
@@ -243,8 +245,9 @@ and emit_const ~expand cst = match cst with
 and emit_contract ~expand (contract : loc_michelson_contract) =
   if !LiquidOptions.verbosity > 0 then
     Format.eprintf "Emit Michelson for contract@.";
+  let root_annots = entrypoint_annot contract.mic_root in
   [
-    M_INS_EXP ("parameter", [contract.mic_parameter], [], []);
+    M_INS_EXP ("parameter", [contract.mic_parameter], [], root_annots);
     M_INS_EXP ("storage", [contract.mic_storage], [], []);
     M_INS_EXP ("code", [], [emit_code ~expand contract.mic_code], []);
   ] @ match contract.mic_fee_code with

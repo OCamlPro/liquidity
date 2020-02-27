@@ -54,19 +54,19 @@ module Michelson = struct
     bprinter fmt b indent x;
     Buffer.contents b
 
-  let bprint_annots b annots =
-    if not !LiquidOptions.no_annot then
+  let bprint_annots ?(parameter=false) b annots =
+    if parameter || not !LiquidOptions.no_annot then
       match annots with
       | [] -> ()
       | _ -> Printf.bprintf b "%s" (String.concat " " ("" :: annots))
 
-  let bprint_wrap_annots b bprint_type annots =
+  let bprint_wrap_annots ?parameter b bprint_type annots =
     match annots with
     | [] -> bprint_type ()
     | _ ->
       Printf.bprintf b "(";
       bprint_type ();
-      bprint_annots b annots;
+      bprint_annots ?parameter b annots;
       Printf.bprintf b ")"
 
   let is_word_type = function
@@ -79,7 +79,7 @@ module Michelson = struct
     | Tvar _ -> true
     | Tpartial _ -> false
 
-  let bprint_type_base fmt b indent ty annots =
+  let bprint_type_base ?parameter fmt b indent ty annots =
     let rec bprint_type_rec fmt b indent ty annots =
       match ty with
       | Tfail -> Printf.bprintf b "unit" (* use unit for failure in michelson *)
@@ -195,7 +195,7 @@ module Michelson = struct
       | ty :: tys ->
         let indent = fmt.increase_indent indent in
         Printf.bprintf b "(pair";
-        bprint_annots b annots;
+        bprint_annots ?parameter b annots;
         Printf.bprintf b "%c%s" fmt.newline indent;
         bprint_type fmt b indent ty [];
         Printf.bprintf b "%c%s" fmt.newline indent;
@@ -221,7 +221,7 @@ module Michelson = struct
       | [label_bigmap, (Tbigmap _ as ty_b); label_r, ty_r] ->
         let indent = fmt.increase_indent indent in
         Printf.bprintf b "(%s" ty_c;
-        bprint_annots b annots;
+        bprint_annots ?parameter b annots;
         Printf.bprintf b "%c%s" fmt.newline indent;
         bprint_type fmt b indent ty_b [];
         Printf.bprintf b "%c%s" fmt.newline indent;
@@ -230,7 +230,7 @@ module Michelson = struct
       | (label, ty) :: labels ->
         let indent = fmt.increase_indent indent in
         Printf.bprintf b "(%s" ty_c;
-        bprint_annots b annots;
+        bprint_annots ?parameter b annots;
         Printf.bprintf b "%c%s" fmt.newline indent;
         let annots = match ty with
           | Tbigmap _ -> [":" ^ label]
@@ -248,7 +248,7 @@ module Michelson = struct
 
     and bprint_type fmt b indent ty annots =
       if is_word_type ty then
-        bprint_wrap_annots b
+        bprint_wrap_annots ?parameter b
           (fun () -> bprint_type_rec fmt b indent ty []) annots
       else
         bprint_type_rec fmt b indent ty annots
@@ -256,20 +256,18 @@ module Michelson = struct
     in
     bprint_type fmt b indent ty annots
 
-  let rec bprint_type fmt b indent ty =
-    bprint_type_base fmt b indent ty []
+  let rec bprint_type ?parameter fmt b indent ty =
+    bprint_type_base ?parameter fmt b indent ty []
 
   let annot a =
-    if !LiquidOptions.no_annot then ""
-    else match a with
-      | Some s -> " @" ^ s
-      | None -> ""
+    match a with
+    | Some s -> " @" ^ s
+    | None -> ""
 
   let annots_to_string annots =
-    if !LiquidOptions.no_annot then ""
-    else match annots with
-      | [] -> ""
-      | annots -> " " ^ String.concat " " annots
+    match annots with
+    | [] -> ""
+    | annots -> " " ^ String.concat " " annots
 
   let rec bprint_const (bprint_mic : format -> Buffer.t -> string -> 'a -> unit)
       fmt b ?(inseq=false) indent (cst : 'a const) =
@@ -382,11 +380,12 @@ module Michelson = struct
           bprint_code fmt b indent_in exp) exps;
       Printf.bprintf b "%c%s}" fmt.newline indent
     | M_INS_EXP (ins,tys, exps, annots) ->
+      let parameter = ins = "parameter" in
       let indent = fmt.increase_indent indent in
       Printf.bprintf b "%s%s" ins (annots_to_string annots);
       List.iter (fun ty ->
           Printf.bprintf b "%c%s" fmt.newline indent;
-          bprint_type fmt b indent ty) tys;
+          bprint_type ~parameter fmt b indent ty) tys;
       List.iter (fun exp ->
           Printf.bprintf b "%c%s" fmt.newline indent;
           bprint_code fmt b indent exp) exps;

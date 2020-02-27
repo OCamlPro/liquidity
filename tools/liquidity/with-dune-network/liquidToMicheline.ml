@@ -76,8 +76,11 @@ let parse_annots annots =
       | Some a -> a :: acc
       | None -> acc) [] annots |> List.rev
 
-let prim ~loc ?(fields=[]) name args var_name =
+let prim ~loc ?(fields=[]) ?entry name args var_name =
   let annots = List.map (fun f -> Fannot f) fields in
+  let annots = match entry with
+    | None -> annots
+    | Some e -> Eannot e :: annots in
   let annots = match var_name with
     | Some s -> (Nannot s) :: annots
     | None -> annots
@@ -93,7 +96,7 @@ let prim_type ~loc ?(annots=[]) name args =
 let int ~loc n =
   Micheline.Int (loc, LiquidNumber.(mic_of_integer @@ integer_of_int n))
 
-let rec convert_type ~loc expr =
+let rec convert_type ~loc ?parameter expr =
   match expr with
   | Tunit -> prim_type ~loc "unit" []
   | Ttimestamp -> prim_type ~loc "timestamp" []
@@ -129,16 +132,16 @@ let rec convert_type ~loc expr =
   | Tset x -> prim_type ~loc "set" [convert_type ~loc x]
   | Tlist x -> prim_type ~loc "list" [convert_type ~loc x]
   | Toption x -> prim_type ~loc "option" [convert_type ~loc x]
-  | Trecord (name, labels) -> convert_record_type ~loc name labels
-  | Tsum (name, constrs) -> convert_sum_type ~loc name constrs
+  | Trecord (name, labels) -> convert_record_type ~loc ?parameter name labels
+  | Tsum (name, constrs) -> convert_sum_type ~loc ?parameter name constrs
   | Tfail -> convert_type ~loc Tunit (* use unit for failures *)
   | Tvar _ | Tpartial _ -> assert false
 
-and convert_record_type ~loc name labels =
-  convert_composed_type "pair" ~loc (Some name) labels
+and convert_record_type ~loc ?parameter name labels =
+  convert_composed_type "pair" ~loc ?parameter (Some name) labels
 
-and convert_sum_type ~loc name constrs =
-  convert_composed_type "or" ~loc name constrs
+and convert_sum_type ~loc ?parameter name constrs =
+  convert_composed_type "or" ~loc ?parameter name constrs
 
 and convert_composed_type ty_c ~loc ?(parameter=false) name labels =
   let annots = match name with
@@ -147,7 +150,7 @@ and convert_composed_type ty_c ~loc ?(parameter=false) name labels =
   match labels with
   | [] -> assert false
   | [l, ty] ->
-    begin match convert_type ~loc ty with
+    begin match convert_type ~loc ~parameter ty with
       | Micheline.Prim(loc, "big_map", args, _annots) ->
         prim_type ~loc "big_map" args ~annots:[Tannot l]
       | Micheline.Prim(loc, name, args, annots) ->
@@ -162,7 +165,7 @@ and convert_composed_type ty_c ~loc ?(parameter=false) name labels =
     let ty_r = convert_type ~loc ty_r in
     prim_type ~loc ~annots ty_c [ty_b; ty_r]
   | (l, ty) :: labels ->
-    let ty = match convert_type ~loc ty with
+    let ty = match convert_type ~loc ~parameter ty with
       | Micheline.Prim(loc, "big_map", args, annots) ->
         prim_type ~loc "big_map" args ~annots:[Tannot l]
       | Micheline.Prim(loc, name, args, annots) ->
@@ -346,10 +349,7 @@ and convert_code expand expr =
   | ITER body -> prim "ITER" [convert_code expand body] None
   | MAP body -> prim "MAP" [convert_code expand body] name
   | CONTRACT (entry, ty) ->
-    let fields = match entry with
-      | None -> []
-      | Some e -> [e] in
-    prim "CONTRACT" [convert_type ty] ~fields name
+    prim "CONTRACT" [convert_type ty] ?entry name
   | UNPACK ty ->
     prim "UNPACK" [convert_type ty] name
   | INT -> prim "INT" [] name
@@ -368,10 +368,7 @@ and convert_code expand expr =
       prim (Printf.sprintf "D%sP" (String.make n 'U')) [] name
 
   | SELF entry ->
-    let fields = match entry with
-      | None -> []
-      | Some e -> [e] in
-    prim "SELF" [] ~fields name
+    prim "SELF" [] ?entry name
   | STEPS_TO_QUOTA -> prim "STEPS_TO_QUOTA" [] name
   | CREATE_CONTRACT contract ->
     let p, s, c, f = convert_contract_raw expand contract in
@@ -430,10 +427,10 @@ and convert_code expand expr =
 
 and convert_contract_raw expand c =
   let loc = LiquidLoc.noloc in
-  let arg_type = convert_type ~loc c.mic_parameter in
+  let arg_type = convert_type ~loc ~parameter:true c.mic_parameter in
   let root_annots = match c.mic_root with
     | None -> []
-    | Some r -> convert_annots [Fannot r] in
+    | Some r -> convert_annots [Eannot r] in
   let storage_type = convert_type ~loc c.mic_storage in
   let code = convert_code expand c.mic_code in
   let fee_code = match c.mic_fee_code with
