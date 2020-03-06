@@ -264,7 +264,7 @@ and untype_lambda { arg_name; arg_ty; body; ret_ty; recursive } =
   let env = empty_env () in
   let env = new_lbinding arg_name base env in
   let recursive, env, ret_ty = match recursive with
-    | None -> recursive, env, Tunit
+    | None -> recursive, env, ret_ty
     | Some f ->
       let f_base = base_of_var f in
       let env = new_binding f f_base env in

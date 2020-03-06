@@ -225,7 +225,8 @@ let decompile_contract code =
   let annoted_tz, type_annots, types = LiquidFromMicheline.infos_env env in
   global_types := types;
   global_type_annots := type_annots;
-  let typed_ast = LiquidCheck.typecheck_contract ~warnings:false ~decompiling:true c in
+  let typed_ast = LiquidCheck.typecheck_contract
+      ~keep_tvars:true ~warnings:false ~decompiling:true c in
   global_ty_env := typed_ast.ty_env;
   global_contract_sig := LiquidTypes.full_sig_of_contract typed_ast;
   let encode_ast, to_inline =
@@ -387,7 +388,8 @@ module StringLiquidityConv :
 
   let print_contract c =
     let untyped_ast =
-      LiquidCheck.typecheck_contract ~warnings:false ~decompiling:true c
+      LiquidCheck.typecheck_contract
+        ~keep_tvars:true ~warnings:false ~decompiling:true c
     in
     From_strings [LiquidPrinter.Syntax.string_of_structure
                     (LiquidToParsetree.structure_of_contract

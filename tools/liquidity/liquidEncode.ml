@@ -275,8 +275,8 @@ let rec encode_type ?(decompiling=false) ty =
   | Tcontract (entry, param) ->
     Tcontract (entry, encode_type ~decompiling param)
   | Tvar _ | Tpartial _ ->
-    Format.eprintf "%s@." (LiquidPrinter.LiquidDebug.string_of_type ty);
-    assert false (* Removed during typechecking *)
+    (* Removed during typechecking (if monomorphized)  *)
+    ty
 
 and encode_qual_type env ty =
   encode_type ~decompiling:env.decompiling (normalize_type ~in_env:env.env ty)
@@ -353,7 +353,9 @@ let rec allowed_type
     allowed_type ~allow_big_map:false ~allow_operation ~allow_contract t1 &&
     allowed_type
       ~allow_big_map:false ~allow_operation:false ~allow_contract:false t2
-  | Tvar _ | Tpartial _ -> false (* Removed during typechecking *)
+  | Tvar _ | Tpartial _ ->
+    (* Removed during typechecking (if monomorphized) *)
+    true
 
 let check_allowed_type loc ?allow_operation ?allow_contract ty =
   if not @@ allowed_type ?allow_operation ?allow_contract ty then
@@ -553,7 +555,7 @@ let uncurry_lambda = function
   | _ -> false
 
 let record_field_name_in_env env field record =
-  let field_pos = match record.ty with
+  let field_pos = match expand record.ty with
     | Trecord (_, ltys) ->
       (let exception Found of int in
        try
@@ -562,7 +564,7 @@ let record_field_name_in_env env field record =
        with Found i -> i)
     | _ -> assert false in
   let record = { record with ty = encode_qual_type env record.ty } in
-  let field = match record.ty with
+  let field = match expand record.ty with
     | Trecord (_, ltys) -> List.nth ltys field_pos |> fst
     | _ -> assert false in
   (field, record)

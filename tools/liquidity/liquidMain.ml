@@ -202,7 +202,8 @@ let compile_tezos_file filename =
       (DebugPrint.string_of_contract c1);
   let typed_ast =
     try
-      LiquidCheck.typecheck_contract ~warnings:false ~decompiling:true c1
+      LiquidCheck.typecheck_contract
+        ~keep_tvars:true ~warnings:false ~decompiling:true c1
     with LiquidError _ ->
       (* Retry with generalization of types *)
       LiquidMichelineTypes.set_generalize_types env true;
@@ -212,7 +213,8 @@ let compile_tezos_file filename =
       if !LiquidOptions.verbosity>0 then
         FileString.write_file  (filename ^ ".pre")
           (DebugPrint.string_of_contract c2);
-      LiquidCheck.typecheck_contract ~warnings:false ~decompiling:true c2
+      LiquidCheck.typecheck_contract
+        ~keep_tvars:true ~warnings:false ~decompiling:true c2
   in
   let annoted_tz, type_annots, types = LiquidFromMicheline.infos_env env in
   let encode_ast, to_inline =
@@ -230,14 +232,11 @@ let compile_tezos_file filename =
     | Some output -> output
     | None -> outprefix ^
               if !LiquidOptions.ocaml_syntax then ".liq" else ".reliq" in
-  let s = try
-      let untyped_ast =
-        LiquidCheck.typecheck_contract ~warnings:false ~decompiling:true untyped_ast
-      in
-      LiquidPrinter.Syntax.string_of_structure
-        (LiquidToParsetree.structure_of_contract ~type_annots ~types untyped_ast) []
-    with LiquidError _ ->
-      DebugPrint.string_of_contract untyped_ast in
+  let s =
+    LiquidCheck.typecheck_contract ~warnings:false ~decompiling:true untyped_ast
+    |> LiquidToParsetree.structure_of_contract ~type_annots ~types
+    |> fun s -> LiquidPrinter.Syntax.string_of_structure s []
+  in
   let s =
     if !LiquidOptions.writeinfo then
       LiquidInfomark.gen_info ~decompile:true [filename] ^ s ^ "\n"
