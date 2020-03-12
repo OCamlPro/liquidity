@@ -316,28 +316,11 @@ module Make
       | Backtracked (errors, _) -> Lwt.return_error ("backtracked", errors)
       | Skipped -> Lwt.return_error ("skipped", [])
       | Other json -> Lwt.return_error ("unknown", [json])
-      | Applied resc ->
-        let consumed_gas, consumed_storage, allocated_dest, originated =
-          match resc with
-          | Result.(Transaction { consumed_gas; paid_storage_size_diff;
-                                  allocated_destination_contract;
-                                  originated_contracts}) ->
-            consumed_gas,
-            paid_storage_size_diff,
-            allocated_destination_contract,
-            originated_contracts
-          | Result.(Origination { consumed_gas; paid_storage_size_diff;
-                                  originated_contracts}) ->
-            consumed_gas,
-            paid_storage_size_diff,
-            false,
-            originated_contracts
-          | Result.(Reveal_Delegation { consumed_gas }) ->
-            consumed_gas, 0, false, []
-        in
-        let allocated = List.length originated + if allocated_dest then 1 else 0 in
-        let consumed_storage = allocated * 257 + consumed_storage in
-        Lwt.return_ok (consumed_gas, consumed_storage)
+      | Applied res ->
+        let allocated = List.length res.originated_contracts +
+                        if res.allocated_destination_contract then 1 else 0 in
+        let consumed_storage = allocated * 257 + res.paid_storage_size_diff in
+        Lwt.return_ok (res.consumed_gas, consumed_storage)
     in
     extract_consumed metadata.Result.operation_result
     >>= fun res  ->
@@ -527,11 +510,8 @@ module Make
               raise_response_error ?loc_table "failed"
                 (`A (List.map Json_repr.from_any errors))
             | Skipped -> raise_response_error ?loc_table "skipped" (`A [])
-            | Applied ( Transaction { originated_contracts }
-                      | Origination { originated_contracts })->
+            | Applied { originated_contracts } ->
               Lwt.return originated_contracts
-            | Applied (Reveal_Delegation _) ->
-              Lwt.return []
             | Other json ->
               raise_response_error ?loc_table "unknown" (`A [Json_repr.from_any json])
         ) contents

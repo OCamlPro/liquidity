@@ -485,36 +485,9 @@ module Make (L : LiquidClientSigs.LANG) = struct
     end
 
     module Result = struct
-      (* type origination_result_content = {
-       *   big_map_diff: (int, Target.const) Big_map_diff.t;
-       *   balance_updates: Balance_update.t list;
-       *   originated_contracts: string list;
-       *   consumed_gas: int;
-       *   storage_size: int;
-       *   paid_storage_size_diff: int;
-       * }
-       * type transaction_result_content = {
-       *   storage: Target.const;
-       *   big_map_diff: (int, Target.const) Big_map_diff.t;
-       *   balance_updates: Balance_update.t list;
-       *   originated_contracts: string list;
-       *   consumed_gas: int;
-       *   storage_size: int;
-       *   paid_storage_size_diff: int;
-       *   allocated_destination_contract: bool;
-       * }
-       * type reveal_result_content = {
-       *   consumed_gas: int;
-       * }
-       * type delegation_result_content = reveal_result_content
-       * type 'a result =
-       *   | Applied of 'a
-       *   | Failed of error list
-       *   | Skipped
-       *   | Backtracked of error list * 'a *)
-      type result_content =
-        | Transaction of {
-            storage: Target.const;
+
+      type result_content = {
+            storage: Target.const option;
             big_map_diff: (int, Target.const) Big_map_diff.t;
             balance_updates: Balance_update.t list;
             originated_contracts: string list;
@@ -523,18 +496,6 @@ module Make (L : LiquidClientSigs.LANG) = struct
             paid_storage_size_diff: int;
             allocated_destination_contract: bool;
           }
-        | Origination of {
-            big_map_diff: (int, Target.const) Big_map_diff.t;
-            balance_updates: Balance_update.t list;
-            originated_contracts: string list;
-            consumed_gas: int;
-            storage_size: int;
-            paid_storage_size_diff: int;
-          }
-        | Reveal_Delegation of {
-            consumed_gas: int;
-          }
-        (* | Activate_account *)
       type result =
         | Applied of result_content
         | Failed of error list
@@ -553,41 +514,17 @@ module Make (L : LiquidClientSigs.LANG) = struct
 
       let result_content_encoding =
         let open Json_encoding in
-        union [
-          case_ignore_extra
-            (obj8
-               (req "storage" Target.const_encoding)
-               (dft "big_map_diff"
-                  (Big_map_diff.encoding int_string Target.const_encoding)
-                  [])
-               (dft "balance_updates" (list Balance_update.encoding) [])
-               (dft "originated_contracts" (list string) [])
-               (dft "consumed_gas" int_string 0)
-               (dft "storage_size" int_string 0)
-               (dft "paid_storage_size_diff" int_string 0)
-               (dft "allocated_destination_contract" bool false))
-            (function
-              | Transaction {
-                  storage;
-                  big_map_diff;
-                  balance_updates;
-                  originated_contracts;
-                  consumed_gas;
-                  storage_size;
-                  paid_storage_size_diff;
-                  allocated_destination_contract;
-                } -> Some (
-                  storage,
-                  big_map_diff,
-                  balance_updates,
-                  originated_contracts,
-                  consumed_gas,
-                  storage_size,
-                  paid_storage_size_diff,
-                  allocated_destination_contract
-                )
-              | _ -> None)
-            (fun (
+        conv
+          (fun {
+             storage;
+             big_map_diff;
+             balance_updates;
+             originated_contracts;
+             consumed_gas;
+             storage_size;
+             paid_storage_size_diff;
+             allocated_destination_contract;
+           } -> (
                storage,
                big_map_diff,
                balance_updates,
@@ -596,70 +533,37 @@ module Make (L : LiquidClientSigs.LANG) = struct
                storage_size,
                paid_storage_size_diff,
                allocated_destination_contract
-             ) ->
-               Transaction {
-                 storage;
-                 big_map_diff;
-                 balance_updates;
-                 originated_contracts;
-                 consumed_gas;
-                 storage_size;
-                 paid_storage_size_diff;
-                 allocated_destination_contract;
-               });
-          case_ignore_extra
-            (obj6
-               (dft "big_map_diff"
-                  (Big_map_diff.encoding int_string Target.const_encoding)
-                  [])
-               (dft "balance_updates" (list Balance_update.encoding) [])
-               (dft "originated_contracts" (list string) [])
-               (dft "consumed_gas" int_string 0)
-               (dft "storage_size" int_string 0)
-               (dft "paid_storage_size_diff" int_string 0))
-            (function
-              | Origination {
-                  big_map_diff;
-                  balance_updates;
-                  originated_contracts;
-                  consumed_gas;
-                  storage_size;
-                  paid_storage_size_diff;
-                } -> Some (
-                  big_map_diff,
-                  balance_updates,
-                  originated_contracts,
-                  consumed_gas,
-                  storage_size,
-                  paid_storage_size_diff
-                )
-              | _ -> None)
-            (fun (
-               big_map_diff,
-               balance_updates,
-               originated_contracts,
-               consumed_gas,
-               storage_size,
-               paid_storage_size_diff
-             ) ->
-               Origination {
-                 big_map_diff;
-                 balance_updates;
-                 originated_contracts;
-                 consumed_gas;
-                 storage_size;
-                 paid_storage_size_diff;
-               });
-
-          case_ignore_extra
-            (obj1
-               (dft "consumed_gas" int_string 0))
-            (function
-              | Reveal_Delegation { consumed_gas } ->
-                Some consumed_gas
-              | _ -> None)
-            (fun consumed_gas -> Reveal_Delegation { consumed_gas });
-        ]
+             ))
+          (fun (
+             storage,
+             big_map_diff,
+             balance_updates,
+             originated_contracts,
+             consumed_gas,
+             storage_size,
+             paid_storage_size_diff,
+             allocated_destination_contract
+           ) -> {
+               storage;
+               big_map_diff;
+               balance_updates;
+               originated_contracts;
+               consumed_gas;
+               storage_size;
+               paid_storage_size_diff;
+               allocated_destination_contract;
+             })
+          (obj8
+             (opt "storage" Target.const_encoding)
+             (dft "big_map_diff"
+                (Big_map_diff.encoding int_string Target.const_encoding)
+                [])
+             (dft "balance_updates" (list Balance_update.encoding) [])
+             (dft "originated_contracts" (list string) [])
+             (dft "consumed_gas" int_string 0)
+             (dft "storage_size" int_string 0)
+             (dft "paid_storage_size_diff" int_string 0)
+             (dft "allocated_destination_contract" bool false))
 
       let result_encoding =
         let open Json_encoding in
