@@ -26,6 +26,7 @@ OCaml.library("ocplib-liquidity-to-michelson-client",
    ocaml + {
      files = [
        "lazy_superposed.ml";
+       "liquidityLang.ml";
        "liquidityToMichelson.ml";
        "liquidityToMichelsonClient.ml";
      ];
@@ -37,6 +38,25 @@ OCaml.library("ocplib-liquidity-to-michelson-client",
      ];
    });
 
+OCaml.library("ocplib-liquidity-to-love-client",
+   ocaml + {
+     files = [
+       "lazy_superposed.ml";
+       "liquidityLang.ml";
+       "liquidityToLove.ml";
+       "liquidityToLoveClient.ml";
+     ];
+     requires = [
+       "dune-proto";
+       "dune-client";
+       "ocplib-liquidity-client-functor";
+       "ocplib-liquidity-base";
+       "ocplib-liquidity-init";
+       "ocplib-liquidity-with-dune-network";
+       "ocplib-liq2love"
+     ];
+   });
+
 OCaml.program("liquidity-client",
    ocaml + {
      bytelink = ["-cclib"; "-lsodium_stubs -lsodium"];
@@ -45,6 +65,7 @@ OCaml.program("liquidity-client",
        "liquidClientMain.ml";
      ];
      requires = [
+       "ocplib-liquidity-to-love-client";
        "ocplib-liquidity-to-michelson-client";
        "ocplib-file";
        "ocplib-liquidity-base";
