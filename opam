@@ -38,5 +38,6 @@ depends: [
      "ipaddr" { < "4.0.0" }
      "uecc"
      "rresult"
+     "hacl"
 ]
 available: [ocaml-version >= "4.06.1"]

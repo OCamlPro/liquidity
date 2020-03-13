@@ -63,7 +63,6 @@ OCaml.library("ezjsonm", ocaml + {
 OCaml.library("dune-network-deps", ocaml + {
      files = [
        pp_js("js/blake2.ml");
-       "hacl.ml";
      ];
      requires = [
        "zarith";
@@ -87,7 +86,6 @@ OCaml.library("dune-network-deps", ocaml + {
        "blake2b-ref.c";    (* from BLAKE/BLAKE *)
        "blake2b-stubs.c";
        "blake2.ml";
-       "hacl.ml";
      ];
      requires = [
        "zarith";

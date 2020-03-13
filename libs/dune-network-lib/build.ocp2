@@ -104,6 +104,7 @@ OCaml.library("dune-network-lib",
         "michelson_v1_macros.ml";
      ]);
      requires = [
+     	      "hacl";
               "dune-network-deps";
               "ocplib-json-typed";
               "ocplib-json-typed-bson"; (* data_encoding *)
