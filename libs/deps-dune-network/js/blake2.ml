@@ -23,6 +23,28 @@
 
 (* Bindings to https://github.com/dcposch/blakejs *)
 
+open Js_of_ocaml
+
+(* Ensure required libraries are available *)
+let () =
+  let is_node_js =
+    Js.Optdef.test Js.Unsafe.global##module_ &&
+    Js.Optdef.test Js.Unsafe.global##module_##exports
+  in
+  let js_failwith fmt =
+    Format.kasprintf
+      (fun s ->
+         Js.raise_js_error (jsnew Js.error_constr (Js.string s)))
+      fmt
+  in
+  if not (Js.Optdef.test Js.Unsafe.global##blakejs) then
+    js_failwith "Library blakejs is required but not available, \
+                 load it before liquidity-js %s"
+      (if is_node_js then
+         "with:\n\
+          const blakejs = require('blakejs');"
+       else "")
+
 (* Same interface as Tezos' Blake2 *)
 module Blake2b : sig
   type t
