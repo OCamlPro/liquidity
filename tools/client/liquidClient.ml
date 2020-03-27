@@ -157,7 +157,7 @@ module Make
     | Some head -> Lwt.return head
     | None -> get_head ()
 
-  let run_pre ?(debug=false)
+  let run_pre ?(debug=false) ?(amount = !LiquidOptions.amount)
       source_contract target_contract loc_table ?source entry_name input storage =
     let rpc = if debug then RPC.trace else RPC.run in
     let storage_ty = Source.storage source_contract in
@@ -173,7 +173,7 @@ module Make
       entrypoint = entry_name;
       input;
       storage;
-      amount =  !LiquidOptions.amount;
+      amount;
       chain_id = head.chain_id;
       source;
     } in
@@ -187,20 +187,20 @@ module Make
       | Some trace -> Some (E.convert_trace ~loc_table trace) in
     Lwt.return (operations, storage, big_map_diff, trace)
 
-  let run ~debug ?source contract entry_name parameter storage =
+  let run ~debug ?source ?amount contract entry_name parameter storage =
     let source = get_source ?source () in
     let target_contract, _, loc_table = compile_contract contract in
     run_pre ~debug contract
       target_contract loc_table ~source entry_name parameter storage
 
-  let run_debug ?source liquid entry_name input storage =
+  let run_debug ?source ?amount liquid entry_name input storage =
     run ~debug:true ?source liquid entry_name input storage
     >>= function
     | (nbops, sto, big_diff, Some trace) ->
       Lwt.return (nbops, sto, big_diff, trace)
     | _ -> assert false
 
-  let run ?source liquid entry_name input storage =
+  let run ?source ?amount liquid entry_name input storage =
     run ~debug:false ?source liquid entry_name input storage
     >>= fun (nbops, sto, big_diff, _) ->
     Lwt.return (nbops, sto, big_diff)
@@ -423,7 +423,7 @@ module Make
           ?fee ~gas_limit ~storage_limit
           ~loc_table op
 
-  let forge_deploy_op ?head ?source ?public_key
+  let forge_deploy_op ?head ?source ?public_key ?(balance = !LiquidOptions.amount)
       ?fee ?gas_limit ?storage_limit ?real_op_size
       contract init_params =
     let target_contract, comp_init, loc_table = compile_contract contract in
@@ -432,16 +432,16 @@ module Make
       compile_const ~ty:(Source.storage contract) init_storage in
     let op = Operation.(Origination {
         delegate = None;
-        balance = !LiquidOptions.amount;
+        balance ;
         script = Some (target_contract, init_storage);
       }) in
     forge_op ?head ?source ?public_key
       ?fee ?gas_limit ?storage_limit ?real_op_size
       ~loc_table op
 
-  let forge_deploy ?head ?source ?public_key
+  let forge_deploy ?head ?source ?public_key ?balance
       contract init_params =
-    forge_deploy_op ?head ?source ?public_key
+    forge_deploy_op ?head ?source ?public_key ?balance
       contract init_params >>= fun (operation, _, loc_table) ->
     estimate_gas_storage ~loc_table ?head operation >>= fun (est_gas_limit, est_storage_limit) ->
     let gas_limit = match !LiquidOptions.gas_limit with
@@ -455,7 +455,7 @@ module Make
         failwith (Printf.sprintf "Storage limit below estimated (%d)"
                     est_storage_limit)
       | Some l -> l in
-    forge_deploy_op ?head ?source ?public_key ~real_op_size:0
+    forge_deploy_op ?head ?source ?public_key ?balance ~real_op_size:0
       ?fee:!LiquidOptions.fee ~gas_limit ~storage_limit
       contract init_params
     >|= function
@@ -522,12 +522,12 @@ module Make
       Lwt.return (injected_op_hash, originated_contracts)
 
 
-  let deploy contract init_params =
+  let deploy ?balance contract init_params =
     let sk = get_private_key () in
     let source = get_source () in
     let public_key = get_public_key_from_secret_key sk in
     get_head () >>= fun head ->
-    forge_deploy ~head ~source ~public_key
+    forge_deploy ~head ~source ~public_key ?balance
       contract init_params
     >>= fun (op, op_bytes, loc_table) ->
     inject_operation ~loc_table ~sk ~head op.Operation.contents op_bytes >>= function
@@ -535,7 +535,7 @@ module Make
     | op_h, [_; c] -> Lwt.return (op_h, c) (* with revelation *)
     | _ -> raise (ResponseError "deploy (inject)")
 
-  let rec forge_call_op ?head ?source ?public_key
+  let rec forge_call_op ?head ?source ?public_key ?(amount = !LiquidOptions.amount)
       ?fee ?gas_limit ?storage_limit ?real_op_size
       ~loc_table address ?contract entry_name input =
     let input_ty = match contract with
@@ -545,7 +545,7 @@ module Make
         | ty -> ty in
     let input_t = compile_const ?ty:input_ty input in
     let op = Operation.(Transaction {
-        amount =  !LiquidOptions.amount;
+        amount;
         destination = address;
         entrypoint = entry_name;
         parameters = Some input_t;
@@ -554,14 +554,14 @@ module Make
       ?fee ?gas_limit ?storage_limit ?real_op_size
       ~loc_table op
 
-  let forge_call ?head ?source ?public_key
+  let forge_call ?head ?source ?public_key ?amount
       ?contract ~address ~entry input =
     let loc_table = match contract with
       | None -> []
       | Some contract ->
         let _, _, l = compile_contract contract in l
     in
-    forge_call_op ?head ?source ?public_key ~loc_table ?contract
+    forge_call_op ?head ?source ?public_key ?amount ~loc_table ?contract
       address entry input >>= fun (operation, _, loc_table) ->
     estimate_gas_storage ~loc_table ?head operation >>= fun (est_gas_limit, est_storage_limit) ->
     let gas_limit = match !LiquidOptions.gas_limit with
@@ -575,7 +575,7 @@ module Make
         failwith (Printf.sprintf "Storage limit below estimated (%d)"
                     est_storage_limit)
       | Some l -> l in
-    forge_call_op ?head ?source ?public_key ~loc_table ?contract ~real_op_size:0
+    forge_call_op ?head ?source ?public_key ?amount ~loc_table ?contract ~real_op_size:0
       ?fee:!LiquidOptions.fee ~gas_limit ~storage_limit
       address entry input
     >|= function
@@ -583,12 +583,12 @@ module Make
     | (operation, Some op, loc_table) ->
       (operation, op, loc_table)
 
-  let call ?contract ~address ~entry parameter =
+  let call ?contract ?amount ~address ~entry parameter =
     let sk = get_private_key () in
     let source = get_source () in
     let public_key = get_public_key_from_secret_key sk in
     get_head () >>= fun head ->
-    forge_call ~head ~source ~public_key
+    forge_call ~head ~source ~public_key ?amount
       ?contract ~address ~entry parameter
     >>= fun (op, op_bytes, loc_table) ->
     inject_operation ~loc_table ~sk ~head op.Operation.contents op_bytes
@@ -689,6 +689,7 @@ module Make
       SourceFrom.contract ->
       SourceFrom.const list -> TargetFrom.const t
     val run :
+      ?amount : LiquidNumber.tez ->
       SourceFrom.contract ->
       string ->
       SourceFrom.const ->
@@ -698,6 +699,7 @@ module Make
          list)
         t
     val run_debug :
+      ?amount : LiquidNumber.tez ->
       SourceFrom.contract ->
       string ->
       SourceFrom.const ->
@@ -708,6 +710,7 @@ module Make
        (L.Source.location, SourceFrom.const) Trace.trace_item list)
         t
     val deploy :
+      ?balance : LiquidNumber.tez ->
       SourceFrom.contract ->
       SourceFrom.const list -> (string * string) t
     val get_storage :
@@ -717,6 +720,7 @@ module Make
       SourceFrom.const -> SourceFrom.const option t
     val call :
       ?contract:SourceFrom.contract ->
+      ?amount : LiquidNumber.tez ->
       address:string -> entry:string -> SourceFrom.const -> string t
     val activate : secret:string -> string t
     val inject : operation:bytes -> signature:string -> string t
@@ -726,12 +730,14 @@ module Make
       ?head:Header.t ->
       ?source:string ->
       ?public_key:string ->
+      ?balance : LiquidNumber.tez ->
       SourceFrom.contract -> SourceFrom.const list -> bytes t
     val forge_call :
       ?head:Header.t ->
       ?source:string ->
       ?public_key:string ->
       ?contract:SourceFrom.contract ->
+      ?amount : LiquidNumber.tez ->
       address:string -> entry:string -> SourceFrom.const -> bytes t
   end
 
@@ -745,26 +751,26 @@ module Make
       >|= fun storage ->
       C.TargetConv.print_const storage
 
-    let run contract entry_name input storage =
+    let run ?amount contract entry_name input storage =
       let contract = C.SourceConv.parse_contract contract in
       let input = C.SourceConv.parse_const input in
       let storage = C.SourceConv.parse_const storage in
-      run contract entry_name input storage
+      run ?amount contract entry_name input storage
       >|= fun (ops, storage, bm) ->
       (ops, C.SourceConv.print_const storage, print_big_map_diff bm)
 
-    let run_debug contract entry_name input storage =
+    let run_debug ?amount contract entry_name input storage =
       let contract = C.SourceConv.parse_contract contract in
       let input = C.SourceConv.parse_const input in
       let storage = C.SourceConv.parse_const storage in
-      run_debug contract entry_name input storage
+      run_debug ?amount contract entry_name input storage
       >|= fun (ops, storage, bm, trace) ->
       (ops, C.SourceConv.print_const storage, print_big_map_diff bm, print_trace trace)
 
-    let deploy contract args =
+    let deploy ?balance contract args =
       let contract = C.SourceConv.parse_contract contract in
       let args = List.map C.SourceConv.parse_const args in
-      deploy contract args
+      deploy ?balance contract args
 
     let get_storage contract address =
       let contract = C.SourceConv.parse_contract contract in
@@ -779,12 +785,12 @@ module Make
       | None -> None
       | Some v -> Some (C.SourceConv.print_const v)
 
-    let call ?contract ~address ~entry parameter =
+    let call ?contract ?amount ~address ~entry parameter =
       let contract = match contract with
         | None -> None
         | Some c -> Some (C.SourceConv.parse_contract c) in
       let parameter = C.SourceConv.parse_const parameter in
-      call ?contract ~address ~entry parameter
+      call ?contract ?amount ~address ~entry parameter
 
     let activate = activate
     let inject = inject
@@ -793,33 +799,33 @@ module Make
       let const = C.SourceConv.parse_const const in
       pack ~const ~ty
 
-    let forge_deploy ?head ?source ?public_key contract args =
+    let forge_deploy ?head ?source ?public_key ?balance contract args =
       let contract = C.SourceConv.parse_contract contract in
       let args = List.map C.SourceConv.parse_const args in
-      forge_deploy ?head ?source ?public_key contract args
+      forge_deploy ?head ?source ?public_key ?balance contract args
       >>= fun (_, op, _) -> Lwt.return op
 
-    let forge_call ?head ?source ?public_key  ?contract ~address ~entry parameter =
+    let forge_call ?head ?source ?public_key ?contract ?amount ~address ~entry parameter =
       let contract = match contract with
         | None -> None
         | Some c -> Some (C.SourceConv.parse_contract c) in
       let parameter = C.SourceConv.parse_const parameter in
-      forge_call ?head ?source ?public_key ?contract ~address ~entry parameter
+      forge_call ?head ?source ?public_key ?contract ?amount ~address ~entry parameter
       >>= fun (_, op, _) -> Lwt.return op
   end
 
   module Sync : S with type 'a t := 'a = struct
     let init_storage ?source a b = Lwt_main.run @@ Async.init_storage ?source a b
-    let forge_deploy ?head ?source ?public_key a b =
-      Lwt_main.run @@ Async.forge_deploy ?head ?source ?public_key a b
-    let forge_call ?head ?source ?public_key ?contract ~address ~entry d =
-      Lwt_main.run @@ Async.forge_call ?head ?source ?public_key ?contract ~address ~entry d
-    let run a b c d = Lwt_main.run @@ Async.run a b c d
-    let run_debug a b c d = Lwt_main.run @@ Async.run_debug a b c d
-    let deploy a b = Lwt_main.run @@ Async.deploy a b
+    let forge_deploy ?head ?source ?public_key ?balance a b =
+      Lwt_main.run @@ Async.forge_deploy ?head ?source ?public_key ?balance a b
+    let forge_call ?head ?source ?public_key ?contract ?amount ~address ~entry d =
+      Lwt_main.run @@ Async.forge_call ?head ?source ?public_key ?contract ?amount ~address ~entry d
+    let run ?amount a b c d = Lwt_main.run @@ Async.run ?amount a b c d
+    let run_debug ?amount a b c d = Lwt_main.run @@ Async.run_debug ?amount a b c d
+    let deploy ?balance a b = Lwt_main.run @@ Async.deploy ?balance a b
     let get_storage a b = Lwt_main.run @@ Async.get_storage a b
     let get_big_map_value b c = Lwt_main.run @@ Async.get_big_map_value b c
-    let call ?contract ~address ~entry d = Lwt_main.run @@ Async.call ?contract ~address ~entry d
+    let call ?contract ?amount ~address ~entry d = Lwt_main.run @@ Async.call ?contract ?amount ~address ~entry d
     let activate ~secret = Lwt_main.run @@ Async.activate ~secret
     let inject ~operation ~signature =
       Lwt_main.run @@ Async.inject ~operation ~signature
