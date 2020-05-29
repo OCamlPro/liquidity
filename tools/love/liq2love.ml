@@ -2039,7 +2039,7 @@ and liqexp_to_loveexp (env : env) (e : typed_exp) : exp * Love_type.t =
       let dest =
         let d, t = ltl dest in
         match to_poly_variant t with
-        | `TKeyHash ->
+        | `TKeyhash ->
           mk_apply (mk_var_with_args (string_to_ident "Address.of_keyhash") []) [d]
         | `TAddress -> d
         | _ ->
