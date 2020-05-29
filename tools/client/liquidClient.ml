@@ -315,7 +315,9 @@ module Make
       | Result.Failed errors -> Lwt.return_error ("failed", errors)
       | Backtracked (errors, _) -> Lwt.return_error ("backtracked", errors)
       | Skipped -> Lwt.return_error ("skipped", [])
-      | Other json -> Lwt.return_error ("unknown", [json])
+      | Other json ->
+        Lwt.return_error
+          ("unexpected node response metadata for run_operation", [json])
       | Applied res ->
         let allocated = List.length res.originated_contracts +
                         if res.allocated_destination_contract then 1 else 0 in
@@ -513,7 +515,9 @@ module Make
             | Applied { originated_contracts } ->
               Lwt.return originated_contracts
             | Other json ->
-              raise_response_error ?loc_table "unknown" (`A [Json_repr.from_any json])
+              raise_response_error ?loc_table
+                "unexpected node response for preapply_operations"
+                (`A [Json_repr.from_any json])
         ) contents
       >>= fun originated_contracts ->
       let originated_contracts = List.flatten originated_contracts in

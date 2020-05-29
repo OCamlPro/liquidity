@@ -85,7 +85,11 @@ module Data = struct
   let get_inputs () = !init_inputs
 
   let validate_contract_addr s =
-    if String.length s <> 36 || String.sub s 0 3 <> "KT1" then
+    if String.length s <> 36 ||
+       (String.sub s 0 3 <> "KT1" &&
+        let pref = String.sub s 0 2 in
+        pref <> "tz" && pref <> "dn")
+    then
       failwith (s ^ " is not a valid contract address")
 
   let validate_key_hash s =

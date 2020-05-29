@@ -486,7 +486,7 @@ module Make (L : LiquidClientSigs.LANG) = struct
 
     module Result = struct
 
-      type result_content = {
+      type full_result_content = {
             storage: Target.const option;
             big_map_diff: (int, Target.const) Big_map_diff.t;
             balance_updates: Balance_update.t list;
@@ -496,11 +496,17 @@ module Make (L : LiquidClientSigs.LANG) = struct
             paid_storage_size_diff: int;
             allocated_destination_contract: bool;
           }
+      type consumed_result_content = {
+            originated_contracts: string list;
+            consumed_gas: int;
+            paid_storage_size_diff: int;
+            allocated_destination_contract: bool;
+          }
       type result =
-        | Applied of result_content
+        | Applied of consumed_result_content
         | Failed of error list
         | Skipped
-        | Backtracked of error list * result_content
+        | Backtracked of error list * consumed_result_content
         | Other of Json_repr.any
       type metadata = {
         balance_updates : Balance_update.t list;
@@ -516,52 +522,30 @@ module Make (L : LiquidClientSigs.LANG) = struct
         let open Json_encoding in
         conv
           (fun {
-             storage;
-             big_map_diff;
-             balance_updates;
              originated_contracts;
              consumed_gas;
-             storage_size;
              paid_storage_size_diff;
              allocated_destination_contract;
            } -> (
-               storage,
-               big_map_diff,
-               balance_updates,
                originated_contracts,
                consumed_gas,
-               storage_size,
                paid_storage_size_diff,
                allocated_destination_contract
              ))
           (fun (
-             storage,
-             big_map_diff,
-             balance_updates,
              originated_contracts,
              consumed_gas,
-             storage_size,
              paid_storage_size_diff,
              allocated_destination_contract
            ) -> {
-               storage;
-               big_map_diff;
-               balance_updates;
                originated_contracts;
                consumed_gas;
-               storage_size;
                paid_storage_size_diff;
                allocated_destination_contract;
              })
-          (obj8
-             (opt "storage" Target.const_encoding)
-             (dft "big_map_diff"
-                (Big_map_diff.encoding int_string Target.const_encoding)
-                [])
-             (dft "balance_updates" (list Balance_update.encoding) [])
+          (obj4
              (dft "originated_contracts" (list string) [])
              (dft "consumed_gas" int_string 0)
-             (dft "storage_size" int_string 0)
              (dft "paid_storage_size_diff" int_string 0)
              (dft "allocated_destination_contract" bool false))
 

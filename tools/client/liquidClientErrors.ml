@@ -239,7 +239,7 @@ module Make (L : LANG) = struct
             in
             kind, id, loc, title, descr, err
           ) err
-      with Ezjsonm.Parse_error _ -> []
+      with Ezjsonm.Parse_error _ | Not_found -> []
     in
     raise_error_from_l ?loc_table msg l
 
