@@ -493,7 +493,7 @@ OCaml.library("dune-proto",
       from_dune_proto("lib_protocol/vote_storage.ml");
       from_dune_proto("lib_protocol/commitment_storage.ml");
       from_dune_proto("lib_protocol/dune_actions.ml");
-      from_dune_proto("lib_protocol/init_storage.ml");
+      "init_storage.ml";
       from_dune_proto("lib_protocol/fees_storage.ml");
 
       "alpha_context.ml", { pp = [ "ocp-pp" ] };

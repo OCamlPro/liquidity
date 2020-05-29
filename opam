@@ -39,5 +39,6 @@ depends: [
      "uecc"
      "rresult"
      "hacl"
+     "ptime"
 ]
 available: [ocaml-version >= "4.06.1"]
