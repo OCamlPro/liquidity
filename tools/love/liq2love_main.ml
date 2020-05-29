@@ -43,8 +43,9 @@ let compile_liquid_files filename =
       ~warnings:true ~decompiling:false ~monomorphise:true ~keep_tvars:true syntax_ast in
   let typed_ast_no_tfail = Preprocess.contract_ttfail_to_tvar typed_ast in
   let ctr_name = Compil_utils.get_ctr_name filename in
+  Log.print "Starting transpilation@.";
   let love_ast, _ = Liq2love.liqcontract_to_lovecontract ~ctr_name typed_ast_no_tfail in
-  Log.debug "Love contract : %a" Love_printer.Ast.print_structure love_ast;
+  Log.debug "Love contract : %a@." Love_printer.Ast.print_structure love_ast;
 (*
   let tenv =
       (Love_tenv.empty (Contract []) ()) in    

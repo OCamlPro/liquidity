@@ -2051,19 +2051,85 @@ and liqexp_to_loveexp (env : env) (e : typed_exp) : exp * Love_type.t =
       mk_apply
         (mk_var_with_args (string_to_ident "Account.transfer") [])
         [dest; fst @@ ltl amount], operation ()
-    | Call {contract; amount; entry; arg} ->
-      debug "[liqexp_to_loveexp] Creating a Call@.";
-      let name =
-        match entry with
-          None -> "default"
-        | Some name -> name in
-      debug "[liqexp_to_loveexp] Calling %s@." name;
-      let ctrct, typ = ltl contract in
-      let cssig, entry_typ =
+    | Call {contract; amount; entry; arg} -> begin
+        debug "[liqexp_to_loveexp] Creating a Call@.";
+        let name =
+          match entry with
+            None -> "default"
+          | Some name -> name in
+        debug "[liqexp_to_loveexp] Calling %s@." name;
+        let ctrct_or_addr, _typ = ltl contract in
+        let tmp_ctrname = "CalledContract" in
+        let tmp_entrypt = "entry_pt" in
         match contract.ty with
-          Tcontract (name, ty) ->
-          let ty = liqtype_to_lovetype env ty in
-          Compil_utils.get_signature_from_name name ty env, ty
+          Tcontract (cname, ty) ->
+          let cssig, entry_typ =
+            let ty = liqtype_to_lovetype env ty in
+            Compil_utils.get_signature_from_name cname ty env, ty
+          in
+          mk_let
+            (* let (CalledContract : cssig) *)
+            (mk_pcontract tmp_ctrname (StructType cssig))
+            (* = ctrct *)
+            ctrct_or_addr
+            (* in let entry_pt = CalledContract.name *)
+            (mk_let
+               (mk_pvar tmp_entrypt)
+               (mk_var (Ident.put_in_namespace tmp_ctrname (string_to_ident name)))
+               (* in call *)
+               (mk_apply
+                  (Compil_utils.mk_primitive_lambda env
+                     "Contract.call"
+                     (entrypoint entry_typ @=> dun () @=> entry_typ @=> operation ()) [])
+                  [mk_var @@ string_to_ident tmp_entrypt;
+                   fst @@ ltl amount;
+                   fst @@ ltl arg
+                  ]
+               )
+            )
+        , operation ()
+        | Taddress ->
+          (* In liquidity, contracts can be called through their addresses. *)
+          let arg, typ_arg = ltl arg in
+          let ctr_sig = Anonymous {sig_kind = Contract []; sig_content = [name, SEntry typ_arg]}
+          in
+          let ctrct =
+            (* match (Contract.at arg) with *)
+            mk_match
+              (mk_apply
+                  (Compil_utils.mk_primitive_lambda env
+                     "Contract.at"
+                     ((address ()) @=> option (TContractInstance ctr_sig))
+                     [AContractType (StructType ctr_sig)]
+                  )
+                  [ctrct_or_addr]
+              )
+              [
+                (* Some ctr -> ctr *)
+                mk_pconstr "Some" [mk_pvar "ctr"], mk_var (Ident.create_id "ctr")
+              ]
+          in            
+          mk_let
+            (* let (CalledContract : cssig) *)
+            (mk_pcontract tmp_ctrname (StructType ctr_sig))
+            (* = ctrct *)
+            ctrct
+            (* in let entry_pt = CalledContract.name *)
+            (mk_let
+               (mk_pvar tmp_entrypt)
+               (mk_var (Ident.put_in_namespace tmp_ctrname (string_to_ident name)))
+               (* in call *)
+               (mk_apply
+                  (Compil_utils.mk_primitive_lambda env
+                     "Contract.call"
+                     (entrypoint typ_arg @=> dun () @=> typ_arg @=> operation ()) [])
+                  [mk_var @@ string_to_ident tmp_entrypt;
+                   fst @@ ltl amount;
+                   arg
+                  ]
+               )
+            ), operation ()            
+          
         | t ->
           debug
             "[liqexp_to_loveexp] \
@@ -2071,33 +2137,9 @@ and liqexp_to_loveexp (env : env) (e : typed_exp) : exp * Love_type.t =
             (LiquidPrinter.Liquid.string_of_type t);
           error
             "Expression %a has Liquidity type %s, but it was expected to be a contract"
-            Love_printer.Ast.print_exp ctrct
+            Love_printer.Ast.print_exp ctrct_or_addr
             (LiquidPrinter.Liquid.string_of_type t)
-      in
-      let tmp_ctrname = "CalledContract" in
-      let tmp_entrypt = "entry_pt" in
-      mk_let
-        (* let (CalledContract : cssig) *)
-        (mk_pcontract tmp_ctrname (StructType cssig))
-        (* = ctrct *)
-        ctrct
-        (* in let entry_pt = CalledContract.name *)
-        (mk_let
-           (mk_pvar tmp_entrypt)
-           (mk_var (Ident.put_in_namespace tmp_ctrname (string_to_ident name)))
-           (* in call *)
-           (mk_apply
-              (Compil_utils.mk_primitive_lambda env
-                 "Contract.call"
-                 (entrypoint entry_typ @=> dun () @=> entry_typ @=> operation ()) [])
-              [mk_var @@ string_to_ident tmp_entrypt;
-               fst @@ ltl amount;
-               fst @@ ltl arg
-              ]
-           )
-        )
-    , operation ()
-
+      end
     | MatchOption {arg; ifnone; some_name; ifsome} -> (
         debug "[liqexp_to_loveexp] Creating a Option match@.";
         let arg, targ = ltl arg in
@@ -2522,8 +2564,7 @@ and liqexp_to_loveexp (env : env) (e : typed_exp) : exp * Love_type.t =
       debug "[liqexp_to_loveexp] Creating a type annoted expression (discarding type)@.";
       ltl e
 
-    | Self _ -> failwith "TODO: self"
-
+    | Self _
     | SelfCall _ -> error "Reentrance is forbidden in Love"
 
     | Type t ->
