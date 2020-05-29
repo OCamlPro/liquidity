@@ -515,6 +515,10 @@ OCaml.library("dune-proto",
       from_dune_proto("lib_protocol/love_context.ml");
       from_dune_proto("lib_protocol/love_tenv.ml");
       from_dune_proto("lib_protocol/love_typechecker.ml");
+      "love_env.ml";
+      "love_translator.ml";
+      "love_prim_interp.ml", { pp = [ "ocp-pp" ] };
+      from_dune_proto("lib_protocol/love_prim_list.ml");
      ]));
     requires = [ "ocplib-external-callback" ];
   }, [ "dune-env", [ "Environment", { filename = "environment" };

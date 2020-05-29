@@ -24,6 +24,7 @@
 open LiquidTypes
 
 open Tezos_protocol.Protocol
+open Environment
 open Love_pervasives
 
 module DebugPrint = LiquidPrinter.LiquidDebug
@@ -44,19 +45,22 @@ let compile_liquid_files filename =
   let ctr_name = Compil_utils.get_ctr_name filename in
   let love_ast, _ = Liq2love.liqcontract_to_lovecontract ~ctr_name typed_ast_no_tfail in
   Log.debug "Love contract : %a" Love_printer.Ast.print_structure love_ast;
+(*
+  let tenv =
+      (Love_tenv.empty (Contract []) ()) in    
   let new_c,tenv =
     Love_typechecker.typecheck_struct
       None
-      (Love_tenv.empty (Contract []) ())
+      tenv
       love_ast in
   Log.debug
     "*********Final environment**********\n%a@."
     Love_tenv.pp_env tenv;
   Log.debug "Love program : %a"
-    Love_printer.Ast.print_structure new_c;
+    Love_printer.Ast.print_structure new_c; *)
   let () =
     let json =
-      let str = {Love_ast.version = 1, 0; code = new_c} in
+      let str = {Love_ast.version = 1, 0; code = love_ast} in
       Environment.Data_encoding.Json.construct Love_json_encoding.Ast.top_contract_encoding str
     in
     let love_program =
@@ -76,7 +80,7 @@ let compile_liquid_files filename =
         "#love\n\
          \n\
          %a"
-        Love_printer.Ast.print_structure new_c
+        Love_printer.Ast.print_structure love_ast
     in
     Format.printf "Writing file %s@." (filename ^ ".lov");
     FileString.write_file (filename ^ ".lov")
@@ -113,12 +117,13 @@ let main () =
       "Available options:";
     ]
   in
-  (*Format.printf "Initialisation environments@.";
+  let () = 
+    Format.printf "Initialisation environments@.";
     Love_type_list.init ();
     Love_prim_list.init ();
     Love_tenv.init_core_env ();
-    Format.printf "Initialisation complete@.";*)
-
+    Format.printf "Initialisation complete@.";
+  in
   Format.printf "...Compiling Liquidity file@.";
   Arg.parse arg_list (fun s -> Data.files := s :: !Data.files) arg_usage;
   if !Data.files = [] || List.length !Data.files > 1 then raise Bad_arg;
