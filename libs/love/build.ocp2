@@ -474,7 +474,7 @@ OCaml.library("dune-proto",
       from_dune_proto("lib_protocol/manager_repr.ml");
       from_dune_proto("lib_protocol/parameters_repr.ml");
 
-      "raw_context.ml", { pp = [ "ocp-pp" ] };
+      from_dune_proto("lib_protocol/raw_context.ml");
       from_dune_proto("lib_protocol/storage_sigs.ml");
       from_dune_proto("lib_protocol/storage_functors.ml");
       from_dune_proto("lib_protocol/storage.ml");
@@ -496,7 +496,7 @@ OCaml.library("dune-proto",
       "init_storage.ml";
       from_dune_proto("lib_protocol/fees_storage.ml");
 
-      "alpha_context.ml", { pp = [ "ocp-pp" ] };
+      from_dune_proto("lib_protocol/alpha_context.ml");
 
       from_dune_proto("lib_protocol/script_typed_ir.ml");
       from_dune_proto("lib_protocol/script_tc_errors.ml");
