@@ -21,85 +21,34 @@
 (*  along with this program.  If not, see <https://www.gnu.org/licenses/>.  *)
 (****************************************************************************)
 
-(* This part of the library is made to create a minimal set of dependencies
-to be able to run code that was directly extracted from Dune Network *)
+module Hash = struct
+  module type S = sig
+    val bytes : int
+    val digest : Bigstring.t -> Bigstring.t
+    module HMAC : sig
+      val digest :
+        key:Bigstring.t -> msg:Bigstring.t -> Bigstring.t
+    end
+  end
 
-function pp_js(file) {
-    return file,
-           { pp =  ["camlp4o"; "%{js_of_ocaml-camlp4_SRC_DIR}%/pa_js.cma"]};
-}
+  module Make (H : Digestif.S) = struct
 
-OCaml.library("ocplib-fake-lwt",
-   ocaml + {
-     files = [
-       "utils.ml";
-       "lwt.ml";
-       "lwt_list.ml";
-       "lwt_mutex.ml";
-       "lwt_stream.ml";
-       "lwt_io.ml";
-     ];
-   });
+    let bytes = H.digest_size
 
-if( with_dune_network ) {
+    let digest big =
+      let s = H.digest_bigstring big in
+      Bigstring.of_string (H.to_raw_string s)
 
-if( for_javascript ) {
+    module HMAC = struct
 
-OCaml.library("zarith", ocaml + {
-     files = [
-       "z.ml";
-     ];
-     requires = [
-       "nums";
-   ];
-});
+      let digest ~key ~msg =
+        let s = H.hmac_bigstring ~key msg in
+        Bigstring.of_string (H.to_raw_string s)
 
-OCaml.library("ezjsonm", ocaml + {
-     requires = [
-       "ocplib-ezjsonm-js";
-   ];
-});
+    end
+  end
 
-OCaml.library("dune-network-deps", ocaml + {
-     files = [
-       pp_js("js/blake2.ml");
-       "hacl.ml";
-     ];
-     requires = [
-       "zarith";
-       "lwt";
-       (* "cstruct"; *)
-       "bigstring";
-       "ocplib-endian";
-       "uutf";
-       "ocplib-ezjsonm-js";
-       "ocp-libsodium-js";
-       "js_of_ocaml";
-       "hex";
-       "digestif.ocaml";
-   ];
-});
+  module SHA256 : S = Make (Digestif.SHA256)
+  module SHA512 : S = Make (Digestif.SHA512)
 
-} else {
-
-OCaml.library("dune-network-deps", ocaml + {
-     files = [
-       "blake2b-ref.c";    (* from BLAKE/BLAKE *)
-       "blake2b-stubs.c";
-       "blake2.ml";
-       "hacl.ml";
-     ];
-     requires = [
-       "zarith";
-       (* "cstruct"; *)
-       "bigstring";
-       "ocplib-endian";
-       "lwt";
-       "digestif.ocaml";
-       "sodium";
-       "ezjsonm";
-     ];
-});
-
-}
-}
+end
