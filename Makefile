@@ -51,7 +51,7 @@ liquidity: _obuild/liquidity/liquidity.asm
 	cp -f _obuild/liquidity/liquidity.asm liquidity
 
 
-client: liquidity-mini
+client: liquidity-client
 mini: liquidity-mini
 build: liquidity liquidity-mini liquidity-client makelove
 

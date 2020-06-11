@@ -22,5 +22,6 @@
 (****************************************************************************)
 
 module Env_config = struct
+  #include "../../dune-network/src/lib_config/env_config.ml"
   let tezos_compatible_mode = false
 end

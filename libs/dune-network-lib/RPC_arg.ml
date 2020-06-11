@@ -23,9 +23,15 @@
 
 type 'a t = unit
 
+type 'a arg = 'a t
+
 let make
-    ~name
-    ~descr
-    ~destruct
-    ~construct
+    ~name:_
+    ?descr:_
+    ~destruct:_
+    ~construct:_
     () = () (* assert false *)
+
+let like _ ?descr:_ _ = ()
+
+let int64 = ()

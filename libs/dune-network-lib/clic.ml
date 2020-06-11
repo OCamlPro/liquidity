@@ -22,6 +22,7 @@
 (****************************************************************************)
 
 type ('a, 'b) params = unit
+type ('a, 'b) parameter = unit
 
 let param ~name ~desc _ _ = ()
-let parameter _ = ()
+let parameter ~autocomplete:_ _ = ()
