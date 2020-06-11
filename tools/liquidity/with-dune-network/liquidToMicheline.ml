@@ -22,7 +22,9 @@
 (****************************************************************************)
 
 open LiquidTypes
-open Dune_Network_Lib
+open Dune_Network_Lib.Stdlib
+open Dune_Network_Lib.Micheline
+open Dune_Network_Lib.Data_encoding
 open Micheline
 
 type annot =

@@ -2,6 +2,7 @@ open LiquidClientSigs
 open LiquidClientRequest
 open LiquidClientUtils
 open Lwt.Infix
+open Dune_Network_Lib.Crypto
 
 module Make(L : LANG) = struct
 
@@ -63,7 +64,7 @@ module Make(L : LANG) = struct
     get
       ~output:int_string
       ~path:"/chains/main/blocks/head/context/contracts/%s/counter"
-      source
+      (Signature.Public_key_hash.to_b58check source)
 
   let get_head () =
     get
@@ -75,7 +76,7 @@ module Make(L : LANG) = struct
     get
       ~output:Json_encoding.(option string)
       ~path:"/chains/main/blocks/head/context/contracts/%s/manager_key"
-      source
+      (Signature.Public_key_hash.to_b58check source)
 
   let get_balance addr =
     get

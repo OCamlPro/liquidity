@@ -23,7 +23,9 @@
 
 open LiquidTypes
 open LiquidMichelineTypes
-open Dune_Network_Lib
+open Dune_Network_Lib.Stdlib
+open Dune_Network_Lib.Micheline
+open Dune_Network_Lib.Data_encoding
 open Micheline
 
 exception Missing_program_field of string

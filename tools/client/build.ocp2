@@ -47,8 +47,6 @@ OCaml.library("ocplib-liquidity-to-love-client",
        "liquidityToLoveClient.ml";
      ];
      requires = [
-       "dune-proto";
-       "dune-client";
        "ocplib-liquidity-client-functor";
        "ocplib-liquidity-base";
        "ocplib-liquidity-init";

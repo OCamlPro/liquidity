@@ -8,7 +8,7 @@ module Liquidity = LiquidityLang
 (* Michelson *)
 module Michelson = struct
 
-  open Dune_Network_Lib
+  open Dune_Network_Lib.Micheline
 
   type const = LiquidMichelineTypes.expr
   type contract = LiquidMichelineTypes.contract

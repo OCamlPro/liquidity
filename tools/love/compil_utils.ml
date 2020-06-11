@@ -1,4 +1,5 @@
-open Tezos_protocol.Protocol
+open Dune_Network_Lib
+open Protocol
 open Love_type
 open Love_ast
 open Love_ast_utils

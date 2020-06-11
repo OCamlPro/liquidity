@@ -2,7 +2,8 @@ open LiquidClientUtils
 open LiquidClientRequest
 open LiquidClientSigs
 open Lwt.Infix
-open Dune_Network_Lib (* for crypto *)
+open Dune_Network_Lib.Stdlib
+open Dune_Network_Lib.Crypto (* for crypto *)
 
 module Make
     (L : LANG)
@@ -39,31 +40,27 @@ module Make
     match private_key, !LiquidOptions.private_key with
     | None, None -> failwith "Missing private key"
     | Some sk, _ | _, Some sk ->
-      match Ed25519.Secret_key.of_b58check sk with
-      | Ok sk -> sk
-      | Error _ ->
+      match Signature.Secret_key.of_b58check_opt sk with
+      | Some sk -> sk
+      | None ->
         failwith "Bad private key: must be an Ed25519, \
                   base58-check encoded private key of the form edsk..."
 
   let get_public_key ?public_key () =
     match public_key, !LiquidOptions.public_key with
-    | Some pk, _ | _, Some pk -> pk
+    | Some pk, _ | _, Some pk ->
+      Signature.Public_key.of_b58check_exn pk
     | None, None ->
       try get_private_key () |> get_public_key_from_secret_key
       with _ -> failwith "Missing public key"
 
   let get_source ?source () =
     match source, !LiquidOptions.source with
-      | Some source, _ | _, Some source -> source
-      | None, None ->
-        try
-          let pk = match Ed25519.Public_key.of_b58check (get_public_key ()) with
-            | Ok pk -> pk
-            | Error _ -> raise Exit in
-          get_public_key_hash_from_public_key pk
-        with _ ->
-        try get_private_key () |> get_public_key_from_secret_key
-        with _ -> failwith "Missing source"
+    | Some source, _ | _, Some source ->
+      Signature.Public_key_hash.of_b58check_exn source
+    | None, None ->
+      get_public_key ()
+      |> get_public_key_hash_from_public_key
 
   let get_next_counter source =
     match !LiquidOptions.counter with
@@ -168,6 +165,7 @@ module Make
     let input = compile_const ~ty:input_ty input in
     let storage = compile_const ~ty:storage_ty storage in
     get_head () >>= fun head ->
+    let source = Option.map ~f:Signature.Public_key_hash.to_b58check source in
     let operation = Run_code.Input.{
       script = target_contract;
       entrypoint = entry_name;
@@ -381,6 +379,7 @@ module Make
           LiquidNumber.(liq_of_tez fee)
           LiquidNumber.(liq_of_tez @@ tez_of_mic_mutez computed_fee)
       | Some fee -> fee in
+    let source = Signature.Public_key_hash.to_b58check source in
     let operation counter = Operation.(Manager {
         source;
         fee = computed_fee;
@@ -391,7 +390,8 @@ module Make
       if source_revealed then
         [operation counter]
       else
-        let edpk = get_public_key ?public_key () in
+        let edpk = get_public_key ?public_key ()
+                 |> Signature.Public_key.to_b58check in
         let reveal = Operation.(Manager {
             source;
             fee = {tezzies = "0"; mutez = None};
@@ -480,8 +480,9 @@ module Make
         }
       | Some sk ->
         let op_b = MBytes.of_bytes op_b in
-        let signature_b = sign sk op_b in
-        let signature = Ed25519.Signature.to_b58check signature_b in
+        let signature = sign sk op_b in
+        let signature_b = Signature.to_bytes signature in
+        let signature = Signature.to_b58check signature in
         let signed_op_b = MBytes.concat "" [op_b; signature_b] in
         let op_hash =
           Operation_hash.to_b58check @@
@@ -528,8 +529,9 @@ module Make
 
   let deploy ?balance contract init_params =
     let sk = get_private_key () in
-    let source = get_source () in
-    let public_key = get_public_key_from_secret_key sk in
+    let source = get_source () |> Signature.Public_key_hash.to_b58check in
+    let public_key = get_public_key_from_secret_key sk
+                     |> Signature.Public_key.to_b58check in
     get_head () >>= fun head ->
     forge_deploy ~head ~source ~public_key ?balance
       contract init_params
@@ -589,8 +591,9 @@ module Make
 
   let call ?contract ?amount ~address ~entry parameter =
     let sk = get_private_key () in
-    let source = get_source () in
-    let public_key = get_public_key_from_secret_key sk in
+    let source = get_source () |> Signature.Public_key_hash.to_b58check in
+    let public_key = get_public_key_from_secret_key sk
+                     |> Signature.Public_key.to_b58check in
     get_head () >>= fun head ->
     forge_call ~head ~source ~public_key ?amount
       ?contract ~address ~entry parameter
@@ -605,6 +608,8 @@ module Make
     let public_key = get_public_key_from_secret_key sk in
     get_head () >>= fun head ->
     get_next_counter source >>= fun counter ->
+    let source = Signature.Public_key_hash.to_b58check source in
+    let public_key = Signature.Public_key.to_b58check public_key in
     let reveal = Operation.(Manager {
         source;
         fee = {tezzies = "0"; mutez = None};
@@ -625,7 +630,7 @@ module Make
 
   let activate ~secret =
     let sk = get_private_key () in
-    let source = get_source () in
+    let source = get_source () |> Signature.Public_key_hash.to_b58check in
     get_head () >>= fun head ->
     let activate = Operation.(Activate_account { pkh = source; secret }) in
     let data = Operation.{
@@ -639,9 +644,9 @@ module Make
 
   let inject ~operation ~signature =
     let signature =
-      match Ed25519.Signature.of_b58check signature with
+      match Signature.of_b58check signature with
       | Error _ -> failwith "Cannot decode signature (must be valid edsig...)"
-      | Ok s -> MBytes.to_bytes s in
+      | Ok s -> MBytes.to_bytes (Signature.to_bytes s) in
     RPC.injection (Bytes.cat operation signature)
 
   let init_storage ?source contract init_params =

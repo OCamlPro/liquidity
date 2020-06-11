@@ -9,17 +9,33 @@ OCaml.library("ocplib-liq2love",
        "ocplib-dot";
        "ocplib-liquidity-base";
        "ocplib-file";
-       "dune-proto";
+       "dune-network-lib";
      ];
    });
 
+
+
+if (for_javascript) {
 OCaml.program("makelove",
    ocaml + {
      files = [
      	   "liq2love_main.ml"
      ];
      requires = [
-       "dune-proto";
+       "dune-network-lib";
        "ocplib-liq2love"
      ];
    });
+} else {
+OCaml.program("makelove",
+   ocaml + {
+     bytelink = ["-cclib"; "-lsodium_stubs -lsodium"];
+     files = [
+     	   "liq2love_main.ml"
+     ];
+     requires = [
+       "dune-network-lib";
+       "ocplib-liq2love"
+     ];
+   });
+}

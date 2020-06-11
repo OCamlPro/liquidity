@@ -1,8 +1,8 @@
 open LiquidTypes
 open Dune_Network_Lib
-open Tezos_protocol.Protocol
+open Protocol
 open LiquidClientSigs
-open Client
+open Love_client
 
 (* Liquidity *)
 module Liquidity = LiquidityLang

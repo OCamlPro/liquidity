@@ -1,4 +1,5 @@
-open Dune_Network_Lib (* for crypto *)
+open Dune_Network_Lib.Stdlib
+open Dune_Network_Lib.Crypto (* for crypto *)
 
 let dummy_sign = "edsigtXomBKi5CTRf5cjATJWSyaRvhfYNHqSUGrn4SdbYRcGwQ\
                   rUGjzEfQDTuqHhuA8b2d8NarZjz8TRf65WkpQmo423BtomS8Q"
@@ -61,34 +62,32 @@ module ExprHash = struct
     end)
 end
 
+
+let pkh_to_b58check (pkh : Signature.public_key_hash) =
+  match pkh with
+  | Signature.Ed25519 pkh ->
+    (match !LiquidOptions.network with
+    | Dune_network -> Ed25519.Public_key_hash_dune.to_b58check pkh
+    | Tezos_network -> Ed25519.Public_key_hash_tezos.to_b58check pkh
+    )
+  | _ -> Signature.Public_key_hash.to_b58check pkh
+
 let get_public_key_hash_from_public_key pk =
-  match !LiquidOptions.network with
-  | Tezos_network ->
-    pk
-    |> Ed25519.Public_key_hash_tezos.of_public_key
-    |> Ed25519.Public_key_hash_tezos.to_b58check
-  | Dune_network ->
-    pk
-    |> Ed25519.Public_key_hash_dune.of_public_key
-    |> Ed25519.Public_key_hash_dune.to_b58check
+  Signature.Public_key.hash pk
 
 let get_public_key_hash_from_secret_key sk =
-  let pk = Sodium.Sign.secret_key_to_public_key sk in
-  get_public_key_hash_from_public_key pk
+  sk
+  |> Signature.Secret_key.to_public_key
+  |> get_public_key_hash_from_public_key
 
 let get_public_key_from_secret_key sk =
-  sk
-  |> Sodium.Sign.secret_key_to_public_key
-  (* Replace by this when tezos is fixed *)
-  (* |> Ed25519.Secret_key.to_public_key *)
-  |> Ed25519.Public_key.to_b58check
+  Signature.Secret_key.to_public_key sk
 
 let hash msg =
   Blake2B.(to_bytes (hash_bytes [MBytes.of_string "\x03"; msg]))
 
 let sign sk op_b =
-  Ed25519.sign sk (hash op_b)
-
+  Signature.sign ~watermark:Signature.Generic_operation sk op_b
 
 let conv_ignore_extra ffrom fto enc =
   let open Json_encoding in

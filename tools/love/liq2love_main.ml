@@ -22,8 +22,8 @@
 (****************************************************************************)
 
 open LiquidTypes
-
-open Tezos_protocol.Protocol
+open Dune_Network_Lib
+open Protocol
 open Environment
 open Love_pervasives
 
@@ -71,8 +71,8 @@ let compile_liquid_files filename =
          %s"
         (Environment.Data_encoding.Json.to_string json)
     in
-    Format.printf "Writing file %s@." (filename ^ ".json");
-    FileString.write_file (filename ^ ".json")
+    Format.printf "Writing file %s@." (filename ^ ".lov.json");
+    FileString.write_file (filename ^ ".lov.json")
       love_program
   in
   let () =
@@ -121,7 +121,7 @@ let main () =
   let () = 
     Format.printf "Initialisation environments@.";
     Love_type_list.init ();
-    Love_prim_list.init ();
+    (* Love_prim_list.init (); *)
     Love_tenv.init_core_env ();
     Format.printf "Initialisation complete@.";
   in
