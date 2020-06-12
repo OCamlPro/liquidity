@@ -32,6 +32,12 @@ let verbosity =
      | _ -> 1 (* LIQUID_DEBUG not a number *)
     )
 
+type target_lang =
+  | Love_lang
+  | Michelson_lang
+
+let target_lang = ref Michelson_lang
+
 (** Perform inlining *)
 let inline = ref true
 

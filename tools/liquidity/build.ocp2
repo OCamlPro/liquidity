@@ -246,6 +246,7 @@ OCaml.program("liquidity",
        "ocplib-liquidity-with-dune-network";
        "ocplib-liquidity-base";
        "ocplib-liquidity-init";
+       "ocplib-liq2love";
        "ezcmd";
      ];
    });
@@ -258,6 +259,7 @@ OCaml.library("ocplib-liquidity-without-dune-network",
        "without-dune-network/liquidMichelineTypes.ml";
        "without-dune-network/liquidFromMicheline.ml";
        "without-dune-network/liquidToMicheline.ml";
+       "without-dune-network/Dune_Network_Lib.ml";
        "liquidDecomp.ml";
      ];
      requires = [

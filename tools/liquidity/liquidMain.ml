@@ -30,12 +30,17 @@ open LiquidTypes
 open Ezcmd.Modules
 module DebugPrint = LiquidPrinter.LiquidDebug
 
+open Dune_Network_Lib
+open Protocol
+open Environment
+open Love_pervasives
+
 (* We use the parser of the OCaml compiler parser to parse the file,
    we then translate it to a simplified AST, before compiling it
    to Michelson. No type-checking yet.
 *)
 
-let compile_liquid_files files =
+let typecheck_liquid_files ?monomorphise ?keep_tvars files =
   let ocaml_asts = List.map (fun filename ->
       let ocaml_ast = LiquidFromParsetree.read_file filename in
       (* Format.eprintf "%s\n================\n@."
@@ -60,7 +65,44 @@ let compile_liquid_files files =
       (DebugPrint.string_of_contract
          syntax_ast);
   let typed_ast = LiquidCheck.typecheck_contract
-      ~warnings:true ~decompiling:false syntax_ast in
+      ~warnings:true ~decompiling:false ?monomorphise ?keep_tvars syntax_ast in
+  typed_ast, outprefix
+
+let output_final ~to_json ~to_readable ~outprefix ~ext c =
+  if !LiquidOptions.json then
+    let s = to_json c in
+    let output = match !LiquidOptions.output with
+      | Some output -> output
+      | None -> String.concat "." [outprefix; ext; "json"] in
+    match output with
+    | "-" -> Printf.printf "%s%!" s
+    | _ ->
+      FileString.write_file output s;
+      Printf.eprintf "File %S generated\n%!" output;
+      Printf.eprintf "If you have a node running, \
+                      you may want to typecheck with:\n";
+      Printf.eprintf "  curl http://127.0.0.1:8733/chains/main/blocks/head/\
+                      helpers/scripts/typecheck_code -H \
+                      \"Content-Type:application/json\" \
+                      -d '{\"program\":'$(cat %s)'}'\n" output
+  else
+    let s = to_readable c in
+    match
+      match !LiquidOptions.output with
+      | Some output -> output
+      | None -> String.concat "." [outprefix; ext]
+    with
+    | "-" -> Printf.printf "%s%!" s
+    | output ->
+      FileString.write_file output s;
+      Printf.eprintf "File %S generated\n%!" output;
+      Printf.eprintf "You may want to typecheck with:\n";
+      Printf.eprintf "  %s-client typecheck script %s\n"
+        (String.lowercase_ascii (LiquidOptions.network_name ()))
+        output
+
+let compile_liquid_files_to_michelson files =
+  let typed_ast, outprefix = typecheck_liquid_files files in
   if !LiquidOptions.verbosity>0 then
     FileString.write_file (outprefix ^ ".typed")
       (DebugPrint.string_of_contract_types
@@ -100,7 +142,7 @@ let compile_liquid_files files =
     | None -> ()
     | Some init ->
       match LiquidInit.compile_liquid_init live_ast.ty_env
-              (full_sig_of_contract syntax_ast) init with
+              (full_sig_of_contract typed_ast) init with
       | LiquidInit.Init_constant c_init when !LiquidOptions.json ->
         let c_init = LiquidMichelson.compile_const c_init in
         let s = LiquidToMicheline.(json_of_const @@ convert_const ~expand:true c_init) in
@@ -132,44 +174,46 @@ let compile_liquid_files files =
     LiquidToMicheline.convert_contract ~expand:(!LiquidOptions.json) pre_michelson
   in
 
-  if !LiquidOptions.json then
-    let s = LiquidToMicheline.json_of_contract c in
-    let output = match !LiquidOptions.output with
-      | Some output -> output
-      | None -> outprefix ^ ".tz.json" in
-    match output with
-    | "-" -> Printf.printf "%s%!" s
-    | _ ->
-      FileString.write_file output s;
-      Printf.eprintf "File %S generated\n%!" output;
-      Printf.eprintf "If you have a node running, \
-                      you may want to typecheck with:\n";
-      Printf.eprintf "  curl http://127.0.0.1:8733/chains/main/blocks/head/\
-                      helpers/scripts/typecheck_code -H \
-                      \"Content-Type:application/json\" \
-                      -d '{\"program\":'$(cat %s)'}'\n" output
-  else
-    let s =
-      if !LiquidOptions.singleline
-      then LiquidToMicheline.line_of_contract c
-      else LiquidToMicheline.string_of_contract c in
-    let s =
-      if !LiquidOptions.writeinfo then
-        LiquidInfomark.gen_info ~decompile:false files ^ s
-      else s in
-    match
-      match !LiquidOptions.output with
-      | Some output -> output
-      | None -> outprefix ^ ".tz"
-    with
-    | "-" -> Printf.printf "%s%!" s
-    | output ->
-      FileString.write_file output s;
-      Printf.eprintf "File %S generated\n%!" output;
-      Printf.eprintf "You may want to typecheck with:\n";
-      Printf.eprintf "  %s-client typecheck script %s\n"
-        (String.lowercase_ascii (LiquidOptions.network_name ()))
-        output
+  output_final
+    ~to_json:LiquidToMicheline.json_of_contract
+    ~to_readable:(fun c ->
+        let s =
+          if !LiquidOptions.singleline
+          then LiquidToMicheline.line_of_contract c
+          else LiquidToMicheline.string_of_contract c in
+        if !LiquidOptions.writeinfo then
+          LiquidInfomark.gen_info ~decompile:false files ^ s
+        else s)
+    ~outprefix
+    ~ext:"tz"
+    c
+
+let compile_liquid_files_to_love files =
+  if !LiquidOptions.verbosity>0 then
+    Format.eprintf "Initialize Love environments... %!";
+  Love_type_list.init ();
+  Love_prim_list.init ();
+  Love_tenv.init_core_env ();
+  if !LiquidOptions.verbosity>0 then Format.eprintf "Done@.";
+  let typed_ast, outprefix =
+    typecheck_liquid_files ~monomorphise:true ~keep_tvars:true files in
+  let typed_ast_no_tfail = Preprocess.contract_ttfail_to_tvar typed_ast in
+  let ctr_name = typed_ast.contract_name in
+  let love_ast, _ = Liq2love.liqcontract_to_lovecontract ~ctr_name typed_ast_no_tfail in
+  if !LiquidOptions.verbosity>0 then
+    FileString.write_file (outprefix ^ ".love_ast")
+      (Format.asprintf "%a" Love_printer.Ast.print_structure love_ast);
+  let to_json love_ast =
+    let str = {Love_ast.version = 1, 0; code = love_ast} in
+    let json =
+      Environment.Data_encoding.Json.construct
+        Love_json_encoding.Ast.top_contract_encoding str in
+    Format.sprintf "#love-json\n\ \n\ %s"
+      (Environment.Data_encoding.Json.to_string json) in
+  let to_readable love_ast =
+    Format.asprintf "#love\n\ \n\ %a"
+      Love_printer.Ast.print_structure love_ast in
+  output_final ~to_json ~to_readable ~outprefix ~ext:"lov" love_ast
 
 
 let compile_tezos_file filename =
@@ -292,6 +336,19 @@ let compile_tezos_file filename =
 let compile_tezos_files = List.iter compile_tezos_file
 
 
+let compile_liquid_files files =
+  begin match !LiquidOptions.output with
+    | None -> ()
+    | Some o ->
+      if Filename.check_suffix o ".tz" then
+        LiquidOptions.target_lang := Michelson_lang;
+      if Filename.check_suffix o ".lov" then
+        LiquidOptions.target_lang := Love_lang;
+  end;
+  match !LiquidOptions.target_lang with
+  | Michelson_lang -> compile_liquid_files_to_michelson files
+  | Love_lang -> compile_liquid_files_to_love files
+
 module Data = struct
   let files = ref []
   let get_files () = !files
@@ -308,6 +365,12 @@ let compile_files () =
     List.partition (fun filename ->
         Filename.check_suffix filename ".tz" ||
         Filename.check_suffix filename ".json") others in
+  if List.exists (fun filename ->
+      Filename.check_suffix filename ".lov") unknown then begin
+    Format.eprintf "Cannot decompile Love files yet: %a.@."
+      (Format.pp_print_list Format.pp_print_string) unknown;
+    exit 2
+  end;
   match unknown with
     [] ->
     begin match liq_files, tz_files with
@@ -361,7 +424,7 @@ let common_args =
 
     ["json"; "j"],
     Arg.Set LiquidOptions.json,
-    Ezcmd.info ~docs "Output Michelson in JSON representation";
+    Ezcmd.info ~docs "Output in JSON representation";
 
     ["type-only"],
     Arg.Set LiquidOptions.typeonly,

@@ -20,6 +20,19 @@ let common =
     Arg.Clear LiquidOptions.ocaml_syntax,
     Ezcmd.info ~docs "Use ReasonML syntax";
 
+    ["target"; "t"],
+    Arg.Symbol (["michleson"; "love"; "Michleson"; "Love"],
+                function
+                | "michelson" | "Michelson" ->
+                  LiquidOptions.target_lang := Michelson_lang
+                | "love" | "Love"  ->
+                  LiquidOptions.target_lang := Love_lang
+                | s ->
+                  Format.eprintf "%s not allowed for target@." s;
+                  exit 1),
+    Ezcmd.info ~docs ~docv:"LANG"
+      "Set the target language (possible values: $(i,michelson), $(i,love)).";
+
     ["version"],
     Arg.Unit (fun () ->
         Format.printf "%s" LiquidVersion.version;
