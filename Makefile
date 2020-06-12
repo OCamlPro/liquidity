@@ -38,12 +38,6 @@ _obuild/liquidity-client/liquidity-client.asm: _obuild
 liquidity-client: _obuild/liquidity-client/liquidity-client.asm
 	cp -f _obuild/liquidity-client/liquidity-client.asm liquidity-client
 
-_obuild/makelove/makelove.asm: _obuild
-	ocp-build build makelove
-
-makelove: _obuild/makelove/makelove.asm
-	cp -f _obuild/makelove/makelove.asm makelove
-
 liquidity-mini: _obuild/liquidity-mini/liquidity-mini.asm
 	cp -f _obuild/liquidity-mini/liquidity-mini.asm liquidity-mini
 
@@ -53,7 +47,7 @@ liquidity: _obuild/liquidity/liquidity.asm
 
 client: liquidity-client
 mini: liquidity-mini
-build: liquidity liquidity-mini liquidity-client makelove
+build: liquidity liquidity-mini liquidity-client
 
 install: _obuild
 	ocp-build install liquidity
