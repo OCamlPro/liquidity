@@ -8,11 +8,11 @@ module Make (L : LANG) = struct
   module T = LiquidClientTypes.Make(L)
 
   type error = Source.location * string
-  type trace = (Source.location, Source.const) T.Trace.t
+  type trace = (Source.location, Source.const Lazy_superposed.t) T.Trace.t
 
   exception RuntimeError of error * trace option
   exception LocalizedError of error
-  exception RuntimeFailure of error * Source.const option * trace option
+  exception RuntimeFailure of error * Source.const Lazy_superposed.t option * trace option
 
   let name_of_var_annot = function
     | None -> None
@@ -26,7 +26,8 @@ module Make (L : LANG) = struct
   let convert_stack stack_expr =
     List.(rev @@ rev_map (fun (e, annot) ->
         let name = name_of_var_annot annot in
-        decompile_const e, name
+        let c = decompile_const e |> L.Source.const#ast in
+        c, name
       ) stack_expr)
 
   let convert_trace ~loc_table t =
@@ -57,7 +58,7 @@ module Make (L : LANG) = struct
     let json = Ezjsonm.find err ["with"] in
     let err_loc, _ (* failwith_ty *) = List.assoc loc loc_table in
     let failed_with_expr = Json_encoding.destruct Target.const_encoding json in
-    let failed_with = decompile_const failed_with_expr in
+    let failed_with = decompile_const failed_with_expr |> Source.const#ast in
     err_loc, Some failed_with
 
   let error_trace_of_err loc ~loc_table err =

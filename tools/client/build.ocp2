@@ -2,6 +2,7 @@
 OCaml.library("ocplib-liquidity-client-functor",
    ocaml + {
      files = [
+       "lazy_superposed.ml";
        "liquidClientSigs.ml";
        "liquidClientUtils.ml";
        "liquidClientRequest.ml";
@@ -9,9 +10,11 @@ OCaml.library("ocplib-liquidity-client-functor",
        "liquidClientErrors.ml";
        "liquidClientRPCs.ml";
        "liquidClient.ml";
+       "liquidityLang.ml";
      ];
      requires = [
        "ocplib-liquidity-options";
+       "ocplib-liquidity-base";
        "ocplib-json-typed";
        "dune-network-lib";
        "ezjsonm";
@@ -25,10 +28,7 @@ if ( with_dune_network ) {
 OCaml.library("ocplib-liquidity-to-michelson-client",
    ocaml + {
      files = [
-       "lazy_superposed.ml";
-       "liquidityLang.ml";
        "liquidityToMichelson.ml";
-       "liquidityToMichelsonClient.ml";
      ];
      requires = [
        "ocplib-liquidity-client-functor";
@@ -41,10 +41,7 @@ OCaml.library("ocplib-liquidity-to-michelson-client",
 OCaml.library("ocplib-liquidity-to-love-client",
    ocaml + {
      files = [
-       "lazy_superposed.ml";
-       "liquidityLang.ml";
        "liquidityToLove.ml";
-       "liquidityToLoveClient.ml";
      ];
      requires = [
        "ocplib-liquidity-client-functor";

@@ -23,50 +23,9 @@
 
 open LiquidTypes
 open LiquidClientSigs
-module Client = LiquidityToMichelsonClient.String
-module ClientJson = LiquidityToMichelsonClient.SJson
 open Ezcmd.Modules
 
 exception Bad_arg
-
-let report_err ?(kind="Error") fmt (err_loc, err_msg) =
-  Format.fprintf fmt "%a: %s: @[%s@]\n%!" Client.L.Source.print_loc err_loc kind err_msg
-
-let report_error = function
-  | LiquidError error ->
-    report_err Format.err_formatter (error.err_loc, error.err_msg);
-  | LiquidNamespace.Unknown_namespace (p, err_loc) as exn ->
-    let backtrace = Printexc.get_backtrace () in
-    Format.eprintf "Error: %s\nBacktrace:\n%s@."
-      (Printexc.to_string exn) backtrace ;
-    report_err Format.err_formatter
-      (err_loc,
-       Printf.sprintf "Unknown module or contract %s" (String.concat "." p));
-  | LiquidFromMicheline.Missing_program_field f ->
-    Format.eprintf "Missing script field %s@." f;
-  | LiquidClientRequest.RequestError (code, msg) ->
-    Format.eprintf "Request Error (code %d):\n%s@." code msg;
-  | LiquidClientRequest.ResponseError msg ->
-    Format.eprintf "Response Error:\n%s@." msg;
-  | Client.E.RuntimeError (error, _trace) ->
-    report_err ~kind:"Runtime error" Format.err_formatter error;
-  | Client.E.LocalizedError error ->
-    report_err ~kind:"Error" Format.err_formatter error;
-  | Client.E.RuntimeFailure (error, None, _trace) ->
-    report_err ~kind:"Failed at runtime" Format.err_formatter error;
-  | Client.E.RuntimeFailure (error, Some v, _trace) ->
-    report_err ~kind:"Failed at runtime" Format.err_formatter error;
-    Format.eprintf "Failed with %s@." (Client.C.SourceConv.print_const v);
-  | Failure f ->
-    Format.eprintf "Failure: %s@." f
-  | Syntaxerr.Error (Syntaxerr.Other loc) ->
-    report_err ~kind:"Syntax error" Format.err_formatter
-      (LiquidLoc.loc_of_location loc, "unknown");
-  | exn ->
-    let backtrace = Printexc.get_backtrace () in
-    Format.eprintf "Error: %s\nBacktrace:\n%s@."
-      (Printexc.to_string exn) backtrace
-
 
 module Data = struct
 
@@ -112,156 +71,225 @@ module Data = struct
 end
 
 
-let inject file =
-  let signature = match !LiquidOptions.signature with
-    | None ->
-      Printf.eprintf "Error: missing --signature option for --inject\n%!";
-      exit 2
-    | Some signature -> signature
-  in
-  (* an hexa encoded operation *)
-  let operation = FileString.read_file file in
-  let op_h = Client.Sync.inject
-      ~operation:(Hex.to_bytes (`Hex operation))
-      ~signature in
-  Printf.printf "Operation injected: %s\n%!" op_h
+module type S = sig
+  (* val report_err :
+   *   ?kind:string -> Format.formatter -> LiquidTypes.location * string -> unit *)
+  val report_error : exn -> unit
+  val inject : string -> unit
+  val run : unit -> unit
+  val forge_deploy : unit -> unit
+  val init_storage : unit -> unit
+  val deploy : unit -> unit
+  val get_storage : unit -> unit
+  val call_arg : unit -> unit
+  val call : unit -> unit
+  val forge_call : unit -> unit
+  val pack : unit -> unit
+end
 
-let run () =
-  let open Client in
-  let ops, r_storage, big_map_diff =
-    Sync.run (LiquidityToMichelson.From_files (Data.get_files ()))
-      !Data.entry_name !Data.parameter !Data.storage
-  in
-  Printf.printf "%s\n# Internal operations: %d\n%!"
-    r_storage
-    (List.length ops);
-  match big_map_diff with
-  | [] -> ()
-  | diff ->
-    let open Client.T in
-    let open Client.T.Big_map_diff in
-    Printf.printf "\nBig map diff:\n";
-    let pp_id fmt = function
-      | Bm_id id -> Format.fprintf fmt "[ID: %d]" id
-      | Bm_name (id, name) -> Format.fprintf fmt "[%s (%d)]" name id in
-    List.iter (fun item ->
-        match item with
-        | Big_map_add { id; key; value } ->
-          Format.printf "%a +  %s --> %s\n" pp_id id key value
-        | Big_map_remove { id; key } ->
-          Format.printf "%a -  %s\n" pp_id id key
-        | Big_map_delete { id } ->
-          Format.printf "%a DELETE\n" pp_id id
-        | Big_map_alloc { id } ->
-          Format.printf "%a ALLOC\n" pp_id id
-        | Big_map_copy { source_id; destination_id } ->
-          Format.printf "%a COPY to %a\n" pp_id source_id pp_id destination_id
-      ) diff;
-    Printf.printf "%!"
+module Make (L: LANG with module Source = LiquidityLang ) : S = struct
+
+  module Client = LiquidClient.Make(L)
+
+  let report_err ?(kind="Error") fmt (err_loc, err_msg) =
+    Format.fprintf fmt "%a: %s: @[%s@]\n%!" L.Source.print_loc err_loc kind err_msg
+
+  let report_error = function
+    | LiquidError error ->
+      report_err Format.err_formatter (error.err_loc, error.err_msg);
+    | LiquidNamespace.Unknown_namespace (p, err_loc) as exn ->
+      let backtrace = Printexc.get_backtrace () in
+      Format.eprintf "Error: %s\nBacktrace:\n%s@."
+        (Printexc.to_string exn) backtrace ;
+      report_err Format.err_formatter
+        (err_loc,
+         Printf.sprintf "Unknown module or contract %s" (String.concat "." p));
+    | LiquidFromMicheline.Missing_program_field f ->
+      Format.eprintf "Missing script field %s@." f;
+    | LiquidClientRequest.RequestError (code, msg) ->
+      Format.eprintf "Request Error (code %d):\n%s@." code msg;
+    | LiquidClientRequest.ResponseError msg ->
+      Format.eprintf "Response Error:\n%s@." msg;
+    | Client.E.RuntimeError (error, _trace) ->
+      report_err ~kind:"Runtime error" Format.err_formatter error;
+    | Client.E.LocalizedError error ->
+      report_err ~kind:"Error" Format.err_formatter error;
+    | Client.E.RuntimeFailure (error, None, _trace) ->
+      report_err ~kind:"Failed at runtime" Format.err_formatter error;
+    | Client.E.RuntimeFailure (error, Some v, _trace) ->
+      report_err ~kind:"Failed at runtime" Format.err_formatter error;
+      Format.eprintf "Failed with %s@." v#string;
+    | Failure f ->
+      Format.eprintf "Failure: %s@." f
+    | Syntaxerr.Error (Syntaxerr.Other loc) ->
+      report_err ~kind:"Syntax error" Format.err_formatter
+        (LiquidLoc.loc_of_location loc, "unknown");
+    | exn -> raise exn
 
 
-let forge_deploy () =
-  let op =
-    Client.Sync.forge_deploy
-      (LiquidityToMichelson.From_files (Data.get_files ())) (Data.get_inputs ())
-  in
-  Printf.eprintf "Raw operation:\n--------------\n%!";
-  Printf.printf "%s\n%!" Hex.(show @@ of_bytes op)
+  let inject file =
+    let signature = match !LiquidOptions.signature with
+      | None ->
+        Printf.eprintf "Error: missing --signature option for --inject\n%!";
+        exit 2
+      | Some signature -> signature
+    in
+    (* an hexa encoded operation *)
+    let operation = FileString.read_file file in
+    let op_h = Client.Sync.inject
+        ~operation:(Hex.to_bytes (`Hex operation))
+        ~signature in
+    Printf.printf "Operation injected: %s\n%!" op_h
 
-let init_storage () =
-  let outname =
-    let c = match !LiquidOptions.main with
-      | Some c -> c
-      | None -> match List.rev (Data.get_files ()) with
-        | c :: _ -> c
-        | [] -> assert false in
-    String.uncapitalize_ascii c in
-  let from, inputs =
-    LiquidityToMichelson.From_files (Data.get_files ()),
-    Data.get_inputs () in
-  if !LiquidOptions.json then
-    let storage = ClientJson.Sync.init_storage from inputs in
-    let output = match !LiquidOptions.output with
-      | Some output -> output
-      | None -> outname ^ ".init.json" in
-    FileString.write_file output (Ezjsonm.value_to_string ~minify:false storage);
-    Printf.printf "Constant initial storage generated in %S\n%!" output
-  else
-    let storage = Client.Sync.init_storage from inputs in
-    let output = match !LiquidOptions.output with
-      | Some output -> output
-      | None -> outname ^ ".init.tz" in
-    FileString.write_file output storage;
-    Printf.printf "Constant initial storage generated in %S\n%!" output
+  let get_contract () =
+    From_files (Data.get_files ())
+    |> L.Source.parse_contract
+    |> L.Source.contract#ast
 
-let deploy () =
-  let op_h, contract_id =
-    Client.Sync.deploy
-      (LiquidityToMichelson.From_files (Data.get_files ())) (Data.get_inputs ())
-  in
+  let get_inputs () =
+    Data.get_inputs ()
+    |> List.map L.Source.const#string
+
+  let run () =
+    let open Client in
+    let ops, r_storage, big_map_diff =
+      Sync.run (get_contract ())
+        !Data.entry_name
+        (L.Source.const#string !Data.parameter)
+        (L.Source.const#string !Data.storage)
+    in
+    Printf.printf "%s\n# Internal operations: %d\n%!"
+      r_storage#string
+      (List.length ops);
+    match big_map_diff with
+    | [] -> ()
+    | diff ->
+      let open Client.T in
+      let open Client.T.Big_map_diff in
+      Printf.printf "\nBig map diff:\n";
+      let pp_id fmt = function
+        | Bm_id id -> Format.fprintf fmt "[ID: %d]" id
+        | Bm_name (id, name) -> Format.fprintf fmt "[%s (%d)]" name id in
+      List.iter (fun item ->
+          match item with
+          | Big_map_add { id; key; value } ->
+            Format.printf "%a +  %s --> %s\n" pp_id id key#string value#string
+          | Big_map_remove { id; key } ->
+            Format.printf "%a -  %s\n" pp_id id key#string
+          | Big_map_delete { id } ->
+            Format.printf "%a DELETE\n" pp_id id
+          | Big_map_alloc { id } ->
+            Format.printf "%a ALLOC\n" pp_id id
+          | Big_map_copy { source_id; destination_id } ->
+            Format.printf "%a COPY to %a\n" pp_id source_id pp_id destination_id
+        ) diff;
+      Printf.printf "%!"
+
+
+  let forge_deploy () =
+    let op =
+      Client.Sync.forge_deploy (get_contract ()) (get_inputs ())
+    in
+    Printf.eprintf "Raw operation:\n--------------\n%!";
+    Printf.printf "%s\n%!" Hex.(show @@ of_bytes op)
+
+  let init_storage () =
+    let outname =
+      let c = match !LiquidOptions.main with
+        | Some c -> c
+        | None -> match List.rev (Data.get_files ()) with
+          | c :: _ -> c
+          | [] -> assert false in
+      String.uncapitalize_ascii c in
+    let storage =
+      Client.Sync.init_storage (get_contract ()) (get_inputs ()) in
+    if !LiquidOptions.json then
+      let output = match !LiquidOptions.output with
+        | Some output -> output
+        | None -> outname ^ ".init.json" in
+      FileString.write_file output
+        (Ezjsonm.value_to_string ~minify:false storage#json);
+      Printf.printf "Constant initial storage generated in %S\n%!" output
+    else
+      let output = match !LiquidOptions.output with
+        | Some output -> output
+        | None -> outname ^ ".init.tz" in
+      FileString.write_file output storage#string;
+      Printf.printf "Constant initial storage generated in %S\n%!" output
+
+  let deploy () =
+    let op_h, contract_id =
+      Client.Sync.deploy (get_contract ()) (get_inputs ())
+    in
     Printf.printf "New contract %s deployed in operation %s\n%!"
       contract_id op_h
 
-let get_storage () =
-  let r_storage =
-    Client.Sync.get_storage
-      (LiquidityToMichelson.From_files (Data.get_files ()))
-      !Data.contract_address
-  in
-  Printf.printf "%s\n%!" r_storage
+  let get_storage () =
+    let r_storage =
+      Client.Sync.get_storage (get_contract ()) !Data.contract_address
+    in
+    Printf.printf "%s\n%!" r_storage#string
 
-let call_arg () =
-  let s =
-    !Data.parameter
-    |> Client.C.SourceConv.parse_const
-    |> Client.L.compile_const
-    |> Client.C.TargetConv.print_const
-  in
-  match !LiquidOptions.output with
-  | None ->
-    Printf.printf "Use --arg '%s'\n%!" s
-  | Some "-" ->
-    Printf.printf "'%s'%!" s
-  | Some file ->
-    FileString.write_file file s
+  let call_arg () =
+    let arg = !Data.parameter |> Client.L.Source.const#string in
+    let arg = Client.L.compile_const arg#ast |> Client.L.Target.const#ast in
+    match !LiquidOptions.output with
+    | None ->
+      Printf.printf "Use --arg '%s'\n%!" arg#string
+    | Some "-" ->
+      Printf.printf "'%s'%!" arg#string
+    | Some file ->
+      FileString.write_file file arg#string
 
-let call () =
-  let contract = match Data.get_files () with
-    | [] -> None
-    | l -> Some (LiquidityToMichelson.From_files l) in
-  let op_h =
-    Client.Sync.call
-      ?contract
-      ~address:!Data.contract_address
-      ~entry:!Data.entry_name
-      !Data.parameter
-  in
-  Printf.printf "Successful call to contract %s in operation %s\n%!"
-    !Data.contract_address op_h
+  let call () =
+    let contract = match Data.get_files () with
+      | [] -> None
+      | l -> Some (get_contract ()) in
+    let op_h =
+      Client.Sync.call
+        ?contract
+        ~address:!Data.contract_address
+        ~entry:!Data.entry_name
+        (Client.L.Source.const#string !Data.parameter)
+    in
+    Printf.printf "Successful call to contract %s in operation %s\n%!"
+      !Data.contract_address op_h
 
-let forge_call () =
-  let contract = match Data.get_files () with
-    | [] -> None
-    | l -> Some (LiquidityToMichelson.From_files l) in
-  let op =
-    Client.Sync.forge_call
-      ?contract
-      ~address:!Data.contract_address
-      ~entry:!Data.entry_name
-      !Data.parameter in
-  Printf.eprintf "Raw operation:\n--------------\n%!";
-  Printf.printf "%s\n%!" Hex.(show @@ of_bytes op)
+  let forge_call () =
+    let contract = match Data.get_files () with
+      | [] -> None
+      | l -> Some (get_contract ()) in
+    let op =
+      Client.Sync.forge_call
+        ?contract
+        ~address:!Data.contract_address
+        ~entry:!Data.entry_name
+        (Client.L.Source.const#string !Data.parameter)
+    in
+    Printf.eprintf "Raw operation:\n--------------\n%!";
+    Printf.printf "%s\n%!" Hex.(show @@ of_bytes op)
 
-let pack () =
-  (match Data.get_files () with
-   | [] -> ()
-   | l ->
-     LiquidityToMichelson.From_files l
-     |> Client.C.SourceConv.parse_contract
-     |> Client.L.compile_contract
-     |> ignore);
-  let bytes = Client.Sync.pack ~const:!Data.const ~ty:!Data.ty in
-  Printf.printf "0x%s\n%!" Hex.(show @@ of_bytes bytes)
+  let pack () =
+    (match Data.get_files () with
+     | [] -> ()
+     | l ->
+       (get_contract ())#ast
+       |> Client.L.compile_contract
+       |> ignore);
+    let const = Client.L.Source.const#string !Data.const in
+    let ty = Client.L.Source.datatype#string !Data.ty in
+    let bytes = Client.Sync.pack ~const ~ty in
+    Printf.printf "0x%s\n%!" Hex.(show @@ of_bytes bytes)
+
+end
+
+
+module MichelsonClient = Make(LiquidityToMichelson.Lang)
+module LoveClient = Make(LiquidityToLove.Lang)
+
+let client () = match !LiquidOptions.target_lang with
+  | Michelson_lang -> (module MichelsonClient : S)
+  | Love_lang -> (module LoveClient : S)
 
 let parse_tez expl amount =
   match LiquidData.translate (LiquidFromParsetree.initial_env expl)
@@ -424,7 +452,9 @@ liquidity-client run \\
 
       `Blocks LiquidCommonArgs.help_secs;
     ];
-    cmd_action = run;
+    cmd_action = fun () ->
+      let module Client = (val client ()) in
+      Client.run ();
   }
 
 let init_storage_cmd =
@@ -456,7 +486,9 @@ Constant initial storage generated in "tests/others/multisig.liq.init.tz"
 |};
       `Blocks LiquidCommonArgs.help_secs;
     ];
-    cmd_action = init_storage;
+    cmd_action = fun () ->
+      let module Client = (val client ()) in
+      Client.init_storage ();
   }
 
 
@@ -488,7 +520,9 @@ Raw operation:
 |};
       `Blocks LiquidCommonArgs.help_secs;
     ];
-    cmd_action = forge_deploy;
+    cmd_action = fun () ->
+      let module Client = (val client ()) in
+      Client.forge_deploy ();
   }
 
 let deploy_cmd =
@@ -517,7 +551,9 @@ New contract KT1Lb7UdXq88n2ahpjwXfbrQPkgjyKu6BoC2 deployed in operation oovkxqLC
 |};
       `Blocks LiquidCommonArgs.help_secs;
     ];
-    cmd_action = deploy;
+    cmd_action = fun () ->
+      let module Client = (val client ()) in
+      Client.deploy ();
   }
 
 let get_storage_cmd =
@@ -545,7 +581,9 @@ liquidity-client get-storage --files tests/others/multisig.liq --node http://tes
 |};
       `Blocks LiquidCommonArgs.help_secs;
     ];
-    cmd_action = get_storage;
+    cmd_action = fun () ->
+      let module Client = (val client ()) in
+      Client.get_storage ();
   }
 
 
@@ -576,7 +614,9 @@ Successful call to contract KT1Lb7UdXq88n2ahpjwXfbrQPkgjyKu6BoC2 in operation oo
 |};
       `Blocks LiquidCommonArgs.help_secs;
     ];
-    cmd_action = call;
+    cmd_action = fun () ->
+      let module Client = (val client ()) in
+      Client.call ();
   }
 
 let forge_call_cmd =
@@ -607,7 +647,9 @@ Raw operation:
 50d636cc2440f9042c4e79bb29c67ce6488aa1f5b419d4abbd22fc8ff8f4e1ab6c0011589aef8b9cd48925f6fedadcee774d51d14b85912e8b0bd3b8030080ade2040183b221732a1f1b05d442a81967ae8188ed44b6c300ffff0370617900000002030b|};
       `Blocks LiquidCommonArgs.help_secs;
     ];
-    cmd_action = forge_call;
+    cmd_action = fun () ->
+      let module Client = (val client ()) in
+      Client.forge_call ();
   }
 
 let call_arg_cmd =
@@ -629,7 +671,9 @@ Use --arg 'Unit'
 |};
       `Blocks LiquidCommonArgs.help_secs;
     ];
-    cmd_action = call_arg;
+    cmd_action = fun () ->
+      let module Client = (val client ()) in
+      Client.call_arg ();
   }
 
 let pack_cmd =
@@ -652,7 +696,9 @@ liquidity-client pack --node http://testnet-node.dunscan.io  '()' unit
 |};
       `Blocks LiquidCommonArgs.help_secs;
     ];
-    cmd_action = pack;
+    cmd_action = fun () ->
+      let module Client = (val client ()) in
+      Client.pack ();
   }
 
 let inject_cmd =
@@ -678,7 +724,9 @@ let inject_cmd =
       `P "Inject a sign operation";
       `Blocks LiquidCommonArgs.help_secs;
     ];
-    cmd_action = fun () -> inject !opf;
+    cmd_action = fun () ->
+      let module Client = (val client ()) in
+      Client.inject !opf;
   }
 
 let main () =
@@ -710,5 +758,11 @@ let () =
   try
     main ()
   with exn ->
-    report_error exn;
+    (try MichelsonClient.report_error exn
+     with exn ->
+     try LoveClient.report_error exn
+     with exn -> let backtrace = Printexc.get_backtrace () in
+       Format.eprintf "Error: %s\nBacktrace:\n%s@."
+         (Printexc.to_string exn) backtrace
+    );
     exit 1

@@ -21,7 +21,7 @@ let common =
     Ezcmd.info ~docs "Use ReasonML syntax";
 
     ["target"; "t"],
-    Arg.Symbol (["michleson"; "love"; "Michleson"; "Love"],
+    Arg.Symbol (["michelson"; "love"; "Michelson"; "Love"],
                 function
                 | "michelson" | "Michelson" ->
                   LiquidOptions.target_lang := Michelson_lang

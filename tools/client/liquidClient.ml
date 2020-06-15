@@ -5,24 +5,8 @@ open Lwt.Infix
 open Dune_Network_Lib.Stdlib
 open Dune_Network_Lib.Crypto (* for crypto *)
 
-module Make
-    (L : LANG)
-    (SourceFrom : TT)
-    (TargetFrom : TT)
-    (C : CONVERTER with type source_from_datatype := SourceFrom.datatype
-              and type source_from_const := SourceFrom.const
-              and type source_from_contract := SourceFrom.contract
-              and type source_dest_datatype := L.Source.datatype
-              and type source_dest_const := L.Source.const
-              and type source_dest_contract := L.Source.contract
-              and type target_from_datatype := TargetFrom.datatype
-              and type target_from_const := TargetFrom.const
-              and type target_from_contract := TargetFrom.contract
-              and type target_dest_datatype := L.Target.datatype
-              and type target_dest_const := L.Target.const
-              and type target_dest_contract := L.Target.contract) = struct
+module Make (L : LANG) = struct
 
-  module C = C
   module L = L
   module RPC = LiquidClientRPCs.Make(L)
   module E = RPC.E
@@ -33,6 +17,13 @@ module Make
   open T
   open RPC
 
+  type source_datatype = Source.datatype Lazy_superposed.t
+  type source_const = Source.const Lazy_superposed.t
+  type source_contract = Source.contract Lazy_superposed.t
+
+  type target_datatype = Target.datatype Lazy_superposed.t
+  type target_const = Target.const Lazy_superposed.t
+  type target_contract = Target.contract Lazy_superposed.t
 
   type liq_big_map_diff = (bm_id, Source.const) Big_map_diff.t
 
@@ -663,11 +654,11 @@ module Make
     let open Big_map_diff in
     function
     | Big_map_add { id; key_hash; key; value } ->
-      let key = C.SourceConv.print_const key in
-      let value = C.SourceConv.print_const value in
+      let key = Source.const#ast key in
+      let value = Source.const#ast value in
       Big_map_add { id; key_hash; key; value }
     | Big_map_remove { id; key_hash; key } ->
-      let key = C.SourceConv.print_const key in
+      let key = Source.const#ast key in
       Big_map_remove { id; key_hash; key }
     | Big_map_delete { id } ->
       Big_map_delete { id }
@@ -682,7 +673,7 @@ module Make
   let print_stack stack_expr =
     List.map (fun (e, annot) ->
         let name = name_of_var_annot annot in
-        C.SourceConv.print_const e, name
+        e, name
       ) stack_expr
 
   let print_trace t =
@@ -695,130 +686,131 @@ module Make
     type 'a t
     val init_storage :
       ?source:string ->
-      SourceFrom.contract ->
-      SourceFrom.const list -> TargetFrom.const t
+      source_contract ->
+      source_const list -> target_const t
     val run :
       ?amount : LiquidNumber.tez ->
-      SourceFrom.contract ->
+      source_contract ->
       string ->
-      SourceFrom.const ->
-      SourceFrom.const ->
-      (SourceOperation.internal list * SourceFrom.const *
-       (LiquidClientSigs.bm_id, SourceFrom.const) T.Big_map_diff.item
+      source_const ->
+      source_const ->
+      (SourceOperation.internal list * source_const *
+       (LiquidClientSigs.bm_id, source_const) T.Big_map_diff.item
          list)
         t
     val run_debug :
       ?amount : LiquidNumber.tez ->
-      SourceFrom.contract ->
+      source_contract ->
       string ->
-      SourceFrom.const ->
-      SourceFrom.const ->
-      (SourceOperation.internal list * SourceFrom.const *
-       (LiquidClientSigs.bm_id, SourceFrom.const) Big_map_diff.item
+      source_const ->
+      source_const ->
+      (SourceOperation.internal list * source_const *
+       (LiquidClientSigs.bm_id, source_const) Big_map_diff.item
          list *
-       (L.Source.location, SourceFrom.const) Trace.trace_item list)
+       (L.Source.location, source_const) Trace.trace_item list)
         t
     val deploy :
       ?balance : LiquidNumber.tez ->
-      SourceFrom.contract ->
-      SourceFrom.const list -> (string * string) t
+      source_contract ->
+      source_const list -> (string * string) t
     val get_storage :
-      SourceFrom.contract -> string -> SourceFrom.const t
+      source_contract -> string -> source_const t
     val get_big_map_value :
-      LiquidClientSigs.bm_id * Source.datatype * Source.datatype ->
-      SourceFrom.const -> SourceFrom.const option t
+      LiquidClientSigs.bm_id * source_datatype * source_datatype ->
+      source_const -> source_const option t
     val call :
-      ?contract:SourceFrom.contract ->
+      ?contract:source_contract ->
       ?amount : LiquidNumber.tez ->
-      address:string -> entry:string -> SourceFrom.const -> string t
+      address:string -> entry:string -> source_const -> string t
     val activate : secret:string -> string t
     val inject : operation:bytes -> signature:string -> string t
     val pack :
-      const:SourceFrom.const -> ty:SourceFrom.datatype -> bytes t
+      const:source_const -> ty:source_datatype -> bytes t
     val forge_deploy :
       ?head:Header.t ->
       ?source:string ->
       ?public_key:string ->
       ?balance : LiquidNumber.tez ->
-      SourceFrom.contract -> SourceFrom.const list -> bytes t
+      source_contract -> source_const list -> bytes t
     val forge_call :
       ?head:Header.t ->
       ?source:string ->
       ?public_key:string ->
-      ?contract:SourceFrom.contract ->
+      ?contract:source_contract ->
       ?amount : LiquidNumber.tez ->
-      address:string -> entry:string -> SourceFrom.const -> bytes t
+      address:string -> entry:string -> source_const -> bytes t
   end
 
   (* Withoud optional argument head *)
   module Async : S with type 'a t := 'a Lwt.t = struct
 
     let init_storage ?source contract args =
-      let contract = C.SourceConv.parse_contract contract in
-      let args = List.map C.SourceConv.parse_const args in
+      let contract = contract#ast in
+      let args = List.map (fun a -> a#ast) args in
       init_storage ?source contract args
       >|= fun storage ->
-      C.TargetConv.print_const storage
+      Target.const#ast storage
 
     let run ?amount contract entry_name input storage =
-      let contract = C.SourceConv.parse_contract contract in
-      let input = C.SourceConv.parse_const input in
-      let storage = C.SourceConv.parse_const storage in
+      let contract = contract#ast in
+      let input = input#ast in
+      let storage = storage#ast in
       run ?amount contract entry_name input storage
       >|= fun (ops, storage, bm) ->
-      (ops, C.SourceConv.print_const storage, print_big_map_diff bm)
+      (ops, Source.const#ast storage, print_big_map_diff bm)
 
     let run_debug ?amount contract entry_name input storage =
-      let contract = C.SourceConv.parse_contract contract in
-      let input = C.SourceConv.parse_const input in
-      let storage = C.SourceConv.parse_const storage in
+      let contract = contract#ast in
+      let input = input#ast in
+      let storage = storage#ast in
       run_debug ?amount contract entry_name input storage
       >|= fun (ops, storage, bm, trace) ->
-      (ops, C.SourceConv.print_const storage, print_big_map_diff bm, print_trace trace)
+      (ops, Source.const#ast storage, print_big_map_diff bm, print_trace trace)
 
     let deploy ?balance contract args =
-      let contract = C.SourceConv.parse_contract contract in
-      let args = List.map C.SourceConv.parse_const args in
+      let contract = contract#ast in
+      let args = List.map (fun a -> a#ast) args in
       deploy ?balance contract args
 
     let get_storage contract address =
-      let contract = C.SourceConv.parse_contract contract in
+      let contract = contract#ast in
       get_storage contract address
       >|= fun storage ->
-      C.SourceConv.print_const storage
+      Source.const#ast storage
 
-    let get_big_map_value id key =
-      let key = C.SourceConv.parse_const key in
+    let get_big_map_value (id, tk, tv) key =
+      let id = id, tk#ast, tv#ast in
+      let key = key#ast in
       get_big_map_value id key
       >|= function
       | None -> None
-      | Some v -> Some (C.SourceConv.print_const v)
+      | Some v -> Some (Source.const#ast v)
 
     let call ?contract ?amount ~address ~entry parameter =
       let contract = match contract with
         | None -> None
-        | Some c -> Some (C.SourceConv.parse_contract c) in
-      let parameter = C.SourceConv.parse_const parameter in
+        | Some c -> Some (c#ast) in
+      let parameter = parameter#ast in
       call ?contract ?amount ~address ~entry parameter
 
     let activate = activate
     let inject = inject
     let pack ~const ~ty =
-      let ty = C.SourceConv.parse_datatype ty in
-      let const = C.SourceConv.parse_const const in
+      let ty = ty#ast in
+      let const = const#ast in
       pack ~const ~ty
 
     let forge_deploy ?head ?source ?public_key ?balance contract args =
-      let contract = C.SourceConv.parse_contract contract in
-      let args = List.map C.SourceConv.parse_const args in
+      let contract = contract#ast in
+      let args = List.map (fun a -> a#ast) args in
       forge_deploy ?head ?source ?public_key ?balance contract args
       >>= fun (_, op, _) -> Lwt.return op
 
     let forge_call ?head ?source ?public_key ?contract ?amount ~address ~entry parameter =
       let contract = match contract with
         | None -> None
-        | Some c -> Some (C.SourceConv.parse_contract c) in
-      let parameter = C.SourceConv.parse_const parameter in
+        | Some c -> Some (c#ast) in
+      let parameter = parameter#ast in
       forge_call ?head ?source ?public_key ?contract ?amount ~address ~entry parameter
       >>= fun (_, op, _) -> Lwt.return op
   end

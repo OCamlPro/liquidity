@@ -1,4 +1,8 @@
 
+type from =
+  | From_strings of string list
+  | From_files of string list
+
 type bm_id =
   | Bm_id of int
   | Bm_name of int * string
@@ -24,9 +28,16 @@ module type LANG = sig
 
     val print_loc : Format.formatter -> location -> unit
 
+    val parse_contract : from -> contract
+
+    val datatype : datatype Lazy_superposed.superposer
+    val const : const Lazy_superposed.superposer
+    val contract : contract Lazy_superposed.superposer
+
     (**/* unsused **)
     val const_encoding : const Json_encoding.encoding
     val contract_encoding : contract Json_encoding.encoding
+    val datatype_encoding : datatype Json_encoding.encoding
 
   end
 
@@ -45,6 +56,10 @@ module type LANG = sig
     val const_encoding : const Json_encoding.encoding
     val contract_encoding : contract Json_encoding.encoding
     val datatype_encoding : datatype Json_encoding.encoding
+
+    val datatype : datatype Lazy_superposed.superposer
+    val const : const Lazy_superposed.superposer
+    val contract : contract Lazy_superposed.superposer
 
   end
 
@@ -88,6 +103,9 @@ module type TT = sig
   type datatype
   type const
   type contract
+  val datatype : datatype Lazy_superposed.superposer
+  val const : const Lazy_superposed.superposer
+  val contract : contract Lazy_superposed.superposer
 end
 
 module type CONVERTER = sig
@@ -122,3 +140,4 @@ module type CONVERTER = sig
           and type from_contract := target_from_contract
           and type from_datatype := target_from_datatype
 end
+
