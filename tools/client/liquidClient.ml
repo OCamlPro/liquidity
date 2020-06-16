@@ -208,7 +208,7 @@ module Make (L : LANG) = struct
     let ty = compile_datatype key_ty in
     RPC.pack ~data:key_t ~ty >>= fun packed_key ->
     let hash_key_b58 =
-      ExprHash.hash_bytes [Bigstring.of_bytes packed_key]
+      ExprHash.hash_bytes [packed_key]
       |> ExprHash.to_b58check in
     RPC.get_big_map_hash_value id hash_key_b58 >|= function
     | None -> None
@@ -462,7 +462,7 @@ module Make (L : LANG) = struct
       | None ->
         let op_hash =
           Operation_hash.to_b58check @@
-          Operation_hash.hash_bytes [ MBytes.of_bytes op_b ] in
+          Operation_hash.hash_bytes [ op_b ] in
         op_b, op_hash,
         Operation.{
           branch = head.Header.hash;
@@ -470,7 +470,6 @@ module Make (L : LANG) = struct
           signature = None;
         }
       | Some sk ->
-        let op_b = MBytes.of_bytes op_b in
         let signature = sign sk op_b in
         let signature_b = Signature.to_bytes signature in
         let signature = Signature.to_b58check signature in
@@ -478,7 +477,7 @@ module Make (L : LANG) = struct
         let op_hash =
           Operation_hash.to_b58check @@
           Operation_hash.hash_bytes [ signed_op_b ] in
-        MBytes.to_bytes signed_op_b, op_hash,
+        signed_op_b, op_hash,
         Operation.{
           branch = head.Header.hash;
           contents = operations;
@@ -637,7 +636,7 @@ module Make (L : LANG) = struct
     let signature =
       match Signature.of_b58check signature with
       | Error _ -> failwith "Cannot decode signature (must be valid edsig...)"
-      | Ok s -> MBytes.to_bytes (Signature.to_bytes s) in
+      | Ok s -> Signature.to_bytes s in
     RPC.injection (Bytes.cat operation signature)
 
   let init_storage ?source contract init_params =

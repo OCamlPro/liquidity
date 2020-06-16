@@ -1,9 +1,15 @@
 open Dune_Network_Lib
+open Love_parsing
 open Protocol
 open Love_type
 open Love_ast
+open Love_ast_types
+open Love_ast_types.TYPE
+open Love_ast_types.AST
+open Love_type_utils
 open Love_ast_utils
 open Love_pervasives
+open Love_runtime_ast
 open Log
 
 exception Liq2LoveError of string
@@ -177,7 +183,7 @@ let merge_args_with_funtyp args arrowtyp =
   in
   let args = List.mapi (fun i a -> i, a) args in
   let reserved_tvar = Love_type.fresh_typevar ~name:"__reserved" () in
-  let rec loop aliases (args : (int * (exp * Love_type.t)) list) atyp =
+  let rec loop aliases args (* (args : (int * (exp * Love_type.t)) list) *) atyp =
     match args with
       [] -> TypeVarMap.fold (fun _ l acc -> l @ acc) aliases []
     | (i, (arg, typ)) :: tl -> (
@@ -259,8 +265,8 @@ let search_aliases
           name le1 le2
     | SInit t1, SInit t2 -> search acc t1 t2
     | SEntry t1, SEntry t2
-    | SValue t1, SValue t2 -> search acc t1 t2
-    | SView (t1, t2), SView (t1', t2') -> search (search acc t1 t1') t2 t2'
+    | SValue t1, SValue t2
+    | SView t1, SView t2 -> search acc t1 t2
     | SStructure (Anonymous a1), SStructure (Anonymous a2)
     | SSignature a1, SSignature a2 -> search_structures acc a1 a2
     | SStructure (Named _), SStructure (Named _) -> acc
@@ -452,7 +458,7 @@ let apply_types env e te expected_ty =
   let aliases = search_aliases (remove_foralls te) expected_ty in
   let rec cross_exp_typ =
     function
-      {Utils.content = Love_ast.TLambda {exp;_}; _}, TForall (targ, t')
+      {Utils.content = TLambda {exp;_}; _}, TForall (targ, t')
     | exp, TForall (targ, t') -> (
         match TypeVarMap.find_opt targ aliases with
           Some (TVar v) ->
@@ -486,10 +492,10 @@ let mk_primitive_lambda ?loc prim_name expected_typ spec_args =
       None -> error "Unknown Love primitive %s" prim_name
     | Some p -> p
   in
-  let poly_prim = mk_var_with_args ?loc (string_to_ident prim_name) [] in
+  let poly_prim = mk_var ?loc (string_to_ident prim_name) in
   let tprim = Love_primitive.type_of (prim, spec_args) in
   Log.debug "[mk_primitive_lambda] Primitive type : %a@." pretty tprim;
-  let puretprim = Love_type.remove_foralls tprim in
+  let puretprim = remove_foralls tprim in
   Log.debug "[mk_primitive_lambda] Expected type : %a@." pretty expected_typ;
   Log.debug "[mk_primitive_lambda] Matching %a and %a@."
     pretty puretprim
@@ -573,27 +579,28 @@ let mk_some t arg = mk_constr (Ident.create_id "Some") [t] [arg]
 let mk_none t = mk_constr (Ident.create_id "None") [t] []
 
 let mk_emptyset ?typ () =
-  let map = mk_var_with_args (string_to_ident "Set.empty") [] in
+  let map = mk_var (string_to_ident "Set.empty") in
   match typ with
     Some t -> mk_tapply map t
   | None -> map
 
 let mk_emptymap ?typs () =
-  let map = mk_var_with_args (string_to_ident "Map.empty") [] in
+  let map = mk_var (string_to_ident "Map.empty") in
   match typs with
     Some (tk, tb) ->
     mk_tapply (mk_tapply map tk) tb
   | None -> map
 
-let mk_emptybigmap tkey tbnd =
-  mk_var_with_args (string_to_ident "BigMap.empty") [AType tkey; AType tbnd]
+let mk_emptybigmap tk tb =
+  let map = mk_var (string_to_ident "BigMap.empty") in
+  mk_tapply (mk_tapply map tk) tb
 
 let get_signature_from_name name ty tenv =
   let name = match name with
       None -> "default"
     | Some n -> n in
-  Love_type.Anonymous {
-    sig_kind = Contract [];
+  TYPE.Anonymous {
+    TYPE.sig_kind = Contract [];
     sig_content = [name, SEntry ty]
   }
 

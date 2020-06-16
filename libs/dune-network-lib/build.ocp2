@@ -163,25 +163,24 @@ OCaml.library("dune-network-lib-stdlib",
      files = OCaml.pack("Tezos_stdlib", [
         from_dune_network("lib_stdlib/compare.ml");
         from_dune_network("lib_stdlib/option.ml");
+        from_dune_network("lib_stdlib/bytes_encodings.ml");
+        from_dune_network("lib_stdlib/tzEndian.ml");
         from_dune_network("lib_stdlib/mBytes.ml");
         from_dune_network("lib_stdlib/tzList.ml");
         from_dune_network("lib_stdlib/tzString.ml");
         from_dune_network("lib_stdlib/utils.ml");
-        from_dune_network("lib_stdlib/binary_stream.ml");
         from_dune_network("lib_stdlib/tag.ml");
         from_dune_network("lib_stdlib/lwt_utils.ml");
         from_dune_network("lib_stdlib/lwt_canceler.ml");
         from_dune_network("lib_stdlib/ring.ml");
         from_dune_network("lib_stdlib/weakRingTable.ml");
         from_dune_network("lib_stdlib/environment_variable.ml");
-        from_dune_network("lib_stdlib/dune_debug.ml");
      ]);
      requires = [
        "dune-network-deps";
        "re";
-       "bigstring";
-       "ocplib-endian";
-       "ocplib-endian.bigstring"
+       "hex";
+       "zarith";
      ];
    });
 
@@ -208,11 +207,14 @@ OCaml.library("dune-network-lib-data-encoding",
         from_dune_network("lib_data_encoding/binary_length.ml");
         from_dune_network("lib_data_encoding/binary_reader.ml");
         from_dune_network("lib_data_encoding/binary_writer.ml");
+        from_dune_network("lib_data_encoding/binary_stream.ml");
         from_dune_network("lib_data_encoding/binary_stream_reader.ml");
         from_dune_network("lib_data_encoding/json.ml");
         from_dune_network("lib_data_encoding/bson.ml");
         from_dune_network("lib_data_encoding/binary_schema.ml");
         from_dune_network("lib_data_encoding/binary_description.ml");
+        from_dune_network("lib_data_encoding/with_version.ml");
+        from_dune_network("lib_data_encoding/registration.ml");
         from_dune_network("lib_data_encoding/data_encoding.ml");
         "data_encoding_ezjsonm.ml";
      ]);
@@ -254,18 +256,19 @@ OCaml.library("dune-network-lib-clic",
 OCaml.library("dune-network-lib-config",
    with_libs(ocaml + {
      files =
-        OCaml.pack("Tezos_config", [
+        OCaml.pack("Dune_config", [
           "externalCallback.ml";
-          from_dune_network("lib_config/env_config.ml");
+          from_dune_network("lib_config/dune_std.ml");
           from_dune_network("lib_config/source_config.ml");
+          from_dune_network("lib_config/env_config.ml");
           from_dune_network("lib_config/cst_config.ml");
+          from_dune_network("lib_config/config_type.ml");
+          from_dune_network("lib_config/config_encoding.ml");
           from_dune_network("lib_config/set_config_mainnet.ml");
           from_dune_network("lib_config/set_config_testnet.ml");
           from_dune_network("lib_config/set_config_private.ml");
+          from_dune_network("lib_config/set_config_sandbox.ml");
           from_dune_network("lib_config/set_config.ml");
-          from_dune_network("lib_config/config_type.ml");
-          from_dune_network("lib_config/config_network.ml");
-          from_dune_network("lib_config/config.ml");
        ]);
      requires = [
        "dune-network-lib-stdlib";
@@ -310,7 +313,7 @@ OCaml.library("dune-network-lib-crypto",
        "dune-network-lib-stdlib", ["Tezos_stdlib"];
        "dune-network-lib-data-encoding", ["Tezos_data_encoding"];
        "dune-network-lib-error-monad", ["Tezos_error_monad"];
-       "dune-network-lib-config", ["Tezos_config"];
+       "dune-network-lib-config", ["Dune_config"];
        "dune-network-lib-rpc", ["Tezos_rpc"];
        "dune-network-lib-clic", ["Tezos_clic"];
      ]));
@@ -334,6 +337,9 @@ OCaml.library("dune-network-lib-base",
      bytelink = [ "-custom" ];
      files = OCaml.pack("Tezos_base", [
       from_dune_network("lib_base/s.ml");
+      "dune_debug.ml";
+      from_dune_network("lib_base/config_network.ml");
+      from_dune_network("lib_base/config.ml");
       from_dune_network("lib_base/time.ml");
       from_dune_network("lib_base/fitness.ml");
       from_dune_network("lib_base/block_header.ml");
@@ -343,6 +349,7 @@ OCaml.library("dune-network-lib-base",
      ]);
      requires = [
        "dune-network-lib-micheline";
+       "dune-network-lib-config";
        "ptime";
      ];
    }, [
@@ -350,7 +357,6 @@ OCaml.library("dune-network-lib-base",
        "dune-network-lib-data-encoding", ["Tezos_data_encoding"];
        "dune-network-lib-error-monad", ["Tezos_error_monad"];
        "dune-network-lib-crypto", ["Tezos_crypto"];
-       "dune-network-lib-config", ["Tezos_config"];
        "dune-network-lib-base_s", ["Tezos_base_S"];
        "dune-network-lib-rpc", ["Tezos_rpc"];
        "dune-network-lib-clic", ["Tezos_clic"];
@@ -365,7 +371,9 @@ OCaml.library("dune-network-lib-env",
   }, [
       "dune-network-lib-base", ["Tezos_base";
                                 "TzPervasives", { dep = false } ];
-      "dune-network-lib-micheline", ["Tezos_micheline"] ]));
+      "dune-network-lib-micheline", ["Tezos_micheline"];
+      "dune-network-lib-love-parsing", ["Dune_love_parsing"];
+]));
 
 OCaml.library("dune-network-lib-protocol",
   with_libs(ocaml + {
@@ -389,7 +397,6 @@ OCaml.library("dune-network-lib-protocol",
         from_dune_proto("love_type_list.ml");
         from_dune_proto("love_primitive.ml");
         from_dune_proto("love_ast.ml");
-        from_dune_proto("love_ast_utils.ml");
         from_dune_proto("love_runtime_ast.ml");
         from_dune_proto("love_value.ml");
         from_dune_proto("love_printer.ml");
@@ -397,6 +404,9 @@ OCaml.library("dune-network-lib-protocol",
         from_dune_proto("love_json_encoding.ml");
         from_dune_proto("love_tenv.ml");
 
+        from_dune_proto("gas_limit_repr.ml");
+        from_dune_proto("michelson_v1_primitives.ml");
+        from_dune_proto("script_repr.ml");
         (* from_dune_proto("gas_limit_repr.ml");
          * from_dune_proto("michelson_v1_primitives.ml");
          * from_dune_proto("script_repr.ml");
@@ -425,17 +435,20 @@ OCaml.library("dune-network-lib-protocol",
 
         (* from_dune_proto("love_size.ml"); *)
         from_dune_proto("love_binary_buffer.ml");
+        from_dune_proto("love_binary_processor.ml");
         from_dune_proto("love_binary_encoding.ml");
         from_dune_proto("love_encoding.ml");
 
-        from_dune_proto("gas_limit_repr.ml");
         "alpha_context.ml";
         from_dune_proto("love_size.ml");
         from_dune_proto("love_gas.ml");
+        (* from_dune_proto("love_michelson.ml"); *)
         from_dune_proto("love_context.ml");
         from_dune_proto("love_free_vars.ml");
         from_dune_proto("love_env.ml");
-        from_dune_proto("love_translator.ml");
+        "love_translator.ml";
+        "love_michelson.ml";
+        (* from_dune_proto("love_translator.ml"); *)
         from_dune_proto("love_typechecker.ml");
         from_dune_proto("love_prim_interp.ml");
         from_dune_proto("love_prim_list.ml");
@@ -450,20 +463,26 @@ OCaml.library("dune-network-lib-protocol",
    }, [ "dune-network-lib-env", [ "Environment", { filename = "environment" };
                                   "Error_monad", { dep = false } ];
         "dune-network-lib-rpc", ["Tezos_rpc"];
-        "dune-network-lib-config", ["Tezos_config"];
+        "dune-network-lib-config", ["Dune_config"];
       ]));
 
 
-OCaml.library("dune-network-lib-love-parser",
+OCaml.library("dune-network-lib-love-parsing",
   with_libs(ocaml + {
-    files = OCaml.pack("Love_client", [
-      from_dune_proto_client("love_parser_utils.ml");
-      from_dune_proto_client("love_parser.mly"), {
-          ocamlyacc = [ "menhir"; "--fixed-exception"; "--strict" ] };
-      from_dune_proto_client("love_lexer.mll");
+    files = OCaml.pack("Dune_love_parsing", [
+      from_dune_network("lib_love_parsing/love_ast_types.ml");
+      from_dune_network("lib_love_parsing/love_ast_utils.ml");
+      from_dune_network("lib_love_parsing/love_type_utils.ml");
+      from_dune_network("lib_love_parsing/love_parser_utils.ml");
+      from_dune_network("lib_love_parsing/love_parser.mly"), {
+          ocamlyacc = [ "menhir"; "--fixed-exception" ] };
+      from_dune_network("lib_love_parsing/love_lexer.mll");
     ]);
-  }, [ "dune-network-lib-env", [ "Environment", { filename = "environment" } ];
-       "dune-network-lib-protocol", [ "Tezos_protocol" ]; ]));
+  }, [
+      "dune-network-lib-base", ["Tezos_base";
+                                "TzPervasives", { dep = false } ];
+      "dune-network-lib-base_s", ["Tezos_base_S"];
+    ]));
 
 OCaml.library("dune-network-lib-michelson-macros",
   with_libs(ocaml + {
@@ -489,7 +508,7 @@ OCaml.library("dune-network-lib",
        "dune-network-lib-env";
        "dune-network-lib-protocol";
        "dune-network-lib-michelson-macros";
-       "dune-network-lib-love-parser";
+       "dune-network-lib-love-parsing";
      ];
    });
 

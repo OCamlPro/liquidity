@@ -2,7 +2,9 @@ open LiquidTypes
 open Dune_Network_Lib
 open Protocol
 open LiquidClientSigs
-open Love_client
+open Love_parsing
+open Love_type
+open Love_ast_types
 
 (* Liquidity *)
 module Liquidity = LiquidityLang
@@ -13,16 +15,16 @@ module Love = struct
   open Dune_Network_Lib
 
   type const = Love_value.Value.t
-  type contract = Love_ast.top_contract
-  type location = Love_ast.location
-  type datatype = Love_type.t
+  type contract = AST.top_contract
+  type location = AST.location
+  type datatype = TYPE.t
 
   let unit : const = VUnit
 
   let compare_loc : location -> location -> int = Pervasives.compare
 
   let next_loc (loc : location) : location =
-    Love_ast.{
+    AST.{
       pos_lnum = loc.pos_lnum + 1;
       pos_bol = 0;
       pos_cnum = 0
@@ -31,8 +33,8 @@ module Love = struct
   let loc_encoding : location Json_encoding.encoding =
     Json_encoding.(
       conv
-        (fun Love_ast.{pos_lnum; pos_bol; pos_cnum} -> (pos_lnum, pos_bol, pos_cnum))
-        (fun (pos_lnum, pos_bol, pos_cnum) -> Love_ast.{pos_lnum; pos_bol; pos_cnum})
+        (fun AST.{pos_lnum; pos_bol; pos_cnum} -> (pos_lnum, pos_bol, pos_cnum))
+        (fun (pos_lnum, pos_bol, pos_cnum) -> AST.{pos_lnum; pos_bol; pos_cnum})
         (obj3
            (req "lnum" int)
            (req "bol" int)
@@ -47,21 +49,20 @@ module Love = struct
   let datatype_encoding = Liq2love.datatype_encoding
 
   let parse_const s =
-    let lb = Lexing.from_string s in
-    match Love_parser.top_value Love_lexer.token lb with
-      Value v -> v
-    | Type t -> failwith @@ Format.asprintf "Type %a is not a value" Love_type.pretty t
+    match Love_lexer.parse_top_value s with
+    | AST.VALUE v -> Love_value.value_of_value v
+    | AST.TYPE t ->
+      Format.kasprintf failwith "Type %a is not a value" Love_type.pretty t
 
   let parse_datatype s =
-    let lb = Lexing.from_string s in
-    match Love_parser.top_value Love_lexer.token lb with
-    | Value v -> failwith @@ Format.asprintf "Value %a is not a type"
-        Love_printer.Value.print v
-    | Type t -> t
+    match Love_lexer.parse_top_value s with
+    | AST.VALUE v ->
+      Format.kasprintf failwith "Value %a is not a type"
+        Love_printer.Value.print (Love_value.value_of_value v)
+    | AST.TYPE t -> t
 
   let parse_contract s =
-    let lb = Lexing.from_string s in
-    Love_parser.top_contract Love_lexer.token lb
+    Love_lexer.parse_top_contract s
 
   let print_const = Format.asprintf "%a" Love_printer.Value.print
 
@@ -103,7 +104,7 @@ module Compiler = struct
     Liquidity.global_ty_env := typed_ast.ty_env;
     let typed_ast_no_tfail = Preprocess.contract_ttfail_to_tvar typed_ast in
     let love_ast, _ = Liq2love.liqcontract_to_lovecontract ~ctr_name:"main" typed_ast_no_tfail in
-    Love_ast.{version = (1, 0); code = love_ast}, No_init, []
+    AST.{version = (1, 0); code = love_ast}, No_init, []
 
   let decompile_contract _code = failwith "Todo: decompile contract"
 

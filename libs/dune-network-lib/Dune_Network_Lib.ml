@@ -6,5 +6,5 @@ module Micheline = Tezos_micheline
 module Protocol = Tezos_protocol.Protocol
 module Base = Tezos_base
 module Environment = Environment
-module Love_client = Love_client
+module Love_parsing = Dune_love_parsing
 module Michelson_v1_macros = Michelson_v1_macros

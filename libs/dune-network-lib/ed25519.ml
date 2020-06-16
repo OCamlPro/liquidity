@@ -36,7 +36,7 @@ module Public_key_hash = struct
   end
   let of_public_key v =
     hash_bytes
-      [ Sodium.Sign.Bigbytes.of_public_key v ]
+      [ Sodium.Sign.Bytes.of_public_key v ]
 end
 
 module Public_key_hash_tezos = struct
@@ -68,12 +68,12 @@ module Public_key = struct
   let name = "Ed25519.Public_key"
   let title = "Ed25519 public key"
 
-  let to_bytes pk = Sign.Bigbytes.of_public_key pk
+  let to_bytes pk = Sign.Bytes.of_public_key pk
 
   let of_bytes_opt s =
     if MBytes.length s < size then None
     else
-      try Some (Sign.Bigbytes.to_public_key s)
+      try Some (Sign.Bytes.to_public_key s)
       with _ -> None
 
   let to_string s = MBytes.to_string (to_bytes s)
@@ -92,7 +92,7 @@ module Public_key = struct
 
   let hash v =
     Public_key_hash.hash_bytes
-      [ Sign.Bigbytes.of_public_key v ]
+      [ Sign.Bytes.of_public_key v ]
 
   include Compare.Make(struct
       type nonrec t = t
@@ -141,6 +141,9 @@ module Secret_key = struct
   let size = Sodium.Sign.seed_size
 
   let to_bytes sk =
+    Sign.Bytes.of_seed (Sign.secret_key_to_seed sk)
+
+  let to_bigstring sk =
     Sign.Bigbytes.of_seed (Sign.secret_key_to_seed sk)
 
   (* Fabrice:  Sign.skbytes = 32. So the blit will fail only if
@@ -150,7 +153,7 @@ module Secret_key = struct
     else
       let sk = MBytes.create size in
       MBytes.blit s 0 sk 0 size ;
-      let sk, _ = Sign.seed_keypair (Sign.Bigbytes.to_seed sk) in
+      let sk, _ = Sign.seed_keypair (Sign.Bytes.to_seed sk) in
       Some sk
 
   let to_string s = MBytes.to_string (to_bytes s)
@@ -211,7 +214,7 @@ module Secret_key = struct
   include Compare.Make(struct
       type nonrec t = t
       let compare a b =
-        MBytes.compare (Sign.Bigbytes.of_secret_key a) (Sign.Bigbytes.of_secret_key b)
+        MBytes.compare (Sign.Bytes.of_secret_key a) (Sign.Bytes.of_secret_key b)
     end)
 
   include Helpers.MakeRaw(struct
@@ -300,7 +303,7 @@ include Helpers.MakeEncoder(struct
 
 let pp ppf t = Format.fprintf ppf "%s" (to_b58check t)
 
-let zero = MBytes.make size '\000'
+let zero = Bytes.make size '\000'
 
 let sign ?watermark sk msg =
   let msg =
@@ -309,8 +312,8 @@ let sign ?watermark sk msg =
     match watermark with
     | None -> [msg]
     | Some prefix -> [ prefix ; msg ] in
-  (Sign.Bigbytes.sign_detached sk msg)
-  |> Sign.Bigbytes.of_signature
+  (Sign.Bytes.sign_detached sk msg)
+  |> Sign.Bytes.of_signature
 
 let check ?watermark pk signature msg =
   let msg =
@@ -320,7 +323,7 @@ let check ?watermark pk signature msg =
     | None -> [msg]
     | Some prefix -> [ prefix ; msg ] in
   try
-    Sign.Bigbytes.(verify pk (to_signature signature) msg) ;
+    Sign.Bytes.(verify pk (to_signature signature) msg) ;
     true
   with _ -> false
 
@@ -330,25 +333,44 @@ let generate_key ?seed () =
       let sk, pk = Sign.random_keypair () in
       Public_key.hash pk, pk, sk
   | Some seed ->
-      let seedlen = MBytes.length seed in
+      let seedlen = Bigstring.length seed in
       if seedlen < Sign.seed_size then
-        invalid_arg (Printf.sprintf "Ed25519.generate_key: seed must \
-                                     be at least %d bytes long (got %d)"
-                       Sign.seed_size seedlen) ;
+        invalid_arg
+          (Printf.sprintf
+             "Ed25519.generate_key: seed must be at least %d bytes long (got \
+              %d)"
+             Sign.seed_size
+             seedlen) ;
       let sk, pk = Sign.seed_keypair (Sign.Bigbytes.to_seed seed) in
       Public_key.hash pk, pk, sk
 
-
 let deterministic_nonce sk msg =
-  Hacl.Hash.SHA256.HMAC.digest ~key: (Secret_key.to_bytes sk) ~msg
+  let msg = Bigstring.of_bytes msg in
+  let key = Secret_key.to_bigstring sk in
+  Hacl.Hash.SHA256.HMAC.digest ~key ~msg
 
 let deterministic_nonce_hash sk msg =
-  Blake2B.to_bytes (Blake2B.hash_bytes [deterministic_nonce sk msg])
+  Blake2B.to_bytes
+    (Blake2B.hash_bytes [Bigstring.to_bytes (deterministic_nonce sk msg)])
 
+include Compare.Make (struct
+  type nonrec t = t
 
-include Compare.Make(struct
-    type nonrec t = t
-    let compare = MBytes.compare
-  end)
+  let compare = Bytes.compare
+end)
 
 let sk_of_bytes_opt = Secret_key.of_bytes_opt
+
+(* let deterministic_nonce sk msg =
+ *   Hacl.Hash.SHA256.HMAC.digest ~key: (Secret_key.to_bytes sk) ~msg
+ *
+ * let deterministic_nonce_hash sk msg =
+ *   Blake2B.to_bytes (Blake2B.hash_bytes [deterministic_nonce sk msg])
+ *
+ *
+ * include Compare.Make(struct
+ *     type nonrec t = t
+ *     let compare = MBytes.compare
+ *   end)
+ *
+ * let sk_of_bytes_opt = Secret_key.of_bytes_opt *)

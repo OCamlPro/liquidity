@@ -437,7 +437,7 @@ let rec convert_const env ?ty expr =
           let c = MBytes.sub s 0 22 in
           let e = MBytes.sub s 22 (MBytes.length s - 22) in
           let e =
-            if MBytes.equal e MBytes.empty then None
+            if Bytes.equal e Bytes.empty then None
             else Some (MBytes.to_string e) in
           CContract (to_hex c, e)
         | Some ty -> wrong_type env expr ty

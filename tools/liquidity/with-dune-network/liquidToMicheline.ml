@@ -231,8 +231,8 @@ let rec convert_const ~loc expand (expr : loc_michelson const) =
   | CContract (s, e) when s.[0] = '0' ->
     let s = bytes_of_hex s in
     let se = match e with
-      | None -> MBytes.empty
-      | Some e -> MBytes.of_string e in
+      | None -> Bytes.empty
+      | Some e -> Bytes.of_string e in
     Micheline.Bytes (loc, MBytes.concat "" [s; se])
   | CContract (s, (None | Some "default")) -> Micheline.String (loc, s)
   | CContract (s, Some e) -> Micheline.String (loc, String.concat "%" [s; e])

@@ -1,9 +1,13 @@
-open Tezos_protocol.Protocol
+open Dune_Network_Lib
+open Protocol
 open Environment
 open LiquidTypes
 open Love_ast
 open Love_type
 open Love_ast_utils
+open Love_ast_types
+open Love_ast_types.TYPE
+open Love_type_utils
 open Compil_utils
 open Love_pervasives
 open Log
@@ -13,12 +17,12 @@ module SIMap = Collections.StringIdentMap
 
 type env = Love_tenv.t
 
-exception UnknownType of (string * (Love_type.t -> Love_type.t) * env)
+exception UnknownType of (string * (TYPE.t -> TYPE.t) * env)
 
 module TypeVarMap = struct
-  include Love_type.TypeVarMap
+  include TYPE.TypeVarMap
   let find k m =
-    match TypeVarMap.find_opt k m with
+    match TYPE.TypeVarMap.find_opt k m with
       Some t -> t
     | None -> assert false
 end
@@ -99,7 +103,7 @@ let rec fvars =
       | Pmap (t1, t2) -> StringSet.union (fvars t1) (fvars t2)
     )
 
-let rec liqtype_to_lovetypedef (env : env) t : typedef =
+let rec liqtype_to_lovetypedef (env : env) t : TYPE.typedef =
   let params = StringSet.elements @@ fvars t in (* what if the type has no parameter ? *)
   match t with
   | Tsum (None, l) ->
@@ -173,7 +177,7 @@ let rec liqtype_to_lovetypedef (env : env) t : typedef =
     let aparams = List.rev aparams in
     let atype = liqtype_to_lovetype ~aliases env t in
     Alias {aparams; atype}
-and tvref_to_tvar ?(aliases=StringMap.empty) (env : env) tvref : Love_type.t =
+and tvref_to_tvar ?(aliases=StringMap.empty) (env : env) tvref : TYPE.t =
   debug "[tvref_to_tvar] Creating a TVar@.";
   let tv = !(tvref.Ref.contents) in
   match tv.tyo with
@@ -226,8 +230,8 @@ and tvref_to_tvar ?(aliases=StringMap.empty) (env : env) tvref : Love_type.t =
         )
     )
 
-and get_tvar_from_tlist env tlist : Love_type.t list =
-  let rec get_tvars (acc: Love_type.t SMap.t) =
+and get_tvar_from_tlist env tlist : TYPE.t list =
+  let rec get_tvars (acc: TYPE.t SMap.t) =
     function
     | [] -> acc
     | Tvar tv :: tl -> (
@@ -276,7 +280,7 @@ and liqcontract_sig_to_lovetype
                 (* entry.parameter has not been defined yet. *)
                 let tdef = liqtype_to_lovetypedef env t in
                 match tdef with
-                  Love_type.SumType {sparams; _} ->
+                  TYPE.SumType {sparams; _} ->
                   TUser (string_to_ident name, List.map (fun v -> TVar v) sparams), Some (name, tdef)
                 | _ -> assert false
             )
@@ -287,7 +291,7 @@ and liqcontract_sig_to_lovetype
                 (* entry.parameter has not been defined yet. *)
                 let tdef = liqtype_to_lovetypedef env t in
                 match tdef with
-                  Love_type.RecordType {rparams; _} ->
+                  TYPE.RecordType {rparams; _} ->
                   TUser (string_to_ident name, List.map (fun v -> TVar v) rparams), Some (name, tdef)
                 | _ -> assert false)
           | t -> liqtype_to_lovetype env t, None
@@ -614,7 +618,7 @@ let mk_prim name args spec_args =
     in
     exp, ty
 *)
-let liqprim_to_loveprim env (p : primitive) (args : Love_type.t list) =
+let liqprim_to_loveprim env (p : primitive) (args : TYPE.t list) =
   debug "[liqprim_to_loveprim] Primitive tranpilation@.";
   let eq_type l =
     debug "[liqprim_to_loveprim] Types of arguments are equal@.";
@@ -1006,13 +1010,13 @@ let liqprimfold_to_loveexp
     (env : env)
     (prim : LiquidTypes.prim_fold)
     (arg_name : string)
-    (arg : exp)
-    (arg_typ : Love_type.t)
-    (acc : exp)
-    (acc_typ : Love_type.t)
-    (body_maker: env -> typed_exp -> exp * Love_type.t)
+    (arg : AST.exp)
+    (arg_typ : TYPE.t)
+    (acc : AST.exp)
+    (acc_typ : TYPE.t)
+    (body_maker: env -> typed_exp -> AST.exp * TYPE.t)
     (body : typed_exp)
-  : exp * Love_type.t =
+  : AST.exp * TYPE.t =
   let v i = mk_var @@ string_to_ident i in
     match prim with
     | Prim_map_iter ->
@@ -1034,7 +1038,7 @@ let liqprimfold_to_loveexp
            env
            cprim
            ((t1 @=> t2 @=> unit ()) @=> arg_typ @=> unit ())
-           []
+           ANone
         )
         [Compil_utils.put_in_arrow
             ["__key", t1; "__bind", t2]
@@ -1060,7 +1064,7 @@ let liqprimfold_to_loveexp
            env
            "Set.iter"
            ((t @=> unit ()) @=> set t)
-           []
+           ANone
         )
         [mk_lambda (mk_pvar arg_name) bdy t; arg], typ
     | Prim_list_iter ->
@@ -1075,7 +1079,7 @@ let liqprimfold_to_loveexp
       let bdy, typ = body_maker env body in
       debug "[liqprimfold_to_loveexp] Body type = %a@." Love_type.pretty typ;
       mk_apply
-        (mk_primitive_lambda env "List.iter" ((t @=> unit ()) @=> list t @=> unit ()) [])
+        (mk_primitive_lambda env "List.iter" ((t @=> unit ()) @=> list t @=> unit ()) ANone)
         [mk_lambda (mk_pvar arg_name) bdy t; arg], typ
     | Prim_map_fold ->
       debug "[liqprimfold_to_loveexp] Map.fold@.";
@@ -1095,7 +1099,7 @@ let liqprimfold_to_loveexp
       let prim =
         mk_primitive_lambda env
           cprim
-          ((t1 @=> t2 @=> acc_typ @=> acc_typ) @=> arg_typ @=> acc_typ @=> acc_typ) [] in
+          ((t1 @=> t2 @=> acc_typ @=> acc_typ) @=> arg_typ @=> acc_typ @=> acc_typ) ANone in
       debug "[liqprimfold_to_loveexp] Primitive = %a@." Love_printer.Ast.print_exp prim;
       mk_apply
         prim
@@ -1128,7 +1132,7 @@ let liqprimfold_to_loveexp
         (mk_primitive_lambda env
            "Set.fold"
            ((t @=> acc_typ @=> acc_typ) @=> set t @=> acc_typ @=> acc_typ)
-           []
+           ANone
         )
         [Compil_utils.put_in_arrow
            vars
@@ -1154,7 +1158,7 @@ let liqprimfold_to_loveexp
         (mk_primitive_lambda env
            "List.fold"
            ((t @=> acc_typ @=> acc_typ) @=> list t @=> acc_typ @=> acc_typ)
-           []
+           ANone
         )
         [Compil_utils.put_in_arrow
            vars
@@ -1175,7 +1179,7 @@ let liqprimmap_to_loveexp
     (env : env)
     (prim : LiquidTypes.prim_map)
     (arg_name : string)
-    (body_maker : env -> typed_exp -> exp * Love_type.t)
+    (body_maker : env -> typed_exp -> AST.exp * TYPE.t)
     (body : typed_exp)
     arg
     arg_typ =
@@ -1202,7 +1206,7 @@ let liqprimmap_to_loveexp
       (mk_primitive_lambda env
          cprim
          ((t1 @=> t2 @=> typ) @=> arg_typ @=> tbuilder typ)
-         []
+         ANone
       )
       [Compil_utils.put_in_arrow
          vars
@@ -1229,7 +1233,7 @@ let liqprimmap_to_loveexp
         (mk_primitive_lambda env
            "List.map"
            ((t @=> typ) @=> list t @=> list typ)
-        [])
+        ANone)
         [mk_lambda (mk_pvar arg_name) bdy t; arg], list typ
   | Prim_coll_map ->
     error "Generic map %s forbidden" (LiquidTypes.string_of_map_primitive prim)
@@ -1238,7 +1242,7 @@ let liqprimmapfold_to_loveexp
     (env : env)
     prim
     (arg_name : string)
-    (body_maker : env -> typed_exp -> exp * Love_type.t)
+    (body_maker : env -> typed_exp -> AST.exp * TYPE.t)
     (body : typed_exp)
     arg
     arg_typ
@@ -1277,7 +1281,7 @@ let liqprimmapfold_to_loveexp
          cprim
          ((t1 @=> t2 @=> acc_typ @=> TTuple [typ_newbnd; typ_acc])
           @=> arg_typ @=> typ_acc @=> TTuple [tbuilder typ_newbnd; typ_acc])
-         []
+         ANone
       )
       [Compil_utils.put_in_arrow
          vars
@@ -1319,7 +1323,7 @@ let liqprimmapfold_to_loveexp
            "List.map_fold"
            ((t @=> typ_acc @=> TTuple [typ_newbnd; typ_acc])
             @=> list t @=> typ_acc @=> TTuple [list typ_newbnd; typ_acc])
-           []
+           ANone
         )
         [Compil_utils.put_in_arrow
            vars
@@ -1339,7 +1343,7 @@ let liqprimmapfold_to_loveexp
 
 let rec liqconst_to_loveexp
     ?typ (env : env) (c : (datatype, typed) LiquidTypes.exp LiquidTypes.const)
-  : exp * Love_type.t =
+  : AST.exp * TYPE.t =
   let ltl ?typ = liqconst_to_loveexp ?typ env in
   let () = match typ with
       None ->
@@ -1362,7 +1366,7 @@ let rec liqconst_to_loveexp
         in
         match Tez_repr.of_string str with
           None -> error "%s is not a correct dun amount" str
-        | Some d -> mk_const @@ mk_cdun d
+        | Some d -> mk_const @@ mk_cdun @@ Tez_repr.to_int64 d
       ), dun ()
     | CTimestamp s -> (
         debug "[liqconst_to_loveexp] CTimestamp : %s@." s;
@@ -1372,7 +1376,7 @@ let rec liqconst_to_loveexp
       ), timestamp ()
     | CString s -> mk_const @@ mk_cstring s, string ()
     | CBytes b ->
-      mk_const @@ mk_cbytes (MBytes.of_string_slice b 0 (String.length b - 1)), bytes ()
+      mk_const @@ mk_cbytes (MBytes.of_string b), bytes ()
     | CKey k -> (
       match Signature.Public_key.of_b58check_opt k with
           None -> error "Key %s is invalid" k
@@ -1460,7 +1464,7 @@ let rec liqconst_to_loveexp
         in (
           List.fold_left
             (fun map (new_key,new_bnd) ->
-               mk_apply (mk_primitive_lambda env "Map.add" (tkey @=> telt @=> typ @=> typ) [])
+               mk_apply (mk_primitive_lambda env "Map.add" (tkey @=> telt @=> typ @=> typ) ANone)
                  [fst @@ liqconst_to_loveexp ~typ:tkey env new_key;
                   fst @@ liqconst_to_loveexp ~typ:telt env new_bnd;
                   map]
@@ -1494,7 +1498,7 @@ let rec liqconst_to_loveexp
         in (
           List.fold_left
             (fun bm (new_key,new_bnd) ->
-               mk_apply (mk_primitive_lambda env "BigMap.add" (tkey @=> telt @=> typ @=> typ) [])
+               mk_apply (mk_primitive_lambda env "BigMap.add" (tkey @=> telt @=> typ @=> typ) ANone)
                  [fst @@ liqconst_to_loveexp ~typ:tkey env new_key;
                   fst @@ liqconst_to_loveexp ~typ:telt env new_bnd;
                   bm]
@@ -1545,7 +1549,7 @@ let rec liqconst_to_loveexp
         in (
           List.fold_left
             (fun set new_val ->
-               mk_apply (mk_primitive_lambda env "Set.add" (telt @=> typ @=> typ) [])
+               mk_apply (mk_primitive_lambda env "Set.add" (telt @=> typ @=> typ) ANone)
                  [fst @@ liqconst_to_loveexp ~typ:telt env new_val;
                   set]
             )
@@ -1662,7 +1666,7 @@ let rec liqconst_to_loveexp
         Love_printer.Ast.print_exp (fst res) Love_type.pretty (snd res)
   in res
 (** Some primitives need a special treatment done by this function  *)
-and liqapply_to_loveexp env typ prim args : exp * Love_type.t =
+and liqapply_to_loveexp env typ prim args : AST.exp * TYPE.t =
   let ltl = liqexp_to_loveexp env in
   match prim,args with
   | Prim_tuple_get, tuple :: index :: [] -> begin
@@ -1675,8 +1679,8 @@ and liqapply_to_loveexp env typ prim args : exp * Love_type.t =
           debug
             "[liqapply_to_loveexp] Index is not a liquidity constant,\
              checking love representation@.";
-          match fst @@ ltl sthg with
-            {content = Const {content = (CInt i); _}} -> i
+          match (fst @@ ltl sthg) with
+            AST.{ content = Const { content = (CInt i); _ } } -> i
           | cst ->
             debug "[liqapply_to_loveexp] Tuple projections must have an integer as index.\n\
                    Index = %a@."
@@ -1764,14 +1768,14 @@ and liqapply_to_loveexp env typ prim args : exp * Love_type.t =
           Love_type.pretty ty
     in
     mk_apply
-      (Compil_utils.mk_primitive_lambda env prim (list ty @=> ty) [])
+      (Compil_utils.mk_primitive_lambda env prim (list ty @=> ty) ANone)
       [mk_list ~typ:ty @@ List.map (fun e -> fst @@ ltl e) l], ty
 
   | Prim_is_nat, [e] -> (
     (* if e >= 0 then Some e else None *)
       let lovee, te = ltl e in
       mk_if
-        (mk_apply (Compil_utils.mk_primitive_lambda env "<=" (te @=> te @=> bool ()) [])
+        (mk_apply (Compil_utils.mk_primitive_lambda env "<=" (te @=> te @=> bool ()) ANone)
            [lovee; mk_const @@ mk_cint Z.zero])
         (mk_some (nat ()) lovee)
         (mk_none (nat ())), option (nat ())
@@ -1781,7 +1785,7 @@ and liqapply_to_loveexp env typ prim args : exp * Love_type.t =
       let c, ty = liqexp_to_loveexp env cst in
       match to_poly_variant ty with
         `TInt -> c, ty
-      | `TNat -> mk_apply (mk_var_with_args (string_to_ident "Int.of_nat") []) [c], int ()
+      | `TNat -> mk_apply (mk_var (string_to_ident "Int.of_nat")) [c], int ()
       | _ ->
         error
           "Unsafe cast of %a : %a to an integer@."
@@ -1798,8 +1802,8 @@ and liqapply_to_loveexp env typ prim args : exp * Love_type.t =
     let prim_typ = key @=> t @=> t in
     mk_if
       b
-      (mk_apply (Compil_utils.mk_primitive_lambda env "Set.add"    prim_typ []) [elt; set])
-      (mk_apply (Compil_utils.mk_primitive_lambda env "Set.remove" prim_typ []) [elt; set]), t
+      (mk_apply (Compil_utils.mk_primitive_lambda env "Set.add"    prim_typ ANone) [elt; set])
+      (mk_apply (Compil_utils.mk_primitive_lambda env "Set.remove" prim_typ ANone) [elt; set]), t
   | Prim_set_update, l ->
     bad_number_of_args "Set.update" (List.length l) 3
   | Prim_map_update, [elt; valopt; emap] ->
@@ -1827,7 +1831,7 @@ and liqapply_to_loveexp env typ prim args : exp * Love_type.t =
            env
            prim_rem
            (telt @=> map (telt, tval) @=> map (telt, tval))
-           []
+           ANone
        )
          [elt; emap];
        mk_psome (mk_pvar "__v"),
@@ -1836,7 +1840,7 @@ and liqapply_to_loveexp env typ prim args : exp * Love_type.t =
             env
             prim_add
             (telt @=> tval @=> map (telt, tval) @=> map (telt, tval))
-            []
+            ANone
          )
          [elt; mk_var (string_to_ident "__v"); emap]
       ], t
@@ -1886,7 +1890,7 @@ and liqapply_to_loveexp env typ prim args : exp * Love_type.t =
       match Love_primitive.from_string prim_name with
         None -> error "Primitive %s does not exist in Love" prim_name
       | Some p -> p in
-    let prim_typ = Love_primitive.type_of (prim, []) in
+    let prim_typ = Love_primitive.type_of (prim, ANone) in
     debug
       "[liqapply_to_loveexp] Applying correct types based on %a@."
       Love_type.pretty prim_typ;
@@ -1911,7 +1915,7 @@ and liqapply_to_loveexp env typ prim args : exp * Love_type.t =
                 env
                 prim_name
                 (Compil_utils.arrow_from_tlist lovetlist)
-                []
+                ANone
              )
              loveargs
           )
@@ -1921,7 +1925,7 @@ and liqapply_to_loveexp env typ prim args : exp * Love_type.t =
                (mk_pnone ()), mk_none (TTuple [(nat ()); dun ()]);
                (mk_psome (mk_ptuple [mk_pvar "q"; mk_pvar "r"]),
                 mk_match (mk_apply
-                              (mk_var_with_args (string_to_ident "Nat.of_int") [])
+                              (mk_var (string_to_ident "Nat.of_int"))
                               [mk_var (Ident.create_id "q")])
                   [mk_pconstr "Some" [mk_pvar "q"],
                       mk_some
@@ -1945,12 +1949,12 @@ and liqapply_to_loveexp env typ prim args : exp * Love_type.t =
             env
             prim_name
             (Compil_utils.arrow_from_tlist lovetlist)
-            []
+            ANone
         )
           loveargs
       in
       mk_apply
-          (mk_var_with_args (string_to_ident "Int.of_nat") [])
+          (mk_var (string_to_ident "Int.of_nat"))
           [exp], int ()
     | _ ->
       mk_apply (
@@ -1958,11 +1962,11 @@ and liqapply_to_loveexp env typ prim args : exp * Love_type.t =
           env
           prim_name
           (Compil_utils.arrow_from_tlist lovetlist)
-          []
+          ANone
       )
         loveargs, t
 
-and liqexp_to_loveexp (env : env) (e : typed_exp) : exp * Love_type.t =
+and liqexp_to_loveexp (env : env) (e : typed_exp) : AST.exp * TYPE.t =
   let exp, t =
     let ltl = liqexp_to_loveexp env in
     match e.desc with
@@ -2040,7 +2044,7 @@ and liqexp_to_loveexp (env : env) (e : typed_exp) : exp * Love_type.t =
         let d, t = ltl dest in
         match to_poly_variant t with
         | `TKeyhash ->
-          mk_apply (mk_var_with_args (string_to_ident "Address.of_keyhash") []) [d]
+          mk_apply (mk_var (string_to_ident "Address.of_keyhash")) [d]
         | `TAddress -> d
         | _ ->
           error
@@ -2049,7 +2053,7 @@ and liqexp_to_loveexp (env : env) (e : typed_exp) : exp * Love_type.t =
             Love_type.pretty t
       in
       mk_apply
-        (mk_var_with_args (string_to_ident "Account.transfer") [])
+        (mk_var (string_to_ident "Account.transfer"))
         [dest; fst @@ ltl amount], operation ()
     | Call {contract; amount; entry; arg} -> begin
         debug "[liqexp_to_loveexp] Creating a Call@.";
@@ -2069,7 +2073,7 @@ and liqexp_to_loveexp (env : env) (e : typed_exp) : exp * Love_type.t =
           in
           mk_let
             (* let (CalledContract : cssig) *)
-            (mk_pcontract tmp_ctrname (StructType cssig))
+            (mk_pcontract tmp_ctrname cssig)
             (* = ctrct *)
             ctrct_or_addr
             (* in let entry_pt = CalledContract.name *)
@@ -2080,7 +2084,7 @@ and liqexp_to_loveexp (env : env) (e : typed_exp) : exp * Love_type.t =
                (mk_apply
                   (Compil_utils.mk_primitive_lambda env
                      "Contract.call"
-                     (entrypoint entry_typ @=> dun () @=> entry_typ @=> operation ()) [])
+                     (entrypoint entry_typ @=> dun () @=> entry_typ @=> operation ()) ANone)
                   [mk_var @@ string_to_ident tmp_entrypt;
                    fst @@ ltl amount;
                    fst @@ ltl arg
@@ -2100,7 +2104,7 @@ and liqexp_to_loveexp (env : env) (e : typed_exp) : exp * Love_type.t =
                   (Compil_utils.mk_primitive_lambda env
                      "Contract.at"
                      ((address ()) @=> option (TContractInstance ctr_sig))
-                     [AContractType (StructType ctr_sig)]
+                     (AContractType ctr_sig)
                   )
                   [ctrct_or_addr]
               )
@@ -2111,7 +2115,7 @@ and liqexp_to_loveexp (env : env) (e : typed_exp) : exp * Love_type.t =
           in            
           mk_let
             (* let (CalledContract : cssig) *)
-            (mk_pcontract tmp_ctrname (StructType ctr_sig))
+            (mk_pcontract tmp_ctrname ctr_sig)
             (* = ctrct *)
             ctrct
             (* in let entry_pt = CalledContract.name *)
@@ -2122,7 +2126,7 @@ and liqexp_to_loveexp (env : env) (e : typed_exp) : exp * Love_type.t =
                (mk_apply
                   (Compil_utils.mk_primitive_lambda env
                      "Contract.call"
-                     (entrypoint typ_arg @=> dun () @=> typ_arg @=> operation ()) [])
+                     (entrypoint typ_arg @=> dun () @=> typ_arg @=> operation ()) ANone)
                   [mk_var @@ string_to_ident tmp_entrypt;
                    fst @@ ltl amount;
                    arg
@@ -2206,7 +2210,7 @@ and liqexp_to_loveexp (env : env) (e : typed_exp) : exp * Love_type.t =
         (Compil_utils.mk_primitive_lambda env
            "Loop.loop"
            ((arg_type @=> TTuple [bool ();arg_type]) @=> arg_type @=> arg_type)
-           []
+           ANone
         )
         [body; arg], arg_type
     | LoopLeft _ -> failwith "TODO LoopLeft"
@@ -2475,12 +2479,12 @@ and liqexp_to_loveexp (env : env) (e : typed_exp) : exp * Love_type.t =
       let tmp_varid = string_to_ident tmp_name in
       let arg, targ = ltl arg in
       let nat_var =
-        mk_apply (mk_var_with_args (string_to_ident "abs") []) [mk_var tmp_varid] in
+        mk_apply (mk_var (string_to_ident "abs")) [mk_var tmp_varid] in
       mk_let (mk_pvar tmp_name) arg (
         mk_if
           (mk_apply
              (mk_tapply
-                (mk_var_with_args (string_to_ident ">=") [])
+                (mk_var (string_to_ident ">="))
                 targ
              ) [mk_var tmp_varid; mk_const (mk_cint (Z.zero))])
           (mk_let
@@ -2513,8 +2517,8 @@ and liqexp_to_loveexp (env : env) (e : typed_exp) : exp * Love_type.t =
       let ctr =
         match Love_tenv.find_contract name_id env with
           None ->
-          let ctr,ctrt = liqcontract_to_lovecontract ~env false contract in
-          let first_class_ctr : reference = Anonymous ctr in
+          let ctr, ctrt = liqcontract_to_lovecontract ~env false contract in
+          let first_class_ctr : AST.reference = Anonymous ctr in
           mk_packstruct first_class_ctr
         | Some {result = env; _} ->
           mk_packstruct (Named name_id)
@@ -2534,20 +2538,20 @@ and liqexp_to_loveexp (env : env) (e : typed_exp) : exp * Love_type.t =
       in
       let prim =
         mk_tapply
-          (mk_var_with_args (string_to_ident "Contract.create") [])
+          (mk_var (string_to_ident "Contract.create"))
           storage in
 
       mk_apply
         prim
         args,
-      Love_type.return_type (Love_primitive.(type_of (gprim, [])))
+      Love_type.return_type (Love_primitive.(type_of (gprim, ANone)))
 
     | ContractAt {arg; entry; entry_param} ->
       debug "[liqexp_to_loveexp] Creating a contract at@.";
       let entry_ty = liqtype_to_lovetype env entry_param in
       let contract = Compil_utils.get_signature_from_name (Some entry) entry_ty env in
       mk_apply
-        (mk_var_with_args (string_to_ident "Contract.at") [AContractType (StructType contract)])
+        (mk_var_with_arg (string_to_ident "Contract.at") (AContractType contract))
         [fst @@ ltl arg], option (TContractInstance contract)
 
     | Unpack {arg; ty} ->
@@ -2557,7 +2561,7 @@ and liqexp_to_loveexp (env : env) (e : typed_exp) : exp * Love_type.t =
         Love_type.pretty t
         (LiquidPrinter.Liquid.string_of_type e.ty);
       mk_apply
-        (mk_var_with_args (string_to_ident "Bytes.unpack") [AType t])
+        (mk_tapply (mk_var (string_to_ident "Bytes.unpack")) t)
         [fst @@ ltl arg], option t
 
     | TypeAnnot {e; ty} ->
@@ -2628,10 +2632,10 @@ and liqexp_to_loveexp (env : env) (e : typed_exp) : exp * Love_type.t =
   e, t
 
 and liqvalue_to_lovecontent env {val_name; inline; val_private; val_exp} :
-  (string * content) * env =
+  (string * AST.content) * env =
   debug "[liqvalue_to_lovecontent] Creating value %s@." val_name;
   let code, typ = liqexp_to_loveexp env val_exp in
-  let visibility = (if val_private then Private else Public) in
+  let visibility = (if val_private then AST.Private else AST.Public) in
   debug "[liqvalue_to_lovecontent] Value %s = %a:%a@."
     val_name
     Love_printer.Ast.print_exp code
@@ -2652,13 +2656,25 @@ and liqentry_to_lovecontent env {entry_sig; code} =
            Creating entry point with storage type = %a and parameter type = %a@."
       Love_type.pretty stor_typ
       Love_type.pretty param_type in
+  (* let code =
+   *   mk_entry_point_lambda
+   *     entry_sig.storage_name
+   *     stor_typ
+   *     entry_sig.parameter_name
+   *     param_type
+   *     full_love_code in *)
+  let mk_lambda arg ty body = mk_lambda (mk_pvar arg) body ty in
   let code =
-    mk_entry_point_lambda
+    mk_lambda
       entry_sig.storage_name
-      stor_typ
+      stor_typ @@
+    mk_lambda
+      "amount"
+      (dun ()) @@
+    mk_lambda
       entry_sig.parameter_name
-      param_type
-      full_love_code in
+      param_type @@
+    full_love_code in
   let name = entry_sig.entry_name in
   (name, mk_entry code None param_type),
   Compil_utils.add_var
@@ -2686,14 +2702,14 @@ and liqinit_to_loveinit env init_args init_body =
     arg, TTuple args_typ, env
   in
   let body, t = liqexp_to_loveexp env init_body in
-  Init {
+  AST.Init {
     init_code = mk_lambda arg body arg_typ;
     init_typ = arg_typ;
     init_persist = false;
   }
 
 and liqcontract_to_lovecontent
-    env (c : typed_contract) : string * content * env =
+    env (c : typed_contract) : string * AST.content * env =
   debug "[liqcontract_to_lovecontent] Sub structure %s@." c.contract_name;
   let is_module = LiquidTypes.is_only_module c in
   let ckind = if is_module then Module else Contract [] in
@@ -2718,7 +2734,7 @@ and liqcontract_to_lovecontent
   c.contract_name, mk_structure ctr, new_env
 
 and liqcontract_to_lovecontract
-    ?env ?(ctr_name="") (is_module : bool) (c : typed_contract) : structure * env =
+    ?env ?(ctr_name="") (is_module : bool) (c : typed_contract) : AST.structure * env =
   debug "[liqcontract_to_lovecontract] Transpiling liquidity contract@.";
   let env : env =
     match env with
@@ -2743,7 +2759,7 @@ and liqcontract_to_lovecontract
           try
             let tdef = liqtype_to_lovetypedef acc_env (typ []) in
             debug "[liqcontract_to_lovecontract] %a@." (pp_typdef ~name:"" ~privacy:"") tdef;
-            add_typedef_to_contract str tdef acc_env, ((str, DefType (TPublic, tdef)) :: acc_tdef)
+            add_typedef_to_contract str tdef acc_env, ((str, AST.DefType (TPublic, tdef)) :: acc_tdef)
           with
             UnknownType (s,_, _) ->
             debug "[liqcontract_to_lovecontract] %s is not in the environment@." s;
@@ -2782,7 +2798,7 @@ and liqcontract_to_lovecontract
             Love_tenv.add_signature name
               (Love_tenv.contract_sig_to_env (Some name) s env)
               env,
-            (name,(Signature s)) :: sigs
+            (name,(AST.Signature s)) :: sigs
           | Named _ -> failwith "TODO : add named signatures to signature definition"
     )
       c.ty_env.contract_types
@@ -2835,27 +2851,25 @@ and liqcontract_to_lovecontract
           (mk_var @@ Ident.create_id "i")
           init_typ in
       [
-        Constants.init_storage, Init {
+        CONSTANTS.init_storage, AST.Init {
           init_code;
           init_typ;
           init_persist = false;
         }]
     | None -> []
     | Some {init_args; init_body; _} -> [
-        Constants.init_storage,
+        CONSTANTS.init_storage,
         liqinit_to_loveinit env init_args init_body
       ]
   in
   let str =
-    if is_module
-    then mk_module_struct (types @ signatures @ values @ subc @ entries)
-    else
-      {structure_content = (types @ signatures @ values @ subc @ entries @ init);
-       kind = Contract []}
+    let kind = if is_module then TYPE.Module else TYPE.Contract [] in
+    { AST.structure_content = (types @ signatures @ values @ subc @ entries @ init);
+      kind }
   in
   str, env
 
-let liqcontract_to_lovecontract ~(ctr_name:string) (c : typed_contract) : structure * env =
+let liqcontract_to_lovecontract ~(ctr_name:string) (c : typed_contract) : AST.structure * env =
   debug "[liqcontract_to_lovecontract] Registering contract %s@." ctr_name;
   let initial_env = empty_env (Contract []) () in
   try
@@ -2901,7 +2915,7 @@ let rec liqconst_to_lovevalue
           VTimestamp ts
       end
     | CString s -> VString s
-    | CBytes b -> VBytes (MBytes.of_string_slice b 0 (String.length b - 1))
+    | CBytes b -> VBytes (MBytes.of_string b)
     | CKey k -> (
       match Signature.Public_key.of_b58check_opt k with
           None -> error "Key %s is invalid" k
@@ -2986,7 +3000,7 @@ let contract_encoding =
   Environment.Data_encoding.Json.convert @@
   Love_json_encoding.Ast.top_contract_encoding
 
-let datatype_encoding : Love_type.t Json_encoding.encoding =
+let datatype_encoding : TYPE.t Json_encoding.encoding =
   Json_encoding.obj1 @@
   Json_encoding.req "dune_expr" @@
   Environment.Data_encoding.Json.convert @@
@@ -2994,15 +3008,19 @@ let datatype_encoding : Love_type.t Json_encoding.encoding =
 
 let print_contract_json ?minify code =
   Json_encoding.construct contract_encoding
-    {Love_ast.version = 1, 0; code }
+    { AST.version = 1, 0; code }
   |> Ezjsonm.value_to_string ?minify
 
 let init () =
   if !LiquidOptions.verbosity>0 then
     Format.eprintf "Initialize Love environments... %!";
+  let _ =
+    Love_pervasives.update_protocol_revision
+      (Base.Config.config.protocol_revision) in
   Love_type_list.init ();
   Love_prim_list.init ();
   Love_tenv.init_core_env ();
+  Love_env.initialize ();
   if !LiquidOptions.verbosity>0 then Format.eprintf "Done@.";
   ()
 
