@@ -75,7 +75,7 @@ let output_final ~to_json ~to_readable ~outprefix ~ext c =
       | Some output -> output
       | None -> String.concat "." [outprefix; ext; "json"] in
     match output with
-    | "-" -> Printf.printf "%s%!" s
+    | "-" -> Printf.printf "%s\n%!" s
     | _ ->
       FileString.write_file output s;
       Printf.eprintf "File %S generated\n%!" output;
@@ -189,12 +189,6 @@ let compile_liquid_files_to_michelson files =
     c
 
 let compile_liquid_files_to_love files =
-  if !LiquidOptions.verbosity>0 then
-    Format.eprintf "Initialize Love environments... %!";
-  Love_type_list.init ();
-  Love_prim_list.init ();
-  Love_tenv.init_core_env ();
-  if !LiquidOptions.verbosity>0 then Format.eprintf "Done@.";
   let typed_ast, outprefix =
     typecheck_liquid_files ~monomorphise:true ~keep_tvars:true files in
   let typed_ast_no_tfail = Preprocess.contract_ttfail_to_tvar typed_ast in
@@ -203,15 +197,9 @@ let compile_liquid_files_to_love files =
   if !LiquidOptions.verbosity>0 then
     FileString.write_file (outprefix ^ ".love_ast")
       (Format.asprintf "%a" Love_printer.Ast.print_structure love_ast);
-  let to_json love_ast =
-    let str = {Love_ast.version = 1, 0; code = love_ast} in
-    let json =
-      Environment.Data_encoding.Json.construct
-        Love_json_encoding.Ast.top_contract_encoding str in
-    Format.sprintf "#love-json\n\ \n\ %s"
-      (Environment.Data_encoding.Json.to_string json) in
+  let to_json love_ast = Liq2love.print_contract_json love_ast in
   let to_readable love_ast =
-    Format.asprintf "#love\n\ \n\ %a"
+    Format.asprintf "#love\n%a"
       Love_printer.Ast.print_structure love_ast in
   output_final ~to_json ~to_readable ~outprefix ~ext:"lov" love_ast
 

@@ -2972,3 +2972,38 @@ let rec liqconst_to_lovevalue
 let liqconst_to_lovevalue const =
   let initial_env = empty_env (Contract []) () in
   liqconst_to_lovevalue initial_env const
+
+
+let const_encoding : Love_value.Value.t Json_encoding.encoding =
+  Json_encoding.obj1 @@
+  Json_encoding.req "dune_expr" @@
+  Environment.Data_encoding.Json.convert @@
+  Love_json_encoding.Value.encoding
+
+let contract_encoding =
+  Json_encoding.obj1 @@
+  Json_encoding.req "dune_code" @@
+  Environment.Data_encoding.Json.convert @@
+  Love_json_encoding.Ast.top_contract_encoding
+
+let datatype_encoding : Love_type.t Json_encoding.encoding =
+  Json_encoding.obj1 @@
+  Json_encoding.req "dune_expr" @@
+  Environment.Data_encoding.Json.convert @@
+  Love_json_encoding.Type.encoding
+
+let print_contract_json ?minify code =
+  Json_encoding.construct contract_encoding
+    {Love_ast.version = 1, 0; code }
+  |> Ezjsonm.value_to_string ?minify
+
+let init () =
+  if !LiquidOptions.verbosity>0 then
+    Format.eprintf "Initialize Love environments... %!";
+  Love_type_list.init ();
+  Love_prim_list.init ();
+  Love_tenv.init_core_env ();
+  if !LiquidOptions.verbosity>0 then Format.eprintf "Done@.";
+  ()
+
+let () = init ()

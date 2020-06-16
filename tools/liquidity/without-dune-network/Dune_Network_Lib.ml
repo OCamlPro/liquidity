@@ -26,6 +26,7 @@ module Environment = struct
     module Json = struct
       let to_string _ = assert false
       let construct _ _ = assert false
+      let convert _ = assert false
     end
   end
 end
@@ -38,4 +39,5 @@ module Love_ast = struct
 end
 module Liq2love = struct
   let liqcontract_to_lovecontract ~ctr_name _ = assert false
+  let print_contract_json _ = assert false
 end

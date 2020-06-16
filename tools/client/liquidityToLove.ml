@@ -40,33 +40,11 @@ module Love = struct
         )
     )
 
-  let love_enc_to_json_enc
-      (encoding : 'a Environment.Data_encoding.encoding)
-    : 'a Json_encoding.encoding =
-    Json_encoding.conv
-      (fun (v : 'a) ->
-         let json =
-           Environment.Data_encoding.Json.construct encoding v in
-         Environment.Data_encoding.Json.to_string json
-      )
-      (fun str : 'a ->
-         match Environment.Data_encoding.Json.from_string str
-         with
-         | Ok json ->
-           Environment.Data_encoding.Json.destruct encoding json
-         | Error s ->
-           failwith @@
-           "Error while destruct of love element: " ^ s )
-      Json_encoding.string
+  let const_encoding = Liq2love.const_encoding
 
-  let const_encoding : Love_value.Value.t Json_encoding.encoding =
-    love_enc_to_json_enc Love_json_encoding.Value.encoding
+  let contract_encoding = Liq2love.contract_encoding
 
-  let contract_encoding =
-    love_enc_to_json_enc Love_json_encoding.Ast.top_contract_encoding
-
-  let datatype_encoding : Love_type.t Json_encoding.encoding =
-    love_enc_to_json_enc Love_json_encoding.Type.encoding
+  let datatype_encoding = Liq2love.datatype_encoding
 
   let parse_const s =
     let lb = Lexing.from_string s in
@@ -90,7 +68,7 @@ module Love = struct
   let print_datatype = Format.asprintf "%a" Love_type.pretty
 
   let print_contract (c : contract) =
-    Format.asprintf "%a" Love_printer.Ast.print_structure c.code
+     Format.asprintf "#love\n%a" Love_printer.Ast.print_structure c.code
 
   let const = new Lazy_superposed.superposer (object
     method parse = parse_const
