@@ -9,7 +9,6 @@ cache:
   timeout: 1000
   directories:
   - $HOME/.opam
-  - dune-network
 
 before_install:
 - sh travis-scripts/prepare-ubuntu.sh
