@@ -1,12 +1,17 @@
-open LiquidClientSigs
-open LiquidTypes
 open Dune_Network_Lib
+open LiquidTypes
+open LiquidClientUtils
 
 type const = LiquidTypes.syntax_const
 type contract = LiquidTypes.syntax_contract
 type datatype = LiquidTypes.datatype
 type location = LiquidTypes.location
 type loc_info = string option
+
+type compiled_init =
+  | No_init
+  | Init_constant of const
+  | Init_code of contract * (string * datatype) list
 
 let unit = CUnit
 let tuple l =  CTuple l

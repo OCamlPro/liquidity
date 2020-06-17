@@ -1,18 +1,22 @@
 open LiquidClientUtils
 open LiquidClientRequest
 open LiquidClientSigs
+open LiquidClientTypes
+open LiquidTypes
 open Lwt.Infix
+
+module Liquidity = LiquidityLang
+
+type error = location * string
+type trace = (location, syntax_const Lazy_superposed.t) Trace.t
+
+exception RuntimeError of error * trace option
+exception LocalizedError of error
+exception RuntimeFailure of error * syntax_const Lazy_superposed.t option * trace option
 
 module Make (L : LANG) = struct
   open L
   module T = LiquidClientTypes.Make(L)
-
-  type error = Source.location * string
-  type trace = (Source.location, Source.const Lazy_superposed.t) T.Trace.t
-
-  exception RuntimeError of error * trace option
-  exception LocalizedError of error
-  exception RuntimeFailure of error * Source.const Lazy_superposed.t option * trace option
 
   let name_of_var_annot = function
     | None -> None
@@ -26,12 +30,12 @@ module Make (L : LANG) = struct
   let convert_stack stack_expr =
     List.(rev @@ rev_map (fun (e, annot) ->
         let name = name_of_var_annot annot in
-        let c = decompile_const e |> L.Source.const#ast in
+        let c = decompile_const e |> Liquidity.const#ast in
         c, name
       ) stack_expr)
 
   let convert_trace ~loc_table t =
-    List.(rev @@ rev_map (fun T.Trace.{ loc; gas; stack } ->
+    List.(rev @@ rev_map (fun Trace.{ loc; gas; stack } ->
         let loc =  match loc with
           | None -> None
           | Some loc -> match List.assoc_opt loc loc_table with
@@ -39,16 +43,16 @@ module Make (L : LANG) = struct
             | None -> None
         in
         let stack = convert_stack stack in
-        T.Trace.{ loc; gas; stack }
+        Trace.{ loc; gas; stack }
       ) t)
 
   let trace_of_json ~loc_table ?(error=false) trace_r =
     let trace_expr =
       Json_encoding.destruct
-        (T.Trace.encoding Target.loc_encoding Target.const_encoding) trace_r in
+        (Trace.encoding Target.loc_encoding Target.const_encoding) trace_r in
     let trace_expr = match List.rev trace_expr with
-      | (T.Trace.{loc = Some l ; gas; _} :: _) as rtrace_expr when error ->
-        let extra = T.Trace.{loc = Some (Target.next_loc l); gas; stack = []} in
+      | (Trace.{loc = Some l ; gas; _} :: _) as rtrace_expr when error ->
+        let extra = Trace.{loc = Some (Target.next_loc l); gas; stack = []} in
         List.rev (extra :: rtrace_expr)
       | _ -> trace_expr in
     convert_trace ~loc_table trace_expr
@@ -58,7 +62,7 @@ module Make (L : LANG) = struct
     let json = Ezjsonm.find err ["with"] in
     let err_loc, _ (* failwith_ty *) = List.assoc loc loc_table in
     let failed_with_expr = Json_encoding.destruct Target.const_encoding json in
-    let failed_with = decompile_const failed_with_expr |> Source.const#ast in
+    let failed_with = decompile_const failed_with_expr |> Liquidity.const#ast in
     err_loc, Some failed_with
 
   let error_trace_of_err loc ~loc_table err =

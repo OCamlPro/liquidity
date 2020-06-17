@@ -1,6 +1,14 @@
 open Dune_Network_Lib.Stdlib
 open Dune_Network_Lib.Crypto (* for crypto *)
 
+type from =
+  | From_strings of string list
+  | From_files of string list
+
+type bm_id =
+  | Bm_id of int
+  | Bm_name of int * string
+
 let dummy_sign = "edsigtXomBKi5CTRf5cjATJWSyaRvhfYNHqSUGrn4SdbYRcGwQ\
                   rUGjzEfQDTuqHhuA8b2d8NarZjz8TRf65WkpQmo423BtomS8Q"
 

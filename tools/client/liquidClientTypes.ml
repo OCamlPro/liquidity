@@ -1,410 +1,431 @@
 open LiquidClientUtils
 open Dune_Network_Lib
 
+let int_string = Json_encoding.(conv string_of_int int_of_string string)
+
+let bytes_hex =
+  let open Json_encoding in
+  conv
+    (fun b -> Hex.show (Hex.of_bytes b))
+    (fun h -> Hex.to_bytes (`Hex h))
+    string
+
+type error = Json_repr.any
+
+let tez_encoding =
+  let open Json_encoding in
+  conv
+    (fun x -> LiquidNumber.mic_mutez_of_tez x |> Z.to_string)
+    (fun x -> Z.of_string x |> LiquidNumber.tez_of_mic_mutez)
+    string
+
+module Header = struct
+  type t = {
+    hash : string;
+    chain_id : string;
+    predecessor : string;
+    protocol : string;
+  }
+
+  let encoding =
+    let open Json_encoding in
+    conv_ignore_extra
+      (fun {hash; chain_id; predecessor; protocol} ->
+         (hash, chain_id, predecessor, protocol))
+      (fun (hash, chain_id, predecessor, protocol) ->
+         {hash; chain_id; predecessor; protocol})
+      (obj4
+         (req "hash" string)
+         (req "chain_id" string)
+         (req "predecessor" string)
+         (req "protocol" string))
+end
+
+module Constants = struct
+
+  type t = {
+    hard_gas_limit_per_operation : int;
+    hard_storage_limit_per_operation : int;
+  }
+
+  let encoding =
+    let open Json_encoding in
+    conv_ignore_extra
+      (fun {hard_gas_limit_per_operation;
+            hard_storage_limit_per_operation} ->
+        (hard_gas_limit_per_operation,
+         hard_storage_limit_per_operation))
+      (fun (hard_gas_limit_per_operation,
+            hard_storage_limit_per_operation) ->
+        {hard_gas_limit_per_operation;
+         hard_storage_limit_per_operation})
+      (obj2
+         (req "hard_gas_limit_per_operation" int_string)
+         (req "hard_storage_limit_per_operation" int_string))
+end
+
+module Balance_update = struct
+  type category =
+    | Rewards
+    | Fees
+    | Deposits
+  type t =
+    | Contract of {
+        contract : string;
+        change : LiquidNumber.tez;
+      }
+    | Freezer of {
+        category : category;
+        delegate : string;
+        cycle : int;
+        change : LiquidNumber.tez
+      }
+
+  let encoding =
+    let open Json_encoding in
+    union [
+      case_ignore_extra
+        (obj3
+           (req "kind" (constant "contract"))
+           (req "contract" string)
+           (req "change" tez_encoding))
+        (function
+          | Contract { contract; change } -> Some ((), contract, change)
+          | _ -> None)
+        (fun ((), contract, change) ->
+           Contract { contract; change });
+
+      case_ignore_extra
+        (obj5
+           (req "kind" (constant "freezer"))
+           (req "category" (string_enum [
+                "rewards", Rewards;
+                "fees", Fees;
+                "deposits", Deposits;
+              ]))
+           (req "delegate" string)
+           (req "cycle" int)
+           (req "change" tez_encoding))
+        (function
+          | Freezer { category; delegate; cycle; change } ->
+            Some ((), category, delegate, cycle, change)
+          | _ -> None)
+        (fun ((), category, delegate, cycle, change) ->
+           Freezer { category; delegate; cycle; change });
+    ]
+
+end
+
+module Trace = struct
+
+  type ('loc, 'const) trace_item = {
+    loc : 'loc option;
+    gas : int;
+    stack : ('const * string option) list;
+  }
+
+  type ('loc, 'const) t = ('loc, 'const) trace_item list
+
+  let encoding loc_enc const_enc =
+    let open Json_encoding in
+    list @@ conv_ignore_extra
+      (fun { loc; gas; stack } -> (loc, gas, stack))
+      (fun (loc, gas, stack) -> { loc; gas; stack })
+      (obj3
+         (opt "location" loc_enc)
+         (req "gas" int_string)
+         (req "stack" (list (obj2
+                               (req "item" const_enc)
+                               (opt "annot" string)))))
+
+end
+
+module Big_map_diff = struct
+
+  type ('id, 'const) item =
+    | Big_map_add of { id : 'id;
+                       key_hash : string;
+                       key : 'const;
+                       value : 'const }
+    | Big_map_remove of { id : 'id;
+                          key_hash : string;
+                          key : 'const }
+    | Big_map_delete of { id : 'id }
+    | Big_map_alloc of { id : 'id }
+    | Big_map_copy of { source_id : 'id;
+                        destination_id : 'id }
+
+  type ('id, 'const) t = ('id, 'const) item list
+
+  let item_encoding id const =
+    let open Json_encoding in
+    union [
+      case_ignore_extra
+        (obj5
+           (req "action" (constant "update"))
+           (req "big_map" id)
+           (req "key_hash" string)
+           (req "key" const)
+           (req "value" const))
+        (function
+          | Big_map_add { id; key_hash; key; value } ->
+            Some ((), id, key_hash, key, value)
+          | _ -> None)
+        (fun ((), id, key_hash, key, value) ->
+           Big_map_add { id; key_hash; key; value });
+
+      case_ignore_extra
+        (obj4
+           (req "action" (constant "update"))
+           (req "big_map" id)
+           (req "key_hash" string)
+           (req "key" const))
+        (function
+          | Big_map_remove { id; key_hash; key } ->
+            Some ((), id, key_hash, key)
+          | _ -> None)
+        (fun ((), id, key_hash, key) ->
+           Big_map_remove { id; key_hash; key });
+
+      case_ignore_extra
+        (obj2
+           (req "action" (constant "remove"))
+           (req "big_map" id))
+        (function
+          | Big_map_delete { id } -> Some ((), id)
+          | _ -> None)
+        (fun ((), id) -> Big_map_delete { id });
+
+      case_ignore_extra
+        (obj2
+           (req "action" (constant "alloc"))
+           (req "big_map" id))
+        (function
+          | Big_map_alloc { id } -> Some ((), id)
+          | _ -> None)
+        (fun ((), id) -> Big_map_alloc { id });
+
+      case_ignore_extra
+        (obj3
+           (req "action" (constant "alloc"))
+           (req "source_big_map" id)
+           (req "destination_big_map" id))
+        (function
+          | Big_map_copy { source_id; destination_id } ->
+            Some ((), source_id, destination_id)
+          | _ -> None)
+        (fun ((), source_id, destination_id) ->
+           Big_map_copy { source_id; destination_id });
+    ]
+
+  let encoding id const = Json_encoding.list @@ item_encoding id const
+
+end
+
+module Operation = struct
+
+  type ('const, 'contract) manager_operation_content =
+    | Reveal of string
+    | Transaction of {
+        amount : LiquidNumber.tez;
+        destination : string;
+        entrypoint : string;
+        parameters : 'const option;
+      }
+    | Origination of {
+        delegate: string option ;
+        script: ('contract * 'const) option ;
+        balance: LiquidNumber.tez ;
+      }
+    | Delegation of string option
+
+
+  type 'manager operation_content =
+    | Manager of 'manager
+    | Activate_account of {
+        pkh : string;
+        secret : string;
+      }
+
+  type ('const, 'contract) manager_operation = {
+    op : ('const, 'contract) manager_operation_content;
+    source : string;
+    fee : LiquidNumber.tez;
+    counter : int;
+    gas_limit : int;
+    storage_limit : int;
+  }
+
+  type ('const, 'contract) operation =
+    ('const, 'contract) manager_operation operation_content
+
+  type ('const, 'contract) internal = {
+    source : string;
+    nonce : int;
+    op : ('const, 'contract) manager_operation_content operation_content;
+  }
+
+  type ('const, 'contract) t = {
+    branch : string;
+    contents : ('const, 'contract) operation list;
+    signature : string option;
+  }
+
+  let manager_operation_content_encoding const_encoding contract_encoding =
+    let open Json_encoding in
+    union [
+      case_ignore_extra
+        (obj2
+           (req "kind" (constant "reveal"))
+           (req "public_key" string))
+        (function
+          | Reveal pk ->
+            Some ((), pk)
+          | _ -> None)
+        (fun ((), pk) -> Reveal pk);
+
+      case_ignore_extra
+        (obj4
+           (req "kind" (constant "transaction"))
+           (req "amount" tez_encoding)
+           (req "destination" string)
+           (dft "parameters"
+              (obj2
+                 (dft "entrypoint" string "default")
+                 (opt "value" const_encoding)
+              )
+              ("default", None)))
+        (function
+          | Transaction { amount; destination; entrypoint; parameters } ->
+            Some ((), amount, destination, (entrypoint, parameters))
+          | _ -> None)
+        (fun ((), amount, destination, (entrypoint, parameters)) ->
+           Transaction { amount; destination; entrypoint; parameters });
+
+      case_ignore_extra
+        (obj4
+           (req "kind" (constant "origination"))
+           (req "balance" tez_encoding)
+           (opt "delegate" string)
+           (opt "script"
+              (obj2
+                 (req "code" contract_encoding)
+                 (req "storage" const_encoding)
+              )))
+        (function
+          | Origination { balance; delegate; script } ->
+            Some ((), balance, delegate, script)
+          | _ -> None)
+        (fun ((), balance, delegate, script) ->
+           Origination { balance; delegate; script });
+
+      case_ignore_extra
+        (obj2
+           (req "kind" (constant "delegation"))
+           (opt "delegate" string))
+        (function
+          | Delegation pk ->
+            Some ((), pk)
+          | _ -> None)
+        (fun ((), pk) -> Delegation pk);
+    ]
+
+  let operation_content_encoding manager_encoding =
+    let open Json_encoding in
+    union [
+      case
+        manager_encoding
+        (function Manager m -> Some m
+                | _ -> None)
+        (fun m -> Manager m);
+
+      case_ignore_extra
+        (obj3
+           (req "kind" (constant "activate_account"))
+           (req "pkh" string)
+           (req "secret" string))
+        (function
+          | Activate_account { pkh ; secret } ->
+            Some ((), pkh, secret)
+          | _ -> None)
+        (fun ((), pkh, secret) -> Activate_account { pkh ; secret });
+    ]
+
+  let manager_operation_encoding const_encoding contract_encoding =
+    let open Json_encoding in
+    conv_ignore_extra
+      (fun { op; source; fee; counter; gas_limit; storage_limit } ->
+         (op, (source, fee, counter, gas_limit, storage_limit)))
+      (fun (op, (source, fee, counter, gas_limit, storage_limit)) ->
+         { op; source; fee; counter; gas_limit; storage_limit })
+      (merge_objs
+         (manager_operation_content_encoding const_encoding contract_encoding)
+         (obj5
+            (req "source" string)
+            (req "fee" tez_encoding)
+            (req "counter" int_string)
+            (req "gas_limit" int_string)
+            (req "storage_limit" int_string)))
+
+  let operation_encoding const_encoding contract_encoding =
+    operation_content_encoding (manager_operation_encoding const_encoding contract_encoding)
+
+  let internal_encoding const_encoding contract_encoding =
+    let open Json_encoding in
+    conv_ignore_extra
+      (fun { source; nonce; op } -> ((source, nonce), op))
+      (fun ((source, nonce), op) -> { source; nonce; op })
+      (merge_objs
+         (obj2
+            (req "source" string)
+            (req "nonce" int))
+         (operation_content_encoding
+            (manager_operation_content_encoding const_encoding contract_encoding)))
+
+  let encoding const_encoding contract_encoding =
+    let open Json_encoding in
+    conv_ignore_extra
+      (fun { branch; contents; signature } ->
+         (branch, contents, signature))
+      (fun (branch, contents, signature) ->
+         { branch; contents; signature })
+      (obj3
+         (req "branch" string)
+         (req "contents" (list (operation_encoding const_encoding contract_encoding)))
+         (opt "signature" string))
+
+end
+
+module OperationMake (T : sig
+    type const
+    type contract
+    val const_encoding : const Json_encoding.encoding
+    val contract_encoding : contract Json_encoding.encoding
+  end) = struct
+
+  open T
+
+  type operation = (const, contract) Operation.operation
+  type internal = (const, contract) Operation.internal
+  type t = (const, contract) Operation.t
+
+  let operation_encoding =
+    Operation.operation_encoding const_encoding contract_encoding
+
+  let internal_encoding =
+    Operation.internal_encoding const_encoding contract_encoding
+
+  let encoding =
+    Operation.encoding const_encoding contract_encoding
+
+end
+
+module LiquidityOperation = OperationMake(LiquidityLang)
+
 module Make (L : LiquidClientSigs.LANG) = struct
   open L
 
-  let int_string = Json_encoding.(conv string_of_int int_of_string string)
-
-  let bytes_hex =
-    let open Json_encoding in
-    conv
-      (fun b -> Hex.show (Hex.of_bytes b))
-      (fun h -> Hex.to_bytes (`Hex h))
-      string
-
-  type error = Json_repr.any
-
-  let tez_encoding =
-    let open Json_encoding in
-    conv
-      (fun x -> LiquidNumber.mic_mutez_of_tez x |> Z.to_string)
-      (fun x -> Z.of_string x |> LiquidNumber.tez_of_mic_mutez)
-      string
-
-  module Header = struct
-    type t = {
-      hash : string;
-      chain_id : string;
-      predecessor : string;
-      protocol : string;
-    }
-
-    let encoding =
-      let open Json_encoding in
-      conv_ignore_extra
-        (fun {hash; chain_id; predecessor; protocol} ->
-           (hash, chain_id, predecessor, protocol))
-        (fun (hash, chain_id, predecessor, protocol) ->
-           {hash; chain_id; predecessor; protocol})
-        (obj4
-           (req "hash" string)
-           (req "chain_id" string)
-           (req "predecessor" string)
-           (req "protocol" string))
-  end
-
-  module Constants = struct
-
-    type t = {
-      hard_gas_limit_per_operation : int;
-      hard_storage_limit_per_operation : int;
-    }
-
-    let encoding =
-      let open Json_encoding in
-      conv_ignore_extra
-        (fun {hard_gas_limit_per_operation;
-              hard_storage_limit_per_operation} ->
-          (hard_gas_limit_per_operation,
-           hard_storage_limit_per_operation))
-        (fun (hard_gas_limit_per_operation,
-              hard_storage_limit_per_operation) ->
-          {hard_gas_limit_per_operation;
-           hard_storage_limit_per_operation})
-        (obj2
-           (req "hard_gas_limit_per_operation" int_string)
-           (req "hard_storage_limit_per_operation" int_string))
-  end
-
-  module Balance_update = struct
-    type category =
-      | Rewards
-      | Fees
-      | Deposits
-    type t =
-      | Contract of {
-          contract : string;
-          change : LiquidNumber.tez;
-        }
-      | Freezer of {
-          category : category;
-          delegate : string;
-          cycle : int;
-          change : LiquidNumber.tez
-        }
-
-    let encoding =
-      let open Json_encoding in
-      union [
-        case_ignore_extra
-          (obj3
-            (req "kind" (constant "contract"))
-            (req "contract" string)
-            (req "change" tez_encoding))
-          (function
-            | Contract { contract; change } -> Some ((), contract, change)
-            | _ -> None)
-          (fun ((), contract, change) ->
-             Contract { contract; change });
-
-        case_ignore_extra
-          (obj5
-             (req "kind" (constant "freezer"))
-             (req "category" (string_enum [
-                  "rewards", Rewards;
-                  "fees", Fees;
-                  "deposits", Deposits;
-                ]))
-             (req "delegate" string)
-             (req "cycle" int)
-             (req "change" tez_encoding))
-          (function
-            | Freezer { category; delegate; cycle; change } ->
-              Some ((), category, delegate, cycle, change)
-            | _ -> None)
-          (fun ((), category, delegate, cycle, change) ->
-             Freezer { category; delegate; cycle; change });
-      ]
-
-  end
-
-  module Trace = struct
-
-    type ('loc, 'const) trace_item = {
-      loc : 'loc option;
-      gas : int;
-      stack : ('const * string option) list;
-    }
-
-    type ('loc, 'const) t = ('loc, 'const) trace_item list
-
-    let encoding loc_enc const_enc =
-      let open Json_encoding in
-      list @@ conv_ignore_extra
-        (fun { loc; gas; stack } -> (loc, gas, stack))
-        (fun (loc, gas, stack) -> { loc; gas; stack })
-        (obj3
-           (opt "location" loc_enc)
-           (req "gas" int_string)
-           (req "stack" (list (obj2
-                                 (req "item" const_enc)
-                                 (opt "annot" string)))))
-
-  end
-
-  module Big_map_diff = struct
-
-    type ('id, 'const) item =
-      | Big_map_add of { id : 'id;
-                         key_hash : string;
-                         key : 'const;
-                         value : 'const }
-      | Big_map_remove of { id : 'id;
-                            key_hash : string;
-                            key : 'const }
-      | Big_map_delete of { id : 'id }
-      | Big_map_alloc of { id : 'id }
-      | Big_map_copy of { source_id : 'id;
-                          destination_id : 'id }
-
-    type ('id, 'const) t = ('id, 'const) item list
-
-    let item_encoding id const =
-      let open Json_encoding in
-      union [
-        case_ignore_extra
-          (obj5
-            (req "action" (constant "update"))
-            (req "big_map" id)
-            (req "key_hash" string)
-            (req "key" const)
-            (req "value" const))
-          (function
-            | Big_map_add { id; key_hash; key; value } ->
-              Some ((), id, key_hash, key, value)
-            | _ -> None)
-          (fun ((), id, key_hash, key, value) ->
-             Big_map_add { id; key_hash; key; value });
-
-        case_ignore_extra
-          (obj4
-             (req "action" (constant "update"))
-             (req "big_map" id)
-             (req "key_hash" string)
-             (req "key" const))
-          (function
-            | Big_map_remove { id; key_hash; key } ->
-              Some ((), id, key_hash, key)
-            | _ -> None)
-          (fun ((), id, key_hash, key) ->
-             Big_map_remove { id; key_hash; key });
-
-        case_ignore_extra
-          (obj2
-             (req "action" (constant "remove"))
-             (req "big_map" id))
-          (function
-            | Big_map_delete { id } -> Some ((), id)
-            | _ -> None)
-          (fun ((), id) -> Big_map_delete { id });
-
-        case_ignore_extra
-          (obj2
-             (req "action" (constant "alloc"))
-             (req "big_map" id))
-          (function
-            | Big_map_alloc { id } -> Some ((), id)
-            | _ -> None)
-          (fun ((), id) -> Big_map_alloc { id });
-
-        case_ignore_extra
-          (obj3
-             (req "action" (constant "alloc"))
-             (req "source_big_map" id)
-             (req "destination_big_map" id))
-          (function
-            | Big_map_copy { source_id; destination_id } ->
-              Some ((), source_id, destination_id)
-            | _ -> None)
-          (fun ((), source_id, destination_id) ->
-             Big_map_copy { source_id; destination_id });
-      ]
-
-    let encoding id const = Json_encoding.list @@ item_encoding id const
-
-  end
-
-  module OperationMake (T : sig
-      type const
-      type contract
-      val const_encoding : const Json_encoding.encoding
-      val contract_encoding : contract Json_encoding.encoding
-    end) = struct
-    open T
-
-    type manager_operation_content =
-      | Reveal of string
-      | Transaction of {
-          amount : LiquidNumber.tez;
-          destination : string;
-          entrypoint : string;
-          parameters : const option;
-        }
-      | Origination of {
-          delegate: string option ;
-          script: (contract * const) option ;
-          balance: LiquidNumber.tez ;
-        }
-      | Delegation of string option
-
-
-    type 'manager operation_content =
-      | Manager of 'manager
-      | Activate_account of {
-          pkh : string;
-          secret : string;
-        }
-
-    type manager_operation = {
-      op : manager_operation_content;
-      source : string;
-      fee : LiquidNumber.tez;
-      counter : int;
-      gas_limit : int;
-      storage_limit : int;
-    }
-
-    type operation = manager_operation operation_content
-
-    type internal = {
-      source : string;
-      nonce : int;
-      op : manager_operation_content operation_content;
-    }
-
-    type t = {
-      branch : string;
-      contents : operation list;
-      signature : string option;
-    }
-
-    let manager_operation_content_encoding =
-      let open Json_encoding in
-      union [
-        case_ignore_extra
-          (obj2
-            (req "kind" (constant "reveal"))
-            (req "public_key" string))
-          (function
-            | Reveal pk ->
-              Some ((), pk)
-            | _ -> None)
-          (fun ((), pk) -> Reveal pk);
-
-        case_ignore_extra
-          (obj4
-            (req "kind" (constant "transaction"))
-            (req "amount" tez_encoding)
-            (req "destination" string)
-            (dft "parameters"
-               (obj2
-                  (dft "entrypoint" string "default")
-                  (opt "value" const_encoding)
-               )
-               ("default", None)))
-          (function
-            | Transaction { amount; destination; entrypoint; parameters } ->
-              Some ((), amount, destination, (entrypoint, parameters))
-            | _ -> None)
-          (fun ((), amount, destination, (entrypoint, parameters)) ->
-             Transaction { amount; destination; entrypoint; parameters });
-
-        case_ignore_extra
-          (obj4
-            (req "kind" (constant "origination"))
-            (req "balance" tez_encoding)
-            (opt "delegate" string)
-            (opt "script"
-               (obj2
-                  (req "code" contract_encoding)
-                  (req "storage" const_encoding)
-               )))
-          (function
-            | Origination { balance; delegate; script } ->
-              Some ((), balance, delegate, script)
-            | _ -> None)
-          (fun ((), balance, delegate, script) ->
-             Origination { balance; delegate; script });
-
-        case_ignore_extra
-          (obj2
-            (req "kind" (constant "delegation"))
-            (opt "delegate" string))
-          (function
-            | Delegation pk ->
-              Some ((), pk)
-            | _ -> None)
-          (fun ((), pk) -> Delegation pk);
-      ]
-
-    let operation_content_encoding manager_encoding =
-      let open Json_encoding in
-      union [
-        case
-          manager_encoding
-          (function Manager m -> Some m
-                  | _ -> None)
-          (fun m -> Manager m);
-
-        case_ignore_extra
-          (obj3
-            (req "kind" (constant "activate_account"))
-            (req "pkh" string)
-            (req "secret" string))
-          (function
-            | Activate_account { pkh ; secret } ->
-              Some ((), pkh, secret)
-            | _ -> None)
-          (fun ((), pkh, secret) -> Activate_account { pkh ; secret });
-      ]
-
-    let manager_operation_encoding =
-      let open Json_encoding in
-      conv_ignore_extra
-        (fun { op; source; fee; counter; gas_limit; storage_limit } ->
-           (op, (source, fee, counter, gas_limit, storage_limit)))
-        (fun (op, (source, fee, counter, gas_limit, storage_limit)) ->
-           { op; source; fee; counter; gas_limit; storage_limit })
-        (merge_objs
-          manager_operation_content_encoding
-          (obj5
-             (req "source" string)
-             (req "fee" tez_encoding)
-             (req "counter" int_string)
-             (req "gas_limit" int_string)
-             (req "storage_limit" int_string)))
-
-    let operation_encoding =
-      operation_content_encoding manager_operation_encoding
-
-    let internal_encoding =
-      let open Json_encoding in
-      conv_ignore_extra
-        (fun { source; nonce; op } -> ((source, nonce), op))
-        (fun ((source, nonce), op) -> { source; nonce; op })
-        (merge_objs
-           (obj2
-              (req "source" string)
-              (req "nonce" int))
-           (operation_content_encoding manager_operation_content_encoding))
-
-    let encoding =
-      let open Json_encoding in
-      conv_ignore_extra
-        (fun { branch; contents; signature } ->
-           (branch, contents, signature))
-        (fun (branch, contents, signature) ->
-           { branch; contents; signature })
-        (obj3
-           (req "branch" string)
-           (req "contents" (list operation_encoding))
-           (opt "signature" string))
-
-  end
-
-  module Operation = OperationMake(Target)
-  module SourceOperation = OperationMake(Source)
+  module TargetOperation = OperationMake(Target)
 
   module Run_code = struct
 
@@ -442,7 +463,7 @@ module Make (L : LiquidClientSigs.LANG) = struct
 
       type t = {
         storage: Target.const;
-        operations: Operation.internal list;
+        operations: TargetOperation.internal list;
         big_map_diff: (int, Target.const) Big_map_diff.t;
         trace: (Target.location, Target.const) Trace.t option
       }
@@ -456,7 +477,7 @@ module Make (L : LiquidClientSigs.LANG) = struct
              { storage; operations; big_map_diff; trace })
           (obj4
              (req "storage" Target.const_encoding)
-             (dft "operations" (list Operation.internal_encoding) [])
+             (dft "operations" (list TargetOperation.internal_encoding) [])
              (dft "big_map_diff"
                 (Big_map_diff.encoding int_string Target.const_encoding)
                 [])
@@ -468,7 +489,7 @@ module Make (L : LiquidClientSigs.LANG) = struct
 
     module Input = struct
       type t = {
-        operation : Operation.t;
+        operation : TargetOperation.t;
         chain_id : string;
       }
 
@@ -480,7 +501,7 @@ module Make (L : LiquidClientSigs.LANG) = struct
           (fun (operation, chain_id) ->
              { operation; chain_id })
           (obj2
-             (req "operation" Operation.encoding)
+             (req "operation" TargetOperation.encoding)
              (req "chain_id" string))
     end
 
@@ -511,10 +532,10 @@ module Make (L : LiquidClientSigs.LANG) = struct
       type metadata = {
         balance_updates : Balance_update.t list;
         operation_result : result;
-        internal_operation_results : (Operation.internal * result) list;
+        internal_operation_results : (TargetOperation.internal * result) list;
       }
       type t = {
-        contents : (Operation.operation * metadata) list;
+        contents : (TargetOperation.operation * metadata) list;
         signature : string option;
       }
 
@@ -615,7 +636,7 @@ module Make (L : LiquidClientSigs.LANG) = struct
           (dft "internal_operation_results"
              (list
                 (merge_objs
-                   Operation.internal_encoding
+                   TargetOperation.internal_encoding
                    (obj1 (req "result" result_encoding))
                 )) []))
 
@@ -628,7 +649,7 @@ module Make (L : LiquidClientSigs.LANG) = struct
              (req "contents"
                 (list
                    (merge_objs
-                      Operation.operation_encoding
+                      TargetOperation.operation_encoding
                       (obj1 (req "metadata" metadata_encoding)))
                    ))
              (opt "signature" string))

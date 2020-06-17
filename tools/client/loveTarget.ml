@@ -6,11 +6,9 @@ open Love_parsing
 open Love_type
 open Love_ast_types
 
-(* Liquidity *)
 module Liquidity = LiquidityLang
 
-(* Love *)
-module Love = struct
+module Target = struct
 
   open Dune_Network_Lib
 
@@ -93,20 +91,15 @@ end
 
 module Compiler = struct
 
-  type compiled_init =
-    | No_init
-    | Init_constant of Liquidity.const
-    | Init_code of Liquidity.contract * (string * Liquidity.datatype) list
-
   let compile_contract syntax_ast =
     let typed_ast = LiquidCheck.typecheck_contract
         ~warnings:true ~decompiling:false ~monomorphise:true ~keep_tvars:true syntax_ast in
     Liquidity.global_ty_env := typed_ast.ty_env;
     let typed_ast_no_tfail = Preprocess.contract_ttfail_to_tvar typed_ast in
     let love_ast, _ = Liq2love.liqcontract_to_lovecontract ~ctr_name:"main" typed_ast_no_tfail in
-    AST.{version = (1, 0); code = love_ast}, No_init, []
+    AST.{version = (1, 0); code = love_ast}, Liquidity.No_init, []
 
-  let decompile_contract _code = failwith "Todo: decompile contract"
+  let decompile_contract _code = failwith "Cannot decompile Love contract yet"
 
   let compile_const ?ty const =
     let env = !Liquidity.global_ty_env in
@@ -116,7 +109,7 @@ module Compiler = struct
     |> LiquidCheck.typecheck_const tenv ?expected_ty:ty
     |> Liq2love.liqconst_to_lovevalue
 
-  let decompile_const ?ty _ = failwith "Todo: Love decompile const"
+  let decompile_const ?ty _ = failwith "Cannot decompile Love constant yet"
 
   let compile_datatype ty =
     Liq2love.liqtype_to_lovetype (Love_tenv.empty (Contract []) ()) ty
@@ -124,10 +117,7 @@ end
 
 include Compiler
 
-module Lang = struct
-  module Source = Liquidity
-  module Target = Love
+module Client = LiquidClient.Make(struct
+  module Target = Target
   include Compiler
-end
-
-module Client = LiquidClient.Make(Lang)
+end)

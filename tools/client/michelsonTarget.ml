@@ -2,11 +2,9 @@ open LiquidClientSigs
 open LiquidTypes
 open Dune_Network_Lib
 
-(* Liquidity *)
 module Liquidity = LiquidityLang
 
-(* Michelson *)
-module Michelson = struct
+module Target = struct
 
   open Dune_Network_Lib.Micheline
 
@@ -79,11 +77,6 @@ end
 
 module Compiler = struct
 
-  type compiled_init =
-    | No_init
-    | Init_constant of Liquidity.const
-    | Init_code of Liquidity.contract * (string * Liquidity.datatype) list
-
   let compile_contract syntax_ast =
     let typed_ast = LiquidCheck.typecheck_contract
         ~warnings:true ~decompiling:false syntax_ast in
@@ -116,12 +109,12 @@ module Compiler = struct
           LiquidInit.compile_liquid_init live_ast.ty_env contract_sig init,
           init.init_args) in
     let comp_init = match pre_init with
-      | None -> No_init
+      | None -> Liquidity.No_init
       | Some (LiquidInit.Init_constant c, _) ->
-        Init_constant (LiquidUntype.untype_const c)
+        Liquidity.Init_constant (LiquidUntype.untype_const c)
       | Some (LiquidInit.Init_code c, args) ->
-        Init_code (LiquidUntype.untype_contract c,
-                   List.map (fun (x,_,ty) -> x, ty) args)
+        Liquidity.Init_code (LiquidUntype.untype_contract c,
+                             List.map (fun (x,_,ty) -> x, ty) args)
     in
     (c, comp_init, loc_table)
 
@@ -180,10 +173,8 @@ end
 
 include Compiler
 
-module Lang = struct
-  module Source = Liquidity
-  module Target = Michelson
-  include Compiler
-end
-
-module Client = LiquidClient.Make(Lang)
+module Client = LiquidClient.Make(struct
+    module Target = Target
+    include Compiler
+  end
+  )

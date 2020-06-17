@@ -22,8 +22,11 @@
 (****************************************************************************)
 
 open LiquidTypes
+open LiquidClientUtils
 open LiquidClientSigs
 open Ezcmd.Modules
+
+module Liquidity = LiquidityLang
 
 exception Bad_arg
 
@@ -70,11 +73,54 @@ module Data = struct
       failwith (s ^ " is not a valid public key")
 end
 
+let get_contract () =
+  From_files (Data.get_files ())
+  |> Liquidity.parse_contract
+  |> Liquidity.contract#ast
+
+let get_inputs () =
+  Data.get_inputs ()
+  |> List.map Liquidity.const#string
+
+let report_err ?(kind="Error") fmt (err_loc, err_msg) =
+  Format.fprintf fmt "%a: %s: @[%s@]\n%!" Liquidity.print_loc err_loc kind err_msg
+
+let report_error = function
+  | LiquidError error ->
+    report_err Format.err_formatter (error.err_loc, error.err_msg);
+  | LiquidNamespace.Unknown_namespace (p, err_loc) as exn ->
+    let backtrace = Printexc.get_backtrace () in
+    Format.eprintf "Error: %s\nBacktrace:\n%s@."
+      (Printexc.to_string exn) backtrace ;
+    report_err Format.err_formatter
+      (err_loc,
+       Printf.sprintf "Unknown module or contract %s" (String.concat "." p));
+  | LiquidFromMicheline.Missing_program_field f ->
+    Format.eprintf "Missing script field %s@." f;
+  | LiquidClientRequest.RequestError (code, msg) ->
+    Format.eprintf "Request Error (code %d):\n%s@." code msg;
+  | LiquidClientRequest.ResponseError msg ->
+    Format.eprintf "Response Error:\n%s@." msg;
+  | LiquidClientErrors.RuntimeError (error, _trace) ->
+    report_err ~kind:"Runtime error" Format.err_formatter error;
+  | LiquidClientErrors.LocalizedError error ->
+    report_err ~kind:"Error" Format.err_formatter error;
+  | LiquidClientErrors.RuntimeFailure (error, None, _trace) ->
+    report_err ~kind:"Failed at runtime" Format.err_formatter error;
+  | LiquidClientErrors.RuntimeFailure (error, Some v, _trace) ->
+    report_err ~kind:"Failed at runtime" Format.err_formatter error;
+    Format.eprintf "Failed with %s@." v#string;
+  | Failure f ->
+    Format.eprintf "Failure: %s@." f
+  | Syntaxerr.Error (Syntaxerr.Other loc) ->
+    report_err ~kind:"Syntax error" Format.err_formatter
+      (LiquidLoc.loc_of_location loc, "unknown");
+  | exn ->
+    let backtrace = Printexc.get_backtrace () in
+    Format.eprintf "Error: %s\nBacktrace:\n%s@."
+      (Printexc.to_string exn) backtrace
 
 module type S = sig
-  (* val report_err :
-   *   ?kind:string -> Format.formatter -> LiquidTypes.location * string -> unit *)
-  val report_error : exn -> unit
   val inject : string -> unit
   val run : unit -> unit
   val forge_deploy : unit -> unit
@@ -87,45 +133,9 @@ module type S = sig
   val pack : unit -> unit
 end
 
-module Make (L: LANG with module Source = LiquidityLang ) : S = struct
+module Make (L: LANG) : S = struct
 
   module Client = LiquidClient.Make(L)
-
-  let report_err ?(kind="Error") fmt (err_loc, err_msg) =
-    Format.fprintf fmt "%a: %s: @[%s@]\n%!" L.Source.print_loc err_loc kind err_msg
-
-  let report_error = function
-    | LiquidError error ->
-      report_err Format.err_formatter (error.err_loc, error.err_msg);
-    | LiquidNamespace.Unknown_namespace (p, err_loc) as exn ->
-      let backtrace = Printexc.get_backtrace () in
-      Format.eprintf "Error: %s\nBacktrace:\n%s@."
-        (Printexc.to_string exn) backtrace ;
-      report_err Format.err_formatter
-        (err_loc,
-         Printf.sprintf "Unknown module or contract %s" (String.concat "." p));
-    | LiquidFromMicheline.Missing_program_field f ->
-      Format.eprintf "Missing script field %s@." f;
-    | LiquidClientRequest.RequestError (code, msg) ->
-      Format.eprintf "Request Error (code %d):\n%s@." code msg;
-    | LiquidClientRequest.ResponseError msg ->
-      Format.eprintf "Response Error:\n%s@." msg;
-    | Client.E.RuntimeError (error, _trace) ->
-      report_err ~kind:"Runtime error" Format.err_formatter error;
-    | Client.E.LocalizedError error ->
-      report_err ~kind:"Error" Format.err_formatter error;
-    | Client.E.RuntimeFailure (error, None, _trace) ->
-      report_err ~kind:"Failed at runtime" Format.err_formatter error;
-    | Client.E.RuntimeFailure (error, Some v, _trace) ->
-      report_err ~kind:"Failed at runtime" Format.err_formatter error;
-      Format.eprintf "Failed with %s@." v#string;
-    | Failure f ->
-      Format.eprintf "Failure: %s@." f
-    | Syntaxerr.Error (Syntaxerr.Other loc) ->
-      report_err ~kind:"Syntax error" Format.err_formatter
-        (LiquidLoc.loc_of_location loc, "unknown");
-    | exn -> raise exn
-
 
   let inject file =
     let signature = match !LiquidOptions.signature with
@@ -141,22 +151,13 @@ module Make (L: LANG with module Source = LiquidityLang ) : S = struct
         ~signature in
     Printf.printf "Operation injected: %s\n%!" op_h
 
-  let get_contract () =
-    From_files (Data.get_files ())
-    |> L.Source.parse_contract
-    |> L.Source.contract#ast
-
-  let get_inputs () =
-    Data.get_inputs ()
-    |> List.map L.Source.const#string
-
   let run () =
     let open Client in
     let ops, r_storage, big_map_diff =
       Sync.run (get_contract ())
         !Data.entry_name
-        (L.Source.const#string !Data.parameter)
-        (L.Source.const#string !Data.storage)
+        (Liquidity.const#string !Data.parameter)
+        (Liquidity.const#string !Data.storage)
     in
     Printf.printf "%s\n# Internal operations: %d\n%!"
       r_storage#string
@@ -165,7 +166,7 @@ module Make (L: LANG with module Source = LiquidityLang ) : S = struct
     | [] -> ()
     | diff ->
       let open Client.T in
-      let open Client.T.Big_map_diff in
+      let open LiquidClientTypes.Big_map_diff in
       Printf.printf "\nBig map diff:\n";
       let pp_id fmt = function
         | Bm_id id -> Format.fprintf fmt "[ID: %d]" id
@@ -231,7 +232,7 @@ module Make (L: LANG with module Source = LiquidityLang ) : S = struct
     Printf.printf "%s\n%!" r_storage#string
 
   let call_arg () =
-    let arg = !Data.parameter |> Client.L.Source.const#string in
+    let arg = !Data.parameter |> Liquidity.const#string in
     let arg = Client.L.compile_const arg#ast |> Client.L.Target.const#ast in
     match !LiquidOptions.output with
     | None ->
@@ -250,7 +251,7 @@ module Make (L: LANG with module Source = LiquidityLang ) : S = struct
         ?contract
         ~address:!Data.contract_address
         ~entry:!Data.entry_name
-        (Client.L.Source.const#string !Data.parameter)
+        (Liquidity.const#string !Data.parameter)
     in
     Printf.printf "Successful call to contract %s in operation %s\n%!"
       !Data.contract_address op_h
@@ -264,7 +265,7 @@ module Make (L: LANG with module Source = LiquidityLang ) : S = struct
         ?contract
         ~address:!Data.contract_address
         ~entry:!Data.entry_name
-        (Client.L.Source.const#string !Data.parameter)
+        (Liquidity.const#string !Data.parameter)
     in
     Printf.eprintf "Raw operation:\n--------------\n%!";
     Printf.printf "%s\n%!" Hex.(show @@ of_bytes op)
@@ -276,16 +277,16 @@ module Make (L: LANG with module Source = LiquidityLang ) : S = struct
        (get_contract ())#ast
        |> Client.L.compile_contract
        |> ignore);
-    let const = Client.L.Source.const#string !Data.const in
-    let ty = Client.L.Source.datatype#string !Data.ty in
+    let const = Liquidity.const#string !Data.const in
+    let ty = Liquidity.datatype#string !Data.ty in
     let bytes = Client.Sync.pack ~const ~ty in
     Printf.printf "0x%s\n%!" Hex.(show @@ of_bytes bytes)
 
 end
 
 
-module MichelsonClient = Make(LiquidityToMichelson.Lang)
-module LoveClient = Make(LiquidityToLove.Lang)
+module MichelsonClient = Make(MichelsonTarget)
+module LoveClient = Make(LoveTarget)
 
 let client () = match !LiquidOptions.target_lang with
   | Michelson_lang -> (module MichelsonClient : S)
@@ -758,11 +759,5 @@ let () =
   try
     main ()
   with exn ->
-    (try MichelsonClient.report_error exn
-     with exn ->
-     try LoveClient.report_error exn
-     with exn -> let backtrace = Printexc.get_backtrace () in
-       Format.eprintf "Error: %s\nBacktrace:\n%s@."
-         (Printexc.to_string exn) backtrace
-    );
+    report_error exn;
     exit 1
