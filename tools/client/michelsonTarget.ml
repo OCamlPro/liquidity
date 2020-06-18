@@ -109,7 +109,8 @@ module Compiler = struct
           LiquidInit.compile_liquid_init live_ast.ty_env contract_sig init,
           init.init_args) in
     let comp_init = match pre_init with
-      | None -> Liquidity.No_init
+      | None ->
+        Liquidity.Init_components ["storage", Liquidity.storage typed_ast]
       | Some (LiquidInit.Init_constant c, _) ->
         Liquidity.Init_constant (LiquidUntype.untype_const c)
       | Some (LiquidInit.Init_code c, args) ->

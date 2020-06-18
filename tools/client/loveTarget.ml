@@ -98,7 +98,8 @@ module Compiler = struct
     let typed_ast_no_tfail = Preprocess.contract_ttfail_to_tvar typed_ast in
     let love_ast, _ = Liq2love.liqcontract_to_lovecontract ~ctr_name:"main" typed_ast_no_tfail in
     let init = match typed_ast.c_init with
-      | None -> Liquidity.No_init
+      | None ->
+        Liquidity.Init_components ["storage", Liquidity.storage typed_ast]
       | Some init ->
         Liquidity.Init_components
           (List.map (fun (n, _, ty) -> n, ty) init.init_args) in
