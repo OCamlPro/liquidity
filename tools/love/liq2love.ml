@@ -2695,7 +2695,7 @@ and liqinit_to_loveinit env init_args init_body =
            ty :: tlist, Love_tenv.add_var x ty env
         )
         ([], env)
-        init_args
+        (List.rev init_args)
     in
     let arg = mk_ptuple (List.map (fun (x,_,_) -> mk_pvar x) init_args)
     in
