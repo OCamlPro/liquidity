@@ -45,6 +45,7 @@ if( with_dune_network ) {
 
 if( for_javascript ) {
 
+(*
 OCaml.library("zarith", ocaml + {
      files = [
        "z.ml";
@@ -53,6 +54,7 @@ OCaml.library("zarith", ocaml + {
        "nums";
    ];
 });
+*)
 
 OCaml.library("ezjsonm", ocaml + {
      requires = [

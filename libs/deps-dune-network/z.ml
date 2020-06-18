@@ -35,6 +35,7 @@ let pred = Num.pred_num
 
 let div_rem a b =
   Num.quo_num a b, Num.mod_num a b
+let ediv_rem = div_rem
 
 let of_bits b =
   let n = ref (Num.num_of_int 0) in
