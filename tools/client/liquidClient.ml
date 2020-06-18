@@ -1,3 +1,4 @@
+open LiquidTypes
 open LiquidClientUtils
 open LiquidClientRequest
 open LiquidClientSigs
@@ -267,6 +268,22 @@ module Make (L : LANG) = struct
     | Init_constant _, _ ->
       raise (ResponseError "init_storage: Constant initializer, cannot take arguments")
 
+    | Init_components args_tys, _ ->
+      let l_req, l_giv = List.length args_tys, List.length init_params in
+      if l_req <> l_giv then
+        raise
+          (ResponseError
+             (Printf.sprintf
+                "init_storage: init storage needs %d arguments, but was given %d"
+                l_req l_giv
+             ));
+      let param = match init_params with
+        | [] -> Liquidity.unit
+        | [x] -> x
+        | _ -> Liquidity.tuple init_params
+      in
+      Lwt.return param
+
     | Init_code (c, args_tys), _ ->
       let l_req, l_giv = List.length args_tys, List.length init_params in
       if l_req <> l_giv then
@@ -295,6 +312,20 @@ module Make (L : LANG) = struct
       let eval_init_storage =
         replace_init_big_maps big_map_diff eval_init_storage (Liquidity.storage contract) in
       Lwt.return eval_init_storage
+
+
+  let init_storage ?source contract comp_init init_params =
+    init_storage ?source contract comp_init init_params
+    >|= fun init ->
+    let ty = match comp_init with
+      | Init_components args_tys ->
+        (match args_tys with
+         | [] -> Tunit
+         | [_, ty] -> ty
+         | _ -> Ttuple (List.map snd args_tys)
+        )
+      | _ -> Liquidity.storage contract in
+    compile_const ~ty init
 
 
   let estimate_gas_storage ~loc_table ?head operation =
@@ -427,8 +458,6 @@ module Make (L : LANG) = struct
       contract init_params =
     let target_contract, comp_init, loc_table = compile_contract contract in
     init_storage ?source contract comp_init init_params >>= fun init_storage ->
-    let init_storage =
-      compile_const ~ty:(Liquidity.storage contract) init_storage in
     let op = Operation.(Origination {
         delegate = None;
         balance ;
@@ -648,7 +677,6 @@ module Make (L : LANG) = struct
   let init_storage ?source contract init_params =
     let _, comp_init, _ = compile_contract contract in
     init_storage ?source contract comp_init init_params
-    >|= compile_const ~ty:(Liquidity.storage contract)
 
   let pack ~const ~ty =
     let const = compile_const ~ty const in

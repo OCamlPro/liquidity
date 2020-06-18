@@ -97,7 +97,12 @@ module Compiler = struct
     Liquidity.global_ty_env := typed_ast.ty_env;
     let typed_ast_no_tfail = Preprocess.contract_ttfail_to_tvar typed_ast in
     let love_ast, _ = Liq2love.liqcontract_to_lovecontract ~ctr_name:"main" typed_ast_no_tfail in
-    AST.{version = (1, 0); code = love_ast}, Liquidity.No_init, []
+    let init = match typed_ast.c_init with
+      | None -> Liquidity.No_init
+      | Some init ->
+        Liquidity.Init_components
+          (List.map (fun (n, _, ty) -> n, ty) init.init_args) in
+    AST.{version = (1, 0); code = love_ast}, init, []
 
   let decompile_contract _code = failwith "Cannot decompile Love contract yet"
 

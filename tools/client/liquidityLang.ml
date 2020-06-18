@@ -12,6 +12,7 @@ type compiled_init =
   | No_init
   | Init_constant of const
   | Init_code of contract * (string * datatype) list
+  | Init_components of (string * datatype) list
 
 let unit = CUnit
 let tuple l =  CTuple l
