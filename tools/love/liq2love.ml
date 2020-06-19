@@ -17,6 +17,8 @@ module SIMap = Collections.StringIdentMap
 
 type env = Love_tenv.t
 
+let error fmt = error ("Love compiler: " ^^ fmt)
+
 exception UnknownType of (string * (TYPE.t -> TYPE.t) * env)
 
 module TypeVarMap = struct
@@ -2881,8 +2883,6 @@ let liqcontract_to_lovecontract ~(ctr_name:string) (c : typed_contract) : AST.st
     error "Unknown type %s" s
 
 
-
-
 (* 2. LiqConst to LoveValue *)
 
 let rec liqconst_to_lovevalue
@@ -2965,6 +2965,12 @@ let rec liqconst_to_lovevalue
           None -> error "Keyhash %s is invalid" kh
         | Some k -> VKeyHash k
       )
+    | CContract (addr, None) ->
+      (match Contract_repr.of_b58check addr with
+       | Ok c -> VAddress c
+       | Error _ ->
+         error "Love compile const: Not a contract (here %s)." addr
+      )
     | CContract (c, _) ->
       error "Constant contracts (here %s) has no Love representation." c
     | CRecord [] ->
@@ -2983,10 +2989,71 @@ let rec liqconst_to_lovevalue
       Love_printer.Value.print res
   in res
 
+let rec lovevalue_to_liqconst (c : Love_value.Value.t) =
+  debug "[lovevalue_to_liqconst] %a -->%!" Love_printer.Value.print c;
+  let ltl = lovevalue_to_liqconst in
+  let res =
+    match c with
+    | VUnit   -> CUnit
+    | VBool b -> CBool b
+    | VInt integer  -> CInt { LiquidNumber.integer }
+    | VNat integer  -> CNat { LiquidNumber.integer }
+    | VDun d ->
+      Tez_repr.to_mutez d
+      |> Z.of_int64
+      |> LiquidNumber.tez_of_mic_mutez
+      |> fun c -> CTez c
+    | VTimestamp s -> CTimestamp (Script_timestamp_repr.to_string s)
+    | VString s -> CString s
+    | VBytes b -> CBytes (MBytes.to_string b)
+    | VKey k -> CKey (Signature.Public_key.to_b58check k)
+    | VSignature s -> CSignature (Signature.to_b58check s)
+    | VKeyHash k -> CKey_hash (Signature.Public_key_hash.to_b58check k)
+    | VAddress c -> CContract(Contract_repr.to_b58check c, None)
+    | VOperation _ -> error "Love value decomilation: operation constant"
+
+    | VConstr ("None", []) -> CNone
+    | VConstr ("Some", [c]) -> CSome (ltl c)
+    | VConstr ("Left", [c]) -> CLeft (ltl c)
+    | VConstr ("Right", [c]) -> CRight (ltl c)
+    | VConstr (name, [args]) -> CConstr (name, ltl args)
+    | VConstr (name, args) -> CConstr (name, ltl (VTuple args))
+
+    | VTuple l -> CTuple (List.map ltl l)
+    | VList l -> CList (List.map ltl l)
+    | VSet set ->
+      CSet (List.map ltl (Love_value.ValueSet.elements set))
+    | VMap map ->
+      CMap (List.map (fun (k, v) -> ltl k, ltl v)
+              (Love_value.ValueMap.bindings map))
+    | VBigMap { id = Some integer; diff; _ }
+      when Love_value.ValueMap.is_empty diff ->
+      CBigMap (BMId { integer })
+    | VBigMap { id = None; diff ; _ }
+      when Love_value.ValueMap.for_all
+          (fun _ -> function None -> false | Some _ -> true) diff ->
+      let l = List.map (function
+          | (k, Some v) -> ltl k, ltl v
+          | _ -> assert false) (Love_value.ValueMap.bindings diff) in
+      CBigMap (BMList l)
+    | VBigMap _ -> error "Love value decompilation failed on big map diff"
+    | VRecord l -> CRecord (List.map (fun (s, c) -> (s, ltl c)) l)
+
+    | VPackedStructure _ -> error "decompilation VPackedStructure"
+    | VContractInstance _ -> error "decompilation VContractInstance"
+    | VEntryPoint _ -> error "decompilation VEntryPoint"
+    | VView _ -> error "decompilation VView"
+    | VPrimitive _ -> error "decompilation VPrimitive"
+
+    | VClosure _ -> error "Todo: VClosure -> CLambda"
+  in
+  debug " %s" (LiquidPrinter.LiquidDebug.string_of_const res);
+  res
+
+
 let liqconst_to_lovevalue const =
   let initial_env = empty_env (Contract []) () in
   liqconst_to_lovevalue initial_env const
-
 
 let const_encoding : Love_value.Value.t Json_encoding.encoding =
   Json_encoding.obj1 @@

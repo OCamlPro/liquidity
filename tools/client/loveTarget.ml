@@ -117,7 +117,8 @@ module Compiler = struct
     |> LiquidCheck.typecheck_const tenv ?expected_ty:ty
     |> Liq2love.liqconst_to_lovevalue
 
-  let decompile_const ?ty _ = failwith "Cannot decompile Love constant yet"
+  let decompile_const ?ty c =
+    Liq2love.lovevalue_to_liqconst c
 
   let compile_datatype ty =
     Liq2love.liqtype_to_lovetype (Love_tenv.empty (Contract []) ()) ty
