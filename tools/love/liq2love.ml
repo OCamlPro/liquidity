@@ -2663,16 +2663,16 @@ and liqentry_to_lovecontent env {entry_sig; code} =
    *     entry_sig.parameter_name
    *     param_type
    *     full_love_code in *)
-  let mk_lambda arg ty body = mk_lambda (mk_pvar arg) body ty in
+  let mk_lambda arg ty body = mk_lambda arg body ty in
   let code =
     mk_lambda
-      entry_sig.storage_name
+      (mk_pvar entry_sig.storage_name)
       stor_typ @@
     mk_lambda
-      "amount"
+      (mk_pany ())
       (dun ()) @@
     mk_lambda
-      entry_sig.parameter_name
+      (mk_pvar entry_sig.parameter_name)
       param_type @@
     full_love_code in
   let name = entry_sig.entry_name in
