@@ -41,3 +41,6 @@ module Liq2love = struct
   let liqcontract_to_lovecontract ~ctr_name _ = assert false
   let print_contract_json _ = assert false
 end
+module Compil_utils = struct
+  exception Liq2LoveError of string
+end

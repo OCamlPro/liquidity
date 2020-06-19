@@ -17,8 +17,6 @@ module SIMap = Collections.StringIdentMap
 
 type env = Love_tenv.t
 
-let error fmt = error ("Love compiler: " ^^ fmt)
-
 exception UnknownType of (string * (TYPE.t -> TYPE.t) * env)
 
 module TypeVarMap = struct

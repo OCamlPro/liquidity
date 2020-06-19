@@ -308,6 +308,9 @@ let report_error = function
   | Syntaxerr.Error (Syntaxerr.Other loc) ->
     report_err ~kind:"Syntax error" Format.err_formatter
       (LiquidLoc.loc_of_location loc, "unknown");
+  | Compil_utils.Liq2LoveError msg ->
+    report_err ~kind:"Love compiler error" Format.err_formatter
+      (LiquidLoc.noloc, msg);
   | exn ->
     let backtrace = Printexc.get_backtrace () in
     Format.eprintf "Error: %s\nBacktrace:\n%s@."
