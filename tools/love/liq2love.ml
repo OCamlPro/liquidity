@@ -2684,27 +2684,34 @@ and liqentry_to_lovecontent env {entry_sig; code} =
     env
 
 and liqinit_to_loveinit env init_args init_body =
-
-  let arg, arg_typ, env =
-    let args_typ, env =
-      List.fold_left
-        (fun (tlist, env) (x, _, ty) ->
-           debug "[liqcontract_to_lovecontract] Preprocessing arg %s : %s@."
-             x (LiquidPrinter.Liquid.string_of_type ty);
-           let ty = (liqtype_to_lovetype env ty) in
-           ty :: tlist, Love_tenv.add_var x ty env
-        )
-        ([], env)
-        (List.rev init_args)
-    in
-    let arg = mk_ptuple (List.map (fun (x,_,_) -> mk_pvar x) init_args)
-    in
-    arg, TTuple args_typ, env
+  let init_code, init_typ = match init_args with
+    | [] ->
+      let body, _t = liqexp_to_loveexp env init_body in
+      let ty = unit () in
+      mk_lambda (mk_pany ()) body ty, ty
+    | [x, _, ty] ->
+      let ty = liqtype_to_lovetype env ty in
+      let env = Love_tenv.add_var x ty env in
+      let arg = mk_pvar x in
+      let body, _t = liqexp_to_loveexp env init_body in
+      mk_lambda arg body ty, ty
+    | _ ->
+      let args_typ, env =
+        List.fold_left (fun (tlist, env) (x, _, ty) ->
+            debug "[liqcontract_to_lovecontract] Preprocessing arg %s : %s@."
+              x (LiquidPrinter.Liquid.string_of_type ty);
+            let ty = (liqtype_to_lovetype env ty) in
+            ty :: tlist, Love_tenv.add_var x ty env
+          ) ([], env) init_args
+      in
+      let arg = mk_ptuple (List.map (fun (x,_,_) -> mk_pvar x) init_args) in
+      let arg_typ = TTuple (List.rev args_typ) in
+      let body, _t = liqexp_to_loveexp env init_body in
+      mk_lambda arg body arg_typ, arg_typ
   in
-  let body, t = liqexp_to_loveexp env init_body in
   AST.Init {
-    init_code = mk_lambda arg body arg_typ;
-    init_typ = arg_typ;
+    init_code;
+    init_typ;
     init_persist = false;
   }
 
