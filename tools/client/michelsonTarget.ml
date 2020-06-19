@@ -13,6 +13,8 @@ module Target = struct
   type location = Micheline.canonical_location
   type datatype = LiquidMichelineTypes.expr
 
+  let name = "Michelson"
+
   let unit =
     let open Micheline in
     strip_locations (Prim ((), "Unit", [], []))

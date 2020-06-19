@@ -17,6 +17,8 @@ module Target = struct
   type location = AST.location
   type datatype = TYPE.t
 
+  let name = "Love"
+
   let unit : const = VUnit
 
   let compare_loc : location -> location -> int = Pervasives.compare

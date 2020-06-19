@@ -42,6 +42,7 @@ module type LANG = sig
     type location
     type datatype
 
+    val name : string
     val unit : const
     val compare_loc : location -> location -> int
     val next_loc : location -> location

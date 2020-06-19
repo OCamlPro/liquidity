@@ -182,7 +182,8 @@ let compile_liquid_files_to_michelson files =
           then LiquidToMicheline.line_of_contract c
           else LiquidToMicheline.string_of_contract c in
         if !LiquidOptions.writeinfo then
-          LiquidInfomark.gen_info ~decompile:false files ^ s
+          LiquidInfomark.gen_info
+            ~decompile:false ~language:"Michelson" files ^ s
         else s)
     ~outprefix
     ~ext:"tz"
@@ -199,8 +200,12 @@ let compile_liquid_files_to_love files =
       (Format.asprintf "%a" Love_printer.Ast.print_structure love_ast);
   let to_json love_ast = Liq2love.print_contract_json love_ast in
   let to_readable love_ast =
-    Format.asprintf "#love\n%a"
-      Love_printer.Ast.print_structure love_ast in
+    let s = Format.asprintf "#love\n%a"
+        Love_printer.Ast.print_structure love_ast in
+    if !LiquidOptions.writeinfo then
+      LiquidInfomark.gen_info
+        ~decompile:false ~language:"Love" files ^ s
+    else s in
   output_final ~to_json ~to_readable ~outprefix ~ext:"lov" love_ast
 
 
@@ -271,7 +276,9 @@ let compile_tezos_file filename =
   in
   let s =
     if !LiquidOptions.writeinfo then
-      LiquidInfomark.gen_info ~decompile:true [filename] ^ s ^ "\n"
+      LiquidInfomark.gen_info
+        ~decompile:true ~language:"Liquidity"
+        [filename] ^ s ^ "\n"
     else s ^ "\n" in
   match output with
   | "-" ->
