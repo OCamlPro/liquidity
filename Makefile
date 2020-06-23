@@ -66,7 +66,11 @@ clean: _obuild clean-tests clean-sources
 	ocp-build clean
 	rm -f liquidity
 
-build-deps:
+_opam:
+	opam switch create . 4.07.1 --no-install
+	eval $$(opam env)
+
+build-deps: _opam
 	opam install . --deps-only --working-dir -y
 
 distclean: clean
