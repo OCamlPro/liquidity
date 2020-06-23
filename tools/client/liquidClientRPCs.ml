@@ -191,10 +191,16 @@ module Make(L : LANG) = struct
       id
 
   let get_big_map_hash_value id hash =
-    get
-      ~output:(Json_encoding.option Target.const_encoding)
-      ~path:"/chains/main/blocks/head/context/big_maps/%d/%s"
-      id hash
+    Lwt.catch
+      (fun () ->
+         get
+           ~output:(Json_encoding.option Target.const_encoding)
+           ~path:"/chains/main/blocks/head/context/big_maps/%d/%s"
+           id hash
+      )
+      (function
+        | RequestError (404, _) -> Lwt.return_none
+        | exn -> raise exn)
 
   let run_operation ?loc_table ~chain_id operation =
     post

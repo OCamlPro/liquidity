@@ -214,6 +214,12 @@ module Make (L : LANG) = struct
     let key_t = compile_const ~ty:key_ty key in
     let ty = compile_datatype key_ty in
     RPC.pack ~data:key_t ~ty >>= fun packed_key ->
+    let packed_key = match Target.name with
+      | "Love" ->
+        (* Big maps indexed by hash of serialized data,
+           remove first two bytes (0501) *)
+        Bytes.sub packed_key 2 (Bytes.length packed_key - 2)
+      | _ -> packed_key in
     let hash_key_b58 =
       ExprHash.hash_bytes [packed_key]
       |> ExprHash.to_b58check in
