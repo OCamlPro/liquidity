@@ -124,10 +124,10 @@ module Compiler = struct
     (* LiquidData.translate_const_exp const *)
     const
     |> LiquidCheck.typecheck_const tenv ?expected_ty:ty
-    |> Liq2love.liqconst_to_lovevalue
+    |> Liq2love.liqconst_to_lovevalue ?ty
 
   let decompile_const ?ty c =
-    Liq2love.lovevalue_to_liqconst c
+    Liq2love.lovevalue_to_liqconst ?ty c
 
   let compile_datatype ty =
     Liq2love.liqtype_to_lovetype (Love_tenv.empty (Contract []) ()) ty

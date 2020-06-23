@@ -2901,7 +2901,9 @@ let liqcontract_to_lovecontract ~(ctr_name:string) (c : typed_contract) : AST.st
 (* 2. LiqConst to LoveValue *)
 
 let rec liqconst_to_lovevalue
-    (env : env) (c : (datatype, typed) LiquidTypes.exp LiquidTypes.const)
+    (env : env)
+    ?ty
+    (c : (datatype, typed) LiquidTypes.exp LiquidTypes.const)
   : Love_value.Value.t =
   let ltl = liqconst_to_lovevalue env in
   let res : Love_value.Value.t =
@@ -2946,14 +2948,27 @@ let rec liqconst_to_lovevalue
       error "Expression %s is a tuple with %d elements: this is an invalid expression"
         (LiquidPrinter.Liquid.string_of_const c)
         (List.length l)
-    | CTuple l ->  VTuple (List.map ltl l)
+    | CTuple l ->
+      let l = match ty with
+        | Some (Ttuple lty) when List.length lty = List.length l ->
+          List.map2 (fun t ty -> ltl ~ty t) l lty
+        | _ -> List.map ltl l in
+      VTuple l
 
     | CNone -> VConstr ("None", [])
-    | CSome c -> VConstr ("Some", [ltl c])
+    | CSome c ->
+      let ty = match ty with
+        | Some (Toption ty) -> Some ty
+        | _ -> None in
+      VConstr ("Some", [ltl ?ty c])
     | CMap l ->
+      let tyk, tyv = match ty with
+        | Some (Tmap (tk, tv)) -> Some tk, Some tv
+        | _ -> None, None in
       let map =
         List.fold_left
-          (fun acc (key, bnd) -> Love_value.ValueMap.add (ltl key) (ltl bnd) acc)
+          (fun acc (key, bnd) ->
+             Love_value.ValueMap.add (ltl ?ty:tyk key) (ltl ?ty:tyv bnd) acc)
           Love_value.ValueMap.empty
           l
       in
@@ -2962,23 +2977,46 @@ let rec liqconst_to_lovevalue
       error
         "Value compilation failed on %s: bigmaps are not yet compilable in Love"
         (LiquidPrinter.Liquid.string_of_const c)
-    | CList l -> VList (List.map ltl l)
+    | CList l ->
+      let ty = match ty with
+        | Some (Tlist ty) -> Some ty
+        | _ -> None in
+      VList (List.map (ltl ?ty) l)
 
     | CSet l ->
+      let ty = match ty with
+        | Some (Tset ty) -> Some ty
+        | _ -> None in
       let set =
         List.fold_left
-          (fun acc key -> Love_value.ValueSet.add (ltl key) acc)
+          (fun acc key -> Love_value.ValueSet.add (ltl ?ty key) acc)
           Love_value.ValueSet.empty
           l
       in
       VSet set
-    | CLeft c -> VConstr ("Left", [ltl c])
-    | CRight c -> VConstr ("Right", [ltl c])
+    | CLeft c ->
+      let ty = match ty with
+        | Some (Tor (ty, _)) -> Some ty
+        | _ -> None in
+      VConstr ("Left", [ltl ?ty c])
+    | CRight c ->
+      let ty = match ty with
+        | Some (Tor (_, ty)) -> Some ty
+        | _ -> None in
+      VConstr ("Right", [ltl ?ty c])
 
     | CKey_hash kh -> (
-        match Signature.Public_key_hash.of_b58check_opt kh with
-          None -> error "Keyhash %s is invalid" kh
-        | Some k -> VKeyHash k
+        match ty with
+        | Some (Taddress | Tcontract _ ) ->
+          (match Contract_repr.of_b58check kh with
+           | Ok c -> VAddress c
+           | Error _ ->
+             error "Love compile const: Not a valid contract (key hash %s)." kh
+          )
+        | _ ->
+          match Signature.Public_key_hash.of_b58check_opt kh with
+          | None -> error "Keyhash %s is invalid" kh
+          | Some k -> VKeyHash k
       )
     | CContract (addr, None) ->
       (match Contract_repr.of_b58check addr with
@@ -2991,9 +3029,18 @@ let rec liqconst_to_lovevalue
     | CRecord [] ->
       error "Empty records are forbidden in Love"
     | CRecord l ->
-      VRecord (List.map (fun (s, c) -> (s, ltl c)) l)
+      VRecord (List.map (fun (s, c) ->
+          let ty = match ty with
+            | Some (Trecord (_, fields)) -> List.assoc_opt s fields
+            | _ -> None in
+          (s, ltl ?ty c)
+        ) l)
 
-    | CConstr (name, args) -> VConstr (name, [ltl args])
+    | CConstr (name, args) ->
+      let ty = match ty with
+        | Some (Tsum (_, cstrs)) -> List.assoc_opt name cstrs
+        | _ -> None in
+      VConstr (name, [ltl ?ty args])
 
     | CLambda {arg_name; arg_ty; body; ret_ty; recursive} ->
       error "Todo: CLambda -> VClosure"
@@ -3004,7 +3051,7 @@ let rec liqconst_to_lovevalue
       Love_printer.Value.print res
   in res
 
-let rec lovevalue_to_liqconst (c : Love_value.Value.t) =
+let rec lovevalue_to_liqconst ?ty (c : Love_value.Value.t) =
   debug "[lovevalue_to_liqconst] %a -->%!" Love_printer.Value.print c;
   let ltl = lovevalue_to_liqconst in
   let res =
@@ -3028,18 +3075,53 @@ let rec lovevalue_to_liqconst (c : Love_value.Value.t) =
     | VOperation _ -> error "Love value decomilation: operation constant"
 
     | VConstr ("None", []) -> CNone
-    | VConstr ("Some", [c]) -> CSome (ltl c)
-    | VConstr ("Left", [c]) -> CLeft (ltl c)
-    | VConstr ("Right", [c]) -> CRight (ltl c)
-    | VConstr (name, [args]) -> CConstr (name, ltl args)
-    | VConstr (name, args) -> CConstr (name, ltl (VTuple args))
+    | VConstr ("Some", [c]) ->
+      let ty = match ty with
+        | Some (Toption ty) -> Some ty
+        | _ -> None in
+      CSome (ltl ?ty c)
+    | VConstr ("Left", [c]) ->
+      let ty = match ty with
+        | Some (Tor (ty, _)) -> Some ty
+        | _ -> None in
+      CLeft (ltl ?ty c)
+    | VConstr ("Right", [c]) ->
+      let ty = match ty with
+        | Some (Tor (_, ty)) -> Some ty
+        | _ -> None in
+      CRight (ltl ?ty c)
+    | VConstr (name, [args]) ->
+      let ty = match ty with
+        | Some (Tsum (_, cstrs)) -> List.assoc_opt name cstrs
+        | _ -> None in
+      CConstr (name, ltl ?ty args)
+    | VConstr (name, args) ->
+      let ty = match ty with
+        | Some (Tsum (_, cstrs)) -> List.assoc_opt name cstrs
+        | _ -> None in
+      CConstr (name, ltl ?ty (VTuple args))
 
-    | VTuple l -> CTuple (List.map ltl l)
-    | VList l -> CList (List.map ltl l)
+    | VTuple l ->
+      let l = match ty with
+        | Some (Ttuple lty) when List.length lty = List.length l ->
+          List.map2 (fun t ty -> ltl ~ty t) l lty
+        | _ -> List.map ltl l in
+      CTuple l
+    | VList l ->
+      let ty = match ty with
+        | Some (Tlist ty) -> Some ty
+        | _ -> None in
+      CList (List.map (ltl ?ty) l)
     | VSet set ->
-      CSet (List.map ltl (Love_value.ValueSet.elements set))
+      let ty = match ty with
+        | Some (Tset ty) -> Some ty
+        | _ -> None in
+      CSet (List.map (ltl ?ty) (Love_value.ValueSet.elements set))
     | VMap map ->
-      CMap (List.map (fun (k, v) -> ltl k, ltl v)
+      let tyk, tyv = match ty with
+        | Some (Tmap (tk, tv)) -> Some tk, Some tv
+        | _ -> None, None in
+      CMap (List.map (fun (k, v) -> ltl ?ty:tyk k, ltl ?ty:tyv v)
               (Love_value.ValueMap.bindings map))
     | VBigMap { id = Some integer; diff; _ }
       when Love_value.ValueMap.is_empty diff ->
@@ -3048,11 +3130,20 @@ let rec lovevalue_to_liqconst (c : Love_value.Value.t) =
       when Love_value.ValueMap.for_all
           (fun _ -> function None -> false | Some _ -> true) diff ->
       let l = List.map (function
-          | (k, Some v) -> ltl k, ltl v
+          | (k, Some v) ->
+            let tyk, tyv = match ty with
+              | Some (Tbigmap (tk, tv)) -> Some tk, Some tv
+              | _ -> None, None in
+            ltl ?ty:tyk k, ltl ?ty:tyv v
           | _ -> assert false) (Love_value.ValueMap.bindings diff) in
       CBigMap (BMList l)
     | VBigMap _ -> error "Love value decompilation failed on big map diff"
-    | VRecord l -> CRecord (List.map (fun (s, c) -> (s, ltl c)) l)
+    | VRecord l -> CRecord (List.map (fun (s, c) ->
+        let ty = match ty with
+          | Some (Trecord (_, fields)) -> List.assoc_opt s fields
+          | _ -> None in
+        (s, ltl ?ty c)
+      ) l)
 
     | VPackedStructure _ -> error "decompilation VPackedStructure"
     | VContractInstance _ -> error "decompilation VContractInstance"
@@ -3066,9 +3157,9 @@ let rec lovevalue_to_liqconst (c : Love_value.Value.t) =
   res
 
 
-let liqconst_to_lovevalue const =
+let liqconst_to_lovevalue ?ty const =
   let initial_env = empty_env (Contract []) () in
-  liqconst_to_lovevalue initial_env const
+  liqconst_to_lovevalue initial_env ?ty const
 
 let const_encoding : Love_value.Value.t Json_encoding.encoding =
   Json_encoding.obj1 @@
