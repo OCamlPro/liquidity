@@ -41,7 +41,7 @@
 
 *)
 
-version = "2.0-rc4";
+version = "2.0";
 
 if(with_version){
     version_info = { ocp2ml=true;
