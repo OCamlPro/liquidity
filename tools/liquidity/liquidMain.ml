@@ -200,12 +200,16 @@ let compile_liquid_files_to_love files =
       (Format.asprintf "%a" Love_printer.Ast.print_structure love_ast);
   let to_json love_ast = Liq2love.print_contract_json love_ast in
   let to_readable love_ast =
-    let s = Format.asprintf "#love\n%a"
-        Love_printer.Ast.print_structure love_ast in
-    if !LiquidOptions.writeinfo then
-      LiquidInfomark.gen_info
-        ~decompile:false ~language:"Love" files ^ s
-    else s in
+    let info =
+      if !LiquidOptions.writeinfo then
+        LiquidInfomark.gen_info
+          ~decompile:false ~language:"Love" files
+      else "" in
+    String.concat "" [
+      "#love\n\n";
+      info;
+      Format.asprintf "%a" Love_printer.Ast.print_structure love_ast
+    ] in
   output_final ~to_json ~to_readable ~outprefix ~ext:"lov" love_ast
 
 
