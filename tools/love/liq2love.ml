@@ -10,7 +10,6 @@ open Love_ast_types.TYPE
 open Love_type_utils
 open Compil_utils
 open Love_pervasives
-open Log
 
 module SMap = Collections.StringMap
 module SIMap = Collections.StringIdentMap
@@ -18,6 +17,16 @@ module SIMap = Collections.StringIdentMap
 type env = Love_tenv.t
 
 exception UnknownType of (string * (TYPE.t -> TYPE.t) * env)
+
+let debug fmt =
+  if !LiquidOptions.verbosity > 1 then begin
+    Love_pervasives.Options.debug := true;
+    Love_pervasives.Log.fmt := (fun () -> Format.err_formatter);
+    (* Format.eprintf "%s@." (Format.; *)
+    Love_pervasives.Log.debug fmt
+  end
+  else
+    Format.ifprintf Love_pervasives.Log.dummy_formatter fmt
 
 module TypeVarMap = struct
   include TYPE.TypeVarMap
