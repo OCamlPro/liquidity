@@ -53,9 +53,14 @@ module Target = struct
     else LiquidToMicheline.string_of_const c
 
   let print_contract c =
-    if !LiquidOptions.singleline
-    then LiquidToMicheline.line_of_contract c
-    else LiquidToMicheline.string_of_contract c
+    let s =
+      if !LiquidOptions.singleline
+      then LiquidToMicheline.line_of_contract c
+      else LiquidToMicheline.string_of_contract c in
+    if !LiquidOptions.writeinfo then
+      LiquidInfomark.gen_info
+        ~decompile:false ~language:"Michelson" [] ^ s
+    else s
 
   let const = new Lazy_superposed.superposer (object
     method parse = parse_const

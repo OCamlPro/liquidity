@@ -170,10 +170,17 @@ let print_contract c =
     LiquidCheck.typecheck_contract
       ~keep_tvars:true ~warnings:false ~decompiling:true c
   in
-  From_strings [LiquidPrinter.Syntax.string_of_structure
-                  (LiquidToParsetree.structure_of_contract
-                     ~type_annots:!global_type_annots ~types:!global_types untyped_ast) []
-               ]
+  let s =
+    LiquidPrinter.Syntax.string_of_structure
+      (LiquidToParsetree.structure_of_contract
+         ~type_annots:!global_type_annots ~types:!global_types untyped_ast) []
+  in
+  let s =
+    if !LiquidOptions.writeinfo then
+    LiquidInfomark.gen_info
+      ~decompile:true ~language:"Liquidity" [] ^ s
+  else s in
+  From_strings [s]
 
 
 let print_datatype ty =

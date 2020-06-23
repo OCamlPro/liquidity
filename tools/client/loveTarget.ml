@@ -69,7 +69,16 @@ module Target = struct
   let print_datatype = Format.asprintf "%a" Love_type.pretty
 
   let print_contract (c : contract) =
-     Format.asprintf "#love\n%a" Love_printer.Ast.print_structure c.code
+    let info =
+      if !LiquidOptions.writeinfo then
+        LiquidInfomark.gen_info
+          ~decompile:false ~language:"Love" []
+      else "" in
+    String.concat "" [
+      "#love\n\n";
+      info;
+      Format.asprintf "%a" Love_printer.Ast.print_structure c.code
+    ]
 
   let const = new Lazy_superposed.superposer (object
     method parse = parse_const
