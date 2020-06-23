@@ -19,6 +19,7 @@ remove: [
 depends: [
      "bigstring"
      "calendar"
+     "cmdliner"
      "digestif" {>= "0.7" }
      "ezjsonm"
      "easy-format"

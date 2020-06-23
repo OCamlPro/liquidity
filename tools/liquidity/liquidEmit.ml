@@ -30,12 +30,16 @@ let i ~loc exp = {
 }
 
 let var_annot = function
-  | None -> []
-  | Some name -> ["@" ^ name]
+  | Some name when not !LiquidOptions.no_annot -> ["@" ^ name]
+  | _ -> []
 
 let field_annot = function
+  | Some field when not !LiquidOptions.no_annot -> ["%" ^ field]
+  | _ -> []
+
+let entrypoint_annot = function
+  | Some entry -> ["%" ^ entry]
   | None -> []
-  | Some field -> ["%" ^ field]
 
 let rec emit_code ~expand code =
   let name = code.loc_name in
@@ -48,19 +52,19 @@ let rec emit_code ~expand code =
                [emit_code ~expand ifthen; emit_code ~expand ifelse], var_annot name)
   | IF_NONE (ifthen, ifelse) ->
     M_INS_EXP ("IF_NONE", [],
-               [emit_code ~expand ifthen; emit_code ~expand ifelse], var_annot name)
+               [emit_code ~expand ifthen; emit_code ~expand ifelse], [])
   | IF_CONS (ifcons, ifnil) ->
     M_INS_EXP ("IF_CONS", [],
-               [emit_code ~expand ifcons; emit_code ~expand ifnil], var_annot name)
+               [emit_code ~expand ifcons; emit_code ~expand ifnil], [])
   | IF_LEFT (left, right) ->
     M_INS_EXP ("IF_LEFT", [],
-               [emit_code ~expand left; emit_code ~expand right], var_annot name)
+               [emit_code ~expand left; emit_code ~expand right], [])
   | LOOP loop ->
-    M_INS_EXP ("LOOP", [], [emit_code ~expand loop], var_annot name)
+    M_INS_EXP ("LOOP", [], [emit_code ~expand loop], [])
   | LOOP_LEFT loop ->
     M_INS_EXP ("LOOP_LEFT", [], [emit_code ~expand loop], var_annot name)
   | ITER body ->
-    M_INS_EXP ("ITER", [], [emit_code ~expand body], var_annot name)
+    M_INS_EXP ("ITER", [], [emit_code ~expand body], [])
   | MAP body ->
     M_INS_EXP ("MAP", [], [emit_code ~expand body], var_annot name)
   | LAMBDA (arg_type, res_type, body) ->
@@ -73,7 +77,8 @@ let rec emit_code ~expand code =
   | RIGHT (ty, constr) ->
     M_INS_EXP ("RIGHT", [ty], [],
                var_annot name @ field_annot (Some "") @ field_annot constr)
-  | CONTRACT ty -> M_INS_EXP ("CONTRACT", [ty], [], var_annot name)
+  | CONTRACT (entry, ty) ->
+    M_INS_EXP ("CONTRACT", [ty], [], entrypoint_annot entry @ var_annot name)
 
   | UNPACK ty -> M_INS_EXP ("UNPACK", [ty], [], var_annot name)
 
@@ -87,26 +92,22 @@ let rec emit_code ~expand code =
     let cst = emit_const ~expand cst in
     M_INS_CST ("PUSH", ty, cst, var_annot name)
 
-  | DIP (0, exp) -> assert false
-  | DIP (1, exp) -> M_INS_EXP ("DIP", [], [emit_code ~expand exp], var_annot name)
-  | DIP (n, exp) ->
-    if expand then
-      M_INS_EXP ("DIP", [],
-                 [emit_code ~expand @@ i @@
-                  SEQ [{ code with ins = DIP(n-1, exp) }]], [])
-    else
-      M_INS_EXP (Printf.sprintf "D%sP" (String.make n 'I'), [],
-                 [emit_code ~expand exp], var_annot name)
+  | DIP (0, exp) -> emit_code ~expand exp
+  | DIP (1, exp) -> M_INS_EXP ("DIP", [], [emit_code ~expand exp], [])
+  | DIP (n, exp) -> M_INS_EXP_N ("DIP", n, [emit_code ~expand exp], [])
   | DUP 0 -> assert false
   | DUP 1 -> M_INS ("DUP", var_annot name)
   | DUP n ->
     if expand then
       emit_code ~expand @@ i @@
       SEQ [
-        i @@ DIP(1, i @@ SEQ [i @@ DUP(n-1)]);
-        {ins = SWAP; loc = code.loc; loc_name = name }
+        i @@ DIP (n - 1, i @@ SEQ [{ code with ins = DUP 1 }]);
+        i @@ DIG (n-1);
       ]
     else M_INS (Printf.sprintf "D%sP" (String.make n 'U'), var_annot name)
+  | DIG 1 -> M_INS ("SWAP", [])
+  | DIG n -> M_INS_N ("DIG", n, [])
+  | DUG n -> M_INS_N ("DUG", n, [])
 
   | CDAR (0, field) -> emit_code expand { code with ins = CAR field }
   | CDDR (0, field) -> emit_code expand { code with ins = CDR field }
@@ -124,7 +125,8 @@ let rec emit_code ~expand code =
              (fun _ -> i @@ CDR None) @ [{ code with ins = CDR field }])
     else M_INS (Printf.sprintf "C%sDR" (String.make n 'D'),
                 var_annot name @ field_annot field)
-  | DROP -> M_INS ("DROP", var_annot name)
+  | DROP 1 -> M_INS ("DROP", [])
+  | DROP n -> M_INS_N ("DROP", n, [])
   | CAR field -> M_INS ("CAR", var_annot name @ field_annot field)
   | CDR field -> M_INS ("CDR", var_annot name @ field_annot field)
   | PAIR -> M_INS ("PAIR", var_annot name)
@@ -144,22 +146,20 @@ let rec emit_code ~expand code =
   | ADD -> M_INS ("ADD", var_annot name)
   | SUB -> M_INS ("SUB", var_annot name)
   | BALANCE -> M_INS ("BALANCE", var_annot name)
-  | SWAP -> M_INS ("SWAP", var_annot name)
-  | DIP_DROP (n,m) ->
-    emit_code ~expand @@
-    i @@ DIP (n, i @@ SEQ (LiquidMisc.list_init m (fun _ -> i DROP)))
+  | SWAP -> M_INS ("SWAP", [])
+  | DIP_DROP (n,m) -> emit_code ~expand @@ i @@ DIP (n, i @@ SEQ [ i (DROP m) ])
   | SOME -> M_INS ("SOME", var_annot name)
   | GET -> M_INS ("GET", var_annot name)
   | UPDATE -> M_INS ("UPDATE", var_annot name)
   | CONCAT -> M_INS ("CONCAT", var_annot name)
   | SLICE -> M_INS ("SLICE", var_annot name)
   | MEM -> M_INS ("MEM", var_annot name)
-  | SELF -> M_INS ("SELF", var_annot name)
+  | SELF entry -> M_INS ("SELF", entrypoint_annot entry @ var_annot name)
   (*  | SOURCE -> M_INS "SOURCE" *)
   | AMOUNT -> M_INS ("AMOUNT", var_annot name)
   | STEPS_TO_QUOTA -> M_INS ("STEPS_TO_QUOTA", var_annot name)
   | ADDRESS -> M_INS ("ADDRESS", var_annot name)
-  | CREATE_ACCOUNT -> M_INS ("CREATE_ACCOUNT", var_annot name)
+  | CHAIN_ID -> M_INS ("CHAIN_ID", var_annot name)
   | PACK -> M_INS ("PACK", var_annot name)
   | BLAKE2B -> M_INS ("BLAKE2B", var_annot name)
   | SHA256 -> M_INS ("SHA256", var_annot name)
@@ -196,6 +196,8 @@ let rec emit_code ~expand code =
   | IS_IMPLICIT -> M_INS ("IS_IMPLICIT", var_annot name)
   | BLOCK_LEVEL -> M_INS ("BLOCK_LEVEL", var_annot name)
   | COLLECT_CALL -> M_INS ("COLLECT_CALL", var_annot name)
+  | EMPTY_BIG_MAP (k, v) ->
+    M_INS_EXP ("EMPTY_BIG_MAP", [k; v], [], var_annot name)
 
 and emit_const ~expand cst = match cst with
   | ( CUnit
@@ -210,8 +212,7 @@ and emit_const ~expand cst = match cst with
     | CSignature _
     | CNone
     | CKey_hash _
-    | CContract _
-    | CAddress _ ) as cst -> cst
+    | CContract _ ) as cst -> cst
   | CLambda l ->
     CLambda { l with body = emit_code ~expand l.body }
   | CTuple l ->
@@ -226,10 +227,11 @@ and emit_const ~expand cst = match cst with
     CMap (List.map (fun (k, v) ->
         (emit_const ~expand k,
          emit_const ~expand v)) l)
-  | CBigMap l ->
-    CBigMap (List.map (fun (k, v) ->
+  | CBigMap BMList l ->
+    CBigMap (BMList (List.map (fun (k, v) ->
         (emit_const ~expand k,
-         emit_const ~expand v)) l)
+         emit_const ~expand v)) l))
+  | CBigMap BMId _ as c -> c
   | CLeft c ->
     CLeft (emit_const ~expand c)
   | CRight c ->
@@ -243,8 +245,9 @@ and emit_const ~expand cst = match cst with
 and emit_contract ~expand (contract : loc_michelson_contract) =
   if !LiquidOptions.verbosity > 0 then
     Format.eprintf "Emit Michelson for contract@.";
+  let root_annots = entrypoint_annot contract.mic_root in
   [
-    M_INS_EXP ("parameter", [contract.mic_parameter], [], []);
+    M_INS_EXP ("parameter", [contract.mic_parameter], [], root_annots);
     M_INS_EXP ("storage", [contract.mic_storage], [], []);
     M_INS_EXP ("code", [], [emit_code ~expand contract.mic_code], []);
   ] @ match contract.mic_fee_code with

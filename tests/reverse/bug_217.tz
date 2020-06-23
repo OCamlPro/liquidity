@@ -4,6 +4,6 @@ code { DUP ;
        DIP { CDR @__slash_1 ; } ;
        CAR @b_slash_2 ;
        DUP @b ;
-       UNPACK (contract nat) ;
+       UNPACK address ;
        IF_NONE { PUSH int 1 ; FAILWITH ; }
                { DUP @s ; FAILWITH ; } }

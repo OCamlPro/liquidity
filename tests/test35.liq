@@ -2,7 +2,7 @@ type t = A | B | C
 
 type storage = int
 
-let%entry main
+let%entry default
     (parameter : t)
     _storage =
   let r = match parameter with

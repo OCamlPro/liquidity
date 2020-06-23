@@ -1,8 +1,9 @@
-type storage = address option
+type storage = {
+  x : int;
+  c : address;
+}
 
-let%entry main (k : key_hash) _ =
-  let not_delegatable = false in
-  let (op, addr) =
-    Account.create
-      ~manager:k ~delegate:(Some k) ~delegatable:false ~amount:100DUN in
-  ([op], Some addr)
+let%entry default () storage =
+  let addr = Contract.untype (Contract.self ()) in
+  let storage = storage.c <- addr in
+  [], storage

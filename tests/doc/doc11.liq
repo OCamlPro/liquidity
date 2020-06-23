@@ -1,6 +1,6 @@
 type storage = nat
 
-let%entry main ( v : dun ) _ =
+let%entry default ( v : dun ) _ =
   (* conversion from dun to nat *)
   let (nat, rem_dun) = match v / 1DUN with
     | Some qr -> qr

@@ -1,6 +1,8 @@
 S ./**
-S ../../libs/**
-B ../../_obuild/**
+S ../libs/**
+S ../dune-network/src/**
+S ../dune-network/vendors/**
+B ../_obuild/**
 
 FLG -rectypes
 
@@ -22,3 +24,4 @@ PKG easy-format
 PKG ocaml-migrate-parsetree
 PKG menhirLib
 PKG zarith
+PKG ezcmd

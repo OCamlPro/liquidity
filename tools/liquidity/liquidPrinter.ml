@@ -54,24 +54,24 @@ module Michelson = struct
     bprinter fmt b indent x;
     Buffer.contents b
 
-  let bprint_annots b annots =
-    if not !LiquidOptions.no_annot then
+  let bprint_annots ?(parameter=false) b annots =
+    if parameter || not !LiquidOptions.no_annot then
       match annots with
       | [] -> ()
       | _ -> Printf.bprintf b "%s" (String.concat " " ("" :: annots))
 
-  let bprint_wrap_annots b bprint_type annots =
+  let bprint_wrap_annots ?parameter b bprint_type annots =
     match annots with
     | [] -> bprint_type ()
     | _ ->
       Printf.bprintf b "(";
       bprint_type ();
-      bprint_annots b annots;
+      bprint_annots ?parameter b annots;
       Printf.bprintf b ")"
 
   let is_word_type = function
     | Tfail | Tunit | Tbool | Tint   | Tnat | Ttez | Tstring | Tbytes
-    | Ttimestamp | Tkey | Tkey_hash | Tsignature | Toperation | Taddress ->
+    | Ttimestamp | Tkey | Tkey_hash | Tsignature | Toperation | Taddress | Tchainid ->
       true
     | Ttuple _ | Trecord _ | Tsum _ | Tcontract _ | Tor _ | Toption _ | Tlist _
     | Tset _ | Tmap _ | Tbigmap _ | Tlambda _ | Tclosure _ ->
@@ -79,7 +79,7 @@ module Michelson = struct
     | Tvar _ -> true
     | Tpartial _ -> false
 
-  let bprint_type_base fmt b indent ty annots =
+  let bprint_type_base ?parameter fmt b indent ty annots =
     let rec bprint_type_rec fmt b indent ty annots =
       match ty with
       | Tfail -> Printf.bprintf b "unit" (* use unit for failure in michelson *)
@@ -96,23 +96,20 @@ module Michelson = struct
       | Tsignature  -> Printf.bprintf b "signature"
       | Toperation  -> Printf.bprintf b "operation"
       | Taddress  -> Printf.bprintf b "address"
+      | Tchainid  -> Printf.bprintf b "chain_id"
       | Ttuple tys ->
         bprint_type_pairs fmt b indent tys annots
       | Trecord (name, labels) ->
         bprint_type_record name fmt b indent labels annots
       | Tsum (name, constrs) ->
         bprint_type_sum name fmt b indent constrs annots
-      | Tcontract { sig_name; entries_sig = [{ parameter = ty }] } ->
+      | Tcontract (_entry, ty) ->
         let indent = fmt.increase_indent indent in
         Printf.bprintf b "(contract";
-        bprint_annots b
-          (match sig_name with
-           | None -> annots
-           | Some name -> (":" ^ name) :: annots);
+        bprint_annots b annots;
         Printf.bprintf b "%c%s" fmt.newline indent;
         bprint_type fmt b indent ty [];
         Printf.bprintf b ")";
-      | Tcontract _ -> assert false
       | Tor (ty1, ty2) ->
         let indent = fmt.increase_indent indent in
         Printf.bprintf b "(or";
@@ -198,7 +195,7 @@ module Michelson = struct
       | ty :: tys ->
         let indent = fmt.increase_indent indent in
         Printf.bprintf b "(pair";
-        bprint_annots b annots;
+        bprint_annots ?parameter b annots;
         Printf.bprintf b "%c%s" fmt.newline indent;
         bprint_type fmt b indent ty [];
         Printf.bprintf b "%c%s" fmt.newline indent;
@@ -207,6 +204,13 @@ module Michelson = struct
         ()
 
     and bprint_type_composed ty_c name fmt b indent labels annots =
+      let annots = match name with
+        | None | Some "" -> annots
+        | Some name ->
+          let name =
+            if name.[0] = '`' then String.sub name 1 (String.length name - 1)
+            else name in
+          (":" ^ name) :: annots in
       match labels with
       | [] -> assert false
       | [label, ty] ->
@@ -217,36 +221,34 @@ module Michelson = struct
       | [label_bigmap, (Tbigmap _ as ty_b); label_r, ty_r] ->
         let indent = fmt.increase_indent indent in
         Printf.bprintf b "(%s" ty_c;
-        let annots = if name = "" then annots else (":" ^ name) :: annots in
-        bprint_annots b annots;
+        bprint_annots ?parameter b annots;
         Printf.bprintf b "%c%s" fmt.newline indent;
         bprint_type fmt b indent ty_b [];
         Printf.bprintf b "%c%s" fmt.newline indent;
         bprint_type fmt b indent ty_r [];
         Printf.bprintf b ")"
       | (label, ty) :: labels ->
-        let annots = if name = "" then annots else (":" ^ name) :: annots in
         let indent = fmt.increase_indent indent in
         Printf.bprintf b "(%s" ty_c;
-        bprint_annots b annots;
+        bprint_annots ?parameter b annots;
         Printf.bprintf b "%c%s" fmt.newline indent;
         let annots = match ty with
           | Tbigmap _ -> [":" ^ label]
           | _ -> ["%" ^ label] in
         bprint_type fmt b indent ty annots;
         Printf.bprintf b "%c%s" fmt.newline indent;
-        bprint_type_composed ty_c "" fmt b indent labels [];
+        bprint_type_composed ty_c None fmt b indent labels [];
         Printf.bprintf b ")"
 
     and bprint_type_record name fmt b indent labels annots =
-      bprint_type_composed "pair" name fmt b indent labels annots
+      bprint_type_composed "pair" (Some name) fmt b indent labels annots
 
     and bprint_type_sum name fmt b indent constrs annots =
       bprint_type_composed "or" name fmt b indent constrs annots
 
     and bprint_type fmt b indent ty annots =
       if is_word_type ty then
-        bprint_wrap_annots b
+        bprint_wrap_annots ?parameter b
           (fun () -> bprint_type_rec fmt b indent ty []) annots
       else
         bprint_type_rec fmt b indent ty annots
@@ -254,20 +256,18 @@ module Michelson = struct
     in
     bprint_type fmt b indent ty annots
 
-  let rec bprint_type fmt b indent ty =
-    bprint_type_base fmt b indent ty []
+  let rec bprint_type ?parameter fmt b indent ty =
+    bprint_type_base ?parameter fmt b indent ty []
 
   let annot a =
-    if !LiquidOptions.no_annot then ""
-    else match a with
-      | Some s -> " @" ^ s
-      | None -> ""
+    match a with
+    | Some s -> " @" ^ s
+    | None -> ""
 
   let annots_to_string annots =
-    if !LiquidOptions.no_annot then ""
-    else match annots with
-      | [] -> ""
-      | annots -> " " ^ String.concat " " annots
+    match annots with
+    | [] -> ""
+    | annots -> " " ^ String.concat " " annots
 
   let rec bprint_const (bprint_mic : format -> Buffer.t -> string -> 'a -> unit)
       fmt b ?(inseq=false) indent (cst : 'a const) =
@@ -276,9 +276,9 @@ module Michelson = struct
     | CBytes s -> Printf.bprintf b "%s" s
     | CKey s -> Printf.bprintf b "%S" s
     | CKey_hash s -> Printf.bprintf b "%S" s
-    | CContract s -> Printf.bprintf b "%S" s
-    | CAddress s -> Printf.bprintf b "%S" s
     | CSignature s -> Printf.bprintf b "%S" s
+    | CContract (s, None) -> Printf.bprintf b "%S" s
+    | CContract (s, Some entry) -> Printf.bprintf b "%S" (String.concat "%" [s; entry])
     | CTez s -> Printf.bprintf b "%s" (Z.to_string (LiquidNumber.mic_mutez_of_tez s))
     | CInt n -> Printf.bprintf b "%s" (Z.to_string (LiquidNumber.mic_of_integer n))
     | CNat n -> Printf.bprintf b "%s" (Z.to_string (LiquidNumber.mic_of_integer n))
@@ -306,7 +306,7 @@ module Michelson = struct
       bprint_const bprint_mic fmt b indent cst;
       if not inseq then Printf.bprintf b ")";
     | CTuple tys -> bprint_const_pairs bprint_mic fmt b ~inseq indent tys
-    | CMap pairs | CBigMap pairs ->
+    | CMap pairs | CBigMap BMList pairs ->
       let indent = fmt.increase_indent indent in
       Printf.bprintf b "{";
       let _ = List.fold_left (fun first (cst1, cst2) ->
@@ -322,6 +322,8 @@ module Michelson = struct
         ) true pairs
       in
       Printf.bprintf b "}";
+    | CBigMap BMId id ->
+      Printf.bprintf b "%s" (Z.to_string (LiquidNumber.mic_of_integer id))
     | CList csts | CSet csts ->
       let indent = fmt.increase_indent indent in
       Printf.bprintf b "{";
@@ -358,6 +360,8 @@ module Michelson = struct
     match code with
     | M_INS (ins, annots) ->
       Printf.bprintf b "%s%s ;" ins (annots_to_string annots)
+    | M_INS_N (ins, n, annots) ->
+      Printf.bprintf b "%s%s %d ;" ins (annots_to_string annots) n
     | M_INS_CST (ins, ty, cst, annots) ->
       let indent = fmt.increase_indent indent in
       Printf.bprintf b "%s%s%c%s"
@@ -376,11 +380,20 @@ module Michelson = struct
           bprint_code fmt b indent_in exp) exps;
       Printf.bprintf b "%c%s}" fmt.newline indent
     | M_INS_EXP (ins,tys, exps, annots) ->
+      let parameter = ins = "parameter" in
       let indent = fmt.increase_indent indent in
       Printf.bprintf b "%s%s" ins (annots_to_string annots);
       List.iter (fun ty ->
           Printf.bprintf b "%c%s" fmt.newline indent;
-          bprint_type fmt b indent ty) tys;
+          bprint_type ~parameter fmt b indent ty) tys;
+      List.iter (fun exp ->
+          Printf.bprintf b "%c%s" fmt.newline indent;
+          bprint_code fmt b indent exp) exps;
+      Printf.bprintf b "%c%s;" fmt.newline indent;
+    | M_INS_EXP_N (ins, n, exps, annots) ->
+      let indent = fmt.increase_indent indent in
+      Printf.bprintf b "%s%s" ins (annots_to_string annots);
+      Printf.bprintf b "%c%s%d" fmt.newline indent n;
       List.iter (fun exp ->
           Printf.bprintf b "%c%s" fmt.newline indent;
           bprint_code fmt b indent exp) exps;
@@ -451,6 +464,8 @@ module Michelson = struct
       | Some field -> Printf.bprintf b " %%%s " field
       | None -> ()
 
+  let bprint_pre_entry b e = bprint_pre_field b e
+
   let rec bprint_pre_michelson bprint_arg fmt b name
       (m  : 'a pre_michelson) = match m with
     (* = function *)
@@ -461,9 +476,12 @@ module Michelson = struct
       Printf.bprintf b "{ ";
       List.iter (fun a -> bprint_arg fmt b a; Printf.bprintf b " ; ") args;
       Printf.bprintf b " }";
+    | DIP (1, a) ->
+      Printf.bprintf b "DIP ";
+      bprint_pre_name b name;
+      bprint_arg fmt b a;
     | DIP (i, a) ->
-      Printf.bprintf b "D%sP "
-        (String.concat "" (LiquidMisc.list_init i (fun _ -> "I")));
+      Printf.bprintf b "DIP %n " i;
       bprint_pre_name b name;
       bprint_arg fmt b a;
     | IF (a1, a2) ->
@@ -517,10 +535,16 @@ module Michelson = struct
         (String.concat "" (LiquidMisc.list_init i (fun _ -> "U")));
       bprint_pre_name b name;
     | DIP_DROP (i, r) ->
-      Printf.bprintf b "DIP_DROP (%d, %d)" i r;
+      Printf.bprintf b "DIP %d { DROP %d }" i r;
       bprint_pre_name b name;
-    | DROP ->
-      Printf.bprintf b "DROP";
+    | DROP n ->
+      Printf.bprintf b "DROP %d" n;
+      bprint_pre_name b name;
+    | DIG n ->
+      Printf.bprintf b "DIG %d" n;
+      bprint_pre_name b name;
+    | DUG n ->
+      Printf.bprintf b "DUG %d" n;
       bprint_pre_name b name;
     | CAR field ->
       Printf.bprintf b "CAR";
@@ -546,6 +570,11 @@ module Michelson = struct
       bprint_type fmt b "" ty;
       Printf.bprintf b " ";
       bprint_const (fun fmt b ident a -> bprint_arg fmt b a) fmt b "" c;
+    | EMPTY_BIG_MAP (k, v) ->
+      Printf.bprintf b "EMPTY_BIG_MAP ";
+      bprint_pre_name b name;
+      bprint_type fmt b "" k;
+      bprint_type fmt b "" v;
     | PAIR ->
       Printf.bprintf b "PAIR";
       bprint_pre_name b name;
@@ -613,9 +642,10 @@ module Michelson = struct
     | MEM ->
       Printf.bprintf b "MEM";
       bprint_pre_name b name;
-    | SELF ->
+    | SELF e ->
       Printf.bprintf b "SELF";
       bprint_pre_name b name;
+      bprint_pre_entry b e;
     | AMOUNT ->
       Printf.bprintf b "AMOUNT";
       bprint_pre_name b name;
@@ -625,8 +655,8 @@ module Michelson = struct
     | ADDRESS ->
       Printf.bprintf b "ADDRESS";
       bprint_pre_name b name;
-    | CREATE_ACCOUNT ->
-      Printf.bprintf b "CREATE_ACCOUNT";
+    | CHAIN_ID ->
+      Printf.bprintf b "CHAIN_ID";
       bprint_pre_name b name;
     | CREATE_CONTRACT contract ->
       Printf.bprintf b "CREATE_CONTRACT { parameter ";
@@ -699,9 +729,10 @@ module Michelson = struct
       bprint_pre_name b name;
       bprint_pre_field b constr;
       bprint_type fmt b "" ty;
-    | CONTRACT ty ->
+    | CONTRACT (e, ty) ->
       Printf.bprintf b "CONTRACT";
       bprint_pre_name b name;
+      bprint_pre_entry b e;
       bprint_type fmt b "" ty;
     | EDIV ->
       Printf.bprintf b "EDIV";
@@ -854,6 +885,7 @@ module LiquidDebug = struct
       | Tsignature  -> Printf.bprintf b "signature"
       | Toperation  -> Printf.bprintf b "operation"
       | Taddress  -> Printf.bprintf b "address"
+      | Tchainid  -> Printf.bprintf b "chain_id"
       | Ttuple [] -> assert false
       | Ttuple (ty :: tys) ->
         Printf.bprintf b "(";
@@ -874,6 +906,16 @@ module LiquidDebug = struct
         Printf.bprintf b " }";
       | Trecord (name, _) ->
         Printf.bprintf b "%s" name;
+      | Tsum (None, []) ->
+        Printf.bprintf b "[]";
+      | Tsum (None, (c, ty) :: rtys) ->
+        Printf.bprintf b "[ %s of " c;
+        bprint_type b "" ty;
+        List.iter (fun (c, ty) ->
+            Printf.bprintf b " | %s of " c;
+            bprint_type b "" ty;
+          ) rtys;
+        Printf.bprintf b " ]";
       | Tsum (_, (c, ty) :: rtys) when expand ->
         Printf.bprintf b "%s of " c;
         bprint_type b "" ty;
@@ -881,13 +923,16 @@ module LiquidDebug = struct
             Printf.bprintf b " | %s of " c;
             bprint_type b "" ty;
           ) rtys;
-      | Tsum (name, _) ->
+      | Tsum (Some name, _) ->
         Printf.bprintf b "%s" name;
-      | Tcontract { sig_name = Some s } ->
-        Printf.bprintf b "%s.instance" s;
-      | Tcontract contract_sig ->
-        bprint_contract_sig expand b indent contract_sig;
-        Printf.bprintf b ".instance";
+      | Tcontract (Some entry, ty) ->
+        Printf.bprintf b "[%%handle %s : " entry;
+        bprint_type b "" ty;
+        Printf.bprintf b "]";
+      | Tcontract (None, ty) ->
+        Printf.bprintf b "[%%handle ";
+        bprint_type b "" ty;
+        Printf.bprintf b "]";
       | Tor (ty1, ty2) ->
         Printf.bprintf b "(";
         bprint_type b "" ty1;
@@ -939,7 +984,11 @@ module LiquidDebug = struct
             Printf.bprintf b " %d:%s" n id) pl;
         Printf.bprintf b ")";
       | Tpartial (Pmap _) -> Printf.bprintf b "pmap"
-      | Tpartial (Pcont _) -> Printf.bprintf b "pcont"
+      | Tpartial (Pcont None) -> Printf.bprintf b "pcont none"
+      | Tpartial (Pcont Some (e, ty)) ->
+        Printf.bprintf b "pcont[%s : " e;
+        bprint_type b indent (LiquidTypes.expand ty);
+        Printf.bprintf b "]";
       | Tpartial (Ppar) -> Printf.bprintf b "ppar"
     in
     bprint_type b indent ty
@@ -982,8 +1031,8 @@ module LiquidDebug = struct
     | CBytes s -> Printf.bprintf b "%s" s
     | CKey s -> Printf.bprintf b "%s" s
     | CKey_hash s -> Printf.bprintf b "%s" s
-    | CContract s -> Printf.bprintf b "%s" s
-    | CAddress s -> Printf.bprintf b "%s" s
+    | CContract (s, None) -> Printf.bprintf b "%s" s
+    | CContract (s, Some e) -> Printf.bprintf b "%s%%%s" s e
     | CSignature s -> Printf.bprintf b "%s" s
     | CTez s -> Printf.bprintf b "%s%s" (LiquidNumber.liq_of_tez s)
                   (LiquidOptions.curreny ())
@@ -1015,8 +1064,10 @@ module LiquidDebug = struct
         ) cs;
       Printf.bprintf b ")";
     | CMap [] -> Printf.bprintf b "(Map [])";
-    | CBigMap [] -> Printf.bprintf b "(BigMap [])";
-    | CMap ((c1, c2) :: pairs) | CBigMap ((c1, c2) :: pairs) ->
+    | CBigMap BMId id ->
+      Printf.bprintf b "(BigMap %s)" (LiquidNumber.liq_of_integer id);
+    | CBigMap BMList [] -> Printf.bprintf b "(BigMap [])";
+    | CMap ((c1, c2) :: pairs) | CBigMap BMList ((c1, c2) :: pairs) ->
       let indent2 = indent ^ "      " in
       if String.length indent > 2 then Printf.bprintf b "\n%s" indent;
       Printf.bprintf b "(%s [" (match cst with
@@ -1146,15 +1197,23 @@ module LiquidDebug = struct
       Printf.bprintf b ")"
     | Call { contract; amount; entry = None; arg } ->
       Printf.bprintf b "\n%s(Contract.call" indent;
+      bprint_code_rec ~debug b indent contract;
       let indent2 = indent ^ "  " in
-      bprint_code_rec ~debug b indent2 contract;
-      bprint_code_rec ~debug b indent2 amount;
       bprint_code_rec ~debug b indent2 arg;
+      bprint_code_rec ~debug b indent2 amount;
       Printf.bprintf b ")"
     | Call { contract; amount; entry = Some entry; arg } ->
       Printf.bprintf b "\n%s(" indent;
       bprint_code_rec ~debug b indent contract;
       Printf.bprintf b ".%s" entry;
+      let indent2 = indent ^ "  " in
+      bprint_code_rec ~debug b indent2 arg;
+      bprint_code_rec ~debug b indent2 amount;
+      Printf.bprintf b ")"
+    | Self { entry } ->
+      Printf.bprintf b "\n%s[%%handle Self.%s]" indent entry;
+    | SelfCall { amount; entry; arg } ->
+      Printf.bprintf b "\n%s(Self.%s" indent entry;
       let indent2 = indent ^ "  " in
       bprint_code_rec ~debug b indent2 arg;
       bprint_code_rec ~debug b indent2 amount;
@@ -1321,13 +1380,10 @@ module LiquidDebug = struct
           bprint_code_rec ~debug b indent2 exp
         ) args;
       Printf.bprintf b "\n%s(contract %s)" indent contract.contract_name;
-    | ContractAt { arg; c_sig } ->
-      Printf.bprintf b "\n%s(Contract.at" indent;
-      let indent2 = indent ^ "  " in
-      bprint_code_rec ~debug b indent2 arg;
-      Printf.bprintf b " : ";
-      bprint_type b (indent ^ "  ") (Toption (Tcontract c_sig));
-      Printf.bprintf b ")"
+    | ContractAt { arg; entry; entry_param } ->
+      Printf.bprintf b "\n%s[%%%%handle val%%entry %s : " indent entry;
+      bprint_type b (indent ^ "  ") entry_param;
+      Printf.bprintf b " -> _ ]"
     | Unpack { arg; ty } ->
       Printf.bprintf b "\n%s(Bytes.unpack" indent;
       let indent2 = indent ^ "  " in
@@ -1474,7 +1530,8 @@ let string_of_node node =
   | N_END -> "N_END"
   | N_LEFT _ -> "N_LEFT"
   | N_RIGHT _ -> "N_RIGHT"
-  | N_CONTRACT _ -> "N_CONTRACT"
+  | N_CONTRACT (None, _) -> "N_CONTRACT"
+  | N_CONTRACT (Some e, _) -> Printf.sprintf "N_CONTRACT %s" e
   | N_UNPACK _ -> "N_UNPACK"
   | N_ABS -> "N_ABS"
   | N_CREATE_CONTRACT _ -> "N_CREATE_CONTRACT"
@@ -1483,7 +1540,9 @@ let string_of_node node =
   | N_CONSTR c -> "N_CONSTR " ^ c
   | N_SETFIELD f -> "N_SETFIELD " ^ f
   | N_RESULT (_, i) -> Printf.sprintf "N_RESULT %d" i
-  | N_LOOP_LEFT _ -> Printf.sprintf "N_LOOP_LEFT"
-  | N_LOOP_LEFT_BEGIN _ -> Printf.sprintf "N_LOOP_LEFT_BEGIN"
-  | N_LOOP_LEFT_END _ -> Printf.sprintf "N_LOOP_LEFT_END"
-  | N_LOOP_LEFT_RESULT _ -> Printf.sprintf "N_LOOP_LEFT_RESULT"
+  | N_LOOP_LEFT _ -> "N_LOOP_LEFT"
+  | N_LOOP_LEFT_BEGIN _ -> "N_LOOP_LEFT_BEGIN"
+  | N_LOOP_LEFT_END _ -> "N_LOOP_LEFT_END"
+  | N_LOOP_LEFT_RESULT _ -> "N_LOOP_LEFT_RESULT"
+  | N_SELF None -> "N_SELF"
+  | N_SELF Some e -> Printf.sprintf "N_SELF %s" e

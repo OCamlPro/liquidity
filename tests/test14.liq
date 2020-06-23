@@ -4,7 +4,7 @@
 
 type storage = int set
 
-let%entry main
+let%entry default
       (parameter : int)
       (storage : int set) =
 

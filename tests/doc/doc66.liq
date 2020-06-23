@@ -3,7 +3,7 @@ type storage = {
   nothing : unit
 }
 
-let%entry main (param : int) storage =
+let%entry default (param : int) storage =
   let _v = match Map.find param storage.big with
     | None -> failwith ("param is not in the map", param)
     | Some v -> v

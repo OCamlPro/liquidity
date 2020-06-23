@@ -1,6 +1,6 @@
 type storage = unit
 
-let%entry main () _ =
+let%entry default () _ =
   let x = (1,2,3,4) in
   let x0 = x.(0) <- 10 in
   let x1 = x0.(1) <- 11 in

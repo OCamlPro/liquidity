@@ -3,7 +3,7 @@ type storage = {
   nothing : unit
 }
 
-let%entry main (param : int) storage =
+let%entry default (param : int) storage =
   if not (Map.mem param storage.big) then
     failwith ("param is not in the map", param);
   [], storage

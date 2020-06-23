@@ -26,6 +26,8 @@
 
 open LiquidTypes
 
+let fixpoint_limit = 5000
+
 let rec compute decompile code to_inline =
 
   let old_to_inline = to_inline in
@@ -36,7 +38,7 @@ let rec compute decompile code to_inline =
 
   let rec size exp =
     match exp.desc with
-    | Const _ | Var _ | SetField _ | Project _ -> 1
+    | Const _ | Var _ | SetField _ | Project _ | Self _ -> 1
 
     | Failwith arg
     | ContractAt { arg }
@@ -61,6 +63,8 @@ let rec compute decompile code to_inline =
     | MapFold { body; arg; acc } -> 30 + size body + size arg + size acc
     | Call { contract; amount; arg } ->
       1 + size contract + size amount + size arg
+    | SelfCall { amount; arg } ->
+      1 + size amount + size arg
     | Transfer { dest; amount } ->
       1 + size dest + size amount
 
@@ -295,6 +299,9 @@ let rec compute decompile code to_inline =
       let args = List.map iter args in
       { exp with desc = Apply { prim; args } }
 
+    | Self { entry } ->
+      { exp with desc = Self { entry } }
+
     | Transfer { dest; amount } ->
       let dest = iter dest in
       let amount = iter amount in
@@ -305,6 +312,11 @@ let rec compute decompile code to_inline =
       let amount = iter amount in
       let arg = iter arg in
       { exp with desc = Call { contract; amount; entry; arg } }
+
+    | SelfCall { amount; entry; arg } ->
+      let amount = iter amount in
+      let arg = iter arg in
+      { exp with desc = SelfCall { amount; entry; arg } }
 
     | Lambda { arg_name; arg_ty; body; ret_ty; recursive } ->
       let body = iter body in
@@ -329,9 +341,9 @@ let rec compute decompile code to_inline =
       (* contract is already simplified *)
       { exp with desc = CreateContract { args; contract } }
 
-    | ContractAt { arg; c_sig } ->
+    | ContractAt { arg; entry; entry_param } ->
       let arg = iter arg in
-      { exp with desc = ContractAt { arg; c_sig } }
+      { exp with desc = ContractAt { arg; entry; entry_param } }
 
     | Unpack { arg; ty } ->
       let arg = iter arg in
@@ -349,8 +361,8 @@ let rec compute decompile code to_inline =
 
   and iter_const c = match c with
     | ( CUnit | CBool _ | CInt _ | CNat _ | CTez _ | CTimestamp _ | CString _
-      | CBytes _ | CKey _ | CContract _ | CSignature _ | CNone  | CKey_hash _
-      | CAddress _ ) as c -> c
+      | CBytes _ | CKey _ | CSignature _ | CNone  | CKey_hash _
+      | CContract _) as c -> c
     | CSome x -> CSome (iter_const x)
     | CLeft x -> CLeft (iter_const x)
     | CRight x -> CRight (iter_const x)
@@ -359,8 +371,9 @@ let rec compute decompile code to_inline =
     | CSet xs -> CSet (List.map (iter_const) xs)
     | CMap l ->
       CMap (List.map (fun (x,y) -> iter_const x, iter_const y) l)
-    | CBigMap l ->
-      CBigMap (List.map (fun (x,y) -> iter_const x, iter_const y) l)
+    | CBigMap BMList l ->
+      CBigMap (BMList (List.map (fun (x,y) -> iter_const x, iter_const y) l))
+    | CBigMap BMId _ as c -> c
     | CRecord labels ->
       CRecord (List.map (fun (f, x) -> f, iter_const x) labels)
     | CConstr (constr, x) ->
@@ -370,10 +383,17 @@ let rec compute decompile code to_inline =
       CLambda { arg_name; arg_ty; body; ret_ty; recursive }
   in
 
+  let cpt = ref 0 in
 
   let rec fixpoint code =
-    let c = iter code in
-    if eq_syntax_exp c code then c else fixpoint c
+    incr cpt;
+    if !cpt > fixpoint_limit then
+      code
+      (* Format.kasprintf failwith
+       * "Reached fixpoint limit (%d) in inlining" fixpoint_limit *)
+    else
+      let c = iter code in
+      if eq_syntax_exp c code then c else fixpoint c
   in
 
   fixpoint code
@@ -386,7 +406,7 @@ and simplify_contract ?(decompile_annoted=false) contract (to_inline, to_inline_
       (LiquidNamespace.qual_contract_name contract);
 
   match contract.entries with
-  | [{ entry_sig = { entry_name = "main" };
+  | [{ entry_sig = { entry_name = _ };
        code; fee_code } as entry ] ->
     { contract with
       entries = [{ entry with

@@ -9,7 +9,7 @@ type storage =
 
 let x = if true then 3 else 4
 
-let%entry main
+let%entry default
       (p : bool)
       (storage : storage)
       =

@@ -27,8 +27,11 @@ let zero = Num.num_of_int 0
 
 let of_int = Num.num_of_int
 let to_int = Num.int_of_num
+let of_int64 x = Num.num_of_big_int (Big_int.big_int_of_int64 x)
+let to_int64 x = Big_int.int64_of_big_int (Num.big_int_of_num x)
 let add = Num.add_num
 let mul = Num.mult_num
+let pred = Num.pred_num
 
 let div_rem a b =
   Num.quo_num a b, Num.mod_num a b

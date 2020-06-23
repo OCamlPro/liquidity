@@ -1,7 +1,7 @@
 
 type storage = bool
 
-let%entry main
+let%entry default
     (parameter : bool)
     storage =
 

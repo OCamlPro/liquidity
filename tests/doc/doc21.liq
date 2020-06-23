@@ -1,7 +1,7 @@
 type storage = unit
 
-let%entry main () _ =
-  let me = Contract.self () in
+let%entry default () _ =
+  let me = [%handle Self.other] in
   let op = me.other 10 ~amount:0DUN in
   [op], ()
 

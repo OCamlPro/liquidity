@@ -52,8 +52,8 @@ let base_of_var arg =
   try
     let pos = String.index arg '/' in
     String.sub arg 0 pos
-  with Not_found ->
-    raise (Invalid_argument ("base_of_var: "^arg))
+  with Not_found -> arg
+    (* raise (Invalid_argument ("base_of_var: "^arg)) *)
 
 let base_of_lvar arg =
   { arg with nname = base_of_var arg.nname }
@@ -66,13 +66,6 @@ let find_name env name =
        might be lost in the decoding phase (when decompiling). This
        hacks allows to bypass this. *)
     base_of_var name
-
-let escape_var arg =
-  try
-    let pos = String.index arg '/' in
-    String.sub arg 0 pos ^ "_" ^
-    String.sub arg (pos+1) (String.length arg - pos - 1)
-  with Not_found -> assert false
 
 let find_free env var_arg bv =
   let var_arg' = base_of_var var_arg in
@@ -105,7 +98,7 @@ let find_lfree env v bv =
    scopes. Unfortunately, without hash-consing, this can be quite expensive.
 *)
 
-let rec untype (env : env) (code : (datatype, 'a) exp) : (datatype, 'b) exp =
+let rec untype (env : env) (code : (datatype, 'a) exp) : (unit, 'b) exp =
   let desc =
     match code.desc with
     | If { cond; ifthen; ifelse } ->
@@ -220,6 +213,13 @@ let rec untype (env : env) (code : (datatype, 'a) exp) : (datatype, 'b) exp =
              entry;
              arg = untype env arg }
 
+    | Self { entry } -> Self { entry }
+
+    | SelfCall { amount; entry; arg } ->
+      SelfCall { amount = untype env amount;
+             entry;
+             arg = untype env arg }
+
     | MatchVariant { arg; cases } ->
       let arg = untype env arg in
       let cases = List.map (function
@@ -237,8 +237,8 @@ let rec untype (env : env) (code : (datatype, 'a) exp) : (datatype, 'b) exp =
       CreateContract { args = List.map (untype env) args;
                        contract = untype_contract contract }
 
-    | ContractAt { arg; c_sig } ->
-      ContractAt { arg = untype env arg; c_sig }
+    | ContractAt { arg; entry; entry_param } ->
+      ContractAt { arg = untype env arg; entry; entry_param }
 
     | Unpack { arg; ty } ->
       Unpack { arg = untype env arg; ty }
@@ -257,14 +257,14 @@ let rec untype (env : env) (code : (datatype, 'a) exp) : (datatype, 'b) exp =
      *      (LiquidPrinter.Liquid.string_of_code code) *)
 
   in
-  mk ~loc:code.loc desc code.ty
+  mk ~loc:code.loc desc ()(* code.ty *)
 
 and untype_lambda { arg_name; arg_ty; body; ret_ty; recursive } =
   let base = base_of_lvar arg_name in
   let env = empty_env () in
   let env = new_lbinding arg_name base env in
   let recursive, env, ret_ty = match recursive with
-    | None -> recursive, env, Tunit
+    | None -> recursive, env, ret_ty
     | Some f ->
       let f_base = base_of_var f in
       let env = new_binding f f_base env in
@@ -276,8 +276,8 @@ and untype_lambda { arg_name; arg_ty; body; ret_ty; recursive } =
 
 and untype_const c = match c with
   | ( CUnit | CBool _ | CInt _ | CNat _ | CTez _ | CTimestamp _ | CString _
-    | CBytes _ | CKey _ | CContract _ | CSignature _ | CNone  | CKey_hash _
-    | CAddress _ ) as c -> c
+    | CBytes _ | CKey _ | CSignature _ | CNone  | CKey_hash _
+    | CContract _ ) as c -> c
   | CSome x -> CSome (untype_const x)
   | CLeft x -> CLeft (untype_const x)
   | CRight x -> CRight (untype_const x)
@@ -286,8 +286,9 @@ and untype_const c = match c with
   | CSet xs -> CSet (List.map (untype_const) xs)
   | CMap l ->
     CMap (List.map (fun (x,y) -> untype_const x, untype_const y) l)
-  | CBigMap l ->
-    CBigMap (List.map (fun (x,y) -> untype_const x, untype_const y) l)
+  | CBigMap BMList l ->
+    CBigMap (BMList (List.map (fun (x,y) -> untype_const x, untype_const y) l))
+  | CBigMap BMId _ as c -> c
   | CRecord labels ->
     CRecord (List.map (fun (f, x) -> f, untype_const x) labels)
   | CConstr (constr, x) ->

@@ -2,8 +2,8 @@
 type t = A of int | B | C of (int * nat)
 type storage = int
 
-let%entry main
-    (parameter : UnitContract.instance * t)
+let%entry default
+    (parameter : [%handle: unit] * t)
     _storage =
 
   let (c, m) = parameter in

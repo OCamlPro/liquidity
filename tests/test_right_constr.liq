@@ -1,7 +1,7 @@
 
 type storage = (int, string) variant
 
-let%entry main
+let%entry default
       (parameter : string)
       _storage =
   let a = Right parameter in

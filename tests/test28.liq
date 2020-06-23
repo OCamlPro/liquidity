@@ -1,16 +1,11 @@
 
-contract type NatContract = sig
-  type storage
-  val%entry main : nat -> storage -> (operation list * storage)
-end
+type storage = bool * address
 
-type storage = bool * NatContract.instance
-
-let%entry main (_parameter : NatContract.instance) storage =
+let%entry default (_parameter : address) storage =
 
   let (b, c) = storage in
   if b then
-    let op = Contract.call c 0tz 0p in
+    let op = c.default 0p 0DUN in
     [op], set storage 0 true
   else
     [], set storage 0 false

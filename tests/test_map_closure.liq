@@ -3,7 +3,7 @@
 
 type storage = int list
 
-let%entry main
+let%entry default
       (parameter : int)
       storage =
   let add_param x = x + parameter in

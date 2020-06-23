@@ -1,0 +1,56 @@
+
+OCaml.library("ocplib-liquidity-client-functor",
+   ocaml + {
+     files = [
+       "liquidClientSigs.ml";
+       "liquidClientUtils.ml";
+       "liquidClientRequest.ml";
+       "liquidClientTypes.ml";
+       "liquidClientErrors.ml";
+       "liquidClientRPCs.ml";
+       "liquidClient.ml";
+     ];
+     requires = [
+       "ocplib-liquidity-options";
+       "ocplib-json-typed";
+       "dune-network-lib";
+       "ezjsonm";
+       "curl";
+       "curl.lwt";
+     ];
+   });
+
+if ( with_dune_network ) {
+
+OCaml.library("ocplib-liquidity-to-michelson-client",
+   ocaml + {
+     files = [
+       "lazy_superposed.ml";
+       "liquidityToMichelson.ml";
+       "liquidityToMichelsonClient.ml";
+     ];
+     requires = [
+       "ocplib-liquidity-client-functor";
+       "ocplib-liquidity-base";
+       "ocplib-liquidity-init";
+       "ocplib-liquidity-with-dune-network";
+     ];
+   });
+
+OCaml.program("liquidity-client",
+   ocaml + {
+     bytelink = ["-cclib"; "-lsodium_stubs -lsodium"];
+     files = [
+       "../liquidity/liquidCommonArgs.ml";
+       "liquidClientMain.ml";
+     ];
+     requires = [
+       "ocplib-liquidity-to-michelson-client";
+       "ocplib-file";
+       "ocplib-liquidity-base";
+       "ocplib-liquidity-init";
+       "ezcmd";
+     ];
+   });
+
+}

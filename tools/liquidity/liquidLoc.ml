@@ -66,9 +66,6 @@ let print_loc ppf loc =
   | None ->
     Format.fprintf ppf "%s" loc.loc_file
 
-let report_error ?(kind="Error") fmt { err_loc; err_msg } =
-  Format.fprintf fmt "%a: %s: @[%s@]\n%!" print_loc err_loc kind err_msg
-
 let default_warning_printer loc w =
   Format.eprintf "%a: Warning: @[%a@]\n%!" print_loc loc
     (fun fmt -> function
@@ -85,6 +82,7 @@ let default_warning_printer loc w =
          Format.fprintf fmt "Type parameter '%s is weak" a
        | Partial_application ->
          Format.fprintf fmt "This function is partially applied"
+       | WOther s -> Format.pp_print_string fmt s
     ) w
 
 let warning_printer = ref default_warning_printer

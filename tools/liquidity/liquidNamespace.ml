@@ -160,7 +160,8 @@ let rec find_contract_type_aux ~loc s env =
 let rec normalize_type ?from_env ~in_env ty =
   match ty with
   | Tunit | Tbool | Tint | Tnat | Ttez | Tstring | Tbytes | Ttimestamp
-  | Tkey | Tkey_hash | Tsignature | Toperation | Taddress | Tfail -> ty
+  | Tkey | Tkey_hash | Tsignature | Toperation | Taddress | Tfail | Tchainid ->
+    ty
   | Ttuple l -> Ttuple (List.map (normalize_type ?from_env ~in_env) l)
   | Toption t -> Toption (normalize_type ?from_env ~in_env t)
   | Tlist t -> Tlist (normalize_type ?from_env ~in_env t)
@@ -177,8 +178,8 @@ let rec normalize_type ?from_env ~in_env ty =
   | Tlambda (t1, t2, u) ->
     Tlambda (normalize_type ?from_env ~in_env t1,
              normalize_type ?from_env ~in_env t2, u)
-  | Tcontract c_sig ->
-    Tcontract (normalize_contract_sig ?from_env ~in_env ~build_sig_env:false c_sig)
+  | Tcontract (e, ty) ->
+    Tcontract (e, normalize_type ?from_env ~in_env ty)
   | Trecord (name, fields) ->
     let _, found_env =
       try find_type_loose ~loc:noloc name in_env []
@@ -187,11 +188,15 @@ let rec normalize_type ?from_env ~in_env ty =
              List.map (fun (f, ty) ->
                  qualify_name ?from_env ~at:found_env.path f,
                  normalize_type ?from_env ~in_env ty) fields)
-  | Tsum (name, constrs) ->
+  | Tsum (None, constrs) ->
+    Tsum (None,
+          List.map (fun (c, ty) ->
+              c, normalize_type ?from_env ~in_env ty) constrs)
+  | Tsum (Some name, constrs) ->
     let _, found_env =
       try find_type_loose ~loc:noloc name in_env []
       with Not_found | Unknown_namespace _ -> assert false in
-    Tsum (qualify_name ?from_env ~at:found_env.path name,
+    Tsum (Some (qualify_name ?from_env ~at:found_env.path name),
           List.map (fun (c, ty) ->
               qualify_name ?from_env ~at:found_env.path c,
               normalize_type ?from_env ~in_env ty) constrs)
@@ -297,8 +302,6 @@ let lookup_global_value ~loc s env =
   | Current_namespace -> raise Not_found
   | Contract_namespace (c, _)  ->
     let v = List.find (fun v -> not v.val_private && v.val_name = s) c.values in
-    Format.eprintf "Normalize %s@."
-      (LiquidPrinter.Liquid.string_of_type v.val_exp.ty);
     let ty = normalize_type
         ~from_env:env.env
         ~in_env:c.ty_env v.val_exp.ty in

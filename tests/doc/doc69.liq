@@ -6,12 +6,12 @@ contract C = struct
 
   let%init storage = 0
 
-  let%entry main (u : unit) storage =
+  let%entry default (u : unit) storage =
     [], succ storage
 
 end
 
 type storage = C.storage
 
-let%entry main (x : int) s =
+let%entry default (x : int) s =
   [], x + s

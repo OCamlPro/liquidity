@@ -41,9 +41,15 @@ let loc_of_many (l : loc_michelson list) = match l, List.rev l with
   | [], _ | _, [] -> LiquidLoc.noloc
   | first :: _, last :: _ -> LiquidLoc.merge first.loc last.loc
 
+let drop_bq l =
+  if l = "" then l
+  else match l.[0] with
+    | '`' -> String.sub l 1 (String.length l - 1)
+    | _ -> l
+
 let convert_annot = function
   | Tannot l -> ":" ^ l
-  | Fannot l | Eannot l -> "%" ^ l
+  | Fannot l | Eannot l -> "%" ^ drop_bq l
   | Nannot l -> "@" ^ l
 
 let convert_annots annots =
@@ -70,8 +76,11 @@ let parse_annots annots =
       | Some a -> a :: acc
       | None -> acc) [] annots |> List.rev
 
-let prim ~loc ?(fields=[]) name args var_name =
+let prim ~loc ?(fields=[]) ?entry name args var_name =
   let annots = List.map (fun f -> Fannot f) fields in
+  let annots = match entry with
+    | None -> annots
+    | Some e -> Eannot e :: annots in
   let annots = match var_name with
     | Some s -> (Nannot s) :: annots
     | None -> annots
@@ -84,8 +93,10 @@ let seq ~loc exprs =
 let prim_type ~loc ?(annots=[]) name args =
   Micheline.Prim(loc, name, args, convert_annots annots)
 
+let int ~loc n =
+  Micheline.Int (loc, LiquidNumber.(mic_of_integer @@ integer_of_int n))
 
-let rec convert_type ~loc expr =
+let rec convert_type ~loc ?parameter expr =
   match expr with
   | Tunit -> prim_type ~loc "unit" []
   | Ttimestamp -> prim_type ~loc "timestamp" []
@@ -100,6 +111,7 @@ let rec convert_type ~loc expr =
   | Tbytes -> prim_type ~loc "bytes" []
   | Toperation -> prim_type ~loc "operation" []
   | Taddress -> prim_type ~loc "address" []
+  | Tchainid -> prim_type ~loc "chain_id" []
   | Ttuple [x] -> assert false
   | Ttuple [] -> assert false
   | Ttuple [x;y] ->
@@ -107,12 +119,8 @@ let rec convert_type ~loc expr =
   | Ttuple (x :: tys) ->
     prim_type ~loc "pair" [convert_type ~loc x; convert_type ~loc (Ttuple tys)]
   | Tor (x,y) -> prim_type ~loc "or" [convert_type ~loc x; convert_type ~loc y]
-  | Tcontract { sig_name; entries_sig = [{ parameter }]} ->
-    let annots = match sig_name with
-      | None -> []
-      | Some n -> [Tannot n] in
-    prim_type ~loc "contract" [convert_type ~loc parameter] ~annots
-  | Tcontract _ -> assert false
+  | Tcontract (e, parameter) ->
+    prim_type ~loc "contract" [convert_type ~loc parameter]
   | Tlambda (x,y, _) ->
     prim_type ~loc "lambda" [convert_type ~loc x;
                              convert_type ~loc y]
@@ -124,23 +132,25 @@ let rec convert_type ~loc expr =
   | Tset x -> prim_type ~loc "set" [convert_type ~loc x]
   | Tlist x -> prim_type ~loc "list" [convert_type ~loc x]
   | Toption x -> prim_type ~loc "option" [convert_type ~loc x]
-  | Trecord (name, labels) -> convert_record_type ~loc name labels
-  | Tsum (name, constrs) -> convert_sum_type ~loc name constrs
+  | Trecord (name, labels) -> convert_record_type ~loc ?parameter name labels
+  | Tsum (name, constrs) -> convert_sum_type ~loc ?parameter name constrs
   | Tfail -> convert_type ~loc Tunit (* use unit for failures *)
   | Tvar _ | Tpartial _ -> assert false
 
-and convert_record_type ~loc name labels =
-  convert_composed_type "pair" ~loc name labels
+and convert_record_type ~loc ?parameter name labels =
+  convert_composed_type "pair" ~loc ?parameter (Some name) labels
 
-and convert_sum_type ~loc name constrs =
-  convert_composed_type "or" ~loc name constrs
+and convert_sum_type ~loc ?parameter name constrs =
+  convert_composed_type "or" ~loc ?parameter name constrs
 
 and convert_composed_type ty_c ~loc ?(parameter=false) name labels =
-  let parameter = parameter || name = "_entries" in
+  let annots = match name with
+    | None -> []
+    | Some name -> [Tannot name] in
   match labels with
   | [] -> assert false
   | [l, ty] ->
-    begin match convert_type ~loc ty with
+    begin match convert_type ~loc ~parameter ty with
       | Micheline.Prim(loc, "big_map", args, _annots) ->
         prim_type ~loc "big_map" args ~annots:[Tannot l]
       | Micheline.Prim(loc, name, args, annots) ->
@@ -151,13 +161,11 @@ and convert_composed_type ty_c ~loc ?(parameter=false) name labels =
     end
   | [lb, (Tbigmap _ as ty_b); lr, ty_r] ->
     (* workaround for { lb : _ big_map; lr : _ } => pair *)
-    let annots = if name = "" then [] else [Tannot name] in
     let ty_b = convert_type ~loc ty_b in
     let ty_r = convert_type ~loc ty_r in
     prim_type ~loc ~annots ty_c [ty_b; ty_r]
   | (l, ty) :: labels ->
-    let annots = if name = "" then [] else [Tannot name] in
-    let ty = match convert_type ~loc ty with
+    let ty = match convert_type ~loc ~parameter ty with
       | Micheline.Prim(loc, "big_map", args, annots) ->
         prim_type ~loc "big_map" args ~annots:[Tannot l]
       | Micheline.Prim(loc, name, args, annots) ->
@@ -166,7 +174,7 @@ and convert_composed_type ty_c ~loc ?(parameter=false) name labels =
           ])
       | _ -> assert false in
     prim_type ~loc ~annots ty_c
-      [ty; convert_composed_type ty_c ~loc ~parameter "" labels]
+      [ty; convert_composed_type ty_c ~loc ~parameter None labels]
 
 let rec convert_const ~loc expand (expr : loc_michelson const) =
   let bytes_of_hex s =
@@ -197,14 +205,15 @@ let rec convert_const ~loc expand (expr : loc_michelson const) =
   | CList args | CSet args ->
     Micheline.Seq(loc, List.map (convert_const ~loc expand) args)
 
-  | CMap args | CBigMap args ->
+  | CMap args | CBigMap BMList args ->
     Micheline.Seq(loc,
                   List.map (fun (x,y) ->
                       Micheline.Prim(loc, "Elt", [convert_const ~loc expand x;
                                                   convert_const ~loc expand y], []
                                     ))
                     args)
-
+  | CBigMap BMId n ->
+    Micheline.Int (loc, LiquidNumber.mic_of_integer n)
   | CNat n -> Micheline.Int (loc, LiquidNumber.mic_of_integer n)
   | CTez n -> Micheline.Int (loc, LiquidNumber.mic_mutez_of_tez n)
            (*
@@ -217,10 +226,14 @@ let rec convert_const ~loc expand (expr : loc_michelson const) =
   | CKey s -> Micheline.String (loc, s)
   | CKey_hash s when s.[0] = '0' -> Micheline.Bytes (loc, bytes_of_hex s)
   | CKey_hash s -> Micheline.String (loc, s)
-  | CContract s when s.[0] = '0' -> Micheline.Bytes (loc, bytes_of_hex s)
-  | CContract s -> Micheline.String (loc, s)
-  | CAddress s when s.[0] = '0' -> Micheline.Bytes (loc, bytes_of_hex s)
-  | CAddress s -> Micheline.String (loc, s)
+  | CContract (s, e) when s.[0] = '0' ->
+    let s = bytes_of_hex s in
+    let se = match e with
+      | None -> MBytes.empty
+      | Some e -> MBytes.of_string e in
+    Micheline.Bytes (loc, MBytes.concat "" [s; se])
+  | CContract (s, (None | Some "default")) -> Micheline.String (loc, s)
+  | CContract (s, Some e) -> Micheline.String (loc, String.concat "%" [s; e])
   | CSignature s when s.[0] = '0' -> Micheline.Bytes (loc, bytes_of_hex s)
   | CSignature s -> Micheline.String (loc, s)
 
@@ -239,38 +252,36 @@ and convert_code expand expr =
   let ii = ii ~loc:expr.loc in
   let seq = seq ~loc:(expr.loc, None) in
   let prim = prim ~loc:(expr.loc, None) in
+  let int = int ~loc:(expr.loc, None)  in
   let convert_type ty = convert_type ~loc:(expr.loc, None) ty in
   let convert_const c = convert_const ~loc:(expr.loc, None) expand c in
   match expr.ins with
   | RENAME a -> prim "RENAME" [] a
   | SEQ exprs -> seq (List.map (convert_code expand) exprs)
 
-  | FAILWITH -> prim "FAILWITH" [] name
+  | FAILWITH -> prim "FAILWITH" [] None
 
-  | DROP -> prim "DROP" [] name
-  | DIP (0, arg) -> assert false
-  | DIP (1, arg) -> prim "DIP" [ convert_code expand arg ] name
-  | DIP (n, arg) ->
-    if expand then
-      prim "DIP" [ convert_code expand @@ ii @@
-                   SEQ [{ expr with ins = DIP(n-1, arg)}]
-                 ] None
-    else
-      prim (Printf.sprintf "D%sP" (String.make n 'I'))
-        [ convert_code expand arg ] name
+  | DROP 1 -> prim "DROP" [] None
+  | DROP n -> prim "DROP" [int n] None
+  | DIP (0, arg) -> convert_code expand arg
+  | DIP (1, arg) -> prim "DIP" [ convert_code expand arg ] None
+  | DIP (n, arg) -> prim "DIP" [ int n; convert_code expand arg ] None
+  | DIG 1 -> convert_code expand { expr with ins = SWAP }
+  | DIG n -> prim "DIG" [int n] None
+  | DUG n -> prim "DUG" [int n] None
   | CAR None -> prim "CAR" []  name
   | CAR (Some field) -> prim "CAR" [] ~fields:[field] name
   | CDR None -> prim "CDR" []  name
   | CDR (Some field) -> prim "CDR" [] ~fields:[field] name
-  | SWAP -> prim "SWAP" [] name
+  | SWAP -> prim "SWAP" [] None
   | IF (x,y) ->
     prim "IF" [convert_code expand x; convert_code expand y] name
   | IF_NONE (x,y) ->
-    prim "IF_NONE" [convert_code expand x; convert_code expand y] name
+    prim "IF_NONE" [convert_code expand x; convert_code expand y] None
   | IF_LEFT (x,y) ->
-    prim "IF_LEFT" [convert_code expand x; convert_code expand y] name
+    prim "IF_LEFT" [convert_code expand x; convert_code expand y] None
   | IF_CONS (x,y) ->
-    prim "IF_CONS" [convert_code expand x; convert_code expand y] name
+    prim "IF_CONS" [convert_code expand x; convert_code expand y] None
   | NOW -> prim "NOW" [] name
   | PAIR -> prim "PAIR" [] name
   | RECORD (f1, None) -> prim "PAIR" [] ~fields:[f1] name
@@ -315,6 +326,7 @@ and convert_code expand expr =
   | MOD -> prim "MOD" [] name
   | DIV -> prim "DIV" [] name
   | AMOUNT -> prim "AMOUNT" [] name
+  | CHAIN_ID -> prim "CHAIN_ID" [] name
                    (*
   | prim "EMPTY_MAP" [ty1; ty2] ->
      PUSH (Tmap (convert_type ty1, convert_type ty2), CMap [])
@@ -332,12 +344,12 @@ and convert_code expand expr =
     prim "RIGHT" [convert_type ty] name ~fields:[""; c]
 
   | CONS -> prim "CONS" [] name
-  | LOOP loop -> prim "LOOP" [convert_code expand loop] name
+  | LOOP loop -> prim "LOOP" [convert_code expand loop] None
   | LOOP_LEFT loop -> prim "LOOP_LEFT" [convert_code expand loop] name
-  | ITER body -> prim "ITER" [convert_code expand body] name
+  | ITER body -> prim "ITER" [convert_code expand body] None
   | MAP body -> prim "MAP" [convert_code expand body] name
-  | CONTRACT ty ->
-    prim "CONTRACT" [convert_type ty] name
+  | CONTRACT (entry, ty) ->
+    prim "CONTRACT" [convert_type ty] ?entry name
   | UNPACK ty ->
     prim "UNPACK" [convert_type ty] name
   | INT -> prim "INT" [] name
@@ -349,15 +361,15 @@ and convert_code expand expr =
     if expand then
       convert_code expand @@ ii @@
       SEQ [
-        ii @@ DIP(1, ii @@ SEQ [{ expr with ins = DUP(n-1) }]);
-        ii SWAP
+        ii @@ DIP (n - 1, ii @@ SEQ [{ expr with ins = DUP 1 }]);
+        ii @@ DIG (n-1);
       ]
     else
       prim (Printf.sprintf "D%sP" (String.make n 'U')) [] name
 
-  | SELF -> prim "SELF" [] name
+  | SELF entry ->
+    prim "SELF" [] ?entry name
   | STEPS_TO_QUOTA -> prim "STEPS_TO_QUOTA" [] name
-  | CREATE_ACCOUNT -> prim "CREATE_ACCOUNT" [] name
   | CREATE_CONTRACT contract ->
     let p, s, c, f = convert_contract_raw expand contract in
     let p = Micheline.map_node (fun l -> l, None) (fun n -> n) p in
@@ -371,8 +383,7 @@ and convert_code expand expr =
   | LSL -> prim "LSL" [] name
   | LSR -> prim "LSR"  [] name
   | DIP_DROP (ndip, ndrop) ->
-    convert_code expand @@
-    ii @@ DIP (ndip, ii @@ SEQ (LiquidMisc.list_init ndrop (fun _ -> ii DROP)))
+    convert_code expand @@ ii @@ DIP (ndip, ii @@ SEQ [ii @@ DROP ndrop])
 
   | CDAR (0, field) -> convert_code expand { expr with ins = CAR field }
   | CDDR (0, field) -> convert_code expand { expr with ins = CDR field }
@@ -402,25 +413,25 @@ and convert_code expand expr =
 
   | EXTENSION (minst, tys) -> prim minst (List.map convert_type tys) name
 
-  | BLOCK_LEVEL when expand -> prim "LEVEL" [] name
-  | COLLECT_CALL when expand -> prim "COLLCALL" [] name
-  | GET_BALANCE when expand -> prim "GETBAL" [] name
-  | IS_IMPLICIT when expand-> prim "ISIMP" [] name
-
   | BLOCK_LEVEL -> prim "BLOCK_LEVEL" [] name
   | COLLECT_CALL -> prim "COLLECT_CALL" [] name
   | GET_BALANCE -> prim "GET_BALANCE" [] name
   | IS_IMPLICIT -> prim "IS_IMPLICIT" [] name
+  | EMPTY_BIG_MAP (k, v) ->
+    prim "EMPTY_BIG_MAP" [convert_type k; convert_type v] name
 
 and convert_contract_raw expand c =
   let loc = LiquidLoc.noloc in
-  let arg_type = convert_type ~loc c.mic_parameter in
+  let arg_type = convert_type ~loc ~parameter:true c.mic_parameter in
+  let root_annots = match c.mic_root with
+    | None -> []
+    | Some r -> convert_annots [Eannot r] in
   let storage_type = convert_type ~loc c.mic_storage in
   let code = convert_code expand c.mic_code in
   let fee_code = match c.mic_fee_code with
     | None -> None
     | Some mic_fee -> Some (convert_code expand mic_fee) in
-  let p = Micheline.Prim(loc, "parameter", [arg_type], []) in
+  let p = Micheline.Prim(loc, "parameter", [arg_type], root_annots) in
   let s = Micheline.Prim(loc, "storage", [storage_type], []) in
   let c = Micheline.Prim((loc, None), "code", [code], []) in
   let f = match fee_code with
@@ -597,9 +608,5 @@ let convert_const ~expand c =
 let convert_type ty =
   convert_type ~loc:(LiquidLoc.noloc, None) ty |> Micheline.strip_locations
 
-let arg_list work_done = [
-]
-
-(* force linking not anymore ?
-   let execute = Script_interpreter.execute
-*)
+let const_encoding = Data_encoding.Json.convert const_encoding
+let contract_encoding = Data_encoding.Json.convert contract_encoding

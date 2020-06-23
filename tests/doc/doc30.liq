@@ -1,5 +1,5 @@
 type storage = unit
-let%entry main () _ =
+let%entry default () _ =
   let s = Bytes.pack (1, 2, 3, 4) in
   let t = (Bytes.unpack s : (int * int * int * int) option) in
   begin match t with

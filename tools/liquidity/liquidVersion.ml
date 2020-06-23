@@ -21,5 +21,6 @@
 (*  along with this program.  If not, see <https://www.gnu.org/licenses/>.  *)
 (****************************************************************************)
 
+let version = string_of_float infinity
 let commit = "<no commit included>"
 let en_date = "<no date included>"

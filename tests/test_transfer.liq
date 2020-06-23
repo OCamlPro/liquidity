@@ -4,7 +4,7 @@
 
 type storage = tez
 
-let%entry main
+let%entry default
       (dest : key_hash)
       storage =
 

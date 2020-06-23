@@ -13,8 +13,9 @@ decompiler that can translate Michelson contracts to Liquidity, for
 auditing purposes.
 
 .. toctree::
-   :maxdepth: 2
+   :maxdepth: 3
    :caption: Liquidity Documentation
+   :glob:
 
    introduction
    installation/index
@@ -22,6 +23,7 @@ auditing purposes.
    tutorial/tutorial
    tutorial/examples
    reference/liquidity
+   man/index
 
 .. toctree::
 ..   :maxdepth: 2

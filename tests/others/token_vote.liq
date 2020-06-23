@@ -119,12 +119,12 @@ let%entry transferFrom (from, dest, tokens) storage =
 
 contract type NatContract = sig
   type storage
-  val%entry main : nat -> _
+  val%entry default : nat
 end
 
 contract type NatNatContract = sig
   type storage
-  val%entry main : nat * nat -> _
+  val%entry default : nat * nat
 end
 
 let%entry balanceOf (spender, forward) storage =

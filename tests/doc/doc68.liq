@@ -3,7 +3,7 @@ type storage = {
   nothing : unit
 }
 
-let%entry main () storage =
+let%entry default () storage =
   let big = Map.add 10 "ten" storage.big in
   let big = Map.remove 0 big in
   let big = Map.update 0 (Some "zero") big in

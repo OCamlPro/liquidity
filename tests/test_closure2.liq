@@ -2,7 +2,7 @@
 
 type storage = int
 
-let%entry main
+let%entry default
       (parameter : bool)
       storage =
   let x = if parameter  then 10 else 0 in

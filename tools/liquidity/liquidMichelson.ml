@@ -50,10 +50,17 @@ let ii ~loc ins = { ins; loc; loc_name = None }
 
 let seq exprs = ii ~loc:(loc_of_many exprs) (SEQ exprs)
 
-let dup ~loc n = ii ~loc (DUP n)
-
 (* n = size of preserved head of stack *)
 let dip ~loc n exprs = ii ~loc (DIP (n, seq exprs))
+
+let dup ~loc n =
+  (* ii ~loc @@ DUP n *)
+  (* Better expansion than the one in Michelson_v1_macros *)
+  match n with
+  | 0 -> assert false
+  | 1 -> ii ~loc @@ DUP 1
+  | 2 -> seq [dip ~loc 1 [ii ~loc @@ DUP 1]; ii ~loc SWAP]
+  | _ -> seq [dip ~loc (n-1) [ii ~loc @@ DUP 1]; ii ~loc @@ DIG (n-1)]
 
 let push ~loc ty cst = ii ~loc (PUSH (LiquidEncode.encode_type ty, cst))
 
@@ -87,14 +94,7 @@ let sanitize_opt = function
 
 (* n = size of preserved head of stack *)
 let drop_stack ~loc n depth =
-  if depth = 0 then [] else
-    let rec drop_stack depth =
-      if depth = 0 then [] else
-        ii ~loc DROP :: (drop_stack (depth-1))
-    in
-    let exps = drop_stack depth in
-    if n = 0 then exps else [ii ~loc @@ DIP_DROP (n, List.length exps)]
-
+  ii ~loc @@ DIP_DROP (n, depth)
 
 (*******************
  * Code generation *
@@ -164,7 +164,7 @@ let rec compile_desc depth env ~loc desc =
        the result of e1 is droped (ignored) *)
     let e1 = compile depth env e1 in
     let e2 = compile depth env e2 in
-    e1 @ [ ii ~loc:LiquidLoc.noloc DROP ] @ e2
+    e1 @ [ ii ~loc:LiquidLoc.noloc @@ DROP 1 ] @ e2
 
   | Let { bnd_var; bnd_val; body } ->
     (* Compiling a let binding is compiling the bound value and
@@ -212,12 +212,52 @@ let rec compile_desc depth env ~loc desc =
     amount @
     [ push ~loc Tunit CUnit; ii ~loc TRANSFER_TOKENS ]
 
-  | Call { entry = Some _ } ->
-    assert false (* should have been encoded *)
-
-  | Call { contract; amount; entry = None; arg } ->
-    (* Contract.call (encoded) compiled to TRANSFER_TOKENS *)
+  | Call { contract = ({ ty = Tcontract _ } as contract);
+           amount; entry; arg } ->
+    (* Contract.call compiled to TRANSFER_TOKENS *)
     let contract = compile depth env contract in
+    let amount = compile (depth+1) env amount in
+    let arg = compile (depth+2) env arg in
+    contract @ amount @ arg @ [ ii ~loc TRANSFER_TOKENS ]
+
+  | Call { contract = ({ ty = Taddress } as address);
+           amount; entry = Some entry; arg } ->
+    (* Contract.call on addresses compiled to CONTRACT + TRANSFER_TOKENS *)
+    let address = compile depth env address in
+    let ty = LiquidEncode.encode_type arg.ty in
+    let error_msg = Printf.sprintf "No entrypoint %s with parameter type %s"
+        entry
+        (LiquidPrinter.Liquid.string_of_type arg.ty) in
+    let entry = match entry with "default" -> None | _ -> Some entry in
+    let contract =
+      address @
+      [ ii ~loc (CONTRACT (entry, ty));
+        ii ~loc @@
+        IF_NONE (
+          seq [ push ~loc Tstring (CString error_msg) ;
+                ii ~loc FAILWITH ],
+          seq []) ] in
+    let amount = compile (depth+1) env amount in
+    let arg = compile (depth+2) env arg in
+    contract @ amount @ arg @ [ ii ~loc TRANSFER_TOKENS ]
+
+  | Call _ -> assert false
+
+  | Self { entry } ->
+    if env.in_lambda then
+      LiquidLoc.raise_error ~loc
+        "Typing error: \
+         Self handle is not allowed inside non-inlined functions\n%!";
+    let entry = match entry with "default" -> None | _ -> Some entry in
+    [ ii ~loc (SELF entry) ]
+
+  | SelfCall { amount; entry; arg } ->
+    if env.in_lambda then
+      LiquidLoc.raise_error ~loc
+        "Typing error: \
+         Self call is not allowed inside non-inlined functions\n%!";
+    let entry = match entry with "default" -> None | _ -> Some entry in
+    let contract = [ ii ~loc (SELF entry) ] in
     let amount = compile (depth+1) env amount in
     let arg = compile (depth+2) env arg in
     contract @ amount @ arg @ [ ii ~loc TRANSFER_TOKENS ]
@@ -288,12 +328,12 @@ let rec compile_desc depth env ~loc desc =
     let arg = compile depth env arg in
     let rec iter cases =
       match cases with
-      | [] -> [ii ~loc DROP]
+      | [] -> [ii ~loc (DROP 1)]
       | (PConstr (_, args), e) :: cases ->
         let env, depth, left_start, left_end =
           match args with
           | _ :: _ :: _ -> assert false
-          | [] -> env, depth, [ii ~loc DROP], []
+          | [] -> env, depth, [ii ~loc (DROP 1)], []
           | [arg_name] ->
             let env = register_var arg_name depth env in
             let depth = depth + 1 in
@@ -307,7 +347,7 @@ let rec compile_desc depth env ~loc desc =
             let right = iter cases in
             [ii ~loc @@ IF_LEFT( seq (left), seq right )]
         end
-      | [PAny, e] -> [ii ~loc DROP] @ compile depth env e
+      | [PAny, e] -> [ii ~loc (DROP 1)] @ compile depth env e
       | _ -> assert false
     in
     arg @ iter cases
@@ -419,10 +459,11 @@ let rec compile_desc depth env ~loc desc =
     args_code @
     [contract_code; ii ~loc PAIR]
 
-  | ContractAt { arg; c_sig } ->
-    let param_ty = LiquidEncode.encode_contract_sig c_sig in
+  | ContractAt { arg; entry; entry_param } ->
+    let param_ty = LiquidEncode.encode_type entry_param in
+    let entry = match entry with "default" -> None | _ -> Some entry in
     compile depth env arg @
-    [ ii ~loc (CONTRACT param_ty) ]
+    [ ii ~loc (CONTRACT (entry, param_ty)) ]
 
   | Unpack { arg; ty } ->
     let ty = LiquidEncode.encode_type ty in
@@ -475,20 +516,33 @@ and compile_prim ~loc depth env prim args =
     x_code @ set_code
   | Prim_tuple_set, _ -> assert false
 
-  | Prim_self, _ when env.in_lambda ->
-    LiquidLoc.raise_error ~loc
-      "Typing error: \
-       Current.self is not allowed inside non-inlined functions\n%!"
+  | Prim_address, [contract] ->
+    compile depth env contract @
+    [
+      ii PACK;
+      ii @@ PUSH (Tnat, CNat (LiquidNumber.integer_of_int 22));
+      ii @@ PUSH (Tnat, CNat (LiquidNumber.integer_of_int 6));
+      ii SLICE;
+      ii @@ IF_NONE (seq [ ii @@ PUSH (Tunit, CUnit); ii FAILWITH ], seq []);
+      ii @@ UNPACK Taddress;
+      ii @@ IF_NONE (seq [ ii @@ PUSH (Tunit, CUnit); ii FAILWITH ], seq []);
+    ]
 
-  | Prim_self, _ -> [ ii SELF ]
   | Prim_balance, _ -> [ ii BALANCE ]
   | Prim_now, _ -> [ ii NOW ]
   | Prim_amount, _ -> [ ii AMOUNT ]
   | Prim_gas, _ -> [ ii STEPS_TO_QUOTA ]
+  | Prim_chain_id, _ -> [ ii CHAIN_ID ]
   | Prim_source, _ -> [ ii SOURCE ]
   | Prim_sender, _ -> [ ii SENDER ]
   | Prim_block_level, _ -> [ ii BLOCK_LEVEL ]
   | Prim_collect_call, _ -> [ ii COLLECT_CALL ]
+
+  | Prim_big_map_create, [
+      { desc = Apply { prim = Prim_unused None }; ty = k_ty };
+      { desc = Apply { prim = Prim_unused None }; ty = v_ty }
+    ] -> [ ii @@ EMPTY_BIG_MAP (k_ty, v_ty) ]
+  | Prim_big_map_create, _ -> assert false
 
   | Prim_Left, [ arg; { desc = Apply { prim = Prim_unused constr };
                         ty = right_ty }] ->
@@ -527,7 +581,7 @@ and compile_prim ~loc depth env prim args =
   | Prim_extension (_, _, targs, nb_arg, nb_ret, minst), _ ->
     let _depth, args_code = compile_args depth env args in
     let args_code =
-      if nb_arg = 0 then args_code @ [ ii DROP ]
+      if nb_arg = 0 then args_code @ [ ii @@ DROP 1 ]
       else args_code
     in
     let res_code =
@@ -555,12 +609,11 @@ and compile_prim ~loc depth env prim args =
     | Prim_string_concat|Prim_bytes_concat|Prim_concat|Prim_concat_two
     | Prim_string_size|Prim_bytes_size
     | Prim_string_sub|Prim_bytes_sub|Prim_slice
-    | Prim_create_account
     | Prim_blake2b|Prim_sha256|Prim_sha512|Prim_pack
     | Prim_hash_key|Prim_check|Prim_default_account|Prim_list_size
     | Prim_set_size|Prim_map_size|Prim_or|Prim_and|Prim_xor
     | Prim_not|Prim_abs|Prim_int|Prim_neg|Prim_lsr|Prim_lsl|Prim_is_nat
-    | Prim_exec _|Prim_Cons|Prim_set_delegate|Prim_address
+    | Prim_exec _|Prim_Cons|Prim_set_delegate|Prim_address|Prim_address_untype
     | Prim_get_balance|Prim_is_implicit),_ ->
     let _depth, args_code = compile_args depth env args in
     let prim_code = match prim, List.length args with
@@ -595,8 +648,8 @@ and compile_prim ~loc depth env prim args =
       | Prim_string_concat, 1 -> [ ii CONCAT ]
       | Prim_bytes_concat, 1 -> [ ii CONCAT ]
 
-      | Prim_address, 1 -> [ ii ADDRESS ]
-      | Prim_create_account, 4 -> [ ii CREATE_ACCOUNT; ii PAIR ]
+      | Prim_address_untype, 1 -> [ ii ADDRESS ]
+
       | Prim_blake2b, 1 -> [ ii BLAKE2B ]
       | Prim_sha256, 1 -> [ ii SHA256 ]
       | Prim_sha512, 1 -> [ ii SHA512 ]
@@ -639,12 +692,12 @@ and compile_prim ~loc depth env prim args =
         | Prim_string_size|Prim_bytes_size
         | Prim_string_sub|Prim_bytes_sub
         | Prim_string_concat|Prim_bytes_concat
-        | Prim_create_account
         | Prim_blake2b|Prim_sha256|Prim_sha512|Prim_pack
         | Prim_hash_key|Prim_check|Prim_default_account|Prim_list_size
         | Prim_set_size|Prim_map_size|Prim_or|Prim_and|Prim_xor
         | Prim_not|Prim_abs|Prim_int|Prim_neg|Prim_lsr|Prim_lsl|Prim_is_nat
         | Prim_exec _|Prim_Cons|Prim_set_delegate|Prim_address
+        | Prim_address_untype
         | Prim_get_balance|Prim_is_implicit),n ->
         Printf.eprintf "Primitive %S: wrong number of args(%d)\n%!"
           (LiquidTypes.string_of_primitive prim)
@@ -654,12 +707,12 @@ and compile_prim ~loc depth env prim args =
 
       | (Prim_extension _|Prim_tuple_get
         | Prim_tuple_set|Prim_tuple
-        | Prim_self|Prim_balance|Prim_now|Prim_amount|Prim_gas
+        | Prim_balance|Prim_now|Prim_amount|Prim_gas|Prim_chain_id
         | Prim_Left|Prim_Right|Prim_source|Prim_sender|Prim_unused _
         | Prim_coll_find|Prim_coll_update|Prim_coll_mem
         | Prim_coll_size|Prim_list_rev|Prim_slice
         | Prim_concat|Prim_concat_two
-        | Prim_block_level|Prim_collect_call), _ ->
+        | Prim_block_level|Prim_collect_call|Prim_big_map_create), _ ->
         (* already filtered out *)
         Printf.eprintf "Primitive %S ?\n%!"
           (LiquidTypes.string_of_primitive prim)
@@ -674,7 +727,7 @@ and compile_tuple_set ~loc last depth env n y =
   let ii = ii ~loc in
   if n = 0 then
     if last then
-      [ ii DROP ]
+      [ ii @@ DROP 1 ]
       @ compile (depth-1) env y
     else
       [ ii @@ CDR None ] @ compile depth env y @ [ ii PAIR ]
@@ -760,8 +813,8 @@ and compile_lambda ~loc { arg_name; arg_ty; body; ret_ty; recursive } =
 
 and compile_const ~loc c = match c with
   | ( CUnit | CBool _ | CInt _ | CNat _ | CTez _ | CTimestamp _ | CString _
-    | CBytes _ | CKey _ | CContract _ | CSignature _ | CNone  | CKey_hash _
-    | CAddress _ ) as c -> c
+    | CBytes _ | CKey _ | CSignature _ | CNone  | CKey_hash _
+    | CContract _) as c -> c
   | CSome x -> CSome (compile_const ~loc x)
   | CLeft x -> CLeft (compile_const ~loc x)
   | CRight x -> CRight (compile_const ~loc x)
@@ -770,8 +823,11 @@ and compile_const ~loc c = match c with
   | CSet xs -> CSet (List.map (compile_const ~loc) xs)
   | CMap l ->
     CMap (List.map (fun (x,y) -> compile_const ~loc x, compile_const ~loc y) l)
-  | CBigMap l ->
-    CBigMap (List.map (fun (x,y) -> compile_const ~loc x, compile_const ~loc y) l)
+  | CBigMap BMList l ->
+    CBigMap
+      (BMList
+         (List.map (fun (x,y) -> compile_const ~loc x, compile_const ~loc y) l))
+  | CBigMap BMId _ as c -> c
   | CRecord labels ->
     CRecord (List.map (fun (f, x) -> f, compile_const ~loc x) labels)
   | CConstr (constr, x) ->
@@ -809,6 +865,8 @@ and compile_name ~annotafter name code =
        these are used by the Michelson pretty printer (or
        translator) to produce variable annotations @name. *)
     match List.rev code with
+    | [{ ins = SEQ ({ ins = DIP(_, { ins = SEQ ({ ins = DUP _} as c :: _) }) } :: _) }]
+    (* ^- special case for duuup expansion *)
     | c :: _ when name <> None ->
       c.loc_name <- sanitize_opt name;
       code
@@ -850,7 +908,7 @@ and translate_code ~parameter_name ~storage_name code =
   (* at the end of the code, drop everything excepted for the top-most
      element *)
   let trailer = drop_stack ~loc 1 depth in
-  seq (header @ exprs @ trailer)
+  seq (header @ exprs @ [ trailer ])
 
 (* FAILWITH must appear in tail position in Michelson, this function
    removes instructions that appear after FAILWITH in a code block *)
@@ -914,12 +972,14 @@ and translate contract =
       (LiquidNamespace.qual_contract_name contract);
   let mic_storage = contract.storage in
   match contract.entries with
-  | [{ entry_sig = { parameter = mic_parameter; parameter_name; storage_name };
+  | [{ entry_sig = { entry_name; parameter = mic_parameter; parameter_name; storage_name };
        code; fee_code }] ->
+    let mic_root = match entry_name with "" -> None | _ -> Some entry_name in
     { mic_parameter;
       mic_storage;
-      mic_code =  translate_code ~parameter_name ~storage_name code
-                  |> finalize_fail_pre ;
+      mic_root;
+      mic_code = translate_code ~parameter_name ~storage_name code
+                 |> finalize_fail_pre ;
       mic_fee_code = match fee_code with
         | None -> None
         | Some fee_code ->

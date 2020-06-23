@@ -1,19 +1,85 @@
 @media screen and (min-width: 1400px) {
-    .wy-nav-content-wrap {
-        background: #fcfcfc;
-    }
-    .wy-nav-content {
-        margin: auto;
-        background: #fcfcfc;
-    }
+  .wy-nav-content-wrap {
+    background: #fcfcfc;
+  }
+  .wy-nav-content {
+    margin: auto;
+    background: #fcfcfc;
+    max-width: unset;
+  }
 }
 
 @media screen and (min-width: 1100px) {
-    .wy-nav-content-wrap {
-        background: #fcfcfc;
-    }
-    .wy-nav-content {
-        margin: auto;
-        background: #fcfcfc;
-    }
+  .wy-nav-content-wrap {
+    background: #fcfcfc;
+  }
+  .wy-nav-content {
+    margin: auto;
+    background: #fcfcfc;
+    max-width: unset;
+  }
+}
+
+.document {
+  max-width: 800px;
+  margin: auto;
+}
+
+.wy-side-nav-search, .wy-nav-top {
+    background-color: #0f093d;
+}
+
+a, a:visited {
+  color: #553bff
+}
+
+a, a:hover {
+  color: #3e22f8;
+}
+
+rst-content tt.literal, .rst-content tt.literal, .rst-content code.literal {
+  color: #e84fff;
+}
+
+.wy-nav-side {
+  background: #292640;
+}
+
+.wy-menu-vertical a {
+  color: #D7D6E7;
+}
+
+.wy-menu-vertical li.on a, .wy-menu-vertical li.current>a {
+  color: #404040;
+}
+
+.wy-menu-vertical header, .wy-menu-vertical p.caption {
+  color: hsla(247, 84%, 77%, 1)
+}
+
+.wy-menu-vertical li.current {
+  background: #eae9f2;
+}
+
+
+.wy-menu-vertical li.current a:hover {
+  background: #d6d6d6;
+}
+
+.wy-menu-vertical li.current a:hover {
+  background: hsla(247, 32%, 87%, 1);
+}
+
+.wy-menu-vertical a:hover {
+  background-color: hsla(292, 29%, 46%, 1);
+}
+
+.wy-menu-vertical li.toctree-l2.current>a,
+.wy-menu-vertical li.toctree-l2.current li.toctree-l3>a {
+  background: hsla(247, 26%, 88%, 1);
+}
+
+.wy-menu-vertical li.on a, .wy-menu-vertical li.current>a {
+  border-top:none;
+  border-bottom:none;
 }

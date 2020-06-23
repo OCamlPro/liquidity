@@ -3,7 +3,7 @@
 
 type storage = int
 
-let%entry main
+let%entry default
     (_parameter : int list)
     _storage =
 

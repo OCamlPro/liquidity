@@ -1,7 +1,7 @@
 
 type storage = unit
 
-let%entry main
+let%entry default
       (parameter : int)
       (storage : unit) =
   let f = fun arg ->

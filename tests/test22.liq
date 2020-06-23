@@ -2,8 +2,8 @@
 type t = A of int | B | C of (int * nat)
 type storage = int
 
-let%entry main
-    (parameter : UnitContract.instance * t)
+let%entry default
+    (parameter : address * t)
     storage =
 
   let (c, m) = parameter in
@@ -11,8 +11,8 @@ let%entry main
   | A i ->
     [], i
   | B ->
-    let _op = Contract.call c 0tz () in
+    let _op = c.default () 0DUN in
     [], 0
   | C (i, _) ->
-    let _op = Contract.call c 1tz () in
+    let _op = c.default () 1DUN in
     [], i

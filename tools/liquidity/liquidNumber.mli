@@ -21,7 +21,11 @@
 (*  along with this program.  If not, see <https://www.gnu.org/licenses/>.  *)
 (****************************************************************************)
 
-open LiquidTypes
+(** Tez constants are stored with strings *)
+type tez = { tezzies : string; mutez : string option }
+
+(** Unbounded integer constants *)
+type integer = { integer : Z.t }
 
 (** {2 Helper conversion function } *)
 

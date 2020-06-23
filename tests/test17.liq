@@ -4,7 +4,7 @@ type storage =
 | Int of int
 | String of string * int
 
-let%entry main
+let%entry default
       (_parameter : int)
       storage =
   let _a = Nothing in

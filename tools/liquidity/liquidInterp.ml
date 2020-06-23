@@ -252,10 +252,10 @@ let rec undo_cdr acc node =
 
 let rec constrlabel_is_in_type c = function
   | Tunit | Tbool | Tint | Tnat | Ttez | Tstring | Tbytes | Ttimestamp
-  | Tkey | Tkey_hash | Tsignature | Toperation | Taddress | Tfail ->
+  | Tkey | Tkey_hash | Tsignature | Toperation | Taddress | Tfail | Tchainid ->
     false
   | Ttuple tys -> List.exists (constrlabel_is_in_type c) tys
-  | Toption ty | Tlist ty | Tset ty -> constrlabel_is_in_type c ty
+  | Toption ty | Tlist ty | Tset ty | Tcontract (_, ty) -> constrlabel_is_in_type c ty
   | Tmap (t1, t2) | Tbigmap (t1, t2) | Tor (t1, t2) | Tlambda (t1, t2, _) ->
     constrlabel_is_in_type c t1 || constrlabel_is_in_type c t2
   | Tclosure ((t1, t2), t3, _) ->
@@ -265,11 +265,6 @@ let rec constrlabel_is_in_type c = function
   | Trecord (_, l) | Tsum (_, l) ->
     List.exists (fun (c', _) -> c' = c) l ||
     List.exists (fun (_, t) -> constrlabel_is_in_type c t) l
-  | Tcontract s ->
-    List.exists (fun e ->
-        c = e.entry_name ||
-        constrlabel_is_in_type c e.parameter)
-      s.entries_sig
   | Tvar { contents = { contents = { tyo = Some ty }}} ->
     constrlabel_is_in_type c ty
   | Tvar _ | Tpartial _ -> (* assert *) false
@@ -277,20 +272,21 @@ let rec constrlabel_is_in_type c = function
 let rec constrlabel_is_in_code c code =
   match code.ins with
   | RENAME _ | EXTENSION _
-  | EXEC | DUP _ | DIP_DROP _ | DROP | CAR _ | CDR _ | CDAR _ | CDDR _
+  | EXEC | DUP _ | DIP_DROP _ | DROP _ | CAR _ | CDR _ | CDAR _ | CDDR _
   | PAIR | RECORD _ | COMPARE | LE | LT | GE | GT | NEQ | EQ | FAILWITH
   | NOW | TRANSFER_TOKENS | ADD | SUB | BALANCE | SWAP | GET | UPDATE | SOME
-  | CONCAT | MEM | SLICE | SELF | AMOUNT | STEPS_TO_QUOTA | CREATE_ACCOUNT
+  | CONCAT | MEM | SLICE | SELF _ | AMOUNT | STEPS_TO_QUOTA
   | BLAKE2B | SHA256 | SHA512 | HASH_KEY | CHECK_SIGNATURE | ADDRESS | CONS
   | OR | XOR | AND | NOT | INT | ABS | ISNAT | NEG | MUL | EDIV | LSL | LSR
   | SOURCE | SENDER | SIZE | IMPLICIT_ACCOUNT | SET_DELEGATE | PACK | MOD | DIV
-  | BLOCK_LEVEL | IS_IMPLICIT | COLLECT_CALL | GET_BALANCE
+  | BLOCK_LEVEL | IS_IMPLICIT | COLLECT_CALL | GET_BALANCE | EMPTY_BIG_MAP _
+  | DIG _ | DUG _ | CHAIN_ID
     -> false
   | UNPACK ty
   | PUSH (ty, _)
   | LEFT (ty, _)
   | RIGHT (ty, _)
-  | CONTRACT ty -> constrlabel_is_in_type c ty
+  | CONTRACT (_, ty) -> constrlabel_is_in_type c ty
   | CREATE_CONTRACT contract -> constrlabel_is_in_contract c contract
   | LAMBDA (ty1, ty2, code) ->
     constrlabel_is_in_type c ty1 ||
@@ -317,6 +313,7 @@ and constrlabel_is_in_contract c contract =
 
 
 let curr_contract = ref { mic_parameter = Tunit;
+                          mic_root = None;
                           mic_storage = Tunit;
                           mic_code = { loc = noloc;
                                        loc_name = None;
@@ -777,16 +774,44 @@ and decompile_aux stack (seq : node) ins =
     lambda_node :: stack, lambda_node
 
   (* Stack modifications *)
-  | DUP 1, v :: _ ->
+  | DUP 0, stack -> stack, seq
+  | DUP n, stack when n <= List.length stack ->
+    let rec dup n stack = match n, stack with
+      | 1, v :: _ -> v
+      | _, _ :: stack -> dup (n - 1) stack
+      | _, [] -> assert false in
+    let v = dup n stack in
     v :: stack, seq
-  | DROP, _ :: stack ->
-    stack, seq
-  | DIP (1, code), x :: stack ->
+  | DROP n, stack when n <= List.length stack ->
+    let rec drop n stack = match n, stack with
+      | 0, _ -> stack
+      | _, _ :: stack -> drop (n - 1) stack
+      | _, [] -> assert false in
+    drop n stack, seq
+  | DIP (n, code), stack when n <= List.length stack ->
+    let rec dip n acc stack = match n, stack with
+      | 0, _ -> List.rev acc, stack
+      | _, x :: stack -> dip (n - 1) (x :: acc) stack
+      | _, [] -> assert false in
+    let top, stack = dip n [] stack in
     let stack, seq = decompile stack seq code in
-    x :: stack, seq
+    top @ stack, seq
   | SWAP, x :: y :: stack ->
     y :: x :: stack, seq
-
+  | DIG n, stack when n <= List.length stack ->
+    let rec dig n acc stack = match n, stack with
+      | 0, v :: stack -> v, List.rev_append acc stack
+      | _, x :: stack -> dig (n - 1) (x :: acc) stack
+      | _, [] -> assert false in
+    let v, stack = dig n [] stack in
+    v :: stack, seq
+  | DUG n, v :: stack when n <= List.length stack ->
+    let rec dug n acc stack = match n, stack with
+      | 0, _ -> List.rev acc, stack
+      | _, x :: stack -> dug (n - 1) (x :: acc) stack
+      | _, [] -> assert false in
+    let top, stack = dug n [] stack in
+    top @ (v :: stack), seq
 
 
   (* Primitives *)
@@ -816,9 +841,6 @@ and decompile_aux stack (seq : node) ins =
   | SENDER, stack ->
     let x = node ins.loc (N_PRIM "SENDER") [] [seq] in
     x :: stack, x
-  | SELF, stack ->
-    let x = node ins.loc (N_PRIM "SELF") [] [seq] in
-    x :: stack, x
   | NOW, stack ->
     let x = node ins.loc (N_PRIM "NOW") [] [seq] in
     x :: stack, x
@@ -828,6 +850,9 @@ and decompile_aux stack (seq : node) ins =
   | AMOUNT, stack ->
     let x = node ins.loc (N_PRIM "AMOUNT") [] [seq] in
     x :: stack, x
+  | CHAIN_ID, stack ->
+    let x = node ins.loc (N_PRIM "CHAIN_ID") [] [seq] in
+    x :: stack, x
 
   | IMPLICIT_ACCOUNT, key :: stack ->
     let x = node ins.loc (N_PRIM "IMPLICIT_ACCOUNT") [key] [seq] in
@@ -835,6 +860,10 @@ and decompile_aux stack (seq : node) ins =
 
   | SET_DELEGATE, key :: stack ->
     let x = node ins.loc (N_PRIM "SET_DELEGATE") [key] [seq] in
+    x :: stack, x
+
+  | SELF entry, stack ->
+    let x = node ins.loc (N_SELF entry) [] [seq] in
     x :: stack, x
 
   | ADDRESS, x :: stack ->
@@ -876,8 +905,8 @@ and decompile_aux stack (seq : node) ins =
     let x = node ins.loc (N_RIGHT left_ty) [x] [seq] in
     x :: stack, x
 
-  | CONTRACT ty, x :: stack -> (* TODO : keep types too ! *)
-    let x = node ins.loc (N_CONTRACT ty) [x] [seq] in
+  | CONTRACT (entry, ty), x :: stack -> (* TODO : keep types too ! *)
+    let x = node ins.loc (N_CONTRACT (entry, ty)) [x] [seq] in
     x :: stack, x
   | UNPACK ty, x :: stack -> (* TODO : keep types too ! *)
     let x = node ins.loc (N_UNPACK ty) [x] [seq] in
@@ -1085,21 +1114,10 @@ and decompile_aux stack (seq : node) ins =
     let x = node ins.loc (N_PRIM "STEPS_TO_QUOTA") [] [seq] in
     x :: stack, x
 
-  | CREATE_ACCOUNT, manager :: delegate :: delegatable :: amount :: stack ->
-    let x = node ins.loc (N_PRIM "CREATE_ACCOUNT")
-        [manager; delegate; delegatable; amount] [seq] in
-    let res_op = node ins.loc (N_RESULT (x, 0)) [] [] in
-    let res_cont = node ins.loc (N_RESULT (x, 1)) [] [] in
-    res_op :: res_cont :: stack, x
-
-  | CREATE_CONTRACT contract, manager :: delegate ::
-                              spendable :: delegatable ::
-                              amount :: storage :: stack ->
+  | CREATE_CONTRACT contract, delegate :: amount :: storage :: stack ->
     let contract = interp contract in
     let x = node ins.loc (N_CREATE_CONTRACT contract)
-        [manager; delegate;
-         spendable; delegatable;
-         amount; storage] [seq] in
+        [delegate; amount; storage] [seq] in
     let res_op = node ins.loc (N_RESULT (x, 0)) [] [] in
     let res_addr = node ins.loc (N_RESULT (x, 1)) [] [] in
     res_op :: res_addr :: stack, x
@@ -1120,6 +1138,10 @@ and decompile_aux stack (seq : node) ins =
     let x = node ins.loc (N_PRIM "IS_IMPLICIT") [x] [seq] in
     x :: stack, x
 
+  | EMPTY_BIG_MAP (k, v), stack ->
+    let x = node ins.loc (N_CONST (Tbigmap (k, v), CBigMap (BMList []))) []  [seq] in
+    x :: stack, x
+
   | _ ->
     (* let ins = LiquidEmit.emit_code ins in *)
     let s = LiquidPrinter.Michelson.string_of_loc_michelson ins in
@@ -1138,8 +1160,8 @@ and decompile_lambda loc arg_ty res_ty code =
 
 and decompile_const loc cst = match cst with
   | ( CUnit | CBool _ | CInt _ | CNat _ | CTez _ | CTimestamp _ | CString _
-    | CBytes _ | CKey _ | CContract _ | CSignature _ | CNone  | CKey_hash _
-    | CAddress _ ) as c -> c
+    | CBytes _ | CKey _ | CSignature _ | CNone  | CKey_hash _
+    | CContract _ ) as c -> c
   | CSome x -> CSome (decompile_const loc x)
   | CLeft x -> CLeft (decompile_const loc x)
   | CRight x -> CRight (decompile_const loc x)
@@ -1148,8 +1170,10 @@ and decompile_const loc cst = match cst with
   | CSet xs -> CSet (List.map (decompile_const loc) xs)
   | CMap l ->
     CMap (List.map (fun (x,y) -> decompile_const loc x, decompile_const loc y) l)
-  | CBigMap l ->
-    CBigMap (List.map (fun (x,y) -> decompile_const loc x, decompile_const loc y) l)
+  | CBigMap BMId _ as c -> c
+  | CBigMap BMList l ->
+    CBigMap
+      (BMList (List.map (fun (x,y) -> decompile_const loc x, decompile_const loc y) l))
   | CRecord labels ->
     CRecord (List.map (fun (f, x) -> f, decompile_const loc x) labels)
   | CConstr (constr, x) ->

@@ -9,7 +9,7 @@ let bool_to_int c =
 (* type of pos is inferred to: int -> bool *)
 let pos i = i > 0
 
-let%entry main param  _ =
+let%entry default param  _ =
 
   (* type of l is inferred to: (dun, int) variant *)
   let l = Left 1DUN in

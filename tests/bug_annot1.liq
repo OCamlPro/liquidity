@@ -7,14 +7,14 @@ module C1 = struct
     contract C3 = struct
 
         type storage = unit
-        let%entry main (_x:int) _ = ([] : operation list), ()
+        let%entry default (_x:int) _ = ([] : operation list), ()
 
     end
     contract C = struct
 
         type storage = unit
-        let%entry main (_x:t) _ = ([] : operation list), ()
-        (* val%entry main : t -> _ *)
+        let%entry default (_x:t) _ = ([] : operation list), ()
+        (* val%entry default : t *)
 
         let mc = 1tz
     end
@@ -29,16 +29,16 @@ contract type C = sig
 
   type t = { x : timestamp; y : address }
   type storage = unit
-  val%entry main : t -> _
+  val%entry default : t
 end
 
 module Y = C1.C2
 module R = Y
 contract X = R.C
 
-type storage = X.instance * C.instance
+type storage = address * address
 
-let%entry main (_k : key_hash) storage =
+let%entry default (_k : key_hash) storage =
   let x = { Y.x = 1tz + Y.C.mc + Y.my ; R.y = true } in
-  let op = storage.(0).main x ~amount:0tz in
+  let op = storage.(0).default x ~amount:0tz in
   [op], storage

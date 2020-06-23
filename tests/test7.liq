@@ -3,7 +3,7 @@
 type t = tez
 type storage = (t * tez)
 
-let%entry main
+let%entry default
       (_parameter : timestamp)
       storage =
 

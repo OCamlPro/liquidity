@@ -53,6 +53,7 @@ let const_name_of_datatype = function
   | Tfail -> "fail"
   | Toperation -> "op"
   | Taddress -> "addr"
+  | Tchainid -> "chain"
   | Tvar _ | Tpartial _ -> assert false
 
 
@@ -365,9 +366,9 @@ let rec decompile_next (env : env) node =
         | "BALANCE", [] -> Prim_balance, [unit ~loc]
         | "AMOUNT",[] -> Prim_amount, [unit ~loc]
         | "STEPS_TO_QUOTA",[] -> Prim_gas, [unit ~loc]
+        | "CHAIN_ID",[] -> Prim_chain_id, [unit ~loc]
         | "SOURCE",[] -> Prim_source, [unit ~loc]
         | "SENDER",[] -> Prim_sender, [unit ~loc]
-        | "SELF",[] -> Prim_self, [unit ~loc]
         | "BLOCK_LEVEL", [] -> Prim_block_level, [unit ~loc]
         | "COLLECT_CALL", [] -> Prim_collect_call, [unit ~loc]
         | prim, args ->
@@ -395,8 +396,7 @@ let rec decompile_next (env : env) node =
             | "SHA512" -> Prim_sha512
             | "HASH_KEY" -> Prim_hash_key
             | "CHECK_SIGNATURE" -> Prim_check
-            | "CREATE_ACCOUNT" -> Prim_create_account
-            | "ADDRESS" -> Prim_address
+            | "ADDRESS" -> Prim_address_untype
             | "XOR" -> Prim_xor
             | "NOT" -> Prim_not
             | "OR" -> Prim_or
@@ -448,9 +448,9 @@ let rec decompile_next (env : env) node =
     | N_CONSTR c, [arg] ->
       mklet env node (Constructor {constr = Constr c; arg = arg_of arg })
 
-    | N_CONTRACT ty, [arg] ->
-      mklet env node (ContractAt { arg = arg_of arg;
-                               c_sig = contract_sig_of_param ty })
+    | N_CONTRACT (entry, entry_param), [arg] ->
+      let entry = match entry with None -> "default" | Some e -> e in
+      mklet env node (ContractAt { arg = arg_of arg; entry; entry_param })
 
     | N_UNPACK ty, [arg] ->
       mklet env node (Unpack { arg = arg_of arg; ty })
@@ -626,22 +626,29 @@ let rec decompile_next (env : env) node =
       mklet env node desc
     | N_LAMBDA_END _, [arg] -> arg_of arg
 
+    | N_SELF entry, [] ->
+      let entry = match entry with None -> "default" | Some e -> e in
+      mklet env node (Self { entry })
+
     | N_TRANSFER, [dest; amount] ->
       mklet env node
         (Transfer { dest = arg_of dest;
                     amount = arg_of amount })
 
+
+    | N_CALL, [ { kind = N_SELF entry }; amount; arg] ->
+      let entry = match entry with None -> "default" | Some e -> e in
+      mklet env node
+        (SelfCall { amount = arg_of amount;
+                    entry;
+                    arg = arg_of arg })
+
     | N_CALL, [contract; amount; arg] ->
-      let entry, arg = match arg.kind, arg.args with
-        | N_CONSTR c, [arg] when is_entry_case c ->
-          Some (entry_name_of_case c), arg
-        | _ -> None, arg in
       mklet env node
         (Call { contract = arg_of contract;
                 amount = arg_of amount;
-                entry;
+                entry = None;
                 arg = arg_of arg })
-    (* TODO *)
 
     | N_CREATE_CONTRACT contract, args ->
       (* Hack: using annotation to represent contract name *)
@@ -703,6 +710,7 @@ let rec decompile_next (env : env) node =
     | N_PROJ _
     | N_CONSTR _
     | N_SETFIELD _
+    | N_SELF _
     ), _->
       LiquidLoc.raise_error
         "not implemented at node %s%!"
@@ -710,8 +718,8 @@ let rec decompile_next (env : env) node =
 
 and decompile_const env c = match c with
   | ( CUnit | CBool _ | CInt _ | CNat _ | CTez _ | CTimestamp _ | CString _
-    | CBytes _ | CKey _ | CContract _ | CSignature _ | CNone  | CKey_hash _
-    | CAddress _ ) as c -> c
+    | CBytes _ | CKey _ | CSignature _ | CNone  | CKey_hash _
+    | CContract _ ) as c -> c
   | CSome x -> CSome (decompile_const env x)
   | CLeft x -> CLeft (decompile_const env x)
   | CRight x -> CRight (decompile_const env x)
@@ -720,8 +728,11 @@ and decompile_const env c = match c with
   | CSet xs -> CSet (List.map (decompile_const env) xs)
   | CMap l ->
     CMap (List.map (fun (x,y) -> decompile_const env x, decompile_const env y) l)
-  | CBigMap l ->
-    CBigMap (List.map (fun (x,y) -> decompile_const env x, decompile_const env y) l)
+  | CBigMap BMList l ->
+    CBigMap
+      (BMList (List.map (fun (x,y) -> decompile_const env x,
+                                      decompile_const env y) l))
+  | CBigMap BMId _ as c -> c
   | CRecord labels ->
     CRecord (List.map (fun (f, x) -> f, decompile_const env x) labels)
   | CConstr (constr, x) ->
@@ -785,14 +796,26 @@ and decompile env contract =
     | None -> "parameter", "storage"
     | Some ps -> ps in
 
+  let rec get_type ty = match ty with
+    | Tvar { contents = { contents = { tyo = Some ty }}} -> get_type ty
+    | _ -> ty in
+
+  let entry_name = match contract.mic_root with
+    | Some r -> r
+    | None ->
+      match get_type contract.mic_parameter with
+      | Tsum (_, l) when List.for_all (fun (e, _) -> is_entry_case e) l ->
+        "__root__"
+      | _ -> "default" in
+
   { contract_name = "_dummy_";
     storage = contract.mic_storage;
     values = [];
-    entries = [{ entry_sig = { entry_name = "main";
+    entries = [{ entry_sig = { entry_name;
                                parameter = contract.mic_parameter;
-                               parameter_name ;
-                               storage_name  };
-                 code ;
+                               parameter_name;
+                               storage_name };
+                 code;
                  fee_code }];
     c_init = None;
     subs = [];

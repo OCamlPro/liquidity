@@ -7,7 +7,7 @@ type storage = {
   bidder : key_hash;
 }
 
-let%entry main
+let%entry submit_auction
     (parameter : key_hash)
     (storage : storage) =
 

@@ -46,6 +46,11 @@ val convert_type : datatype -> LiquidMichelineTypes.expr
 
 (** {2 Pretty printing Micheline } *)
 
+(** {3 Micheline encodings } *)
+
+val const_encoding : LiquidMichelineTypes.expr Json_encoding.encoding
+val contract_encoding : LiquidMichelineTypes.contract Json_encoding.encoding
+
 (** {3 Pretty printing Micheline to string } *)
 
 val line_of_contract : LiquidMichelineTypes.contract -> string
@@ -68,6 +73,3 @@ val const_of_ezjson : LiquidMichelineTypes.json -> LiquidMichelineTypes.expr
 
 val read_micheline_file : string -> LiquidMichelineTypes.contract * LiquidMichelineTypes.env
 val read_micheline_json : string -> LiquidMichelineTypes.contract * LiquidMichelineTypes.env
-
-val arg_list : bool ref ->
-  (Arg.key * Arg.spec * Arg.doc) list

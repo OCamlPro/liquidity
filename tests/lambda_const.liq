@@ -5,5 +5,5 @@ let%init storage =
    * Some (f) *)
   Some (fun x -> if x > 0 then 1tz else 2tz)
 
-let%entry main new_f _ =
+let%entry default new_f _ =
   [], Some new_f

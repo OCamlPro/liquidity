@@ -16,7 +16,7 @@ let[@noinline] mk_t (x, y) =
 (* let mk_somet (x, y) =
  *   { x = Some x ; y = Some y } *)
 
-let%entry main
+let%entry default
       parameter
       storage =
 

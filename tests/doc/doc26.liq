@@ -1,5 +1,5 @@
 type storage = bytes
-let%entry main () _ =
+let%entry default () _ =
   let b = Bytes.pack [1; 2; 3] in
   let h = Crypto.sha512 b in
   if Bytes.length h <> 64p then failwith "incorrect size";

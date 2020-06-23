@@ -1,3 +1,110 @@
+2.0   2020/06/23
+    NEW FEATURES
+    * Support for Babylon+
+      - Only write entry points' type parameter in signatures [BREAKING CHANGE]
+      - Multiple entry points (compiler/client)
+      - Lifting of restictions on big maps
+      - New instruction `Big_map.create`
+      - Big map constants
+      - Use new Michelson instructions `DIP n`, `DROP n`
+      - Compile DUP n with DIP+DIG instead of DU.UP macro to avoid bubbling
+        expansion to `DIP { DUP; SWAP }`
+      - Deprecate `Current.gas`
+      - Type `chain_id` and instruction `Chain.id : unit -> chain_id`
+    * Remove contract instances, and use contract handles instead [BREAKING CHANGE]
+    * Allow polymorphic variants (so as to not have to declare type)
+    * Allow capitalized entry point names with syntax
+      `let%entry `Entry = fun param -> fun storage -> body`
+    * New instruction `Contract.address` returns address without entry point
+      handle [BREAKING CHANGE]
+    * Previous behaviour can be accessed with `Contract.untype`
+    * Addresses can have an entry point handle with syntax
+      `KT1LLcCCB9Fr1hrkGzfdiJ9u3ZajbdckBFrF%entry_name`
+
+    IMPROVEMENTS
+    * Better simplifications (for sequences) and inlining
+    * Decompilation of Michelson entry points with arbitrary names
+    * Modular client in separate executable `liquidity-client`
+    * Documenation
+
+1.057 2020/01/14
+    BUG FIXES
+    * Fix scoping bug in inlining
+    * Don't use _ as a variable name when decompiling
+
+1.056 2020/01/08
+    BUG FIXES
+    * Fix conflicts in internal names with multiple contracts
+
+1.055 2019/11/28
+    NEW FEATURES
+    * Estimate fees and storage (burn) in Client
+
+    IMPROVEMENTS
+    * Updated documentation
+
+1.053 2019/10/08
+    NEW FEATURES
+    * Fee code (only Dune Network)
+    * Decompilation of Michelson fee code
+
+    IMPROVEMENTS
+    * Switch to Dune Network backend
+    * Remove unecessary type annotation in decompiled Liquidity
+
+1.044 2019/09/02
+    IMPROVEMENTS
+    * Generate contracts whose parameter is compatible with upcoming version of
+      Michelson
+
+1.042 2019/07/19
+    IMPROVEMENTS
+    * Client update wrt. Tezos protocol
+
+    BUG FIXES
+    * Decompilation of failing branches
+    * Restriction on timestamp operations
+
+1.041 2019/07/09
+    NEW FEATURES
+    * Allow lambdas in constants
+
+1.04  2019/05/24
+    NEW FEATURES
+    * GPL license
+
+    IMPROVEMENTS
+    * Client update wrt. Tezos protocol
+
+    BUG FIXES
+    * Occur check with physiscal equality (in inlining phase)
+
+1.03  2019/04/03
+    NEW FEATURES
+    * Uncurrying of totally applied functions
+
+    IMPROVEMENTS
+    * Bytes.pack is polymorphic
+    * Better simplifications
+    * Better error reporting
+    * Inlining of closures and constants
+    * Better name/strucuture recovery when decompiling
+
+    BUG FIXES
+    * Monomorphisation global values/variables
+    * Dependencies when using sub-contract as main (#201)
+    * Fix issue in decompilation of sub-contracts
+    * Fix namespace for first class contract types (#202)
+
+1.02  2019/04/02
+    IMPROVEMENTS
+    * Debug information with --verbose
+
+    BUG FIXES
+    * Fix issue in monomophisation
+    * Normalize types wrt current namesapce (#197)
+    * Fix issue with module and contract aliases
+
 1.0   2019-03-08
     NEW FEATURES
     * Revamped module system for function exports

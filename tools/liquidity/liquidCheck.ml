@@ -226,7 +226,8 @@ let rec type_of_const ~loc env = function
   | CBytes _ -> Tbytes
   | CKey _ -> Tkey
   | CSignature _ -> Tsignature
-  | CAddress _ -> Taddress
+  | CContract (_, None) -> Taddress
+  | CContract (_, entry) -> Tcontract (entry, fresh_tvar ())
   | CTuple l ->
     Ttuple (List.map (type_of_const ~loc env) l)
   | CNone -> Toption (fresh_tvar ())
@@ -234,8 +235,8 @@ let rec type_of_const ~loc env = function
   | CMap [] -> Tmap (fresh_tvar (), fresh_tvar ())
   | CMap ((k,e) :: _) -> Tmap (type_of_const ~loc env k, type_of_const ~loc env e)
 
-  | CBigMap [] -> Tbigmap (fresh_tvar (), fresh_tvar ())
-  | CBigMap ((k,e) :: _) -> Tbigmap (type_of_const ~loc env k, type_of_const ~loc env e)
+  | CBigMap (BMList [] | BMId _)-> Tbigmap (fresh_tvar (), fresh_tvar ())
+  | CBigMap BMList ((k,e) :: _) -> Tbigmap (type_of_const ~loc env k, type_of_const ~loc env e)
 
   | CList [] -> Tlist (fresh_tvar ())
   | CList (e :: _) -> Tlist (type_of_const ~loc env e)
@@ -247,11 +248,12 @@ let rec type_of_const ~loc env = function
   | CRight c -> Tor (fresh_tvar (), type_of_const ~loc env c)
 
   | CKey_hash _ -> Tkey_hash
-  | CContract _ -> Tcontract (contract_sig_of_param (fresh_tvar ()))
 
   | CRecord [] -> assert false
   | CRecord ((label, _) :: _ as fields) ->
-    let ty, _ = find_label ~loc label env.env in
+    let ty, _ =
+      try find_label ~loc label env.env
+      with Not_found -> error loc "unbound record field %S" label in
     begin match ty with
       | Trecord (n, l) ->
         let l = List.map2 (fun (lab_c, c) (lab_t, t) ->
@@ -261,7 +263,10 @@ let rec type_of_const ~loc env = function
       | _ -> assert false
     end
   | CConstr (constr, c) ->
-    let ty, (constr, _, i) = find_constr ~loc constr env.env in
+    let ty, (constr, _, i) =
+      try find_constr ~loc constr env.env
+      with Not_found ->
+        error loc "unbound constructor %S" constr in
     begin match ty with
       | Tsum (n, l) ->
         let l = List.mapi (fun j ((constr, t) as ct) ->
@@ -298,7 +303,7 @@ let rec set_uncurry exp =
     set_uncurry f
   | _ -> ()
 
-let rec typecheck_const ~loc env cst ty =
+let rec typecheck_const ~loc env (cst : syntax_const) ty : datatype * typed_const =
   match ty, cst with
   (* No implicit conversions *)
   | ( Tunit, CUnit
@@ -311,7 +316,6 @@ let rec typecheck_const ~loc env cst ty =
     | Tkey, CKey _
     | Tkey_hash, CKey_hash _
     | Tcontract _, CContract _
-    | Taddress, CAddress _
     | Ttimestamp, CTimestamp _
     | Tsignature, CSignature _
     | Toption _, CNone) as ty_cst
@@ -322,23 +326,46 @@ let rec typecheck_const ~loc env cst ty =
   | Tnat, CInt s -> ty, CNat s
   | Tkey, CBytes s -> ty, CKey s
   | Tkey_hash, CBytes s -> ty, CKey_hash s
-  | Tcontract _, CAddress s -> ty, CAddress s
-  | Tcontract { entries_sig = [{ parameter = (Tunit  | Tvar _  as p)}] },
-    CKey_hash s ->
+  | Taddress, CKey_hash s -> ty, CKey_hash s
+  | Taddress, CBytes s -> ty, CContract(s, None)
+  | Tsignature, CBytes s -> ty, CSignature s
+
+  | Tcontract ((None | Some "default"), (Tunit  | Tvar _  as p)), CKey_hash s ->
     unify loc p Tunit;
     ty, CKey_hash s
-  | Tcontract _, CBytes s -> ty, CContract s
-  | Taddress, CContract s -> ty, CContract s
-  | Taddress, CKey_hash s -> ty, CKey_hash s
-  | Taddress, CBytes s -> ty, CContract s
-  | Tsignature, CBytes s -> ty, CSignature s
+  | Tcontract (entry,_), CBytes s ->
+    let len = String.length s in
+    if len < 46 then
+      error loc "constant %s is too short to be a contract" s;
+    let e = String.sub s 46 (len - 46) in
+    let e = Hex.to_string (`Hex e) in
+    begin if e = "" then
+        match entry with
+        | None | Some "default" -> ()
+        | Some entry ->
+          error loc "constant contract is for entry point default \
+                     but should be for entry point %s" entry
+      else
+        match entry with
+        | None ->
+          error loc "constant contract is for entry point %s \
+                     but should be for entry point default" e
+        | Some entry when e <> entry ->
+          error loc "constant contract is for entry point %s \
+                     but should be for entry point %s" e entry
+        | _ -> ()
+    end;
+    ty, CBytes s
+  | Taddress, CContract (s, e) -> ty, CContract (s, e)
 
   | Ttimestamp, CString s -> ty, CTimestamp (ISO8601.of_string s)
   | Ttez, CString s -> ty, CTez (LiquidNumber.tez_of_liq s)
   | Tkey_hash, CString s -> ty, CKey_hash s
-  | Tcontract _, CString s -> ty, CContract s
   | Tkey, CString s -> ty, CKey s
   | Tsignature, CString s -> ty, CSignature s
+
+  | Tchainid, CString s -> ty, CString s
+  | Tchainid, CBytes s -> ty, CBytes s
 
   (* Structures *)
   | Ttuple tys, CTuple csts ->
@@ -375,7 +402,7 @@ let rec typecheck_const ~loc env cst ty =
         (string_of_type ty);
     Tmap (ty1, ty2), CMap csts
 
-  | Tbigmap (ty1, ty2), (CMap csts | CBigMap csts) -> (* allow map *)
+  | Tbigmap (ty1, ty2), (CMap csts | CBigMap BMList csts) -> (* allow map *)
     let (ty1, ty2), csts = List.fold_left (fun ((ty1, ty2), acc) (cst1, cst2) ->
         let ty1, cst1 = typecheck_const ~loc env cst1 ty1 in
         let ty2, cst2 = typecheck_const ~loc env cst2 ty2 in
@@ -385,7 +412,12 @@ let rec typecheck_const ~loc env cst ty =
     if not @@ comparable_type ty1 then
       error loc "Keys of big map are of a non comparable type %s"
         (string_of_type ty);
-    Tbigmap (ty1, ty2), CBigMap csts
+    Tbigmap (ty1, ty2), CBigMap (BMList csts)
+  | Tbigmap (ty1, ty2), CBigMap BMId id -> (* allow map *)
+    if not @@ comparable_type ty1 then
+      error loc "Keys of big map are of a non comparable type %s"
+        (string_of_type ty);
+    Tbigmap (ty1, ty2), CBigMap (BMId id)
 
   | Tlist ty, CList csts ->
     let ty, csts = List.fold_left (fun (ty, acc) cst ->
@@ -434,7 +466,24 @@ let rec typecheck_const ~loc env cst ty =
     let labels, fields = List.split (mk labels csts) in
     Trecord (rname, labels), CRecord fields
 
-  | Tsum (sname, constrs), CConstr (c, cst) ->
+  | Tsum (None, constrs), CConstr (c, cst) ->
+    let constrs, cst = try
+      let ty = List.assoc c constrs in
+      let ty, cst = typecheck_const ~loc env cst ty in
+      let constrs =
+        List.map (fun (c, t) -> if eq_types t ty then (c, ty) else (c, t)) constrs in
+      constrs, cst
+      with Not_found ->
+        let ty, cst =
+          typecheck_const ~loc env cst (type_of_const ~loc env cst) in
+        let constrs = constrs @ [c, ty] in
+        constrs, cst
+    in
+    let ty = Tsum (None, constrs) in
+    let c = CConstr (c, cst) in
+    (ty, c)
+
+  | Tsum (Some sname, constrs), CConstr (c, cst) ->
     let ty =
       try List.assoc c constrs
       with Not_found ->
@@ -442,7 +491,7 @@ let rec typecheck_const ~loc env cst ty =
     let ty, cst = typecheck_const ~loc env cst ty in
     let constrs =
       List.map (fun (c, t) -> if eq_types t ty then (c, ty) else (c, t)) constrs in
-    let ty = Tsum (sname, constrs) in
+    let ty = Tsum (Some sname, constrs) in
     let c = CConstr (c, cst) in
     (ty, c)
 
@@ -454,7 +503,7 @@ let rec typecheck_const ~loc env cst ty =
         (c, ty, cst)
       | _ :: constrs, CRight cst -> seek constrs cst
       | _, _ ->
-        error loc "Constant cannot be converted to type %s" sname
+        error loc "Constant cannot be converted to type %s" (string_of_type ty)
     in
     let c, ty, cst = seek constrs cst in
     let constrs =
@@ -466,9 +515,10 @@ let rec typecheck_const ~loc env cst ty =
     ty, CLambda lam
 
   | Tvar tv, c ->
-    unify loc ty (type_of_const ~loc env c);
     let ty = match (Ref.get tv).tyo with
-      | None -> ty
+      | None ->
+        unify loc ty (type_of_const ~loc env c);
+        ty
       | Some ty -> ty in
     typecheck_const ~loc env c ty
 
@@ -578,57 +628,100 @@ and typecheck env ( exp : syntax_exp ) : typed_exp =
     let desc = If { cond; ifthen; ifelse } in
     mk ?name:exp.name ~loc desc ty
 
+  | Self { entry } ->
+    let self_entries = env.t_contract_sig.f_entries_sig in
+    let parameter  =
+      match List.find_opt (fun e -> e.entry_name = entry) self_entries with
+      | Some e -> e.parameter
+      | None ->
+        error loc
+          "contract has no entry point %s (available entry points: %a)"
+          entry
+          (Format.pp_print_list
+             ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ")
+             (fun fmt e -> Format.pp_print_string fmt e.entry_name))
+          self_entries;
+    in
+    let ty = Tcontract (Some entry, parameter) in
+    let desc = Self { entry } in
+    mk ?name:exp.name ~loc desc ty
+
   | Transfer { dest; amount } ->
     let amount = typecheck_expected "transfer amount" env Ttez amount in
     let dest = typecheck_expected "transfer destination" env Tkey_hash dest in
     let desc = Transfer { dest; amount } in
     mk ?name:exp.name ~loc desc Toperation
 
+  | SelfCall { amount; entry; arg } ->
+    let amount = typecheck_expected "call amount" env Ttez amount in
+    let self_entries = env.t_contract_sig.f_entries_sig in
+    let arg = match List.find_opt (fun e -> e.entry_name = entry) self_entries with
+      | Some e -> typecheck_expected "call argument" env e.parameter arg
+      | None ->
+        (* if env.decompiling then
+         *   typecheck env arg
+         * else *)
+        error loc
+          "contract has no entry point %s (available entry points: %a)"
+          entry
+          (Format.pp_print_list
+             ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ")
+             (fun fmt e -> Format.pp_print_string fmt e.entry_name))
+          self_entries;
+    in
+    let desc = SelfCall { amount; entry; arg } in
+    mk ?name:exp.name ~loc desc Toperation
+
   | Call { contract; amount; entry; arg } ->
     let amount = typecheck_expected "call amount" env Ttez amount in
     let contract = typecheck env contract in
-    let entry' = match entry with None -> "main" | Some e -> e in
-    begin
-      match expand contract.ty with
-      | Tcontract contract_sig ->
-        begin try
-            let { parameter = arg_ty } =
-              List.find (fun { entry_name } -> entry_name = entry')
-                contract_sig.entries_sig in
-            let arg = typecheck_expected "call argument" env arg_ty arg in
-            if amount.transfer || contract.transfer || arg.transfer then
-              error loc "transfer within transfer arguments";
-            let desc = Call { contract; amount; entry; arg } in
-            mk ?name:exp.name ~loc desc Toperation
-          with Not_found ->
-            error loc
-              "contract has no entry point %s (available entry points: %a)"
-              entry'
-              (Format.pp_print_list
-                 ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ")
-                 Format.pp_print_string)
-              (List.map (fun e -> e.entry_name) contract_sig.entries_sig);
-        end
-      | Tvar _ | Tpartial _ ->
+    let arg, entry =
+      match expand contract.ty, entry with
+      | Tcontract (Some c_entry, arg_ty), Some entry
+        when not env.decompiling && entry <> c_entry ->
+        error loc
+          "contract handle is for entry point %s, \
+           but is called with entry point %s"
+          c_entry entry
+      | Tcontract (e, arg_ty), entry ->
+        let entry = match e, entry with
+          | None, None -> None
+          | Some e, _ | _, Some e -> Some e in
+        typecheck_expected "call argument" env arg_ty arg, entry
+      | Taddress, Some _ -> typecheck env arg, entry
+      | Tvar _, Some _ ->
         let arg = typecheck env arg in
-        if amount.transfer || contract.transfer || arg.transfer then
-          error loc "transfer within transfer arguments";
-        unify contract.ty (Tpartial (Pcont [(entry', arg.ty)]));
-        let desc = Call { contract; amount; entry; arg } in
-        mk ?name:exp.name ~loc desc Toperation
-      | ty ->
+        unify contract.ty Taddress;
+        arg, entry
+      | (Taddress | Tvar _), None ->
+        error loc "contract call on address must specify an entry point"
+      | Tpartial (Pcont pe), _ ->
+        let entry = match pe, entry with
+          | None, None -> None
+          | _, Some e | Some (e, _), _ -> Some e in
+        let arg = typecheck env arg in
+        unify contract.ty (Tcontract (entry, arg.ty));
+        arg, entry
+      | ty, _ ->
         error contract.loc
-          "Bad contract type.\nExpected type:\n  <Contract>.instance\n\
+          "Bad contract type.\nAllowed types:\n  \
+           - Contract handle%s\n  \
+           - address\n\
            Actual type:\n  %s"
+          (match entry with
+           | None -> ""
+           | Some e -> " for entry point " ^ e)
           (string_of_type ty)
-    end
+    in
+    let desc = Call { contract; amount; entry; arg } in
+    mk ?name:exp.name ~loc desc Toperation
 
-  (* contract.main (param) amount *)
+  (* contract.entry_name (param) amount *)
   | Apply { prim = Prim_exec _;
             args = { desc = Project { field = entry; record = contract }} ::
                    [param; amount] }
     when match (typecheck env contract).ty with
-      | Tcontract _ -> true
+      | Tcontract _ | Taddress -> true
       | _ -> false
     ->
     typecheck env
@@ -1218,23 +1311,19 @@ and typecheck env ( exp : syntax_exp ) : typed_exp =
     let desc = Unpack { arg; ty } in
     mk ?name:exp.name ~loc desc (Toption ty)
 
-  | ContractAt { arg; c_sig } ->
-    let arg = typecheck_expected "Contract.at argument" env Taddress arg in
-    let desc = ContractAt { arg; c_sig } in
-    mk ?name:exp.name ~loc desc (Toption (Tcontract c_sig))
+  | ContractAt { arg; entry; entry_param } ->
+    let arg = typecheck_expected "[%%handle ...] argument" env Taddress arg in
+    let desc = ContractAt { arg; entry; entry_param } in
+    mk ?name:exp.name ~loc desc (Toption (Tcontract (Some entry, entry_param)))
 
   | CreateContract { args; contract } ->
     let contract = typecheck_contract ~warnings:env.warnings
         ~others:env.visible_contracts
         ~decompiling:env.decompiling contract in
     begin match args with
-      | [manager; delegate; spendable; delegatable; init_balance; init_storage] ->
-        let manager = typecheck_expected "manager" env Tkey_hash manager in
+      | [delegate; init_balance; init_storage] ->
         let delegate =
           typecheck_expected "delegate" env (Toption Tkey_hash) delegate in
-        let spendable = typecheck_expected "spendable" env Tbool spendable in
-        let delegatable =
-          typecheck_expected "delegatable" env Tbool delegatable in
         let init_balance =
           typecheck_expected "initial balance" env Ttez init_balance in
         let contract_storage_type =
@@ -1242,12 +1331,11 @@ and typecheck env ( exp : syntax_exp ) : typed_exp =
         let init_storage = typecheck_expected "initial storage"
             env contract_storage_type init_storage in
         let desc = CreateContract {
-            args = [manager; delegate; spendable;
-                    delegatable; init_balance; init_storage];
+            args = [delegate; init_balance; init_storage];
             contract } in
         mk ?name:exp.name ~loc desc (Ttuple [Toperation; Taddress])
       | _ ->
-        error loc "Contract.create expects 7 arguments, was given %d"
+        error loc "Contract.create expects 3 arguments, was given %d"
           (List.length args)
     end
 
@@ -1514,15 +1602,17 @@ and typecheck_prim2i env prim loc args =
   | Prim_map_size, [ ty ] ->
     unify ty (Tmap (fresh_tvar (), fresh_tvar ())); Tnat
 
-  | Prim_Some, [ ty ] -> Toption ty
+  | Prim_big_map_create, [ ty ] ->
+    unify ty Tunit;
+    Tbigmap (fresh_tvar (), fresh_tvar ())
 
-  | Prim_self, [ ty ] ->
-    unify ty Tunit; Tcontract (sig_of_full_sig env.t_contract_sig)
+  | Prim_Some, [ ty ] -> Toption ty
 
   | Prim_now, [ ty ] -> unify ty Tunit; Ttimestamp
   | ( Prim_balance | Prim_amount ), [ ty ] -> unify ty Tunit; Ttez
   | ( Prim_source | Prim_sender ), [ ty ] -> unify ty Tunit; Taddress
   | Prim_gas, [ ty ] -> unify ty Tunit; Tnat
+  | Prim_chain_id, [ ty ] -> unify ty Tunit; Tchainid
 
   | Prim_pack, [ ty ] ->
     Tbytes
@@ -1535,17 +1625,12 @@ and typecheck_prim2i env prim loc args =
   | Prim_check, [ ty1; ty2; ty3 ] ->
     unify ty1 Tkey; unify ty2 Tsignature; unify ty3 Tbytes; Tbool
 
-  | Prim_address, [ ty ] ->
-    unify ty (Tpartial (Pcont []));
+  | (Prim_address | Prim_address_untype), [ ty ] ->
+    unify ty (Tpartial (Pcont None));
     Taddress
 
-  | Prim_create_account, [ ty1; ty2; ty3; ty4 ] ->
-    unify ty1 Tkey_hash; unify ty2 (Toption Tkey_hash);
-    unify ty3 Tbool; unify ty4 Ttez;
-    Ttuple [Toperation; Taddress]
-
   | Prim_default_account, [ ty ] ->
-    unify ty Tkey_hash; Tcontract unit_contract_sig
+    unify ty Tkey_hash; unit_contract_ty
 
   | Prim_set_delegate, [ ty ] ->
     unify ty (Toption Tkey_hash); Toperation
@@ -1582,7 +1667,7 @@ and typecheck_prim2i env prim loc args =
     unify ty1 Tnat; unify ty2 Tnat; unify ty3 Tbytes; Toption Tbytes
 
   | Prim_get_balance, [ ty ] ->
-    unify ty (Tpartial (Pcont []));
+    unify ty (Tpartial (Pcont None));
     Ttez
 
   | Prim_block_level, [ ty ] ->
@@ -1594,7 +1679,7 @@ and typecheck_prim2i env prim loc args =
     Tbool
 
   | Prim_is_implicit, [ ty ] ->
-    unify ty (Tpartial (Pcont ["main", Tunit]));
+    unify ty (Tpartial (Pcont (Some ("default", Tunit))));
     Toption Tkey_hash
 
   | _ -> failwith ("typecheck_prim2i " ^
@@ -1723,6 +1808,9 @@ and typecheck_prim2t env prim loc args =
   | Prim_set_size, [ Tset _]  ->  Tnat
   | Prim_map_size, [ Tmap _]  ->  Tnat
 
+  | Prim_big_map_create, [ Tunit ] ->
+    Tbigmap (fresh_tvar (), fresh_tvar ())
+
   | Prim_set_update, [ key_ty; Tbool; Tset expected_key_ty]
     ->
     fail_neq ~loc ~expected_ty:expected_key_ty key_ty
@@ -1740,7 +1828,6 @@ and typecheck_prim2t env prim loc args =
     Tset key_ty
 
   | Prim_Some, [ ty ] -> Toption ty
-  | Prim_self, [ Tunit ] -> Tcontract (sig_of_full_sig env.t_contract_sig)
   | Prim_now, [ Tunit ] -> Ttimestamp
   | Prim_balance, [ Tunit ] -> Ttez
   | Prim_source, [ Tunit ] -> Taddress
@@ -1752,23 +1839,17 @@ and typecheck_prim2t env prim loc args =
   | Prim_sha256, [ Tbytes ] -> Tbytes
   | Prim_sha512, [ Tbytes ] -> Tbytes
   | Prim_hash_key, [ Tkey ] -> Tkey_hash
+  | Prim_chain_id, [ Tunit ] -> Tchainid
 
   | Prim_check, [ Tkey; Tsignature; Tbytes ] ->
     Tbool
   | Prim_check, _ ->
     error_prim loc Prim_check args [Tkey; Tsignature; Tbytes]
 
-  | Prim_address, [ Tcontract _ ] ->
+  | (Prim_address | Prim_address_untype), [ Tcontract _ ] ->
     Taddress
 
-  | Prim_create_account, [ Tkey_hash; Toption Tkey_hash; Tbool; Ttez ] ->
-    Ttuple [Toperation; Taddress]
-  | Prim_create_account, _ ->
-    error_prim loc Prim_create_account args
-      [ Tkey_hash; Toption Tkey_hash; Tbool; Ttez ]
-
-  | Prim_default_account, [ Tkey_hash ] ->
-    Tcontract unit_contract_sig
+  | Prim_default_account, [ Tkey_hash ] -> unit_contract_ty
 
   | Prim_set_delegate, [ Toption Tkey_hash ] ->
     Toperation
@@ -1802,9 +1883,11 @@ and typecheck_prim2t env prim loc args =
   | Prim_bytes_sub, [ Tnat; Tnat; Tbytes ] -> Toption Tbytes
 
   | Prim_get_balance, [ Tcontract _ ] -> Ttez
+  (* XXX : should be address -> tez option *)
+
   | Prim_block_level, [ Tunit ] -> Tnat
   | Prim_collect_call, [ Tunit ] -> Tbool
-  | Prim_is_implicit, [ Tcontract { entries_sig = [{ parameter = Tunit }] } ] ->
+  | Prim_is_implicit, [ Tcontract ((None | Some "default"), Tunit) ] ->
     Toption Tkey_hash
 
   | prim, args_tys ->
@@ -1878,15 +1961,16 @@ and expected_prim_types = function
   | Prim_Some | Prim_pack ->
     1, "'a"
 
-  | Prim_self
   | Prim_now
   | Prim_balance
   | Prim_source
   | Prim_sender
   | Prim_amount
   | Prim_gas
+  | Prim_chain_id
   | Prim_block_level
-  | Prim_collect_call ->
+  | Prim_collect_call
+  | Prim_big_map_create ->
     1, "unit"
 
   | Prim_blake2b
@@ -1900,14 +1984,8 @@ and expected_prim_types = function
   | Prim_check ->
     3, "key, signature, bytes"
 
-  | Prim_address | Prim_get_balance ->
-    1, "<Contract>.instance"
-
-  | Prim_create_account ->
-    4, Printf.sprintf
-      "manager:key_hash, delegate:(key_hash option), \
-       delegatable:bool, amount:%s"
-      (LiquidOptions.amount_type ())
+  | Prim_address | Prim_get_balance | Prim_address_untype ->
+    1, "<Contract handle>"
 
   | Prim_default_account ->
     1, "key_hash"
@@ -2032,9 +2110,9 @@ and typecheck_contract ~others ~warnings ~decompiling contract =
     (* when decompiling recover signature of encoded Contract.self *)
     if not decompiling then t_contract_sig
     else match t_contract_sig.f_entries_sig with
-      | [{ entry_name = "main" } as e] ->
+      | [e] ->
         begin match expand e.parameter with
-          | Tsum ("_entries", l) ->
+          | Tsum (_, l) when List.for_all (fun (e,_) -> is_entry_case e) l ->
             let f_entries_sig = List.map (fun (c, parameter) ->
                 { entry_name = entry_name_of_case c;
                   parameter;
@@ -2135,7 +2213,7 @@ let rec type_of_const = function
   | CBytes _ -> Tbytes
   | CKey _ -> Tkey
   | CSignature _ -> Tsignature
-  | CAddress _ -> Taddress
+  | CContract (_, e) -> Tcontract (e, Tunit)
   | CTuple l ->
     Ttuple (List.map type_of_const l)
   | CNone -> Toption Tunit
@@ -2143,8 +2221,8 @@ let rec type_of_const = function
   | CMap [] -> Tmap (Tint, Tunit)
   | CMap ((k,e) :: _) -> Tmap (type_of_const k, type_of_const e)
 
-  | CBigMap [] -> Tbigmap (Tint, Tunit)
-  | CBigMap ((k,e) :: _) -> Tbigmap (type_of_const k, type_of_const e)
+  | CBigMap (BMList [] | BMId _) -> Tbigmap (Tint, Tunit)
+  | CBigMap BMList ((k,e) :: _) -> Tbigmap (type_of_const k, type_of_const e)
 
   | CList [] -> Tlist (Tunit)
   | CList (e :: _) -> Tlist (type_of_const e)
@@ -2156,10 +2234,9 @@ let rec type_of_const = function
   | CRight c -> Tor (fresh_tvar (), type_of_const c)
 
   | CKey_hash _ -> Tkey_hash
-  | CContract _ -> Tcontract unit_contract_sig
 
   | CLambda { arg_ty; ret_ty } -> Tlambda (arg_ty, ret_ty, default_uncurry ())
 
   (* XXX just for printing *)
   | CRecord _ -> Trecord ("<record>", [])
-  | CConstr _ -> Tsum ("<sum>", [])
+  | CConstr _ -> Tsum (None, [])

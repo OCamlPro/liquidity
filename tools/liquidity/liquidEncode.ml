@@ -23,7 +23,6 @@
 
 open LiquidTypes
 open LiquidNamespace
-open LiquidInfer
 open LiquidPrinter.Liquid
 
 (* Elements traversed by uncurrying transformation *)
@@ -234,7 +233,7 @@ let rec encode_type ?(decompiling=false) ty =
   (* else *)
   match ty with
   | Ttez | Tunit | Ttimestamp | Tint | Tnat | Tbool | Tkey | Tkey_hash
-  | Tsignature | Tstring | Tbytes | Toperation | Taddress | Tfail -> ty
+  | Tsignature | Tstring | Tbytes | Toperation | Taddress | Tfail | Tchainid -> ty
   | Ttuple tys ->
     let tys' = List.map (encode_type ~decompiling) tys in
     if List.for_all2 (==) tys tys' then ty
@@ -273,24 +272,11 @@ let rec encode_type ?(decompiling=false) ty =
     Trecord (name, List.map (fun (l, ty) -> l, encode_type ~decompiling ty) labels)
   | Tsum (name, cstys) ->
     Tsum (name, List.map (fun (c, ty) -> c, encode_type ~decompiling ty) cstys)
-  | Tcontract contract_sig when decompiling ->
-    Tcontract { contract_sig with
-                entries_sig =
-                  List.map (fun e ->
-                      { e with parameter = encode_type ~decompiling e. parameter }
-                    ) contract_sig.entries_sig
-              }
-  | Tcontract contract_sig ->
-    let parameter = encode_type ~decompiling (encode_contract_sig contract_sig) in
-    Tcontract { contract_sig with entries_sig = [{
-        entry_name = "main";
-        parameter_name = "parameter";
-        storage_name = "storage";
-        parameter;
-      }] }
+  | Tcontract (entry, param) ->
+    Tcontract (entry, encode_type ~decompiling param)
   | Tvar _ | Tpartial _ ->
-    Format.eprintf "%s@." (LiquidPrinter.LiquidDebug.string_of_type ty);
-    assert false (* Removed during typechecking *)
+    (* Removed during typechecking (if monomorphized)  *)
+    ty
 
 and encode_qual_type env ty =
   encode_type ~decompiling:env.decompiling (normalize_type ~in_env:env.env ty)
@@ -307,7 +293,7 @@ and encode_contract_sig csig =
      *    | None -> "") *)
   | [{ parameter }] -> parameter
   | entries ->
-    Tsum ("_entries",
+    Tsum (None,
           List.map (fun { entry_name; parameter = t } ->
               (entry_name, t)
             ) entries)
@@ -323,63 +309,87 @@ and get_lambda_type ~decompiling args = function
       | _ -> Ttuple (List.rev args) in
     Tlambda (t1, t2, default_uncurry ())
 
-(* returns true if the type has a big map anywhere *)
-let rec has_big_map = function
-  | Tbigmap (_t1, _t2) -> true
+let rec allowed_type
+    ?(allow_big_map=true)
+    ?(allow_operation=true)
+    ?(allow_contract=true) = function
   | Ttez | Tunit | Ttimestamp | Tint | Tnat | Tbool | Tkey | Tkey_hash
-  | Tsignature | Tstring | Tbytes | Toperation | Taddress | Tfail -> false
+  | Tsignature | Tstring | Taddress | Tbytes | Tchainid -> true
+  | Toperation -> allow_operation
+  | Tfail -> false
   | Ttuple tys ->
-    List.exists has_big_map tys
-  | Tset t | Tlist t | Toption t -> has_big_map t
-  | Tor (t1, t2) | Tlambda (t1, t2, _)
+    List.for_all
+      (allowed_type ~allow_big_map ~allow_operation ~allow_contract)
+      tys
+  | Tset t ->
+    comparable_type t &&
+    allowed_type ~allow_big_map ~allow_operation ~allow_contract t
+  | Tlist t | Toption t ->
+    allowed_type ~allow_big_map ~allow_operation ~allow_contract t
+  | Tcontract (_, t) ->
+    allow_contract &&
+    allowed_type ~allow_big_map ~allow_operation:false ~allow_contract:true t
+  | Tor (t1, t2) ->
+    allowed_type ~allow_big_map ~allow_operation ~allow_contract t1 &&
+    allowed_type ~allow_big_map ~allow_operation ~allow_contract t2
+  | Tlambda (t1, t2, _) ->
+    allowed_type t1 &&
+    allowed_type t2
   | Tmap (t1, t2) ->
-    has_big_map t1 || has_big_map t2
+    comparable_type t1 &&
+    allowed_type ~allow_big_map ~allow_operation ~allow_contract t1 &&
+    allowed_type ~allow_big_map ~allow_operation ~allow_contract t2
   | Tclosure  ((t1, t2), t3, _) ->
-    has_big_map t1 || has_big_map t2 || has_big_map t3
-  | Trecord (_, labels) ->
-    List.exists (fun (_, ty) -> has_big_map ty) labels
-  | Tsum (_, cstys) ->
-    List.exists (fun (_, ty) -> has_big_map ty) cstys
-  | Tcontract { entries_sig } ->
-    List.exists (fun { parameter } -> has_big_map parameter) entries_sig
-  | Tvar _ | Tpartial _ -> assert false (* Removed during typechecking *)
+    allowed_type t1 &&
+    allowed_type t2 &&
+    allowed_type t3
+  | Trecord (_, ltys)
+  | Tsum (_, ltys) ->
+    List.for_all (fun (_, ty) ->
+        allowed_type ~allow_big_map ~allow_operation ~allow_contract ty) ltys
+  | Tbigmap (t1, t2) ->
+    allow_big_map &&
+    comparable_type t1 &&
+    allowed_type ~allow_big_map:false ~allow_operation ~allow_contract t1 &&
+    allowed_type
+      ~allow_big_map:false ~allow_operation:false ~allow_contract:false t2
+  | Tvar _ | Tpartial _ ->
+    (* Removed during typechecking (if monomorphized) *)
+    true
+
+let check_allowed_type loc ?allow_operation ?allow_contract ty =
+  if not @@ allowed_type ?allow_operation ?allow_contract ty then
+    error loc
+      "The following type is not allowed: %s"
+      (string_of_type ty)
 
 (* Encode storage type. This checks that big maps appear only as the
    first component of the toplevel tuple or record storage. *)
 let encode_storage_type env ty =
   let ty = encode_qual_type env ty in
-  match ty with
-  | Ttuple (Tbigmap (t1, t2) :: r)
-    when not @@ List.exists has_big_map (t1 :: t2 :: r) -> ty
-  | Trecord (_, ((_, Tbigmap (t1, t2)) :: r))
-    when not @@ List.exists has_big_map (t1 :: t2 :: List.map snd r) -> ty
-  | _ when not (has_big_map ty) -> ty
-  | _ ->
-    error (noloc env)
-      "only one big map is allowed, and only as first component of storage \
-       (either a tuple or a record)"
+  check_allowed_type (noloc env) ~allow_operation:false ~allow_contract:false ty;
+  ty
 
 (* Encode parameter type. Parameter cannot have big maps. *)
 let encode_parameter_type env ty =
   let ty = encode_qual_type env ty in
-  if has_big_map ty then
-    error (noloc env) "big maps are not allowed in parameter type";
+  check_allowed_type (noloc env) ~allow_operation:false ~allow_contract:true ty;
   ty
 
 
-(* Unfortunately, operations are not allowed in Michelson constants,
-   so when they appear in one, we have to turn them to non constant
-   expressions. For instance (Set [op]) is turned into
+(* Unfortunately, operations and big maps are not allowed in Michelson
+   constants, so when they appear in one, we have to turn them to non
+   constant expressions. For instance (Set [op]) is turned into
    Set.add op (Set : operation set) *)
 let rec deconstify env loc ty c =
-  if not @@ type_contains_nonlambda_operation ty then
+  if env.decompiling || not @@ forbidden_constant_ty ty then
     mk ~loc (Const { ty; const = c }) ty
   else match c, (encode_qual_type env ty) with
-    | (CUnit | CBool _ | CInt _ | CNat _ | CTez _ | CTimestamp _ | CString _
-      | CBytes _
-      | CKey _ | CContract _ | CSignature _ | CNone  | CKey_hash _ | CAddress _),
+    | ( CUnit | CBool _ | CInt _ | CNat _ | CTez _ | CTimestamp _ | CString _
+      | CBytes _ | CKey _ | CSignature _ | CNone
+      | CKey_hash _ | CContract _ ),
       _ ->
-      mk ~loc (Const { ty; const =c }) ty
+      mk ~loc (Const { ty; const = c }) ty
 
     | CSome c, Toption ty' ->
       mk ~loc (Apply { prim = Prim_Some; args = [deconstify env loc ty' c] }) ty
@@ -392,6 +402,11 @@ let rec deconstify env loc ty c =
     | CTuple cs, Ttuple tys ->
       mk ~loc (Apply { prim = Prim_tuple;
                        args = List.map2 (deconstify env loc) tys cs }) ty
+
+    | CTuple cs, Trecord (_, ltys) ->
+      mk ~loc (Apply { prim = Prim_tuple;
+                       args = List.map2 (fun (_, ty) ->
+                           deconstify env loc ty) ltys cs }) ty
 
     | CList cs, Tlist ty' ->
       List.fold_right (fun c acc ->
@@ -418,26 +433,29 @@ let rec deconstify env loc ty c =
         cs
         (mk ~loc (Const { ty; const = CMap [] }) ty)
 
-    | CBigMap cs, Tbigmap (tk, te) ->
+    | CBigMap (BMList cs), Tbigmap (tk, te) ->
       List.fold_right (fun (k, e) acc ->
           mk (Apply { prim = Prim_map_add;
                       args = [deconstify env loc tk k; deconstify env loc te e; acc] })
             ~loc ty
         )
         cs
-        (mk ~loc (Const { ty; const = CBigMap [] }) ty)
+        (* (mk ~loc (Const { ty; const = CBigMap [] }) ty) *)
+        (mk ~loc (Apply { prim = Prim_big_map_create;
+                          (* Ghost unused arguments to carry big map type *)
+                          args = [unused env ~loc tk; unused env ~loc te] }) ty)
+
+    | CBigMap (BMId id ), Tbigmap (tk, te) ->
+      mk ~loc (Const { ty; const = c }) ty
 
     (* Removed by encode const *)
     | CRecord _, _
     | CConstr _, _ -> assert false
 
     | _, _ ->
-      Format.eprintf "%s : %s@."
-        (LiquidPrinter.Liquid.string_of_const c)
-        (LiquidPrinter.Liquid.string_of_type ty);
-      assert false
+      error loc "Forbidden type %s in constants" (string_of_type ty)
 
-(* Decrement counters for variables that they appear in an expression *)
+(* Decrement counters for variables that appear in an expression *)
 let rec decr_counts_vars env e =
   if e.effect then () else
     match e.desc with
@@ -448,7 +466,7 @@ let rec decr_counts_vars env e =
         with Not_found -> ()
       end
 
-    | Const _ -> ()
+    | Const _ | Self _ -> ()
 
     | Failwith e
     | Project { record = e }
@@ -463,7 +481,8 @@ let rec decr_counts_vars env e =
     | Loop { body = e1; arg = e2 }
     | LoopLeft { body = e1; arg = e2; acc = None }
     | Map { body = e1; arg = e2 }
-    | Transfer { dest = e1; amount = e2 } ->
+    | Transfer { dest = e1; amount = e2 }
+    | SelfCall { amount = e1; arg = e2 } ->
       decr_counts_vars env e1;
       decr_counts_vars env e2;
 
@@ -505,21 +524,19 @@ let effect_binding env bnd_val = match bnd_val.desc with
   | _ -> bnd_val.effect
 
 let register_inlining ~loc env new_name count inline bnd_val =
-  if not bnd_val.transfer (* no inlining of values with transfer *) then begin
-    match !count with
-    | c when c <= 0 ->
-      if effect_binding env bnd_val then
-        () (* No inling of values with side effects which don't
-              appear later on *)
-      else begin
-        decr_counts_vars env bnd_val;
-        env.to_inline :=
-          StringMap.add new_name (const_unit ~loc) !(env.to_inline)
-      end
-    | c when (c = 1 && inline = InAuto) || inline = InForced ->
-      env.to_inline := StringMap.add new_name bnd_val !(env.to_inline)
-    | _ -> ()
-  end
+  match !count with
+  | c when c <= 0 ->
+    if effect_binding env bnd_val then
+      () (* No inling of values with side effects which don't
+            appear later on *)
+    else begin
+      decr_counts_vars env bnd_val;
+      env.to_inline :=
+        StringMap.add new_name (const_unit ~loc) !(env.to_inline)
+    end
+  | c when (c = 1 && inline = InAuto) || inline = InForced ->
+    env.to_inline := StringMap.add new_name bnd_val !(env.to_inline)
+  | _ -> ()
 
 let register_inlining_value env v =
   try
@@ -538,7 +555,7 @@ let uncurry_lambda = function
   | _ -> false
 
 let record_field_name_in_env env field record =
-  let field_pos = match record.ty with
+  let field_pos = match expand record.ty with
     | Trecord (_, ltys) ->
       (let exception Found of int in
        try
@@ -547,7 +564,7 @@ let record_field_name_in_env env field record =
        with Found i -> i)
     | _ -> assert false in
   let record = { record with ty = encode_qual_type env record.ty } in
-  let field = match record.ty with
+  let field = match expand record.ty with
     | Trecord (_, ltys) -> List.nth ltys field_pos |> fst
     | _ -> assert false in
   (field, record)
@@ -556,8 +573,8 @@ let record_field_name_in_env env field record =
    variant values *)
 let rec encode_const env (c : typed_const) : encoded_const = match c with
   | ( CUnit | CBool _ | CInt _ | CNat _ | CTez _ | CTimestamp _ | CString _
-    | CBytes _ | CKey _ | CContract _ | CSignature _ | CNone  | CKey_hash _
-    | CAddress _ ) as c -> c
+    | CBytes _ | CKey _ | CSignature _ | CNone  | CKey_hash _
+    | CContract _ ) as c -> c
 
   | CSome x -> CSome (encode_const env x)
   | CLeft x -> CLeft (encode_const env x)
@@ -570,8 +587,12 @@ let rec encode_const env (c : typed_const) : encoded_const = match c with
   | CMap l ->
     CMap (List.map (fun (x,y) -> encode_const env x, encode_const env y) l)
 
-  | CBigMap l ->
-    CBigMap (List.map (fun (x,y) -> encode_const env x, encode_const env y) l)
+  | CBigMap BMList l ->
+    CBigMap
+      (BMList
+         (List.map (fun (x,y) -> encode_const env x, encode_const env y) l))
+
+  | CBigMap BMId _ as c -> c
 
   | CRecord labels when env.decompiling ->
     CRecord (List.map (fun (f, x) -> f, encode_const env x) labels)
@@ -581,21 +602,6 @@ let rec encode_const env (c : typed_const) : encoded_const = match c with
 
   | CConstr (constr, x) when env.decompiling ->
     CConstr (constr, encode_const env x)
-
-  | CConstr (constr, x) when is_entry_case constr ->
-    let entry_name = entry_name_of_case constr in
-    let rec iter entries =
-      match entries with
-      | [] -> assert false
-      | [e] ->
-        if e.entry_name <> entry_name then
-          error (noloc env)  "unknown entry point %s" entry_name;
-        encode_const env x
-      | e :: entries ->
-        if e.entry_name = entry_name then CLeft (encode_const env x)
-        else CRight (iter entries)
-    in
-    iter env.t_contract_sig.f_entries_sig
 
   | CConstr (constr, x) ->
     begin try
@@ -637,7 +643,7 @@ and encode env ( exp : typed_exp ) : encoded_exp =
     let const = encode_const env const in
     (* normalize wrt to top level env *)
     let ty = normalize_type ~in_env:env.env ty in
-    (* use functions instead of constants if contains operations *)
+    (* use functions instead of constants if contains operations or big maps *)
     let c = deconstify env loc ty const in
     mk ?name:exp.name ~loc c.desc ty
 
@@ -680,6 +686,9 @@ and encode env ( exp : typed_exp ) : encoded_exp =
     let ifelse = encode env ifelse in
     mk ?name:exp.name ~loc (If { cond; ifthen; ifelse }) exp.ty
 
+  | Self { entry } ->
+    mk ?name:exp.name ~loc (Self { entry }) exp.ty
+
   | Transfer { dest; amount } ->
     let dest = encode env dest in
     let amount = encode env amount in
@@ -689,57 +698,14 @@ and encode env ( exp : typed_exp ) : encoded_exp =
     let amount = encode env amount in
     let contract = encode env contract in
     let arg = encode env arg in
-    let arg =
-      if env.decompiling then arg
-      else match entry with
-        | None -> arg
-        | Some _
-          when match contract.ty with
-            | Tcontract { entries_sig = [_] } -> true
-            | _ -> false
-          -> arg
-        | Some entry ->
-          let constr = entry in
-          let rec iter entries =
-            match entries with
-            | [] -> assert false
-            | [e] ->
-              if e.entry_name <> entry then
-                error (noloc env)  "unknown entry point %s" entry;
-              arg
-            | e :: entries ->
-              let mk_sums entries = match entries with
-                | [ e ] -> e.parameter
-                | _ ->
-                  let cstrs =
-                    List.map (fun e -> e.entry_name, e.parameter)
-                      entries in
-                  Tsum ("", cstrs)
-              in
-              let desc =
-                if e.entry_name = entry then
-                  let right_ty = mk_sums entries in
-                  Apply { prim = Prim_Left;
-                          args = [arg; unused env ~loc ~constr right_ty] }
-                else
-                  let arg = iter entries in
-                  let left_ty = e.parameter in
-                  let u = match entries with
-                    | [_] -> unused env ~loc ~constr left_ty
-                    | _ ->
-                      (* marker for partially contructed values *)
-                      unused env ~loc ~constr:"_" left_ty in
-                  Apply { prim = Prim_Right; args =  [arg; u] }
-              in
-              mk ~loc desc (mk_sums (e :: entries))
-          in
-          iter (match contract.ty with
-              | Tcontract c_sig -> c_sig.entries_sig
-              | _ -> assert false)
-    in
-    let entry = if env.decompiling then entry else None in
     mk ?name:exp.name ~loc
       (Call { contract; amount; entry; arg }) Toperation
+
+  | SelfCall { amount; entry; arg } ->
+    let amount = encode env amount in
+    let arg = encode env arg in
+    mk ?name:exp.name ~loc
+      (SelfCall { amount; entry; arg }) Toperation
 
   | Failwith arg ->
     let arg = encode env arg in
@@ -786,6 +752,16 @@ and encode env ( exp : typed_exp ) : encoded_exp =
                      Apply { prim = Prim_Cons;
                              args = [y; mk_typed_nil ~loc ty] }) ty] }) ty in
     encode env { exp with desc = Apply { prim; args = [l] } }
+
+  | Apply { prim = Prim_big_map_create; args = [ _unit ] } ->
+    let k_ty, v_ty = match exp.ty with
+      | Tbigmap (k, v) -> k, v
+      | _ -> assert false in
+    (* Ghost unused arguments to carry big map type *)
+    let k = unused env ~loc k_ty in
+    let v = unused env ~loc v_ty in
+    let desc = Apply { prim = Prim_big_map_create; args = [k; v] } in
+    mk ?name:exp.name ~loc desc exp.ty
 
   | Apply { prim; args } ->
     encode_apply exp.name env prim loc args exp.ty
@@ -1076,7 +1052,7 @@ and encode env ( exp : typed_exp ) : encoded_exp =
               | Tor (left_ty, right_ty) -> left_ty, right_ty
               | Tsum (_, [_, left_ty; _, right_ty]) -> left_ty, right_ty
               | Tsum (_, (_, left_ty) :: rcstrs) ->
-                left_ty, Tsum ("", rcstrs)
+                left_ty, Tsum (None, rcstrs)
               | _ -> assert false
             in
             let desc =
@@ -1140,9 +1116,9 @@ and encode env ( exp : typed_exp ) : encoded_exp =
     in
     mk ?name:exp.name ~loc (MatchVariant { arg; cases }) exp.ty
 
-  | ContractAt { arg; c_sig } ->
+  | ContractAt { arg; entry; entry_param } ->
     let arg = encode env arg in
-    mk ?name:exp.name ~loc (ContractAt { arg; c_sig }) exp.ty
+    mk ?name:exp.name ~loc (ContractAt { arg; entry; entry_param }) exp.ty
 
   | Unpack { arg; ty } ->
     let arg = encode env arg in
@@ -1339,28 +1315,7 @@ and encode_rec_fun env ~loc ?name f arg_name arg_ty ret_ty lam_ty body =
       lam_ty in
   encode env lam
 
-
-and encode_entry env entry =
-  (* "storage/1" *)
-  let (storage_name, env, _) =
-    new_binding env entry.entry_sig.storage_name env.t_contract_sig.f_storage in
-  (* "parameter/2" *)
-  let (parameter_name, env, _) =
-    new_binding env entry.entry_sig.parameter_name entry.entry_sig.parameter in
-  {
-    entry_sig = {
-      entry.entry_sig with
-      parameter = encode_parameter_type env entry.entry_sig.parameter;
-      parameter_name;
-      storage_name;
-    };
-    code = encode env entry.code;
-    fee_code = match entry.fee_code with
-      | None -> None
-      | Some fee_code -> Some (encode env fee_code)
-  }
-
-(* Contract is encoded to single entry point form (with name "main"):
+(* Contract is encoded to single entry point form (with name "default"):
    {contract C = struct
       ...
       let%entry e1 (p1 : ty1) s1 = code_entry_1
@@ -1375,7 +1330,7 @@ and encode_entry env entry =
       | _Liq_entry_e2 of ty2
       | _Liq_entry_e3 of ty3
 
-     let%entry main (paramter : p) storage =
+     let%entry root (paramter : p) storage =
        match parameter with
        | _Liq_entry_e1 p1 ->
          let s1 = storage in {code_entry_1}
@@ -1467,11 +1422,11 @@ and encode_contract ?(annot=false) ?(decompiling=false) contract =
     encode_modules env contract.subs in
   let values = List.map fst values in
 
-  let parameter = encode_contract_sig (sig_of_full_sig env.t_contract_sig) in
-  let loc = LiquidLoc.loc_in_file env.env.filename in
-
   if !LiquidOptions.verbosity > 0 then
     Format.eprintf "Encode contract %s@." (qual_contract_name contract);
+
+  let parameter = encode_contract_sig (sig_of_full_sig env.t_contract_sig) in
+  let loc = LiquidLoc.loc_in_file env.env.filename in
 
   let rec values_on_top mk l exp = match l with
     | [] -> exp
@@ -1494,13 +1449,13 @@ and encode_contract ?(annot=false) ?(decompiling=false) contract =
       e.entry_sig.parameter_name, e.entry_sig.storage_name
     | _ ->
       let parameter = mk_typed ~loc (Var "parameter") parameter in
-      let ecstrs = List.mapi (fun i e ->
-          let constr = e.entry_sig.entry_name in
-          env.env.constrs <- StringMap.add constr ("_entries", i) env.env.constrs;
-          constr, e.entry_sig.parameter
-        ) contract.entries in
-      env.env.types <-
-        StringMap.add "_entries" (fun _ -> Tsum("_entries", ecstrs)) env.env.types;
+      (* let ecstrs = List.mapi (fun i e ->
+       *     let constr = e.entry_sig.entry_name in
+       *     env.env.constrs <- StringMap.add constr ("_entries", i) env.env.constrs;
+       *     constr, e.entry_sig.parameter
+       *   ) contract.entries in
+       * env.env.types <-
+       *   StringMap.add "_entries" (fun _ -> Tsum("_entries", ecstrs)) env.env.types; *)
       let mk_pattern_matching_case entry_name parameter_name storage_name code =
         let constr = entry_name in
         let pat =
@@ -1589,13 +1544,16 @@ and encode_contract ?(annot=false) ?(decompiling=false) contract =
       let init_body = encode env i.init_body in
       Some { i with init_body; init_args }
   in
+  let root_name = match contract.entries with
+    | [e] -> e.entry_sig.entry_name (* Keep entry name as root if only one entry *)
+    | _ -> "" in
   let contract = {
     contract_name = contract.contract_name;
     values = [];
     storage = encode_storage_type env contract.storage;
     entries = [{
         entry_sig = {
-          entry_name = "main";
+          entry_name = root_name;
           parameter_name = pname;
           storage_name;
           parameter = encode_parameter_type env parameter;
@@ -1632,3 +1590,8 @@ let encode_const env t_contract_sig const =
     } in
 
   encode_const env const
+
+let encode_type ?decompiling ty =
+  let ty = encode_type ?decompiling ty in
+  check_allowed_type (LiquidLoc.loc_in_file "_none_") ty;
+  ty

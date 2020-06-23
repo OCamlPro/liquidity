@@ -179,8 +179,8 @@ let type_name_of_annots ?(allow_capital=false) annots =
   | Found s -> Some (sanitize_name ~allow_capital s)
 
 
-let type_constr_or_label_of_annots ~allow_capital ?(keep_empty=false) annots =
-  if !LiquidOptions.ignore_annots then []
+let type_constr_or_label_of_annots ~allow_capital ?(keep_empty=false) ?(no_ignore=false) annots =
+  if not no_ignore && !LiquidOptions.ignore_annots then []
   else
     let exception Found of string in
     List.fold_left (fun acc a ->
@@ -198,6 +198,14 @@ let type_constr_of_annots annots =
 
 let type_label_of_annots annots =
   type_constr_or_label_of_annots ~allow_capital:false annots
+
+let entryname_of_annots annots =
+  let cstrs =
+    type_constr_or_label_of_annots ~allow_capital:true ~keep_empty:false ~no_ignore:true annots in
+  match cstrs with
+  | [] -> None
+  | x :: _ -> Some (String.uncapitalize_ascii x)
+
 
 let add_generalize_to_env =
   let cpt = ref 0 in
@@ -250,47 +258,22 @@ let rec convert_type ?(parameter=false) env expr =
 
     | Prim(_, "or", [x;y], _debug) ->
       begin match name with
-        | None when not parameter -> Tor (convert_type env x, convert_type env y)
+        (* | None when not parameter -> Tor (convert_type env x, convert_type env y) *)
         | _ ->
-          let name = match name with None -> "_entries" | Some n -> n in
+          let is_variant = match name with None -> true | Some _ -> false in
           try
-            let ty = Tsum (name, type_constrs ~gen:false env expr) in
-            let ty_gen = Tsum (name, type_constrs ~gen:true env expr) in
-            add_generalize_to_env name ty_gen env;
+            let ty = Tsum (name, type_constrs ~gen:false ~is_variant env expr) in
+            let ty_gen = Tsum (name, type_constrs ~gen:true ~is_variant env expr) in
+            (match name with
+             | None -> ()
+             | Some name -> add_generalize_to_env name ty_gen env);
             ty
           with Exit -> Tor (convert_type env x, convert_type env y)
       end
 
     | Prim(_, "contract", [x], annots) ->
-      let sig_name = type_name_of_annots ~allow_capital:true annots in
       let parameter = convert_type env x in
-      let entries_sig = match get_type parameter with
-        | Tsum (_, constrs)
-          when List.for_all (fun (s, _) -> is_entry_case s) constrs ->
-          List.map (fun (s, ty) ->
-              { entry_name = entry_name_of_case s;
-                parameter = ty;
-                parameter_name = "parameter";
-                storage_name = "storage" }
-            ) constrs
-        | _ -> [{
-            entry_name = "main";
-            parameter_name = "parameter";
-            storage_name = "storage";
-            parameter;
-          }] in
-      let c_sig = { sig_name; entries_sig } in
-      begin match
-          sig_name,
-          List.find_opt (fun (n, c_sig') -> eq_signature c_sig c_sig')
-            env.contract_types
-        with
-        | None, None -> Tcontract c_sig
-        | Some n, None ->
-          env.contract_types <- (n, c_sig) :: env.contract_types;
-          Tcontract c_sig
-        | _, Some (n, c_sig) -> Tcontract c_sig
-      end
+      Tcontract (None, parameter)
 
     | Prim(_, "lambda", [x;y], _debug) ->
       Tlambda
@@ -344,8 +327,14 @@ and type_components ~allow_capital ~gen env t =
     end
   | _ -> raise Exit
 
-and type_constrs ~gen env t = type_components ~allow_capital:true ~gen env t
-and type_labels ~gen env t = type_components ~allow_capital:false ~gen env t
+and type_constrs ~gen ~is_variant env t =
+  let constrs = type_components ~allow_capital:true ~gen env t in
+  if is_variant then
+    List.map (fun (c, ty) -> ("`" ^ c, ty)) constrs
+  else constrs
+
+and type_labels ~gen env t =
+  type_components ~allow_capital:false ~gen env t
 
 
 (*
@@ -373,8 +362,8 @@ let rec find nodes ?annots name =
   | Prim(_, name_maybe, [ v ], a) :: nodes ->
     if name_maybe = name then
       match annots with
-      | None -> v
-      | Some a' when a = a' -> v
+      | None -> v, a
+      | Some a' when a = a' -> v, a
       | Some _ ->
         find nodes ?annots name
     else find nodes ?annots name
@@ -405,6 +394,8 @@ let rec convert_const env ?ty expr =
         | Some Tnat -> CNat (LiquidNumber.integer_of_mic n)
         | Some Tint | None -> CInt (LiquidNumber.integer_of_mic n)
         | Some Ttez -> CTez (LiquidNumber.tez_of_mic_mutez n)
+        | Some (Tbigmap (_k, _v)) ->
+          CBigMap (BMId (LiquidNumber.integer_of_mic n))
         | Some ty -> wrong_type env expr ty
       end
 
@@ -416,8 +407,11 @@ let rec convert_const env ?ty expr =
           CTimestamp (ISO8601.of_string s)
         | Some Tkey -> CKey s
         | Some Tkey_hash -> CKey_hash s
-        | Some Tcontract _ -> CContract s
-        | Some Taddress -> CAddress s
+        | Some Taddress | Some Tcontract _ ->
+          (match String.split_on_char '%' s with
+           | [s] -> CContract (s, None)
+           | [s; e] -> CContract (s, Some e)
+           | _ -> assert false)
         | Some Tsignature -> CSignature s
         | Some Tstring | None -> CString s
         | Some ty -> wrong_type env expr ty
@@ -437,10 +431,13 @@ let rec convert_const env ?ty expr =
         | Some Tsignature ->
           (* CSignature Ed25519.Signature.(to_b58check s) *)
           CSignature (to_hex s)
-        | Some Taddress ->
-          CAddress (to_hex s)
-        | Some (Tcontract _) ->
-          CContract (to_hex s)
+        | Some (Taddress | Tcontract _) ->
+          let c = MBytes.sub s 0 22 in
+          let e = MBytes.sub s 22 (MBytes.length s - 22) in
+          let e =
+            if MBytes.equal e MBytes.empty then None
+            else Some (MBytes.to_string e) in
+          CContract (to_hex c, e)
         | Some ty -> wrong_type env expr ty
       end
 
@@ -512,19 +509,26 @@ let rec convert_const env ?ty expr =
                 unknown_expr env "convert_const map element" expr
             ) elems)
         | Some (Tbigmap (ty_k, ty_e)) ->
-          CBigMap (List.map (function
+          CBigMap (BMList (List.map (function
               | Prim(_, "Elt", [k;e], _debug) ->
                 convert_const env ~ty:ty_k k, convert_const env ~ty:ty_e e
               | expr ->
                 unknown_expr env "convert_const big map element" expr
-            ) elems)
+            ) elems))
         | Some (Tlambda (arg_ty, ret_ty, _)) ->
           CLambda { arg_name = { nname = "_" ; nloc = loc };
                     recursive = None;
                     arg_ty; ret_ty;
                     body = convert_code env expr }
         | None ->
-          CList (List.map (convert_const env) elems)
+          (try CList (List.map (convert_const env) elems)
+           with _ ->
+             (* maybe it's a lambda *)
+             CLambda { arg_name = { nname = "_" ; nloc = loc };
+                       recursive = None;
+                       arg_ty = LiquidInfer.fresh_tvar ();
+                       ret_ty = LiquidInfer.fresh_tvar ();
+                       body = convert_code env expr })
         | Some ty ->  wrong_type env expr ty
       end
 
@@ -552,9 +556,17 @@ and convert_code env expr =
   | Prim(index, "DUP", [], annot) ->
     mic_loc env index annot (DUP 1)
   | Prim(index, "DROP", [], annot) ->
-    mic_loc env index annot (DROP)
+    mic_loc env index annot (DROP 1)
+  | Prim(index, "DROP", [ Int (_, i) ], annot) ->
+    mic_loc env index annot (DROP (Z.to_int i))
   | Prim(index, "DIP", [ arg ], annot) ->
     mic_loc env index annot (DIP (1, convert_code env arg))
+  | Prim(index, "DIP", [ Int (_, i); arg ], annot) ->
+    mic_loc env index annot (DIP (Z.to_int i, convert_code env arg))
+  | Prim(index, "DIG", [ Int (_, i) ], annot) ->
+    mic_loc env index annot (DIG (Z.to_int i))
+  | Prim(index, "DUG", [ Int (_, i) ], annot) ->
+    mic_loc env index annot (DUG (Z.to_int i))
   | Prim(index, "CAR", [], annot) ->
     begin match type_label_of_annots annot with
       | [f] -> mic_loc env index annot (CAR (Some f))
@@ -581,6 +593,8 @@ and convert_code env expr =
       (IF_CONS (convert_code env x, convert_code env y))
   | Prim(index, "NOW", [], annot) ->
     mic_loc env index annot (NOW)
+  | Prim(index, "CHAIN_ID", [], annot) ->
+    mic_loc env index annot (CHAIN_ID)
   | Prim(index, "PAIR", [], annot) ->
     begin match type_label_of_annots annot with
       | [x] -> mic_loc env index annot (RECORD (x, None))
@@ -620,7 +634,8 @@ and convert_code env expr =
   | Prim(index, "SENDER", [], annot) ->
     mic_loc env index annot (SENDER)
   | Prim(index, "SELF", [], annot) ->
-    mic_loc env index annot (SELF)
+    let entry = entryname_of_annots annot in
+    mic_loc env index annot (SELF entry)
   | Prim(index, "OR", [], annot) ->
     mic_loc env index annot (OR)
   | Prim(index, "LAMBDA", [ty1; ty2; expr], annot) ->
@@ -697,8 +712,8 @@ and convert_code env expr =
       | _ -> mic_loc env index annot (RIGHT (ty, None))
     end
   | Prim(index, "CONTRACT", [ty], annot) ->
-    mic_loc env index annot
-      (CONTRACT (convert_type env ty))
+    let entry = entryname_of_annots annot in
+    mic_loc env index annot (CONTRACT (entry, convert_type env ty))
   | Prim(index, "UNPACK", [ty], annot) ->
     mic_loc env index annot
       (UNPACK (convert_type env ty))
@@ -736,8 +751,6 @@ and convert_code env expr =
     mic_loc env index annot (LSR)
   | Prim(index, "STEPS_TO_QUOTA", [], annot) ->
     mic_loc env index annot (STEPS_TO_QUOTA)
-  | Prim(index, "CREATE_ACCOUNT", [], annot) ->
-    mic_loc env index annot (CREATE_ACCOUNT)
   | Prim(index, "CREATE_CONTRACT", [Seq (_, contract)], annot) ->
     let contract = convert_raw_contract env contract in
     mic_loc env index annot (CREATE_CONTRACT contract)
@@ -757,17 +770,31 @@ and convert_code env expr =
   | Prim(index, "GET_BALANCE", [], annot) ->
     mic_loc env index annot (GET_BALANCE)
 
+  | Prim(index, "EMPTY_BIG_MAP", [ k; v ], annot) ->
+    let k = convert_type env k in
+    let v = convert_type env v in
+    mic_loc env index annot (EMPTY_BIG_MAP (k, v))
+
   | _ -> unknown_expr env "convert_code" expr
 
+and root_name_of_param p annots =
+  match entryname_of_annots annots with
+  | Some _ as e -> e
+  | None -> match p with
+    | Prim(_, "or", [_; _], annots) -> entryname_of_annots annots
+    | _ -> None
+
 and convert_raw_contract env c =
-  let mic_parameter = convert_type env ~parameter:true (find c "parameter") in
-  let mic_storage = convert_type env (find c "storage") in
-  let mic_code = convert_code env (find c "code" ~annots:[]) in
+  let param_node, param_annots = find c "parameter" in
+  let mic_parameter = convert_type env ~parameter:true param_node in
+  let mic_root = root_name_of_param param_node param_annots in
+  let mic_storage = convert_type env (find c "storage" |> fst) in
+  let mic_code = convert_code env (find c "code" ~annots:[] |> fst) in
   let mic_fee_code =
     try
-      Some (convert_code env (find c "code" ~annots:["@fee"]))
+      Some (convert_code env (find c "code" ~annots:["@fee"] |> fst))
     with Missing_program_field _ -> None in
-  { mic_storage; mic_parameter; mic_code; mic_fee_code }
+  { mic_storage; mic_parameter; mic_code; mic_fee_code; mic_root }
 
 let convert_contract env c =
   if !LiquidOptions.verbosity > 0 then
@@ -843,7 +870,7 @@ let convert_env env =
             List.iteri (fun i (label, l_ty) ->
                 ty_env.labels <- StringMap.add label (name, i) ty_env.labels;
               ) labels;
-          | Tsum (name, constrs) ->
+          | Tsum (Some name, constrs) ->
             List.iteri (fun i (constr, c_ty) ->
                 ty_env.constrs <-
                   StringMap.add constr (name, i) ty_env.constrs;

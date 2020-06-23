@@ -1,7 +1,7 @@
 
 type storage = { q : nat; res : (tez * tez) option * (nat * tez) option }
 
-let%entry main
+let%entry default
     (parameter : tez)
     storage =
 

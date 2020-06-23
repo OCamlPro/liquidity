@@ -1,7 +1,7 @@
 
 type storage = (bool * (string, bool) map)
 
-let%entry main
+let%entry default
   (parameter : (string, tez) map)
   _storage =
 

@@ -1,6 +1,6 @@
 type storage = string
 
-let%entry main (parameter : string) storage =
+let%entry default (parameter : string) storage =
   let size = String.size parameter in
   let size_minus_one = match%nat size-1 with
     | Minus _ -> failwith "Wrong size"

@@ -76,7 +76,11 @@ let rec bv code =
             (StringSet.remove tail_name.nname
                (bv ifcons))))
 
+  | Self _ -> StringSet.empty
+
   | Transfer { dest; amount } -> StringSet.union (bv dest) (bv amount)
+
+  | SelfCall { amount; arg } -> StringSet.union (bv arg) (bv amount)
 
   | Call { contract; amount; entry; arg } ->
     List.fold_left (fun set exp ->
@@ -133,16 +137,17 @@ let rec bv code =
 and bv_const const =
   match const with
   | ( CUnit | CBool _ | CInt _ | CNat _ | CTez _ | CTimestamp _ | CString _
-    | CBytes _ | CKey _ | CContract _ | CSignature _ | CNone  | CKey_hash _
-    | CAddress _ ) -> StringSet.empty
+    | CBytes _ | CKey _ | CSignature _ | CNone  | CKey_hash _
+    | CContract _ ) -> StringSet.empty
   | CSome x | CLeft x | CRight x | CConstr (_, x) -> bv_const x
   | CTuple xs | CList xs | CSet xs ->
     List.fold_left
       (fun acc x -> StringSet.union acc (bv_const x)) StringSet.empty xs
-  | CMap l | CBigMap l ->
+  | CMap l | CBigMap BMList l ->
     List.fold_left
       (fun acc (x, y) -> StringSet.union acc
           (StringSet.union (bv_const x) (bv_const y))) StringSet.empty l
+  | CBigMap BMId _ -> StringSet.empty
   | CRecord labels ->
     List.fold_left
       (fun acc (_, x) -> StringSet.union acc (bv_const x))
@@ -294,11 +299,22 @@ let rec bound code =
     let desc = MatchList { arg; head_name; tail_name; ifcons; ifnil } in
     mk desc code bv
 
+  | Self { entry } ->
+    let desc = Self { entry } in
+    mk desc code StringSet.empty
+
   | Transfer { dest; amount } ->
     let dest = bound dest in
     let amount = bound amount in
     let bv = StringSet.union dest.bv amount.bv in
     let desc = Transfer { dest; amount } in
+    mk desc code bv
+
+  | SelfCall { amount; entry; arg } ->
+    let amount = bound amount in
+    let arg = bound arg in
+    let bv = StringSet.union arg.bv amount.bv in
+    let desc = SelfCall { amount; entry; arg } in
     mk desc code bv
 
   | Call { contract; amount; entry; arg } ->
@@ -403,9 +419,9 @@ let rec bound code =
     let desc = CreateContract { args; contract } in
     mk desc code bv
 
-  | ContractAt { arg; c_sig } ->
+  | ContractAt { arg; entry; entry_param } ->
     let arg = bound arg in
-    let desc = ContractAt { arg; c_sig } in
+    let desc = ContractAt { arg; entry; entry_param } in
     mk desc code arg.bv
 
   | Unpack { arg; ty } ->
@@ -424,8 +440,8 @@ let rec bound code =
 
 and bound_const = function
   | ( CUnit | CBool _ | CInt _ | CNat _ | CTez _ | CTimestamp _ | CString _
-    | CBytes _ | CKey _ | CContract _ | CSignature _ | CNone  | CKey_hash _
-    | CAddress _ ) as c -> c
+    | CBytes _ | CKey _ | CSignature _ | CNone  | CKey_hash _
+    | CContract _) as c -> c
   | CSome x -> CSome (bound_const x)
   | CLeft x -> CLeft (bound_const x)
   | CRight x -> CRight (bound_const x)
@@ -434,8 +450,9 @@ and bound_const = function
   | CSet xs -> CSet (List.map (bound_const) xs)
   | CMap l ->
     CMap (List.map (fun (x,y) -> bound_const x, bound_const y) l)
-  | CBigMap l ->
-    CBigMap (List.map (fun (x,y) -> bound_const x, bound_const y) l)
+  | CBigMap BMList l ->
+    CBigMap (BMList (List.map (fun (x,y) -> bound_const x, bound_const y) l))
+  | CBigMap BMId _ as c -> c
   | CRecord labels ->
     CRecord (List.map (fun (f, x) -> f, bound_const x) labels)
   | CConstr (constr, x) ->

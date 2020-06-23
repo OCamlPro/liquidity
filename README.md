@@ -2,6 +2,7 @@ next | master
 ------------ | -------------
 [![Travis-CI Build Status](https://travis-ci.org/OCamlPro/liquidity.svg?branch=next)](https://travis-ci.org/OCamlPro/liquidity) | [![Travis-CI Build Status](https://travis-ci.org/OCamlPro/liquidity.svg?branch=master)](https://travis-ci.org/OCamlPro/liquidity) 
 
+![Liquidity Logo](docs/sphinx/src/liquidity-dark.svg)
 
 Liquidity: a Smart Contract Language for Dune Network
 ==============================================

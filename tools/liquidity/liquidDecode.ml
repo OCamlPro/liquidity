@@ -34,8 +34,8 @@ let base_of_var arg =
 
 let rec decode_const (c : encoded_const) : typed_const = match c with
   | ( CUnit | CBool _ | CInt _ | CNat _ | CTez _ | CTimestamp _ | CString _
-    | CBytes _ | CKey _ | CContract _ | CSignature _ | CNone  | CKey_hash _
-    | CAddress _ ) as c -> c
+    | CBytes _ | CKey _ | CSignature _ | CNone  | CKey_hash _
+    | CContract _) as c -> c
   | CSome x -> CSome (decode_const x)
   | CLeft x -> CLeft (decode_const x)
   | CRight x -> CRight (decode_const x)
@@ -44,8 +44,9 @@ let rec decode_const (c : encoded_const) : typed_const = match c with
   | CSet xs -> CSet (List.map (decode_const) xs)
   | CMap l ->
     CMap (List.map (fun (x,y) -> decode_const x, decode_const y) l)
-  | CBigMap l ->
-    CBigMap (List.map (fun (x,y) -> decode_const x, decode_const y) l)
+  | CBigMap BMList l ->
+    CBigMap (BMList (List.map (fun (x,y) -> decode_const x, decode_const y) l))
+  | CBigMap BMId _ as c -> c
   | CRecord labels ->
     CRecord (List.map (fun (f, x) -> f, decode_const x) labels)
   | CConstr (constr, x) ->
@@ -95,18 +96,36 @@ and decode ( exp : encoded_exp ) : typed_exp =
     let desc = Transfer { dest; amount } in
     mk ?name:exp.name ~loc desc exp.ty
 
+  | Call { amount; entry = _; arg;
+           contract = { desc = MatchOption {
+               arg = { desc = ContractAt { arg = addr; entry; entry_param }};
+               ifnone = { desc = Failwith _ };
+               ifsome = { desc = Var x }; some_name }  }
+         } when some_name.nname = x ->
+    let amount = decode amount in
+    let contract = decode addr in
+    let arg = decode arg in
+    let desc = Call { contract; amount; entry = Some entry; arg } in
+    mk ?name:exp.name ~loc desc exp.ty
+
   | Call { contract; amount; entry; arg } ->
     let amount = decode amount in
     let contract = decode contract in
-    let desc = match entry, arg.desc with
-      | None, Constructor { constr = Constr c; arg } when is_entry_case c ->
-        let entry = Some (entry_name_of_case c) in
-        let arg = decode arg in
-        Call { contract; amount; entry; arg }
-      | _, _ ->
-        let arg = decode arg in
-        Call { contract; amount; entry; arg }
-    in
+    let entry = match contract.ty, entry with
+      | Tcontract (Some e, _ ), _ | _, Some e -> Some e
+      | _, None -> None in
+    let arg = decode arg in
+    let desc = Call { contract; amount; entry; arg } in
+    mk ?name:exp.name ~loc desc exp.ty
+
+  | Self { entry } ->
+    let desc = Self { entry } in
+    mk ?name:exp.name ~loc desc exp.ty
+
+  | SelfCall { amount; entry; arg } ->
+    let amount = decode amount in
+    let arg = decode arg in
+    let desc = SelfCall { amount; entry; arg } in
     mk ?name:exp.name ~loc desc exp.ty
 
   | Failwith arg ->
@@ -213,9 +232,9 @@ and decode ( exp : encoded_exp ) : typed_exp =
     let cases = List.map (fun (pat, e) -> pat, decode e) cases in
     mk ?name:exp.name ~loc (MatchVariant { arg; cases }) exp.ty
 
-  | ContractAt { arg; c_sig } ->
+  | ContractAt { arg; entry; entry_param } ->
     let arg = decode arg in
-    mk ?name:exp.name ~loc (ContractAt { arg; c_sig }) exp.ty
+    mk ?name:exp.name ~loc (ContractAt { arg; entry; entry_param }) exp.ty
 
   | Unpack { arg; ty } ->
     let arg = decode arg in
@@ -244,9 +263,9 @@ and entry_of_case param_constrs top_storage (pat, body, fee_body) =
     | _ -> top_storage, body
   in
   match pat with
-  | PConstr (s, [parameter_name]) when is_entry_case s ->
+  | PConstr (s, [parameter_name]) when is_entry_case ~allow_capital:true s ->
     let storage_name, body = extract_storage_name body in
-    let entry_name = entry_name_of_case s in
+    let entry_name = entry_name_of_case ~allow_capital:true s in
     let parameter = List.assoc s param_constrs in
     let fee_code = match fee_body with
       | None -> None
@@ -328,11 +347,41 @@ and decode_entries param_constrs top_parameter top_storage values exp fee_exp =
     List.map (entry_of_case param_constrs top_storage) cases
 
   | Let { bnd_var; inline; bnd_val; body } ->
+    let bv_val = LiquidBoundVariables.bv bnd_val in
+    if StringSet.mem top_parameter bv_val ||
+       StringSet.mem top_storage bv_val then raise Exit;
     decode_entries param_constrs top_parameter top_storage
       ({ val_name = bnd_var.nname;
          val_private = false;
          inline;
          val_exp = decode bnd_val } :: values) body fee_exp
+
+  | Apply { prim = Prim_tuple; args = [ { desc = Const { const = CList [] } } as le;
+                                        exp_sto ] } ->
+    let values, entries =
+      decode_entries param_constrs top_parameter top_storage values exp_sto fee_exp in
+    let le = decode le in
+    let entries = List.map (fun e ->
+        { e with
+          code = { e.code with
+                   desc = Apply { prim = Prim_tuple; args = [le; e.code] } }
+        }
+      ) entries in
+    values, entries
+
+  | Apply { prim = Prim_tuple; args = [ { desc = MatchVariant _ } as exp_ops ;
+                                        sto ] } ->
+    let values, entries =
+      decode_entries param_constrs top_parameter top_storage values exp_ops fee_exp in
+    let sto = decode sto in
+    let entries = List.map (fun e ->
+        { e with
+          code = { e.code with
+                   desc = Apply { prim = Prim_tuple; args = [e.code; sto] } }
+        }
+      ) entries in
+    values, entries
+
   | _ -> raise Exit
 
 and move_outer_lets parameter storage values exp =
@@ -361,7 +410,7 @@ and decode_contract contract =
     | None -> None
     | Some i -> Some { i with init_body = decode i.init_body } in
   try match contract.entries with
-    | [{ entry_sig = { entry_name = "main";
+    | [{ entry_sig = { entry_name = _;
                        parameter = Tsum (_, param_constrs);
                        parameter_name;
                        storage_name;

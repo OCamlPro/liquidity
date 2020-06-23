@@ -1,6 +1,6 @@
 type storage = nat
 
-let%entry main
+let%entry default
     (parameter : int)
     storage =
 

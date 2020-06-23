@@ -28,8 +28,9 @@ DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 
 export OPAMYES=1
 
+make clone-dune-network
 pushd $DUNE
-make build-deps
+make build-deps || (rm -rf _opam; make build_deps)
 eval `opam config env`
 make
 popd
