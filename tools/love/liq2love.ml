@@ -647,7 +647,7 @@ let liqprim_to_loveprim env (p : primitive) (args : TYPE.t list) =
   in
   let args = List.map (fun t -> Love_tenv.normalize_type ~relative:true t env) args in
   match p with
-  | Prim_balance         -> "Account.balance", args
+  | Prim_balance         -> "Current.balance", args
   | Prim_now             -> "Current.time", args
   | Prim_amount          -> "Current.amount", args
   | Prim_gas             -> "Current.gas", args
@@ -978,7 +978,7 @@ let liqprim_to_loveprim env (p : primitive) (args : TYPE.t list) =
   | Prim_string_concat -> "String.concat", args
   | Prim_bytes_concat -> "Bytes.concat", args
   | Prim_block_level -> "Current.level", args
-  | Prim_get_balance -> "Current.balance", args
+  | Prim_get_balance -> "Account.balance", args
 
 
   | Prim_tuple_get | Prim_tuple_set| Prim_tuple
@@ -1905,7 +1905,8 @@ and liqapply_to_loveexp env typ prim args : AST.exp * TYPE.t =
       Love_type.pretty prim_typ;
     let love_args_typ = Compil_utils.merge_args_with_funtyp love_args_typ prim_typ in
     let loveargs, lovetlist = List.split love_args_typ in
-    debug "[liqapply_to_loveexp] Type of prim is %a, with %i args.@."
+    debug "[liqapply_to_loveexp] Type of prim %s is %a, with %i args.@."
+      prim_name
       Love_type.pretty prim_typ
       (List.length loveargs);
     debug "[liqapply_to_loveexp] Args = %a.@."
