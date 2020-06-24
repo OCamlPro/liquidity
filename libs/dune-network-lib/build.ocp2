@@ -340,7 +340,8 @@ OCaml.library("dune-network-lib-base",
       from_dune_network("lib_base/s.ml");
       "dune_debug.ml", { pp = [ "ocp-pp" ];
                          more_deps = from_dune_network("lib_base/dune_debug.ml") };
-      from_dune_network("lib_base/config_network.ml");
+      "config_network.ml", { pp = [ "ocp-pp" ];
+                         more_deps = from_dune_network("lib_base/config_network.ml") };
       from_dune_network("lib_base/config.ml");
       from_dune_network("lib_base/time.ml");
       from_dune_network("lib_base/fitness.ml");
