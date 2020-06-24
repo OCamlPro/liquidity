@@ -342,7 +342,9 @@ let generate_key ?seed () =
               %d)"
              Sign.seed_size
              seedlen) ;
-      let sk, pk = Sign.seed_keypair (Sign.Bigbytes.to_seed seed) in
+      let seed2 = Bigstring.create Sign.seed_size in
+      Bigstring.blit seed 0 seed2 0 Sign.seed_size ;
+      let sk, pk = Sign.seed_keypair (Sign.Bigbytes.to_seed seed2) in
       Public_key.hash pk, pk, sk
 
 let deterministic_nonce sk msg =
