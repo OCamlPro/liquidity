@@ -1,6 +1,6 @@
 
 exception RequestError of int * string
-exception ResponseError of string
+exception ResponseError of string * Ezjsonm.value
 
 open Lwt
 

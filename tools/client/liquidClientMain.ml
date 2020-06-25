@@ -99,17 +99,32 @@ let report_error = function
     Format.eprintf "Missing script field %s@." f;
   | LiquidClientRequest.RequestError (code, msg) ->
     Format.eprintf "Request Error (code %d):\n%s@." code msg;
-  | LiquidClientRequest.ResponseError msg ->
+  | LiquidClientRequest.ResponseError (msg, json) ->
     Format.eprintf "Response Error:\n%s@." msg;
-  | LiquidClientErrors.RuntimeError (error, _trace) ->
+    if !LiquidOptions.verbosity > 0 then
+      Format.eprintf "JSON Error:\n%s@."
+        (Ezjsonm.value_to_string ~minify:false json);
+  | LiquidClientErrors.RuntimeError (error, _trace, json) ->
     report_err ~kind:"Runtime error" Format.err_formatter error;
-  | LiquidClientErrors.LocalizedError error ->
+    if !LiquidOptions.verbosity > 0 then
+      Format.eprintf "JSON Error:\n%s@."
+        (Ezjsonm.value_to_string ~minify:false json);
+  | LiquidClientErrors.LocalizedError (error, json) ->
     report_err ~kind:"Error" Format.err_formatter error;
-  | LiquidClientErrors.RuntimeFailure (error, None, _trace) ->
+    if !LiquidOptions.verbosity > 0 then
+      Format.eprintf "JSON Error:\n%s@."
+        (Ezjsonm.value_to_string ~minify:false json);
+  | LiquidClientErrors.RuntimeFailure (error, None, _trace, json) ->
     report_err ~kind:"Failed at runtime" Format.err_formatter error;
-  | LiquidClientErrors.RuntimeFailure (error, Some v, _trace) ->
+    if !LiquidOptions.verbosity > 0 then
+      Format.eprintf "JSON Error:\n%s@."
+        (Ezjsonm.value_to_string ~minify:false json);
+  | LiquidClientErrors.RuntimeFailure (error, Some v, _trace, json) ->
     report_err ~kind:"Failed at runtime" Format.err_formatter error;
     Format.eprintf "Failed with %s@." v#string;
+    if !LiquidOptions.verbosity > 0 then
+      Format.eprintf "JSON Error:\n%s@."
+        (Ezjsonm.value_to_string ~minify:false json);
   | Failure f ->
     Format.eprintf "Failure: %s@." f
   | Syntaxerr.Error (Syntaxerr.Other loc) ->

@@ -6,13 +6,13 @@ open LiquidTypes
 open Lwt.Infix
 
 module Liquidity = LiquidityLang
-
 type error = location * string
 type trace = (location, syntax_const Lazy_superposed.t) Trace.t
 
-exception RuntimeError of error * trace option
-exception LocalizedError of error
-exception RuntimeFailure of error * syntax_const Lazy_superposed.t option * trace option
+exception RuntimeError of error * trace option * Ezjsonm.value
+exception LocalizedError of error * Ezjsonm.value
+exception RuntimeFailure of error * syntax_const Lazy_superposed.t option *
+                            trace option * Ezjsonm.value
 
 module Make (L : LANG) = struct
   open L
@@ -73,7 +73,7 @@ module Make (L : LANG) = struct
       err_loc, Some trace
     with Not_found -> err_loc, None
 
-  let raise_error_from_l ?loc_table err_msg l =
+  let raise_error_from_l ?loc_table ~original_json err_msg l =
     let default_error () =
       let last_descr = match List.rev l with
         | (_, _, _, _, Some descr, _) :: _ -> "\n  " ^ descr
@@ -90,7 +90,7 @@ module Make (L : LANG) = struct
       Printf.sprintf "in %s\n- %s%s" err_msg err_l last_descr
     in
     match loc_table with
-    | None -> raise (ResponseError (default_error ()))
+    | None -> raise (ResponseError (default_error (), original_json))
     | Some loc_table ->
       let err_msg = Printf.sprintf "in %s" err_msg in
       try
@@ -100,27 +100,25 @@ module Make (L : LANG) = struct
               | None -> false
               | Some i ->
                 match String.sub id i (String.length id - i) with
-                | ".script_rejected" | ".scriptRejectedRuntimeError" -> true
+                | ".script_rejected"
+                | ".scriptRejectedRuntimeError"
+                | ".unhandled_user_exception" -> true
                 | _ -> false
             in
-            match loc, kind, is_rejected with
-            | Some loc, "temporary", true ->
+            match loc, is_rejected with
+            | Some loc, true ->
               let err_loc, fail_v = fail_of_err loc ~loc_table err in
               let _, trace = error_trace_of_err loc ~loc_table err in
-              raise (RuntimeFailure ((err_loc, err_msg), fail_v, trace))
-            | Some loc, "temporary", _ ->
+              raise (RuntimeFailure ((err_loc, err_msg), fail_v, trace, original_json))
+            | Some loc, _ ->
               let title = match title with Some t -> t | None -> id in
               let err_msg = String.concat "\n- " [err_msg; title] in
               let err_loc, trace = error_trace_of_err loc ~loc_table err in
-              raise (RuntimeError ((err_loc, err_msg), trace))
-            | Some loc, _, _ ->
-              let err_loc, _ = List.assoc loc loc_table in
-              let err_msg = default_error () in
-              raise (LocalizedError (err_loc, err_msg))
+              raise (RuntimeError ((err_loc, err_msg), trace, original_json))
             | _ -> ()
           ) l;
-        raise (ResponseError (default_error ()))
-      with Not_found -> raise (ResponseError (default_error ()))
+        raise (ResponseError (default_error (), original_json))
+      with Not_found -> raise (ResponseError (default_error (), original_json))
 
   let extract_errors_from_json r schema =
     try
@@ -230,7 +228,7 @@ module Make (L : LANG) = struct
             let kind = Ezjsonm.find err ["kind"] |> Ezjsonm.get_string in
             if kind = "generic" then begin
               let err = Ezjsonm.find err ["error"] |> Ezjsonm.get_string in
-              raise (ResponseError err)
+              raise (ResponseError (err, r))
             end;
             let id = Ezjsonm.find err ["id"] |> Ezjsonm.get_string in
             let title, descr = descr_of_id id schema in
@@ -246,6 +244,6 @@ module Make (L : LANG) = struct
           ) err
       with Ezjsonm.Parse_error _ | Not_found -> []
     in
-    raise_error_from_l ?loc_table msg l
+    raise_error_from_l ?loc_table ~original_json:err msg l
 
 end

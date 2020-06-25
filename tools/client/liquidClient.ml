@@ -268,21 +268,18 @@ module Make (L : LANG) = struct
     | Init_constant c, [] -> Lwt.return c
 
     | No_init, [] ->
-      raise (ResponseError "init_storage: Missing init")
+      failwith "init_storage: Missing init"
     | No_init, _ ->
-      raise (ResponseError "init_storage: No initializer, cannot take arguments")
+      failwith "init_storage: No initializer, cannot take arguments"
     | Init_constant _, _ ->
-      raise (ResponseError "init_storage: Constant initializer, cannot take arguments")
+      failwith "init_storage: Constant initializer, cannot take arguments"
 
     | Init_components args_tys, _ ->
       let l_req, l_giv = List.length args_tys, List.length init_params in
       if l_req <> l_giv then
-        raise
-          (ResponseError
-             (Printf.sprintf
-                "init_storage: init storage needs %d arguments, but was given %d"
-                l_req l_giv
-             ));
+        Format.ksprintf failwith
+          "init_storage: init storage needs %d arguments, but was given %d"
+          l_req l_giv ;
       let param = match init_params with
         | [] -> Liquidity.unit
         | [x] -> x
@@ -293,12 +290,9 @@ module Make (L : LANG) = struct
     | Init_code (c, args_tys), _ ->
       let l_req, l_giv = List.length args_tys, List.length init_params in
       if l_req <> l_giv then
-        raise
-          (ResponseError
-             (Printf.sprintf
-                "init_storage: init storage needs %d arguments, but was given %d"
-                l_req l_giv
-             ));
+        Format.ksprintf failwith
+          "init_storage: init storage needs %d arguments, but was given %d"
+          l_req l_giv;
       let eval_input_storage =
         try
           Liquidity.default_empty_const (Liquidity.storage contract)
@@ -570,7 +564,7 @@ module Make (L : LANG) = struct
     inject_operation ~loc_table ~sk ~head op.Operation.contents op_bytes >>= function
     | op_h, [c] -> Lwt.return (op_h, c)
     | op_h, [_; c] -> Lwt.return (op_h, c) (* with revelation *)
-    | _ -> raise (ResponseError "deploy (inject)")
+    | _ -> failwith "Unexpected multiple contract ids in deploy (inject)"
 
   let rec forge_call_op ?head ?source ?public_key ?(amount = !LiquidOptions.amount)
       ?fee ?gas_limit ?storage_limit ?real_op_size

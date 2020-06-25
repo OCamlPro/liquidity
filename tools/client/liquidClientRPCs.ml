@@ -14,7 +14,7 @@ let default_raise_response_error ?loc_table:_ path r =
       "in %s:\n%s"
       path
       (Ezjsonm.value_to_string ~minify:false r) in
-  raise (ResponseError s)
+  raise (ResponseError (s, r))
 
 (* let send_post
  *     ~raise_response_error
