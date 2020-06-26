@@ -57,62 +57,8 @@ let rec apply_cont cont name love_ty =
 (* Transforms a tv Ref.t into a TVar.t.
    If a tv aliases another tv, the same Tvar will be generated.  *)
 
-let rec fvars =
-  function
-  | Tunit
-  | Tbool
-  | Tint
-  | Tnat
-  | Ttez
-  | Tstring
-  | Tbytes
-  | Ttimestamp
-  | Tkey
-  | Tkey_hash
-  | Tsignature
-  | Toperation
-  | Taddress
-  | Tchainid -> StringSet.empty
-
-  | Ttuple l ->
-    List.fold_left (fun acc elt -> StringSet.union acc @@ fvars elt) StringSet.empty l
-
-  | Toption t
-  | Tlist t
-  | Tset t -> fvars t
-
-  | Tmap (t1, t2)
-  | Tbigmap (t1, t2)
-  | Tor (t1, t2)
-  | Tlambda (t1, t2, _) -> StringSet.union (fvars t1) (fvars t2)
-  | Tcontract _ -> StringSet.empty
-
-  | Trecord (_, l)
-  | Tsum  (_, l) ->
-    List.fold_left (fun acc (_,t) -> StringSet.union acc @@ fvars t)
-      StringSet.empty
-      l
-  | Tclosure ((t1, t2), t3, _) ->
-    StringSet.union (StringSet.union (fvars t1) (fvars t2)) @@ fvars t3
-  | Tfail -> StringSet.empty
-
-  | Tvar v -> StringSet.singleton !(v.contents).id
-  | (Tpartial p) as t -> (
-      match p with
-        Peqn _ | Pcont _ | Ppar ->
-        error
-          "Partial type %s not supported"
-          (LiquidPrinter.Liquid.string_of_type t)
-      | Ptup l ->
-        List.fold_left
-          (fun acc (_,elt) -> StringSet.union acc @@ fvars elt)
-          StringSet.empty
-          l
-      | Pmap (t1, t2) -> StringSet.union (fvars t1) (fvars t2)
-    )
-
 let rec liqtype_to_lovetypedef (env : env) t : TYPE.typedef =
-  let params = StringSet.elements @@ fvars t in (* what if the type has no parameter ? *)
+  let params = StringSet.elements @@ free_tvars t in (* what if the type has no parameter ? *)
   match t with
   | Tsum (None, l) ->
     error
@@ -185,6 +131,7 @@ let rec liqtype_to_lovetypedef (env : env) t : TYPE.typedef =
     let aparams = List.rev aparams in
     let atype = liqtype_to_lovetype ~aliases env t in
     Alias {aparams; atype}
+
 and tvref_to_tvar ?(aliases=StringMap.empty) (env : env) tvref : TYPE.t =
   debug "[tvref_to_tvar] Creating a TVar@.";
   let tv = !(tvref.Ref.contents) in
@@ -608,6 +555,7 @@ and liqtype_to_lovetype ?(aliases=StringMap.empty) (env : env) tv =
     TArrow (t1, t3)
   | Tchainid ->
     error "[liqtype_to_lovetype] No equivalent of Tchainid in Love"
+
 let rec remove_forall t =
   match t with
     TForall (_, t) -> remove_forall t
