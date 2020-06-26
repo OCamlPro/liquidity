@@ -2839,6 +2839,22 @@ let liqcontract_to_lovecontract ~(ctr_name:string) (c : typed_contract) : AST.st
 
 (* 2. LiqConst to LoveValue *)
 
+let contract_to_lovevalue env ~ty addr =
+  match Contract_repr.of_b58check addr with
+  | Error _ ->
+    error "Love compile const: Not a valid contract %s." addr
+  | Ok c ->
+    match ty with
+    | Some (Tcontract (entry, paramty)) ->
+      let entry = match entry with None -> "default" | Some e -> e in
+      let love_sig = {
+        sig_kind = Contract [];
+        sig_content = [entry, SEntry (liqtype_to_lovetype env paramty) ];
+      } in
+      Love_value.Value.VContractInstance (love_sig, c)
+    | None | Some _ ->
+      Love_value.Value.VAddress c
+
 let rec liqconst_to_lovevalue
     (env : env)
     ?ty
@@ -2941,22 +2957,13 @@ let rec liqconst_to_lovevalue
     | CKey_hash kh -> (
         match ty with
         | Some (Taddress | Tcontract _ ) ->
-          (match Contract_repr.of_b58check kh with
-           | Ok c -> VAddress c
-           | Error _ ->
-             error "Love compile const: Not a valid contract (key hash %s)." kh
-          )
+          contract_to_lovevalue env ~ty kh
         | _ ->
           match Signature.Public_key_hash.of_b58check_opt kh with
           | None -> error "Keyhash %s is invalid" kh
           | Some k -> VKeyHash k
       )
-    | CContract (addr, None) ->
-      (match Contract_repr.of_b58check addr with
-       | Ok c -> VAddress c
-       | Error _ ->
-         error "Love compile const: Not a contract (here %s)." addr
-      )
+    | CContract (addr, None) -> contract_to_lovevalue env ~ty addr
     | CContract (c, _) ->
       error "Constant contracts (here %s) has no Love representation." c
     | CRecord [] ->
