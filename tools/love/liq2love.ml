@@ -22,7 +22,6 @@ let debug fmt =
   if !LiquidOptions.verbosity > 1 then begin
     Love_pervasives.Options.debug := true;
     Love_pervasives.Log.fmt := (fun () -> Format.err_formatter);
-    (* Format.eprintf "%s@." (Format.; *)
     Love_pervasives.Log.debug fmt
   end
   else
@@ -1365,18 +1364,10 @@ let rec liqconst_to_loveexp
     | CBool b -> mk_const @@ mk_cbool b, bool ()
     | CInt i  -> mk_const @@ mk_cint i.integer, int ()
     | CNat n  -> mk_const @@ mk_cnat n.integer, nat ()
-    | CTez {tezzies;mutez} -> (
-        let str =
-          let mutez = match mutez with
-            | Some mutez -> mutez
-            | None  -> "000000"
-          in
-          tezzies ^ mutez
-        in
-        match Tez_repr.of_string str with
-          None -> error "%s is not a correct dun amount" str
-        | Some d -> mk_const @@ mk_cdun @@ Tez_repr.to_int64 d
-      ), dun ()
+    | CTez tez ->
+      let mudun = LiquidNumber.mic_mutez_of_tez tez in
+      let d = Z.to_int64 mudun in
+      mk_const (mk_cdun d), dun ()
     | CTimestamp s -> (
         debug "[liqconst_to_loveexp] CTimestamp : %s@." s;
         match Script_timestamp_repr.of_string s with
@@ -2912,18 +2903,12 @@ let rec liqconst_to_lovevalue
     | CBool b -> VBool b
     | CInt i  -> VInt i.integer
     | CNat n  -> VNat n.integer
-    | CTez {tezzies;mutez} -> begin
-        let str =
-          let mutez = match mutez with
-            | Some mutez -> mutez
-            | None  -> "000000"
-          in
-          tezzies ^ mutez
-        in
-        match Tez_repr.of_string str with
-          None -> error "%s is not a correct dun amount" str
-        | Some d -> Love_value.Value.VDun d
-      end
+    | CTez tez ->
+      let mudun = LiquidNumber.mic_mutez_of_tez tez in
+      let d = match Tez_repr.of_mutez (Z.to_int64 mudun) with
+        | None -> assert false
+        | Some d -> d in
+      VDun d
     | CTimestamp s -> begin
         debug "[liqconst_to_lovevalue] CTimestamp : %s@." s;
         match Script_timestamp_repr.of_string s with
