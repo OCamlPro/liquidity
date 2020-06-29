@@ -2360,10 +2360,10 @@ and liqapply_to_loveexp ?loc env typ prim args : AST.exp * TYPE.t =
         Some t -> t
       | None -> bad_exp_type ?loc valopt tvalopt "option" in
     let emap, t = ltl emap in
-    let prim_add, prim_rem =
+    let prim_add, prim_rem, map =
       match to_poly_variant t with
-        `TMap _ -> "Map.add", "Map.remove"
-      | `TBigMap _ -> "BigMap.add", "BigMap.remove"
+        `TMap _ -> "Map.add", "Map.remove", map
+      | `TBigMap _ -> "BigMap.add", "BigMap.remove", bigmap
       | _ ->
         debug "[liqapply_to_loveexp] Incorrect type %a for map" Love_type.pretty t;
         bad_exp_type ?loc emap t "map"
