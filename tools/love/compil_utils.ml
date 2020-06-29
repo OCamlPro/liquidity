@@ -12,28 +12,47 @@ open Love_pervasives
 open Love_runtime_ast
 open Log
 
-exception Liq2LoveError of string
+let shift = 15
 
-let error m =
-  let pre = fun m -> raise (Liq2LoveError m) in
-  Format.kasprintf pre m
+let love_loc loc =
+  match loc.LiquidTypes.loc_pos with
+  | None -> None
+  | Some ((l1, c1), (l2, c2)) ->
+     (* Nothing for end position *)
+     (* use bol to encode *)
+     Some (AST.{
+           pos_lnum = l1;
+           pos_cnum = c1;
+           pos_bol = l2 lsl shift + c2;
+       })
 
-let cannot_apply p exp ty =
-  error
+let liq_loc loc_file = function
+  | None -> { LiquidTypes.loc_file; loc_pos = None }
+  | Some AST.{ pos_lnum = l1; pos_cnum = c1; pos_bol } ->
+     let l2 = pos_bol lsr shift in
+     let c2 = pos_bol - l2 in
+     { LiquidTypes.loc_file;
+       loc_pos = Some ((l1, c1), (l2, c2)) }
+
+let error ?loc msg =
+  LiquidLoc.raise_error ?loc ("Love compiler error:  " ^^ msg ^^ "%!")
+
+let cannot_apply ?loc p exp ty =
+  error ?loc
     "Cannot apply %s on expression %a of type %a"
     p
     Love_printer.Ast.print_exp exp
     Love_type.pretty ty
 
-let bad_number_of_args fname got expected =
-  error
+let bad_number_of_args ?loc fname got expected =
+  error ?loc
     "Bad number of arguments for %s: got %d, expected %d"
     fname
     got
     expected
 
-let bad_const_type cst ty expected =
-  error
+let bad_const_type ?loc cst ty expected =
+  error ?loc
     "Constant %s has type %a, but it was expected to be of type %s"
     (LiquidPrinter.Liquid.string_of_const cst)
     Love_type.pretty ty
@@ -44,15 +63,15 @@ let pp_pat fmt = function
     Format.fprintf fmt "%s (%s) ->\n" constr (String.concat ", " vars)
   | PAny -> Format.fprintf fmt "_"
 
-let bad_pat_type pat ty expected =
-  error
+let bad_pat_type ?loc pat ty expected =
+  error ?loc
     "Pattern %a has type %a, but it was expected to be of type %s"
     pp_pat pat
     Love_type.pretty ty
     expected
 
-let bad_exp_type exp ty expected =
-  error
+let bad_exp_type ?loc exp ty expected =
+  error ?loc
     "Expression %a has type %a, but it was expected to be of type %s"
     Love_printer.Ast.print_exp exp
     Love_type.pretty ty
@@ -234,6 +253,7 @@ let add_var ?kind s t env =
 (** Returning the corresponding types in t2 that are polymorphic in t1.
     The argument aliases corresponds to the type aliases (such as type t = int). *)
 let search_aliases
+    ?loc
     t1
     t2 =
   let rec search_in_lists (acc : 'a TypeVarMap.t) l1 l2 =
@@ -253,7 +273,7 @@ let search_aliases
         | SAbstract _, SAbstract _ -> acc
         | (SPublic _ | SPrivate _ | SAbstract _),
           (SPublic _ | SPrivate _ | SAbstract _) ->
-          error "Signature and definition of type %s do not have the same visibility." name
+          error ?loc "Signature and definition of type %s do not have the same visibility." name
       )
     | SException e1, SException e2 ->
       let le1 = List.length e1 in
@@ -261,7 +281,7 @@ let search_aliases
       if le1 = le2 then
         search_in_lists acc e1 e2
       else
-        error "Exception %s expects %d arguments, but it is defined with %d arguments."
+        error ?loc "Exception %s expects %d arguments, but it is defined with %d arguments."
           name le1 le2
     | SInit t1, SInit t2 -> search acc t1 t2
     | SEntry t1, SEntry t2
@@ -272,7 +292,7 @@ let search_aliases
     | SStructure (Named _), SStructure (Named _) -> acc
     | (SType _ | SException _ | SInit _ | SEntry _ | SView _ | SValue _ | SStructure _ | SSignature _),
       (SType _ | SException _ | SInit _ | SEntry _ | SView _ | SValue _ | SStructure _ | SSignature _)
-      -> error "Signature element %s does not correspond to implementation" name
+      -> error ?loc "Signature element %s does not correspond to implementation" name
 
   and search_structures acc c1 c2 =
     let rec cross_content acc l1 l2 =
@@ -282,7 +302,7 @@ let search_aliases
         let acc = search_content acc name1 content1 content2 in
         cross_content acc l1 l2
       | _, _ :: l2 -> cross_content acc l1 l2
-      | (name,_) :: _, [] -> error "Cannot find all aliases : %s is in signature, but not in the structure" name
+      | (name,_) :: _, [] -> error ?loc "Cannot find all aliases : %s is in signature, but not in the structure" name
     in
     let sort_content = List.sort (fun (s,_) (s',_) -> String.compare s s') in
     cross_content
@@ -376,7 +396,7 @@ let search_aliases
       if le1 = le2 then
         search_in_lists acc l1 l2
       else
-        error "Tuple %a expects %d arguments, while tuple %a expects %d."
+        error ?loc "Tuple %a expects %d arguments, while tuple %a expects %d."
           Love_type.pretty t1 le1 Love_type.pretty t2 le2
 
     | TUser (n1, l1),TUser (n2, l2)  ->
@@ -389,14 +409,14 @@ let search_aliases
           if le1 = le2 then
             search_in_lists acc l1 l2
           else
-            error "User type %a expects %d arguments, while its \
-                   implementation expects %d arguments."
+            error ?loc "User type %a expects %d arguments, while its \
+                        implementation expects %d arguments."
               Ident.print_strident n1 le1 le2
         end
       else (
         Log.debug "[search_aliases] Different id types : %a <> %a@."
           pretty_typename n1 pretty_typename n2;
-        error
+        error ?loc
           "Type %a is incompatible with type %a"
           Love_type.pretty t1 Love_type.pretty t2
       )
@@ -421,7 +441,7 @@ let search_aliases
         match Ident.split n with
           "UnitContract", None -> acc
         | _ ->
-          error
+          error ?loc
             "Searching aliases between %a and anonymous contracts"
             Ident.print_strident n
       )
@@ -431,7 +451,7 @@ let search_aliases
         match Ident.split n with
           "UnitContract", None -> acc
         | _ ->
-          error "Searching aliases between anonymous and %a" Ident.print_strident n
+          error ?loc "Searching aliases between anonymous and %a" Ident.print_strident n
       )
     | TForall (arg, t), TForall (_arg', t') -> (
         Log.debug "[search_aliases] Foralls@.";
@@ -446,7 +466,7 @@ let search_aliases
        | TTuple _ | TForall _ ),
       ( TContractInstance _ | TPackedStructure _
        | TTuple _ | TForall _ | TUser _ ) ->
-      error "Type %a is not compatible with type %a"
+      error ?loc "Type %a is not compatible with type %a"
         Love_type.pretty t1 Love_type.pretty t2
   in
   search
@@ -454,8 +474,8 @@ let search_aliases
     t1
     t2
 
-let apply_types env e te expected_ty =
-  let aliases = search_aliases (remove_foralls te) expected_ty in
+let apply_types ?loc env e te expected_ty =
+  let aliases = search_aliases ?loc (remove_foralls te) expected_ty in
   let rec cross_exp_typ =
     function
       {Utils.content = TLambda {exp;_}; _}, TForall (targ, t')
@@ -489,9 +509,11 @@ let mk_primitive_lambda ?loc prim_name expected_typ spec_args =
   ;
   let prim =
     match Love_primitive.from_string prim_name with
-      None -> error "Unknown Love primitive %s" prim_name
+      None -> error ?loc "Unknown Love primitive %s" prim_name
     | Some p -> p
   in
+  let loc, liqloc = match loc with
+    | None -> None, None | Some l -> love_loc l, loc in
   let poly_prim = mk_var ?loc (string_to_ident prim_name) in
   let tprim = Love_primitive.type_of (prim, spec_args) in
   Log.debug "[mk_primitive_lambda] Primitive type : %a@." pretty tprim;
@@ -500,7 +522,7 @@ let mk_primitive_lambda ?loc prim_name expected_typ spec_args =
   Log.debug "[mk_primitive_lambda] Matching %a and %a@."
     pretty puretprim
     pretty expected_typ;
-  let aliases = search_aliases puretprim expected_typ in
+  let aliases = search_aliases ?loc:liqloc puretprim expected_typ in
   Log.debug "[mk_primitive_lambda] Matching done@.";
 
   let rec add_not_binded_tvars ptyp exp =
@@ -608,14 +630,14 @@ let the = function
     None -> failwith "Compil_utils.the"
   | Some o -> o
 
-let rec return_type_with_args env arrowtyp args =
+let rec return_type_with_args ?loc env arrowtyp args =
   match arrowtyp, args with
   | t, [] -> t
   | TForall (_, tarr), _ -> return_type_with_args env tarr args
   | TArrow (t1, t2), t::tl -> (
       debug "[return_type_with_args] Search aliases between %a and %a@."
         pretty t1 pretty t;
-      let aliases = search_aliases t1 t in
+      let aliases = search_aliases ?loc t1 t in
       return_type_with_args
         env
         (replace_map (fun _ -> true) aliases t2) tl
@@ -624,7 +646,7 @@ let rec return_type_with_args env arrowtyp args =
     debug "[return_type_with_args] Type %a is called with %i arguments@."
       pretty t
       (List.length l);
-    error "Type %a is called with %i arguments"
+    error ?loc "Type %a is called with %i arguments"
       pretty t
       (List.length l)
 
