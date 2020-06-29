@@ -1738,7 +1738,7 @@ and liqprimfold_to_loveexp
               bdy
            );
          arg;
-         acc], t
+         acc], typ
     | Prim_coll_iter
     | Prim_coll_fold ->
       error ~loc
