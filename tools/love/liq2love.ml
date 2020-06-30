@@ -928,7 +928,6 @@ let liqprim_to_loveprim ?loc env (p : primitive) (args : TYPE.t list) =
   | Prim_block_level -> "Current.level", args
   | Prim_get_balance -> "Account.balance", args
 
-
   | Prim_tuple_get | Prim_tuple_set| Prim_tuple
   | Prim_Left | Prim_Right
   | Prim_map_update
@@ -937,6 +936,7 @@ let liqprim_to_loveprim ?loc env (p : primitive) (args : TYPE.t list) =
   | Prim_is_nat
   | Prim_int
   | Prim_exec _
+  | Prim_is_implicit
   | Prim_concat ->
     error ?loc
       "Invariant broken: Primitive %s should have been treated elsewhere"
@@ -956,7 +956,6 @@ let liqprim_to_loveprim ?loc env (p : primitive) (args : TYPE.t list) =
     error ?loc "Primitive %s (%s) is unsupported" s1 (LiquidTypes.string_of_primitive p)
   (* generated in LiquidCheck *)
   | Prim_unused _
-  | Prim_is_implicit
   | Prim_collect_call
   | Prim_big_map_create
   | Prim_address_untype
@@ -1529,7 +1528,7 @@ let rec liqexp_to_loveexp (env : env) (e : typed_exp) : AST.exp * TYPE.t =
       ltl e
 
     | Self _
-    | SelfCall _ -> error ~loc "Reentrance is forbidden in Love"
+    | SelfCall _ -> error ~loc "Self not implemented yet"
 
     | Type t ->
       error ~loc
@@ -2448,6 +2447,24 @@ and liqapply_to_loveexp ?loc env typ prim args : AST.exp * TYPE.t =
     in
     mk_constr ?loc:lloc (string_to_ident "Right") [t1; t] [a],
     variant (t1, t)
+  | Prim_is_implicit, [arg] ->
+    let arg, ty_arg = ltl arg in
+    let addr =
+      mk_apply ?loc:lloc
+        (mk_primitive_lambda ?loc env "Contract.address"
+           ((TContractInstance unit_contract_named_type) @=> address ())
+           ANone
+        )
+        [arg] in
+    let kh_opt =
+      mk_apply ?loc:lloc
+        (mk_primitive_lambda ?loc env "Keyhash.of_address"
+           (address () @=> option (keyhash ()))
+           ANone
+        )
+        [addr] in
+    kh_opt, option (keyhash ())
+
   | Prim_exec _, _ -> error ?loc "Invariant broken: Prim_exec is solved before"
   | _ ->
     debug "[liqapply_to_loveexp] Love primitive@.";
