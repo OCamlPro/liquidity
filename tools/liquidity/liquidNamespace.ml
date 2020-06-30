@@ -124,7 +124,7 @@ let rec find ~loc s env proj =
     StringMap.find s (proj env), env
 
 let find_type ~loc s env subst =
-  let mk, found_env = find ~loc s env (fun env -> env.types) in
+  let (mk, _), found_env = find ~loc s env (fun env -> env.types) in
   mk subst, found_env
 
 (* Necessary for encoding phases where some dependencies information

@@ -65,14 +65,21 @@ let rec apply_cont cont name love_ty =
 (* Transforms a tv Ref.t into a TVar.t.
    If a tv aliases another tv, the same Tvar will be generated.  *)
 
-let rec liqtype_to_lovetypedef ?loc (env : env) t : TYPE.typedef =
+let is_alias str ty =
+  match ty with
+  | Trecord (rname, _) -> rname <> str
+  | Tsum (Some sname, _) -> sname <> str
+  | _ -> true
+
+let rec liqtype_to_lovetypedef ?loc (env : env) name t : TYPE.typedef =
   let params = StringSet.elements @@ free_tvars t in (* what if the type has no parameter ? *)
+  let alias = is_alias name t in
   match t with
   | Tsum (None, l) ->
     error ?loc
       "Sum type %s expects a name"
       (LiquidPrinter.Liquid.string_of_type t)
-  | Tsum (Some sname, l) ->
+  | Tsum (Some sname, l) when not alias ->
     debug "[liqtype_to_lovetypedef] Sum type@.";
     let sparams, aliases =
       List.fold_left
@@ -100,7 +107,7 @@ let rec liqtype_to_lovetypedef ?loc (env : env) t : TYPE.typedef =
         )
         l
     in Love_ast_utils.mk_sumtype sparams scons NonRec
-  | Trecord (rname, l) ->
+  | Trecord (rname, l) when not alias ->
     debug "[liqtype_to_lovetypedef] Record type@.";
     let rparams, aliases =
       List.fold_left
@@ -244,7 +251,7 @@ and liqcontract_sig_to_lovetype
                 UnknownType (n, _, _, _) when String.equal name n ->
                 debug "[liqcontract_sig_to_lovetype] Sum type %s defined in signature@." name;
                 (* entry.parameter has not been defined yet. *)
-                let tdef = liqtype_to_lovetypedef env t in
+                let tdef = liqtype_to_lovetypedef env name t in
                 match tdef with
                   TYPE.SumType {sparams; _} ->
                   TUser (string_to_ident name, List.map (fun v -> TVar v) sparams), Some (name, tdef)
@@ -255,7 +262,7 @@ and liqcontract_sig_to_lovetype
                 UnknownType (n, _, _, _) when String.equal name n ->
                 debug "[liqcontract_sig_to_lovetype] Record type %s defined in signature@." name;
                 (* entry.parameter has not been defined yet. *)
-                let tdef = liqtype_to_lovetypedef env t in
+                let tdef = liqtype_to_lovetypedef env name t in
                 match tdef with
                   TYPE.RecordType {rparams; _} ->
                   TUser (string_to_ident name, List.map (fun v -> TVar v) rparams), Some (name, tdef)
@@ -2675,13 +2682,12 @@ and liqcontract_to_lovecontract
       None -> empty_env (if is_module then Module else Contract []) ()
     | Some e -> e in
   let env, types = (*  Adding type definitions *)
-    let rec fill_env_with_types
-        (types : (datatype list -> datatype) StringMap.t) (str : string) typ (acc_env, acc_tdef) =
+    let rec fill_env_with_types (acc_env, acc_tdef) (str, (typ, _id))  =
       let typedef_registered n =
         match find_type n acc_env with
           None -> false
         | Some _ -> true in
-      let res =
+       let res =
         if
           typedef_registered str ||
           Collections.StringSet.mem str Compil_utils.reserved_types
@@ -2691,7 +2697,7 @@ and liqcontract_to_lovecontract
         ) else (
           debug "[liqcontract_to_lovecontract] Adding type %s to environment@." str;
           try
-            let tdef = liqtype_to_lovetypedef acc_env (typ []) in
+            let tdef = liqtype_to_lovetypedef acc_env str (typ []) in
             debug "[liqcontract_to_lovecontract] %a@." (pp_typdef ~name:"" ~privacy:"") tdef;
             add_typedef_to_contract ~loc:(LiquidLoc.loc_in_file c.ty_env.filename)
               str tdef acc_env, ((str, AST.DefType (TPublic, tdef)) :: acc_tdef)
@@ -2699,9 +2705,10 @@ and liqcontract_to_lovecontract
             UnknownType (s,_, _, _) ->
             debug "[liqcontract_to_lovecontract] %s is not in the environment@." s;
             try
-              let acc = fill_env_with_types types s (StringMap.find s types) (acc_env, acc_tdef)
-              in
-              fill_env_with_types types str typ acc
+              let acc =
+                fill_env_with_types (acc_env, acc_tdef)
+                  (s, StringMap.find s c.ty_env.types) in
+              fill_env_with_types acc (str, (typ, _id))
             with
               UnknownType (s', _, _, loc) when String.equal s' str ->
               error ?loc "Type %s is inter-recursive: forbidden in Love." s'
@@ -2710,10 +2717,9 @@ and liqcontract_to_lovecontract
       debug "[liqcontract_to_lovecontract] Type %s added@." str;
       res
     in
-    StringMap.fold
-      (fill_env_with_types c.ty_env.types)
-      c.ty_env.types
-      (env, [])
+    StringMap.bindings c.ty_env.types
+    |> List.sort (fun (_, (_, id1)) (_, (_, id2)) -> Pervasives.compare id1 id2)
+    |> List.fold_left fill_env_with_types (env, [])
   in
   let types = List.rev types in
   let env, signatures =
@@ -2754,7 +2760,7 @@ and liqcontract_to_lovecontract
       ([], env)
       c.subs
   in
-  let storage_typedef = liqtype_to_lovetypedef env c.storage in
+  let storage_typedef = liqtype_to_lovetypedef env "storage" c.storage in
   debug "[liqcontract_to_lovecontract] Storage type def = %a@."
     Love_type.(pp_typdef ~name:"storage" ~privacy:"") storage_typedef;
   let subc = List.rev subc in

@@ -863,7 +863,7 @@ let const_of_string filename s =
 let convert_env env =
   let ty_env = LiquidFromParsetree.initial_env env.filename in
   let new_types_map =
-    StringMap.map (fun (tys, _i) ->
+    StringMap.map (fun (tys, new_id) ->
         let ty = match tys with
           | [] -> assert false
           | ty :: _ -> LiquidInfer.instantiate (LiquidTypes.free_tvars ty, ty)
@@ -884,7 +884,7 @@ let convert_env env =
         (fun pvals ->
            let subst = LiquidInfer.make_subst params pvals in
            LiquidInfer.instantiate_to subst ty
-           )
+           ), new_id
     ) env.types in
     ty_env.types <- StringMap.union (fun _ t1 _ -> Some t1) new_types_map ty_env.types;
   ty_env.contract_types <-

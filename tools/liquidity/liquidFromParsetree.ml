@@ -123,7 +123,10 @@ let remove_stack typ = match typ.ptyp_desc with
   | Ptyp_extension ( { txt = "stack" }, PTyp  t ) -> t
   | _ -> typ
 
+let id_type_alias = ref (-1)
+
 let add_type_alias ~loc ty_name params ty env =
+  incr id_type_alias;
   let pset, params = List.fold_left (fun (acc, params) -> function
       | { ptyp_desc = Ptyp_var alpha; ptyp_loc }, Invariant ->
         if StringSet.mem alpha acc then
@@ -145,7 +148,7 @@ let add_type_alias ~loc ty_name params ty env =
     let subst = make_subst params pvals in
     instantiate_to subst ty
   in
-  env.types <- StringMap.add ty_name mk_ty env.types
+  env.types <- StringMap.add ty_name (mk_ty, !id_type_alias) env.types
 
 let rec translate_type env ?expected typ =
   if has_stack typ then
@@ -2379,7 +2382,7 @@ and pack_contract env toplevels =
   let is_module =
     not (List.exists (function Syn_entry _ -> true | _ -> false) toplevels) in
   let storage =
-    try StringMap.find "storage" env.types []
+    try fst (StringMap.find "storage" env.types) []
     with Not_found ->
       if is_module then Tunit
       else
@@ -2438,7 +2441,10 @@ let filename_to_contract filename =
 
 let initial_env filename =
   {
-    types = StringMap.map (fun ty -> fun _ -> ty) predefined_types;
+    types = StringMap.map (fun ty ->
+        incr id_type_alias;
+        (fun _ -> ty), !id_type_alias
+      ) predefined_types;
     contract_types = predefined_contract_types;
     labels = StringMap.empty;
     constrs = predefined_constructors;

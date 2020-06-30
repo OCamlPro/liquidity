@@ -924,7 +924,9 @@ and contract_tvars_to_unit ~keep_tvars (contract : typed_contract) =
       }) contract.entries in
   let rec env_tvars_to_unit ty_env = {
     ty_env with
-    types = StringMap.map (fun mk -> fun p -> vars_to_unit (mk p)) ty_env.types;
+    types = StringMap.map (fun (mk, id) ->
+        (fun p -> vars_to_unit (mk p)), id
+      ) ty_env.types;
     contract_types = StringMap.map sig_vars_to_unit ty_env.contract_types;
     top_env = match ty_env.top_env with
       | None -> None

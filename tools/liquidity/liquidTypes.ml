@@ -188,7 +188,7 @@ and env = {
   contractname : string;
   (* fields modified in LiquidFromParsetree *)
   (* type definitions *)
-  mutable types : (datatype list -> datatype) StringMap.t;
+  mutable types : ((datatype list -> datatype) * int) StringMap.t;
   (* contract type definitions *)
   mutable contract_types : contract_sig StringMap.t;
   (* labels of records in type definitions *)
