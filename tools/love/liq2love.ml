@@ -35,7 +35,15 @@ module TypeVarMap = struct
     | None -> assert false
 end
 
-let add_typedef_to_contract name tdef env = Love_tenv.add_typedef name TPublic tdef env
+let add_typedef_to_contract ~loc name tdef env =
+  try Love_tenv.add_typedef name TPublic tdef env
+  with Love_tenv.EnvironmentError msg ->
+    (* TODO: Only catch redefinition of same aliased types *)
+    Format.ksprintf
+      (fun s -> LiquidLoc.warn loc (WOther s))
+      "Ignored Love error in definition of type %s (%s)"
+      name msg;
+    env
 
 let find_type (tname : string) (env: env) =
   match Love_tenv.find_tdef (string_to_ident tname) env with
@@ -203,6 +211,7 @@ and get_tvar_from_tlist env tlist : TYPE.t list =
     []
 
 and liqcontract_sig_to_lovetype
+    ~loc
     (env : env)
     (mod_name : string option)
     {sig_name; entries_sig} : structure_type =
@@ -216,7 +225,7 @@ and liqcontract_sig_to_lovetype
         Named (string_to_ident name)
       | None ->
         debug "[liqcontract_sig_to_lovetype] Not registered, treating as anonymous@.";
-        liqcontract_sig_to_lovetype env None {sig_name = None; entries_sig}
+        liqcontract_sig_to_lovetype ~loc env None {sig_name = None; entries_sig}
     )
   | None -> (
       debug "[liqcontract_sig_to_lovetype] Anonymous contract@.";
@@ -270,7 +279,7 @@ and liqcontract_sig_to_lovetype
                None -> (name, SEntry t1) :: content, env
              | Some (n,t) ->
                (n, SType (SPublic t)) :: (name, SEntry t1) :: content,
-               add_typedef_to_contract n t env
+               add_typedef_to_contract ~loc n t env
           )
           ([], env)
           entries_sig
@@ -282,7 +291,8 @@ and liqcontract_sig_to_lovetype
     )
 
 and liqtype_to_lovetype ?loc ?(aliases=StringMap.empty) (env : env) tv =
-  debug "[liqtype_to_lovetype] Transpiling type %s@." (LiquidPrinter.Liquid.string_of_type tv);
+  debug "[liqtype_to_lovetype] Transpiling type %s@."
+    (LiquidPrinter.LiquidDebug.string_of_type tv);
   let ltl = liqtype_to_lovetype env in
   let action res t =
     let t =
@@ -394,8 +404,8 @@ and liqtype_to_lovetype ?loc ?(aliases=StringMap.empty) (env : env) tv =
   | Trecord (name, fields) -> (
       debug "[liqtype_to_lovetype] Record@.";
       match find_type name env with
-        None -> raise (UnknownType (name, (fun t -> t), env, loc))
-      | Some (RecordType {rparams;rfields}) ->
+      | None -> raise (UnknownType (name, (fun t -> t), env, loc))
+      | Some (RecordType {rparams; rfields}) ->
         let params =
           let rec instanciate_params params_map poly_fields fields =
             match poly_fields with
@@ -2683,7 +2693,8 @@ and liqcontract_to_lovecontract
           try
             let tdef = liqtype_to_lovetypedef acc_env (typ []) in
             debug "[liqcontract_to_lovecontract] %a@." (pp_typdef ~name:"" ~privacy:"") tdef;
-            add_typedef_to_contract str tdef acc_env, ((str, AST.DefType (TPublic, tdef)) :: acc_tdef)
+            add_typedef_to_contract ~loc:(LiquidLoc.loc_in_file c.ty_env.filename)
+              str tdef acc_env, ((str, AST.DefType (TPublic, tdef)) :: acc_tdef)
           with
             UnknownType (s,_, _, _) ->
             debug "[liqcontract_to_lovecontract] %s is not in the environment@." s;
@@ -2715,7 +2726,9 @@ and liqcontract_to_lovecontract
         else
           let name = name^"__signature" in
           debug "[liqcontract_to_lovecontract] Registering signature %s@." name;
-          match liqcontract_sig_to_lovetype env (Some name) cs with
+          match liqcontract_sig_to_lovetype
+                  ~loc:(LiquidLoc.loc_in_file c.ty_env.filename)
+                  env (Some name) cs with
             Anonymous s ->
             debug "[liqcontract_to_lovecontract] Signature %s = %a@."
               name (Love_type.pp_contract_sig ) s;
