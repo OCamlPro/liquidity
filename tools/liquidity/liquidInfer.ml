@@ -640,7 +640,9 @@ let mk_typed_name s tn =
   if tn = 1 then s
   else Printf.sprintf "%s__%d_" s tn
 
-let rec vars_to_unit ?loc ty = match ty with
+let rec vars_to_unit ?loc ~keep_tvars ty =
+  let vars_to_unit = vars_to_unit ~keep_tvars in
+  match ty with
   | Ttuple tyl -> Ttuple (List.map (vars_to_unit ?loc) tyl)
   | Toption ty -> Toption (vars_to_unit ?loc ty)
   | Tlist ty -> Tlist (vars_to_unit ?loc ty)
@@ -658,6 +660,7 @@ let rec vars_to_unit ?loc ty = match ty with
     Tsum (sn, List.map (fun (cn, cty) -> (cn, vars_to_unit ?loc cty)) cl)
   | Tcontract (e, ty) -> Tcontract (e, vars_to_unit ?loc ty)
   | Tvar { contents = { contents = { tyo = Some ty }}} -> vars_to_unit ?loc ty
+  | Tvar _ when keep_tvars -> ty
   | Tvar _ ->
     (* Remaining vars correspond to unused arguments *)
     (* unify (match loc with None -> noloc | Some loc -> loc)
@@ -680,10 +683,10 @@ let rec vars_to_unit ?loc ty = match ty with
   | Tunit | Tbool | Tint | Tnat | Ttez | Tstring | Tbytes | Ttimestamp | Tkey
   | Tkey_hash | Tsignature | Toperation | Taddress | Tfail | Tchainid -> ty
 
-let sig_vars_to_unit ?loc c =
+let sig_vars_to_unit ?loc ~keep_tvars c =
   { c with entries_sig =
              List.map (fun es ->
-                 { es with parameter = vars_to_unit ?loc es.parameter }
+                 { es with parameter = vars_to_unit ?loc ~keep_tvars es.parameter }
                ) c.entries_sig
   }
 
@@ -701,13 +704,15 @@ let rec has_unresolved = function
   | Tpartial _ -> true
   | _ -> false
 
-let vars_to_unit ?(warn=false) ?(err=false) ?loc ty =
+let vars_to_unit ?(warn=false) ?(err=false) ?loc ~keep_tvars ty =
+  let vars_to_unit = vars_to_unit ~keep_tvars in
   if not (warn || err) then vars_to_unit ?loc ty
   else
     let warning = has_unresolved ty in
     let tvars = free_tvars ty in
     let str_ty = (string_of_type ty) in
     let ty' = vars_to_unit ?loc ty in
+    let warning = if keep_tvars then has_unresolved ty' else warning in
     if warning then begin
       let loc = match loc with None -> noloc | Some loc -> loc in
       if err then error loc "Unresolved type %s, add annotation" str_ty
@@ -720,7 +725,11 @@ let vars_to_unit ?(warn=false) ?(err=false) ?loc ty =
     end;
     ty'
 
-let rec tvars_to_unit ?(err=false) ({ desc; ty; loc } as e) =
+let rec tvars_to_unit ?(err=false) ~keep_tvars ({ desc; ty; loc } as e) =
+  let tvars_to_unit = tvars_to_unit ~keep_tvars in
+  let vars_to_unit = vars_to_unit ~keep_tvars in
+  let const_tvars_to_unit = const_tvars_to_unit ~keep_tvars in
+  let contract_tvars_to_unit = contract_tvars_to_unit ~keep_tvars in
   let desc = match desc with
     | Var _ -> desc
     | Let { bnd_var; inline; bnd_val; body } ->
@@ -855,7 +864,11 @@ let rec tvars_to_unit ?(err=false) ({ desc; ty; loc } as e) =
   in
   { e with desc; ty = vars_to_unit ~err ~loc ty }
 
-and const_tvars_to_unit ~loc c = match c with
+and const_tvars_to_unit ~loc ~keep_tvars c =
+  let const_tvars_to_unit = const_tvars_to_unit ~keep_tvars in
+  let vars_to_unit = vars_to_unit ~keep_tvars in
+  let tvars_to_unit = tvars_to_unit ~keep_tvars in
+  match c with
   | ( CUnit | CBool _ | CInt _ | CNat _ | CTez _ | CTimestamp _ | CString _
     | CBytes _ | CKey _ | CSignature _ | CNone  | CKey_hash _
     | CContract _) as c -> c
@@ -883,7 +896,11 @@ and const_tvars_to_unit ~loc c = match c with
               body = tvars_to_unit body;
               ret_ty = vars_to_unit ~err:true ~loc:body.loc ret_ty }
 
-and contract_tvars_to_unit (contract : typed_contract) =
+and contract_tvars_to_unit ~keep_tvars (contract : typed_contract) =
+  let contract_tvars_to_unit = contract_tvars_to_unit ~keep_tvars in
+  let tvars_to_unit = tvars_to_unit ~keep_tvars in
+  let vars_to_unit = vars_to_unit ~keep_tvars in
+  let sig_vars_to_unit = sig_vars_to_unit ~keep_tvars in
   let subs = List.map contract_tvars_to_unit contract.subs in
   let values = List.map (fun v ->
       { v with val_exp = tvars_to_unit v.val_exp }
@@ -1194,9 +1211,7 @@ let mono_contract ?(keep_tvars=false) c =
   let vtys = register_global_vtys QualMap.empty c in
   let c, vtys = mono_contract vtys c in
   let c = mono_values c vtys c in
-  if keep_tvars
-  then c
-  else contract_tvars_to_unit c
+  contract_tvars_to_unit ~keep_tvars c
 
 let copy_ty ty =
   let refs = Hashtbl.create 17 in
