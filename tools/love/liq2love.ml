@@ -16,7 +16,7 @@ module SIMap = Collections.StringIdentMap
 
 type env = Love_tenv.t
 
-exception UnknownType of (string * (TYPE.t -> TYPE.t) * env)
+exception UnknownType of (string * (TYPE.t -> TYPE.t) * env * location option)
 
 let debug fmt =
   if !LiquidOptions.verbosity > 1 then begin
@@ -50,9 +50,9 @@ let get_opt o = match o with None -> assert false | Some o -> o
 
 let rec apply_cont cont name love_ty =
   try cont love_ty with
-    UnknownType (n, cont,_) when String.equal n name ->
+    UnknownType (n, cont, _, _) when String.equal n name ->
     apply_cont cont name love_ty
-  | UnknownType (n, cont,_) when String.equal n "Partial" ->
+  | UnknownType (n, cont, _, _) when String.equal n "Partial" ->
     cont (TVar (Love_type.fresh_typevar ()))
 (* Transforms a tv Ref.t into a TVar.t.
    If a tv aliases another tv, the same Tvar will be generated.  *)
@@ -84,7 +84,7 @@ let rec liqtype_to_lovetypedef ?loc (env : env) t : TYPE.typedef =
         (fun (name, cons) ->
            let t =
              try liqtype_to_lovetype ~aliases env cons
-             with UnknownType (n, cont, _) when String.equal n sname ->
+             with UnknownType (n, cont, _, _) when String.equal n sname ->
                apply_cont cont sname love_ty
            in
            debug "[liqtype_to_lovedef] %s of type %a@." name Love_type.pretty t;
@@ -112,7 +112,7 @@ let rec liqtype_to_lovetypedef ?loc (env : env) t : TYPE.typedef =
         (fun (name, cons) ->
            let t =
              try  (liqtype_to_lovetype ~aliases env) cons
-             with UnknownType (n, cont, _) when String.equal n rname ->
+             with UnknownType (n, cont, _, _) when String.equal n rname ->
                apply_cont cont rname love_ty
            in name, t
         )
@@ -139,7 +139,7 @@ and tvref_to_tvar ?(aliases=StringMap.empty) (env : env) tvref : TYPE.t =
     Some t -> (
     try liqtype_to_lovetype env t
     with
-      UnknownType (n, f, _) when String.equal n "Partial" ->
+      UnknownType (n, f, _, _) when String.equal n "Partial" ->
       debug "[tvref_to_tvar] Partial TVar@.";
       f (TVar (Love_type.fresh_typevar ()))
   )
@@ -232,7 +232,7 @@ and liqcontract_sig_to_lovetype
               (LiquidPrinter.Liquid.string_of_type entry.parameter)
           | Tsum (Some name, _) as t -> (
               try liqtype_to_lovetype env t, None with
-                UnknownType (n, _, _) when String.equal name n ->
+                UnknownType (n, _, _, _) when String.equal name n ->
                 debug "[liqcontract_sig_to_lovetype] Sum type %s defined in signature@." name;
                 (* entry.parameter has not been defined yet. *)
                 let tdef = liqtype_to_lovetypedef env t in
@@ -243,7 +243,7 @@ and liqcontract_sig_to_lovetype
             )
           | Trecord (name, _) as t -> (
               try liqtype_to_lovetype env t, None with
-                UnknownType (n, _, _) when String.equal name n ->
+                UnknownType (n, _, _, _) when String.equal name n ->
                 debug "[liqcontract_sig_to_lovetype] Record type %s defined in signature@." name;
                 (* entry.parameter has not been defined yet. *)
                 let tdef = liqtype_to_lovetypedef env t in
@@ -288,9 +288,10 @@ and liqtype_to_lovetype ?loc ?(aliases=StringMap.empty) (env : env) tv =
     let t =
       try ltl t
       with
-        UnknownType (name, f, env) ->
+        UnknownType (name, f, env, uloc) ->
         debug "[liqtype_to_lovetype] Unknown type %s, sending task to sender@." name;
-        raise (UnknownType (name, (fun t -> res @@ f t), env))
+        raise (UnknownType (name, (fun t -> res @@ f t), env,
+                            Option.first_some uloc loc))
     in res t
   in
   match tv with
@@ -339,14 +340,14 @@ and liqtype_to_lovetype ?loc ?(aliases=StringMap.empty) (env : env) tv =
     let res t1 t2 = map (t1, t2) in
     let t2 t1 =
       try res t1 (ltl t2) with
-        UnknownType (name, f, e) ->
-        raise (UnknownType (name, (fun t2 -> res t1 @@ f t2), e))
+        UnknownType (name, f, e, loc) ->
+        raise (UnknownType (name, (fun t2 -> res t1 @@ f t2), e, loc))
     in
     let t1 =
       try ltl t1
       with
-        UnknownType (name, f, e) ->
-        raise (UnknownType (name, (fun t -> let t1 = f t in t2 t1), e))
+        UnknownType (name, f, e, loc) ->
+        raise (UnknownType (name, (fun t -> let t1 = f t in t2 t1), e, loc))
     in t2 t1
 
   | Tbigmap (t1, t2) ->
@@ -354,14 +355,14 @@ and liqtype_to_lovetype ?loc ?(aliases=StringMap.empty) (env : env) tv =
     let res t1 t2 = bigmap (t1, t2) in
     let t2 t1 =
       try res t1 (ltl t2) with
-        UnknownType (name, f, e) ->
-        raise (UnknownType (name, (fun t2 -> res t1 @@ f t2), e))
+        UnknownType (name, f, e, loc) ->
+        raise (UnknownType (name, (fun t2 -> res t1 @@ f t2), e, loc))
     in
     let t1 =
       try ltl t1
       with
-        UnknownType (name, f, e) ->
-        raise (UnknownType (name, (fun t -> let t1 = f t in t2 t1), e))
+        UnknownType (name, f, e, loc) ->
+        raise (UnknownType (name, (fun t -> let t1 = f t in t2 t1), e, loc))
     in t2 t1
   | Tcontract (s, c) ->
     begin
@@ -383,19 +384,19 @@ and liqtype_to_lovetype ?loc ?(aliases=StringMap.empty) (env : env) tv =
     let t2 t1 =
       try debug "[liqtype_to_lovetype] t1 = %a, calculating t2@." Love_type.pretty t1;
         t1 @=> (ltl t2) with
-        UnknownType (name, f, e) ->
-        raise (UnknownType (name, (fun t2 -> t1 @=> f t2), e))
+        UnknownType (name, f, e, loc) ->
+        raise (UnknownType (name, (fun t2 -> t1 @=> f t2), e, loc))
     in
     let t1 =
       try ltl t1
       with
-        UnknownType (name, f, e) ->
-        raise (UnknownType (name, (fun t -> let t1 = f t in t2 t1), e))
+        UnknownType (name, f, e, loc) ->
+        raise (UnknownType (name, (fun t -> let t1 = f t in t2 t1), e, loc))
     in t2 t1
   | Trecord (name, fields) -> (
       debug "[liqtype_to_lovetype] Record@.";
       match find_type name env with
-        None -> raise (UnknownType (name, (fun t -> t), env))
+        None -> raise (UnknownType (name, (fun t -> t), env, loc))
       | Some (RecordType {rparams;rfields}) ->
         let params =
           let rec instanciate_params params_map poly_fields fields =
@@ -430,7 +431,7 @@ and liqtype_to_lovetype ?loc ?(aliases=StringMap.empty) (env : env) tv =
   | Tsum (Some name, cons) -> (
       debug "[liqtype_to_lovetype] Sum@.";
       match find_type name env with
-        None -> raise (UnknownType (name, (fun t -> t), env))
+        None -> raise (UnknownType (name, (fun t -> t), env, loc))
       | Some (SumType {sparams; scons}) ->
         let params =
           let rec instanciate_params params_map poly_cons cons =
@@ -506,11 +507,12 @@ and liqtype_to_lovetype ?loc ?(aliases=StringMap.empty) (env : env) tv =
     tvref_to_tvar ~aliases env v
   | Tfail ->
     debug "[liqtype_to_lovetype] Fail@.";
-    raise (UnknownType ("Fail", (fun t -> t), env))
+    raise (UnknownType ("Fail", (fun t -> t), env, loc))
   | Tpartial p -> (
       debug "[liqtype_to_lovetype] Partial %s@." (LiquidPrinter.Liquid.string_of_type tv);
       match p with
-        Peqn _ | Pcont _ | Ppar | Pmap _ -> raise (UnknownType ("Partial", (fun t -> t), env))
+      | Peqn _ | Pcont _ | Ppar | Pmap _ ->
+        raise (UnknownType ("Partial", (fun t -> t), env, loc))
       | Ptup l ->
         debug "[liqtype_to_lovetype] Partial tuple@.";
         let l = List.fast_sort (fun (i1, _) (i2, _) -> i1 - i2) l in
@@ -2613,7 +2615,9 @@ and liqcontract_to_lovecontent
 
 and liqcontract_to_lovecontract
     ?env ?(ctr_name="") (is_module : bool) (c : typed_contract) : AST.structure * env =
-  debug "[liqcontract_to_lovecontract] Transpiling liquidity contract@.";
+  if !LiquidOptions.verbosity > 0 then
+    Format.eprintf "Transpile contract %s to Love@."
+      (LiquidNamespace.qual_contract_name c);
   let env : env =
     match env with
       None -> empty_env (if is_module then Module else Contract []) ()
@@ -2630,7 +2634,7 @@ and liqcontract_to_lovecontract
           typedef_registered str ||
           Collections.StringSet.mem str Compil_utils.reserved_types
         then (
-          debug "[liqcontract_to_lovecontract] Type %s is already registered" str;
+          debug "[liqcontract_to_lovecontract] Type %s is already registered@." str;
           (acc_env, acc_tdef)
         ) else (
           debug "[liqcontract_to_lovecontract] Adding type %s to environment@." str;
@@ -2639,15 +2643,15 @@ and liqcontract_to_lovecontract
             debug "[liqcontract_to_lovecontract] %a@." (pp_typdef ~name:"" ~privacy:"") tdef;
             add_typedef_to_contract str tdef acc_env, ((str, AST.DefType (TPublic, tdef)) :: acc_tdef)
           with
-            UnknownType (s,_, _) ->
+            UnknownType (s,_, _, _) ->
             debug "[liqcontract_to_lovecontract] %s is not in the environment@." s;
             try
               let acc = fill_env_with_types types s (StringMap.find s types) (acc_env, acc_tdef)
               in
               fill_env_with_types types str typ acc
             with
-              UnknownType (s', _, _) when String.equal s' str ->
-              error "Type %s is inter-recursive: forbidden in Love." s'
+              UnknownType (s', _, _, loc) when String.equal s' str ->
+              error ?loc "Type %s is inter-recursive: forbidden in Love." s'
         )
       in
       debug "[liqcontract_to_lovecontract] Type %s added@." str;
@@ -2753,10 +2757,10 @@ let liqcontract_to_lovecontract ~(ctr_name:string) (c : typed_contract) : AST.st
   try
     liqcontract_to_lovecontract ~ctr_name ~env:initial_env false c
   with
-    UnknownType (s,_,e) ->
+    UnknownType (s, _, e, loc) ->
     debug "Failing with typing environment =\n%a@."
       Love_tenv.pp_env e;
-    error "Unknown type %s" s
+    error ?loc "Unknown type %s" s
 
 
 (* 2. LiqConst to LoveValue *)
