@@ -111,6 +111,7 @@ let to_poly_variant = function
   | TUser (LName "timestamp", []) -> `TTimestamp
   | TUser (LName "key", [])       -> `TKey
   | TUser (LName "keyhash", [])   -> `TKeyhash
+  | TUser (LName "address", [])   -> `TAddress
   | TUser (LName "signature", []) -> `TSignature
   | TUser (LName "operation", []) -> `TOperation
   | TUser (LName "list", [t1]) -> `TList t1

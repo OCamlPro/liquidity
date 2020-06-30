@@ -365,10 +365,8 @@ and liqtype_to_lovetype ?loc ?(aliases=StringMap.empty) (env : env) tv =
         raise (UnknownType (name, (fun t -> let t1 = f t in t2 t1), e, loc))
     in t2 t1
   | Tcontract (s, c) ->
-    begin
-      let ty = ltl c in
-      TContractInstance (Compil_utils.get_signature_from_name s ty env)
-    end
+    let ty = ltl c in
+    TContractInstance (Compil_utils.get_signature_from_name s ty env)
   | Tor (t1,t2) -> (
       let t1 = ltl t1 and t2 = ltl t2 in
       let sumtyp = variant (t1,t2) in
@@ -2019,7 +2017,7 @@ and liqconst_to_loveexp
             map (typ_key, typ_bnd),
             typ_key,
             typ_bnd
-          | Some t,_ -> bad_const_type c (the typ) "map"
+          | Some t,_ -> bad_const_type ?loc c (the typ) "map"
         in (
           List.fold_left
             (fun map (new_key,new_bnd) ->
@@ -2073,7 +2071,7 @@ and liqconst_to_loveexp
           mk_enil (), Love_type.type_empty_list
         | Some (`TList t) -> mk_enil ~typ:t (), list t
         | Some t ->
-          bad_const_type c (the typ) "list"
+          bad_const_type ?loc c (the typ) "list"
       )
     | CList l ->
       let new_l, t =
@@ -2104,7 +2102,7 @@ and liqconst_to_loveexp
             mk_emptyset ~typ:thd (), set thd, thd
           | Some (`TSet t),_ -> mk_emptyset ~typ:t (), set t, t
           | Some t,_ ->
-            bad_const_type c (the typ) "set"
+            bad_const_type ?loc c (the typ) "set"
         in (
           List.fold_left
             (fun set new_val ->
@@ -2129,7 +2127,7 @@ and liqconst_to_loveexp
             Love_type.pretty t2;
             liqconst_to_loveexp ~typ env c, t2
         | Some _ ->
-          bad_const_type c (the typ) "variant"
+          bad_const_type ?loc c (the typ) "variant"
       in
       mk_constr (string_to_ident "Left") [t1; t2] [c],
       variant (t1, t2)
@@ -2145,16 +2143,21 @@ and liqconst_to_loveexp
           debug "Type for left : (%a, %a) tor"
             (Love_type.pretty ) t1 (Love_type.pretty ) typ;
           liqconst_to_loveexp ~typ env c, t1
-        | Some _ -> bad_const_type c (the typ) "variant"
+        | Some _ -> bad_const_type ?loc c (the typ) "variant"
       in
       mk_constr (string_to_ident "Right") [t1; t2] [c],
       variant (t1, t2)
 
     | CKey_hash kh -> (
-        match Signature.Public_key_hash.of_b58check_opt kh with
-          None -> error ?loc "Keyhash %s is invalid" kh
-        | Some k -> mk_const mk_ckeyhash k, keyhash ()
+        match Option.map ~f:to_poly_variant typ with
+        | Some (`TAddress | `Type (TContractInstance _)) ->
+          contract_to_loveexp ?loc ~typ kh
+        | _ ->
+          match Signature.Public_key_hash.of_b58check_opt kh with
+          | None -> error ?loc "Keyhash %s is invalid" kh
+          | Some k -> mk_const mk_ckeyhash k, keyhash ()
       )
+    | CContract (addr, None) -> contract_to_loveexp ?loc ~typ addr
     | CContract (c, _) ->
       error ?loc "Constant contracts (here %s) has no Love representation." c
     | CRecord [] ->
@@ -2224,6 +2227,23 @@ and liqconst_to_loveexp
         "[liqconst_to_loveexp] Const %a : %a@."
         Love_printer.Ast.print_exp (fst res) Love_type.pretty (snd res)
   in res
+
+
+and contract_to_loveexp ?loc ~typ addr =
+  match Contract_repr.of_b58check addr with
+  | Error _ ->
+    error ?loc "Not a valid contract %s." addr
+  | Ok _ ->
+    let mk_const f c =
+      let loc = match loc with
+        | None -> None
+        | Some loc -> love_loc loc in
+      mk_const ?loc @@ f ?loc c in
+    match Option.map ~f:to_poly_variant typ with
+    | Some (`Type (TContractInstance _ as t)) ->
+      mk_const mk_caddress addr, t
+    | _ -> mk_const mk_caddress addr, address ()
+
 
 (** Some primitives need a special treatment done by this function  *)
 and liqapply_to_loveexp ?loc env typ prim args : AST.exp * TYPE.t =

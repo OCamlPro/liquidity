@@ -229,7 +229,7 @@ and const_ttfail_to_tvar loc (typ : datatype) c : 'a * datatype =
   | CContract _ -> c, tfail_to_tvar typ
   | CSignature _ -> c, Tsignature
   | CNone -> c, tfail_to_tvar typ
-  | CKey_hash _ -> c, Tkey_hash
+  | CKey_hash _ -> c, tfail_to_tvar typ
   | CSome x ->
     let xty = match typ with Toption t -> t | _ -> assert false in
     let c, t = const_ttfail_to_tvar loc xty x in CSome c, Toption t
