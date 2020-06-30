@@ -788,6 +788,8 @@ let liqprim_to_loveprim ?loc env (p : primitive) (args : TYPE.t list) =
           | `TVar _ , `TBool              -> "||", [bool (); bool ()]
           | `TInt, (`TInt | `TVar _)
           | `TVar _, `TInt -> "lor", [int (); int ()]
+          | `TNat, (`TNat | `TVar _)
+          | `TVar _, `TNat -> "nlor", [nat (); nat ()]
           | _,_ ->
             error ?loc "Cannot apply OR on %a and %a"
               Love_type.pretty t1 Love_type.pretty t2;
@@ -796,6 +798,7 @@ let liqprim_to_loveprim ?loc env (p : primitive) (args : TYPE.t list) =
           match to_poly_variant t with
           | `TBool -> "||", args
           | `TInt -> "lor", args
+          | `TNat -> "nlor", args
           | _ ->
             error ?loc "Cannot apply OR on %a and anything"
               Love_type.pretty t
@@ -813,6 +816,8 @@ let liqprim_to_loveprim ?loc env (p : primitive) (args : TYPE.t list) =
           | `TVar _ , `TBool -> "&&", [bool (); bool ()]
           | `TInt, (`TInt | `TVar _)
           | `TVar _, `TInt -> "land", [int (); int ()]
+          | `TNat, (`TNat | `TVar _)
+          | `TVar _, `TNat -> "nland", [nat (); nat ()]
           | _,_ ->
             error ?loc "Cannot apply AND on %a and %a"
               Love_type.pretty t1 Love_type.pretty t2;
@@ -821,6 +826,7 @@ let liqprim_to_loveprim ?loc env (p : primitive) (args : TYPE.t list) =
           match to_poly_variant t with
             `TBool -> "&&", args
           | `TInt -> "land", args
+          | `TNat -> "nland", args
           | _ ->
             error ?loc "Cannot apply AND on %a and anything"
               Love_type.pretty t
@@ -837,6 +843,8 @@ let liqprim_to_loveprim ?loc env (p : primitive) (args : TYPE.t list) =
           | `TVar _ , `TBool -> "|&", [bool (); bool ()]
           | `TInt, (`TInt | `TVar _)
           | `TVar _, `TInt -> "lxor",  [int (); int ()]
+          | `TNat, (`TNat | `TVar _)
+          | `TVar _, `TNat -> "nlxor",  [nat (); nat ()]
           | _,_ ->
             error ?loc "Cannot apply XOR on %a and %a"
               Love_type.pretty t1 Love_type.pretty t2;
@@ -845,6 +853,7 @@ let liqprim_to_loveprim ?loc env (p : primitive) (args : TYPE.t list) =
           match to_poly_variant t with
             `TBool -> "|&", args
           | `TInt  -> "lxor", args
+          | `TNat  -> "nlxor", args
           | _ ->
             error ?loc "Cannot apply XOR on %a and anything"
               Love_type.pretty t
@@ -858,7 +867,8 @@ let liqprim_to_loveprim ?loc env (p : primitive) (args : TYPE.t list) =
     debug "[liqprim_to_loveprim] Not@.";
     match List.map to_poly_variant args with
       [`TBool] -> "not", args
-    | [`TInt]  -> "lnor", args
+    | [`TInt]  -> "lnot", args
+    (* | [`TNat]  -> "nlnot", args  Does not exist in Love ? *)
     | [_]->
       error ?loc "Cannot apply NOT on %a"
         Love_type.pretty (List.hd args)
