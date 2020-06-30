@@ -123,11 +123,19 @@ DUNE_TESTS=`find dune-network/src/bin_client/test/contracts -regex "[^\.]+.tz" \
 
 TESTS=$(DOC_TESTS) $(SIMPLE_TESTS) $(MORE_TESTS:=.liq) $(RE_TESTS:=.reliq) $(OTHER_TESTS:=.liq)
 
+LOVE_TESTS=$(TESTS)
+
 tests: build
 	@echo ---------------------
 	@echo Run full tests
 	@echo ---------------------
 	@scripts/run-list.sh scripts/check.sh $(TESTS)
+
+tests-love: build
+	@echo ---------------------
+	@echo Run Love tests
+	@echo ---------------------
+	@scripts/run-list.sh scripts/check_love.sh $(TESTS)
 
 tests-mini: mini
 	@echo ---------------------
@@ -143,4 +151,4 @@ rev-tests: build
 	@echo ---------------------
 	@scripts/run-list.sh scripts/check-rev.sh $(RTESTS)
 
-all-tests: tests tests-mini rev-tests
+all-tests: tests tests-mini rev-tests tests-love
