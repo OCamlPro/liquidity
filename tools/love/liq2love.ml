@@ -1476,9 +1476,12 @@ let rec liqexp_to_loveexp (env : env) (e : typed_exp) : AST.exp * TYPE.t =
         | Some p -> p in
       let ctr =
         match Love_tenv.find_contract name_id env with
-          None ->
-          let ctr, ctrt = liqcontract_to_lovecontract ~env false contract in
-          let first_class_ctr : AST.reference = Anonymous ctr in
+        | None ->
+          let _, ctr, _env = liqcontract_to_lovecontent env contract in
+            (* liqcontract_to_lovecontract ~env false contract in *)
+          let first_class_ctr : AST.reference = match ctr with
+            | Structure ctr -> Anonymous ctr
+            | _ -> assert false in
           mk_packstruct first_class_ctr
         | Some {result = env; _} ->
           mk_packstruct (Named name_id)
@@ -2551,21 +2554,13 @@ and liqentry_to_lovecontent env {entry_sig; code} =
   let param_type = liqtype_to_lovetype env entry_sig.parameter in
   let stor_typ =
     stor_typ_from_opt_typ @@ Love_tenv.get_storage_type env in
-  let env = Compil_utils.add_var entry_sig.parameter_name param_type env in
-  let env = Compil_utils.add_var entry_sig.storage_name stor_typ env in
+  let env = add_var entry_sig.parameter_name param_type env in
+  let env = add_var entry_sig.storage_name stor_typ env in
   let full_love_code = fst @@ liqexp_to_loveexp env code in
-  let () =
-    debug "[liqentry_to_lovecontent] \
-           Creating entry point with storage type = %a and parameter type = %a@."
-      Love_type.pretty stor_typ
-      Love_type.pretty param_type in
-  (* let code =
-   *   mk_entry_point_lambda
-   *     entry_sig.storage_name
-   *     stor_typ
-   *     entry_sig.parameter_name
-   *     param_type
-   *     full_love_code in *)
+  debug "[liqentry_to_lovecontent] \
+         Creating entry point with storage type = %a and parameter type = %a@."
+    Love_type.pretty stor_typ
+    Love_type.pretty param_type;
   let mk_lambda arg ty body = mk_lambda arg body ty in
   let code =
     mk_lambda
@@ -2729,10 +2724,9 @@ and liqcontract_to_lovecontract
       ([], env)
       c.subs
   in
-  let storage_type = liqtype_to_lovetypedef env c.storage
-  in
+  let storage_typedef = liqtype_to_lovetypedef env c.storage in
   debug "[liqcontract_to_lovecontract] Storage type def = %a@."
-    Love_type.(pp_typdef ~name:"storage" ~privacy:"") storage_type;
+    Love_type.(pp_typdef ~name:"storage" ~privacy:"") storage_typedef;
   let subc = List.rev subc in
   let values, env =
     List.fold_left
