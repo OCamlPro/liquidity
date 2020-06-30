@@ -710,7 +710,7 @@ let liqprim_to_loveprim ?loc env (p : primitive) (args : TYPE.t list) =
         | `TInt, `TNat -> "/!+", args
         | `TNat, `TInt -> "/+!", args
         | `TDun, `TNat -> "/$+", args
-        | `TNat, `TNat -> "/+$", args
+        | `TNat, `TNat -> "/+", args
         | _,_ ->
           error ?loc "Cannot divide %a with %a"
             Love_type.pretty t1 Love_type.pretty t2;
