@@ -1,14 +1,15 @@
 # branches:
 #   only:
 #   - master
+os: linux
 dist: xenial
 language: generic
-sudo: required
 
 cache:
   timeout: 1000
   directories:
-  - $HOME/.opam
+    - _opam
+    - dune_network/_opam
 
 before_install:
 - sh travis-scripts/prepare-ubuntu.sh
@@ -24,6 +25,7 @@ script:
 - make
 - make tests-mini
 - make tests
+- make tests-love
 - make rev-tests
 
 after_script:

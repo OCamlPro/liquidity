@@ -30,6 +30,7 @@ export OPAMYES=1
 
 make clone-dune-network
 pushd $DUNE
+rmdir _opam || echo "Not empty _opam"
 make build-deps || (rm -rf _opam; make build_deps)
 eval `opam config env`
 make

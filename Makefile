@@ -99,7 +99,7 @@ headers:
 
 NTESTS=43
 NREVTESTS=10
-SIMPLE_TESTS=`seq -f 'test%.0f.liq' 0 $(NTESTS)`
+SIMPLE_TESTS=$(shell seq -f 'test%.0f.liq' 0 $(NTESTS))
 MORE_TESTS=test_ifcons test_if test_loop test_option test_transfer test_call test_left \
   test_extfun test_left_constr test_closure test_closure2 test_closure3 \
   test_map test_rev test_reduce_closure test_map_closure test_mapreduce_closure \
@@ -110,20 +110,26 @@ MORE_TESTS=test_ifcons test_if test_loop test_option test_transfer test_call tes
   bug_214 bug_216 bug_steven1 bug_steven2 bug_inline2
 RE_TESTS=bug202
 OTHER_TESTS=others/broker others/demo others/auction others/multisig others/alias others/game others/mist_wallet_current others/token others/token_vote others/token_no_fee others/new_token
-DOC_TESTS=`cd tests; find doc -regex "[^\.]+.liq" | sort -V`
-REV_TESTS=`find tests/reverse -regex "[^\.]+.tz" | sort -V`
+DOC_TESTS=$(shell cd tests; find doc -regex "[^\.]+.liq" | sort -V)
+REV_TESTS=$(shell find tests/reverse -regex "[^\.]+.tz" | sort -V)
 
-NEW_DUNE_TESTS= fail weather_insurance
-FAILING_DUNE_TESTS= originator
-DUNE_TESTS=`find dune-network/src/bin_client/test/contracts -regex "[^\.]+.tz" \
+NEW_DUNE_TESTS=fail weather_insurance
+FAILING_DUNE_TESTS=originator
+DUNE_TESTS=$(shell find dune-network/src/bin_client/test/contracts -regex "[^\.]+.tz" \
             ! -path "*concat_hello.tz" \
             ! -path "*/deprecated/*" \
             ! -path "*pexec*.tz" \
-            | sort -V`
+            | sort -V \
+	    | xargs)
 
 TESTS=$(DOC_TESTS) $(SIMPLE_TESTS) $(MORE_TESTS:=.liq) $(RE_TESTS:=.reliq) $(OTHER_TESTS:=.liq)
 
-LOVE_TESTS=$(TESTS)
+TODO_LOVE_TESTS=doc/doc16.liq doc/doc19.liq doc/doc21.liq doc/doc73.liq doc/doc76.liq \
+  doc/doc77.liq test16.liq test19.liq test_loop_left.liq test_inline.liq \
+  test_rec_fun.liq inline_fail.liq bug_annot1.liq test_infer_unpack.liq \
+  test_modules.liq lambda_const.liq bug_210.liq bug_216.liq bug202.reliq \
+  others/broker.liq others/token_no_fee.liq
+LOVE_TESTS:=$(filter-out $(TODO_LOVE_TESTS) , $(TESTS))
 
 tests: build
 	@echo ---------------------
@@ -135,7 +141,13 @@ tests-love: build
 	@echo ---------------------
 	@echo Run Love tests
 	@echo ---------------------
-	@scripts/run-list.sh scripts/check_love.sh $(TESTS)
+	@scripts/run-list.sh scripts/check_love.sh $(LOVE_TESTS)
+
+tests-love-fail: build
+	@echo ---------------------
+	@echo Run Love tests with known failing tests
+	@echo ---------------------
+	@scripts/run-list.sh scripts/check_love.sh $(TODO_LOVE_TESTS)
 
 tests-mini: mini
 	@echo ---------------------

@@ -28,10 +28,11 @@ export OPAMYES=1
 wget https://raw.githubusercontent.com/ocaml/opam/master/shell/install.sh
 yes "" | sh install.sh
 
-# currently, we only target OCaml 4.06.1 or 4.07.1 because we reuse the parser of OCaml
-opam switch create liquidity 4.07.1
-
-eval $(opam config env)
+opam init --bare
+eval $(opam env)
 
 opam update
+rmdir _opam || echo "Not empty _opam"
+opam switch create . 4.07.1 --no-install || echo "Switch already installed"
+eval $(opam env)
 make build-deps
