@@ -46,8 +46,14 @@ let typecheck_liquid_files ?monomorphise ?keep_tvars files =
       let ocaml_ast = LiquidFromParsetree.read_file filename in
       (* Format.eprintf "%s\n================\n@."
        *   (LiquidPrinter.Syntax.string_of_structure ocaml_ast []); *)
+      let ast_log =
+        match !LiquidOptions.output with
+        | Some output when output <> "-" ->
+          String.concat "." [Filename.chop_extension output;
+                             Filename.basename filename; "ocaml"]
+        | _ -> filename ^ ".ocaml" in
       if !LiquidOptions.verbosity>0 then
-        FileString.write_file (filename ^ ".ocaml")
+        FileString.write_file ast_log
           (LiquidOCamlPrinter.contract_ast ocaml_ast);
       (filename, ocaml_ast)
     ) files in
