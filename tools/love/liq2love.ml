@@ -943,7 +943,6 @@ let liqprim_to_loveprim ?loc env (p : primitive) (args : TYPE.t list) =
   | Prim_string_concat -> "String.concat", args
   | Prim_bytes_concat -> "Bytes.concat", args
   | Prim_block_level -> "Current.level", args
-  | Prim_get_balance -> "Account.balance", args
 
   | Prim_tuple_get | Prim_tuple_set| Prim_tuple
   | Prim_Left | Prim_Right
@@ -954,6 +953,7 @@ let liqprim_to_loveprim ?loc env (p : primitive) (args : TYPE.t list) =
   | Prim_int
   | Prim_exec _
   | Prim_is_implicit
+  | Prim_get_balance
   | Prim_concat ->
     error ?loc
       "Invariant broken: Primitive %s should have been treated elsewhere"
@@ -2464,12 +2464,13 @@ and liqapply_to_loveexp ?loc env typ prim args : AST.exp * TYPE.t =
     in
     mk_constr ?loc:lloc (string_to_ident "Right") [t1; t] [a],
     variant (t1, t)
+
   | Prim_is_implicit, [arg] ->
     let arg, ty_arg = ltl arg in
     let addr =
       mk_apply ?loc:lloc
         (mk_primitive_lambda ?loc env "Contract.address"
-           ((TContractInstance unit_contract_named_type) @=> address ())
+           (ty_arg @=> address ())
            ANone
         )
         [arg] in
@@ -2481,6 +2482,24 @@ and liqapply_to_loveexp ?loc env typ prim args : AST.exp * TYPE.t =
         )
         [addr] in
     kh_opt, option (keyhash ())
+
+  | Prim_get_balance, [arg] ->
+    let arg, ty_arg = ltl arg in
+    let addr =
+      mk_apply ?loc:lloc
+        (mk_primitive_lambda ?loc env "Contract.address"
+           (ty_arg @=> address ())
+           ANone
+        )
+        [arg] in
+    let res =
+      mk_apply ?loc:lloc
+        (mk_primitive_lambda ?loc env "Account.balance"
+           (address () @=> dun ())
+           ANone
+        )
+        [addr] in
+    res, dun ()
 
   | Prim_exec _, _ -> error ?loc "Invariant broken: Prim_exec is solved before"
   | _ ->
