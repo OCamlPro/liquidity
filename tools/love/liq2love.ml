@@ -19,13 +19,15 @@ type env = Love_tenv.t
 exception UnknownType of (string * (TYPE.t -> TYPE.t) * env * location option)
 
 let debug fmt =
-  if !LiquidOptions.verbosity > 1 then begin
+  if !LiquidOptions.verbosity > 2 then begin
     Love_pervasives.Options.debug := true;
     Love_pervasives.Log.fmt := (fun () -> Format.err_formatter);
     Love_pervasives.Log.debug fmt
   end
+  else if !LiquidOptions.verbosity > 1 then
+    Format.eprintf fmt
   else
-    Format.ifprintf Love_pervasives.Log.dummy_formatter fmt
+    Format.ifprintf Format.err_formatter fmt
 
 module TypeVarMap = struct
   include TYPE.TypeVarMap
@@ -35,9 +37,9 @@ module TypeVarMap = struct
     | None -> assert false
 end
 
-let add_typedef_to_contract ~loc name tdef env =
+let add_typedef_to_contract ?(ignore_errs=false) ~loc name tdef env =
   try Love_tenv.add_typedef name TPublic tdef env
-  with Love_tenv.EnvironmentError msg ->
+  with Love_tenv.EnvironmentError msg when ignore_errs ->
     (* TODO: Only catch redefinition of same aliased types *)
     Format.ksprintf
       (fun s -> LiquidLoc.warn loc (WOther s))
@@ -45,10 +47,65 @@ let add_typedef_to_contract ~loc name tdef env =
       name msg;
     env
 
+let string_to_ident ?(scoped=false) s =
+  if scoped then string_to_ident s
+  else Ident.create_id s
+
 let find_type (tname : string) (env: env) =
-  match Love_tenv.find_tdef (string_to_ident tname) env with
-    None -> None
-  | Some {result; _} -> Some result
+  let t_unscoped = string_to_ident ~scoped:false tname in
+  let t_scoped = string_to_ident ~scoped:true tname in
+  match Love_tenv.find_tdef t_unscoped env with
+  | Some {result; _} -> Some (result, t_unscoped)
+  | None ->
+    match Love_tenv.find_tdef t_scoped env with
+    | Some {result; _} -> Some (result, t_scoped)
+    | None -> None
+
+let find_var (v : string) (env: env) =
+  let v_unscoped = string_to_ident ~scoped:false v in
+  let v_scoped = string_to_ident ~scoped:true v in
+  match Love_tenv.find_var v_unscoped env with
+  | Some {result = k, t; _} -> Some (v_unscoped, k, t)
+  | None ->
+    match Love_tenv.find_var v_scoped env with
+    | Some {result = k, t; _} -> Some (v_scoped, k, t)
+    | None -> None
+
+let find_constr c (env : env) =
+  let c_unscoped = string_to_ident ~scoped:false c in
+  let c_scoped = string_to_ident ~scoped:true c in
+  match Love_tenv.find_constr c_unscoped env with
+  | Some t -> Some (t, c_unscoped)
+  | None ->
+    match Love_tenv.find_constr c_scoped env with
+    | Some t -> Some (t, c_scoped)
+    | None -> None
+
+let find_constructor name cons =
+  try
+    List.find
+      (fun (n, _) ->
+         Ident.equal String.equal
+           (string_to_ident ~scoped:false n) (string_to_ident ~scoped:false name))
+      cons
+  with Not_found ->
+    List.find
+      (fun (n, _) ->
+         (* Ident.equal String.equal
+          *   (string_to_ident ~scoped:true n)
+          *   (string_to_ident ~scoped:true name)) *)
+         String.equal
+           (Ident.get_final (string_to_ident ~scoped:true n))
+           (Ident.get_final (string_to_ident ~scoped:true name)))
+      cons
+
+let normalize_type t env =
+  try Love_tenv.normalize_type ~relative:true t env
+  with _ ->
+  try Love_tenv.normalize_type ~relative:false t env
+  with e ->
+    debug "normalize type environment =\n%a@." Love_tenv.pp_env env;
+    raise e
 
 let env_of_subcontract name skind env = Love_tenv.new_subcontract_env name skind env
 
@@ -412,7 +469,7 @@ and liqtype_to_lovetype ?loc ?(aliases=StringMap.empty) (env : env) tv =
       debug "[liqtype_to_lovetype] Record@.";
       match find_type name env with
       | None -> raise (UnknownType (name, (fun t -> t), env, loc))
-      | Some (RecordType {rparams; rfields}) ->
+      | Some (RecordType {rparams; rfields}, id_name) ->
         let params =
           let rec instanciate_params params_map poly_fields fields =
             match poly_fields with
@@ -433,7 +490,7 @@ and liqtype_to_lovetype ?loc ?(aliases=StringMap.empty) (env : env) tv =
                 Some t -> t
               | None -> assert false) rparams
         in
-        let t = TUser (string_to_ident name, rparams_replaced)
+        let t = TUser (id_name, rparams_replaced)
         in
         debug "[liqtype_to_lovetype] Record type = %a@." Love_type.pretty t;
         t
@@ -447,7 +504,7 @@ and liqtype_to_lovetype ?loc ?(aliases=StringMap.empty) (env : env) tv =
       debug "[liqtype_to_lovetype] Sum@.";
       match find_type name env with
         None -> raise (UnknownType (name, (fun t -> t), env, loc))
-      | Some (SumType {sparams; scons}) ->
+      | Some (SumType {sparams; scons}, id_name) ->
         let params =
           let rec instanciate_params params_map poly_cons cons =
             match poly_cons with
@@ -466,13 +523,8 @@ and liqtype_to_lovetype ?loc ?(aliases=StringMap.empty) (env : env) tv =
                 | _ -> assert false in
               debug "[liqtype_to_lovetype] Arguments : %a@."
                 (Format.pp_print_list Love_type.pretty) l;
-              let l' =
-                match
-                  List.find
-                    (fun (n, _) -> String.equal (Ident.get_final (string_to_ident n)) name)
-                    cons
-                with
-                  _, Ttuple l -> l
+              let l' = match find_constructor name cons with
+                | _, Ttuple l -> l
                 | _, Tunit -> if Compare.Int.equal (List.length l) 1 then [Tunit] else []
                 | _, ty -> [ty]
                 | exception Not_found ->
@@ -512,7 +564,7 @@ and liqtype_to_lovetype ?loc ?(aliases=StringMap.empty) (env : env) tv =
         let sparams_replaced =
           List.map (fun param -> ltl @@ TypeVarMap.find param params) sparams
         in
-        let t = TUser (string_to_ident name, sparams_replaced) in
+        let t = TUser (id_name, sparams_replaced) in
         debug "[liqtype_to_lovetype] Sum type = %a" Love_type.pretty t;
         t
       | Some _ -> assert false
@@ -613,7 +665,7 @@ let liqprim_to_loveprim ?loc env (p : primitive) (args : TYPE.t list) =
         (LiquidTypes.string_of_primitive p)
         (List.length l)
   in
-  let args = List.map (fun t -> Love_tenv.normalize_type ~relative:true t env) args in
+  let args = List.map (fun t -> normalize_type t env) args in
   match p with
   | Prim_balance         -> "Current.balance", args
   | Prim_now             -> "Current.time", args
@@ -998,10 +1050,11 @@ let rec liqexp_to_loveexp (env : env) (e : typed_exp) : AST.exp * TYPE.t =
         body, body_typ
     | Var v -> (
         debug "[liqexp_to_loveexp] Creating Var (%s)@." v;
-        let vi = string_to_ident v in
-        match Love_tenv.find_var vi env with
-          None -> error ~loc "Unknown variable %s" v
-        | Some {result = _,t; _} -> mk_var vi, t
+        match find_var v env with
+        | None ->
+          debug "environment =\n%a@." Love_tenv.pp_env env;
+          error ~loc "Unknown variable %s" v
+        | Some (vi, _, t) -> mk_var vi, t
       )
     | SetField {record; field; set_val} ->
       debug "[liqexp_to_loveexp] Creating a SetField@.";
@@ -1368,7 +1421,6 @@ let rec liqexp_to_loveexp (env : env) (e : typed_exp) : AST.exp * TYPE.t =
                    [mk_pany ()], env
                | PConstr (name, [arg]) ->
                  debug "[liqexp_to_loveexp] Simple constructor %s.@." name;
-                 let n = string_to_ident name in
                  let type_of_carg =
                    let typeargs =
                      match targ with
@@ -1377,9 +1429,9 @@ let rec liqexp_to_loveexp (env : env) (e : typed_exp) : AST.exp * TYPE.t =
                        bad_pat_type ~loc pat targ "defined by the user"
                    in
                    let poly_typ_constr =
-                     match Love_tenv.find_constr n env with
+                     match find_constr name env with
                        None -> error ~loc "Unknown constructor %s" name
-                     | Some t -> t
+                     | Some (t, _) -> t
                    in
                    let typ_constr =
                      Love_tenv.constr_with_targs poly_typ_constr.result typeargs env
@@ -1397,7 +1449,6 @@ let rec liqexp_to_loveexp (env : env) (e : typed_exp) : AST.exp * TYPE.t =
 
                | PConstr (name, args) ->
                  debug "[liqexp_to_loveexp] Constructor %s.@." name;
-                 let n = string_to_ident name in
                  let types_of_cargs =
                    let typeargs =
                      match targ with
@@ -1405,9 +1456,9 @@ let rec liqexp_to_loveexp (env : env) (e : typed_exp) : AST.exp * TYPE.t =
                      | t -> bad_pat_type ~loc pat targ "defined by the user"
                    in
                    let poly_typ_constr =
-                     match Love_tenv.find_constr n env with
-                       None -> error ~loc "Unknown constructor %s" name
-                     | Some t -> t
+                     match find_constr name env with
+                     | None -> error ~loc "Unknown constructor %s" name
+                     | Some (t, _) -> t
                    in
                    let typ_constr =
                      Love_tenv.constr_with_targs poly_typ_constr.result typeargs env
@@ -1579,8 +1630,8 @@ let rec liqexp_to_loveexp (env : env) (e : typed_exp) : AST.exp * TYPE.t =
         (LiquidPrinter.Liquid.string_of_type e.ty);
       liqtype_to_lovetype env e.ty
   in
-  let t = Love_tenv.normalize_type ~relative:true t env in
-  let expected_typ = Love_tenv.normalize_type ~relative:true expected_typ env in
+  let t = normalize_type t env in
+  let expected_typ = normalize_type expected_typ env in
   debug
     "[liqexp_to_loveexp] Expected type for expression %a is %a:\n\
      Matching type %a with expected type %a@."
@@ -2219,17 +2270,16 @@ and liqconst_to_loveexp
     | CConstr (name, args) ->
       (* Todo : add type arguments to CConstr *)
       debug "[liqconst_to_loveexp] Creating constant constructor %s@." name;
-      let id_name = string_to_ident name in
-      let t, targs =
-        match Love_tenv.find_constr id_name env with
+      let t, targs, id_name =
+        match find_constr name env with
           None ->
           debug "[liqconst_to_loveexp] Constructor %s is unknown" name;
           error ?loc "Error in constant %s: constructor %s is unknown"
             (LiquidPrinter.Liquid.string_of_const c)
             name
-        | Some {result = {cparent;cargs = [t];_}; _} ->
+        | Some ({result = {cparent;cargs = [t];_}; _}, id_name) ->
           (* In liquidity, constructors arguments are tuples. *)
-          cparent, t
+          cparent, t, id_name
         | _ -> assert false
       in mk_constr id_name [] [fst @@ ltl ~typ:targs args], t
 
@@ -2290,7 +2340,7 @@ and liqapply_to_loveexp ?loc env typ prim args : AST.exp * TYPE.t =
     let iindex = Z.to_int index in
     debug "[liqapply_to_loveexp] Projection with index = %a@." Z.pp_print index;
       let tup, ty = ltl tuple in
-      let ty = Love_tenv.normalize_type ~relative:true ty env in
+      let ty = normalize_type ty env in
       debug
         "[liqapply_to_loveexp] Tuple %a : %a@."
         Love_printer.Ast.print_exp tup Love_type.pretty ty;
@@ -2327,7 +2377,7 @@ and liqapply_to_loveexp ?loc env typ prim args : AST.exp * TYPE.t =
     let iindex = Z.to_int index in
     debug "[liqapply_to_loveexp] Projection with index = %a@." Z.pp_print index;
     let tup, typ = ltl tuple in
-    let typ = Love_tenv.normalize_type ~relative:true typ env in
+    let typ = normalize_type typ env in
     let content, _ = ltl content in
     match typ with
       TTuple _ -> mk_update ?loc:lloc tup [iindex, content], typ
@@ -2702,13 +2752,14 @@ and liqcontract_to_lovecontract
     | Some e -> e in
   let env, types = (*  Adding type definitions *)
     let rec fill_env_with_types (acc_env, acc_tdef) (str, (typ, _id))  =
-      let typedef_registered n =
+      debug "[liqcontract_to_lovecontract] Registering type %s@." str;
+      let typedef_registered acc_env n =
         match find_type n acc_env with
           None -> false
         | Some _ -> true in
        let res =
         if
-          typedef_registered str ||
+          typedef_registered acc_env str ||
           Collections.StringSet.mem str Compil_utils.reserved_types
         then (
           debug "[liqcontract_to_lovecontract] Type %s is already registered@." str;
@@ -2722,11 +2773,18 @@ and liqcontract_to_lovecontract
               str tdef acc_env, ((str, AST.DefType (TPublic, tdef)) :: acc_tdef)
           with
             UnknownType (s,_, _, _) ->
-            debug "[liqcontract_to_lovecontract] %s is not in the environment@." s;
+            debug "[liqcontract_to_lovecontract] %s is not in the environment, needed by %s@."
+              s str;
+            debug "environment =\n%a@."
+              Love_tenv.pp_env acc_env;
             try
+              let s_ty =
+                LiquidNamespace.find_type
+                  ~loc:(LiquidLoc.loc_in_file c.ty_env.filename)
+                  s c.ty_env in
               let acc =
                 fill_env_with_types (acc_env, acc_tdef)
-                  (s, StringMap.find s c.ty_env.types) in
+                  (s, (s_ty, -1)) in
               fill_env_with_types acc (str, (typ, _id))
             with
               UnknownType (s', _, _, loc) when String.equal s' str ->
