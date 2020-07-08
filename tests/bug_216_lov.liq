@@ -1,14 +1,15 @@
 type storage = address
 
-contract A = struct
-  type storage = { a : nat; b : nat }
-
-  let%entry default () s =
-    if s.a = s.b then failwith ();
-    [], s
-end
-
 contract S = struct
+
+  contract A = struct
+    type storage = { a : nat; b : nat }
+
+    let%entry default () s =
+      if s.a = s.b then failwith ();
+      [], s
+  end
+
   type xx = {w : int; r : bool }
   type storage = { some_tez : tez; some_string : string ; x : xx}
 

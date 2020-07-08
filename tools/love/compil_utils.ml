@@ -462,9 +462,16 @@ let search_aliases
           None -> TypeVarMap.remove arg acc
         | Some t -> TypeVarMap.add arg t acc
       )
+    | TForall (arg, t), t' ->
+       let old_binding = TypeVarMap.find_opt arg acc in
+       let acc = search (TypeVarMap.remove arg acc) t t' in
+       (match old_binding with
+          None -> acc
+        | Some t -> TypeVarMap.add arg t acc
+       )
 
     | ( TUser _ | TContractInstance _ | TPackedStructure _
-       | TTuple _ | TForall _ ),
+       | TTuple _ ),
       ( TContractInstance _ | TPackedStructure _
        | TTuple _ | TForall _ | TUser _ ) ->
       error ?loc "Type %a is not compatible with type %a"

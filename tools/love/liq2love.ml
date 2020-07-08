@@ -81,6 +81,26 @@ let find_constr c (env : env) =
     | Some t -> Some (t, c_scoped)
     | None -> None
 
+let find_field f (env : env) =
+  let find_field ~scoped name env =
+    let field_path = string_to_ident ~scoped name in
+    let path, field_name = ident_split_end field_path in
+    match path with
+    | None -> Love_tenv.find_field field_name env, None
+    | Some path -> Love_tenv.find_field_in path field_name env, Some path
+  in
+  match find_field ~scoped:true f env with
+  | Some r, path -> Some (r, path)
+  | None, _ ->
+    match find_field ~scoped:false f env with
+    | Some r, path -> Some (r, path)
+    | None, _ -> None
+
+let find_env path (env : env) =
+  match Love_tenv.find_env path env (fun _ e -> Some (e, -1)) with
+  | Some {result; _} -> Some result
+  | None -> None
+
 let find_constructor name cons =
   try
     List.find
@@ -1340,31 +1360,28 @@ let rec liqexp_to_loveexp (env : env) (e : typed_exp) : AST.exp * TYPE.t =
         "%s is an empty record which are forbidden in Love"
         (LiquidPrinter.Liquid.string_of_code e)
 
-    | Record l -> (
+    | Record ((first_name, _) :: _ as l) -> (
         debug "[liqexp_to_loveexp] Creating a record@.";
-        let fexp, ftyp =
-          let whole_list =
-            List.fold_left
-              (fun acc (name, exp) ->
-                 let e, t = ltl exp in
-                 let field_name = Ident.get_final (string_to_ident name) in
-                 (field_name,e,t) :: acc
-              )
-              []
-              l
-          in
+        let record_typ, path =
+          match find_field first_name env with
+          | None -> error ~loc "Unknown field %s in record" first_name
+          | Some ({result = {fparent; _}}, path) -> fparent, path
+        in
+        let fexp =
           List.fold_left
-            (fun (acc_e, acc_t) (n,e,t) -> ((n,e) :: acc_e, (n,t) :: acc_t))
-            ([], [])
-            whole_list
+            (fun acc (name, exp) ->
+               let e, t = ltl exp in
+               let field_name =
+                 Ident.get_final (string_to_ident ~scoped:true name) in
+               (field_name, e) :: acc
+            )
+            []
+            l
+          |> List.rev
         in
-        let path =
-          let (field,_) = List.hd l in
-          fst @@ ident_split_end (string_to_ident field)
-        in
-        let t = Love_tenv.record_type path ftyp env in
-        debug "[liqexp_to_loveexp] Record type is %a@." Love_type.pretty t;
-        mk_record ?loc:lloc path fexp, t
+        debug "[liqexp_to_loveexp] Record type is %a@."
+          Love_type.pretty record_typ;
+        mk_record ?loc:lloc path fexp, record_typ
       )
 
     | Constructor {constr = Constr c; arg} -> (
@@ -2233,35 +2250,25 @@ and liqconst_to_loveexp
     | CRecord [] ->
       error ?loc "Empty records are forbidden in Love"
     | CRecord (((name, _) :: _) as l) -> (* May be source of errors on polymorphic records *)
-      (*let id_name = string_to_ident name in *)
       debug "[liqconst_to_loveexp] Constant record";
-      let field_path = string_to_ident name in
-      let path, field_name = ident_split_end field_path in
-      let find_field =
-        match path with
-          None -> Love_tenv.find_field
-        | Some path -> Love_tenv.find_field_in path
-      in
-      let parent_typ =
-        match find_field field_name env with
-          None ->
+      let parent_typ, path =
+        match find_field name env with
+        | None ->
           error ?loc "Unknown field %s in record %s"
             name
             (LiquidPrinter.Liquid.string_of_const c)
-        | Some {result = {fparent; _}} -> fparent
+        | Some ({result = {fparent; _}}, path) -> fparent, path
       in
       mk_record path (
         List.map
-          (fun (name, c) -> (*
-          let (id_name : string Ident.t) = string_to_ident name in *)
-             let field_name = Ident.get_final (string_to_ident name) in
-             let typ =
-               match find_field field_name env with
-                 None -> debug "[liqconst_to_loveexp] Field %s is unknown" name;
+          (fun (name, c) ->
+             let typ, _path =
+               match find_field name env with
+               | None -> debug "[liqconst_to_loveexp] Field %s is unknown" name;
                  error ?loc "Unknown field %s in record %s"
                    name
                    (LiquidPrinter.Liquid.string_of_const c)
-               | Some {result = {ftyp; _}} -> ftyp
+               | Some ({result = {ftyp; _}}, path) -> ftyp, path
              in
              name, (fst @@ ltl ~typ c)
           )

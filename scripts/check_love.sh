@@ -25,6 +25,10 @@
 
 test=$1
 
+if [ -f tests/${test%.*}_lov.${test##*.} ]; then
+    test=${test%.*}_lov.${test##*.}
+fi
+
 DIR="$(cd "$(dirname "$0")" && echo "$(pwd -P)/")"
 . $DIR/config.sh
 
