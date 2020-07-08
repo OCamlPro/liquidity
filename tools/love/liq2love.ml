@@ -3188,11 +3188,10 @@ let print_contract_json ?minify code =
   |> Ezjsonm.value_to_string ?minify
 
 let init () =
+  let rev = Config.Source_config.max_revision in
   if !LiquidOptions.verbosity>0 then
-    Format.eprintf "Initialize Love environments... %!";
-  let _ =
-    Love_pervasives.update_protocol_revision
-      (Base.Config.config.protocol_revision) in
+    Format.eprintf "Initialize Love environments (rev %d)... %!" rev;
+  let _ = Love_pervasives.update_protocol_revision rev in
   Love_type_list.init ();
   Love_prim_list.init ();
   Love_tenv.init_core_env ();
@@ -3200,4 +3199,4 @@ let init () =
   if !LiquidOptions.verbosity>0 then Format.eprintf "Done@.";
   ()
 
-let () = init ()
+(* let () = init () *)

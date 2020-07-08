@@ -197,6 +197,7 @@ let compile_liquid_files_to_michelson files =
     c
 
 let compile_liquid_files_to_love files =
+  Liq2love.init ();
   let typed_ast, outprefix =
     typecheck_liquid_files ~monomorphise:true ~keep_tvars:true files in
   let typed_ast_no_tfail = Preprocess.contract_ttfail_to_tvar typed_ast in
