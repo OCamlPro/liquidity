@@ -62,7 +62,7 @@ module Love_ast = struct
   type t = {version : int * int; code : unit}
 end
 module Liq2love = struct
-  let liqcontract_to_lovecontract ~ctr_name _ = assert false
+  let liqcontract_to_lovecontract _ = assert false
   let print_contract_json _ = assert false
   let init () = ()
 end

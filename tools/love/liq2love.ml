@@ -2895,11 +2895,11 @@ and liqcontract_to_lovecontract
   in
   str, env
 
-let liqcontract_to_lovecontract ~(ctr_name:string) (c : typed_contract) : AST.structure * env =
-  debug "[liqcontract_to_lovecontract] Registering contract %s@." ctr_name;
+let liqcontract_to_lovecontract (c : typed_contract) : AST.structure * env =
+  debug "[liqcontract_to_lovecontract] Registering contract %s@." c.contract_name;
   let initial_env = empty_env (Contract []) () in
   try
-    liqcontract_to_lovecontract ~ctr_name ~env:initial_env false c
+    liqcontract_to_lovecontract ~ctr_name:c.contract_name ~env:initial_env false c
   with
     UnknownType (s, _, e, loc) ->
     debug "Failing with typing environment =\n%a@."
