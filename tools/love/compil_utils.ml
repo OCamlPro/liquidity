@@ -581,8 +581,8 @@ let reserved_types =
       "timestamp";
       "unit";
       "tez";
-      "int"
-      ;
+      "int";
+      "chain_id";
     ]
 
 let reserved_structures =
