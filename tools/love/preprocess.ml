@@ -270,29 +270,29 @@ and const_ttfail_to_tvar loc (typ : datatype) c : 'a * datatype =
           xs in
       CSet cl, Tset t
   | CMap l ->
-      let tk, tb = match typ with Tmap (t,t') -> t,t' | _ -> assert false in
+      let tk, tx = match typ with Tmap (t,t') -> t,t' | _ -> assert false in
       let cl =
         List.map
           (fun (k,x) ->
              let k, tk' = const_ttfail_to_tvar loc tk k in LiquidInfer.unify loc tk tk';
-             let x, tx' = const_ttfail_to_tvar loc tk x in LiquidInfer.unify loc tb tx';
+             let x, tx' = const_ttfail_to_tvar loc tx x in LiquidInfer.unify loc tx tx';
              k,x
           )
           l in
-      CMap cl, Tmap (tk, tb)
+      CMap cl, Tmap (tk, tx)
   | CBigMap bm -> begin
       match bm with
         BMList l ->
-        let tk, tb = match typ with Tbigmap (t,t') -> t,t' | _ -> assert false in
+        let tk, tx = match typ with Tbigmap (t,t') -> t,t' | _ -> assert false in
         let cl =
           List.map
             (fun (k,x) ->
                let k, tk' = const_ttfail_to_tvar loc tk k in LiquidInfer.unify loc tk tk';
-               let x, tx' = const_ttfail_to_tvar loc tk x in LiquidInfer.unify loc tb tx';
+               let x, tx' = const_ttfail_to_tvar loc tx x in LiquidInfer.unify loc tx tx';
                k,x
             )
             l in
-        CBigMap (BMList cl), Tbigmap (tk, tb)
+        CBigMap (BMList cl), Tbigmap (tk, tx)
       | BMId i ->
         CBigMap (BMId i), typ
     end
