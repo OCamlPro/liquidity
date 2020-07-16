@@ -27,7 +27,7 @@
 open LiquidTypes
 
 val initial_env : string -> env
-val mk_inner_env : env -> string -> env
+val mk_inner_env : env -> is_module:bool -> string -> env
 
 val translate :
   filename:string -> Parsetree.structure -> syntax_contract

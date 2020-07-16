@@ -36,7 +36,14 @@ let rec rec_find s env proj =
   with Not_found ->
   match env.top_env with
   | None -> raise Not_found
-  | Some env -> rec_find s env proj
+  | Some top_env ->
+    if not env.is_module && !LiquidOptions.target_lang = Love_lang then begin
+      Format.eprintf "Contracts must be self contained in Love. \
+                      %S was not found in contract %s.@." s env.contractname;
+      raise Not_found
+    end
+    else
+      rec_find s top_env proj
 
 let unqualify s =
   match List.rev (String.split_on_char '.' s) with
@@ -99,6 +106,13 @@ let rec find_env ~loc fullpath path env =
     let oenv =
       try StringMap.find p env.others
       with Not_found ->
+        if StringMap.mem p env.unreachable_others then
+          LiquidLoc.warn loc
+            (WOther (Printf.sprintf
+                       "Namespace %s is known \
+                        but not reachable when compiling to Love, \
+                        contracts must be self-contained"
+                       (String.concat "." fullpath)));
         raise (Unknown_namespace (fullpath, loc))
     in
     match oenv with

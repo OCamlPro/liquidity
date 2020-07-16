@@ -305,10 +305,7 @@ let report_err ?(kind="Error") fmt (err_loc, err_msg) =
 let report_error = function
   | LiquidError error ->
     report_err Format.err_formatter (error.err_loc, error.err_msg);
-  | LiquidNamespace.Unknown_namespace (p, err_loc) as exn ->
-    let backtrace = Printexc.get_backtrace () in
-    Format.eprintf "Error: %s\nBacktrace:\n%s@."
-      (Printexc.to_string exn) backtrace ;
+  | LiquidNamespace.Unknown_namespace (p, err_loc) ->
     report_err Format.err_formatter
       (err_loc,
        Printf.sprintf "Unknown module or contract %s" (String.concat "." p));
@@ -365,7 +362,9 @@ let compile_files () =
   let liq_files, others =
     List.partition (fun filename ->
         Filename.check_suffix filename ".liq" ||
-        Filename.check_suffix filename ".reliq" )
+        Filename.check_suffix filename ".liqm" || (* module *)
+        Filename.check_suffix filename ".reliq" ||
+        Filename.check_suffix filename ".reliqm" )  (* module *)
       files in
   let tz_files, unknown =
     List.partition (fun filename ->

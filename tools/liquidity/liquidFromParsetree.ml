@@ -67,7 +67,9 @@ let loc_of_loc = LiquidLoc.loc_of_location
 
 let ppf = Format.err_formatter
 
-let mk_inner_env env contractname =
+let mk_inner_env env ~is_module contractname =
+  let must_be_self_contained =
+    not is_module && !LiquidOptions.target_lang = Love_lang in
   let new_env = {
     types = StringMap.empty;
     contract_types = StringMap.empty;
@@ -76,8 +78,11 @@ let mk_inner_env env contractname =
     ext_prims = StringMap.empty;
     filename = env.filename;
     top_env = Some env;
-    others = env.others;
+    others = if must_be_self_contained then StringMap.empty else env.others;
+    unreachable_others =
+      if must_be_self_contained then env.others else StringMap.empty;
     contractname;
+    is_module;
     path = env.path @ [ contractname ];
   } in
   env.others <- StringMap.add contractname (Direct new_env) env.others;
@@ -987,7 +992,7 @@ and translate_code contracts env exp =
            { pexp_desc = Pexp_pack {
                  pmod_desc = Pmod_structure structure;
                  pmod_loc } }] ->
-          let inner_env = mk_inner_env env "_dummy_" in
+          let inner_env = mk_inner_env env ~is_module:false "_dummy_" in
           let inner_acc = StringMap.bindings contracts
                           |> List.map (fun (_, c) -> Syn_other_contract c) in
           let contract =
@@ -1960,7 +1965,7 @@ and translate_signature contract_type_name env acc ast =
           };
       psig_loc;
     } :: ast ->
-    let inner_env = mk_inner_env env contract_type_name in
+    let inner_env = mk_inner_env env ~is_module:false contract_type_name in
     let contract_sig =
       translate_signature contract_type_name inner_env [] signature in
     if contract_sig.entries_sig = [] then
@@ -2039,6 +2044,7 @@ and translate_structure env acc ast : syntax_exp parsed_struct =
            ), []);
       pstr_loc } :: ast
     ->
+    let env = { env with is_module = false } in
     if List.exists (function Syn_init _ -> true | _ -> false) acc then
       error_loc pstr_loc "Initial storage already defined";
     let init =
@@ -2065,6 +2071,7 @@ and translate_structure env acc ast : syntax_exp parsed_struct =
                      ]) } ]
            ), []) } :: ast
     ->
+    let env = { env with is_module = false } in
     if List.mem name reserved_keywords then
       error_loc name_loc "entry point %S forbidden" name;
     if List.exists (function
@@ -2205,7 +2212,7 @@ and translate_structure env acc ast : syntax_exp parsed_struct =
           };
       pstr_loc;
     } :: ast ->
-    let inner_env = mk_inner_env env contract_type_name in
+    let inner_env = mk_inner_env env ~is_module:false contract_type_name in
     let contract_sig =
       translate_signature contract_type_name inner_env [] signature in
     if contract_sig.entries_sig = [] then
@@ -2313,7 +2320,7 @@ and translate_structure env acc ast : syntax_exp parsed_struct =
         pmod_desc = Pmod_structure structure
       };
     }; pstr_loc } :: ast ->
-    let inner_env = mk_inner_env env contract_name in
+    let inner_env = mk_inner_env env ~is_module:false contract_name in
     begin
       match !LiquidOptions.main with
       | Some main when main = add_path_name env.path contract_name ->
@@ -2351,7 +2358,7 @@ and translate_structure env acc ast : syntax_exp parsed_struct =
                  };
                   pstr_loc }]
            ), [])} :: ast ->
-    let inner_env = mk_inner_env env contract_name in
+    let inner_env = mk_inner_env env ~is_module:true contract_name in
     begin
       match translate_structure inner_env (acc_for_subcontract acc) structure with
       | PaModule contract ->
@@ -2439,6 +2446,11 @@ let filename_to_contract filename =
        Filename.(basename filename |> remove_extension)
        '.' '_')
 
+let is_module_file filename =
+  match Filename.extension filename with
+  | "liqm" | "reliqm" -> true
+  | _ -> false
+
 let initial_env filename =
   {
     types = StringMap.map (fun ty ->
@@ -2453,7 +2465,9 @@ let initial_env filename =
     top_env = None;
     path = [];
     contractname = filename_to_contract filename;
+    is_module = is_module_file filename;
     others = StringMap.empty;
+    unreachable_others = StringMap.empty;
   }
 
 let translate_exn exn =
@@ -2525,6 +2539,9 @@ let translate ~filename ast =
 
 let mk_toplevel_env filename top_env =
   let contractname = filename_to_contract filename in
+  let is_module = is_module_file filename in
+  let must_be_self_contained =
+    not is_module && !LiquidOptions.target_lang = Love_lang in
   let tenv = {
     types = StringMap.empty;
     contract_types = StringMap.empty;
@@ -2534,8 +2551,11 @@ let mk_toplevel_env filename top_env =
     filename;
     top_env = Some top_env;
     contractname;
+    is_module;
     path = [contractname];
-    others = top_env.others;
+    others = if must_be_self_contained then StringMap.empty else top_env.others;
+    unreachable_others =
+      if must_be_self_contained then top_env.others else StringMap.empty;
   } in
   top_env.others <- StringMap.add contractname (Direct tenv) top_env.others;
   tenv

@@ -659,7 +659,8 @@ let rec decompile_next (env : env) node =
         | Some s ->
           try contract_name_of_annot s
           with _ -> "Contract" ^ string_of_int node.num in
-      let env = LiquidFromParsetree.mk_inner_env env contract_name in
+      let env = LiquidFromParsetree.mk_inner_env env
+          ~is_module:false contract_name in
       let contract = { (decompile env contract) with contract_name } in
       mklet env node
         (CreateContract { args = List.map arg_of args; contract })

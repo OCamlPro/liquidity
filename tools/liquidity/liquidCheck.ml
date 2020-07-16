@@ -2096,6 +2096,9 @@ and typecheck_entry env entry =
   { entry with code; fee_code }
 
 and typecheck_contract ~others ~warnings ~decompiling contract =
+  let must_be_self_contained =
+    not contract.ty_env.is_module && !LiquidOptions.target_lang = Love_lang in
+  let others = if must_be_self_contained then [] else others in
   let rothers, rsubs =
     List.fold_left (fun (others, subs) c ->
         let c = typecheck_contract

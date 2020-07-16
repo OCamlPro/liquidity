@@ -183,7 +183,8 @@ and extprim = {
 and env = {
   (* name of file being compiled *)
   filename : string;
-
+  (* env for module or contract *)
+  is_module : bool;
   (* name of contract being compiled *)
   contractname : string;
   (* fields modified in LiquidFromParsetree *)
@@ -201,6 +202,8 @@ and env = {
   path : string list;
   (* other reachable qualified environments *)
   mutable others : other_env StringMap.t ;
+  (* other unreachable qualified environments for Love *)
+  mutable unreachable_others : other_env StringMap.t ;
   (* englobing env *)
   top_env : env option;
 }
