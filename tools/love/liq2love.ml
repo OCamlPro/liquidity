@@ -2844,10 +2844,10 @@ and liqcontract_to_lovecontract
       ([], env)
       c.subs
   in
+  let subc = List.rev subc in
   let storage_typedef = liqtype_to_lovetypedef env "storage" c.storage in
   debug "[liqcontract_to_lovecontract] Storage type def = %a@."
     Love_type.(pp_typdef ~name:"storage" ~privacy:"") storage_typedef;
-  let subc = List.rev subc in
   let values, env =
     List.fold_left
       (fun (acc_v, env) v ->

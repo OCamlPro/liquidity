@@ -2277,13 +2277,12 @@ and translate_structure env acc ast : syntax_exp parsed_struct =
       }
     }
     } :: ast ->
-    let c_path = Longident.flatten c_name in
     let c_name = str_of_id c_name in
     begin try
         let contract = find_contract ~loc:(loc_of_loc loc)
             c_name env (filter_contracts acc) in
         if is_only_module contract then raise Not_found;
-        env.others <- StringMap.add contract_name (Alias c_path) env.others;
+        env.others <- StringMap.add contract_name (Direct contract.ty_env) env.others;
         translate_structure env acc ast
       with Not_found ->
         unbound_contract loc c_name
@@ -2308,7 +2307,7 @@ and translate_structure env acc ast : syntax_exp parsed_struct =
         let contract = find_module ~loc:(loc_of_loc loc) m_path env
             ((StringMap.bindings (filter_contracts acc) |> List.map snd)) in
         if not @@ is_only_module contract then raise Not_found;
-        env.others <- StringMap.add contract_name (Alias m_path) env.others;
+        env.others <- StringMap.add contract_name (Direct contract.ty_env) env.others;
         translate_structure env acc ast
       with Not_found ->
         unbound_module loc mn

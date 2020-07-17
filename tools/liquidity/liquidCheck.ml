@@ -100,6 +100,7 @@ let find_var ?(count_used=true) env loc name =
     { (mk (Var name) ~loc (instantiate tys)) with effect }
   with Not_found ->
   try
+    let name = unalias_name name env.env in
     let v = lookup_global_value ~loc name env in
     let v_ftvars = free_tvars v.val_exp.ty in
     let ty = instantiate (v_ftvars, v.val_exp.ty) in

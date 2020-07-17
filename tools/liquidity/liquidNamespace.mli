@@ -63,7 +63,9 @@ val find_extprim : loc:location -> string -> env -> extprim
 val is_extprim : string -> env -> bool
 
 (** Look for a qualified global value exported in a sub module or
-    another contract *)
+    another contract.
+    Precondition: s must be unaliased (call with {!unalias_name}).
+ *)
 val lookup_global_value :
   loc:location -> string -> typecheck_env -> typed_exp value
 

@@ -274,23 +274,25 @@ let find_contract_type ~loc s env =
 
 let find_label_ty_name ~loc s env =
   let (tn, i), found_env = find ~loc s env (fun env -> env.labels) in
-  qualify_name ~from_env:env ~at:found_env.path tn, i
+  tn, i, found_env
 
 let find_constr_ty_name ~loc s env =
   let (tn, i), found_env = find ~loc s env (fun env -> env.constrs) in
-  qualify_name ~from_env:env ~at:found_env.path tn, i
+  tn, i, found_env
 
 let find_label ~loc s env =
-  let n, i = find_label_ty_name ~loc s env in
-  let ty = find_type ~loc n env [] in
+  let n, i, found_env = find_label_ty_name ~loc s env in
+  let ty = find_type ~loc n found_env [] in
+  let ty = normalize_type ~from_env:env ~in_env:found_env ty in
   let label_name, label_ty = match ty with
     | Trecord (_, l) -> List.nth l i
     | _ -> assert false in
   ty, (label_name, label_ty, i)
 
 let find_constr ~loc s env =
-  let n, i = find_constr_ty_name ~loc s env in
-  let ty = find_type ~loc n env [] in
+  let n, i, found_env = find_constr_ty_name ~loc s env in
+  let ty = find_type ~loc n found_env [] in
+  let ty = normalize_type ~from_env:env ~in_env:found_env ty in
   let constr_name, constr_ty = match ty with
     | Tsum (_, l) -> List.nth l i
     | _ -> assert false in
@@ -308,6 +310,7 @@ let is_extprim s env =
 
 (* ------------------------- *)
 
+(* Precondition: s must be unaliased (call with unalias_name s) *)
 let lookup_global_value ~loc s env =
   let path, s = unqualify s in
   let path = match unalias path env.env with
