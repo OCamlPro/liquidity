@@ -103,7 +103,7 @@ let rec find_env ~loc fullpath path env =
   match path with
   | [] -> env
   | p :: path ->
-    let oenv =
+    let env =
       try StringMap.find p env.others
       with Not_found ->
         if StringMap.mem p env.unreachable_others then
@@ -115,10 +115,7 @@ let rec find_env ~loc fullpath path env =
                        (String.concat "." fullpath)));
         raise (Unknown_namespace (fullpath, loc))
     in
-    match oenv with
-    | Direct env -> find_env ~loc fullpath path env
-    | Alias apath -> find_env ~loc fullpath (apath @ path) env
-
+    find_env ~loc fullpath path env
 
 let find_env ~loc path env = find_env ~loc path path env
 
@@ -146,11 +143,10 @@ let find_type ~loc s env subst =
 let rec find_type_loose ~loc s env subst =
   try find_type ~loc s env subst
   with (Not_found | Unknown_namespace _ as e) ->
-    StringMap.fold (fun _ oenv acc ->
-        match acc, oenv with
-        | Some _, _ -> acc
-        | _, Alias _ -> acc
-        | _, Direct env ->
+    StringMap.fold (fun _ env acc ->
+        match acc with
+        | Some _ -> acc
+        | None ->
           try Some (find_type_loose ~loc s env subst)
           with Not_found | Unknown_namespace _ -> None
       ) env.others None
@@ -237,11 +233,10 @@ and normalize_contract_sig ?from_env ~in_env ~build_sig_env c_sig =
     let rec env_of_contract_type_name s env =
       try find_contract_type_aux ~loc:noloc s env |> snd
       with (Not_found | Unknown_namespace _ as e) ->
-        StringMap.fold (fun _ oenv acc ->
-            match acc, oenv with
-            | Some _, _ -> acc
-            | _, Alias _ -> acc
-            | _, Direct env ->
+        StringMap.fold (fun _ env acc ->
+            match acc with
+            | Some _ -> acc
+            | None ->
               try Some (env_of_contract_type_name s env)
               with Not_found | Unknown_namespace _ -> None
           ) env.others None

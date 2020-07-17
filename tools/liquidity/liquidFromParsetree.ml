@@ -85,7 +85,7 @@ let mk_inner_env env ~is_module contractname =
     is_module;
     path = env.path @ [ contractname ];
   } in
-  env.others <- StringMap.add contractname (Direct new_env) env.others;
+  env.others <- StringMap.add contractname new_env env.others;
   new_env
 
 let error_loc loc fmt =
@@ -2282,7 +2282,7 @@ and translate_structure env acc ast : syntax_exp parsed_struct =
         let contract = find_contract ~loc:(loc_of_loc loc)
             c_name env (filter_contracts acc) in
         if is_only_module contract then raise Not_found;
-        env.others <- StringMap.add contract_name (Direct contract.ty_env) env.others;
+        env.others <- StringMap.add contract_name contract.ty_env env.others;
         translate_structure env acc ast
       with Not_found ->
         unbound_contract loc c_name
@@ -2307,7 +2307,7 @@ and translate_structure env acc ast : syntax_exp parsed_struct =
         let contract = find_module ~loc:(loc_of_loc loc) m_path env
             ((StringMap.bindings (filter_contracts acc) |> List.map snd)) in
         if not @@ is_only_module contract then raise Not_found;
-        env.others <- StringMap.add contract_name (Direct contract.ty_env) env.others;
+        env.others <- StringMap.add contract_name contract.ty_env env.others;
         translate_structure env acc ast
       with Not_found ->
         unbound_module loc mn
@@ -2556,7 +2556,7 @@ let mk_toplevel_env filename top_env =
     unreachable_others =
       if must_be_self_contained then top_env.others else StringMap.empty;
   } in
-  top_env.others <- StringMap.add contractname (Direct tenv) top_env.others;
+  top_env.others <- StringMap.add contractname tenv top_env.others;
   tenv
 
 let translate_multi l =
