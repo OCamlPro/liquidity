@@ -125,6 +125,7 @@ and entry_sig = {
   storage_name : string;   (** name of the storage argument (type is
                                common to all entry points in a
                                contract) *)
+  return : datatype option;(** return type for views *)
 }
 
 (** An entry point *)
@@ -132,6 +133,7 @@ and 'exp entry = {
   entry_sig : entry_sig; (** Signature of the entry point *)
   code : 'exp;           (** Liquidity code for the entry point *)
   fee_code : 'exp option;(** Code for the entry point's fees *)
+  view : bool;
 }
 
 (** Global values *)
@@ -1637,6 +1639,7 @@ let contract_sig_of_default ?sig_name parameter = {
       parameter;
       parameter_name = "parameter";
       storage_name = "storage";
+      return = None;
     }];
 }
 

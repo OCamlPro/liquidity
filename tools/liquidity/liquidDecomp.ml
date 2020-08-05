@@ -816,9 +816,11 @@ and decompile env contract =
     entries = [{ entry_sig = { entry_name;
                                parameter = contract.mic_parameter;
                                parameter_name;
-                               storage_name };
+                               storage_name;
+                               return = None };
                  code;
-                 fee_code }];
+                 fee_code;
+                 view = false }];
     c_init = None;
     subs = [];
     ty_env = env ;

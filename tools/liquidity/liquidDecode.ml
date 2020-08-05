@@ -285,9 +285,11 @@ and entry_of_case param_constrs top_storage (pat, body, fee_body) =
         parameter;
         parameter_name;
         storage_name;
+        return = None;
       };
       code = decode body;
       fee_code;
+      view = false;
     }
   | _ -> raise Exit
 

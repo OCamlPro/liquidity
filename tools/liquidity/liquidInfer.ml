@@ -912,15 +912,16 @@ and contract_tvars_to_unit ~keep_tvars (contract : typed_contract) =
              init_args = List.map (fun (x, loc, ty) ->
                  x, loc, vars_to_unit ~loc ty) init_args;
              init_body = tvars_to_unit init_body } in
-  let entries = List.map (fun { entry_sig; code; fee_code } ->
+  let entries = List.map (fun { entry_sig; code; fee_code; view } ->
       { entry_sig = { entry_sig with
                       parameter =
                         vars_to_unit ~loc:(code : typed_exp).loc
                           entry_sig.parameter };
         code = tvars_to_unit code;
+        view;
         fee_code = match fee_code with
           | None -> None
-          | Some fee_code -> Some (tvars_to_unit fee_code)
+          | Some fee_code -> Some (tvars_to_unit fee_code);
       }) contract.entries in
   let rec env_tvars_to_unit ty_env = {
     ty_env with
@@ -1156,6 +1157,7 @@ and mono_contract vtys c =
           (string_of_type pty);
       { code;
         fee_code;
+        view = e.view;
         entry_sig = { e.entry_sig with parameter = pty } }
     ) c.entries in
   let c_init = match c.c_init with

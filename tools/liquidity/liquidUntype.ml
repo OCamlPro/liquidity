@@ -326,6 +326,7 @@ and untype_entry env (entry : (datatype, 'a) exp entry) =
                 };
     code;
     fee_code;
+    view = entry.view;
   }
 
 and untype_contract contract =

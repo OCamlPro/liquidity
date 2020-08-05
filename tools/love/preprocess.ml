@@ -321,14 +321,15 @@ and contract_ttfail_to_tvar (contract : typed_contract) =
                debug "[Preprocess.contract_ttfail_to_tvar] Preprocessing body of %s@." init_name;
                ttfail_to_tvar init_body
              )} in
-  let entries = List.map (fun { entry_sig; code } ->
+  let entries = List.map (fun { entry_sig; code; view; _ } ->
       debug "[Preprocess.contract_ttfail_to_tvar] Preprocessing entry %s@." entry_sig.entry_name;
       { entry_sig = { entry_sig with
                       parameter =
                         tfail_to_tvar ~loc:(code : typed_exp).loc
                           entry_sig.parameter };
         code = ttfail_to_tvar code;
-        fee_code = None
+        fee_code = None; (* TODO *)
+        view;
       }) contract.entries in
   let rec env_ttfail_to_tvar ty_env = {
     ty_env with

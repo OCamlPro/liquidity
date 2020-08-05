@@ -79,8 +79,12 @@ let tmp_contract_of_init ~loc env (init : (datatype, 'a) exp LiquidTypes.init) s
     entries = [{ entry_sig = { entry_name = "default";
                                parameter;
                                parameter_name = "_parameter";
-                               storage_name = "_storage" };
-                 code; fee_code = None }];
+                               storage_name = "_storage";
+                               return = None };
+                 code;
+                 fee_code = None;
+                 view = false;
+               }];
     ty_env = env;
     c_init = None;
     subs = [];

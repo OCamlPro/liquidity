@@ -2078,10 +2078,15 @@ and typecheck_entry env entry =
   (* register parameter *)
   let (env, count_param) =
     new_binding env entry.entry_sig.parameter_name entry.entry_sig.parameter in
-  let expected_ty = Ttuple [Tlist Toperation; env.t_contract_sig.f_storage] in
-  (* Code for entry point must be of type (operation list * storage) *)
-  let code =
-    typecheck_expected "return value" env expected_ty entry.code in
+  let expected_ty = match entry.entry_sig.return with
+    | None ->
+      (* Code for entry point must be of type (operation list * storage) *)
+      Ttuple [Tlist Toperation; env.t_contract_sig.f_storage]
+    | Some t -> t in
+  let code = typecheck_expected "return value" env expected_ty entry.code in
+  let return = match entry.entry_sig.return with
+    | None -> None
+    | Some _ -> Some code.ty in
   let expected_fee_ty = Ttuple [Ttez; Tnat] in
   (* Code for entry point must be of type (operation list * storage) *)
   let fee_code = match entry.fee_code with
@@ -2094,7 +2099,8 @@ and typecheck_entry env entry =
     check_used env { nname = v; nloc = noloc env } c in
   check_used entry.entry_sig.parameter_name count_param;
   check_used entry.entry_sig.storage_name count_storage;
-  { entry with code; fee_code }
+  let entry_sig = { entry.entry_sig with return } in
+  { entry with entry_sig; code; fee_code }
 
 and typecheck_contract ~others ~warnings ~decompiling contract =
   let must_be_self_contained =
@@ -2123,6 +2129,7 @@ and typecheck_contract ~others ~warnings ~decompiling contract =
                   parameter;
                   parameter_name = "parameter";
                   storage_name = "storage";
+                  return = None;
                 }) l in
             { t_contract_sig with f_entries_sig }
 

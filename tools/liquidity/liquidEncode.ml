@@ -1558,9 +1558,11 @@ and encode_contract ?(annot=false) ?(decompiling=false) contract =
           parameter_name = pname;
           storage_name;
           parameter = encode_parameter_type env parameter;
+          return = None;
         };
         code;
         fee_code;
+        view = false;
       }];
     ty_env = contract.ty_env;
     c_init;

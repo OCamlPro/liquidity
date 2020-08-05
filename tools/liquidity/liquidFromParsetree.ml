@@ -1768,12 +1768,12 @@ and translate_case contracts env case : (pattern * syntax_exp * location) =
     | { ppat_loc } ->
       error_loc ppat_loc "bad pattern"
 
-and translate_entry name env contracts head_exp mk_parameter mk_storage =
+and translate_entry name env contracts ~is_view head_exp mk_parameter mk_storage =
   match head_exp with
   | { pexp_desc = Pexp_fun (Nolabel, None, param_pat, head_exp) }
     when mk_parameter = None ->
     let mk_param = deconstruct_pat env param_pat in
-    translate_entry name env contracts head_exp (Some mk_param) mk_storage
+    translate_entry name env contracts ~is_view head_exp (Some mk_param) mk_storage
 
   | { pexp_desc = Pexp_fun (Nolabel, None, storage_pat, head_exp);
       pexp_loc }
@@ -1795,7 +1795,7 @@ and translate_entry name env contracts head_exp mk_parameter mk_storage =
         end
       | _ -> (storage_name, code)
     in
-    translate_entry name env contracts head_exp mk_parameter (Some mk_storage)
+    translate_entry name env contracts ~is_view head_exp mk_parameter (Some mk_storage)
 
   | { pexp_desc = Pexp_fun (Nolabel, None, _, _);
       pexp_loc }  ->
@@ -1822,7 +1822,7 @@ and translate_entry name env contracts head_exp mk_parameter mk_storage =
           "return type must be a product of \"operation list\" \
            and the storage type"
     end;
-    translate_entry name env contracts head_exp mk_parameter mk_storage
+    translate_entry name env contracts ~is_view head_exp mk_parameter mk_storage
 
   | exp ->
     let code = translate_code contracts env exp in
@@ -1835,11 +1835,19 @@ and translate_entry name env contracts head_exp mk_parameter mk_storage =
       | ( { txt = "fee" | "fees" } ,
           PStr [{ pstr_desc = Pstr_eval (fee_exp,[])} ] ) :: _
         when !LiquidOptions.network = Dune_network ->
+        if is_view then error_loc exp.pexp_loc "Fee code cannot appear in a view";
         let fee_code = translate_code contracts env fee_exp in
         let _, _, fee_code = mk_parameter fee_code in
         let _, fee_code = mk_storage fee_code in
         Some fee_code
-      | _ -> None
+      | attrs ->
+        Format.kasprintf
+          (fun s -> LiquidLoc.warn (loc_of_loc exp.pexp_loc) (WOther s))
+          "Attributes %a ignored with network %S"
+          (Format.pp_print_list
+             (fun fmt ({ txt }, _) -> Format.pp_print_string fmt txt)) attrs
+          (LiquidOptions.network_name ());
+        None
     in
     set_curry_flag parameter;
     {
@@ -1848,9 +1856,11 @@ and translate_entry name env contracts head_exp mk_parameter mk_storage =
         parameter;
         parameter_name = parameter_name.nname;
         storage_name = storage_name.nname;
+        return = if is_view then Some (fresh_tvar ()) (* dummy *) else None;
       };
       code;
       fee_code;
+      view = is_view;
     }
 
 and translate_initial_storage env init_name contracts exp args =
@@ -1953,8 +1963,33 @@ and translate_signature contract_type_name env acc ast =
     let parameter = translate_type env param_ty in
     set_curry_flag parameter;
     let storage_name= "storage" in
-    let entry = { entry_name; parameter; parameter_name; storage_name } in
+    let entry = { entry_name; parameter; parameter_name; storage_name; return = None } in
     translate_signature contract_type_name env (entry :: acc) ast
+
+  (*  val%view view_name : param_ty -> return_ty *)
+  | { psig_desc = Psig_extension (
+      ({ txt = "view" }, PSig [{
+           psig_desc = Psig_value {
+               pval_name = { txt = view_name; loc = name_loc };
+               pval_type = { ptyp_desc = Ptyp_arrow (_, param_ty, return_ty) };
+               pval_prim = [];
+               (* pval_attributes = []; *)
+               pval_loc;
+             }}
+         ]), [])} :: ast ->
+    if List.mem view_name reserved_keywords then
+      error_loc name_loc "view %S forbidden" view_name;
+    if List.exists (fun e -> e.return <> None && e.entry_name = view_name) acc then
+      error_loc name_loc "view %S is already declared" view_name;
+    let parameter_name = "parameter" in
+    let parameter = translate_type env param_ty in
+    set_curry_flag parameter;
+    let storage_name= "storage" in
+    let return = translate_type env return_ty in
+    let view = { entry_name = view_name;
+                 parameter; parameter_name; storage_name;
+                 return = Some return } in
+    translate_signature contract_type_name env (view :: acc) ast
 
   | { psig_desc = Psig_modtype
           {
@@ -2053,10 +2088,12 @@ and translate_structure env acc ast : syntax_exp parsed_struct =
     in
     translate_structure env (init :: acc) ast
 
-  (* let%entry name = head_exp *)
+  (* let%entry name = head_exp
+     OR
+     let%view name = head_exp *)
   | { pstr_desc =
         Pstr_extension
-          (({ txt = "entry" },
+          (({ txt = ("entry" | "view" as kind) },
             PStr
               [{ pstr_desc =
                    Pstr_value (
@@ -2072,14 +2109,24 @@ and translate_structure env acc ast : syntax_exp parsed_struct =
            ), []) } :: ast
     ->
     let env = { env with is_module = false } in
+    let kind_desc = match kind with
+      | "entry" -> "entry point"
+      | k -> k in
     if List.mem name reserved_keywords then
-      error_loc name_loc "entry point %S forbidden" name;
+      error_loc name_loc "%s %S forbidden" kind_desc name;
     if List.exists (function
         | Syn_entry e -> e.entry_sig.entry_name = name
         | _ -> false) acc then
-      error_loc name_loc "entry point %S is already defined" name;
+      error_loc name_loc "%s %S is already defined" kind_desc name;
+    let is_view = match kind with
+      | "view" ->
+        if !LiquidOptions.target_lang = Michelson_lang then
+          error_loc name_loc
+            "views are not allowed when compiling to Michelson";
+        true
+      | _ -> false in
     let entry =
-      Syn_entry (translate_entry name env
+      Syn_entry (translate_entry name env ~is_view
                    (filter_contracts acc) head_exp None None) in
     translate_structure env (entry :: acc) ast
 
