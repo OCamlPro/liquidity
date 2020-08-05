@@ -366,29 +366,27 @@ let search_aliases
   and search acc t1 t2 =
     Log.debug "[search_aliases] Matching %a with %a@." pretty t1 pretty t2;
     match t1, t2 with
-      TVar tv, _ -> (
-        let add_if_ok () =
-          Log.debug "[search_aliases] Binding %a to %a@."pretty t1 pretty t2;
-          TypeVarMap.add tv t2 acc
-        in
+    | TVar tv, t2 | t2, TVar tv -> (
+      let add_if_ok () =
+        Log.debug "[search_aliases] Binding %a to %a@."pretty t1 pretty t2;
+        TypeVarMap.add tv t2 acc
+      in
       match TypeVarMap.find_opt tv acc with
-        None -> add_if_ok ()
-      | Some t ->(
-          match equal t t2 with
-            Aliases _ -> add_if_ok ()
-          | _ -> (
-              Log.debug
-                "[search_aliases] Error : %a is already matched to %a,\
-                 cannot be matched to %a."
-                pp_typvar tv pretty t pretty t2;
-              failwith ( "Search alias error")
-            )
-        )
-      )
-    | _, TVar _ ->
-      Log.debug "[search_aliases] Trying to merge %a into %a : error@.."
-        pretty t1 pretty t2;
-      failwith ( "Search : genericity error.")
+      | None -> add_if_ok ()
+      | Some t ->
+         match equal t t2 with
+         | Aliases _ -> add_if_ok ()
+         | _ ->
+            Log.debug
+              "[search_aliases] Error : %a is already matched to %a,\
+               cannot be matched to %a."
+              pp_typvar tv pretty t pretty t2;
+            failwith ( "Search alias error")
+    )
+    (* | _, TVar _ ->
+     *   Log.debug "[search_aliases] Trying to merge %a into %a : error@.."
+     *     pretty t1 pretty t2;
+     *   failwith ( "Search : genericity error.") *)
 
     | TTuple l1, TTuple l2 ->
       Log.debug "[search_aliases] Tuples@.";
