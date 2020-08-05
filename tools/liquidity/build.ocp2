@@ -42,7 +42,7 @@
 
 *)
 
-version = "2.1-beta3";
+version = "2.1-beta4";
 
 if(with_version){
     version_info = { ocp2ml=true;
