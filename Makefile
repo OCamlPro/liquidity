@@ -125,10 +125,9 @@ DUNE_TESTS=$(shell find dune-network/src/bin_client/test/contracts -regex "[^\.]
 TESTS=$(DOC_TESTS) $(SIMPLE_TESTS) $(MORE_TESTS:=.liq) $(RE_TESTS:=.reliq) $(OTHER_TESTS:=.liq)
 
 TODO_LOVE_TESTS=doc/doc16.liq doc/doc19.liq doc/doc21.liq doc/doc76.liq \
-  test16.liq test19.liq test_loop_left.liq test_inline.liq \
+  test19.liq test_loop_left.liq test_inline.liq \
   test_rec_fun.liq test_infer_unpack.liq \
-  lambda_const.liq \
-  others/broker.liq others/token_no_fee.liq
+  lambda_const.liq others/token_no_fee.liq
 LOVE_TESTS:=$(filter-out $(TODO_LOVE_TESTS) , $(TESTS))
 
 tests: build

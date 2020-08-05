@@ -2558,6 +2558,26 @@ and liqapply_to_loveexp ?loc env typ prim args : AST.exp * TYPE.t =
         [addr] in
     res, dun ()
 
+  | Prim_sub, [{ ty = Ttez; _ } as x1;  { ty = Ttez; _ } as x2] ->
+    let x1, ty1 = ltl x1 in
+    let x2, ty2 = ltl x2 in
+    let res_opt = mk_apply ?loc:lloc
+        (mk_primitive_lambda ?loc env "-$"
+           (ty1 @=> ty2 @=> option (dun ()))
+           ANone
+        )
+        [x1; x2] in
+    let res =
+      mk_match ?loc:lloc
+        res_opt
+        [mk_pnone (),
+         mk_raise (Fail (string ()))
+           ([mk_const (mk_cstring "subtraction_underflow")]);
+         mk_psome (mk_pvar "__v"),
+         mk_var (string_to_ident "__v")
+        ] in
+    res, dun ()
+
   | Prim_exec _, _ -> error ?loc "Invariant broken: Prim_exec is solved before"
   | _ ->
     debug "[liqapply_to_loveexp] Love primitive@.";
