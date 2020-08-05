@@ -577,15 +577,19 @@ let const_of_ezjson ezj =
 
 let read_file filename =
   let lines = ref [] in
-  let chan = open_in filename in
-  begin try
-      while true; do
-        lines := input_line chan :: !lines
-      done;
-    with
-      End_of_file -> close_in chan
-  end;
-  !lines |> List.rev |> String.concat "\n"
+  try
+    let chan = open_in filename in
+    begin try
+        while true; do
+          lines := input_line chan :: !lines
+        done;
+      with
+        End_of_file -> close_in chan
+    end;
+    !lines |> List.rev |> String.concat "\n"
+  with Sys_error msg ->
+    Format.eprintf "@[<v 2>Error reading file %S:@,%s@]@." filename msg;
+    exit 2
 
 let read_micheline_file filename =
   let s = read_file filename in

@@ -2617,7 +2617,12 @@ let translate_multi l =
     | exn -> translate_exn exn
 
 let ocaml_of_file parser file =
-  let ic = open_in file in
+  let ic =
+    try open_in file
+    with Sys_error msg ->
+      Format.eprintf "@[<v 2>Error reading file %S:@,%s@]@." file msg;
+      exit 2
+  in
   try
     Location.input_name := file;
     let lexbuf = Lexing.from_channel ic in
@@ -2625,7 +2630,11 @@ let ocaml_of_file parser file =
     let ast = parser lexbuf in
     close_in ic;
     ast
-  with exn ->
+  with
+  | Sys_error msg ->
+    Format.eprintf "@[<v 2>Error reading file %S:@,%s@]@." file msg;
+    exit 2
+  | exn ->
     close_in ic;
     translate_exn exn
 
