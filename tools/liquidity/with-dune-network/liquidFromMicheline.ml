@@ -276,7 +276,7 @@ let rec convert_type ?(parameter=false) env expr =
 
     | Prim(_, "contract", [x], annots) ->
       let parameter = convert_type env x in
-      Tcontract (None, parameter)
+      Tcontract_handle (None, parameter)
 
     | Prim(_, "lambda", [x;y], _debug) ->
       Tlambda
@@ -410,7 +410,7 @@ let rec convert_const env ?ty expr =
           CTimestamp (ISO8601.of_string s)
         | Some Tkey -> CKey s
         | Some Tkey_hash -> CKey_hash s
-        | Some Taddress | Some Tcontract _ ->
+        | Some Taddress | Some Tcontract_handle _ ->
           (match String.split_on_char '%' s with
            | [s] -> CContract (s, None)
            | [s; e] -> CContract (s, Some e)
@@ -434,7 +434,7 @@ let rec convert_const env ?ty expr =
         | Some Tsignature ->
           (* CSignature Ed25519.Signature.(to_b58check s) *)
           CSignature (to_hex s)
-        | Some (Taddress | Tcontract _) ->
+        | Some (Taddress | Tcontract_handle _) ->
           let c = MBytes.sub s 0 22 in
           let e = MBytes.sub s 22 (MBytes.length s - 22) in
           let e =

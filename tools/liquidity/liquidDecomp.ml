@@ -48,7 +48,7 @@ let const_name_of_datatype = function
   | Tset _ -> "s"
   | Tmap _ -> "map"
   | Tbigmap _ -> "bigmap"
-  | Tcontract _ -> "contrat"
+  | Tcontract_handle _ -> "contrat"
   | Tor _ -> "or"
   | Tlambda _ | Tclosure _  -> "fun"
   | Tfail -> "fail"

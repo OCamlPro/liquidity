@@ -229,7 +229,7 @@ let rec type_of_const ~loc env = function
   | CKey _ -> Tkey
   | CSignature _ -> Tsignature
   | CContract (_, None) -> Taddress
-  | CContract (_, entry) -> Tcontract (entry, fresh_tvar ())
+  | CContract (_, entry) -> Tcontract_handle (entry, fresh_tvar ())
   | CTuple l ->
     Ttuple (List.map (type_of_const ~loc env) l)
   | CNone -> Toption (fresh_tvar ())
@@ -317,7 +317,7 @@ let rec typecheck_const ~loc env (cst : syntax_const) ty : datatype * typed_cons
     | Ttez, CTez _
     | Tkey, CKey _
     | Tkey_hash, CKey_hash _
-    | Tcontract _, CContract _
+    | Tcontract_handle _, CContract _
     | Ttimestamp, CTimestamp _
     | Tsignature, CSignature _
     | Toption _, CNone) as ty_cst
@@ -332,10 +332,10 @@ let rec typecheck_const ~loc env (cst : syntax_const) ty : datatype * typed_cons
   | Taddress, CBytes s -> ty, CContract(s, None)
   | Tsignature, CBytes s -> ty, CSignature s
 
-  | Tcontract ((None | Some "default"), (Tunit  | Tvar _  as p)), CKey_hash s ->
+  | Tcontract_handle ((None | Some "default"), (Tunit  | Tvar _  as p)), CKey_hash s ->
     unify loc p Tunit;
     ty, CKey_hash s
-  | Tcontract (entry,_), CBytes s ->
+  | Tcontract_handle (entry,_), CBytes s ->
     let len = String.length s in
     if len < 46 then
       error loc "constant %s is too short to be a contract" s;
@@ -644,7 +644,7 @@ and typecheck env ( exp : syntax_exp ) : typed_exp =
              (fun fmt e -> Format.pp_print_string fmt e.entry_name))
           self_entries;
     in
-    let ty = Tcontract (Some entry, parameter) in
+    let ty = Tcontract_handle (Some entry, parameter) in
     let desc = Self { entry } in
     mk ?name:exp.name ~loc desc ty
 
@@ -679,13 +679,13 @@ and typecheck env ( exp : syntax_exp ) : typed_exp =
     let contract = typecheck env contract in
     let arg, entry =
       match expand contract.ty, entry with
-      | Tcontract (Some c_entry, arg_ty), Some entry
+      | Tcontract_handle (Some c_entry, arg_ty), Some entry
         when not env.decompiling && entry <> c_entry ->
         error loc
           "contract handle is for entry point %s, \
            but is called with entry point %s"
           c_entry entry
-      | Tcontract (e, arg_ty), entry ->
+      | Tcontract_handle (e, arg_ty), entry ->
         let entry = match e, entry with
           | None, None -> None
           | Some e, _ | _, Some e -> Some e in
@@ -702,7 +702,7 @@ and typecheck env ( exp : syntax_exp ) : typed_exp =
           | None, None -> None
           | _, Some e | Some (e, _), _ -> Some e in
         let arg = typecheck env arg in
-        unify contract.ty (Tcontract (entry, arg.ty));
+        unify contract.ty (Tcontract_handle (entry, arg.ty));
         arg, entry
       | ty, _ ->
         error contract.loc
@@ -723,7 +723,7 @@ and typecheck env ( exp : syntax_exp ) : typed_exp =
             args = { desc = Project { field = entry; record = contract }} ::
                    [param; amount] }
     when match (typecheck env contract).ty with
-      | Tcontract _ | Taddress -> true
+      | Tcontract_handle _ | Taddress -> true
       | _ -> false
     ->
     typecheck env
@@ -1316,7 +1316,7 @@ and typecheck env ( exp : syntax_exp ) : typed_exp =
   | ContractAt { arg; entry; entry_param } ->
     let arg = typecheck_expected "[%%handle ...] argument" env Taddress arg in
     let desc = ContractAt { arg; entry; entry_param } in
-    mk ?name:exp.name ~loc desc (Toption (Tcontract (Some entry, entry_param)))
+    mk ?name:exp.name ~loc desc (Toption (Tcontract_handle (Some entry, entry_param)))
 
   | CreateContract { args; contract } ->
     let contract = typecheck_contract ~warnings:env.warnings
@@ -1848,7 +1848,7 @@ and typecheck_prim2t env prim loc args =
   | Prim_check, _ ->
     error_prim loc Prim_check args [Tkey; Tsignature; Tbytes]
 
-  | (Prim_address | Prim_address_untype), [ Tcontract _ ] ->
+  | (Prim_address | Prim_address_untype), [ Tcontract_handle _ ] ->
     Taddress
 
   | Prim_default_account, [ Tkey_hash ] -> unit_contract_ty
@@ -1884,12 +1884,12 @@ and typecheck_prim2t env prim loc args =
   | Prim_string_sub, [ Tnat; Tnat; Tstring ] -> Toption Tstring
   | Prim_bytes_sub, [ Tnat; Tnat; Tbytes ] -> Toption Tbytes
 
-  | Prim_get_balance, [ Tcontract _ ] -> Ttez
+  | Prim_get_balance, [ Tcontract_handle _ ] -> Ttez
   (* XXX : should be address -> tez option *)
 
   | Prim_block_level, [ Tunit ] -> Tnat
   | Prim_collect_call, [ Tunit ] -> Tbool
-  | Prim_is_implicit, [ Tcontract ((None | Some "default"), Tunit) ] ->
+  | Prim_is_implicit, [ Tcontract_handle ((None | Some "default"), Tunit) ] ->
     Toption Tkey_hash
 
   | prim, args_tys ->
@@ -2225,7 +2225,7 @@ let rec type_of_const = function
   | CBytes _ -> Tbytes
   | CKey _ -> Tkey
   | CSignature _ -> Tsignature
-  | CContract (_, e) -> Tcontract (e, Tunit)
+  | CContract (_, e) -> Tcontract_handle (e, Tunit)
   | CTuple l ->
     Ttuple (List.map type_of_const l)
   | CNone -> Toption Tunit

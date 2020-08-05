@@ -50,9 +50,9 @@ let rec default_const = function
     CSignature
       "edsigthTzJ8X7MPmNeEwybRAvdxS1pupqcM5Mk4uCuyZAe7uEk\
        68YpuGDeViW8wSXMrCi5CwoNgqs8V2w8ayB5dMJzrYCHhD8C7"
-  | Taddress | Tcontract ((None | Some "default"), _) ->
+  | Taddress | Tcontract_handle ((None | Some "default"), _) ->
     CContract ("KT1BEqzn5Wx8uJrZNvuS9DVHmLvG9td3fDLi", None)
-  | Tcontract (e, _) ->
+  | Tcontract_handle (e, _) ->
     CContract ("KT1BEqzn5Wx8uJrZNvuS9DVHmLvG9td3fDLi", e)
   | Tchainid -> CString "NetXwhYbWGa82xo"
   | Ttuple l ->
@@ -105,9 +105,9 @@ let rec default_empty_const = function
     CSignature
       "edsigthTzJ8X7MPmNeEwybRAvdxS1pupqcM5Mk4uCuyZAe7uEk\
        68YpuGDeViW8wSXMrCi5CwoNgqs8V2w8ayB5dMJzrYCHhD8C7"
-  | Taddress | Tcontract ((None | Some "default"), _) ->
+  | Taddress | Tcontract_handle ((None | Some "default"), _) ->
     CContract ("KT1BEqzn5Wx8uJrZNvuS9DVHmLvG9td3fDLi", None)
-  | Tcontract (e, _) ->
+  | Tcontract_handle (e, _) ->
     CContract ("KT1BEqzn5Wx8uJrZNvuS9DVHmLvG9td3fDLi", e)
   | Tchainid -> CString "NetXwhYbWGa82xo"
   | Ttuple l ->
@@ -162,9 +162,9 @@ let rec default_empty_untyped_const = function
     CSignature
       "edsigthTzJ8X7MPmNeEwybRAvdxS1pupqcM5Mk4uCuyZAe7uEk\
        68YpuGDeViW8wSXMrCi5CwoNgqs8V2w8ayB5dMJzrYCHhD8C7"
-  | Taddress | Tcontract ((None | Some "default"), _) ->
+  | Taddress | Tcontract_handle ((None | Some "default"), _) ->
     CContract ("KT1BEqzn5Wx8uJrZNvuS9DVHmLvG9td3fDLi", None)
-  | Tcontract (e, _) ->
+  | Tcontract_handle (e, _) ->
     CContract ("KT1BEqzn5Wx8uJrZNvuS9DVHmLvG9td3fDLi", e)
   | Tchainid -> CString "NetXwhYbWGa82xo"
   | Ttuple l ->

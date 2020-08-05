@@ -213,7 +213,7 @@ let rec compile_desc depth env ~loc desc =
     amount @
     [ push ~loc Tunit CUnit; ii ~loc TRANSFER_TOKENS ]
 
-  | Call { contract = ({ ty = Tcontract _ } as contract);
+  | Call { contract = ({ ty = Tcontract_handle _ } as contract);
            amount; entry; arg } ->
     (* Contract.call compiled to TRANSFER_TOKENS *)
     let contract = compile depth env contract in

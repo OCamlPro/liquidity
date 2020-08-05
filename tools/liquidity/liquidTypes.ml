@@ -95,7 +95,7 @@ type datatype =
 
   | Tmap of datatype * datatype
   | Tbigmap of datatype * datatype
-  | Tcontract of string option * datatype
+  | Tcontract_handle of string option * datatype
   | Tor of datatype * datatype
   | Tlambda of datatype * datatype * uncurry_flag
 
@@ -259,7 +259,7 @@ let rec may_contain_arrow_type ty = match expand ty with
   | Ttimestamp | Tkey | Tkey_hash | Tsignature | Taddress | Tfail | Tchainid ->
     false
   | Ttuple l -> List.exists may_contain_arrow_type l
-  | Toption ty | Tlist ty | Tset ty | Tcontract (_, ty) ->
+  | Toption ty | Tlist ty | Tset ty | Tcontract_handle (_, ty) ->
     may_contain_arrow_type ty
   | Tmap (t1, t2) | Tbigmap (t1, t2) | Tor (t1, t2) ->
     may_contain_arrow_type t1 || may_contain_arrow_type t2
@@ -324,8 +324,8 @@ let rec eq_types ty1 ty2 = ty1 == ty2 || match expand ty1, expand ty2 with
       with Invalid_argument _ -> false
     end
 
-  | Tcontract (Some e1, ty1), Tcontract (Some e2, ty2) -> e1 = e2 && eq_types ty1 ty2
-  | Tcontract (_, ty1), Tcontract (_, ty2) -> eq_types ty1 ty2
+  | Tcontract_handle (Some e1, ty1), Tcontract_handle (Some e2, ty2) -> e1 = e2 && eq_types ty1 ty2
+  | Tcontract_handle (_, ty1), Tcontract_handle (_, ty2) -> eq_types ty1 ty2
 
   | Tvar tvr1, Tvar tvr2 -> (Ref.get tvr1).id = (Ref.get tvr2).id
 
@@ -353,7 +353,7 @@ let rec forbidden_constant_ty ty = match expand ty with
   | Ttimestamp | Tkey | Tkey_hash | Tsignature | Taddress | Tfail | Tchainid ->
     false
   | Ttuple l -> List.exists forbidden_constant_ty l
-  | Toption ty | Tlist ty | Tset ty | Tcontract (_, ty) ->
+  | Toption ty | Tlist ty | Tset ty | Tcontract_handle (_, ty) ->
     forbidden_constant_ty ty
   | Tmap (t1, t2) | Tor (t1, t2) ->
     forbidden_constant_ty t1 || forbidden_constant_ty t2
@@ -387,7 +387,7 @@ let is_only_module c = c.entries = []
 let free_tvars ty =
   let rec aux fv ty = match expand ty with
     | Ttuple tyl -> List.fold_left aux fv tyl
-    | Toption ty | Tlist ty | Tset ty | Tcontract (_, ty) -> aux fv ty
+    | Toption ty | Tlist ty | Tset ty | Tcontract_handle (_, ty) -> aux fv ty
     | Tmap (ty1, ty2) | Tbigmap (ty1, ty2) | Tor (ty1, ty2)
     | Tlambda (ty1, ty2, _) -> aux (aux fv ty1) ty2
     | Tclosure ((ty1, ty2), ty3, _) -> aux (aux (aux fv ty1) ty2) ty3
@@ -432,7 +432,7 @@ let build_subst aty cty =
       List.fold_left2 (fun s (_, ty1) (_, ty2) -> aux s ty1 ty2) s fl1 fl2
     | Tsum (_, cl1), Tsum (_, cl2) ->
       List.fold_left2 (fun s (_, ty1) (_, ty2) -> aux s ty1 ty2) s cl1 cl2
-    | Tcontract (_, ty1), Tcontract (_, ty2) -> aux s ty1 ty2
+    | Tcontract_handle (_, ty1), Tcontract_handle (_, ty2) -> aux s ty1 ty2
     | Tvar tvr, _ ->
       let tv = Ref.get tvr in
       begin match tv.tyo with
@@ -1643,7 +1643,7 @@ let contract_sig_of_default ?sig_name parameter = {
     }];
 }
 
-let contract_type_of_default ty = Tcontract (Some "default", ty)
+let contract_type_of_default ty = Tcontract_handle (Some "default", ty)
 
 let dummy_contract_sig = {
   f_sig_name = None;

@@ -122,7 +122,7 @@ let rec convert_type ~loc ?parameter expr =
   | Ttuple (x :: tys) ->
     prim_type ~loc "pair" [convert_type ~loc x; convert_type ~loc (Ttuple tys)]
   | Tor (x,y) -> prim_type ~loc "or" [convert_type ~loc x; convert_type ~loc y]
-  | Tcontract (e, parameter) ->
+  | Tcontract_handle (e, parameter) ->
     prim_type ~loc "contract" [convert_type ~loc parameter]
   | Tlambda (x,y, _) ->
     prim_type ~loc "lambda" [convert_type ~loc x;

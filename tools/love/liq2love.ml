@@ -458,7 +458,7 @@ and liqtype_to_lovetype ?loc ?(aliases=StringMap.empty) (env : env) tv =
         UnknownType (name, f, e, loc) ->
         raise (UnknownType (name, (fun t -> let t1 = f t in t2 t1), e, loc))
     in t2 t1
-  | Tcontract (s, c) ->
+  | Tcontract_handle (s, c) ->
     let ty = ltl c in
     TContractInstance (Compil_utils.get_signature_from_name s ty env)
   | Tor (t1,t2) -> (
@@ -1157,7 +1157,7 @@ let rec liqexp_to_loveexp (env : env) (e : typed_exp) : AST.exp * TYPE.t =
         let tmp_ctrname = "CalledContract" in
         let tmp_entrypt = "entry_pt" in
         match contract.ty with
-          Tcontract (cname, ty) ->
+          Tcontract_handle (cname, ty) ->
           let cssig, entry_typ =
             let ty = liqtype_to_lovetype env ty in
             Compil_utils.get_signature_from_name cname ty env, ty
@@ -2935,7 +2935,7 @@ let contract_to_lovevalue env ~ty addr =
     error "Love compile const: Not a valid contract %s." addr
   | Ok c ->
     match ty with
-    | Some (Tcontract (entry, paramty)) ->
+    | Some (Tcontract_handle (entry, paramty)) ->
       let entry = match entry with None -> "default" | Some e -> e in
       let love_sig = {
         sig_kind = Contract [];
@@ -3046,7 +3046,7 @@ let rec liqconst_to_lovevalue
 
     | CKey_hash kh -> (
         match ty with
-        | Some (Taddress | Tcontract _ ) ->
+        | Some (Taddress | Tcontract_handle _ ) ->
           contract_to_lovevalue env ~ty kh
         | _ ->
           match Signature.Public_key_hash.of_b58check_opt kh with

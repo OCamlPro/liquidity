@@ -273,8 +273,8 @@ let rec encode_type ?(decompiling=false) ty =
     Trecord (name, List.map (fun (l, ty) -> l, encode_type ~decompiling ty) labels)
   | Tsum (name, cstys) ->
     Tsum (name, List.map (fun (c, ty) -> c, encode_type ~decompiling ty) cstys)
-  | Tcontract (entry, param) ->
-    Tcontract (entry, encode_type ~decompiling param)
+  | Tcontract_handle (entry, param) ->
+    Tcontract_handle (entry, encode_type ~decompiling param)
   | Tvar _ | Tpartial _ ->
     (* Removed during typechecking (if monomorphized)  *)
     ty
@@ -327,7 +327,7 @@ let rec allowed_type
     allowed_type ~allow_big_map ~allow_operation ~allow_contract t
   | Tlist t | Toption t ->
     allowed_type ~allow_big_map ~allow_operation ~allow_contract t
-  | Tcontract (_, t) ->
+  | Tcontract_handle (_, t) ->
     allow_contract &&
     allowed_type ~allow_big_map ~allow_operation:false ~allow_contract:true t
   | Tor (t1, t2) ->

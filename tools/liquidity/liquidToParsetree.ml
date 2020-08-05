@@ -98,7 +98,7 @@ module HAbbrev = Hashtbl.Make (struct
         Trecord ("", List.map (fun (fn, fty) -> (fn, erase_names fty)) fl)
       | Tsum (_sn, cl) ->
         Tsum (None, List.map (fun (cn, cty) -> (cn, erase_names cty)) cl)
-      | Tcontract (entry, ty) -> Tcontract (entry, erase_names ty)
+      | Tcontract_handle (entry, ty) -> Tcontract_handle (entry, erase_names ty)
     let hash ty = Hashtbl.hash (erase_names ty)
     let equal ty1 ty2 = eq_types (erase_names ty1) (erase_names ty2)
   end)
@@ -206,7 +206,7 @@ let rec convert_type ~abbrev ?name ty =
           (StringMap.bindings subst)
       with Not_found -> params in
     typ_constr name args
-  | Tcontract (_, ty) ->
+  | Tcontract_handle (_, ty) ->
     Typ.extension (id "handle", PTyp (convert_type ~abbrev ty))
   | Tvar { contents = { contents = { id; tyo = None | Some Tpartial _ }}} ->
     Typ.var id
@@ -220,7 +220,7 @@ let rec convert_type ~abbrev ?name ty =
       let caml_ty, t_name = match ty with
         | Ttez | Tunit | Ttimestamp | Tint | Tnat | Tbool
         | Tkey | Tkey_hash | Tsignature | Tstring | Tbytes | Toperation | Taddress
-        | Tfail | Trecord _ | Tsum _ | Tcontract _ | Tchainid -> assert false
+        | Tfail | Trecord _ | Tsum _ | Tcontract_handle _ | Tchainid -> assert false
         | Ttuple args ->
           Typ.tuple (List.map (convert_type ~abbrev) args), "pair_t"
         | Tor (x,y) ->

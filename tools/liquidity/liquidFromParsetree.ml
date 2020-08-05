@@ -263,9 +263,9 @@ let rec translate_type env ?expected typ =
 
   | { ptyp_desc = Ptyp_extension ({ txt = "handle" }, PTyp t) } ->
     let expected = match expected with
-      | Some Tcontract (_, t) -> Some t
+      | Some Tcontract_handle (_, t) -> Some t
       | _ -> None in
-    Tcontract (None, translate_type env ?expected t)
+    Tcontract_handle (None, translate_type env ?expected t)
 
   | { ptyp_desc = Ptyp_constr ({ txt = ty_name; loc }, params); ptyp_loc } ->
     let ty_name = str_of_id ty_name in
@@ -368,7 +368,7 @@ let rec set_curry_flag ty = match ty with
   | Tunit | Tbool | Tint | Tnat | Ttez | Tstring | Tbytes | Ttimestamp | Tkey
   | Tkey_hash | Tsignature | Toperation | Taddress | Tfail | Tchainid -> ()
   | Ttuple tyl -> List.iter set_curry_flag tyl
-  | Toption ty | Tlist ty | Tset ty | Tcontract (_, ty) -> set_curry_flag ty
+  | Toption ty | Tlist ty | Tset ty | Tcontract_handle (_, ty) -> set_curry_flag ty
   | Tmap (ty1, ty2) | Tbigmap (ty1, ty2) | Tor (ty1, ty2) ->
     set_curry_flag ty1; set_curry_flag ty2
   | Tlambda (ty1, ty2, u) ->

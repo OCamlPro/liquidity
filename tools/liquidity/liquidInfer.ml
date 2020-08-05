@@ -66,7 +66,7 @@ let wrap_tvar ty =
 
 let rec has_tvar = function
   | Ttuple tyl -> List.exists has_tvar tyl
-  | Toption ty | Tlist ty | Tset ty | Tcontract (_, ty) -> has_tvar ty
+  | Toption ty | Tlist ty | Tset ty | Tcontract_handle (_, ty) -> has_tvar ty
   | Tmap (ty1, ty2) | Tbigmap (ty1, ty2) | Tor (ty1, ty2)
   | Tlambda (ty1, ty2, _) -> has_tvar ty1 || has_tvar ty2
   | Tclosure ((ty1, ty2), ty3, _) -> has_tvar ty1 || has_tvar ty2 || has_tvar ty3
@@ -77,7 +77,7 @@ let rec has_tvar = function
 
 let rec occurs id = function
   | Ttuple tyl -> List.exists (fun ty -> occurs id ty) tyl
-  | Toption ty | Tlist ty | Tset ty | Tcontract (_, ty) -> occurs id ty
+  | Toption ty | Tlist ty | Tset ty | Tcontract_handle (_, ty) -> occurs id ty
   | Tmap (ty1, ty2) | Tbigmap (ty1, ty2) | Tor (ty1, ty2)
   | Tlambda (ty1, ty2, _) -> occurs id ty1 || occurs id ty2
   | Tclosure ((ty1, ty2), ty3, _) -> occurs id ty1 || occurs id ty2 ||occurs id ty3
@@ -146,7 +146,7 @@ let rec generalize tyx1 tyx2 =
   | Toption ty1, Toption ty2
   | Tlist ty1, Tlist ty2
   | Tset ty1, Tset ty2
-  | Tcontract (_, ty1), Tcontract (_, ty2) ->
+  | Tcontract_handle (_, ty1), Tcontract_handle (_, ty2) ->
     generalize ty1 ty2
 
   | Tmap (k_ty1, v_ty1), Tmap (k_ty2, v_ty2)
@@ -297,14 +297,14 @@ let rec unify loc ty1 ty2 =
 
       | Tpartial (Pcont c), ty | ty, Tpartial (Pcont c) ->
         begin match ty, c with
-          | Tcontract (e, ty), None ->
-            Tcontract (e, ty), []
-          | Tcontract (Some e, ty), Some (ep, typ) ->
+          | Tcontract_handle (e, ty), None ->
+            Tcontract_handle (e, ty), []
+          | Tcontract_handle (Some e, ty), Some (ep, typ) ->
             unify typ ty;
             let e = if e <> ep then None else Some e in
-            Tcontract (e, ty), []
-          | Tcontract (None, ty), Some (ep, typ) ->
-            Tcontract (Some ep, ty), []
+            Tcontract_handle (e, ty), []
+          | Tcontract_handle (None, ty), Some (ep, typ) ->
+            Tcontract_handle (Some ep, ty), []
           | _, _ -> error loc "Partial contract incompatible with %S"
                    (string_of_type ty)
         end
@@ -373,7 +373,7 @@ let rec unify loc ty1 ty2 =
         end;
         tyx1, []
 
-      | Tcontract (e1, ty1), Tcontract (e2, ty2) ->
+      | Tcontract_handle (e1, ty1), Tcontract_handle (e2, ty2) ->
         (match e1, e2 with
          | Some e1, Some e2 when e1 <> e2 ->
            error loc "Handles for different entry points (%s and %s)"
@@ -511,7 +511,7 @@ let instantiate_to s ty =
       Trecord (rn, List.map (fun (fn, fty) -> (fn, aux fty)) fl)
     | Tsum (sn, cl) ->
       Tsum (sn, List.map (fun (cn, cty) -> (cn, aux cty)) cl)
-    | Tcontract (e, ty) -> Tcontract (e, aux ty)
+    | Tcontract_handle (e, ty) -> Tcontract_handle (e, aux ty)
     | Tvar tvr ->
       let tv = Ref.get tvr in
       begin match tv.tyo with
@@ -567,7 +567,7 @@ let get_type env loc ty =
       Trecord (rn, List.map (fun (f, ty) -> (f, aux ty)) fl)
     | Tsum (sn, cl) ->
       Tsum (sn, List.map (fun (c, ty) -> (c, aux ty)) cl)
-    | Tcontract (e, ty) -> Tcontract (e, aux ty)
+    | Tcontract_handle (e, ty) -> Tcontract_handle (e, aux ty)
     | Tvar tvr when (Ref.get tvr).tyo = None -> ty
     | Tvar tvr ->
       let tv = Ref.get tvr in
@@ -597,7 +597,7 @@ let get_type env loc ty =
         | Tpartial (Pcont c) ->
           let tyo = match c with
             | None -> unit_contract_ty
-            | Some (e, ty) -> Tcontract (Some e, ty) in
+            | Some (e, ty) -> Tcontract_handle (Some e, ty) in
           Ref.set tvr { tv with tyo = Some tyo }; ty
 
         | Tpartial (Peqn _) as ty ->
@@ -658,7 +658,7 @@ let rec vars_to_unit ?loc ~keep_tvars ty =
     Trecord (rn, List.map (fun (fn, fty) -> (fn, vars_to_unit ?loc fty)) fl)
   | Tsum (sn, cl) ->
     Tsum (sn, List.map (fun (cn, cty) -> (cn, vars_to_unit ?loc cty)) cl)
-  | Tcontract (e, ty) -> Tcontract (e, vars_to_unit ?loc ty)
+  | Tcontract_handle (e, ty) -> Tcontract_handle (e, vars_to_unit ?loc ty)
   | Tvar { contents = { contents = { tyo = Some ty }}} -> vars_to_unit ?loc ty
   | Tvar _ when keep_tvars -> ty
   | Tvar _ ->
@@ -692,7 +692,7 @@ let sig_vars_to_unit ?loc ~keep_tvars c =
 
 let rec has_unresolved = function
   | Ttuple tyl -> List.exists has_unresolved tyl
-  | Toption ty | Tlist ty | Tset ty | Tcontract (_, ty) -> has_unresolved ty
+  | Toption ty | Tlist ty | Tset ty | Tcontract_handle (_, ty) -> has_unresolved ty
   | Tmap (ty1, ty2) | Tbigmap (ty1, ty2) | Tor (ty1, ty2)
   | Tlambda (ty1, ty2, _) -> has_unresolved ty1 || has_unresolved ty2
   | Tclosure ((ty1, ty2), ty3, _) ->
@@ -1238,7 +1238,7 @@ let copy_ty ty =
       Trecord (rn, List.map (fun (fn, fty) -> (fn, copy_ty fty)) fl)
     | Tsum (sn, cl) ->
       Tsum (sn, List.map (fun (cn, cty) -> (cn, copy_ty cty)) cl)
-    | Tcontract (e, ty) -> Tcontract (e, copy_ty ty)
+    | Tcontract_handle (e, ty) -> Tcontract_handle (e, copy_ty ty)
     | Tvar tvr ->
       let tv = Ref.get tvr in
       let tvr =
