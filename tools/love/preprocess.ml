@@ -113,7 +113,8 @@ let rec ttfail_to_tvar ({ desc; ty; loc } as e) =
       let body = ttfail_to_tvar body in
       Loop { arg_name;
              body;
-             arg = ttfail_to_tvar arg }, body.ty (* todo : unify argument and body argument ? *)
+             arg = ttfail_to_tvar arg }, body.ty
+    (* TODO : unify argument and body argument ? *)
     | LoopLeft { arg_name; body; arg; acc } ->
       let body = ttfail_to_tvar body in
       LoopLeft { arg_name;
@@ -123,8 +124,8 @@ let rec ttfail_to_tvar ({ desc; ty; loc } as e) =
                    | None -> None
                    | Some acc ->
                      let acc = ttfail_to_tvar acc in
-                     LiquidInfer.unify loc acc.ty body.ty;
                      Some acc }, body.ty
+    (* TODO : unify argument and body argument ? *)
     | Fold { prim; arg_name; body; arg; acc } ->
       let body = ttfail_to_tvar body in
       let acc = ttfail_to_tvar acc in
