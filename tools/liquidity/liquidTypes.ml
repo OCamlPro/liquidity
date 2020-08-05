@@ -96,6 +96,7 @@ type datatype =
   | Tmap of datatype * datatype
   | Tbigmap of datatype * datatype
   | Tcontract_handle of string option * datatype
+  | Tcontract_view of string * datatype * datatype
   | Tor of datatype * datatype
   | Tlambda of datatype * datatype * uncurry_flag
 
@@ -261,7 +262,7 @@ let rec may_contain_arrow_type ty = match expand ty with
   | Ttuple l -> List.exists may_contain_arrow_type l
   | Toption ty | Tlist ty | Tset ty | Tcontract_handle (_, ty) ->
     may_contain_arrow_type ty
-  | Tmap (t1, t2) | Tbigmap (t1, t2) | Tor (t1, t2) ->
+  | Tmap (t1, t2) | Tbigmap (t1, t2) | Tor (t1, t2) | Tcontract_view (_, t1, t2) ->
     may_contain_arrow_type t1 || may_contain_arrow_type t2
   | Trecord (_, l) | Tsum (_, l) ->
     List.exists (fun (_, t) -> may_contain_arrow_type t) l
@@ -324,8 +325,12 @@ let rec eq_types ty1 ty2 = ty1 == ty2 || match expand ty1, expand ty2 with
       with Invalid_argument _ -> false
     end
 
-  | Tcontract_handle (Some e1, ty1), Tcontract_handle (Some e2, ty2) -> e1 = e2 && eq_types ty1 ty2
-  | Tcontract_handle (_, ty1), Tcontract_handle (_, ty2) -> eq_types ty1 ty2
+  | Tcontract_handle (Some e1, ty1), Tcontract_handle (Some e2, ty2) ->
+    e1 = e2 && eq_types ty1 ty2
+  | Tcontract_handle (_, ty1), Tcontract_handle (_, ty2) ->
+    eq_types ty1 ty2
+  | Tcontract_view (v1, tp1, tr1), Tcontract_view (v2, tp2, tr2) ->
+    v1 = v2 && eq_types tp1 tp2 && eq_types tr1 tr2
 
   | Tvar tvr1, Tvar tvr2 -> (Ref.get tvr1).id = (Ref.get tvr2).id
 
@@ -355,7 +360,7 @@ let rec forbidden_constant_ty ty = match expand ty with
   | Ttuple l -> List.exists forbidden_constant_ty l
   | Toption ty | Tlist ty | Tset ty | Tcontract_handle (_, ty) ->
     forbidden_constant_ty ty
-  | Tmap (t1, t2) | Tor (t1, t2) ->
+  | Tmap (t1, t2) | Tor (t1, t2) | Tcontract_view (_, t1, t2) ->
     forbidden_constant_ty t1 || forbidden_constant_ty t2
   | Trecord (_, l) | Tsum (_, l) ->
     List.exists (fun (_, t) -> forbidden_constant_ty t) l
@@ -389,7 +394,7 @@ let free_tvars ty =
     | Ttuple tyl -> List.fold_left aux fv tyl
     | Toption ty | Tlist ty | Tset ty | Tcontract_handle (_, ty) -> aux fv ty
     | Tmap (ty1, ty2) | Tbigmap (ty1, ty2) | Tor (ty1, ty2)
-    | Tlambda (ty1, ty2, _) -> aux (aux fv ty1) ty2
+    | Tlambda (ty1, ty2, _) | Tcontract_view (_, ty1, ty2) -> aux (aux fv ty1) ty2
     | Tclosure ((ty1, ty2), ty3, _) -> aux (aux (aux fv ty1) ty2) ty3
     | Trecord (_, fl) | Tsum (_, fl) ->
       List.fold_left (fun fv (_, ty) -> aux fv ty) fv fl
@@ -433,6 +438,8 @@ let build_subst aty cty =
     | Tsum (_, cl1), Tsum (_, cl2) ->
       List.fold_left2 (fun s (_, ty1) (_, ty2) -> aux s ty1 ty2) s cl1 cl2
     | Tcontract_handle (_, ty1), Tcontract_handle (_, ty2) -> aux s ty1 ty2
+    | Tcontract_view (_, tp1, tr1), Tcontract_view (_, tp2, tr2) ->
+      aux (aux s tp1 tp2) tr1 tr2
     | Tvar tvr, _ ->
       let tv = Ref.get tvr in
       begin match tv.tyo with

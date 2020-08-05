@@ -461,6 +461,11 @@ and liqtype_to_lovetype ?loc ?(aliases=StringMap.empty) (env : env) tv =
   | Tcontract_handle (s, c) ->
     let ty = ltl c in
     TContractInstance (Compil_utils.get_signature_from_name s ty env)
+  | Tcontract_view (v, param, ret) ->
+    let param = ltl param in
+    let ret = ltl ret in
+    let ty = TArrow (param, ret) in
+    TContractInstance (Compil_utils.view_signature env v ty)
   | Tor (t1,t2) -> (
       let t1 = ltl t1 and t2 = ltl t2 in
       let sumtyp = variant (t1,t2) in

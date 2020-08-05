@@ -99,6 +99,8 @@ module HAbbrev = Hashtbl.Make (struct
       | Tsum (_sn, cl) ->
         Tsum (None, List.map (fun (cn, cty) -> (cn, erase_names cty)) cl)
       | Tcontract_handle (entry, ty) -> Tcontract_handle (entry, erase_names ty)
+      | Tcontract_view (v, t1, t2) ->
+        Tcontract_view (v, erase_names t1, erase_names t2)
     let hash ty = Hashtbl.hash (erase_names ty)
     let equal ty1 ty2 = eq_types (erase_names ty1) (erase_names ty2)
   end)
@@ -208,6 +210,10 @@ let rec convert_type ~abbrev ?name ty =
     typ_constr name args
   | Tcontract_handle (_, ty) ->
     Typ.extension (id "handle", PTyp (convert_type ~abbrev ty))
+  | Tcontract_view (_, t1, t2) ->
+    Typ.extension (id "view",
+                   PTyp (Typ.arrow Nolabel
+                           (convert_type ~abbrev t1) (convert_type ~abbrev t2)))
   | Tvar { contents = { contents = { id; tyo = None | Some Tpartial _ }}} ->
     Typ.var id
   | Tvar { contents = { contents = { tyo = Some ty }}} ->
@@ -220,7 +226,8 @@ let rec convert_type ~abbrev ?name ty =
       let caml_ty, t_name = match ty with
         | Ttez | Tunit | Ttimestamp | Tint | Tnat | Tbool
         | Tkey | Tkey_hash | Tsignature | Tstring | Tbytes | Toperation | Taddress
-        | Tfail | Trecord _ | Tsum _ | Tcontract_handle _ | Tchainid -> assert false
+        | Tfail | Trecord _ | Tsum _ | Tcontract_handle _ | Tcontract_view _
+        | Tchainid -> assert false
         | Ttuple args ->
           Typ.tuple (List.map (convert_type ~abbrev) args), "pair_t"
         | Tor (x,y) ->

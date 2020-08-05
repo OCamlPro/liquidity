@@ -68,6 +68,7 @@ let rec has_tvar = function
   | Ttuple tyl -> List.exists has_tvar tyl
   | Toption ty | Tlist ty | Tset ty | Tcontract_handle (_, ty) -> has_tvar ty
   | Tmap (ty1, ty2) | Tbigmap (ty1, ty2) | Tor (ty1, ty2)
+  | Tcontract_view (_, ty1, ty2)
   | Tlambda (ty1, ty2, _) -> has_tvar ty1 || has_tvar ty2
   | Tclosure ((ty1, ty2), ty3, _) -> has_tvar ty1 || has_tvar ty2 || has_tvar ty3
   | Trecord (_, fl) | Tsum (_, fl) ->List.exists (fun (_, ty) -> has_tvar ty) fl
@@ -79,6 +80,7 @@ let rec occurs id = function
   | Ttuple tyl -> List.exists (fun ty -> occurs id ty) tyl
   | Toption ty | Tlist ty | Tset ty | Tcontract_handle (_, ty) -> occurs id ty
   | Tmap (ty1, ty2) | Tbigmap (ty1, ty2) | Tor (ty1, ty2)
+  | Tcontract_view (_, ty1, ty2)
   | Tlambda (ty1, ty2, _) -> occurs id ty1 || occurs id ty2
   | Tclosure ((ty1, ty2), ty3, _) -> occurs id ty1 || occurs id ty2 ||occurs id ty3
   | Trecord (_, fl) | Tsum (_, fl)->List.exists (fun (_, ty) -> occurs id ty) fl
@@ -159,6 +161,10 @@ let rec generalize tyx1 tyx2 =
     generalize r_ty1 r_ty2
 
   | Tlambda (from_ty1, to_ty1, _), Tlambda (from_ty2, to_ty2, _) ->
+    generalize from_ty1 from_ty2;
+    generalize to_ty1 to_ty2
+
+  | Tcontract_view (_, from_ty1, to_ty1), Tcontract_view (_, from_ty2, to_ty2) ->
     generalize from_ty1 from_ty2;
     generalize to_ty1 to_ty2
 
@@ -383,6 +389,13 @@ let rec unify loc ty1 ty2 =
         unify ty1 ty2;
         tyx1, []
 
+      | Tcontract_view (v1, tp1, tr1), Tcontract_view (v2, tp2, tr2) ->
+        if v1 <> v2 then
+          error loc "Handles for different views (%s and %s)" v1 v2;
+        unify tp1 tp2;
+        unify tr1 tr2;
+        tyx1, []
+
       | _, _ ->
         if not (eq_types tyx1 tyx2) then
           error loc "Types %s and %s are not compatible\n"
@@ -512,6 +525,7 @@ let instantiate_to s ty =
     | Tsum (sn, cl) ->
       Tsum (sn, List.map (fun (cn, cty) -> (cn, aux cty)) cl)
     | Tcontract_handle (e, ty) -> Tcontract_handle (e, aux ty)
+    | Tcontract_view (v, t1, t2) -> Tcontract_view (v, aux t1, aux t2)
     | Tvar tvr ->
       let tv = Ref.get tvr in
       begin match tv.tyo with
@@ -568,6 +582,7 @@ let get_type env loc ty =
     | Tsum (sn, cl) ->
       Tsum (sn, List.map (fun (c, ty) -> (c, aux ty)) cl)
     | Tcontract_handle (e, ty) -> Tcontract_handle (e, aux ty)
+    | Tcontract_view (v, t1, t2) -> Tcontract_view (v, aux t1, aux t2)
     | Tvar tvr when (Ref.get tvr).tyo = None -> ty
     | Tvar tvr ->
       let tv = Ref.get tvr in
@@ -659,6 +674,8 @@ let rec vars_to_unit ?loc ~keep_tvars ty =
   | Tsum (sn, cl) ->
     Tsum (sn, List.map (fun (cn, cty) -> (cn, vars_to_unit ?loc cty)) cl)
   | Tcontract_handle (e, ty) -> Tcontract_handle (e, vars_to_unit ?loc ty)
+  | Tcontract_view (e, t1, t2) ->
+    Tcontract_view (e, vars_to_unit ?loc t1, vars_to_unit ?loc t2)
   | Tvar { contents = { contents = { tyo = Some ty }}} -> vars_to_unit ?loc ty
   | Tvar _ when keep_tvars -> ty
   | Tvar _ ->
@@ -694,6 +711,7 @@ let rec has_unresolved = function
   | Ttuple tyl -> List.exists has_unresolved tyl
   | Toption ty | Tlist ty | Tset ty | Tcontract_handle (_, ty) -> has_unresolved ty
   | Tmap (ty1, ty2) | Tbigmap (ty1, ty2) | Tor (ty1, ty2)
+  | Tcontract_view (_, ty1, ty2)
   | Tlambda (ty1, ty2, _) -> has_unresolved ty1 || has_unresolved ty2
   | Tclosure ((ty1, ty2), ty3, _) ->
     has_unresolved ty1 || has_unresolved ty2 || has_unresolved ty3
@@ -1239,6 +1257,7 @@ let copy_ty ty =
     | Tsum (sn, cl) ->
       Tsum (sn, List.map (fun (cn, cty) -> (cn, copy_ty cty)) cl)
     | Tcontract_handle (e, ty) -> Tcontract_handle (e, copy_ty ty)
+    | Tcontract_view (v, t1, t2) -> Tcontract_view (v, copy_ty t1, copy_ty t2)
     | Tvar tvr ->
       let tv = Ref.get tvr in
       let tvr =

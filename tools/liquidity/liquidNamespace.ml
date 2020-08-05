@@ -191,6 +191,10 @@ let rec normalize_type ?from_env ~in_env ty =
              normalize_type ?from_env ~in_env t2, u)
   | Tcontract_handle (e, ty) ->
     Tcontract_handle (e, normalize_type ?from_env ~in_env ty)
+  | Tcontract_view (v, t1, t2) ->
+    Tcontract_view (v,
+                    normalize_type ?from_env ~in_env t1,
+                    normalize_type ?from_env ~in_env t2)
   | Trecord (name, fields) ->
     let _, found_env =
       try find_type_loose ~loc:noloc name in_env []

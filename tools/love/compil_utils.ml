@@ -632,6 +632,12 @@ let get_signature_from_name name ty tenv =
     sig_content = [name, SEntry ty]
   }
 
+let view_signature tenv name ty =
+  TYPE.Anonymous {
+    TYPE.sig_kind = Contract [];
+    sig_content = [name, SView ty]
+  }
+
 let the = function
     None -> failwith "Compil_utils.the"
   | Some o -> o

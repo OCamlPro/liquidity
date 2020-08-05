@@ -275,6 +275,8 @@ let rec encode_type ?(decompiling=false) ty =
     Tsum (name, List.map (fun (c, ty) -> c, encode_type ~decompiling ty) cstys)
   | Tcontract_handle (entry, param) ->
     Tcontract_handle (entry, encode_type ~decompiling param)
+  | Tcontract_view (v, p, r) ->
+    Tcontract_view (v, encode_type ~decompiling p, encode_type ~decompiling r)
   | Tvar _ | Tpartial _ ->
     (* Removed during typechecking (if monomorphized)  *)
     ty
@@ -330,6 +332,7 @@ let rec allowed_type
   | Tcontract_handle (_, t) ->
     allow_contract &&
     allowed_type ~allow_big_map ~allow_operation:false ~allow_contract:true t
+  | Tcontract_view (_, _, _) -> assert false (* Not in Michelson *)
   | Tor (t1, t2) ->
     allowed_type ~allow_big_map ~allow_operation ~allow_contract t1 &&
     allowed_type ~allow_big_map ~allow_operation ~allow_contract t2

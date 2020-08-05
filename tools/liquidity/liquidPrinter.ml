@@ -74,7 +74,8 @@ module Michelson = struct
     | Tfail | Tunit | Tbool | Tint   | Tnat | Ttez | Tstring | Tbytes
     | Ttimestamp | Tkey | Tkey_hash | Tsignature | Toperation | Taddress | Tchainid ->
       true
-    | Ttuple _ | Trecord _ | Tsum _ | Tcontract_handle _ | Tor _ | Toption _ | Tlist _
+    | Ttuple _ | Trecord _ | Tsum _ | Tcontract_handle _ | Tcontract_view _
+    | Tor _ | Toption _ | Tlist _
     | Tset _ | Tmap _ | Tbigmap _ | Tlambda _ | Tclosure _ ->
       false
     | Tvar _ -> true
@@ -111,6 +112,7 @@ module Michelson = struct
         Printf.bprintf b "%c%s" fmt.newline indent;
         bprint_type fmt b indent ty [];
         Printf.bprintf b ")";
+      | Tcontract_view _ -> assert false
       | Tor (ty1, ty2) ->
         let indent = fmt.increase_indent indent in
         Printf.bprintf b "(or";
@@ -933,6 +935,12 @@ module LiquidDebug = struct
       | Tcontract_handle (None, ty) ->
         Printf.bprintf b "[%%handle ";
         bprint_type b "" ty;
+        Printf.bprintf b "]";
+      | Tcontract_view (v, t1, t2) ->
+        Printf.bprintf b "[%%view %s : " v;
+        bprint_type b "" t1;
+        Printf.bprintf b " -> ";
+        bprint_type b "" t2;
         Printf.bprintf b "]";
       | Tor (ty1, ty2) ->
         Printf.bprintf b "(";

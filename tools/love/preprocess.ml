@@ -20,6 +20,8 @@ let rec tfail_to_tvar ?loc ty = match ty with
   | Tsum (sn, cl) ->
     Tsum (sn, List.map (fun (cn, cty) -> (cn, tfail_to_tvar ?loc cty)) cl)
   | Tcontract_handle (s, c) -> Tcontract_handle (s, tfail_to_tvar ?loc c)
+  | Tcontract_view (v, t1, t2) ->
+    Tcontract_view (v, tfail_to_tvar ?loc t1, tfail_to_tvar ?loc t2)
   | Tvar { contents = { contents = { tyo = Some ty; id }}} ->
     debug "[Preprocess.tfail_to_tvar] TVar %s aliased" id;
     tfail_to_tvar ?loc ty

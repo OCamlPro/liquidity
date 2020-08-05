@@ -267,6 +267,23 @@ let rec translate_type env ?expected typ =
       | _ -> None in
     Tcontract_handle (None, translate_type env ?expected t)
 
+  | { ptyp_desc =
+        Ptyp_extension (
+          { txt = "view" },
+          PStr [{ pstr_desc = Pstr_eval (
+              { pexp_desc =
+                  Pexp_constraint (
+                    { pexp_desc = Pexp_ident { txt = Lident view_name } },
+                    { ptyp_desc = Ptyp_arrow (_, param, return) }
+                  ) },
+              [])}] )} ->
+    let expected_t1, expected_t2  = match expected with
+      | Some Tcontract_view (_, t1, t2) -> Some t1, Some t2
+      | _ -> None, None in
+    Tcontract_view (view_name,
+                    translate_type env ?expected:expected_t1 param,
+                    translate_type env ?expected:expected_t2 return)
+
   | { ptyp_desc = Ptyp_constr ({ txt = ty_name; loc }, params); ptyp_loc } ->
     let ty_name = str_of_id ty_name in
     let loc = loc_of_loc loc in
@@ -369,7 +386,8 @@ let rec set_curry_flag ty = match ty with
   | Tkey_hash | Tsignature | Toperation | Taddress | Tfail | Tchainid -> ()
   | Ttuple tyl -> List.iter set_curry_flag tyl
   | Toption ty | Tlist ty | Tset ty | Tcontract_handle (_, ty) -> set_curry_flag ty
-  | Tmap (ty1, ty2) | Tbigmap (ty1, ty2) | Tor (ty1, ty2) ->
+  | Tmap (ty1, ty2) | Tbigmap (ty1, ty2) | Tor (ty1, ty2)
+  | Tcontract_view (_, ty1, ty2) ->
     set_curry_flag ty1; set_curry_flag ty2
   | Tlambda (ty1, ty2, u) ->
     set_curry_flag ty1; set_curry_flag ty2;
