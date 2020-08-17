@@ -213,16 +213,19 @@ let rec compile_desc depth env ~loc desc =
     amount @
     [ push ~loc Tunit CUnit; ii ~loc TRANSFER_TOKENS ]
 
-  | Call { contract = ({ ty = Tcontract_handle _ } as contract);
-           amount; entry; arg } ->
+  | Call { entry = View _ } | Call { amount = None } ->
+    LiquidLoc.raise_error ~loc "Cannot compile views to Michelson"
+
+  | Call { contract = DContract ({ ty = Tcontract_handle _ } as contract);
+           amount = Some amount; entry; arg } ->
     (* Contract.call compiled to TRANSFER_TOKENS *)
     let contract = compile depth env contract in
     let amount = compile (depth+1) env amount in
     let arg = compile (depth+2) env arg in
     contract @ amount @ arg @ [ ii ~loc TRANSFER_TOKENS ]
 
-  | Call { contract = ({ ty = Taddress } as address);
-           amount; entry = Some entry; arg } ->
+  | Call { contract = DContract ({ ty = Taddress } as address);
+           amount = Some amount; entry = Entry entry; arg } ->
     (* Contract.call on addresses compiled to CONTRACT + TRANSFER_TOKENS *)
     let address = compile depth env address in
     let ty = LiquidEncode.encode_type arg.ty in
@@ -238,6 +241,20 @@ let rec compile_desc depth env ~loc desc =
           seq [ push ~loc Tstring (CString error_msg) ;
                 ii ~loc FAILWITH ],
           seq []) ] in
+    let amount = compile (depth+1) env amount in
+    let arg = compile (depth+2) env arg in
+    contract @ amount @ arg @ [ ii ~loc TRANSFER_TOKENS ]
+
+  | Call { contract = DSelf; amount = Some amount; entry; arg } ->
+    if env.in_lambda then
+      LiquidLoc.raise_error ~loc
+        "Typing error: \
+         Self call is not allowed inside non-inlined functions\n%!";
+    let entry = match entry with
+      | NoEntry | Entry "default" -> None
+      | Entry entry -> Some entry
+      | View _ -> assert false in
+    let contract = [ ii ~loc (SELF entry) ] in
     let amount = compile (depth+1) env amount in
     let arg = compile (depth+2) env arg in
     contract @ amount @ arg @ [ ii ~loc TRANSFER_TOKENS ]
@@ -462,7 +479,10 @@ let rec compile_desc depth env ~loc desc =
 
   | ContractAt { arg; entry; entry_param } ->
     let param_ty = LiquidEncode.encode_type entry_param in
-    let entry = match entry with "default" -> None | _ -> Some entry in
+    let entry = match entry with
+      | NoEntry | Entry "default" -> None
+      | Entry entry -> Some entry
+      | View _ -> assert false in
     compile depth env arg @
     [ ii ~loc (CONTRACT (entry, param_ty)) ]
 

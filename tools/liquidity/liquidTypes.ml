@@ -965,12 +965,14 @@ and ('ty, 'a) exp_desc =
   (** Self contract calls:
       - {[ Self.entry arg ~amount ]} *)
 
-  | Call of { contract: ('ty, 'a) exp;
-              amount: ('ty, 'a) exp;
-              entry: string option;
+  | Call of { contract: ('ty, 'a) dest;
+              amount: ('ty, 'a) exp option;
+              entry: entry_or_view;
               arg: ('ty, 'a) exp }
   (** Contract calls:
-      - {[ contract.entry arg ~amount ]} *)
+      - {[ contract.entry arg ~amount ]}
+       Contract views:
+      - {[ contract.view arg ]}  *)
 
   | MatchOption of { arg : ('ty, 'a) exp;
                      ifnone: ('ty, 'a) exp;
@@ -1077,7 +1079,7 @@ and ('ty, 'a) exp_desc =
       {[ Contract.create ~delegate~amount (contract C) ]} *)
 
   | ContractAt of { arg: ('ty, 'a) exp;
-                    entry: string;
+                    entry: entry_or_view;
                     entry_param: datatype }
   (** Contract handle from address: {[%handle <sig>] arg} *)
 
@@ -1093,6 +1095,14 @@ and ('ty, 'a) exp_desc =
   | Type of datatype
   (** Type, for use with extended primitives : [ty] *)
 
+and ('ty, 'a) dest =
+  | DSelf
+  | DContract of ('ty, 'a) exp
+
+and entry_or_view =
+  | NoEntry
+  | Entry of string
+  | View of string
 
 (** Ghost type for typed expressions *)
 type typed
@@ -1147,8 +1157,11 @@ let mk =
         dest.effect || amount.effect,
         true
 
-      | Call { contract; amount; arg } ->
-        contract.effect || amount.effect || arg.effect,
+      | Call { contract = DContract contract; amount; arg } ->
+        contract.effect || (match amount with Some a -> a.effect| None -> false) || arg.effect,
+        true
+      | Call { contract = _; amount; arg } ->
+        (match amount with Some a -> a.effect| None -> false) || arg.effect,
         true
 
       | Self _ -> false, false
@@ -1251,8 +1264,17 @@ let rec eq_exp_desc eq_ty eq_var e1 e2 = match e1, e2 with
     eq_exp eq_ty eq_var f1.body f2.body
   | Call t1, Call t2 ->
     t1.entry = t2.entry &&
-    eq_exp eq_ty eq_var t1.contract t2.contract &&
-    eq_exp eq_ty eq_var t1.amount t2.amount &&
+    (match t1.contract, t2.contract with
+     | DContract c1, DContract c2 ->
+       eq_exp eq_ty eq_var c1 c2
+     | DSelf, DSelf -> true
+     | _ -> false
+    ) &&
+    (match t1.amount, t2.amount with
+     | Some a1, Some a2 -> eq_exp eq_ty eq_var a1 a2
+     | None, None -> true
+     | _ -> false
+    ) &&
     eq_exp eq_ty eq_var t1.arg t2.arg
   | Self e1, Self e2 -> e1.entry = e2.entry
   | SelfCall t1, SelfCall t2 ->

@@ -957,9 +957,12 @@ and translate_code contracts env exp =
         with
         | [c; t; a] -> c, t, a
         | _ -> assert false in
-      Call { contract = translate_code contracts env contract;
-             amount = translate_code contracts env amount;
-             entry = None;
+      let contract = match contract with
+        | { pexp_desc = Pexp_ident ( { txt = Lident "Self" } ) } -> DSelf
+        | _ -> DContract (translate_code contracts env contract) in
+      Call { contract;
+             amount = Some (translate_code contracts env amount);
+             entry = NoEntry;
              arg = translate_code contracts env arg }
 
     | { pexp_desc =
@@ -979,13 +982,31 @@ and translate_code contracts env exp =
         | _ -> error_loc pexp_loc "wrong arguments" in
       let amount = translate_code contracts env amount in
       let arg = translate_code contracts env arg in
-      begin match contract with
-        | { pexp_desc = Pexp_construct ({ txt = Lident "Self" }, None) } ->
-          SelfCall { amount; entry; arg }
-        | _ ->
-          Call { contract = translate_code contracts env contract;
-                 amount; entry = Some entry; arg }
-      end
+      let contract = match contract with
+        | { pexp_desc = Pexp_ident ( { txt = Lident "Self" } ) } -> DSelf
+        | _ -> DContract (translate_code contracts env contract) in
+      Call { contract; amount = Some amount; entry = Entry entry; arg }
+
+    | { pexp_desc =
+          Pexp_apply (
+            { pexp_desc = Pexp_ident
+                  { txt = Ldot(Lident "Contract", "view") } },
+            ([_; _; _] as args));
+        pexp_loc } ->
+      let contract, entry, arg =
+        match order_labelled_args pexp_loc
+                ["dest"; "entry"; "parameter"] args
+        with
+        | [c; { pexp_desc = Pexp_ident { txt = e }}; a] ->
+          c, str_of_id e, a
+        | [c; { pexp_desc = Pexp_constant (Pconst_string (e, None)) }; a] ->
+          c, e, a
+        | _ -> error_loc pexp_loc "wrong arguments" in
+      let arg = translate_code contracts env arg in
+      let contract = match contract with
+        | { pexp_desc = Pexp_ident ( { txt = Lident "Self" } ) } -> DSelf
+        | _ -> DContract (translate_code contracts env contract) in
+      Call { contract; amount = None; entry = View entry; arg }
 
     | { pexp_desc =
           Pexp_apply (
@@ -1076,22 +1097,59 @@ and translate_code contracts env exp =
         with Not_found ->
           error_loc c_loc "Unknown contract type %s" contract_name  in
       let { parameter = entry_param } =
-        try List.find (fun { entry_name } -> entry_name = entry_point )
+        try List.find (fun { entry_name; return } ->
+            entry_name = entry_point && return = None)
               c_sig.entries_sig
         with Not_found ->
           error_loc c_loc "%s has no entry point %s" contract_name entry_point
       in
       ContractAt { arg = translate_code contracts env addr_exp;
-                   entry = entry_point ;
+                   entry = Entry entry_point ;
                    entry_param }
 
-    (* [%handle: val%entry entry_name : param_ty ] *)
+    | { pexp_desc =
+          Pexp_apply (
+            { pexp_desc = Pexp_extension (
+                  { txt = "view" },
+                  PStr [{ pstr_desc = Pstr_eval (
+                      { pexp_desc = Pexp_ident
+                            { txt = Ldot(contract_id, view);
+                              loc = c_loc } },
+                      [])}]
+                )
+            },
+            [
+              Nolabel, addr_exp;
+            ]) }
+      (* when StringMap.mem (str_of_id contract_id) env.contract_types *) ->
+      let contract_name = str_of_id contract_id in
+      let c_sig =
+        try find_contract_type ~loc contract_name env
+        with Not_found ->
+          error_loc c_loc "Unknown contract type %s" contract_name  in
+      let param, ret =
+        match
+          List.find_opt (fun { entry_name; return } ->
+              entry_name = view && return <> None)
+            c_sig.entries_sig
+        with
+        | None ->
+          error_loc c_loc "%s has no view %s" contract_name view
+        | Some { parameter; return = Some return } -> parameter, return
+        | _ -> assert false
+      in
+      ContractAt { arg = translate_code contracts env addr_exp;
+                   entry = View view ;
+                   entry_param = Tlambda (param, ret, default_uncurry ()) }
+
+    (* [%handle: val%entry entry_name : param_ty ]
+       [%handle: val%view view_name : param_ty -> result_ty ] *)
     | { pexp_desc =
           Pexp_apply (
             { pexp_desc = Pexp_extension (
                   { txt = "handle" },
                   PSig [{ psig_desc = Psig_extension (
-                      ({ txt = "entry" }, PSig [{
+                      ({ txt = ("entry" | "view") as kind }, PSig [{
                            psig_desc = Psig_value {
                                pval_name = { txt = entry_name; loc = name_loc };
                                pval_type = param_ty;
@@ -1108,9 +1166,13 @@ and translate_code contracts env exp =
             ]) } ->
       let entry_param = translate_type env param_ty in
       if List.mem entry_name reserved_keywords then
-        error_loc name_loc "entry point %S forbidden" entry_name;
+        error_loc name_loc "%s %S forbidden" kind entry_name;
+      let entry = match kind with
+        | "entry" -> Entry entry_name
+        | "view" -> View entry_name
+        | _ -> assert false in
       ContractAt { arg =  translate_code contracts env addr_exp;
-                   entry = entry_name;
+                   entry;
                    entry_param }
 
     | { pexp_desc =
@@ -1428,9 +1490,12 @@ and translate_code contracts env exp =
         ( [Nolabel, param; Labelled "amount", amount]
         | [Labelled "amount", amount; Nolabel, param] )
       ) } ->
-      Call { contract = translate_code contracts env contract;
-             amount = translate_code contracts env amount;
-             entry = Some entry;
+      let contract = match contract with
+        | { pexp_desc = Pexp_ident ( { txt = Lident "Self" } ) } -> DSelf
+        | _ -> DContract (translate_code contracts env contract) in
+      Call { contract;
+             amount = Some (translate_code contracts env amount);
+             entry = Entry entry;
              arg = translate_code contracts env param }
 
     (* f @@ x -> f x *)
@@ -1825,24 +1890,27 @@ and translate_entry name env contracts ~is_view head_exp mk_parameter mk_storage
     LiquidLoc.raise_error ~loc:(loc_of_loc pexp_loc)
       "entry point %s needs two arguments" name
 
-  | { pexp_desc = Pexp_constraint (head_exp, return_type); pexp_loc } ->
-    begin match translate_type env return_type with
-      | Ttuple [ ret_ty; sto_ty ] ->
-        let storage = find_type ~loc:noloc "storage" env [] in
-        if not @@ eq_types sto_ty storage then
-          error_loc pexp_loc
-            "Second component of return type must be identical to storage type";
-        if ret_ty <> Tlist Toperation then
-          error_loc pexp_loc
-            "First component of return type must be an operation list"
-      | _ ->
-        error_loc pexp_loc
-          "return type must be a product of \"operation list\" \
-           and the storage type"
-    end;
-    translate_entry name env contracts ~is_view head_exp mk_parameter mk_storage
-
   | exp ->
+    (* Extra check for entry point signature *)
+    (* begin match exp with
+     *   | { pexp_desc = Pexp_constraint (_, return_type); pexp_loc }
+     *     when not is_view ->
+     *     begin match translate_type env return_type with
+     *       | Ttuple [ ret_ty; sto_ty ] ->
+     *         let storage = find_type ~loc:noloc "storage" env [] in
+     *         if not @@ eq_types sto_ty storage then
+     *           error_loc pexp_loc
+     *             "Second component of return type must be identical to storage type";
+     *         if ret_ty <> Tlist Toperation then
+     *           error_loc pexp_loc
+     *             "First component of return type must be an operation list"
+     *       | _ ->
+     *         error_loc pexp_loc
+     *           "return type must be a product of \"operation list\" \
+     *            and the storage type"
+     *     end
+     *   | _ -> ()
+     * end; *)
     let code = translate_code contracts env exp in
     let mk_parameter, mk_storage = match mk_parameter, mk_storage with
       | Some mkp, Some mks -> mkp, mks
@@ -1859,12 +1927,13 @@ and translate_entry name env contracts ~is_view head_exp mk_parameter mk_storage
         let _, fee_code = mk_storage fee_code in
         Some fee_code
       | attrs ->
-        Format.kasprintf
-          (fun s -> LiquidLoc.warn (loc_of_loc exp.pexp_loc) (WOther s))
-          "Attributes %a ignored with network %S"
-          (Format.pp_print_list
-             (fun fmt ({ txt }, _) -> Format.pp_print_string fmt txt)) attrs
-          (LiquidOptions.network_name ());
+        if attrs <> [] then
+          Format.kasprintf
+            (fun s -> LiquidLoc.warn (loc_of_loc exp.pexp_loc) (WOther s))
+            "Attributes %a ignored with network %S"
+            (Format.pp_print_list
+               (fun fmt ({ txt }, _) -> Format.pp_print_string fmt txt)) attrs
+            (LiquidOptions.network_name ());
         None
     in
     set_curry_flag parameter;

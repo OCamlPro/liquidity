@@ -674,49 +674,142 @@ and typecheck env ( exp : syntax_exp ) : typed_exp =
     let desc = SelfCall { amount; entry; arg } in
     mk ?name:exp.name ~loc desc Toperation
 
-  | Call { contract; amount; entry; arg } ->
+  | Call { contract; amount = Some _; entry = View _; arg }
+  | Call { contract; amount = None; entry = (NoEntry | Entry _); arg } ->
+    assert false
+
+  | Call { contract; amount = Some amount;
+           entry = (Entry _ | NoEntry) as entry; arg } ->
     let amount = typecheck_expected "call amount" env Ttez amount in
-    let contract = typecheck env contract in
+    let contract = match contract with
+      | DContract c ->
+        DContract (typecheck env c)
+      | DSelf -> DSelf in
     let arg, entry =
-      match expand contract.ty, entry with
-      | Tcontract_handle (Some c_entry, arg_ty), Some entry
-        when not env.decompiling && entry <> c_entry ->
-        error loc
-          "contract handle is for entry point %s, \
-           but is called with entry point %s"
-          c_entry entry
-      | Tcontract_handle (e, arg_ty), entry ->
-        let entry = match e, entry with
-          | None, None -> None
-          | Some e, _ | _, Some e -> Some e in
-        typecheck_expected "call argument" env arg_ty arg, entry
-      | Taddress, Some _ -> typecheck env arg, entry
-      | Tvar _, Some _ ->
-        let arg = typecheck env arg in
-        unify contract.ty Taddress;
-        arg, entry
-      | (Taddress | Tvar _), None ->
-        error loc "contract call on address must specify an entry point"
-      | Tpartial (Pcont pe), _ ->
-        let entry = match pe, entry with
-          | None, None -> None
-          | _, Some e | Some (e, _), _ -> Some e in
-        let arg = typecheck env arg in
-        unify contract.ty (Tcontract_handle (entry, arg.ty));
-        arg, entry
-      | ty, _ ->
-        error contract.loc
-          "Bad contract type.\nAllowed types:\n  \
-           - Contract handle%s\n  \
-           - address\n\
-           Actual type:\n  %s"
-          (match entry with
-           | None -> ""
-           | Some e -> " for entry point " ^ e)
-          (string_of_type ty)
+      match contract with
+      | DSelf ->
+        let self_entries =
+          List.filter (fun e -> e.return = None)
+            env.t_contract_sig.f_entries_sig in
+        let entry = match entry with
+          | Entry e -> e
+          | _ -> error loc "Self must be called with entry point" in
+        let arg =
+          match List.find_opt (fun e -> e.entry_name = entry) self_entries with
+          | Some e -> typecheck_expected "call argument" env e.parameter arg
+          | None ->
+            (* if env.decompiling then
+             *   typecheck env arg
+             * else *)
+            error loc
+              "contract has no entry point %s (available entry points: %a)"
+              entry
+              (Format.pp_print_list
+                 ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ")
+                 (fun fmt e -> Format.pp_print_string fmt e.entry_name))
+              self_entries;
+        in
+        arg, Entry entry
+
+      | DContract contract ->
+        match expand contract.ty, entry with
+        | Tcontract_handle (Some c_entry, arg_ty), Entry entry
+          when not env.decompiling && entry <> c_entry ->
+          error loc
+            "contract handle is for entry point %s, \
+             but is called with entry point %s"
+            c_entry entry
+        | Tcontract_handle (e, arg_ty), entry ->
+          let entry = match e, entry with
+            | None, NoEntry -> NoEntry
+            | Some e, _ | _, Entry e -> Entry e
+            | _ -> assert false in
+          typecheck_expected "call argument" env arg_ty arg, entry
+        | Taddress, Entry _ -> typecheck env arg, entry
+        | Tvar _, Entry _ ->
+          let arg = typecheck env arg in
+          unify contract.ty Taddress;
+          arg, entry
+        | (Taddress | Tvar _), NoEntry ->
+          error loc "contract call on address must specify an entry point"
+        | Tpartial (Pcont pe), _ ->
+          let entry, rentry = match pe, entry with
+            | None, NoEntry -> None, NoEntry
+            | _, View _ -> assert false
+            | _, Entry e | Some (e, _), _ -> Some e, Entry e in
+          let arg = typecheck env arg in
+          unify contract.ty (Tcontract_handle (entry, arg.ty));
+          arg, rentry
+        | ty, _ ->
+          error contract.loc
+            "Bad contract type.\nAllowed types:\n  \
+             - Contract handle%s\n  \
+             - address\n\
+             Actual type:\n  %s"
+            (match entry with
+             | NoEntry -> ""
+             | View _ -> assert false
+             | Entry e -> " for entry point " ^ e)
+            (string_of_type ty)
     in
-    let desc = Call { contract; amount; entry; arg } in
+    let desc = Call { contract; amount = Some amount; entry; arg } in
     mk ?name:exp.name ~loc desc Toperation
+
+  | Call { contract; amount = None;
+           entry = View view; arg } ->
+    let contract = match contract with
+      | DContract c ->
+        DContract (typecheck env c)
+      | DSelf -> DSelf in
+    let arg, ret_ty =
+      match contract with
+      | DSelf ->
+        let self_views =
+          List.filter (fun e -> e.return <> None)
+            env.t_contract_sig.f_entries_sig in
+        (match List.find_opt (fun e -> e.entry_name = view) self_views with
+         | Some v ->
+           let ret_ty = match v.return with None -> assert false | Some t -> t in
+           typecheck_expected "view argument" env v.parameter arg, ret_ty
+         | None ->
+           (* if env.decompiling then
+              *   typecheck env arg
+              * else *)
+           error loc
+             "contract has no view point %s (available views: %a)"
+             view
+             (Format.pp_print_list
+                ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ")
+                (fun fmt e -> Format.pp_print_string fmt e.entry_name))
+             self_views
+        )
+
+      | DContract contract ->
+        match expand contract.ty with
+        | Tcontract_view (c_view, _, _)
+          when not env.decompiling && view <> c_view ->
+          error loc
+            "contract handle is for view %s, \
+             but is called with view %s"
+            c_view view
+        | Tcontract_view (c_view, arg_ty, ret_ty) ->
+          typecheck_expected (c_view ^ " view argument") env arg_ty arg, ret_ty
+        | Taddress -> typecheck env arg, fresh_tvar ()
+        | Tvar _ ->
+          let arg = typecheck env arg in
+          unify contract.ty Taddress;
+          arg, fresh_tvar ()
+        | ty ->
+          error contract.loc
+            "Bad contract type.\nAllowed types:\n  \
+             - Contract handle for view %s\n  \
+             - address\n\
+             Actual type:\n  %s"
+            view
+            (string_of_type ty)
+    in
+    let desc = Call { contract; amount = None; entry = View view; arg } in
+    mk ?name:exp.name ~loc desc ret_ty
 
   (* contract.entry_name (param) amount *)
   | Apply { prim = Prim_exec _;
@@ -727,7 +820,21 @@ and typecheck env ( exp : syntax_exp ) : typed_exp =
       | _ -> false
     ->
     typecheck env
-      (mk (Call { contract; amount; entry = Some entry; arg = param })
+      (mk (Call { contract = DContract contract; amount = Some amount;
+                  entry = Entry entry; arg = param })
+         ~loc ())
+
+  (* contract.view_name (param) *)
+  | Apply { prim = Prim_exec _;
+            args = { desc = Project { field = view; record = contract }} ::
+                   [param] }
+    when match (typecheck env contract).ty with
+      | Tcontract_view _ | Taddress -> true
+      | _ -> false
+    ->
+    typecheck env
+      (mk (Call { contract = DContract contract; amount = None;
+                  entry = View view; arg = param })
          ~loc ())
 
   | Apply { prim = Prim_exec _;
@@ -739,6 +846,16 @@ and typecheck env ( exp : syntax_exp ) : typed_exp =
         nb_args
     else
       error loc "Bad syntax for Contract.call."
+
+  | Apply { prim = Prim_exec _;
+            args = { desc = Var "Contract.view" } :: args } ->
+    let nb_args = List.length args in
+    if nb_args <> 3  then
+      error loc
+        "Contract.view expects 3 arguments, it was given %d arguments."
+        nb_args
+    else
+      error loc "Bad syntax for Contract.view."
 
   (* Extended primitives *)
   | Apply { prim = Prim_extension (ename, effect, targs, nb_arg, nb_ret, minst);
@@ -1316,7 +1433,18 @@ and typecheck env ( exp : syntax_exp ) : typed_exp =
   | ContractAt { arg; entry; entry_param } ->
     let arg = typecheck_expected "[%%handle ...] argument" env Taddress arg in
     let desc = ContractAt { arg; entry; entry_param } in
-    mk ?name:exp.name ~loc desc (Toption (Tcontract_handle (Some entry, entry_param)))
+    let ret_ty = match entry, entry_param with
+      | NoEntry, _ -> Tcontract_handle (None, entry_param)
+      | Entry e, _ -> Tcontract_handle (Some e, entry_param)
+      | View v, Tlambda (param, ret, _) ->
+        Tcontract_view (v, param, ret)
+      | View v, _ ->
+        let param = fresh_tvar () in
+        let ret = fresh_tvar () in
+        unify entry_param (Tlambda (param, ret, default_uncurry ()));
+        Tcontract_view (v, param, ret)
+    in
+    mk ?name:exp.name ~loc desc (Toption ret_ty)
 
   | CreateContract { args; contract } ->
     let contract = typecheck_contract ~warnings:env.warnings
@@ -2059,7 +2187,10 @@ and typecheck_expected info env expected_ty exp =
   let exp = typecheck env exp in
   if exp.ty <> Tfail then
     if has_tvar exp.ty || has_tvar expected_ty then
-      unify exp.loc exp.ty expected_ty
+      try unify exp.loc exp.ty expected_ty
+      with LiquidError e ->
+        fail_neq ~info:("in "^info) ~more:e.err_msg
+          ~loc:exp.loc ~expected_ty exp.ty
     else
       fail_neq ~info:("in "^info) ~loc:exp.loc ~expected_ty exp.ty;
   exp

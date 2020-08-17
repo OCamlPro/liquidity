@@ -790,9 +790,13 @@ let rec tvars_to_unit ?(err=false) ~keep_tvars ({ desc; ty; loc } as e) =
       Transfer { dest = tvars_to_unit dest;
                  amount = tvars_to_unit amount }
     | Call { contract; amount; entry; arg } ->
-      Call { contract = tvars_to_unit ~err:true contract;
-             amount = tvars_to_unit amount;
-             entry;
+      let contract = match contract with
+        | DSelf -> DSelf
+        | DContract contract -> DContract (tvars_to_unit ~err:true contract) in
+      let amount = match amount with
+        | None -> None
+        | Some amount -> Some (tvars_to_unit amount) in
+      Call { contract; amount; entry;
              arg = tvars_to_unit ~err:true arg }
     | Self { entry } -> Self { entry }
     | SelfCall { amount; entry; arg } ->
@@ -1044,10 +1048,16 @@ let rec mono_exp env subst vtys (e:typed_exp) =
     | Seq (e1, e2) -> Seq (mono_exp subst vtys e1, mono_exp subst vtys e2)
     | Transfer tr -> Transfer { dest = mono_exp subst vtys tr.dest;
                                 amount = mono_exp subst vtys tr.amount }
-    | Call c -> Call { entry = c.entry;
-                       contract = mono_exp subst vtys c.contract;
-                       amount = mono_exp subst vtys c.amount;
-                       arg = mono_exp subst vtys c.arg }
+    | Call c ->
+      let contract = match c.contract with
+        | DSelf -> DSelf
+        | DContract c -> DContract (mono_exp subst vtys c) in
+      let amount = match c.amount with
+        | None -> None
+        | Some a -> Some (mono_exp subst vtys a) in
+      Call { entry = c.entry;
+             contract; amount;
+             arg = mono_exp subst vtys c.arg }
     | Self { entry } -> Self { entry }
     | SelfCall c -> SelfCall { entry = c.entry;
                                amount = mono_exp subst vtys c.amount;

@@ -63,7 +63,13 @@ let rec compute decompile code to_inline =
     | Fold { body; arg; acc }
     | MapFold { body; arg; acc } -> 30 + size body + size arg + size acc
     | Call { contract; amount; arg } ->
-      1 + size contract + size amount + size arg
+      let sc = match contract with
+        | DContract c -> size c
+        | DSelf -> 0 in
+      let sa = match amount with
+        | Some a -> size a
+        | None -> 0 in
+      1 + sc + sa + size arg
     | SelfCall { amount; arg } ->
       1 + size amount + size arg
     | Transfer { dest; amount } ->
@@ -309,8 +315,12 @@ let rec compute decompile code to_inline =
       { exp with desc = Transfer { dest; amount } }
 
     | Call { contract; amount; entry; arg } ->
-      let contract = iter contract in
-      let amount = iter amount in
+      let contract = match contract with
+        | DContract c -> DContract (iter c)
+        | DSelf -> DSelf in
+      let amount = match amount with
+        | Some a -> Some (iter a)
+        | None -> None in
       let arg = iter arg in
       { exp with desc = Call { contract; amount; entry; arg } }
 

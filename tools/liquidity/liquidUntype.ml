@@ -209,9 +209,13 @@ let rec untype (env : env) (code : (datatype, 'a) exp) : (unit, 'b) exp =
                  amount = untype env amount }
 
     | Call { contract; amount; entry; arg } ->
-      Call { contract = untype env contract;
-             amount = untype env amount;
-             entry;
+      let contract = match contract with
+        | DSelf -> DSelf
+        | DContract c -> DContract (untype env c) in
+      let amount = match amount with
+        | None -> None
+        | Some a -> Some (untype env a) in
+      Call { contract; amount; entry;
              arg = untype env arg }
 
     | Self { entry } -> Self { entry }

@@ -92,9 +92,13 @@ let rec ttfail_to_tvar ({ desc; ty; loc } as e) =
       Transfer { dest = ttfail_to_tvar dest;
                  amount = ttfail_to_tvar amount }, tfail_to_tvar ty
     | Call { contract; amount; entry; arg } ->
-      Call { contract = ttfail_to_tvar contract;
-             amount = ttfail_to_tvar amount;
-             entry;
+      let contract = match contract with
+        | DSelf -> DSelf
+        | DContract c -> DContract (ttfail_to_tvar c) in
+      let amount = match amount with
+        | None -> None
+        | Some a -> Some (ttfail_to_tvar a) in
+      Call { contract; amount; entry;
              arg = ttfail_to_tvar arg }, tfail_to_tvar ty
     | MatchOption { arg; ifnone; some_name; ifsome } ->
       let ifnone = ttfail_to_tvar ifnone in

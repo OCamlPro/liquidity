@@ -496,11 +496,19 @@ let rec decr_counts_vars env e =
     | MatchOption { arg = e1; ifnone = e2; ifsome = e3 }
     | Fold { body = e1; arg = e2; acc = e3 }
     | MapFold { body = e1; arg = e2; acc = e3 }
-    | LoopLeft { body = e1; arg = e2; acc = Some e3 }
-    | Call { contract = e1; amount = e2; arg = e3 } ->
+    | LoopLeft { body = e1; arg = e2; acc = Some e3 } ->
       decr_counts_vars env e1;
       decr_counts_vars env e2;
       decr_counts_vars env e3;
+
+    | Call { contract; amount; arg } ->
+      (match contract with
+       | DSelf -> ()
+       | DContract c -> decr_counts_vars env c);
+      (match amount with
+       | None -> ()
+       | Some a -> decr_counts_vars env a);
+      decr_counts_vars env arg
 
     | Apply { args }
     | CreateContract { args } ->
@@ -699,8 +707,12 @@ and encode env ( exp : typed_exp ) : encoded_exp =
     mk ?name:exp.name ~loc (Transfer { dest; amount }) exp.ty
 
   | Call { contract; amount; entry; arg } ->
-    let amount = encode env amount in
-    let contract = encode env contract in
+    let amount = match amount with
+      | None -> None
+      | Some amount -> Some (encode env amount) in
+    let contract = match contract with
+      | DSelf -> DSelf
+      | DContract contract -> DContract (encode env contract) in
     let arg = encode env arg in
     mk ?name:exp.name ~loc
       (Call { contract; amount; entry; arg }) Toperation

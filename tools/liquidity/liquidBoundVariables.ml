@@ -84,9 +84,15 @@ let rec bv code =
   | SelfCall { amount; arg } -> StringSet.union (bv arg) (bv amount)
 
   | Call { contract; amount; entry; arg } ->
+    let exps = (match contract with
+      | DContract c -> [c]
+      | DSelf -> []
+      ) @ match amount with
+      | None -> [arg]
+      | Some a -> [a; arg] in
     List.fold_left (fun set exp ->
         StringSet.union set (bv exp)
-      ) StringSet.empty [contract; amount; arg]
+      ) StringSet.empty exps
 
   | Loop { arg_name; body; arg }
   | LoopLeft { arg_name; body; arg; acc = None }
@@ -319,13 +325,23 @@ let rec bound code =
     mk desc code bv
 
   | Call { contract; amount; entry; arg } ->
-    let contract = bound contract in
-    let amount = bound amount in
+    let contract = match contract with
+      | DContract c -> DContract (bound c)
+      | DSelf -> DSelf in
+    let amount = match amount with
+      | Some a -> Some (bound a)
+      | None -> None in
     let arg = bound arg in
+    let exps = (match contract with
+        | DContract c -> [c]
+        | DSelf -> []
+      ) @ match amount with
+      | None -> [arg]
+      | Some a -> [a; arg] in
     let bv =
       List.fold_left (fun set exp ->
           StringSet.union set (exp.bv)
-        ) StringSet.empty [contract; amount; arg]
+        ) StringSet.empty exps
     in
     let desc = Call {contract; amount; entry; arg } in
     mk desc code bv

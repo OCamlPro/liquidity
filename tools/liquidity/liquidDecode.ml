@@ -98,23 +98,32 @@ and decode ( exp : encoded_exp ) : typed_exp =
     mk ?name:exp.name ~loc desc exp.ty
 
   | Call { amount; entry = _; arg;
-           contract = { desc = MatchOption {
+           contract = DContract { desc = MatchOption {
                arg = { desc = ContractAt { arg = addr; entry; entry_param }};
                ifnone = { desc = Failwith _ };
                ifsome = { desc = Var x }; some_name }  }
          } when some_name.nname = x ->
-    let amount = decode amount in
+    let amount = match amount with
+      | None -> None
+      | Some amount -> Some (decode amount) in
     let contract = decode addr in
     let arg = decode arg in
-    let desc = Call { contract; amount; entry = Some entry; arg } in
+    let desc = Call { contract = DContract contract; amount;
+                      entry; arg } in
     mk ?name:exp.name ~loc desc exp.ty
 
   | Call { contract; amount; entry; arg } ->
-    let amount = decode amount in
-    let contract = decode contract in
-    let entry = match contract.ty, entry with
-      | Tcontract_handle (Some e, _ ), _ | _, Some e -> Some e
-      | _, None -> None in
+    let amount = match amount with
+      | None -> None
+      | Some amount -> Some (decode amount) in
+    let contract, entry = match contract with
+      | DSelf -> DSelf, entry
+      | DContract contract ->
+        let entry = match contract.ty, entry with
+          | Tcontract_handle (Some e, _ ), _ | _, Entry e -> Entry e
+          | Tcontract_view (v, _, _), _ | _, View v -> View v
+          | _, NoEntry -> NoEntry in
+        DContract (decode contract), entry in
     let arg = decode arg in
     let desc = Call { contract; amount; entry; arg } in
     mk ?name:exp.name ~loc desc exp.ty

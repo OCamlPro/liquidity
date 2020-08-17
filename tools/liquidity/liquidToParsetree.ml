@@ -518,7 +518,8 @@ and convert_code ~abbrev (expr : (datatype, 'a) exp) =
         Labelled "amount", convert_code ~abbrev amount;
       ]
 
-  | Call { contract; amount; entry = None; arg } ->
+  | Call { contract = DContract contract;
+           amount = Some amount; entry = NoEntry; arg } ->
     let contract_exp = convert_code ~abbrev contract in
     Exp.apply ~loc
       (Exp.ident (lid "Contract.call"))
@@ -528,7 +529,8 @@ and convert_code ~abbrev (expr : (datatype, 'a) exp) =
         Labelled "amount", convert_code ~abbrev amount;
       ]
 
-  | Call { contract; amount; entry = Some entry; arg } ->
+  | Call { contract = DContract contract; amount = Some amount;
+           entry = Entry entry; arg } ->
     let contract_exp = convert_code ~abbrev contract in
     Exp.apply ~loc
       (Exp.field contract_exp (lid entry))
@@ -536,6 +538,40 @@ and convert_code ~abbrev (expr : (datatype, 'a) exp) =
         Nolabel, convert_code ~abbrev arg;
         Labelled "amount", convert_code ~abbrev amount;
       ]
+
+  | Call { contract = DSelf; amount = Some amount;
+           entry = (NoEntry | Entry _) as entry; arg } ->
+    let entry = match entry with
+      | NoEntry -> "default"
+      | Entry e -> e
+      | View _ -> assert false in
+    Exp.apply ~loc
+      (Exp.ident (lid ("Self." ^ entry)))
+      [
+        Nolabel, convert_code ~abbrev arg;
+        Labelled "amount", convert_code ~abbrev amount;
+      ]
+
+  | Call { contract = DContract contract; amount = None;
+           entry = View view; arg } ->
+    let contract_exp = convert_code ~abbrev contract in
+    Exp.apply ~loc
+      (Exp.field contract_exp (lid view))
+      [
+        Nolabel, convert_code ~abbrev arg;
+      ]
+
+  | Call { contract = DSelf; amount = None;
+           entry = View view; arg } ->
+    Exp.apply ~loc
+      (Exp.ident (lid ("Self." ^ view)))
+      [
+        Nolabel, convert_code ~abbrev arg;
+      ]
+
+  | Call { amount = Some _; entry = View _}
+  | Call { amount = None; entry = (Entry _ | NoEntry) } ->
+    assert false
 
   | Self { entry } ->
     Exp.extension (
@@ -746,15 +782,19 @@ and convert_code ~abbrev (expr : (datatype, 'a) exp) =
   | CreateContract _ -> assert false
 
   | ContractAt { arg; entry; entry_param } ->
+    let sig_ext, e_id = match entry with
+      | Entry e -> "entry", e
+      | NoEntry -> "entry", "default"
+      | View v -> "view", v in
     Exp.apply ~loc
       (Exp.extension (
           id ~loc "handle",
           PSig [
             Sig.extension (
-              id ~loc "entry",
+              id ~loc sig_ext,
               PSig [
                 Sig.value
-                  (Val.mk (id entry)
+                  (Val.mk (id e_id)
                      (convert_type ~abbrev entry_param))
               ])
           ]))

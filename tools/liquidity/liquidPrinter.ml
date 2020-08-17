@@ -1204,21 +1204,43 @@ module LiquidDebug = struct
       bprint_code_rec ~debug b indent2 dest;
       bprint_code_rec ~debug b indent2 amount;
       Printf.bprintf b ")"
-    | Call { contract; amount; entry = None; arg } ->
+    | Call { amount = Some _; entry = View _ }
+    | Call { amount = None; entry = (Entry _ | NoEntry) } -> assert false
+    | Call { contract ; amount = Some amount;
+             entry = NoEntry; arg } ->
       Printf.bprintf b "\n%s(Contract.call" indent;
-      bprint_code_rec ~debug b indent contract;
+      (match contract with
+      | DContract contract -> bprint_code_rec ~debug b indent contract
+      | DSelf -> Printf.bprintf b "self"
+      );
       let indent2 = indent ^ "  " in
       bprint_code_rec ~debug b indent2 arg;
       bprint_code_rec ~debug b indent2 amount;
       Printf.bprintf b ")"
-    | Call { contract; amount; entry = Some entry; arg } ->
+    | Call { contract; amount = Some amount;
+             entry = Entry entry; arg } ->
       Printf.bprintf b "\n%s(" indent;
-      bprint_code_rec ~debug b indent contract;
+      (match contract with
+      | DContract contract -> bprint_code_rec ~debug b indent contract
+      | DSelf -> Printf.bprintf b "self"
+      );
       Printf.bprintf b ".%s" entry;
       let indent2 = indent ^ "  " in
       bprint_code_rec ~debug b indent2 arg;
       bprint_code_rec ~debug b indent2 amount;
       Printf.bprintf b ")"
+    | Call { contract; amount = None;
+             entry = View view; arg } ->
+      Printf.bprintf b "\n%s(" indent;
+      (match contract with
+      | DContract contract -> bprint_code_rec ~debug b indent contract
+      | DSelf -> Printf.bprintf b "self"
+      );
+      Printf.bprintf b ".%s" view;
+      let indent2 = indent ^ "  " in
+      bprint_code_rec ~debug b indent2 arg;
+      Printf.bprintf b ")"
+
     | Self { entry } ->
       Printf.bprintf b "\n%s[%%handle Self.%s]" indent entry;
     | SelfCall { amount; entry; arg } ->
@@ -1390,7 +1412,11 @@ module LiquidDebug = struct
         ) args;
       Printf.bprintf b "\n%s(contract %s)" indent contract.contract_name;
     | ContractAt { arg; entry; entry_param } ->
-      Printf.bprintf b "\n%s[%%%%handle val%%entry %s : " indent entry;
+      let kind, entry = match entry with
+        | NoEntry -> "entry", "default"
+        | Entry e -> "entry", e
+        | View v -> "view", v in
+      Printf.bprintf b "\n%s[%%%%handle val%%%s %s : " indent kind entry;
       bprint_type b (indent ^ "  ") entry_param;
       Printf.bprintf b " -> _ ]"
     | Unpack { arg; ty } ->

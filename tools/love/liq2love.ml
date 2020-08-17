@@ -1151,18 +1151,28 @@ let rec liqexp_to_loveexp (env : env) (e : typed_exp) : AST.exp * TYPE.t =
       mk_apply ?loc:lloc
         (mk_var (string_to_ident "Account.transfer"))
         [dest; fst @@ ltl amount], operation ()
-    | Call {contract; amount; entry; arg} -> begin
+
+    | Call {amount = None ; entry = (NoEntry | Entry _) }
+    | Call {amount = Some _ ; entry = View _ } -> assert false
+
+    | Call { contract = DSelf } ->
+      error ~loc "Self not implemented yet"
+
+    | Call {contract = DContract contract; amount = Some amount;
+            entry = (NoEntry | Entry _) as entry; arg} ->
+      begin
         debug "[liqexp_to_loveexp] Creating a Call@.";
         let name =
           match entry with
-            None -> "default"
-          | Some name -> name in
+          | NoEntry -> "default"
+          | Entry name -> name
+          | View _ -> assert false in
         debug "[liqexp_to_loveexp] Calling %s@." name;
         let ctrct_or_addr, _typ = ltl contract in
         let tmp_ctrname = "CalledContract" in
         let tmp_entrypt = "entry_pt" in
         match contract.ty with
-          Tcontract_handle (cname, ty) ->
+        | Tcontract_handle (cname, ty) ->
           let cssig, entry_typ =
             let ty = liqtype_to_lovetype env ty in
             Compil_utils.get_signature_from_name cname ty env, ty
@@ -1234,6 +1244,89 @@ let rec liqexp_to_loveexp (env : env) (e : typed_exp) : AST.exp * TYPE.t =
             Love_printer.Ast.print_exp ctrct_or_addr
             (LiquidPrinter.Liquid.string_of_type t)
       end
+    | Call {contract = DContract contract; amount = None;
+            entry = View view; arg} ->
+      begin
+        debug "[liqexp_to_loveexp] Creating a View@.";
+        debug "[liqexp_to_loveexp] View %s@." view;
+        let ctrct_or_addr, _typ = ltl contract in
+        let tmp_ctrname = "ViewedContract" in
+        let tmp_view = "view_pt" in
+        match contract.ty with
+        | Tcontract_view (cname, arg_ty, ret_ty) ->
+          let arg_ty = liqtype_to_lovetype env arg_ty in
+          let ret_ty = liqtype_to_lovetype env ret_ty in
+          let view_typ = TArrow (arg_ty, ret_ty) in
+          let cssig = Compil_utils.view_signature env cname view_typ in
+          mk_let ?loc:lloc
+            (* let (CalledContract : cssig) *)
+            (mk_pcontract tmp_ctrname cssig)
+            (* = ctrct *)
+            ctrct_or_addr
+            (* in let entry_pt = CalledContract.name *)
+            (mk_let
+               (mk_pvar tmp_view)
+               (mk_var (Ident.put_in_namespace tmp_ctrname (string_to_ident view)))
+               (* in call *)
+               (mk_apply ?loc:lloc
+                  (mk_primitive_lambda ~loc env "Contract.view"
+                     (tview view_typ @=> view_typ) ANone)
+                  [mk_var @@ string_to_ident tmp_view;
+                   fst @@ ltl arg
+                  ]
+               )
+            )
+        , ret_ty
+        | Taddress ->
+          (* In liquidity, contracts can be viewd through their addresses. *)
+          let arg, typ_arg = ltl arg in
+          let typ_ret = liqtype_to_lovetype env e.ty in
+          let ty_view = TArrow (typ_arg, typ_ret) in
+          let ctr_sig = Compil_utils.view_signature env view ty_view in
+          let ctrct =
+            (* match (Contract.at arg) with *)
+            mk_match
+              (mk_apply ?loc:lloc
+                  (mk_primitive_lambda ~loc env "Contract.at"
+                     ((address ()) @=> option (TContractInstance ctr_sig))
+                     (AContractType ctr_sig)
+                  )
+                  [ctrct_or_addr]
+              )
+              [
+                (* Some ctr -> ctr *)
+                mk_pconstr "Some" [mk_pvar "ctr"], mk_var (Ident.create_id "ctr")
+              ]
+          in
+          mk_let ?loc:lloc
+            (* let (CalledContract : cssig) *)
+            (mk_pcontract tmp_ctrname ctr_sig)
+            (* = ctrct *)
+            ctrct
+            (* in let entry_pt = CalledContract.name *)
+            (mk_let
+               (mk_pvar tmp_view)
+               (mk_var (Ident.put_in_namespace tmp_ctrname (string_to_ident view)))
+               (* in call *)
+               (mk_apply ?loc:lloc
+                  (mk_primitive_lambda env "Contract.view"
+                     (tview ty_view @=> ty_view) ANone)
+                  [mk_var @@ string_to_ident tmp_view;
+                   arg
+                  ]
+               )
+            ), typ_ret
+
+        | t ->
+          error ~loc:contract.loc
+            "Expression %a has Liquidity type %s, \
+             but was expected to be a contract"
+            Love_printer.Ast.print_exp ctrct_or_addr
+            (LiquidPrinter.Liquid.string_of_type t)
+      end |> fun x ->
+      debug "[liqexp_to_loveexp] Done Creating a View@.";
+      x
+
     | MatchOption {arg; ifnone; some_name; ifsome} -> (
         debug "[liqexp_to_loveexp] Creating a Option match@.";
         let arg_loc = arg.loc in
@@ -1598,7 +1691,11 @@ let rec liqexp_to_loveexp (env : env) (e : typed_exp) : AST.exp * TYPE.t =
     | ContractAt {arg; entry; entry_param} ->
       debug "[liqexp_to_loveexp] Creating a contract at@.";
       let entry_ty = liqtype_to_lovetype env entry_param in
-      let contract = get_signature_from_name (Some entry) entry_ty env in
+      let contract = match entry with
+        | NoEntry -> get_signature_from_name None entry_ty env
+        | Entry e -> get_signature_from_name (Some e) entry_ty env
+        | View v -> view_signature env v entry_ty
+      in
       mk_apply ?loc:lloc
         (mk_var_with_arg (string_to_ident "Contract.at") (AContractType contract))
         [fst @@ ltl arg], option (TContractInstance contract)

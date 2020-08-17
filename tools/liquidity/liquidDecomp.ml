@@ -451,7 +451,8 @@ let rec decompile_next (env : env) node =
 
     | N_CONTRACT (entry, entry_param), [arg] ->
       let entry = match entry with None -> "default" | Some e -> e in
-      mklet env node (ContractAt { arg = arg_of arg; entry; entry_param })
+      mklet env node (ContractAt { arg = arg_of arg;
+                                   entry = Entry entry; entry_param })
 
     | N_UNPACK ty, [arg] ->
       mklet env node (Unpack { arg = arg_of arg; ty })
@@ -637,18 +638,27 @@ let rec decompile_next (env : env) node =
                     amount = arg_of amount })
 
 
+
     | N_CALL, [ { kind = N_SELF entry }; amount; arg] ->
       let entry = match entry with None -> "default" | Some e -> e in
       mklet env node
-        (SelfCall { amount = arg_of amount;
-                    entry;
-                    arg = arg_of arg })
+        (Call { contract = DSelf;
+                amount = Some (arg_of amount);
+                entry = Entry entry;
+                arg = arg_of arg })
+
+    (* | N_CALL, [ { kind = N_SELF entry }; amount; arg] ->
+     *   let entry = match entry with None -> "default" | Some e -> e in
+     *   mklet env node
+     *     (SelfCall { amount = arg_of amount;
+     *                 entry;
+     *                 arg = arg_of arg }) *)
 
     | N_CALL, [contract; amount; arg] ->
       mklet env node
-        (Call { contract = arg_of contract;
-                amount = arg_of amount;
-                entry = None;
+        (Call { contract = DContract (arg_of contract);
+                amount = Some (arg_of amount);
+                entry = NoEntry;
                 arg = arg_of arg })
 
     | N_CREATE_CONTRACT contract, args ->

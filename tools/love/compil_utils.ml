@@ -99,6 +99,7 @@ let bigmap (t, t') = Love_type_list.get_type "bigmap" [t; t']
 let option t = Love_type_list.get_type "option" [t]
 let variant (t, t') = Love_type_list.get_type "variant" [t; t']
 let entrypoint t = Love_type_list.get_type "entrypoint" [t]
+let tview t = Love_type_list.get_type "view" [t]
 
 let to_poly_variant = function
   | TUser (LName "unit", [])      -> `TUnit
