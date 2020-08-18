@@ -2782,7 +2782,8 @@ and liqvalue_to_lovecontent env {val_name; inline; val_private; val_exp} :
   add_var ~kind:(Value visibility) val_name typ env
 
 
-and liqentry_to_lovecontent env {entry_sig; code} =
+and liqentry_to_lovecontent env { entry_sig; code; view } =
+  assert (not view);
   let param_type = liqtype_to_lovetype env entry_sig.parameter in
   let stor_typ =
     stor_typ_from_opt_typ @@ Love_tenv.get_storage_type env in
@@ -2811,6 +2812,39 @@ and liqentry_to_lovecontent env {entry_sig; code} =
     ~kind:Entry
     name
     (entrypoint (param_type))
+    env
+
+and liqview_to_lovecontent env { entry_sig; code; view } =
+  assert view;
+  let param_type = liqtype_to_lovetype env entry_sig.parameter in
+  let stor_typ =
+    stor_typ_from_opt_typ @@ Love_tenv.get_storage_type env in
+  let env = add_var entry_sig.parameter_name param_type env in
+  let env = add_var entry_sig.storage_name stor_typ env in
+  let full_love_code = fst @@ liqexp_to_loveexp env code in
+  debug "[liqview_to_lovecontent] \
+         Creating view with storage type = %a and parameter type = %a@."
+    Love_type.pretty stor_typ
+    Love_type.pretty param_type;
+  let mk_lambda arg ty body = mk_lambda arg body ty in
+  let code =
+    mk_lambda
+      (mk_pvar entry_sig.storage_name)
+      stor_typ @@
+    mk_lambda
+      (mk_pvar entry_sig.parameter_name)
+      param_type @@
+    full_love_code in
+  let name = entry_sig.entry_name in
+  let return_typ = match entry_sig.return with
+    | None -> assert false
+    | Some t -> liqtype_to_lovetype env t in
+  let view_typ = TArrow (param_type, return_typ) in
+  (name, mk_view code view_typ NonRec),
+  Compil_utils.add_var
+    ~kind:(View Local)
+    name
+    (tview view_typ)
     env
 
 and liqinit_to_loveinit env init_args init_body =
@@ -2981,7 +3015,9 @@ and liqcontract_to_lovecontract
   let entries, env =
     List.fold_left
       (fun (acc_v, env) v ->
-         let v', env = liqentry_to_lovecontent env v in
+         let v', env = match v.view with
+           | false -> liqentry_to_lovecontent env v
+           | true -> liqview_to_lovecontent env v in
          v' :: acc_v, env)
       ([], env)
       c.entries in
