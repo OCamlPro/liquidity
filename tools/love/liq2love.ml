@@ -315,55 +315,66 @@ and liqcontract_sig_to_lovetype
       debug "[liqcontract_sig_to_lovetype] Anonymous contract@.";
       let entry_sig_to_love_content env entry =
         let name = entry.entry_name in
-        let typ, tdef =
-          match entry.parameter with
-          | Tsum (None, _) ->
+        let is_view = entry.return <> None in
+        let kind = if is_view then "View" else "Entry point" in
+        let typ_and_defs = function
+          | Tsum (None, _) as t ->
             error
               "Cannot convert contract signature. \
-               Parameter type of entry point %s: %s has no name"
-              name
-              (LiquidPrinter.Liquid.string_of_type entry.parameter)
+               Type of %s %s: %s has no name"
+              kind name
+              (LiquidPrinter.Liquid.string_of_type t)
           | Tsum (Some name, _) as t -> (
-              try liqtype_to_lovetype env t, None with
+              try liqtype_to_lovetype env t, [] with
                 UnknownType (n, _, _, _) when String.equal name n ->
-                debug "[liqcontract_sig_to_lovetype] Sum type %s defined in signature@." name;
+                debug "[liqcontract_sig_to_lovetype] \
+                       Sum type %s defined in signature@." name;
                 (* entry.parameter has not been defined yet. *)
                 let tdef = liqtype_to_lovetypedef env name t in
                 match tdef with
-                  TYPE.SumType {sparams; _} ->
-                  TUser (string_to_ident name, List.map (fun v -> TVar v) sparams), Some (name, tdef)
+                | TYPE.SumType {sparams; _} ->
+                  TUser (string_to_ident name,
+                         List.map (fun v -> TVar v) sparams),
+                  [name, tdef]
                 | _ -> assert false
             )
           | Trecord (name, _) as t -> (
-              try liqtype_to_lovetype env t, None with
+              try liqtype_to_lovetype env t, [] with
                 UnknownType (n, _, _, _) when String.equal name n ->
-                debug "[liqcontract_sig_to_lovetype] Record type %s defined in signature@." name;
+                debug "[liqcontract_sig_to_lovetype] \
+                       Record type %s defined in signature@." name;
                 (* entry.parameter has not been defined yet. *)
                 let tdef = liqtype_to_lovetypedef env name t in
                 match tdef with
                   TYPE.RecordType {rparams; _} ->
-                  TUser (string_to_ident name, List.map (fun v -> TVar v) rparams), Some (name, tdef)
+                  TUser (string_to_ident name,
+                         List.map (fun v -> TVar v) rparams),
+                  [name, tdef]
                 | _ -> assert false)
-          | t -> liqtype_to_lovetype env t, None
-
+          | t -> liqtype_to_lovetype env t, []
         in
-        debug "[liqcontract_sig_to_lovetype] Entry %s : %a@." name Love_type.pretty typ;
-        name, typ, tdef
+        let param_ty, tdef = typ_and_defs entry.parameter in
+        let typ, tdef = match entry.return with
+          | None -> param_ty, tdef
+          | Some t ->
+            let ret, tdef2 = typ_and_defs t in
+            TArrow (param_ty, ret), tdef @ tdef2 in
+        debug "[liqcontract_sig_to_lovetype] %s %s : %a@."
+          kind name Love_type.pretty typ;
+        name, typ, tdef, is_view
       in
       let sig_content, _env =
         List.fold_left
           (fun (content, env) entry ->
              debug "[liqcontract_sig_to_lovetype] Entry %s@." entry.entry_name;
-             let name, t1, tdef = entry_sig_to_love_content env entry in
+             let name, t1, tdef, is_view = entry_sig_to_love_content env entry in
              debug "[liqcontract_sig_to_lovetype] Entry %s has type %a@."
-               name
-               Love_type.pretty t1
-             ;
-             match tdef with
-               None -> (name, SEntry t1) :: content, env
-             | Some (n,t) ->
-               (n, SType (SPublic t)) :: (name, SEntry t1) :: content,
-               add_typedef_to_contract ~loc n t env
+               name Love_type.pretty t1 ;
+             let item = name, if is_view then SView t1 else SEntry t1 in
+             List.fold_left (fun (content, env) (n, t) ->
+                 (n, SType (SPublic t)) :: content,
+                 add_typedef_to_contract ~loc n t env
+               ) (item :: content, env) tdef
           )
           ([], env)
           entries_sig
