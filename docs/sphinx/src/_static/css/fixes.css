@@ -83,3 +83,45 @@ rst-content tt.literal, .rst-content tt.literal, .rst-content code.literal {
   border-top:none;
   border-bottom:none;
 }
+
+
+.love.topic {
+    border-left: 1px #af102f solid;
+    margin-bottom: 24px;
+    padding: 6px;
+}
+
+.love.topic > p {
+    margin-bottom: 0;
+}
+
+.love.topic > .topic-title {
+    color: #af102f;
+    background: #f5ced9;
+    /* border: 1px #985367 solid; */
+    border-bottom: 3px #af102f solid;
+    margin: -7px -7px 6px -7px;
+    padding: 6px;
+}
+
+.love.topic > .topic-title:before {
+  content: "❤️ ";
+}
+.only-love:before {
+  content: "🤍 ";
+}
+.only-love {
+    background: #e52c50;
+    border-radius: 6px;
+    padding: 3px 6px 2px 5px;
+    float: right;
+    font-size: small;
+    font-width: bold;
+    color: white;
+    margin-left: 10px;
+}
+
+code {
+    white-space: pre-wrap !important;
+    overflow-wrap: anywhere;
+}

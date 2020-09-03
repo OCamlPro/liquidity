@@ -119,6 +119,7 @@ The ``play`` entry point
 ~~~~~~~~~~~~~~~~~~~~~~~~
 
 The first entry point, ``play`` takes as argument a pair composed of:
+
 - a natural number, which is the number chosen by the player
 - and a key hash, which is the address on which a player wishes to be
   payed as well as the current storage of the smart contract.

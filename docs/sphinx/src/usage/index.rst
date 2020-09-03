@@ -2,9 +2,12 @@ Usage
 =====
 
 There are two tools provided by Liquidity.
+
 1. ``liquidity``, the compiler. It can be used to:
+
    * compile Liquidity files (.liq) to Michelson
    * decompile Michelson files (.tz) to Liquidity
+
 2. ``liquidity-client``, a client to interact with Liquidity contracts
    on Dune Network.
 

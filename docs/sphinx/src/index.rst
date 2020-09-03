@@ -20,10 +20,12 @@ auditing purposes.
    introduction
    installation/index
    usage/index
+   reference/liquidity
    tutorial/tutorial
    tutorial/examples
-   reference/liquidity
    man/index
+   reference/michelson_to_liquidity
+   reference/grammar
 
 .. toctree::
 ..   :maxdepth: 2

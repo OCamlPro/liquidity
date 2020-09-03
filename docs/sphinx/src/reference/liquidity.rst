@@ -1,12 +1,16 @@
 Liquidity Reference
 ===================
 
+.. role:: love
+   :class: only-love
+
+
 Contract Format
 ---------------
 
 All the contracts have the following form::
 
- [%%version 2.0]
+ [%%version 2.1]
  
  <... local declarations ...>
 
@@ -33,6 +37,12 @@ All the contracts have the following form::
      (storage : TYPE) =
      BODY
 
+ let%view view1
+     (parameter : TYPE)
+     (storage : TYPE)
+     : TYPE =
+     BODY
+
   ...
 
 The optional ``version`` statement tells the compiler in which version
@@ -41,20 +51,21 @@ contract that has a version that it does not understand (too old, more
 recent).
 
 A contract is composed of type declarations, local values definitions,
-an initializer, and a set of entry points. The type ``storage`` must
-be defined for all contracts.
+an initializer, and a set of entry points and views. The type
+``storage`` must be defined for all contracts.
 
 Each entry point is a special function declared with the keyword
 ``let%entry``. An entry point must have two arguments, the first one
-being the parameter (which must be type annotated) and the second one
-is the storage (type annotation optional). The return type of the
-function can be specified but is not necessary. Each entry point must
-be given a unique name within the same contract.
+being the parameter (whose type can be inferred, but we recommend
+writing a type annotation for documentation purposes) and the second
+one is the storage. The return type of the function can be specified
+but is not necessary. Each entry point and view must be given a unique
+name within the same contract.
 
 If there is an entry point named ``default``, it will be the default
 entry point for the contract, *i.e.* the one that is called when the
 entry point is not specified in ``Contract.call``. It is generally a
-goof idea to make this entry point take a parameter of type unit, so
+good idea to make this entry point take a parameter of type unit, so
 that the code will be executed by any transfer made to it without
 arguments. (This can code to prevent accidental token transfers for
 instance.)
@@ -66,14 +77,26 @@ contract after the call. The type of the pair must match the type of a
 pair where the first component is a list of opertations and the second
 is the type of the storage argument.
 
-``<... local declarations ...>`` is an optional set of optional type,
-function and extended primitives declarations. Type declarations can be
-used to define records and variants (sum-types), described later in this
+.. topic:: Only with Love
+   :class: love
+
+   Views are effect-less functions that return values (usually by reading
+   the storage) and that are accessible outside the contract. Each view
+   takes a parameter and a storage, and returns a value. We recommend
+   writing the parameter and return types for documentation.
+
+``<... local declarations ...>`` is an optional set of type, function
+and extended primitives declarations. Type declarations can be used to
+define records and variants (sum-types), described later in this
 documentation.
 
 An optional initial storage or storage initializer can be given with
 ``let%init storage``. When deploying a Liquidity contract, if the
 storage is not constant it is evaluated in the head context.
+
+Note that types, values, entry points and values definitions can be
+written in any order as long as they are defined before their use
+(forward references are forbidden).
 
 Basic Types and Values
 ----------------------
@@ -104,7 +127,7 @@ The built-in base types are:
 
 Composite Types
 ~~~~~~~~~~~~~~~
-  
+
 Types can be composed using the following type operators:
 
 - tuples: noted ``t1 * t2``, ``t1 * t2 * t3``, etc.
@@ -133,6 +156,43 @@ to by their names.
 
 User defined types can be parameterized by type variables. See
 `Polymorphism`_ for the specifics and limitations.
+
+Contract Handles and View Types
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Contracts can either be manipulated (stored, passed as argument to a
+function or a parameter to another contract) as *addresses* (this is a
+representation for an untyped contract, whose signature is unknown) or
+as *typed values*. Contracts can be freely converted to one type or
+the other (the internal representation during execution remains
+identical, but extra checks are performed when going from an address
+to a typed contract). These typed values mention only a subset of the
+contract signature. In fact they must mention only a single entry
+point or view in the signature, this is why we call them *handles* (to
+a specific entry point).
+
+There are two kinds of types for these handles: handles to entry
+points and handles to views.
+
+Handles to entry points need only mention the type of the parameter as
+such::
+
+  %[handle 'parameter]
+
+:love:`Only with love` Handles to views must mention the view name, the parameter type and
+the return type::
+
+  %[view (view_name : 'parameter -> 'return)]
+
+These special types can be used anywhere a type is required.
+
+Follow these links for the conversion primitives:
+
+- :ref:`Converting handles addresses <handle_to_address>` : ``Contract.address``.
+- :ref:`Converting addresses to entry point handles <handle_entry>`:
+  ``[%handle: val%entry : ...]`` or ``[%handle C.entry]``.
+- :love:`Only with love` :ref:`Converting addresses to view handles <handle_view>`:
+  ``[%handle: val%view : ...]`` or ``[%view C.view]``.
 
 
 Constant Values
@@ -554,6 +614,19 @@ Operations on contracts
   .. tryliquidity:: ../../../../tests/doc/doc15.liq
   .. literalinclude:: ../../../../tests/doc/doc15.liq
 
+* ``Contract.view: dest:(address | [%view (view_name : 'a -> 'b)]) ->
+  ?view:<view_name> -> parameter:'a -> 'b``. Call a specific contract
+  view.  Arguments can be labeled, in which case they can be given in
+  any order. The view name is mandatory if an ``dest`` is an address
+  (it is not required if ``dest`` is a view handle). The destination
+  is either a view handle or an address (in which case, an view name
+  point must be specified).
+  :love:`Only with love`
+
+  .. tryliquidity:: ../../../../tests/test_view.liq
+  .. literalinclude:: ../../../../tests/test_view.liq
+     :lines: 8-12
+
 * ``Account.default: key_hash -> [%handle unit]``. Returns a contract
   handle to the ``default`` entry point of the implicit account
   associated to the given ``key_hash``. Transfers to it cannot
@@ -572,9 +645,11 @@ Operations on contracts
   .. tryliquidity:: ../../../../tests/doc/doc18.liq
   .. literalinclude:: ../../../../tests/doc/doc18.liq
 
-* ``Contract.address: [%handle 'a] -> address`` . Returns the address of
+* .. _handle_to_address:
+
+  ``Contract.address: [%handle 'a] -> address`` . Returns the address of
   a contract. The returned address can be converted to any entry point
-  handle of the contract (contrary to ``Contract.untype``).
+  (or view) handle of the contract (contrary to ``Contract.untype``).
 
   .. tryliquidity:: ../../../../tests/doc/doc19.liq
   .. literalinclude:: ../../../../tests/doc/doc19.liq
@@ -585,7 +660,9 @@ Operations on contracts
   .. tryliquidity:: ../../../../tests/doc/doc16.liq
   .. literalinclude:: ../../../../tests/doc/doc16.liq
 
-* ``[%handle: val%entry <entry_name> : 'a ] : address -> [%handle 'a]
+* .. _handle_entry:
+
+  ``[%handle: val%entry <entry_name> : 'a ] : address -> [%handle 'a]
   option``. Returns a contract handle to the entry point
   ``<entry_name>`` if the contract at the specified address has an
   entry point named ``<entry_name>`` of parameter type ``'a``. If no
@@ -596,6 +673,22 @@ Operations on contracts
 
   .. tryliquidity:: ../../../../tests/doc/doc20.liq
   .. literalinclude:: ../../../../tests/doc/doc20.liq
+
+* .. _handle_view:
+
+  ``[%handle: val%view <view_name> : 'a -> 'b] : address -> [%view
+  (view_name : 'a -> 'b)] option``.  Returns a contract view handle to
+  the view ``<view_name>`` if the contract at the specified address
+  has an view named ``<view_name>`` of parameter type ``'a`` and
+  return type ``'b``. If no such view exists or the parameter or
+  return types are different then this function returns ``None``. For
+  any contract or contract type ``C``, you can also use the syntactic
+  sugar ``[%view C.<view_name>]`` instead.
+  :love:`Only with love`
+
+  .. tryliquidity:: ../../../../tests/test_view.liq
+  .. literalinclude:: ../../../../tests/test_view.liq
+     :lines: 14-19
 
 * ``Contract.get_balance: [%handle 'a] -> dun``. Returns the balance
   of the contract.
@@ -1034,7 +1127,7 @@ collections.
 
 
 The Modules and Contracts System
--------------------------------
+--------------------------------
 
 The system described in this section allows to define several
 contracts and modules in the same file, to reference contracts by
@@ -1131,12 +1224,19 @@ the keyword ``sig`` and defined with the keyword ``contract type``::
     val%entry entry1 : TYPE
     val%entry entry2 : TYPE
     val%entry default : TYPE
+    val%view view1 : TYPE -> TYPE
+    val%view view2 : TYPE -> TYPE
     ...
   end
 
-A contract signature can contain type declarations, and
-declarations for the entry point signatures with the special keyword
-``val%entry`` in which only the type parameter must be specified.
+A contract signature can contain:
+
+- type declarations,
+- declarations for the entry point signatures with the special keyword
+  ``val%entry`` in which only the type parameter must be specified,
+- declarations for the view signatures with the special keyword
+  ``val%view`` whose type must be an arrow type of the parameter to
+  the result type.
 
 
 Predefined Contract Signatures
@@ -1327,268 +1427,3 @@ the changes in the OCaml syntax:
 
 A good way to learn this syntax is to use the syntax conversion
 argument of the compiler (``--convert FILE``).
-  
-From Michelson to Liquidity
----------------------------
-
-Here is a table of how Michelson instructions translate to Liquidity:
-
-  
-* ``ADDRESS``: ``Contract.untype c``
-* ``AMOUNT``: ``Current.amount()``
-* ``ABS``: ``match%nat x with Plus n -> | Minus n -> n``
-* ``ADD``: ``x + y``
-* ``AND``: ``x land y`` or ``x && y`` or ``x & y``
-* ``BALANCE``: ``Current.balance()``
-* ``BLAKE2B``: ``Crypto.blake2b bytes``
-* ``CAR``: ``x.(0)``
-* ``CDR``: ``x.(1)``
-* ``CAST``: not available
-* ``CHECK_SIGNATURE``: ``Crypto.check key sig bytes``
-* ``COMPARE``: ``compare x y``
-* ``CONCAT``: ``String.concat list`` or ``bytes.concat list``
-* ``CONS``: ``x :: y``
-* ``CONTRACT``
-* ``CREATE_ACCOUNT``: ``Account.create``
-* ``CREATE_CONTRACT``
-* ``DIP``: automatic stack management
-* ``DROP``: automatic stack management
-* ``DUP``: automatic stack management
-* ``EDIV``: ``x / y``
-* ``EMPTY_BIG_MAP``: ``BigMap []``
-* ``EMPTY_MAP``: ``Map []``
-* ``EMPTY_SET``: ``Set []``
-* ``EQ``: ``x = y``
-* ``EXEC``: ``x |> f`` or ``f x`` or ``f @@ x``
-* ``FAILWITH``: ``Current.failwith``
-* ``GE``: ``x >= y``
-* ``GET``: ``Map.find key map``
-* ``GT``: ``x > y``
-* ``HASH_KEY``: ``Crypto.hash_key k``
-* ``IF``: ``if COND_EXPR then EXPR_IF_TRUE else EXPR_IF_FALSE``
-* ``IF_CONS``: ``match list with [] -> EXPR | head :: tail -> EXPR``
-* ``IF_LEFT``: ``match variant with Left x -> EXPR | Right x -> EXPR``
-* ``IF_NONE``: ``match option with None -> EXPR | Some x -> EXPR``
-* ``IMPLICIT_ACCOUNT``: ``Account.default``
-* ``INT``: ``int x``
-* ``ISNAT``:``is_nat x`` or ``match%int x with Plus x -> ... | Minus y -> ...``
-* ``ITER``: ``List.iter``, ``Set.iter``, ``Map.iter``,
-            ``List.fold``, ``Map.fold``
-* ``LAMBDA``: ``fun x -> ...``
-* ``LE``: ``x <= y``
-* ``LEFT``: ``Left x``
-* ``LOOP``: ``Loop.loop (fun x -> ...; (cond, x')) x0``
-* ``LOOP_LEFT``: ``Loop.left (fun (x, acc) -> (Left x/Right res, acc)) x0 acc``
-* ``LSL``: ``x lsl y`` or ``x << y``
-* ``LSR``: ``x lsr y`` or ``x >> y``
-* ``LT``: ``x < y``
-* ``MAP``: ``List.map``, ``Map.map``,
-           ``List.map_fold``, ``Map.map_fold``
-* ``MEM``: ``Set.mem ele set``, ``Map.mem key map``
-* ``MUL``: ``x * y``
-* ``NEG``: ``~- x``
-* ``NEQ``: ``x <> y``
-* ``NIL``: ``( [] : int list)``
-* ``NONE``: ``(None : int option)``
-* ``NOT``: ``not x``
-* ``NOW``: ``Current.time ()``
-* ``OR``: ``x lor y``, or ``x || y``, or ``x or y``
-* ``PACK``: ``Bytes.pack x``
-* ``PAIR``: ``( x, y )``
-* ``PUSH``, ``DIP``, ``DROP``, ``DIG``, ``DUG``, ``SWAP``: automatic stack management
-* ``RENAME``: automatic annotations management
-* ``RIGHT``: ``Right x``
-* ``SENDER``: ``Current.sender()``
-* ``SIZE``: ``List.size list``, ``String.size``, ``Bytes.size``, ``Set.size``
-* ``SELF %e``: ``[%handle Self.e]``
-* ``SET_DELEGATE``: ``Contract.set_delegate (Some keyhash)``
-* ``SHA256``: ``Crypto.sha256 bytes``
-* ``SHA512``: ``Crypto.sha512 bytes``
-* ``SLICE``: ``String.sub pos len string`` or ``Bytes.sub``
-* ``SOME``: ``Some x``
-* ``SOURCE``: ``Current.source()``
-* ``STEPS_TO_QUOTA``: ``Current.gas()`` (deprecated, works for
-  decompilation only)
-* ``SUB``: ``x - y``
-* ``TRANSFER_TOKENS``: ``Contract.call contract amount param``
-* ``UNIT``: ``()``
-* ``UNPACK``: ``(unpack bytes : int list option)``
-* ``UPDATE``: ``Set.update key true set`` or ``Map.update key (Some val) map``
-* ``XOR``: ``x lxor y``
-
-Liquidity Grammar
------------------
-
-Toplevel:
-
-* ``[%%version`` FLOAT ``]``
-* Structure*
-
-Contract:
-
-* ``struct`` Structure* ``end``
-* UIDENT
-
-Module:
-
-* ``struct`` ModStructure* ``end``
-* UIDENT
-
-ModStructure:
-
-* ``type`` LIDENT ``=`` Type
-* ``type`` LIDENT ``= {`` [ LIDENT ``:`` Type ``;``]+ ``}``
-* ``type`` LIDENT ``=`` [ ``|`` UIDENT ``of`` Type ]+
-* ``module`` UIDENT ``=`` Module
-* ``contract`` UIDENT ``=`` Contract
-* ``contract type`` UIDENT ``= sig`` Signature* ``end``
-* ``let`` ``rec``? Annot* Pattern ``=`` Expression
-
-Structure:
-
-* ModStructure
-* ``let%init storage =`` Expression
-* ``let%entry`` LIDENT Pattern Pattern =`` Expression
-
-Signature:
-
-* ``type`` LIDENT ``=`` Type
-* ``type`` LIDENT
-* ``val%entry`` LIDENT ``:`` LIDENT ``:`` Type ``->`` LIDENT ``:`` Type ``-> operation list *`` Type
-
-Annot:
-
-* ``[@inline]``
-* ``[@private]``
-
-Expression:
-
-* LIDENT
-* UIDENT ``.`` LIDENT
-* [LIDENT ``.``]+ LIDENT
-* [LIDENT ``.``]+ LIDENT ``<-`` Expression
-* ``(`` Expression ``:`` Type ``)``
-* ``if`` Expression ``then`` Expression
-* ``if`` Expression ``then`` Expression ``else`` Expression
-* ``Contract.create`` Expression Expression Expression Expression
-  Expression Expression ``(contract`` Contract ``)``
-* ``let`` ``rec``? Annot* Pattern ``=`` Expression ``in`` Expression
-* Expression ``;`` Expression
-* ``Loop.loop (fun`` Pattern ``->`` Expression ``)`` Expression
-* ``Loop.left (fun`` Pattern ``->`` Expression ``)`` Expression
-* Expression Expression
-* ``match%nat`` Expression ``with | Plus`` LIDENT ``->`` Expression ``| Minus`` LIDENT ``->`` Expression
-* ``match`` Expression ``with | Left`` LIDENT ``->`` Expression ``| Right`` LIDENT ``->`` Expression
-* ``match`` Expression ``with | [] ->`` Expression ``|`` LIDENT ``::`` LIDENT ``->`` Expression
-* ``match`` Expression ``with`` [ ``|`` MatchPattern ``->`` Expression ]*
-* ``Left`` Expression
-* ``Right`` Expression
-* ``Some`` Expression
-* Expression ``::`` Expression
-* Constant
-
-Pattern:
-
-* LIDENT
-* ``(`` LIDENT ``:`` Type ``)``
-* ``_``
-* ``(`` Pattern [``,`` Pattern]* ``)``
-
-MatchPattern:
-
-* UIDENT
-* UIDENT Pattern
-
-
-Type:
-
-* ``unit``
-* ``bool``
-* ``int``
-* ``nat``
-* ``dun``
-* ``string``
-* ``bytes``
-* ``timestamp``
-* ``key``
-* ``key_hash``
-* ``signature``
-* ``operation``
-* ``address``
-* ``chain_id``
-* Type ``option``
-* Type ``list``
-* Type ``set``
-* ``(`` Type ``,`` Type ``) variant``
-* ``(`` Type ``,`` Type ``) map``
-* ``(`` Type ``,`` Type ``) big_map``
-* Type [ ``*`` Type]+
-* Type ``->`` Type
-* ``_``
-* LIDENT
-  
-Constant:
-
-* ``dn1`` B58Char+(33)
-* ``dn2`` B58Char+(33)
-* ``dn3`` B58Char+(33)
-* ``edpk`` B58Char+(50)
-* ``sppk`` B58Char+(50)
-* ``p2pk`` B58Char+(50)
-* ``edsig`` B58Char+(94)
-* ``p2sig`` B58Char+(93)
-* ``spsig1`` B58Char+(93)
-* ``KT1`` B58Char+(33)
-* ``0x`` [HexChar HexChar]*
-* ``true``
-* ``false``
-* DIGIT [DIGIT | ``_``]*
-* DIGIT [DIGIT | ``_``]* ``p``
-* DIGIT [DIGIT | ``_``]* [``.`` [DIGIT | ``_``]*]? ``DUN``
-* DAY [``T`` HOUR [ TIMEZONE ]?]?
-* ``"`` CHAR* ``"``
-* ``()``
-* ``[`` Constant+`;` ``]``
-* ``Map`` | ``Map`` ``[`` Constant+``;`` ``]``
-* ``Set`` | ``Set`` ``[`` Constant+``;`` ``]``
-* ``BigMap`` | ``BigMap`` ``[`` Constant+``;`` ``]``
-* ``fun`` Pattern ``->`` Expression
-
-B58Char:
-
-* [ ``1``- ``9`` | ``A``-``H`` | ``J``-``N`` | ``P``-``Z`` | ``a``-``k`` | ``m``-``z`` ]
-
-
-HexChar:
-
-* [``0``-``9`` | ``A``-``F`` | ``a``-``f``]
-
-
-LIDENT:
-
-* [``a``-``z`` | ``_``] [``A``-``Z`` | ``a``-``z`` | ``_`` | ``'`` | ``0``-``9``]*
-
-
-UIDENT:
-
-* [``A``-``Z``] [``A``-``Z`` | ``a``-``z`` | ``_`` | ``'`` | ``0``-``9``]*
-
-
-DIGIT:
-
-* [``0``-``9``]
-
-
-DAY:
-
-* DIGIT+(4) ``-`` DIGIT+(2) ``-`` DIGIT+(2)
-
-
-HOUR:
-
-* DIGIT+(2) ``:`` DIGIT+(2) [``:`` DIGIT+(2)]?
-
-TIMEZONE:
-
-* ``+`` DIGIT+(2) ``:`` DIGIT+(2)
-* ``Z``

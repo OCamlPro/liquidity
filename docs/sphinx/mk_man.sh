@@ -7,7 +7,7 @@ dst=src/man/$file.rst
 
 ../../$cmd --help=groff | groff -Thtml > $dsthtml
 echo "\`\`$cmd\`\`" > $dst
-echo "============" >> $dst
+echo "================================================" >> $dst
 echo >> $dst
 echo ".. _$file:" >> $dst
 echo ".. raw:: html" >> $dst

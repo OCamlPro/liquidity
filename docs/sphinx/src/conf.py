@@ -77,7 +77,7 @@ language = None
 exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store', 'doc_gen']
 
 # The name of the Pygments (syntax highlighting) style to use.
-pygments_style = 'sphinx'
+pygments_style = 'native'
 
 # Deactivate syntax highlighting
 # - http://www.sphinx-doc.org/en/stable/markup/code.html#code-examples
