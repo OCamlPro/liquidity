@@ -4,6 +4,9 @@ Liquidity Reference
 .. role:: love
    :class: only-love
 
+.. role:: michelson
+   :class: only-michelson
+
 
 Contract Format
 ---------------
@@ -104,6 +107,8 @@ Basic Types and Values
 Types in Liquidity are monomorphic. They are all inherited from
 Michelson, except for algebraic data types and records, that are
 translated to Michelson types.
+
+:love:`Only with love` Structured types are kept when compiling to Love.
 
 Basic Types
 ~~~~~~~~~~~
@@ -302,11 +307,10 @@ functions like this:
 * ``TYPE_ARG -> TYPE_RESULT`` for a primitive with one argument
 * ``TYPE_ARG1 -> TYPE_ARG2 -> TYPE_RESULT`` for a primitive with two arguments
 
-Whereas functions can only take one argument in Liquidity/Michelson
-(possibly a tuple), primitives can take multiple arguments.
-
 Extended Primitives
 ~~~~~~~~~~~~~~~~~~~
+
+:michelson:`Only with michelson`
 
 Additional prefix Michelson primitives can be added to the language
 through a local declaration as follows:
