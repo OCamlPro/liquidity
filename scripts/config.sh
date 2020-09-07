@@ -46,7 +46,7 @@ function run {
     CMD=$2
     if [[ $3 -eq 0 ]] || [[ -z $3 ]] ; then
         [[ ! -z "$VERBOSE" ]] && echo $CMD
-        OUTPUT=$(eval $CMD 2>&1)
+        OUTPUT=$(eval "$CMD" 2>&1)
         STATUS=$?
         [[ ! -z "$VERBOSE" ]] && echo $OUTPUT
         if [[ "$STATUS" -eq 0 ]] ; then

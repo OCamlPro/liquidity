@@ -51,7 +51,7 @@ run \
 
 run \
     "Typecheck" \
-    "${DUNE_FULL_PATH} ${DUNE_ARGS} rpc post /chains/main/blocks/head/helpers/scripts/typecheck_code with file:_obuild/tests/$test.lov.json" \
+    "RES=\$(mktemp -t lov.tc.res.XXXX); ${DUNE_FULL_PATH} ${DUNE_ARGS} rpc post /chains/main/blocks/head/helpers/scripts/typecheck_code with file:_obuild/tests/$test.lov.json > \$RES; cat \$RES; ! grep -q '^Command failed' \$RES" \
     $([ -f ${DUNE_FULL_PATH} ] ; echo $?)
 
 echo
