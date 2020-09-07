@@ -1150,7 +1150,9 @@ let rec liqexp_to_loveexp (env : env) (e : typed_exp) : AST.exp * TYPE.t =
         let d, t = ltl dest in
         match to_poly_variant t with
         | `TKeyhash ->
-          mk_apply (mk_var (string_to_ident "Address.of_keyhash")) [d]
+          mk_apply
+            (mk_primitive_lambda ~loc env "Address.of_keyhash")
+            [d]
         | `TAddress -> d
         | _ ->
           error ~loc
@@ -1160,7 +1162,7 @@ let rec liqexp_to_loveexp (env : env) (e : typed_exp) : AST.exp * TYPE.t =
             Love_type.pretty t
       in
       mk_apply ?loc:lloc
-        (mk_var (string_to_ident "Account.transfer"))
+        (mk_primitive_lambda ~loc env "Account.transfer")
         [dest; fst @@ ltl amount], operation ()
 
     | Call {amount = None ; entry = (NoEntry | Entry _) }
@@ -1200,7 +1202,8 @@ let rec liqexp_to_loveexp (env : env) (e : typed_exp) : AST.exp * TYPE.t =
                (* in call *)
                (mk_apply ?loc:lloc
                   (mk_primitive_lambda ~loc env "Contract.call"
-                     (entrypoint entry_typ @=> dun () @=> entry_typ @=> operation ()) ANone)
+                     ~expected_typ:(entrypoint entry_typ @=> dun () @=>
+                                     entry_typ @=> operation ()))
                   [mk_var @@ string_to_ident tmp_entrypt;
                    fst @@ ltl amount;
                    fst @@ ltl arg
@@ -1218,8 +1221,8 @@ let rec liqexp_to_loveexp (env : env) (e : typed_exp) : AST.exp * TYPE.t =
             mk_match
               (mk_apply ?loc:lloc
                   (mk_primitive_lambda ~loc env "Contract.at"
-                     ((address ()) @=> option (TContractInstance ctr_sig))
-                     (AContractType ctr_sig)
+                     ~expected_typ:((address ()) @=> option (TContractInstance ctr_sig))
+                     ~spec_args:(AContractType ctr_sig)
                   )
                   [ctrct_or_addr]
               )
@@ -1240,7 +1243,8 @@ let rec liqexp_to_loveexp (env : env) (e : typed_exp) : AST.exp * TYPE.t =
                (* in call *)
                (mk_apply ?loc:lloc
                   (mk_primitive_lambda env "Contract.call"
-                     (entrypoint typ_arg @=> dun () @=> typ_arg @=> operation ()) ANone)
+                     ~expected_typ:(entrypoint typ_arg @=> dun () @=>
+                                    typ_arg @=> operation ()))
                   [mk_var @@ string_to_ident tmp_entrypt;
                    fst @@ ltl amount;
                    arg
@@ -1281,7 +1285,7 @@ let rec liqexp_to_loveexp (env : env) (e : typed_exp) : AST.exp * TYPE.t =
                (* in call *)
                (mk_apply ?loc:lloc
                   (mk_primitive_lambda ~loc env "Contract.view"
-                     (tview view_typ @=> view_typ) ANone)
+                     ~expected_typ:(tview view_typ @=> view_typ))
                   [mk_var @@ string_to_ident tmp_view;
                    fst @@ ltl arg
                   ]
@@ -1299,8 +1303,8 @@ let rec liqexp_to_loveexp (env : env) (e : typed_exp) : AST.exp * TYPE.t =
             mk_match
               (mk_apply ?loc:lloc
                   (mk_primitive_lambda ~loc env "Contract.at"
-                     ((address ()) @=> option (TContractInstance ctr_sig))
-                     (AContractType ctr_sig)
+                     ~expected_typ:((address ()) @=> option (TContractInstance ctr_sig))
+                     ~spec_args:(AContractType ctr_sig)
                   )
                   [ctrct_or_addr]
               )
@@ -1321,7 +1325,7 @@ let rec liqexp_to_loveexp (env : env) (e : typed_exp) : AST.exp * TYPE.t =
                (* in call *)
                (mk_apply ?loc:lloc
                   (mk_primitive_lambda env "Contract.view"
-                     (tview ty_view @=> ty_view) ANone)
+                     ~expected_typ:(tview ty_view @=> ty_view))
                   [mk_var @@ string_to_ident tmp_view;
                    arg
                   ]
@@ -1392,8 +1396,8 @@ let rec liqexp_to_loveexp (env : env) (e : typed_exp) : AST.exp * TYPE.t =
       in
       mk_apply ?loc:lloc
         (mk_primitive_lambda ~loc env "Loop.loop"
-           ((arg_type @=> TTuple [bool ();arg_type]) @=> arg_type @=> arg_type)
-           ANone
+           ~expected_typ:((arg_type @=> TTuple [bool ();arg_type]) @=>
+                          arg_type @=> arg_type)
         )
         [body; arg], arg_type
 
@@ -1629,16 +1633,17 @@ let rec liqexp_to_loveexp (env : env) (e : typed_exp) : AST.exp * TYPE.t =
       let tmp_varid = string_to_ident tmp_name in
       let arg, targ = ltl arg in
       let nat_var =
-        mk_apply (mk_var (string_to_ident "abs")) [mk_var tmp_varid] in
+        mk_apply
+          (mk_primitive_lambda ~loc env "abs")
+          [mk_var tmp_varid] in
       mk_let ?loc:lloc
         (mk_pvar tmp_name)
         arg (
         mk_if
           (mk_apply
-             (mk_tapply
-                (mk_var (string_to_ident ">="))
-                targ
-             ) [mk_var tmp_varid; mk_const (mk_cint (Z.zero))])
+             (mk_primitive_lambda ~loc env ">="
+                ~expected_typ:(int () @=> int () @=> bool ()))
+             [mk_var tmp_varid; mk_const (mk_cint (Z.zero))])
           (mk_let
              (mk_pvar ?loc:(love_loc plus_name.nloc) plus_name.nname)
              nat_var
@@ -1694,7 +1699,7 @@ let rec liqexp_to_loveexp (env : env) (e : typed_exp) : AST.exp * TYPE.t =
       in
       let prim =
         mk_tapply
-          (mk_var (string_to_ident "Contract.create"))
+          (mk_primitive_lambda ~loc env "Contract.create")
           storage in
       mk_apply ?loc:lloc prim args,
       Love_type.return_type (Love_primitive.(type_of (gprim, ANone)))
@@ -1708,7 +1713,8 @@ let rec liqexp_to_loveexp (env : env) (e : typed_exp) : AST.exp * TYPE.t =
         | View v -> view_signature env v entry_ty
       in
       mk_apply ?loc:lloc
-        (mk_var_with_arg (string_to_ident "Contract.at") (AContractType contract))
+        (mk_primitive_lambda ~loc env "Contract.at"
+           ~spec_args:(AContractType contract))
         [fst @@ ltl arg], option (TContractInstance contract)
 
     | Unpack {arg; ty} ->
@@ -1718,7 +1724,7 @@ let rec liqexp_to_loveexp (env : env) (e : typed_exp) : AST.exp * TYPE.t =
         Love_type.pretty t
         (LiquidPrinter.Liquid.string_of_type e.ty);
       mk_apply ?loc:lloc
-        (mk_tapply (mk_var (string_to_ident "Bytes.unpack")) t)
+        (mk_tapply (mk_primitive_lambda ~loc env "Bytes.unpack") t)
         [fst @@ ltl arg], option t
 
     | TypeAnnot {e; ty} ->
@@ -1824,9 +1830,7 @@ and liqprimfold_to_loveexp
 
       mk_apply ?loc:(love_loc loc)
         (mk_primitive_lambda ~loc env cprim
-           ((t1 @=> t2 @=> unit ()) @=> arg_typ @=> unit ())
-           ANone
-        )
+           ~expected_typ:((t1 @=> t2 @=> unit ()) @=> arg_typ @=> unit ()))
         [put_in_arrow
             ["__key", t1; "__bind", t2]
             (mk_let ?loc:(love_loc arg_loc)
@@ -1847,9 +1851,7 @@ and liqprimfold_to_loveexp
       debug "[liqprimfold_to_loveexp] Body type = %a@." Love_type.pretty typ;
       mk_apply ?loc:(love_loc loc)
         (mk_primitive_lambda ~loc env "Set.iter"
-           ((t @=> unit ()) @=> set t)
-           ANone
-        )
+           ~expected_typ:((t @=> unit ()) @=> set t))
         [mk_lambda (mk_pvar ?loc:(love_loc arg_name.nloc) arg_name.nname) bdy t;
          arg], typ
     | Prim_list_iter ->
@@ -1864,7 +1866,7 @@ and liqprimfold_to_loveexp
       debug "[liqprimfold_to_loveexp] Body type = %a@." Love_type.pretty typ;
       mk_apply ?loc:(love_loc loc)
         (mk_primitive_lambda ~loc env "List.iter"
-           ((t @=> unit ()) @=> list t @=> unit ()) ANone)
+           ~expected_typ:((t @=> unit ()) @=> list t @=> unit ()))
         [mk_lambda (mk_pvar ?loc:(love_loc arg_name.nloc) arg_name.nname) bdy t;
          arg], typ
     | Prim_map_fold ->
@@ -1884,8 +1886,8 @@ and liqprimfold_to_loveexp
       debug "[liqprimfold_to_loveexp] Body type = %a@." Love_type.pretty typ;
       let prim =
         mk_primitive_lambda ~loc env cprim
-          ((t1 @=> t2 @=> acc_typ @=> acc_typ) @=>
-           arg_typ @=> acc_typ @=> acc_typ) ANone in
+          ~expected_typ:((t1 @=> t2 @=> acc_typ @=> acc_typ) @=>
+                         arg_typ @=> acc_typ @=> acc_typ) in
       debug "[liqprimfold_to_loveexp] Primitive = %a@."
         Love_printer.Ast.print_exp prim;
       mk_apply ?loc:(love_loc loc)
@@ -1912,9 +1914,7 @@ and liqprimfold_to_loveexp
       debug "[liqprimfold_to_loveexp] Body type = %a@." Love_type.pretty typ;
       mk_apply ?loc:(love_loc loc)
         (mk_primitive_lambda ~loc env "Set.fold"
-           ((t @=> acc_typ @=> acc_typ) @=> set t @=> acc_typ @=> acc_typ)
-           ANone
-        )
+           ~expected_typ:((t @=> acc_typ @=> acc_typ) @=> set t @=> acc_typ @=> acc_typ))
         [put_in_arrow
            vars
            (mk_let
@@ -1937,9 +1937,7 @@ and liqprimfold_to_loveexp
       debug "[liqprimfold_to_loveexp] Body type = %a@." Love_type.pretty typ;
       mk_apply ?loc:(love_loc loc)
         (mk_primitive_lambda ~loc env "List.fold"
-           ((t @=> acc_typ @=> acc_typ) @=> list t @=> acc_typ @=> acc_typ)
-           ANone
-        )
+           ~expected_typ:((t @=> acc_typ @=> acc_typ) @=> list t @=> acc_typ @=> acc_typ))
         [put_in_arrow
            vars
            (mk_let
@@ -1982,9 +1980,7 @@ and liqprimmap_to_loveexp
     let bdy, typ = liqexp_to_loveexp env body in
     mk_apply ?loc:(love_loc loc)
       (mk_primitive_lambda ~loc env cprim
-         ((t1 @=> t2 @=> typ) @=> arg_typ @=> tbuilder typ)
-         ANone
-      )
+         ~expected_typ:((t1 @=> t2 @=> typ) @=> arg_typ @=> tbuilder typ))
       [put_in_arrow
          vars
          (mk_let
@@ -2004,8 +2000,7 @@ and liqprimmap_to_loveexp
       let bdy, typ = liqexp_to_loveexp env body in
       mk_apply ?loc:(love_loc loc)
         (mk_primitive_lambda ~loc env "List.map"
-           ((t @=> typ) @=> list t @=> list typ)
-        ANone)
+           ~expected_typ:((t @=> typ) @=> list t @=> list typ))
         [mk_lambda (mk_pvar ?loc:(love_loc arg_name.nloc) arg_name.nname) bdy t;
          arg], list typ
   | Prim_coll_map ->
@@ -2049,10 +2044,9 @@ and liqprimmapfold_to_loveexp
     in
     mk_apply ?loc:(love_loc loc)
       (mk_primitive_lambda ~loc env cprim
-         ((t1 @=> t2 @=> acc_typ @=> TTuple [typ_newbnd; typ_acc])
-          @=> arg_typ @=> typ_acc @=> TTuple [tbuilder typ_newbnd; typ_acc])
-         ANone
-      )
+         ~expected_typ:((t1 @=> t2 @=> acc_typ @=> TTuple [typ_newbnd; typ_acc])
+                        @=> arg_typ @=> typ_acc @=>
+                        TTuple [tbuilder typ_newbnd; typ_acc]))
       [put_in_arrow
          vars
          (mk_let
@@ -2083,10 +2077,9 @@ and liqprimmapfold_to_loveexp
       in
       mk_apply ?loc:(love_loc loc)
         (mk_primitive_lambda ~loc env "List.map_fold"
-           ((t @=> typ_acc @=> TTuple [typ_newbnd; typ_acc])
-            @=> list t @=> typ_acc @=> TTuple [list typ_newbnd; typ_acc])
-           ANone
-        )
+           ~expected_typ:((t @=> typ_acc @=> TTuple [typ_newbnd; typ_acc])
+                          @=> list t @=> typ_acc @=>
+                          TTuple [list typ_newbnd; typ_acc]))
         [put_in_arrow
            vars
            (mk_let
@@ -2221,7 +2214,9 @@ and liqconst_to_loveexp
         in (
           List.fold_left
             (fun map (new_key,new_bnd) ->
-               mk_apply (mk_primitive_lambda ?loc env "Map.add" (tkey @=> telt @=> typ @=> typ) ANone)
+               mk_apply
+                 (mk_primitive_lambda ?loc env "Map.add"
+                    ~expected_typ:(tkey @=> telt @=> typ @=> typ))
                  [fst @@ liqconst_to_loveexp ~typ:tkey env new_key;
                   fst @@ liqconst_to_loveexp ~typ:telt env new_bnd;
                   map]
@@ -2255,7 +2250,9 @@ and liqconst_to_loveexp
         in (
           List.fold_left
             (fun bm (new_key,new_bnd) ->
-               mk_apply (mk_primitive_lambda ?loc env "BigMap.add" (tkey @=> telt @=> typ @=> typ) ANone)
+               mk_apply
+                 (mk_primitive_lambda ?loc env "BigMap.add"
+                    ~expected_typ:(tkey @=> telt @=> typ @=> typ))
                  [fst @@ liqconst_to_loveexp ~typ:tkey env new_key;
                   fst @@ liqconst_to_loveexp ~typ:telt env new_bnd;
                   bm]
@@ -2306,7 +2303,9 @@ and liqconst_to_loveexp
         in (
           List.fold_left
             (fun set new_val ->
-               mk_apply (mk_primitive_lambda ?loc env "Set.add" (telt @=> typ @=> typ) ANone)
+               mk_apply
+                 (mk_primitive_lambda ?loc env "Set.add"
+                    ~expected_typ:(telt @=> typ @=> typ))
                  [fst @@ liqconst_to_loveexp ~typ:telt env new_val;
                   set]
             )
@@ -2534,16 +2533,19 @@ and liqapply_to_loveexp ?loc env typ prim args : AST.exp * TYPE.t =
           Love_type.pretty ty
     in
     mk_apply ?loc:lloc
-      (mk_primitive_lambda ?loc env prim (list ty @=> ty) ANone)
+      (mk_primitive_lambda ?loc env prim ~expected_typ:(list ty @=> ty))
       [mk_list ~typ:ty @@ List.map (fun e -> fst @@ ltl e) l], ty
 
   | Prim_is_nat, [e] -> (
-    (* if e >= 0 then Some e else None *)
+    (* if e >= 0 then Some (abs e) else None *)
       let lovee, te = ltl e in
+      let abs_e = mk_apply ?loc:lloc (mk_primitive_lambda ?loc env "abs") [lovee] in
       mk_if ?loc:lloc
-        (mk_apply (mk_primitive_lambda ?loc env "<=" (te @=> te @=> bool ()) ANone)
+        (mk_apply
+           (mk_primitive_lambda ?loc env "<="
+              ~expected_typ:(te @=> te @=> bool ()))
            [lovee; mk_const @@ mk_cint Z.zero])
-        (mk_some (nat ()) lovee)
+        (mk_some (nat ()) abs_e)
         (mk_none (nat ())), option (nat ())
     )
   | Prim_int, [cst] -> (
@@ -2551,7 +2553,7 @@ and liqapply_to_loveexp ?loc env typ prim args : AST.exp * TYPE.t =
       let c, ty = liqexp_to_loveexp env cst in
       match to_poly_variant ty with
         `TInt -> c, ty
-      | `TNat -> mk_apply ?loc:lloc (mk_var (string_to_ident "Int.of_nat")) [c], int ()
+      | `TNat -> mk_apply ?loc:lloc (mk_primitive_lambda ?loc env "Int.of_nat") [c], int ()
       | _ ->
         error ?loc
           "Unsafe cast of %a : %a to an integer@."
@@ -2568,8 +2570,10 @@ and liqapply_to_loveexp ?loc env typ prim args : AST.exp * TYPE.t =
     let prim_typ = key @=> t @=> t in
     mk_if ?loc:lloc
       b
-      (mk_apply (mk_primitive_lambda ?loc env "Set.add"    prim_typ ANone) [elt; set])
-      (mk_apply (mk_primitive_lambda ?loc env "Set.remove" prim_typ ANone) [elt; set]), t
+      (mk_apply
+         (mk_primitive_lambda ?loc env "Set.add" ~expected_typ:prim_typ) [elt; set])
+      (mk_apply
+         (mk_primitive_lambda ?loc env "Set.remove" ~expected_typ:prim_typ) [elt; set]), t
   | Prim_set_update, l ->
     bad_number_of_args ?loc "Set.update" (List.length l) 3
   | Prim_map_update, [elt; valopt; emap] ->
@@ -2594,16 +2598,12 @@ and liqapply_to_loveexp ?loc env typ prim args : AST.exp * TYPE.t =
       [mk_pnone (),
        mk_apply (
          mk_primitive_lambda ?loc env prim_rem
-           (telt @=> map (telt, tval) @=> map (telt, tval))
-           ANone
-       )
+           ~expected_typ:(telt @=> map (telt, tval) @=> map (telt, tval)))
          [elt; emap];
        mk_psome (mk_pvar "__v"),
        mk_apply (
            mk_primitive_lambda ?loc env prim_add
-            (telt @=> tval @=> map (telt, tval) @=> map (telt, tval))
-            ANone
-         )
+            ~expected_typ:(telt @=> tval @=> map (telt, tval) @=> map (telt, tval)))
          [elt; mk_var (string_to_ident "__v"); emap]
       ], t
   | Prim_map_update, l ->
@@ -2640,16 +2640,12 @@ and liqapply_to_loveexp ?loc env typ prim args : AST.exp * TYPE.t =
     let addr =
       mk_apply ?loc:lloc
         (mk_primitive_lambda ?loc env "Contract.address"
-           (ty_arg @=> address ())
-           ANone
-        )
+           ~expected_typ:(ty_arg @=> address ()))
         [arg] in
     let kh_opt =
       mk_apply ?loc:lloc
         (mk_primitive_lambda ?loc env "Keyhash.of_address"
-           (address () @=> option (keyhash ()))
-           ANone
-        )
+           ~expected_typ:(address () @=> option (keyhash ())))
         [addr] in
     kh_opt, option (keyhash ())
 
@@ -2658,16 +2654,12 @@ and liqapply_to_loveexp ?loc env typ prim args : AST.exp * TYPE.t =
     let addr =
       mk_apply ?loc:lloc
         (mk_primitive_lambda ?loc env "Contract.address"
-           (ty_arg @=> address ())
-           ANone
-        )
+           ~expected_typ:(ty_arg @=> address ()))
         [arg] in
     let res =
       mk_apply ?loc:lloc
         (mk_primitive_lambda ?loc env "Account.balance"
-           (address () @=> dun ())
-           ANone
-        )
+           ~expected_typ:(address () @=> dun ()))
         [addr] in
     res, dun ()
 
@@ -2676,9 +2668,7 @@ and liqapply_to_loveexp ?loc env typ prim args : AST.exp * TYPE.t =
     let x2, ty2 = ltl x2 in
     let res_opt = mk_apply ?loc:lloc
         (mk_primitive_lambda ?loc env "-$"
-           (ty1 @=> ty2 @=> option (dun ()))
-           ANone
-        )
+           ~expected_typ:(ty1 @=> ty2 @=> option (dun ())))
         [x1; x2] in
     let res =
       mk_match ?loc:lloc
@@ -2732,9 +2722,7 @@ and liqapply_to_loveexp ?loc env typ prim args : AST.exp * TYPE.t =
           (mk_pvar "tmp")
           (mk_apply
              (mk_primitive_lambda ?loc env prim_name
-                (arrow_from_tlist lovetlist)
-                ANone
-             )
+                ~expected_typ:(arrow_from_tlist lovetlist))
              loveargs
           )
           (mk_match ?loc:lloc
@@ -2743,8 +2731,8 @@ and liqapply_to_loveexp ?loc env typ prim args : AST.exp * TYPE.t =
                (mk_pnone ()), mk_none (TTuple [(nat ()); dun ()]);
                (mk_psome (mk_ptuple [mk_pvar "q"; mk_pvar "r"]),
                 mk_match (mk_apply
-                              (mk_var (string_to_ident "Nat.of_int"))
-                              [mk_var (Ident.create_id "q")])
+                            (mk_primitive_lambda ?loc env "Nat.of_int")
+                            [mk_var (Ident.create_id "q")])
                   [mk_pconstr "Some" [mk_pvar "q"],
                       mk_some
                         (TTuple [(nat ()); dun ()])
@@ -2764,20 +2752,16 @@ and liqapply_to_loveexp ?loc env typ prim args : AST.exp * TYPE.t =
       let exp =
         mk_apply ?loc:lloc (
           mk_primitive_lambda ?loc env prim_name
-            (arrow_from_tlist lovetlist)
-            ANone
-        )
+            ~expected_typ:(arrow_from_tlist lovetlist))
           loveargs
       in
       mk_apply ?loc:lloc
-          (mk_var (string_to_ident "Int.of_nat"))
-          [exp], int ()
+        (mk_primitive_lambda ?loc env "Int.of_nat")
+        [exp], int ()
     | _ ->
       mk_apply ?loc:lloc (
         mk_primitive_lambda ?loc env prim_name
-          (arrow_from_tlist lovetlist)
-          ANone
-      )
+          ~expected_typ:(arrow_from_tlist lovetlist))
         loveargs, t
 
 and liqvalue_to_lovecontent env {val_name; inline; val_private; val_exp} :

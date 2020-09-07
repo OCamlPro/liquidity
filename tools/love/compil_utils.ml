@@ -509,11 +509,13 @@ let apply_types ?loc env e te expected_ty =
   in
   cross_exp_typ (e, te)
 
-let mk_primitive_lambda ?loc prim_name expected_typ spec_args =
-  Log.debug "[mk_primitive_lambda] Primitive %s with normalized expected type %a@."
+let mk_primitive_lambda ?loc expected_typ spec_args prim_name =
+  Log.debug "[mk_primitive_lambda] Primitive %s%a@."
     prim_name
-    Love_type.pretty expected_typ
-  ;
+    (fun fmt -> function
+      | None -> ()
+      | Some t -> Format.fprintf fmt " with normalized expected type %a" Love_type.pretty t
+    ) expected_typ ;
   let prim =
     match Love_primitive.from_string prim_name with
       None -> error ?loc "Unknown Love primitive %s" prim_name
@@ -521,23 +523,29 @@ let mk_primitive_lambda ?loc prim_name expected_typ spec_args =
   in
   let loc, liqloc = match loc with
     | None -> None, None | Some l -> love_loc l, loc in
-  let poly_prim = mk_var ?loc (string_to_ident prim_name) in
+  let poly_prim = match spec_args with
+    | ANone -> mk_var ?loc (string_to_ident prim_name)
+    | args -> mk_var_with_arg ?loc (string_to_ident prim_name) args in
   let tprim = Love_primitive.type_of (prim, spec_args) in
-  Log.debug "[mk_primitive_lambda] Primitive type : %a@." pretty tprim;
-  let puretprim = remove_foralls tprim in
-  Log.debug "[mk_primitive_lambda] Expected type : %a@." pretty expected_typ;
-  Log.debug "[mk_primitive_lambda] Matching %a and %a@."
-    pretty puretprim
-    pretty expected_typ;
-  let aliases = search_aliases ?loc:liqloc puretprim expected_typ in
-  Log.debug "[mk_primitive_lambda] Matching done@.";
-
+  let aliases = match expected_typ with
+    | None -> TypeVarMap.empty
+    | Some expected_typ ->
+       Log.debug "[mk_primitive_lambda] Primitive type : %a@." pretty tprim;
+       let puretprim = remove_foralls tprim in
+       Log.debug "[mk_primitive_lambda] Expected type : %a@." pretty expected_typ;
+       Log.debug "[mk_primitive_lambda] Matching %a and %a@."
+         pretty puretprim
+         pretty expected_typ;
+       let aliases = search_aliases ?loc:liqloc puretprim expected_typ in
+       Log.debug "[mk_primitive_lambda] Matching done@.";
+       aliases
+  in
   let rec add_not_binded_tvars ptyp exp =
     let arg = Love_type.fresh_typevar () in
     match ptyp with
       TForall (tv, t) -> (
         match TypeVarMap.find_opt tv aliases with
-          None ->
+        | None ->
           add_not_binded_tvars
             t
             (mk_tlambda ?loc arg (mk_tapply ?loc exp (TVar arg)))
@@ -549,15 +557,17 @@ let mk_primitive_lambda ?loc prim_name expected_typ spec_args =
     | _ -> exp
   in add_not_binded_tvars tprim poly_prim
 
-let mk_primitive_lambda ?loc env prim_name t =
-  Log.debug "[mk_primitive_lambda] Primitive %s with expected type %a@."
+let mk_primitive_lambda ?loc env ?expected_typ ?(spec_args=ANone) prim_name =
+  Log.debug "[mk_primitive_lambda] Primitive %s%a@."
     prim_name
-    Love_type.pretty t
-  ;
-  mk_primitive_lambda
-    ?loc
-    prim_name
-    (Love_tenv.normalize_type ~relative:true t env)
+    (fun fmt -> function
+      | None -> ()
+      | Some t -> Format.fprintf fmt " with expected type %a" Love_type.pretty t
+    ) expected_typ ;
+  let expexted_typ = match expected_typ with
+    | None -> None
+    | Some t -> Some (Love_tenv.normalize_type ~relative:true t env) in
+  mk_primitive_lambda ?loc expexted_typ spec_args prim_name
 
 let reserved_types =
   Collections.StringSet.of_list
