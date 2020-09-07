@@ -17,6 +17,8 @@ module Target = struct
   type location = AST.location
   type datatype = TYPE.t
 
+  let () =  Liq2love.init ()
+
   let name = "Love"
 
   let unit : const = VUnit
