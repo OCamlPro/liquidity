@@ -111,6 +111,9 @@ let rec ttfail_to_tvar ({ desc; ty; loc } as e) =
     | MatchList { arg; head_name; tail_name; ifcons; ifnil } ->
       let ifnil = ttfail_to_tvar ifnil in
       let ifcons = ttfail_to_tvar ifcons in
+      let tail_name = match head_name.nname, tail_name.nname with
+        | "_", "_" -> { tail_name with nname = "__" }
+        | _ -> tail_name in
       MatchList { arg = ttfail_to_tvar arg;
                   head_name; tail_name;
                   ifcons;
