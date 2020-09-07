@@ -2,6 +2,17 @@ open Tezos_protocol.Protocol
 open LiquidTypes
 open Love_pervasives
 open Log
+open Compil_utils
+
+let check_lambda_params c =
+  let loc = LiquidLoc.loc_in_file c.ty_env.filename in
+  List.iter (fun { entry_sig; view } ->
+      if has_lambda entry_sig.parameter then
+        error ~loc
+          "Parameter of %s %s cannot contain lambda type in Love"
+          (if view then "view" else "entry point")
+          entry_sig.entry_name;
+    ) c.entries
 
 let rec tfail_to_tvar ?loc ty = match ty with
   | Ttuple tyl -> Ttuple (List.map (tfail_to_tvar ?loc) tyl)
@@ -311,6 +322,7 @@ and const_ttfail_to_tvar loc (typ : datatype) c : 'a * datatype =
   | CLambda { arg_name; arg_ty; body; ret_ty; recursive } -> c, typ (* todo *)
 
 and contract_ttfail_to_tvar (contract : typed_contract) =
+  check_lambda_params contract;
   debug "[Preprocess.contract_ttfail_to_tvar] Preprocessing contract %s@." contract.contract_name;
   let subs = List.map contract_ttfail_to_tvar contract.subs in
   let values = List.map (fun v ->

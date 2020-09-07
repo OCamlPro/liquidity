@@ -353,6 +353,10 @@ and liqcontract_sig_to_lovetype
                 | _ -> assert false)
           | t -> liqtype_to_lovetype env t, []
         in
+        if has_lambda entry.parameter then
+          error ~loc
+            "Parameter of entry point %s cannot contain lambda type in Love"
+            entry.entry_name;
         let param_ty, tdef = typ_and_defs entry.parameter in
         let typ, tdef = match entry.return with
           | None -> param_ty, tdef
