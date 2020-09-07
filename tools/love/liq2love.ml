@@ -370,11 +370,13 @@ and liqcontract_sig_to_lovetype
              let name, t1, tdef, is_view = entry_sig_to_love_content env entry in
              debug "[liqcontract_sig_to_lovetype] Entry %s has type %a@."
                name Love_type.pretty t1 ;
-             let item = name, if is_view then SView t1 else SEntry t1 in
-             List.fold_left (fun (content, env) (n, t) ->
+             let content, env =
+               List.fold_left (fun (content, env) (n, t) ->
                  (n, SType (SPublic t)) :: content,
                  add_typedef_to_contract ~loc n t env
-               ) (item :: content, env) tdef
+                 ) (content, env) tdef in
+             let item = name, if is_view then SView t1 else SEntry t1 in
+             item :: content, env
           )
           ([], env)
           entries_sig
@@ -601,7 +603,7 @@ and liqtype_to_lovetype ?loc ?(aliases=StringMap.empty) (env : env) tv =
           List.map (fun param -> ltl @@ TypeVarMap.find param params) sparams
         in
         let t = TUser (id_name, sparams_replaced) in
-        debug "[liqtype_to_lovetype] Sum type = %a" Love_type.pretty t;
+        debug "[liqtype_to_lovetype] Sum type = %a@." Love_type.pretty t;
         t
       | Some _ -> assert false
     )
@@ -2908,6 +2910,47 @@ and liqcontract_to_lovecontract
     match env with
       None -> empty_env (if is_module then Module else Contract []) ()
     | Some e -> e in
+
+  debug "[liqcontract_to_lovecontract] %i subcontracts/modules to handle@." (List.length c.subs);
+  let subc, env =
+    List.fold_left
+      (fun (acc_subc, acc_env) c ->
+         if Collections.StringSet.mem c.contract_name Compil_utils.reserved_structures
+         then (acc_subc, acc_env)
+         else
+           let n, sc, new_env = liqcontract_to_lovecontent acc_env c in
+           (n, sc) :: acc_subc, new_env
+      )
+      ([], env)
+      c.subs
+  in
+  let subc = List.rev subc in
+  let env, signatures =
+    StringMap.fold (
+      fun name cs (env, sigs) ->
+        if
+          Collections.StringSet.mem name Compil_utils.reserved_structures ||
+          String.equal ctr_name name
+        then env, sigs
+        else
+          let name = name in
+          debug "[liqcontract_to_lovecontract] Registering signature %s@." name;
+          match liqcontract_sig_to_lovetype
+                  ~loc:(LiquidLoc.loc_in_file c.ty_env.filename)
+                  env (Some name) cs with
+            Anonymous s ->
+            debug "[liqcontract_to_lovecontract] Signature %s = %a@."
+              name (Love_type.pp_contract_sig ) s;
+            Love_tenv.add_signature name
+              (Love_tenv.contract_sig_to_env (Some name) s env)
+              env,
+            (name,(AST.Signature s)) :: sigs
+          | Named _ ->
+            (* failwith "TODO : add named signatures to signature definition"; *)
+            env, sigs
+    )
+      c.ty_env.contract_types
+      (env, []) in
   let env, types = (*  Adding type definitions *)
     let rec fill_env_with_types (acc_env, acc_tdef) (str, (typ, _id))  =
       debug "[liqcontract_to_lovecontract] Registering type %s@." str;
@@ -2915,7 +2958,7 @@ and liqcontract_to_lovecontract
         match find_type n acc_env with
           None -> false
         | Some _ -> true in
-       let res =
+      let res =
         if
           typedef_registered acc_env str ||
           Collections.StringSet.mem str Compil_utils.reserved_types
@@ -2957,45 +3000,6 @@ and liqcontract_to_lovecontract
     |> List.fold_left fill_env_with_types (env, [])
   in
   let types = List.rev types in
-  let env, signatures =
-    StringMap.fold (
-      fun name cs (env, sigs) ->
-        if
-          Collections.StringSet.mem name Compil_utils.reserved_structures ||
-          String.equal ctr_name name
-        then env, sigs
-        else
-          let name = name^"__signature" in
-          debug "[liqcontract_to_lovecontract] Registering signature %s@." name;
-          match liqcontract_sig_to_lovetype
-                  ~loc:(LiquidLoc.loc_in_file c.ty_env.filename)
-                  env (Some name) cs with
-            Anonymous s ->
-            debug "[liqcontract_to_lovecontract] Signature %s = %a@."
-              name (Love_type.pp_contract_sig ) s;
-            Love_tenv.add_signature name
-              (Love_tenv.contract_sig_to_env (Some name) s env)
-              env,
-            (name,(AST.Signature s)) :: sigs
-          | Named _ -> failwith "TODO : add named signatures to signature definition"
-    )
-      c.ty_env.contract_types
-      (env, []) in
-
-  debug "[liqcontract_to_lovecontract] %i subcontracts/modules to handle@." (List.length c.subs);
-  let subc, env =
-    List.fold_left
-      (fun (acc_subc, acc_env) c ->
-         if Collections.StringSet.mem c.contract_name Compil_utils.reserved_structures
-         then (acc_subc, acc_env)
-         else
-           let n, sc, new_env = liqcontract_to_lovecontent acc_env c in
-           (n, sc) :: acc_subc, new_env
-      )
-      ([], env)
-      c.subs
-  in
-  let subc = List.rev subc in
   let storage_typedef = liqtype_to_lovetypedef env "storage" c.storage in
   debug "[liqcontract_to_lovecontract] Storage type def = %a@."
     Love_type.(pp_typdef ~name:"storage" ~privacy:"") storage_typedef;
@@ -3043,7 +3047,7 @@ and liqcontract_to_lovecontract
   in
   let str =
     let kind = if is_module then TYPE.Module else TYPE.Contract [] in
-    { AST.structure_content = (types @ signatures @ values @ subc @ entries @ init);
+    { AST.structure_content = (subc @ types @ signatures @ values @ init @ entries);
       kind }
   in
   str, env
