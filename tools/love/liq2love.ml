@@ -202,6 +202,8 @@ let rec liqtype_to_lovetypedef ?loc (env : env) name t : TYPE.typedef =
     let rcons =
       List.map
         (fun (name, cons) ->
+           let name =
+             Ident.get_final (string_to_ident ~scoped:true name) in
            let t =
              try  (liqtype_to_lovetype ~aliases env) cons
              with UnknownType (n, cont, _, _) when String.equal n rname ->
@@ -1505,14 +1507,19 @@ let rec liqexp_to_loveexp (env : env) (e : typed_exp) : AST.exp * TYPE.t =
 
     | Constructor {constr = Constr c; arg} -> (
         debug "[liqexp_to_loveexp] Creating a construction %s@." c;
-        let id = string_to_ident c in
-        let arg, typ = ltl arg in
-        let targs = match liqtype_to_lovetype env e.ty with
-            TUser (_, l) -> l
-          | t ->
-            bad_exp_type ~loc arg typ "defined by the user"
+        let id = string_to_ident ~scoped:true c in
+        let constr_typ =
+          match find_constr c env with
+          | None -> error ~loc "Unknown constructor %s" c
+          | Some ({result = {cparent; _}}, _path) -> cparent
         in
-        mk_constr ?loc:lloc id targs [arg], (Love_tenv.constr_type ((string_to_ident c),[typ]) env)
+        let arg, typ = ltl arg in
+        let targs = match constr_typ with
+          | TUser (_, l) -> l
+          | t -> bad_exp_type ~loc arg typ "defined by the user"
+        in
+        let res = mk_constr ?loc:lloc id targs [arg] in
+        res, constr_typ
       )
 
     | Constructor {constr; arg} -> (
