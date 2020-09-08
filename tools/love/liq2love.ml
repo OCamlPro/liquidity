@@ -1717,7 +1717,7 @@ let rec liqexp_to_loveexp (env : env) (e : typed_exp) : AST.exp * TYPE.t =
       mk_apply ?loc:lloc prim args,
       Love_type.return_type (Love_primitive.(type_of (gprim, ANone)))
 
-    | ContractAt {arg; entry; entry_param} ->
+    | HandleAt {arg; entry; entry_param} ->
       debug "[liqexp_to_loveexp] Creating a contract at@.";
       let entry_ty = liqtype_to_lovetype env entry_param in
       let contract = match entry with

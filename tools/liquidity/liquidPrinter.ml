@@ -1411,7 +1411,7 @@ module LiquidDebug = struct
           bprint_code_rec ~debug b indent2 exp
         ) args;
       Printf.bprintf b "\n%s(contract %s)" indent contract.contract_name;
-    | ContractAt { arg; entry; entry_param } ->
+    | HandleAt { arg; entry; entry_param } ->
       let kind, entry = match entry with
         | NoEntry -> "entry", "default"
         | Entry e -> "entry", e

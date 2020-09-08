@@ -1430,9 +1430,9 @@ and typecheck env ( exp : syntax_exp ) : typed_exp =
     let desc = Unpack { arg; ty } in
     mk ?name:exp.name ~loc desc (Toption ty)
 
-  | ContractAt { arg; entry; entry_param } ->
+  | HandleAt { arg; entry; entry_param } ->
     let arg = typecheck_expected "[%%handle ...] argument" env Taddress arg in
-    let desc = ContractAt { arg; entry; entry_param } in
+    let desc = HandleAt { arg; entry; entry_param } in
     let ret_ty = match entry, entry_param with
       | NoEntry, _ -> Tcontract_handle (None, entry_param)
       | Entry e, _ -> Tcontract_handle (Some e, entry_param)

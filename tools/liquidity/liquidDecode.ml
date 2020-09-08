@@ -99,7 +99,7 @@ and decode ( exp : encoded_exp ) : typed_exp =
 
   | Call { amount; entry = _; arg;
            contract = DContract { desc = MatchOption {
-               arg = { desc = ContractAt { arg = addr; entry; entry_param }};
+               arg = { desc = HandleAt { arg = addr; entry; entry_param }};
                ifnone = { desc = Failwith _ };
                ifsome = { desc = Var x }; some_name }  }
          } when some_name.nname = x ->
@@ -242,9 +242,9 @@ and decode ( exp : encoded_exp ) : typed_exp =
     let cases = List.map (fun (pat, e) -> pat, decode e) cases in
     mk ?name:exp.name ~loc (MatchVariant { arg; cases }) exp.ty
 
-  | ContractAt { arg; entry; entry_param } ->
+  | HandleAt { arg; entry; entry_param } ->
     let arg = decode arg in
-    mk ?name:exp.name ~loc (ContractAt { arg; entry; entry_param }) exp.ty
+    mk ?name:exp.name ~loc (HandleAt { arg; entry; entry_param }) exp.ty
 
   | Unpack { arg; ty } ->
     let arg = decode arg in

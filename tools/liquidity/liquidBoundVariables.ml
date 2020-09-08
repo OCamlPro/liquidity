@@ -134,7 +134,7 @@ let rec bv code =
         StringSet.union set (bv arg)
       ) bc args
 
-  | ContractAt { arg }
+  | HandleAt { arg }
   | Unpack { arg } -> bv arg
 
   | TypeAnnot { e } -> bv e
@@ -436,9 +436,9 @@ let rec bound code =
     let desc = CreateContract { args; contract } in
     mk desc code bv
 
-  | ContractAt { arg; entry; entry_param } ->
+  | HandleAt { arg; entry; entry_param } ->
     let arg = bound arg in
-    let desc = ContractAt { arg; entry; entry_param } in
+    let desc = HandleAt { arg; entry; entry_param } in
     mk desc code arg.bv
 
   | Unpack { arg; ty } ->

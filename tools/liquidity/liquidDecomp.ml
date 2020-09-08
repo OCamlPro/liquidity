@@ -451,8 +451,8 @@ let rec decompile_next (env : env) node =
 
     | N_CONTRACT (entry, entry_param), [arg] ->
       let entry = match entry with None -> "default" | Some e -> e in
-      mklet env node (ContractAt { arg = arg_of arg;
-                                   entry = Entry entry; entry_param })
+      mklet env node (HandleAt { arg = arg_of arg;
+                                 entry = Entry entry; entry_param })
 
     | N_UNPACK ty, [arg] ->
       mklet env node (Unpack { arg = arg_of arg; ty })

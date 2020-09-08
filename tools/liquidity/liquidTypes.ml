@@ -1078,9 +1078,9 @@ and ('ty, 'a) exp_desc =
   (** Oringinating contracts:
       {[ Contract.create ~delegate~amount (contract C) ]} *)
 
-  | ContractAt of { arg: ('ty, 'a) exp;
-                    entry: entry_or_view;
-                    entry_param: datatype }
+  | HandleAt of { arg: ('ty, 'a) exp;
+                  entry: entry_or_view;
+                  entry_param: datatype }
   (** Contract handle from address: {[%handle <sig>] arg} *)
 
   | Unpack of { arg: ('ty, 'a) exp;
@@ -1141,7 +1141,7 @@ let mk =
 
       | Project { record = e }
       | Constructor { arg = e}
-      | ContractAt { arg = e}
+      | HandleAt { arg = e}
       | Unpack { arg = e }
       | Lambda { body = e } -> e.effect, false (* e.transfer *)
 
@@ -1222,7 +1222,7 @@ let rec eq_exp_desc eq_ty eq_var e1 e2 = match e1, e2 with
     p1.field = p2.field && eq_exp eq_ty eq_var p1.record p2.record
   | Constructor c1, Constructor c2 ->
     c1.constr = c2.constr && eq_exp eq_ty eq_var c1.arg c2.arg
-  | ContractAt c1, ContractAt c2 ->
+  | HandleAt c1, HandleAt c2 ->
     c1.entry = c2.entry &&
     eq_types c1.entry_param c2.entry_param &&
     eq_exp eq_ty eq_var c1.arg c2.arg

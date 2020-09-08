@@ -871,10 +871,10 @@ let rec tvars_to_unit ?(err=false) ~keep_tvars ({ desc; ty; loc } as e) =
     | CreateContract { args; contract } ->
       CreateContract { args = List.map tvars_to_unit args;
                        contract = contract_tvars_to_unit contract }
-    | ContractAt { arg; entry; entry_param } ->
-      ContractAt { arg = tvars_to_unit ~err:true arg;
-                   entry;
-                   entry_param = vars_to_unit ~err:true ~loc entry_param }
+    | HandleAt { arg; entry; entry_param } ->
+      HandleAt { arg = tvars_to_unit ~err:true arg;
+                 entry;
+                 entry_param = vars_to_unit ~err:true ~loc entry_param }
     | Unpack { arg; ty } ->
       if has_unresolved ty then
         error loc "Unresolved unpack type %S, add annotation"
@@ -1119,10 +1119,10 @@ let rec mono_exp env subst vtys (e:typed_exp) =
     | CreateContract cc ->
       CreateContract { args = List.map (mono_exp subst vtys) cc.args;
                        contract = fst @@ mono_contract vtys cc.contract }
-    | ContractAt ca ->
-      ContractAt { arg = mono_exp subst vtys ca.arg;
-                   entry = ca.entry;
-                   entry_param = instantiate ca.entry_param }
+    | HandleAt ca ->
+      HandleAt { arg = mono_exp subst vtys ca.arg;
+                 entry = ca.entry;
+                 entry_param = instantiate ca.entry_param }
     | Unpack up ->
       Unpack { arg = mono_exp subst vtys up.arg;
                ty = instantiate up.ty }

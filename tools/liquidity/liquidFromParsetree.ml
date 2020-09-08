@@ -1103,7 +1103,7 @@ and translate_code contracts env exp =
         with Not_found ->
           error_loc c_loc "%s has no entry point %s" contract_name entry_point
       in
-      ContractAt { arg = translate_code contracts env addr_exp;
+      HandleAt { arg = translate_code contracts env addr_exp;
                    entry = Entry entry_point ;
                    entry_param }
 
@@ -1138,7 +1138,7 @@ and translate_code contracts env exp =
         | Some { parameter; return = Some return } -> parameter, return
         | _ -> assert false
       in
-      ContractAt { arg = translate_code contracts env addr_exp;
+      HandleAt { arg = translate_code contracts env addr_exp;
                    entry = View view ;
                    entry_param = Tlambda (param, ret, default_uncurry ()) }
 
@@ -1171,7 +1171,7 @@ and translate_code contracts env exp =
         | "entry" -> Entry entry_name
         | "view" -> View entry_name
         | _ -> assert false in
-      ContractAt { arg =  translate_code contracts env addr_exp;
+      HandleAt { arg =  translate_code contracts env addr_exp;
                    entry;
                    entry_param }
 

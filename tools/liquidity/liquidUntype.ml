@@ -242,8 +242,8 @@ let rec untype (env : env) (code : (datatype, 'a) exp) : (unit, 'b) exp =
       CreateContract { args = List.map (untype env) args;
                        contract = untype_contract contract }
 
-    | ContractAt { arg; entry; entry_param } ->
-      ContractAt { arg = untype env arg; entry; entry_param }
+    | HandleAt { arg; entry; entry_param } ->
+      HandleAt { arg = untype env arg; entry; entry_param }
 
     | Unpack { arg; ty } ->
       Unpack { arg = untype env arg; ty }

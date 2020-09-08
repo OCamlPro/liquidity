@@ -214,10 +214,10 @@ let rec ttfail_to_tvar ({ desc; ty; loc } as e) =
     | CreateContract { args; contract } ->
       CreateContract { args = List.map ttfail_to_tvar args;
                        contract = contract_ttfail_to_tvar contract }, tfail_to_tvar ty
-    | ContractAt { arg; entry; entry_param } ->
-      ContractAt { arg = ttfail_to_tvar arg;
-                   entry;
-                   entry_param = tfail_to_tvar entry_param }, tfail_to_tvar ty
+    | HandleAt { arg; entry; entry_param } ->
+      HandleAt { arg = ttfail_to_tvar arg;
+                 entry;
+                 entry_param = tfail_to_tvar entry_param }, tfail_to_tvar ty
     | Unpack { arg; ty } ->
       Unpack { arg = ttfail_to_tvar arg;
                ty = tfail_to_tvar ~loc:arg.loc ty }, tfail_to_tvar ty

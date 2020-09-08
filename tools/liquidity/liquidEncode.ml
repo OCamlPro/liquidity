@@ -475,7 +475,7 @@ let rec decr_counts_vars env e =
     | Failwith e
     | Project { record = e }
     | Constructor { arg = e }
-    | ContractAt { arg = e }
+    | HandleAt { arg = e }
     | Unpack { arg = e }
     | Lambda { body = e } -> decr_counts_vars env e
 
@@ -1132,9 +1132,9 @@ and encode env ( exp : typed_exp ) : encoded_exp =
     in
     mk ?name:exp.name ~loc (MatchVariant { arg; cases }) exp.ty
 
-  | ContractAt { arg; entry; entry_param } ->
+  | HandleAt { arg; entry; entry_param } ->
     let arg = encode env arg in
-    mk ?name:exp.name ~loc (ContractAt { arg; entry; entry_param }) exp.ty
+    mk ?name:exp.name ~loc (HandleAt { arg; entry; entry_param }) exp.ty
 
   | Unpack { arg; ty } ->
     let arg = encode env arg in

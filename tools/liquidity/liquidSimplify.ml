@@ -42,7 +42,7 @@ let rec compute decompile code to_inline =
     | Const _ | Var _ | SetField _ | Project _ | Self _ -> 1
 
     | Failwith arg
-    | ContractAt { arg }
+    | HandleAt { arg }
     | Unpack { arg }
     | Constructor { arg } -> size arg
 
@@ -352,9 +352,9 @@ let rec compute decompile code to_inline =
       (* contract is already simplified *)
       { exp with desc = CreateContract { args; contract } }
 
-    | ContractAt { arg; entry; entry_param } ->
+    | HandleAt { arg; entry; entry_param } ->
       let arg = iter arg in
-      { exp with desc = ContractAt { arg; entry; entry_param } }
+      { exp with desc = HandleAt { arg; entry; entry_param } }
 
     | Unpack { arg; ty } ->
       let arg = iter arg in

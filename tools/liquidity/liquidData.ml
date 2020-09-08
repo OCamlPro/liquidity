@@ -255,7 +255,7 @@ let rec translate_const_exp (exp : ('a, 'b) exp) =
   | MatchVariant _
   | Failwith _
   | CreateContract _
-  | ContractAt _
+  | HandleAt _
   | Unpack _
   | Type _
     ->

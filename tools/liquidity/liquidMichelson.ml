@@ -477,7 +477,7 @@ let rec compile_desc depth env ~loc desc =
     args_code @
     [contract_code; ii ~loc PAIR]
 
-  | ContractAt { arg; entry; entry_param } ->
+  | HandleAt { arg; entry; entry_param } ->
     let param_ty = LiquidEncode.encode_type entry_param in
     let entry = match entry with
       | NoEntry | Entry "default" -> None

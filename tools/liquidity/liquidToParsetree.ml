@@ -781,7 +781,7 @@ and convert_code ~abbrev (expr : (datatype, 'a) exp) =
 
   | CreateContract _ -> assert false
 
-  | ContractAt { arg; entry; entry_param } ->
+  | HandleAt { arg; entry; entry_param } ->
     let sig_ext, e_id = match entry with
       | Entry e -> "entry", e
       | NoEntry -> "entry", "default"
