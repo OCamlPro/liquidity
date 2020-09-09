@@ -245,6 +245,9 @@ let rec untype (env : env) (code : (datatype, 'a) exp) : (unit, 'b) exp =
     | HandleAt { arg; entry; entry_param } ->
       HandleAt { arg = untype env arg; entry; entry_param }
 
+    | ContractAt { arg; c_sig } ->
+      ContractAt { arg = untype env arg; c_sig }
+
     | Unpack { arg; ty } ->
       Unpack { arg = untype env arg; ty }
 

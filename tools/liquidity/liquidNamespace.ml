@@ -195,6 +195,8 @@ let rec normalize_type ?from_env ~in_env ty =
     Tcontract_view (v,
                     normalize_type ?from_env ~in_env t1,
                     normalize_type ?from_env ~in_env t2)
+  | Tcontract c_sig ->
+    Tcontract (normalize_contract_sig ?from_env ~in_env ~build_sig_env:false c_sig)
   | Trecord (name, fields) ->
     let _, found_env =
       try find_type_loose ~loc:noloc name in_env []

@@ -37,10 +37,13 @@ module TypeVarMap = struct
     | None -> assert false
 end
 
-let add_typedef_to_contract ?(ignore_errs=false) ~loc name tdef env =
+let add_typedef_to_contract ?(ignore_errs=false) ?loc name tdef env =
   try Love_tenv.add_typedef name TPublic tdef env
   with Love_tenv.EnvironmentError msg when ignore_errs ->
     (* TODO: Only catch redefinition of same aliased types *)
+    let loc = match loc with
+      | None -> LiquidLoc.noloc
+      | Some l -> l in
     Format.ksprintf
       (fun s -> LiquidLoc.warn loc (WOther s))
       "Ignored Love error in definition of type %s (%s)"
@@ -118,6 +121,59 @@ let find_constructor name cons =
            (Ident.get_final (string_to_ident ~scoped:true n))
            (Ident.get_final (string_to_ident ~scoped:true name)))
       cons
+
+let find_contract (name : string) (env: env) =
+  let c_unscoped = string_to_ident ~scoped:false name in
+  let c_scoped = string_to_ident ~scoped:true name in
+  match Love_tenv.find_contract c_unscoped env with
+  | Some {result; _} -> Some (result, c_unscoped)
+  | None ->
+    match Love_tenv.find_contract c_scoped env with
+    | Some {result; _} -> Some (result, c_scoped)
+    | None -> None
+
+let find_signature (name : string) (env: env) =
+  let c_unscoped = string_to_ident ~scoped:false name in
+  let c_scoped = string_to_ident ~scoped:true name in
+  match Love_tenv.find_signature c_unscoped env with
+  | Some {result; _} -> Some (result, c_unscoped)
+  | None ->
+    match Love_tenv.find_signature c_scoped env with
+    | Some {result; _} -> Some (result, c_scoped)
+    | None -> None
+
+let find_signature name env =
+  match find_signature name env with
+  | Some res -> Some res
+  | None -> find_signature (name ^ "__sig__") env
+
+let get_entrypoint_or_view_ty name ctr_name env =
+  match find_contract ctr_name env with
+  | None -> None
+  | Some (contract_env, _) ->
+    match find_var name contract_env with
+    | Some (_, Entry, TUser (LName "entrypoint", [t]))
+    | Some (_, View _, TUser (LName "view", [t])) ->
+      Some (Love_tenv.normalize_type ~relative:false t contract_env)
+    | _ -> None
+
+let get_entrypoint_ty name ctr_name env =
+  match find_contract ctr_name env with
+  | None -> None
+  | Some (contract_env, _) ->
+    match find_var name contract_env with
+    | Some (_, Entry, TUser (LName "entrypoint", [t])) ->
+      Some (Love_tenv.normalize_type ~relative:false t contract_env)
+    | _ -> None
+
+let get_view_ty name ctr_name env =
+  match find_contract ctr_name env with
+  | None -> None
+  | Some (contract_env, _) ->
+    match find_var name contract_env with
+    | Some (_, View _, TUser (LName "view", [t])) ->
+      Some (Love_tenv.normalize_type ~relative:false t contract_env)
+    | _ -> None
 
 let normalize_type t env =
   try Love_tenv.normalize_type ~relative:true t env
@@ -297,101 +353,105 @@ and get_tvar_from_tlist env tlist : TYPE.t list =
     []
 
 and liqcontract_sig_to_lovetype
-    ~loc
+    ?loc
     (env : env)
     (mod_name : string option)
-    {sig_name; entries_sig} : structure_type =
+    {sig_name; entries_sig} : structure_type * env =
   debug "[liqcontract_sig_to_lovetype] Creating type from Liquidity Contract@.";
   match mod_name with
-    Some name -> (
+  | Some name -> (
       debug "[liqcontract_sig_to_lovetype] Module is named %s@." name;
-      match Love_tenv.find_contract (string_to_ident name) env with
-        Some _ -> (* The signature has already been registered *)
+      match find_signature name env with
+      | Some (c_env, c) -> (* The signature has already been registered *)
         debug "[liqcontract_sig_to_lovetype] Already registered@.";
-        Named (string_to_ident name)
+        Named c, c_env
       | None ->
         debug "[liqcontract_sig_to_lovetype] Not registered, treating as anonymous@.";
-        liqcontract_sig_to_lovetype ~loc env None {sig_name = None; entries_sig}
+        liqcontract_sig_to_lovetype ?loc env None {sig_name = None; entries_sig}
     )
-  | None -> (
-      debug "[liqcontract_sig_to_lovetype] Anonymous contract@.";
-      let entry_sig_to_love_content env entry =
-        let name = entry.entry_name in
-        let is_view = entry.return <> None in
-        let kind = if is_view then "View" else "Entry point" in
-        let typ_and_defs = function
-          | Tsum (None, _) as t ->
-            error
-              "Cannot convert contract signature. \
-               Type of %s %s: %s has no name"
-              kind name
-              (LiquidPrinter.Liquid.string_of_type t)
-          | Tsum (Some name, _) as t -> (
-              try liqtype_to_lovetype env t, [] with
-                UnknownType (n, _, _, _) when String.equal name n ->
-                debug "[liqcontract_sig_to_lovetype] \
-                       Sum type %s defined in signature@." name;
-                (* entry.parameter has not been defined yet. *)
-                let tdef = liqtype_to_lovetypedef env name t in
-                match tdef with
-                | TYPE.SumType {sparams; _} ->
-                  TUser (string_to_ident name,
-                         List.map (fun v -> TVar v) sparams),
-                  [name, tdef]
-                | _ -> assert false
-            )
-          | Trecord (name, _) as t -> (
-              try liqtype_to_lovetype env t, [] with
-                UnknownType (n, _, _, _) when String.equal name n ->
-                debug "[liqcontract_sig_to_lovetype] \
-                       Record type %s defined in signature@." name;
-                (* entry.parameter has not been defined yet. *)
-                let tdef = liqtype_to_lovetypedef env name t in
-                match tdef with
-                  TYPE.RecordType {rparams; _} ->
-                  TUser (string_to_ident name,
-                         List.map (fun v -> TVar v) rparams),
-                  [name, tdef]
-                | _ -> assert false)
-          | t -> liqtype_to_lovetype env t, []
-        in
-        if has_lambda entry.parameter then
-          error ~loc
-            "Parameter of entry point %s cannot contain lambda type in Love"
-            entry.entry_name;
-        let param_ty, tdef = typ_and_defs entry.parameter in
-        let typ, tdef = match entry.return with
-          | None -> param_ty, tdef
-          | Some t ->
-            let ret, tdef2 = typ_and_defs t in
-            TArrow (param_ty, ret), tdef @ tdef2 in
-        debug "[liqcontract_sig_to_lovetype] %s %s : %a@."
-          kind name Love_type.pretty typ;
-        name, typ, tdef, is_view
-      in
-      let sig_content, _env =
-        List.fold_left
-          (fun (content, env) entry ->
-             debug "[liqcontract_sig_to_lovetype] Entry %s@." entry.entry_name;
-             let name, t1, tdef, is_view = entry_sig_to_love_content env entry in
-             debug "[liqcontract_sig_to_lovetype] Entry %s has type %a@."
-               name Love_type.pretty t1 ;
-             let content, env =
-               List.fold_left (fun (content, env) (n, t) ->
-                 (n, SType (SPublic t)) :: content,
-                 add_typedef_to_contract ~loc n t env
-                 ) (content, env) tdef in
-             let item = name, if is_view then SView t1 else SEntry t1 in
-             item :: content, env
+  | None ->
+    debug "[liqcontract_sig_to_lovetype] Anonymous contract@.";
+    let entry_sig_to_love_content env entry =
+      let name = entry.entry_name in
+      let is_view = entry.return <> None in
+      let kind = if is_view then "View" else "Entry point" in
+      debug "[liqcontract_sig_to_lovetype] %s %s : %s@."
+        kind name (LiquidPrinter.Liquid.string_of_type entry.parameter);
+      let typ_and_defs = function
+        | Tsum (None, _) as t ->
+          error
+            "Cannot convert contract signature. \
+             Type of %s %s: %s has no name"
+            kind name
+            (LiquidPrinter.Liquid.string_of_type t)
+        | Tsum (Some name, _) as t -> (
+            try liqtype_to_lovetype env t, [] with
+              UnknownType (n, _, _, _) when String.equal name n ->
+              debug "[liqcontract_sig_to_lovetype] \
+                     Sum type %s defined in signature@." name;
+              (* entry.parameter has not been defined yet. *)
+              let tdef = liqtype_to_lovetypedef env name t in
+              match tdef with
+              | TYPE.SumType {sparams; _} ->
+                TUser (string_to_ident name,
+                       List.map (fun v -> TVar v) sparams),
+                [name, tdef]
+              | _ -> assert false
           )
-          ([], env)
-          entries_sig
+        | Trecord (name, _) as t -> (
+            try liqtype_to_lovetype env t, [] with
+              UnknownType (n, _, _, _) when String.equal name n ->
+              debug "[liqcontract_sig_to_lovetype] \
+                     Record type %s defined in signature@." name;
+              (* entry.parameter has not been defined yet. *)
+              let tdef = liqtype_to_lovetypedef env name t in
+              match tdef with
+                TYPE.RecordType {rparams; _} ->
+                TUser (string_to_ident name,
+                       List.map (fun v -> TVar v) rparams),
+                [name, tdef]
+              | _ -> assert false)
+        | t -> liqtype_to_lovetype env t, []
       in
-      Anonymous {
-        sig_kind = Contract [];
-        sig_content = List.rev sig_content
-      }
-    )
+      if has_lambda entry.parameter then
+        error ?loc
+          "Parameter of entry point %s cannot contain lambda type in Love"
+          entry.entry_name;
+      let param_ty, tdef = typ_and_defs entry.parameter in
+      let typ, tdef = match entry.return with
+        | None -> param_ty, tdef
+        | Some t ->
+          let ret, tdef2 = typ_and_defs t in
+          TArrow (param_ty, ret), tdef @ tdef2 in
+      debug "[liqcontract_sig_to_lovetype] %s %s : %a@."
+        kind name Love_type.pretty typ;
+      name, typ, tdef, is_view
+    in
+    let sig_content, _env =
+      List.fold_left
+        (fun (content, env) entry ->
+           debug "[liqcontract_sig_to_lovetype] Entry %s@." entry.entry_name;
+           let name, t1, tdef, is_view = entry_sig_to_love_content env entry in
+           debug "[liqcontract_sig_to_lovetype] Entry %s has type %a@."
+             name Love_type.pretty t1 ;
+           let content, env =
+             List.fold_left (fun (content, env) (n, t) ->
+                 (n, SType (SPublic t)) :: content,
+                 add_typedef_to_contract ?loc n t env
+               ) (content, env) tdef in
+           let item = name, if is_view then SView t1 else SEntry t1 in
+           item :: content, env
+        )
+        ([], empty_env (Contract []) ())
+        entries_sig
+    in
+    let c_sig = {
+      sig_kind = Contract [];
+      sig_content = List.rev sig_content
+    } in
+    let c_sig_env = Love_tenv.contract_sig_to_env sig_name c_sig env in
+    Anonymous c_sig, c_sig_env
+
 
 and liqtype_to_lovetype ?loc ?(aliases=StringMap.empty) (env : env) tv =
   debug "[liqtype_to_lovetype] Transpiling type %s@."
@@ -477,14 +537,17 @@ and liqtype_to_lovetype ?loc ?(aliases=StringMap.empty) (env : env) tv =
         UnknownType (name, f, e, loc) ->
         raise (UnknownType (name, (fun t -> let t1 = f t in t2 t1), e, loc))
     in t2 t1
-  | Tcontract_handle (s, c) ->
-    let ty = ltl c in
-    TContractInstance (Compil_utils.get_signature_from_name s ty env)
-  | Tcontract_view (v, param, ret) ->
-    let param = ltl param in
-    let ret = ltl ret in
-    let ty = TArrow (param, ret) in
-    TContractInstance (Compil_utils.view_signature env v ty)
+  | Tcontract_handle (entry_name, parameter) ->
+    let c_sig = handle_sig ?entry_name parameter in
+    let c_sig, _ = liqcontract_sig_to_lovetype ?loc env c_sig.sig_name c_sig in
+    TContractInstance c_sig
+  | Tcontract_view (v, parameter, return) ->
+    let c_sig = handle_sig ~entry_name:v parameter ~return in
+    let c_sig, _ = liqcontract_sig_to_lovetype ?loc env c_sig.sig_name c_sig in
+    TContractInstance c_sig
+  | Tcontract c_sig ->
+    let c_sig, _ = liqcontract_sig_to_lovetype ?loc env c_sig.sig_name c_sig in
+    TContractInstance c_sig
   | Tor (t1,t2) -> (
       let t1 = ltl t1 and t2 = ltl t2 in
       let sumtyp = variant (t1,t2) in
@@ -1081,7 +1144,7 @@ let rec liqexp_to_loveexp (env : env) (e : typed_exp) : AST.exp * TYPE.t =
   let exp, t =
     let ltl = liqexp_to_loveexp env in
     match e.desc with
-      Let { bnd_var = {nname; _}; inline; bnd_val; body} ->
+    | Let { bnd_var = {nname; _}; inline; bnd_val; body} ->
       debug "[liqexp_to_loveexp] let %s = ...@." nname;
       let bnd_val,btyp = ltl bnd_val in
       debug "[liqexp_to_loveexp] let %s = %a in...@." nname Love_printer.Ast.print_exp bnd_val;
@@ -1179,176 +1242,120 @@ let rec liqexp_to_loveexp (env : env) (e : typed_exp) : AST.exp * TYPE.t =
     | Call { contract = DSelf } ->
       error ~loc "Self not implemented yet"
 
-    | Call {contract = DContract contract; amount = Some amount;
-            entry = (NoEntry | Entry _) as entry; arg} ->
-      begin
-        debug "[liqexp_to_loveexp] Creating a Call@.";
-        let name =
-          match entry with
-          | NoEntry -> "default"
-          | Entry name -> name
-          | View _ -> assert false in
-        debug "[liqexp_to_loveexp] Calling %s@." name;
-        let ctrct_or_addr, _typ = ltl contract in
-        let tmp_ctrname = "CalledContract" in
-        let tmp_entrypt = "entry_pt" in
+    | Call {contract = DContract contract; amount; entry; arg} ->
+      let name =
+        match entry with
+        | NoEntry -> "default"
+        | Entry name -> name
+        | View name -> name in
+      debug "[liqexp_to_loveexp] Creating a Call to %s@." name;
+      let ctrct_or_addr, _typ = ltl contract in
+      let amount, is_view = match amount with
+        | None -> None, true
+        | Some a -> Some (fst @@ ltl a), false in
+      let tmp_ctrname = "__C__" in
+      let tmp_ctrname, ctrct, cssig , arg, env =
         match contract.ty with
+        | Tcontract c_sig ->
+          let tmp_ctrname = match c_sig.sig_name with
+            | Some c -> c
+            | None -> tmp_ctrname in
+          let cssig, cssig_env =
+            liqcontract_sig_to_lovetype ~loc env c_sig.sig_name c_sig in
+          let env = Love_tenv.add_subcontract_env tmp_ctrname cssig_env env in
+          let ltl = liqexp_to_loveexp env in
+          let arg, _arg_typ = ltl arg in
+          tmp_ctrname, ctrct_or_addr, cssig, arg, env
         | Tcontract_handle (cname, ty) ->
-          let cssig, entry_typ =
-            let ty = liqtype_to_lovetype env ty in
-            Compil_utils.get_signature_from_name cname ty env, ty
+          let c_sig = handle_sig ~entry_name:name ty in
+          let cssig, cssig_env =
+            liqcontract_sig_to_lovetype ~loc env c_sig.sig_name c_sig in
+          let env = Love_tenv.add_subcontract_env tmp_ctrname cssig_env env in
+          let ltl = liqexp_to_loveexp env in
+          tmp_ctrname, ctrct_or_addr, cssig, fst @@ ltl arg, env
+        | Tcontract_view (cname, arg_ty, ret_ty) ->
+          assert (name = cname);
+          let c_sig = handle_sig ~entry_name:cname arg_ty ~return:ret_ty in
+          let cssig, cssig_env =
+            liqcontract_sig_to_lovetype ~loc env c_sig.sig_name c_sig in
+          let env = Love_tenv.add_subcontract_env tmp_ctrname cssig_env env in
+          let ltl = liqexp_to_loveexp env in
+          tmp_ctrname, ctrct_or_addr, cssig, fst @@ ltl arg, env
+        | Taddress ->
+          (* In liquidity, contracts can be called/viewed through their addresses. *)
+          let c_sig =
+            if is_view then
+              handle_sig ~entry_name:name arg.ty ~return:e.ty
+            else handle_sig ~entry_name:name arg.ty in
+          let cssig, cssig_env =
+            liqcontract_sig_to_lovetype ~loc env c_sig.sig_name c_sig in
+          let env = Love_tenv.add_subcontract_env tmp_ctrname cssig_env env in
+          let ltl = liqexp_to_loveexp env in
+          let arg, _typ_arg = ltl arg in
+          let ctrct =
+            (* match (Contract.at arg) with *)
+            mk_match
+              (mk_apply ?loc:lloc
+                  (mk_primitive_lambda ~loc env "Contract.at"
+                     ~expected_typ:((address ()) @=> option (TContractInstance cssig))
+                     ~spec_args:(AContractType cssig)
+                  )
+                  [ctrct_or_addr]
+              )
+              [
+                (* Some ctr -> ctr *)
+                mk_pconstr "Some" [mk_pvar "ctr"], mk_var (Ident.create_id "ctr")
+              ]
           in
+          tmp_ctrname, ctrct, cssig, arg, env
+        | t ->
+          error ~loc:contract.loc
+            "Expression %a has Liquidity type %s, \
+             but was expected to be a contract"
+            Love_printer.Ast.print_exp ctrct_or_addr
+            (LiquidPrinter.Liquid.string_of_type t)
+      in
+      begin match amount with
+        | Some amount -> (* Call *)
+          let entry_typ = match get_entrypoint_ty name tmp_ctrname env with
+            | None -> assert false
+            | Some ty -> ty in
           mk_let ?loc:lloc
-            (* let (CalledContract : cssig) *)
+            (* let (__C__ : cssig) *)
             (mk_pcontract tmp_ctrname cssig)
             (* = ctrct *)
-            ctrct_or_addr
-            (* in let entry_pt = CalledContract.name *)
-            (mk_let
-               (mk_pvar tmp_entrypt)
-               (mk_var (Ident.put_in_namespace tmp_ctrname (string_to_ident name)))
-               (* in call *)
-               (mk_apply ?loc:lloc
-                  (mk_primitive_lambda ~loc env "Contract.call"
-                     ~expected_typ:(entrypoint entry_typ @=> dun () @=>
-                                     entry_typ @=> operation ()))
-                  [mk_var @@ string_to_ident tmp_entrypt;
-                   fst @@ ltl amount;
-                   fst @@ ltl arg
-                  ]
-               )
+            ctrct
+            (* in Contract.call __C__.name *)
+            (mk_apply ?loc:lloc
+               (mk_primitive_lambda ~loc env "Contract.call"
+                  ~expected_typ:(entrypoint entry_typ @=> dun () @=>
+                                 entry_typ @=> operation ()))
+               [mk_var @@ Ident.put_in_namespace tmp_ctrname (string_to_ident name);
+                amount;
+                arg
+               ]
             )
         , operation ()
-        | Taddress ->
-          (* In liquidity, contracts can be called through their addresses. *)
-          let arg, typ_arg = ltl arg in
-          let ctr_sig = Anonymous {sig_kind = Contract []; sig_content = [name, SEntry typ_arg]}
-          in
-          let ctrct =
-            (* match (Contract.at arg) with *)
-            mk_match
-              (mk_apply ?loc:lloc
-                  (mk_primitive_lambda ~loc env "Contract.at"
-                     ~expected_typ:((address ()) @=> option (TContractInstance ctr_sig))
-                     ~spec_args:(AContractType ctr_sig)
-                  )
-                  [ctrct_or_addr]
-              )
-              [
-                (* Some ctr -> ctr *)
-                mk_pconstr "Some" [mk_pvar "ctr"], mk_var (Ident.create_id "ctr")
-              ]
-          in
+        | None -> (* View *)
+          let view_typ = match get_view_ty name tmp_ctrname env with
+            | None -> assert false
+            | Some ty -> ty in
+          let ret_ty = Love_type.return_type view_typ in
           mk_let ?loc:lloc
-            (* let (CalledContract : cssig) *)
-            (mk_pcontract tmp_ctrname ctr_sig)
-            (* = ctrct *)
-            ctrct
-            (* in let entry_pt = CalledContract.name *)
-            (mk_let
-               (mk_pvar tmp_entrypt)
-               (mk_var (Ident.put_in_namespace tmp_ctrname (string_to_ident name)))
-               (* in call *)
-               (mk_apply ?loc:lloc
-                  (mk_primitive_lambda env "Contract.call"
-                     ~expected_typ:(entrypoint typ_arg @=> dun () @=>
-                                    typ_arg @=> operation ()))
-                  [mk_var @@ string_to_ident tmp_entrypt;
-                   fst @@ ltl amount;
-                   arg
-                  ]
-               )
-            ), operation ()
-
-        | t ->
-          error ~loc:contract.loc
-            "Expression %a has Liquidity type %s, \
-             but was expected to be a contract"
-            Love_printer.Ast.print_exp ctrct_or_addr
-            (LiquidPrinter.Liquid.string_of_type t)
-      end
-    | Call {contract = DContract contract; amount = None;
-            entry = View view; arg} ->
-      begin
-        debug "[liqexp_to_loveexp] Creating a View@.";
-        debug "[liqexp_to_loveexp] View %s@." view;
-        let ctrct_or_addr, _typ = ltl contract in
-        let tmp_ctrname = "ViewedContract" in
-        let tmp_view = "view_pt" in
-        match contract.ty with
-        | Tcontract_view (cname, arg_ty, ret_ty) ->
-          let arg_ty = liqtype_to_lovetype env arg_ty in
-          let ret_ty = liqtype_to_lovetype env ret_ty in
-          let view_typ = TArrow (arg_ty, ret_ty) in
-          let cssig = Compil_utils.view_signature env cname view_typ in
-          mk_let ?loc:lloc
-            (* let (CalledContract : cssig) *)
+            (* let (__C__ : cssig) *)
             (mk_pcontract tmp_ctrname cssig)
             (* = ctrct *)
-            ctrct_or_addr
-            (* in let entry_pt = CalledContract.name *)
-            (mk_let
-               (mk_pvar tmp_view)
-               (mk_var (Ident.put_in_namespace tmp_ctrname (string_to_ident view)))
-               (* in call *)
-               (mk_apply ?loc:lloc
-                  (mk_primitive_lambda ~loc env "Contract.view"
-                     ~expected_typ:(tview view_typ @=> view_typ))
-                  [mk_var @@ string_to_ident tmp_view;
-                   fst @@ ltl arg
-                  ]
-               )
+            ctrct
+            (* in Contract.view __C__.name *)
+            (mk_apply ?loc:lloc
+               (mk_primitive_lambda ~loc env "Contract.view"
+                  ~expected_typ:(tview view_typ @=> view_typ))
+               [mk_var @@ Ident.put_in_namespace tmp_ctrname (string_to_ident name);
+                arg
+               ]
             )
         , ret_ty
-        | Taddress ->
-          (* In liquidity, contracts can be viewd through their addresses. *)
-          let arg, typ_arg = ltl arg in
-          let typ_ret = liqtype_to_lovetype env e.ty in
-          let ty_view = TArrow (typ_arg, typ_ret) in
-          let ctr_sig = Compil_utils.view_signature env view ty_view in
-          let ctrct =
-            (* match (Contract.at arg) with *)
-            mk_match
-              (mk_apply ?loc:lloc
-                  (mk_primitive_lambda ~loc env "Contract.at"
-                     ~expected_typ:((address ()) @=> option (TContractInstance ctr_sig))
-                     ~spec_args:(AContractType ctr_sig)
-                  )
-                  [ctrct_or_addr]
-              )
-              [
-                (* Some ctr -> ctr *)
-                mk_pconstr "Some" [mk_pvar "ctr"], mk_var (Ident.create_id "ctr")
-              ]
-          in
-          mk_let ?loc:lloc
-            (* let (CalledContract : cssig) *)
-            (mk_pcontract tmp_ctrname ctr_sig)
-            (* = ctrct *)
-            ctrct
-            (* in let entry_pt = CalledContract.name *)
-            (mk_let
-               (mk_pvar tmp_view)
-               (mk_var (Ident.put_in_namespace tmp_ctrname (string_to_ident view)))
-               (* in call *)
-               (mk_apply ?loc:lloc
-                  (mk_primitive_lambda env "Contract.view"
-                     ~expected_typ:(tview ty_view @=> ty_view))
-                  [mk_var @@ string_to_ident tmp_view;
-                   arg
-                  ]
-               )
-            ), typ_ret
-
-        | t ->
-          error ~loc:contract.loc
-            "Expression %a has Liquidity type %s, \
-             but was expected to be a contract"
-            Love_printer.Ast.print_exp ctrct_or_addr
-            (LiquidPrinter.Liquid.string_of_type t)
-      end |> fun x ->
-      debug "[liqexp_to_loveexp] Done Creating a View@.";
-      x
+      end
 
     | MatchOption {arg; ifnone; some_name; ifsome} -> (
         debug "[liqexp_to_loveexp] Creating a Option match@.";
@@ -1678,7 +1685,6 @@ let rec liqexp_to_loveexp (env : env) (e : typed_exp) : AST.exp * TYPE.t =
 
     | CreateContract {args; contract} -> (* Todo : bad argument to contract *)
       debug "[liqexp_to_loveexp] Creating a contract creation@.";
-      let name_id = string_to_ident contract.contract_name in
       let gprim =
         match Love_primitive.from_string "Contract.create" with
           None ->
@@ -1686,7 +1692,7 @@ let rec liqexp_to_loveexp (env : env) (e : typed_exp) : AST.exp * TYPE.t =
                       in Love primitives list"
         | Some p -> p in
       let ctr =
-        match Love_tenv.find_contract name_id env with
+        match find_contract contract.contract_name env with
         | None ->
           let _, ctr, _env = liqcontract_to_lovecontent env contract in
             (* liqcontract_to_lovecontract ~env false contract in *)
@@ -1694,7 +1700,7 @@ let rec liqexp_to_loveexp (env : env) (e : typed_exp) : AST.exp * TYPE.t =
             | Structure ctr -> Anonymous ctr
             | _ -> assert false in
           mk_packstruct first_class_ctr
-        | Some {result = env; _} ->
+        | Some (_, name_id) ->
           mk_packstruct (Named name_id)
       in
       let args, storage =
@@ -1718,13 +1724,30 @@ let rec liqexp_to_loveexp (env : env) (e : typed_exp) : AST.exp * TYPE.t =
       Love_type.return_type (Love_primitive.(type_of (gprim, ANone)))
 
     | HandleAt {arg; entry; entry_param} ->
+      debug "[liqexp_to_loveexp] Creating a handle at@.";
+      (* let entry_ty = liqtype_to_lovetype env entry_param in *)
+      let c_sig = match entry with
+        | NoEntry -> handle_sig entry_param
+        | Entry e -> handle_sig ~entry_name:e entry_param
+        | View v -> match entry_param with
+          | Tlambda (p, r, _) -> handle_sig ~entry_name:v p ~return:r
+          | _ -> assert false in
+      let contract, _ =
+        liqcontract_sig_to_lovetype ~loc env c_sig.sig_name c_sig in
+      (* let contract = match entry with
+       *   | NoEntry -> get_signature_from_name None entry_ty env
+       *   | Entry e -> get_signature_from_name (Some e) entry_ty env
+       *   | View v -> view_signature env v entry_ty
+       * in *)
+      mk_apply ?loc:lloc
+        (mk_primitive_lambda ~loc env "Contract.at"
+           ~spec_args:(AContractType contract))
+        [fst @@ ltl arg], option (TContractInstance contract)
+
+    | ContractAt { arg; c_sig } ->
       debug "[liqexp_to_loveexp] Creating a contract at@.";
-      let entry_ty = liqtype_to_lovetype env entry_param in
-      let contract = match entry with
-        | NoEntry -> get_signature_from_name None entry_ty env
-        | Entry e -> get_signature_from_name (Some e) entry_ty env
-        | View v -> view_signature env v entry_ty
-      in
+      let contract, _ =
+        liqcontract_sig_to_lovetype ~loc env c_sig.sig_name c_sig in
       mk_apply ?loc:lloc
         (mk_primitive_lambda ~loc env "Contract.at"
            ~spec_args:(AContractType contract))
@@ -2937,31 +2960,32 @@ and liqcontract_to_lovecontract
   in
   let subc = List.rev subc in
   let env, signatures =
-    StringMap.fold (
-      fun name cs (env, sigs) ->
-        if
-          Collections.StringSet.mem name Compil_utils.reserved_structures ||
-          String.equal ctr_name name
-        then env, sigs
-        else
-          let name = name in
-          debug "[liqcontract_to_lovecontract] Registering signature %s@." name;
-          match liqcontract_sig_to_lovetype
-                  ~loc:(LiquidLoc.loc_in_file c.ty_env.filename)
-                  env (Some name) cs with
-            Anonymous s ->
-            debug "[liqcontract_to_lovecontract] Signature %s = %a@."
-              name (Love_type.pp_contract_sig ) s;
-            Love_tenv.add_signature name
-              (Love_tenv.contract_sig_to_env (Some name) s env)
-              env,
-            (name,(AST.Signature s)) :: sigs
-          | Named _ ->
-            (* failwith "TODO : add named signatures to signature definition"; *)
-            env, sigs
-    )
+    StringMap.fold
+      (fun name cs (env, sigs) ->
+         if
+           Collections.StringSet.mem name Compil_utils.reserved_structures ||
+           String.equal ctr_name name
+         then env, sigs
+         else
+           let name = name ^ "__sig__" in
+           debug "[liqcontract_to_lovecontract] Registering signature %s@." name;
+           match liqcontract_sig_to_lovetype
+                   ~loc:(LiquidLoc.loc_in_file c.ty_env.filename)
+                   env (Some name) cs
+           with
+           | Anonymous s, s_env ->
+             debug "[liqcontract_to_lovecontract] Signature %s = %a@."
+               name (Love_type.pp_contract_sig ) s;
+             Love_tenv.add_signature name s_env env,
+             (name, AST.Signature s) :: sigs
+           | Named _, _s_env ->
+             debug "Named %s@." name;
+             (* failwith "TODO : add named signatures to signature definition"; *)
+             env, sigs
+      )
       c.ty_env.contract_types
-      (env, []) in
+      (env, [])
+  in
   let env, types = (*  Adding type definitions *)
     let rec fill_env_with_types (acc_env, acc_tdef) (str, (typ, _id))  =
       debug "[liqcontract_to_lovecontract] Registering type %s@." str;

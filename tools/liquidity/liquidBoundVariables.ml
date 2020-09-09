@@ -135,6 +135,7 @@ let rec bv code =
       ) bc args
 
   | HandleAt { arg }
+  | ContractAt { arg }
   | Unpack { arg } -> bv arg
 
   | TypeAnnot { e } -> bv e
@@ -439,6 +440,11 @@ let rec bound code =
   | HandleAt { arg; entry; entry_param } ->
     let arg = bound arg in
     let desc = HandleAt { arg; entry; entry_param } in
+    mk desc code arg.bv
+
+  | ContractAt { arg; c_sig } ->
+    let arg = bound arg in
+    let desc = ContractAt { arg; c_sig } in
     mk desc code arg.bv
 
   | Unpack { arg; ty } ->

@@ -33,6 +33,7 @@ let rec tfail_to_tvar ?loc ty = match ty with
   | Tcontract_handle (s, c) -> Tcontract_handle (s, tfail_to_tvar ?loc c)
   | Tcontract_view (v, t1, t2) ->
     Tcontract_view (v, tfail_to_tvar ?loc t1, tfail_to_tvar ?loc t2)
+  | Tcontract csig -> Tcontract (sig_tfail_to_tvar ?loc csig)
   | Tvar { contents = { contents = { tyo = Some ty; id }}} ->
     debug "[Preprocess.tfail_to_tvar] TVar %s aliased" id;
     tfail_to_tvar ?loc ty
@@ -47,11 +48,14 @@ let rec tfail_to_tvar ?loc ty = match ty with
   | Tkey_hash | Tsignature | Toperation | Taddress | Tchainid -> ty
   | Tfail -> LiquidInfer.fresh_tvar ()
 
-let sig_tfail_to_tvar ?loc (c : LiquidTypes.contract_sig) =
+and sig_tfail_to_tvar ?loc (c : LiquidTypes.contract_sig) =
   { c with
     entries_sig =
       List.map (fun es ->
-          { es with parameter = tfail_to_tvar ?loc es.parameter }
+          { es with parameter = tfail_to_tvar ?loc es.parameter;
+                    return = match es.return with
+                      | None -> None
+                      | Some r -> Some (tfail_to_tvar ?loc r) }
         ) c.entries_sig
   }
 
@@ -218,6 +222,10 @@ let rec ttfail_to_tvar ({ desc; ty; loc } as e) =
       HandleAt { arg = ttfail_to_tvar arg;
                  entry;
                  entry_param = tfail_to_tvar entry_param }, tfail_to_tvar ty
+    | ContractAt { arg; c_sig } ->
+      let arg = ttfail_to_tvar arg in
+      let c_sig = sig_tfail_to_tvar c_sig in
+      ContractAt { arg; c_sig }, tfail_to_tvar ty
     | Unpack { arg; ty } ->
       Unpack { arg = ttfail_to_tvar arg;
                ty = tfail_to_tvar ~loc:arg.loc ty }, tfail_to_tvar ty

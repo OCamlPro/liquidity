@@ -22,6 +22,13 @@ let%entry default3 (c : address) s =
   if Contract.view c get_i false > 0 then failwith ();
   [], s
 
+let%entry default4 (c : address) s =
+  match C0.at c with
+  | None -> failwith ()
+  | Some c ->
+    if Contract.view c get_i () > 0 then failwith ();
+    [], s
+
 let%view is_ok i storage : bool =
   match Map.find i storage with
   | Some b -> b

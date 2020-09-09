@@ -694,13 +694,14 @@ let rec has_lambda ty =
   match expand ty with
   | Tlambda _ | Tclosure _ -> true
   | Toperation | Tunit | Tbool | Tint | Tnat | Ttez | Tstring | Tbytes
-  | Ttimestamp | Tkey | Tkey_hash | Tsignature | Taddress | Tfail | Tchainid ->
-    false
+  | Ttimestamp | Tkey | Tkey_hash | Tsignature | Taddress | Tfail | Tchainid
+  | Tcontract _ ->
+     false
   | Ttuple l -> List.exists has_lambda l
   | Toption ty | Tlist ty | Tset ty | Tcontract_handle (_, ty) ->
-    has_lambda ty
+     has_lambda ty
   | Tmap (t1, t2) | Tbigmap (t1, t2) | Tor (t1, t2) | Tcontract_view (_, t1, t2) ->
-    has_lambda t1 || has_lambda t2
+     has_lambda t1 || has_lambda t2
   | Trecord (_, l) | Tsum (_, l) ->
-    List.exists (fun (_, t) -> has_lambda t) l
+     List.exists (fun (_, t) -> has_lambda t) l
   | Tvar _ | Tpartial _ -> false

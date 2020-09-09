@@ -277,6 +277,30 @@ let rec encode_type ?(decompiling=false) ty =
     Tcontract_handle (entry, encode_type ~decompiling param)
   | Tcontract_view (v, p, r) ->
     Tcontract_view (v, encode_type ~decompiling p, encode_type ~decompiling r)
+  | Tcontract contract_sig when decompiling ->
+    Tcontract { contract_sig with
+                entries_sig =
+                  List.map (fun e ->
+                      { e with parameter = encode_type ~decompiling e. parameter }
+                    ) contract_sig.entries_sig
+              }
+  | Tcontract { entries_sig = [ { return = None } as e]} ->
+    let p = encode_type ~decompiling e.parameter in
+    Tcontract_handle (Some e.entry_name, p)
+  | Tcontract { entries_sig = [ { return = Some ret } as e]} ->
+    let p = encode_type ~decompiling e.parameter in
+    let r = encode_type ~decompiling ret in
+    Tcontract_view (e.entry_name, p, r)
+  | Tcontract contract_sig ->
+    (* XXX check this for views, or error here? *)
+    let parameter = encode_type ~decompiling (encode_contract_sig contract_sig) in
+    Tcontract { contract_sig with entries_sig = [{
+        entry_name = "default";
+        parameter_name = "parameter";
+        storage_name = "storage";
+        parameter;
+        return = None;
+      }] }
   | Tvar _ | Tpartial _ ->
     (* Removed during typechecking (if monomorphized)  *)
     ty
@@ -333,6 +357,12 @@ let rec allowed_type
     allow_contract &&
     allowed_type ~allow_big_map ~allow_operation:false ~allow_contract:true t
   | Tcontract_view (_, _, _) -> assert false (* Not in Michelson *)
+  | Tcontract { entries_sig } ->
+    allow_contract && List.for_all (fun e ->
+        allowed_type ~allow_big_map ~allow_operation:false ~allow_contract:true
+          e.parameter
+        && e.return = None
+      ) entries_sig
   | Tor (t1, t2) ->
     allowed_type ~allow_big_map ~allow_operation ~allow_contract t1 &&
     allowed_type ~allow_big_map ~allow_operation ~allow_contract t2
@@ -476,6 +506,7 @@ let rec decr_counts_vars env e =
     | Project { record = e }
     | Constructor { arg = e }
     | HandleAt { arg = e }
+    | ContractAt { arg = e }
     | Unpack { arg = e }
     | Lambda { body = e } -> decr_counts_vars env e
 
@@ -1135,6 +1166,19 @@ and encode env ( exp : typed_exp ) : encoded_exp =
   | HandleAt { arg; entry; entry_param } ->
     let arg = encode env arg in
     mk ?name:exp.name ~loc (HandleAt { arg; entry; entry_param }) exp.ty
+
+  | ContractAt { arg; c_sig = { entries_sig = [ e ] } } ->
+    (* Try to encode contractat with single elt *)
+    let arg = encode env arg in
+    let entry = match e.return with
+      | None -> Entry e.entry_name
+      | Some _ -> View e.entry_name in
+    mk ?name:exp.name ~loc
+      (HandleAt { arg; entry; entry_param = e.parameter }) exp.ty
+
+  | ContractAt { arg; c_sig } ->
+    let arg = encode env arg in
+    mk ?name:exp.name ~loc (ContractAt { arg; c_sig }) exp.ty
 
   | Unpack { arg; ty } ->
     let arg = encode env arg in

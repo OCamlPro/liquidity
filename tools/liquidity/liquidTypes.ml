@@ -95,6 +95,7 @@ type datatype =
 
   | Tmap of datatype * datatype
   | Tbigmap of datatype * datatype
+  | Tcontract of contract_sig
   | Tcontract_handle of string option * datatype
   | Tcontract_view of string * datatype * datatype
   | Tor of datatype * datatype
@@ -115,7 +116,7 @@ and partial_type =
   | Peqn of ((datatype * datatype) list * datatype) list * location (*overload*)
   | Ptup of (int * datatype) list (* partial tuple *)
   | Pmap of datatype * datatype (* map or bigmap *)
-  | Pcont of (string * datatype) option (* unknown contract *)
+  | Pcont of (string * datatype) list (* unknown contract *)
   | Ppar (* equation parameter *)
 
 (** A signature for an entry point *)
@@ -266,6 +267,9 @@ let rec may_contain_arrow_type ty = match expand ty with
     may_contain_arrow_type t1 || may_contain_arrow_type t2
   | Trecord (_, l) | Tsum (_, l) ->
     List.exists (fun (_, t) -> may_contain_arrow_type t) l
+  | Tcontract s ->
+    List.exists (fun e -> may_contain_arrow_type e.parameter)
+      s.entries_sig
   | Tvar _ | Tpartial _ -> true
 
 (** Equality between types. Contract signatures are first order values
@@ -332,6 +336,8 @@ let rec eq_types ty1 ty2 = ty1 == ty2 || match expand ty1, expand ty2 with
   | Tcontract_view (v1, tp1, tr1), Tcontract_view (v2, tp2, tr2) ->
     v1 = v2 && eq_types tp1 tp2 && eq_types tr1 tr2
 
+  | Tcontract csig1, Tcontract csig2 -> eq_signature csig1 csig2
+
   | Tvar tvr1, Tvar tvr2 -> (Ref.get tvr1).id = (Ref.get tvr2).id
 
   | _, _ -> false
@@ -348,19 +354,20 @@ and eq_signature { entries_sig = s1 } { entries_sig = s2 } =
       ) s1 s2
   with Invalid_argument _ -> false
 
-(** Returns true if a type contains is forbidden for a constant:
+(** Returns true if a type contains is for a constant:
     - operation (excepted in lambda's where they are allowed in Michelson)
     - big maps *)
 let rec forbidden_constant_ty ty = match expand ty with
   | Toperation -> true
   | Tbigmap _ -> true
   | Tunit | Tbool | Tint | Tnat | Ttez | Tstring | Tbytes
-  | Ttimestamp | Tkey | Tkey_hash | Tsignature | Taddress | Tfail | Tchainid ->
+  | Ttimestamp | Tkey | Tkey_hash | Tsignature | Taddress | Tfail | Tchainid
+  | Tcontract_handle _ | Tcontract_view _ | Tcontract _ ->
     false
   | Ttuple l -> List.exists forbidden_constant_ty l
-  | Toption ty | Tlist ty | Tset ty | Tcontract_handle (_, ty) ->
+  | Toption ty | Tlist ty | Tset ty ->
     forbidden_constant_ty ty
-  | Tmap (t1, t2) | Tor (t1, t2) | Tcontract_view (_, t1, t2) ->
+  | Tmap (t1, t2) | Tor (t1, t2) ->
     forbidden_constant_ty t1 || forbidden_constant_ty t2
   | Trecord (_, l) | Tsum (_, l) ->
     List.exists (fun (_, t) -> forbidden_constant_ty t) l
@@ -398,6 +405,8 @@ let free_tvars ty =
     | Tclosure ((ty1, ty2), ty3, _) -> aux (aux (aux fv ty1) ty2) ty3
     | Trecord (_, fl) | Tsum (_, fl) ->
       List.fold_left (fun fv (_, ty) -> aux fv ty) fv fl
+    | Tcontract c ->
+      List.fold_left (fun fv { parameter = ty } -> aux fv ty) fv c.entries_sig
     | Tvar tvr -> begin match (Ref.get tvr).tyo with
         | None -> StringSet.add (Ref.get tvr).id fv
         | Some ty -> aux fv ty
@@ -410,7 +419,7 @@ let free_tvars ty =
         ) fv el
     | Tpartial (Ptup pl) -> List.fold_left (fun fv (_, ty) -> aux fv ty) fv pl
     | Tpartial (Pmap (ty1, ty2)) -> aux (aux fv ty1) ty2
-    | Tpartial (Pcont (Some (_, ty))) -> aux fv ty
+    | Tpartial (Pcont el) -> List.fold_left (fun fv (_, ty) -> aux fv ty) fv el
     | _ -> fv
   in
   aux StringSet.empty ty
@@ -440,6 +449,10 @@ let build_subst aty cty =
     | Tcontract_handle (_, ty1), Tcontract_handle (_, ty2) -> aux s ty1 ty2
     | Tcontract_view (_, tp1, tr1), Tcontract_view (_, tp2, tr2) ->
       aux (aux s tp1 tp2) tr1 tr2
+    | Tcontract c1, Tcontract c2 ->
+      List.fold_left2 (fun s e1 e2 ->
+          aux s e1.parameter e2.parameter
+        ) s c1.entries_sig c2.entries_sig
     | Tvar tvr, _ ->
       let tv = Ref.get tvr in
       begin match tv.tyo with
@@ -1083,6 +1096,10 @@ and ('ty, 'a) exp_desc =
                   entry_param: datatype }
   (** Contract handle from address: {[%handle <sig>] arg} *)
 
+  | ContractAt of { arg: ('ty, 'a) exp;
+                    c_sig: contract_sig }
+  (** Contract from address: {[ C_sig.at arg ]} *)
+
   | Unpack of { arg: ('ty, 'a) exp;
                 ty: datatype }
   (** Unpacking bytes with type annotation:
@@ -1142,6 +1159,7 @@ let mk =
       | Project { record = e }
       | Constructor { arg = e}
       | HandleAt { arg = e}
+      | ContractAt { arg = e}
       | Unpack { arg = e }
       | Lambda { body = e } -> e.effect, false (* e.transfer *)
 
@@ -1225,6 +1243,9 @@ let rec eq_exp_desc eq_ty eq_var e1 e2 = match e1, e2 with
   | HandleAt c1, HandleAt c2 ->
     c1.entry = c2.entry &&
     eq_types c1.entry_param c2.entry_param &&
+    eq_exp eq_ty eq_var c1.arg c2.arg
+  | ContractAt c1, ContractAt c2 ->
+    eq_signature c1.c_sig c2.c_sig &&
     eq_exp eq_ty eq_var c1.arg c2.arg
   | Unpack u1, Unpack u2 ->
     eq_types u1.ty u2.ty && eq_exp eq_ty eq_var u1.arg u2.arg
@@ -1659,18 +1680,21 @@ type loc_michelson_contract = loc_michelson mic_contract
 
 let noloc = { loc_file = "<unspecified>"; loc_pos = None }
 
-(** Build a default contract signature (with a single [main] entry
-    point) for a parameter type *)
-let contract_sig_of_default ?sig_name parameter = {
+let handle_sig ?sig_name ?return ?(entry_name="default") parameter = {
   sig_name;
   entries_sig = [ {
-      entry_name = "default";
+      entry_name;
       parameter;
       parameter_name = "parameter";
       storage_name = "storage";
-      return = None;
+      return;
     }];
 }
+
+(** Build a default contract signature (with a single [main] entry
+    point) for a parameter type *)
+let contract_sig_of_default ?sig_name parameter =
+  handle_sig ?sig_name parameter
 
 let contract_type_of_default ty = Tcontract_handle (Some "default", ty)
 

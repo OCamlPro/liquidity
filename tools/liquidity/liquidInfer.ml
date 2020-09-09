@@ -92,7 +92,7 @@ let rec occurs id = function
                                   List.exists (fun (ty1, ty2) -> occurs id ty1 || occurs id ty2) cl) el
   | Tpartial (Ptup al) -> List.exists (fun (_, ty) -> occurs id ty) al
   | Tpartial (Pmap (ty1, ty2)) -> occurs id ty1 || occurs id ty2
-  | Tpartial (Pcont (Some (_, ty))) -> occurs id ty
+  | Tpartial (Pcont el) -> List.exists (fun (_, ty) -> occurs id ty) el
   | _ -> false
 
 let merge_lists l1 l2 =
@@ -167,6 +167,15 @@ let rec generalize tyx1 tyx2 =
   | Tcontract_view (_, from_ty1, to_ty1), Tcontract_view (_, from_ty2, to_ty2) ->
     generalize from_ty1 from_ty2;
     generalize to_ty1 to_ty2
+
+  | Tcontract c1, Tcontract c2
+    when List.compare_lengths c1.entries_sig c2.entries_sig = 0 ->
+    List.iter2 (fun e1 e2 ->
+        generalize e1.parameter e2.parameter;
+        match e1.return, e2.return with
+        | Some r1, Some r2 -> generalize r1 r2
+        | _, _ -> ()
+      ) c1.entries_sig c2.entries_sig
 
   | Tclosure ((from_ty1, env_ty1), to_ty1, _),
     Tclosure ((from_ty2, env_ty2), to_ty2, _) ->
@@ -288,7 +297,42 @@ let rec unify loc ty1 ty2 =
                    (string_of_type ty)
         end
 
+      | Tpartial (Pcont el1), Tpartial (Pcont el2) ->
+        let el = List.fold_left (fun el (ep1, pty1) ->
+            try let pty2 = List.assoc ep1 el in unify pty1 pty2; el
+            with Not_found -> (ep1, pty1) :: el
+          ) el1 el2 in
+        Tpartial (Pcont el), []
 
+      | Tpartial (Pcont el), ty | ty, Tpartial (Pcont el) ->
+        begin match ty with
+          | Tcontract { entries_sig } ->
+            List.iter (fun (ep, pty) ->
+                let entry = try
+                    List.find (fun e -> e.entry_name = ep) entries_sig
+                  with Not_found ->
+                    error loc "Contract has no entry point named %S"  ep in
+                unify pty entry.parameter
+              ) el;
+            ty, []
+          | Tcontract_handle (e, pty) ->
+            (match e, el with
+             | Some e, [ep, epty] when ep = e ->
+               unify pty epty;
+               ty, []
+             | None, [ep, epty] ->
+               unify pty epty;
+               Tcontract_handle (Some ep, pty), []
+             | _ -> error loc "Partial contract incompatible with %S"
+                      (string_of_type ty)
+            );
+          | Tcontract_view (_, _, _) ->
+            (* TODO *)
+            ty, []
+          | _ -> error loc "Partial contract incompatible with %S"
+                   (string_of_type ty)
+        end
+(*
       | Tpartial (Pcont None), Tpartial (Pcont None) ->
         Tpartial (Pcont None), []
       | Tpartial (Pcont (Some (e, ty))), Tpartial (Pcont None)
@@ -314,7 +358,7 @@ let rec unify loc ty1 ty2 =
           | _, _ -> error loc "Partial contract incompatible with %S"
                    (string_of_type ty)
         end
-
+*)
 
       | Tpartial (Ppar), Tpartial (Ppar) ->
         Tpartial (Ppar), []
@@ -609,12 +653,44 @@ let get_type env loc ty =
          * TODO might be bigmap also
          *   let ty = Tmap (aux k_ty, aux v_ty) in
          *   Ref.set tvr { tv with tyo = Some ty }; ty *)
+         | Tpartial (Pcont []) ->
+           let ty = unit_contract_ty in
+           Ref.set tvr { tv with tyo = Some ty }; ty
+         | Tpartial (Pcont [e, pty]) ->
+           let ty = Tcontract_handle (Some e, pty) in
+           Ref.set tvr { tv with tyo = Some ty }; ty
+         | Tpartial (Pcont el) ->
+           let rec get_contract_types acc env =
+             let acc = StringMap.fold (fun _ oenv acc ->
+                 get_contract_types acc oenv
+               ) env.others acc in
+             StringMap.union (fun _ _ x -> Some x) acc env.contract_types in
+           let known_contract_types =
+             get_contract_types predefined_contract_types env in
+           let csm = StringMap.filter (fun cn cs ->
+               List.for_all (fun e1 ->
+                   List.exists (fun e2 ->
+                       fst e1 = e2.entry_name &&
+                       eq_types (aux (snd e1)) e2.parameter
+                     ) cs.entries_sig
+                 ) el
+             ) known_contract_types in
+           let csig = match StringMap.bindings csm with
+             | [] -> error loc "No compatible contract signature found"
+             | [_, csig] -> csig
+             | (c1, _) :: (c2, _) :: _ ->
+               error loc "Different compatible contract signature match \
+                          (Both %s and %s)" c1 c2
+           in
+           let ty = aux (Tcontract csig) in
+           Ref.set tvr { tv with tyo = Some ty }; ty
+(*
         | Tpartial (Pcont c) ->
           let tyo = match c with
             | None -> unit_contract_ty
             | Some (e, ty) -> Tcontract_handle (Some e, ty) in
           Ref.set tvr { tv with tyo = Some tyo }; ty
-
+*)
         | Tpartial (Peqn _) as ty ->
           let ty, to_unify = resolve loc ty in
           Ref.set tvr { tv with tyo = Some ty };
@@ -657,6 +733,7 @@ let mk_typed_name s tn =
 
 let rec vars_to_unit ?loc ~keep_tvars ty =
   let vars_to_unit = vars_to_unit ~keep_tvars in
+  let sig_vars_to_unit = sig_vars_to_unit ~keep_tvars in
   match ty with
   | Ttuple tyl -> Ttuple (List.map (vars_to_unit ?loc) tyl)
   | Toption ty -> Toption (vars_to_unit ?loc ty)
@@ -676,6 +753,7 @@ let rec vars_to_unit ?loc ~keep_tvars ty =
   | Tcontract_handle (e, ty) -> Tcontract_handle (e, vars_to_unit ?loc ty)
   | Tcontract_view (e, t1, t2) ->
     Tcontract_view (e, vars_to_unit ?loc t1, vars_to_unit ?loc t2)
+  | Tcontract c -> Tcontract (sig_vars_to_unit ?loc c)
   | Tvar { contents = { contents = { tyo = Some ty }}} -> vars_to_unit ?loc ty
   | Tvar _ when keep_tvars -> ty
   | Tvar _ ->
@@ -700,7 +778,7 @@ let rec vars_to_unit ?loc ~keep_tvars ty =
   | Tunit | Tbool | Tint | Tnat | Ttez | Tstring | Tbytes | Ttimestamp | Tkey
   | Tkey_hash | Tsignature | Toperation | Taddress | Tfail | Tchainid -> ty
 
-let sig_vars_to_unit ?loc ~keep_tvars c =
+and sig_vars_to_unit ?loc ~keep_tvars c =
   { c with entries_sig =
              List.map (fun es ->
                  { es with parameter = vars_to_unit ?loc ~keep_tvars es.parameter }
@@ -748,6 +826,7 @@ let rec tvars_to_unit ?(err=false) ~keep_tvars ({ desc; ty; loc } as e) =
   let vars_to_unit = vars_to_unit ~keep_tvars in
   let const_tvars_to_unit = const_tvars_to_unit ~keep_tvars in
   let contract_tvars_to_unit = contract_tvars_to_unit ~keep_tvars in
+  let sig_vars_to_unit = sig_vars_to_unit ~keep_tvars in
   let desc = match desc with
     | Var _ -> desc
     | Let { bnd_var; inline; bnd_val; body } ->
@@ -875,6 +954,9 @@ let rec tvars_to_unit ?(err=false) ~keep_tvars ({ desc; ty; loc } as e) =
       HandleAt { arg = tvars_to_unit ~err:true arg;
                  entry;
                  entry_param = vars_to_unit ~err:true ~loc entry_param }
+    | ContractAt { arg; c_sig } ->
+      ContractAt { arg = tvars_to_unit arg;
+                   c_sig = sig_vars_to_unit c_sig }
     | Unpack { arg; ty } ->
       if has_unresolved ty then
         error loc "Unresolved unpack type %S, add annotation"
@@ -1123,6 +1205,18 @@ let rec mono_exp env subst vtys (e:typed_exp) =
       HandleAt { arg = mono_exp subst vtys ca.arg;
                  entry = ca.entry;
                  entry_param = instantiate ca.entry_param }
+    | ContractAt ca ->
+      let c_sig = { ca.c_sig with entries_sig = List.map (fun e ->
+          { e with
+            parameter = instantiate e.parameter;
+            return = match e.return with
+              | None -> None
+              | Some r -> Some (instantiate r);
+          }
+        ) ca.c_sig.entries_sig
+        } in
+      ContractAt { arg = mono_exp subst vtys ca.arg;
+                   c_sig }
     | Unpack up ->
       Unpack { arg = mono_exp subst vtys up.arg;
                ty = instantiate up.ty }
@@ -1268,6 +1362,15 @@ let copy_ty ty =
       Tsum (sn, List.map (fun (cn, cty) -> (cn, copy_ty cty)) cl)
     | Tcontract_handle (e, ty) -> Tcontract_handle (e, copy_ty ty)
     | Tcontract_view (v, t1, t2) -> Tcontract_view (v, copy_ty t1, copy_ty t2)
+    | Tcontract c ->
+      Tcontract { c with entries_sig = List.map (fun es ->
+          { es with
+            parameter = copy_ty es.parameter;
+            return = match es.return with
+              | None -> None
+              | Some r -> Some (copy_ty r);
+          }
+        ) c.entries_sig }
     | Tvar tvr ->
       let tv = Ref.get tvr in
       let tvr =
@@ -1294,9 +1397,8 @@ let copy_ty ty =
       Tpartial (Ptup (List.map (fun (s, t) -> s, copy_ty t) l))
     | Tpartial Pmap (t1, t2) ->
       Tpartial (Pmap (copy_ty t1, copy_ty t2))
-    | Tpartial Pcont None -> ty
-    | Tpartial Pcont Some (e, ty) ->
-      Tpartial (Pcont (Some (e, copy_ty ty))) in
+    | Tpartial Pcont l ->
+      Tpartial (Pcont (List.map (fun (s, t) -> s, copy_ty t) l)) in
   copy_ty ty
 
 let instantiate_to subst ty =

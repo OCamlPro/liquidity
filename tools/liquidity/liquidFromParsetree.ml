@@ -284,6 +284,20 @@ let rec translate_type env ?expected typ =
                     translate_type env ?expected:expected_t1 param,
                     translate_type env ?expected:expected_t2 return)
 
+  | { ptyp_desc = Ptyp_constr ({ txt = ty_name ; loc }, []) }
+    when Longident.last ty_name = "instance" ->
+    let contract_type_name =
+      match List.rev (Longident.flatten ty_name) with
+      | _ :: rpath -> String.concat "." (List.rev rpath)
+      | _ -> assert false
+    in
+    begin
+      let loc = loc_of_loc loc in
+      try Tcontract (find_contract_type ~loc contract_type_name env)
+      with Not_found ->
+        unbound_contract_type typ.ptyp_loc contract_type_name
+    end
+
   | { ptyp_desc = Ptyp_constr ({ txt = ty_name; loc }, params); ptyp_loc } ->
     let ty_name = str_of_id ty_name in
     let loc = loc_of_loc loc in
@@ -397,6 +411,8 @@ let rec set_curry_flag ty = match ty with
     !u := Some false;
   | Trecord (rn, fl) -> List.iter (fun (_, ty) -> set_curry_flag ty) fl
   | Tsum (sn, cl) -> List.iter (fun (_, ty) -> set_curry_flag ty) cl
+  | Tcontract c ->
+    List.iter (fun es -> set_curry_flag es.parameter) c.entries_sig
   | Tvar { contents = { contents = { tyo = Some ty }}} -> set_curry_flag ty
   | Tvar _ -> ()
   | Tpartial _ -> ()
@@ -1174,6 +1190,35 @@ and translate_code contracts env exp =
       HandleAt { arg =  translate_code contracts env addr_exp;
                    entry;
                    entry_param }
+
+    | { pexp_desc =
+          Pexp_apply (
+            { pexp_desc = Pexp_ident
+                  { txt = Ldot(contract_id, "at") } },
+            [
+              Nolabel, addr_exp;
+            ]) }
+      when
+        try
+          ignore @@ find_contract_type ~loc (str_of_id contract_id) env;
+          true
+        with Not_found -> false
+      ->
+      let c_sig = find_contract_type ~loc (str_of_id contract_id) env in
+      ContractAt { arg = translate_code contracts env addr_exp; c_sig }
+
+    | { pexp_desc =
+          Pexp_apply (
+            { pexp_desc = Pexp_ident
+                  { txt = Ldot(contract_id, "at"); loc = l } },
+            [
+              Nolabel, addr_exp;
+            ]) } ->
+      let c_sig =
+        try find_contract_type ~loc (str_of_id contract_id) env
+        with Not_found ->
+          error_loc l "Unknown contract type %s" (str_of_id contract_id) in
+      ContractAt { arg = translate_code contracts env addr_exp; c_sig }
 
     | { pexp_desc =
           Pexp_constraint (

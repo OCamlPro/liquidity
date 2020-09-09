@@ -101,6 +101,15 @@ module HAbbrev = Hashtbl.Make (struct
       | Tcontract_handle (entry, ty) -> Tcontract_handle (entry, erase_names ty)
       | Tcontract_view (v, t1, t2) ->
         Tcontract_view (v, erase_names t1, erase_names t2)
+      | Tcontract c ->
+        Tcontract { c with entries_sig = List.map (fun es ->
+            { es with
+              parameter = erase_names es.parameter;
+              return = match es.return with
+                | None -> None
+                | Some r -> Some (erase_names r)
+            }
+          ) c.entries_sig }
     let hash ty = Hashtbl.hash (erase_names ty)
     let equal ty1 ty2 = eq_types (erase_names ty1) (erase_names ty2)
   end)
@@ -214,6 +223,8 @@ let rec convert_type ~abbrev ?name ty =
     Typ.extension (id "view",
                    PTyp (Typ.arrow Nolabel
                            (convert_type ~abbrev t1) (convert_type ~abbrev t2)))
+  | Tcontract contract_sig ->
+    convert_contract_sig ~abbrev contract_sig
   | Tvar { contents = { contents = { id; tyo = None | Some Tpartial _ }}} ->
     Typ.var id
   | Tvar { contents = { contents = { tyo = Some ty }}} ->
@@ -227,7 +238,7 @@ let rec convert_type ~abbrev ?name ty =
         | Ttez | Tunit | Ttimestamp | Tint | Tnat | Tbool
         | Tkey | Tkey_hash | Tsignature | Tstring | Tbytes | Toperation | Taddress
         | Tfail | Trecord _ | Tsum _ | Tcontract_handle _ | Tcontract_view _
-        | Tchainid -> assert false
+        | Tcontract _ | Tchainid -> assert false
         | Ttuple args ->
           Typ.tuple (List.map (convert_type ~abbrev) args), "pair_t"
         | Tor (x,y) ->
@@ -261,6 +272,33 @@ let rec convert_type ~abbrev ?name ty =
         add_abbrev name ty (TypeName caml_ty)
       | _ ->
         caml_ty
+
+and convert_contract_sig ~abbrev csig =
+  let name = match csig.sig_name with
+    | None -> "ContractType" (* ^ (string_of_int !cpt_abbrev) *)
+    | Some name -> name in
+  let val_items = List.map (fun e ->
+      let ty, kind = match e.return with
+        | None -> e.parameter, "entry"
+        | Some r -> Tlambda (e.parameter, r, default_uncurry ()), "view" in
+      let ty = convert_type ~abbrev ty in
+      Sig.extension (id kind, PSig [Sig.value (Val.mk (id e.entry_name) ty)])
+    ) csig.entries_sig in
+  let abstr_storage = Sig.type_ Recursive [
+      Type.mk ~kind:Ptype_abstract (id "storage")
+    ] in
+  let signature = Mty.signature (abstr_storage :: val_items) in
+  let typ = StringMap.fold (fun n csig' -> function
+      | Some _ as acc -> acc
+      | None ->
+        match csig'.sig_name with
+        | Some name when eq_types (Tcontract csig') (Tcontract csig) ->
+          Some (typ_constr (name ^ ".instance") [])
+        | _ -> None
+    ) predefined_contract_types None in
+  match typ with
+  | Some typ -> typ
+  | None -> add_abbrev name (Tcontract csig) (ContractType signature)
 
 let convert_primitive prim args =
   match prim, args with
@@ -799,6 +837,13 @@ and convert_code ~abbrev (expr : (datatype, 'a) exp) =
               ])
           ]))
       [ Nolabel, convert_code ~abbrev arg ]
+
+  | ContractAt { arg; c_sig } ->
+    Exp.constraint_ ~loc
+      (Exp.apply ~loc
+         (Exp.ident (lid "Contract.at"))
+         [ Nolabel, convert_code ~abbrev arg ])
+      (convert_type ~abbrev (Toption (Tcontract c_sig)))
 
   | Unpack { arg; ty } ->
     Exp.constraint_ ~loc

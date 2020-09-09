@@ -486,6 +486,12 @@ let rec compile_desc depth env ~loc desc =
     compile depth env arg @
     [ ii ~loc (CONTRACT (entry, param_ty)) ]
 
+  | ContractAt { arg; c_sig } ->
+    let c = match c_sig.sig_name with None -> "Contract" | Some c -> c in
+    LiquidLoc.raise_error ~loc
+      "%s.at is not available when compiling to Michelson.\n\
+      Use ([%%handle %s.entry] arg) instead." c c
+
   | Unpack { arg; ty } ->
     let ty = LiquidEncode.encode_type ty in
     compile depth env arg @

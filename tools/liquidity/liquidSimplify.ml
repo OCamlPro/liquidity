@@ -44,6 +44,7 @@ let rec compute decompile code to_inline =
     | Failwith arg
     | HandleAt { arg }
     | Unpack { arg }
+    | ContractAt { arg }
     | Constructor { arg } -> size arg
 
     | Seq (e1, e2) -> size e1 + size e2
@@ -355,6 +356,10 @@ let rec compute decompile code to_inline =
     | HandleAt { arg; entry; entry_param } ->
       let arg = iter arg in
       { exp with desc = HandleAt { arg; entry; entry_param } }
+
+    | ContractAt { arg; c_sig } ->
+      let arg = iter arg in
+      { exp with desc = ContractAt { arg; c_sig } }
 
     | Unpack { arg; ty } ->
       let arg = iter arg in

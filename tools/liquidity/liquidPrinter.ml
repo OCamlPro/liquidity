@@ -74,7 +74,7 @@ module Michelson = struct
     | Tfail | Tunit | Tbool | Tint   | Tnat | Ttez | Tstring | Tbytes
     | Ttimestamp | Tkey | Tkey_hash | Tsignature | Toperation | Taddress | Tchainid ->
       true
-    | Ttuple _ | Trecord _ | Tsum _ | Tcontract_handle _ | Tcontract_view _
+    | Ttuple _ | Trecord _ | Tsum _ | Tcontract_handle _ | Tcontract_view _ | Tcontract _
     | Tor _ | Toption _ | Tlist _
     | Tset _ | Tmap _ | Tbigmap _ | Tlambda _ | Tclosure _ ->
       false
@@ -113,6 +113,7 @@ module Michelson = struct
         bprint_type fmt b indent ty [];
         Printf.bprintf b ")";
       | Tcontract_view _ -> assert false
+      | Tcontract _ -> assert false
       | Tor (ty1, ty2) ->
         let indent = fmt.increase_indent indent in
         Printf.bprintf b "(or";
@@ -928,6 +929,11 @@ module LiquidDebug = struct
           ) rtys;
       | Tsum (Some name, _) ->
         Printf.bprintf b "%s" name;
+      | Tcontract { sig_name = Some s } ->
+        Printf.bprintf b "%s.instance" s;
+      | Tcontract contract_sig ->
+        bprint_contract_sig expand b indent contract_sig;
+        Printf.bprintf b ".instance";
       | Tcontract_handle (Some entry, ty) ->
         Printf.bprintf b "[%%handle %s : " entry;
         bprint_type b "" ty;
@@ -993,10 +999,13 @@ module LiquidDebug = struct
             Printf.bprintf b " %d:%s" n id) pl;
         Printf.bprintf b ")";
       | Tpartial (Pmap _) -> Printf.bprintf b "pmap"
-      | Tpartial (Pcont None) -> Printf.bprintf b "pcont none"
-      | Tpartial (Pcont Some (e, ty)) ->
-        Printf.bprintf b "pcont[%s : " e;
-        bprint_type b indent (LiquidTypes.expand ty);
+      | Tpartial (Pcont el) ->
+        Printf.bprintf b "pcont[";
+        List.iter (fun (e, ty) ->
+            Printf.bprintf b "%s : " e;
+            bprint_type b indent (LiquidTypes.expand ty);
+            Printf.bprintf b ";"
+          ) el;
         Printf.bprintf b "]";
       | Tpartial (Ppar) -> Printf.bprintf b "ppar"
     in
@@ -1419,6 +1428,13 @@ module LiquidDebug = struct
       Printf.bprintf b "\n%s[%%%%handle val%%%s %s : " indent kind entry;
       bprint_type b (indent ^ "  ") entry_param;
       Printf.bprintf b " -> _ ]"
+    | ContractAt { arg; c_sig } ->
+      Printf.bprintf b "\n%s(Contract.at" indent;
+      let indent2 = indent ^ "  " in
+      bprint_code_rec ~debug b indent2 arg;
+      Printf.bprintf b " : ";
+      bprint_type b (indent ^ "  ") (Toption (Tcontract c_sig));
+      Printf.bprintf b ")"
     | Unpack { arg; ty } ->
       Printf.bprintf b "\n%s(Bytes.unpack" indent;
       let indent2 = indent ^ "  " in

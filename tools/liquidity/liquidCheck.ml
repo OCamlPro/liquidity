@@ -685,6 +685,10 @@ and typecheck env ( exp : syntax_exp ) : typed_exp =
       | DContract c ->
         DContract (typecheck env c)
       | DSelf -> DSelf in
+    let entry' = match entry with
+      | NoEntry -> "default"
+      | Entry e -> e
+      | View _ -> assert false in
     let arg, entry =
       match contract with
       | DSelf ->
@@ -725,6 +729,22 @@ and typecheck env ( exp : syntax_exp ) : typed_exp =
             | Some e, _ | _, Entry e -> Entry e
             | _ -> assert false in
           typecheck_expected "call argument" env arg_ty arg, entry
+        | Tcontract contract_sig, entry ->
+          let entries =
+            List.filter (fun e -> e.return = None) contract_sig.entries_sig in
+          let arg_ty =
+            match List.find_opt (fun e -> e.entry_name = entry') entries with
+            | Some { parameter = arg_ty } -> arg_ty
+            | _ ->
+              error loc
+                "contract has no entry point %s (available entry points: %a)"
+                entry'
+                (Format.pp_print_list
+                   ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ")
+                   (fun fmt e -> Format.pp_print_string fmt e.entry_name))
+                entries
+          in
+          typecheck_expected "call argument" env arg_ty arg, entry
         | Taddress, Entry _ -> typecheck env arg, entry
         | Tvar _, Entry _ ->
           let arg = typecheck env arg in
@@ -732,14 +752,10 @@ and typecheck env ( exp : syntax_exp ) : typed_exp =
           arg, entry
         | (Taddress | Tvar _), NoEntry ->
           error loc "contract call on address must specify an entry point"
-        | Tpartial (Pcont pe), _ ->
-          let entry, rentry = match pe, entry with
-            | None, NoEntry -> None, NoEntry
-            | _, View _ -> assert false
-            | _, Entry e | Some (e, _), _ -> Some e, Entry e in
+        | (Tvar _ | Tpartial _), _ ->
           let arg = typecheck env arg in
-          unify contract.ty (Tcontract_handle (entry, arg.ty));
-          arg, rentry
+          unify contract.ty (Tpartial (Pcont [(entry', arg.ty)]));
+          arg, entry
         | ty, _ ->
           error contract.loc
             "Bad contract type.\nAllowed types:\n  \
@@ -794,6 +810,23 @@ and typecheck env ( exp : syntax_exp ) : typed_exp =
             c_view view
         | Tcontract_view (c_view, arg_ty, ret_ty) ->
           typecheck_expected (c_view ^ " view argument") env arg_ty arg, ret_ty
+        | Tcontract contract_sig ->
+          let views =
+            List.filter (fun e -> e.return <> None) contract_sig.entries_sig in
+          let arg_ty, ret_ty =
+            match List.find_opt (fun e -> e.entry_name = view) views with
+            | Some { parameter = arg_ty; return = Some ret_ty } ->
+              arg_ty, ret_ty
+            | _ ->
+              error loc
+                "contract has no view %s (available views: %a)"
+                view
+                (Format.pp_print_list
+                   ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ")
+                   (fun fmt e -> Format.pp_print_string fmt e.entry_name))
+                views
+          in
+          typecheck_expected "view argument" env arg_ty arg, ret_ty
         | Taddress -> typecheck env arg, fresh_tvar ()
         | Tvar _ ->
           let arg = typecheck env arg in
@@ -816,7 +849,7 @@ and typecheck env ( exp : syntax_exp ) : typed_exp =
             args = { desc = Project { field = entry; record = contract }} ::
                    [param; amount] }
     when match (typecheck env contract).ty with
-      | Tcontract_handle _ | Taddress -> true
+      | Tcontract_handle _ | Tcontract _ | Taddress -> true
       | _ -> false
     ->
     typecheck env
@@ -829,7 +862,7 @@ and typecheck env ( exp : syntax_exp ) : typed_exp =
             args = { desc = Project { field = view; record = contract }} ::
                    [param] }
     when match (typecheck env contract).ty with
-      | Tcontract_view _ | Taddress -> true
+      | Tcontract_view _ | Tcontract _ | Taddress -> true
       | _ -> false
     ->
     typecheck env
@@ -1446,6 +1479,11 @@ and typecheck env ( exp : syntax_exp ) : typed_exp =
     in
     mk ?name:exp.name ~loc desc (Toption ret_ty)
 
+  | ContractAt { arg; c_sig } ->
+    let arg = typecheck_expected "Contract.at argument" env Taddress arg in
+    let desc = ContractAt { arg; c_sig } in
+    mk ?name:exp.name ~loc desc (Toption (Tcontract c_sig))
+
   | CreateContract { args; contract } ->
     let contract = typecheck_contract ~warnings:env.warnings
         ~others:env.visible_contracts
@@ -1756,7 +1794,7 @@ and typecheck_prim2i env prim loc args =
     unify ty1 Tkey; unify ty2 Tsignature; unify ty3 Tbytes; Tbool
 
   | (Prim_address | Prim_address_untype), [ ty ] ->
-    unify ty (Tpartial (Pcont None));
+    unify ty (Tpartial (Pcont []));
     Taddress
 
   | Prim_default_account, [ ty ] ->
@@ -1797,7 +1835,7 @@ and typecheck_prim2i env prim loc args =
     unify ty1 Tnat; unify ty2 Tnat; unify ty3 Tbytes; Toption Tbytes
 
   | Prim_get_balance, [ ty ] ->
-    unify ty (Tpartial (Pcont None));
+    unify ty (Tpartial (Pcont []));
     Ttez
 
   | Prim_block_level, [ ty ] ->
@@ -1809,7 +1847,7 @@ and typecheck_prim2i env prim loc args =
     Tbool
 
   | Prim_is_implicit, [ ty ] ->
-    unify ty (Tpartial (Pcont (Some ("default", Tunit))));
+    unify ty (Tpartial (Pcont ["default", Tunit]));
     Toption Tkey_hash
 
   | _ -> failwith ("typecheck_prim2i " ^

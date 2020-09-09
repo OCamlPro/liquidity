@@ -246,6 +246,10 @@ and decode ( exp : encoded_exp ) : typed_exp =
     let arg = decode arg in
     mk ?name:exp.name ~loc (HandleAt { arg; entry; entry_param }) exp.ty
 
+  | ContractAt { arg; c_sig } ->
+    let arg = decode arg in
+    mk ?name:exp.name ~loc (ContractAt { arg; c_sig }) exp.ty
+
   | Unpack { arg; ty } ->
     let arg = decode arg in
     mk ?name:exp.name ~loc (Unpack { arg; ty }) exp.ty

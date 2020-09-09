@@ -138,7 +138,7 @@ let rec convert_type ~loc ?parameter expr =
   | Trecord (name, labels) -> convert_record_type ~loc ?parameter name labels
   | Tsum (name, constrs) -> convert_sum_type ~loc ?parameter name constrs
   | Tfail -> convert_type ~loc Tunit (* use unit for failures *)
-  | Tvar _ | Tpartial _ | Tcontract_view _ -> assert false
+  | Tvar _ | Tpartial _ | Tcontract_view _ | Tcontract _ -> assert false
 
 and convert_record_type ~loc ?parameter name labels =
   convert_composed_type "pair" ~loc ?parameter (Some name) labels
