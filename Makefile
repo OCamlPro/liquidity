@@ -127,6 +127,7 @@ TESTS=$(DOC_TESTS) $(SIMPLE_TESTS) $(MORE_TESTS:=.liq) $(RE_TESTS:=.reliq) $(OTH
 TODO_LOVE_TESTS=doc/doc16.liq doc/doc19.liq doc/doc21.liq doc/doc76.liq \
   test19.liq test_loop_left.liq test_inline.liq curry.liq \
   test_rec_fun.liq lambda_const.liq \
+  bug_216.liq bug_steven1.liq bug_steven2.liq bug202.reliq \
   others/alias.liq others/token_vote.liq others/token_no_fee.liq
 EXTRA_LOVE_TESTS=test_view.liq
 LOVE_TESTS:=$(filter-out $(TODO_LOVE_TESTS) , $(TESTS)) $(EXTRA_LOVE_TESTS)

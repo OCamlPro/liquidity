@@ -9,6 +9,6 @@ let%entry test1 () _ =
   [], w
 
 
-(* let%entry test2 x _ =
- *   let y = true in
- *   [], { y ; x } *)
+let%entry test2 x _ =
+  let y = true in
+  [], { y ; x }
