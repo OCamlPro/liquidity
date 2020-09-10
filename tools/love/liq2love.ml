@@ -1493,7 +1493,7 @@ let rec liqexp_to_loveexp (env : env) (e : typed_exp) : AST.exp * TYPE.t =
           | Some ({result = {cparent; _}}, _path) -> cparent
         in
         let arg, typ = ltl arg in
-        let targs = match constr_typ with
+        let targs = match liqtype_to_lovetype env e.ty with
           | TUser (_, l) -> l
           | t -> bad_exp_type ~loc arg typ "defined by the user"
         in
@@ -2335,7 +2335,7 @@ and liqconst_to_loveexp
             "Constant %s must be typed: no type has been provided"
             (LiquidPrinter.Liquid.string_of_const c)
         | Some (TUser (_, [t1; typ])) ->
-          debug "Type for left : (%a, %a) tor"
+          debug "Type for right : (%a, %a) tor"
             (Love_type.pretty ) t1 (Love_type.pretty ) typ;
           liqconst_to_loveexp ~typ env c, t1
         | Some _ -> bad_const_type ?loc c (the typ) "variant"
@@ -2382,12 +2382,19 @@ and liqconst_to_loveexp
           )
           l
       ), parent_typ
-    | CConstr (name, args) ->
-      (* Todo : add type arguments to CConstr *)
+    | CConstr (name, arg) ->
       debug "[liqconst_to_loveexp] Creating constant constructor %s@." name;
-      let t, targs, id_name =
+      let typ_args = match typ with
+        | None ->
+          error ?loc
+            "Constant %s must be typed: no type has been provided"
+            (LiquidPrinter.Liquid.string_of_const c)
+        | Some (TUser (_, typ_args)) -> typ_args
+        | Some t -> bad_const_type ?loc c t "constructor"
+      in
+      let t, ty_arg, id_name =
         match find_constr name env with
-          None ->
+        | None ->
           debug "[liqconst_to_loveexp] Constructor %s is unknown" name;
           error ?loc "Error in constant %s: constructor %s is unknown"
             (LiquidPrinter.Liquid.string_of_const c)
@@ -2396,13 +2403,15 @@ and liqconst_to_loveexp
           (* In liquidity, constructors arguments are tuples. *)
           cparent, t, id_name
         | _ -> assert false
-      in mk_constr id_name [] [fst @@ ltl ~typ:targs args], t
+      in
+      let arg, _ = ltl ~typ:ty_arg arg in
+      mk_constr id_name typ_args [arg], t
 
     | CLambda {arg_name; arg_ty; body; ret_ty; recursive} ->
       error ?loc "Constant lambdas are forbidden in Love"
   in
   let () = match typ with
-      None ->
+    | None ->
       debug
         "[liqconst_to_loveexp] Untyped const %a : %a.@."
         Love_printer.Ast.print_exp (fst res) Love_type.pretty (snd res)
