@@ -9,3 +9,10 @@ let%entry default (addr : address) _ =
     | Some _my_handle -> ()
   end;
   [], ()
+
+let%entry default2 (addr : address) _ =
+  begin match BoolContract.at addr with
+    | None -> failwith ("Cannot recover bool contract from:", addr)
+    | Some _c -> ()
+  end;
+  [], ()

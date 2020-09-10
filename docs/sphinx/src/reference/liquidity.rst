@@ -588,13 +588,14 @@ Operations on numeric values
 Operations on contracts
 ~~~~~~~~~~~~~~~~~~~~~~~
 
-* ``Contract.call: dest:(address | [%handle 'a]) -> amount:dun ->
+* ``Contract.call: dest:(address | [%handle 'a] | 'S.instance) -> amount:dun ->
   ?entry:<entry_name> -> parameter:'a -> operation``. Forge an internal
   contract call. It is translated to ``TRANSFER_TOKENS`` in Michelson.
   Arguments can be labeled, in which case they can be given
   in any order. The entry point name is optional (``default`` by
-  default). The destination is either a contract handle or an address
-  (in which case, an entry point must be specified).
+  default). The destination is either a contract handle to an entry
+  point, a contract instance, or an address (in the last two cases, an
+  entry point must be specified).
 
   .. tryliquidity:: ../../../../tests/doc/doc13.liq
   .. literalinclude:: ../../../../tests/doc/doc13.liq
@@ -664,6 +665,14 @@ Operations on contracts
   .. tryliquidity:: ../../../../tests/doc/doc16.liq
   .. literalinclude:: ../../../../tests/doc/doc16.liq
 
+* ``C.at: address -> C.instance option``. Returns the contract
+  associated with the address and of type ``C``, if any.
+  :love:`Only with love`
+
+  .. tryliquidity:: ../../../../tests/doc/doc20.liq
+  .. literalinclude:: ../../../../tests/doc/doc20.liq
+     :lines: 13-18
+
 * .. _handle_entry:
 
   ``[%handle: val%entry <entry_name> : 'a ] : address -> [%handle 'a]
@@ -677,6 +686,7 @@ Operations on contracts
 
   .. tryliquidity:: ../../../../tests/doc/doc20.liq
   .. literalinclude:: ../../../../tests/doc/doc20.liq
+     :lines: 1-11
 
 * .. _handle_view:
 
@@ -1241,6 +1251,23 @@ A contract signature can contain:
 - declarations for the view signatures with the special keyword
   ``val%view`` whose type must be an arrow type of the parameter to
   the result type.
+
+.. topic:: Only with Love
+   :class: love
+
+   The type of a contract (instance) whose signature is `C` is written
+   ``C.instance``. Note that ``C`` must be declared as a contract or a
+   contract signature beforehand if we want to declare values of type
+   ``C.instance``.
+
+   For example::
+
+     type t = {
+       counter : int;
+       dest : C.instance;
+     }
+
+   is a record type with a contract field ``dest`` of signature ``C``.
 
 
 Predefined Contract Signatures
