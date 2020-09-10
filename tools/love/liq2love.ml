@@ -283,57 +283,29 @@ let rec liqtype_to_lovetypedef ?loc (env : env) name t : TYPE.typedef =
     Alias {aparams; atype}
 
 and tvref_to_tvar ?(aliases=StringMap.empty) (env : env) tvref : TYPE.t =
-  debug "[tvref_to_tvar] Creating a TVar@.";
   let tv = !(tvref.Ref.contents) in
+  debug "[tvref_to_tvar] Creating a TVar for %s@." tv.id;
   match tv.tyo with
-    Some t -> (
-    try liqtype_to_lovetype env t
-    with
-      UnknownType (n, f, _, _) when String.equal n "Partial" ->
-      debug "[tvref_to_tvar] Partial TVar@.";
-      f (TVar (Love_type.fresh_typevar ()))
-  )
-  | None -> ( (* Type has not been found for tvref. Checking on aliases *)
-      match StringMap.find_opt tv.id aliases with
-        Some t ->
-        debug "[tvref_to_tvar] Tvar %s is aliased to TVar %s@."
-          tv.id t.tv_name
-        ;
-        TVar t
-      | None -> (
-          let aliases = !(tvref.Ref.aliases) in
-          let rec check_aliases_info =
-            function
-              [] -> None
-            | {Ref.contents; _}   :: tl -> (
-                match (!contents).tyo with
-                  None -> check_aliases_info tl
-                | Some t -> Some (liqtype_to_lovetype env t)
-              )
-          in
-          match check_aliases_info aliases with
-            Some t -> t (* One of the aliases had the type *)
-          | None -> ( (* No aliases, creating a TVar *)
-              let sorted_aliases = (* Maybe not necesary to sort, ask Alain *)
-                List.fast_sort
-                  (fun (t1 : LiquidTypes.tv LiquidTypes.Ref.t) t2 ->
-                     String.compare !(t1.contents).id !(t2.contents).id
-                  )
-                  aliases
-              in
-              let new_name =
-                List.fold_left
-                  (fun acc (v: LiquidTypes.tv LiquidTypes.Ref.t)
-                    -> acc ^ (!(v.contents).id)
-                  )
-                  "_liq_" (* Starting by '_liq_' to avoid redefinition. *)
-                  sorted_aliases
-              in
-              debug "[tvref_to_tvar] TVar %s@." new_name;
-              TVar {tv_name = new_name; tv_traits = {tcomparable = true}}
-            )
-        )
+  | Some t -> (
+      try
+        let t = liqtype_to_lovetype env t in
+        debug "[tvref_to_tvar] %s is actually a reference to %a@."
+          tv.id Love_type.pretty t;
+        t
+      with
+        UnknownType (n, f, _, _) when String.equal n "Partial" ->
+        debug "[tvref_to_tvar] Partial TVar@.";
+        f (TVar (Love_type.fresh_typevar ()))
     )
+  | None ->
+    (* Type has not been found for tvref. Checking on aliases *)
+    match StringMap.find_opt tv.id aliases with
+    | Some t ->
+      debug "[tvref_to_tvar] Tvar %s is aliased to TVar %s@."
+        tv.id t.tv_name ;
+      TVar t
+    | None ->
+      TVar { tv_name = tv.id; tv_traits = {tcomparable = false}}
 
 and get_tvar_from_tlist env tlist : TYPE.t list =
   let rec get_tvars (acc: TYPE.t SMap.t) =
@@ -456,7 +428,7 @@ and liqcontract_sig_to_lovetype
 and liqtype_to_lovetype ?loc ?(aliases=StringMap.empty) (env : env) tv =
   debug "[liqtype_to_lovetype] Transpiling type %s@."
     (LiquidPrinter.LiquidDebug.string_of_type tv);
-  let ltl = liqtype_to_lovetype env in
+  let ltl = liqtype_to_lovetype ?loc ~aliases env in
   let action res t =
     let t =
       try ltl t
