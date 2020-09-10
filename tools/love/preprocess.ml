@@ -329,6 +329,23 @@ and const_ttfail_to_tvar loc (typ : datatype) c : 'a * datatype =
   | CConstr (constr, x) ->  c, typ (* todo *)
   | CLambda { arg_name; arg_ty; body; ret_ty; recursive } -> c, typ (* todo *)
 
+and entry_ttfail_to_tvar storage { entry_sig; code; view; _ } =
+  debug "[Preprocess.contract_ttfail_to_tvar] Preprocessing entry %s@." entry_sig.entry_name;
+  let loc = (code : typed_exp).loc in
+  let parameter = tfail_to_tvar ~loc entry_sig.parameter in
+  let return, code_ty = match entry_sig.return with
+    | None -> None, Ttuple [Tlist Toperation; storage]
+    | Some r ->
+      let r = tfail_to_tvar ~loc r in
+      Some r, r in
+  let code = ttfail_to_tvar code in
+  LiquidInfer.unify loc code.ty code_ty;
+  { entry_sig = { entry_sig with parameter; return };
+    code = code;
+    fee_code = None; (* TODO *)
+    view;
+  }
+
 and contract_ttfail_to_tvar (contract : typed_contract) =
   check_lambda_params contract;
   debug "[Preprocess.contract_ttfail_to_tvar] Preprocessing contract %s@." contract.contract_name;
@@ -350,16 +367,8 @@ and contract_ttfail_to_tvar (contract : typed_contract) =
                debug "[Preprocess.contract_ttfail_to_tvar] Preprocessing body of %s@." init_name;
                ttfail_to_tvar init_body
              )} in
-  let entries = List.map (fun { entry_sig; code; view; _ } ->
-      debug "[Preprocess.contract_ttfail_to_tvar] Preprocessing entry %s@." entry_sig.entry_name;
-      { entry_sig = { entry_sig with
-                      parameter =
-                        tfail_to_tvar ~loc:(code : typed_exp).loc
-                          entry_sig.parameter };
-        code = ttfail_to_tvar code;
-        fee_code = None; (* TODO *)
-        view;
-      }) contract.entries in
+  let entries =
+    List.map (entry_ttfail_to_tvar contract.storage) contract.entries in
   let rec env_ttfail_to_tvar ty_env = {
     ty_env with
     contract_types = StringMap.map sig_tfail_to_tvar ty_env.contract_types;
