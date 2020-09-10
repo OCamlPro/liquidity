@@ -483,12 +483,11 @@ let search_aliases
 
 let apply_types ?loc env e te expected_ty =
   let aliases = search_aliases ?loc (remove_foralls te) expected_ty in
-  let rec cross_exp_typ =
-    function
-      {Utils.content = TLambda {exp;_}; _}, TForall (targ, t')
+  let rec cross_exp_typ (e, t) = match e, t with
+    | {Utils.content = TLambda {exp;_}; _}, TForall (targ, t')
     | exp, TForall (targ, t') -> (
         match TypeVarMap.find_opt targ aliases with
-          Some (TVar v) ->
+        | Some (TVar v) ->
           let new_e, new_t = cross_exp_typ (exp,t') in
           debug "[apply_types] %a is substitued by %a@."
             Love_type.pp_typvar targ Love_type.pp_typvar v;
@@ -498,7 +497,11 @@ let apply_types ?loc env e te expected_ty =
           let new_e, new_t = cross_exp_typ (exp,t') in
           debug "[apply_types] %a is replaced by %a@."
             Love_type.pp_typvar targ pretty alias;
-          mk_tapply new_e alias, Love_type.replace (user_comp env) targ alias new_t
+          let e = match e.content with
+            | TLambda _ -> new_e
+            | _ -> mk_tapply new_e alias in
+          e, Love_type.replace (user_comp env) targ alias new_t
+
         | None ->
           let new_e, new_t = cross_exp_typ (exp,t') in
           debug "[apply_types] %a remains polymorphic@."
@@ -541,14 +544,14 @@ let mk_primitive_lambda ?loc expected_typ spec_args prim_name =
        aliases
   in
   let rec add_not_binded_tvars ptyp exp =
-    let arg = Love_type.fresh_typevar () in
     match ptyp with
       TForall (tv, t) -> (
         match TypeVarMap.find_opt tv aliases with
-        | None ->
-          add_not_binded_tvars
-            t
-            (mk_tlambda ?loc arg (mk_tapply ?loc exp (TVar arg)))
+        | None -> exp
+          (* let arg = Love_type.fresh_typevar () in
+           * add_not_binded_tvars
+           *   t
+           *   (mk_tlambda ?loc arg (mk_tapply ?loc exp (TVar arg))) *)
         | Some typ ->
           add_not_binded_tvars
             t

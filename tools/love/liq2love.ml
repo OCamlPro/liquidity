@@ -1657,12 +1657,6 @@ let rec liqexp_to_loveexp (env : env) (e : typed_exp) : AST.exp * TYPE.t =
 
     | CreateContract {args; contract} -> (* Todo : bad argument to contract *)
       debug "[liqexp_to_loveexp] Creating a contract creation@.";
-      let gprim =
-        match Love_primitive.from_string "Contract.create" with
-          None ->
-          error ~loc "Invariant broken: Contract.create has not been found \
-                      in Love primitives list"
-        | Some p -> p in
       let ctr =
         match find_contract contract.contract_name env with
         | None ->
@@ -1693,7 +1687,7 @@ let rec liqexp_to_loveexp (env : env) (e : typed_exp) : AST.exp * TYPE.t =
           (mk_primitive_lambda ~loc env "Contract.create")
           storage in
       mk_apply ?loc:lloc prim args,
-      Love_type.return_type (Love_primitive.(type_of (gprim, ANone)))
+      TTuple [operation (); address ()]
 
     | HandleAt {arg; entry; entry_param} ->
       debug "[liqexp_to_loveexp] Creating a handle at@.";
@@ -1781,6 +1775,11 @@ let rec liqexp_to_loveexp (env : env) (e : typed_exp) : AST.exp * TYPE.t =
      Matching type %a with expected type %a@."
     Love_printer.Ast.print_exp exp Love_type.pretty expected_typ
     Love_type.pretty t Love_type.pretty expected_typ;
+  let fvars = Love_type.fvars t in
+  let exp, t =
+    TypeVarSet.fold
+      (fun tv (e, t) -> mk_tlambda tv e, TForall (tv, t))
+      fvars (exp, t) in
   let e, t =
     try
       apply_types ~loc env exp t expected_typ
@@ -1795,17 +1794,6 @@ let rec liqexp_to_loveexp (env : env) (e : typed_exp) : AST.exp * TYPE.t =
       )
   in
   debug "[liqexp_to_loveexp] New expression %a : %a@."
-    Love_printer.Ast.print_exp e Love_type.pretty t;
-  let fvars = Love_type.fvars t in
-  let t,e =
-    TypeVarSet.fold
-      (fun tv (acc_t, acc_e) ->
-         TForall (tv, acc_t),
-         mk_tlambda tv acc_e
-      )
-      fvars
-      (t,e) in
-  debug "[liqexp_to_loveexp] Forall type %a : %a@."
     Love_printer.Ast.print_exp e Love_type.pretty t;
   e, t
 
