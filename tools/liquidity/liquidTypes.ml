@@ -261,15 +261,13 @@ let rec may_contain_arrow_type ty = match expand ty with
   | Ttimestamp | Tkey | Tkey_hash | Tsignature | Taddress | Tfail | Tchainid ->
     false
   | Ttuple l -> List.exists may_contain_arrow_type l
-  | Toption ty | Tlist ty | Tset ty | Tcontract_handle (_, ty) ->
+  | Toption ty | Tlist ty | Tset ty ->
     may_contain_arrow_type ty
-  | Tmap (t1, t2) | Tbigmap (t1, t2) | Tor (t1, t2) | Tcontract_view (_, t1, t2) ->
+  | Tmap (t1, t2) | Tbigmap (t1, t2) | Tor (t1, t2) ->
     may_contain_arrow_type t1 || may_contain_arrow_type t2
   | Trecord (_, l) | Tsum (_, l) ->
     List.exists (fun (_, t) -> may_contain_arrow_type t) l
-  | Tcontract s ->
-    List.exists (fun e -> may_contain_arrow_type e.parameter)
-      s.entries_sig
+  | Tcontract _ | Tcontract_view _ | Tcontract_handle _ -> false
   | Tvar _ | Tpartial _ -> true
 
 (** Equality between types. Contract signatures are first order values
@@ -343,16 +341,18 @@ let rec eq_types ty1 ty2 = ty1 == ty2 || match expand ty1, expand ty2 with
   | _, _ -> false
 
 
-(** Equality between signatures modulo names of signatures  *)
+(** Equality between signatures modulo names of signatures and order  *)
 and eq_signature { entries_sig = s1 } { entries_sig = s2 } =
-  try
-    List.for_all2 (fun e1 e2 ->
-        e1.entry_name = e2.entry_name &&
-        (* e1.parameter_name = e2.parameter_name &&
-         * e1.storage_name = e2.storage_name && *)
-        eq_types e1.parameter e2.parameter
-      ) s1 s2
-  with Invalid_argument _ -> false
+  List.length s1 = List.length s2 &&
+  List.for_all (fun e1 ->
+      List.exists (fun e2 ->
+          e1.entry_name = e2.entry_name &&
+          eq_types e1.parameter e2.parameter &&
+          match e1.return, e2.return with
+          | Some r1, Some r2 -> eq_types r1 r2
+          | _, _ -> false
+        ) s2
+    ) s1
 
 (** Returns true if a type contains is for a constant:
     - operation (excepted in lambda's where they are allowed in Michelson)

@@ -875,8 +875,12 @@ and structure_item_of_entry ~abbrev storage_ty storage_caml entry =
             id "fee", PStr [Str.eval fee_code]
           ] }
   in
+  let code = match entry.entry_sig.return with
+    | None -> code
+    | Some return -> Exp.constraint_ code (convert_type ~abbrev return)
+  in
   Str.extension (
-    { txt = "entry"; loc = !default_loc },
+    { txt = if entry.view then "view" else "entry"; loc = !default_loc },
     PStr    [
       Str.value Nonrecursive
         [

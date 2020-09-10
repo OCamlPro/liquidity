@@ -55,7 +55,7 @@ let const_name_of_datatype = function
   | Toperation -> "op"
   | Taddress -> "addr"
   | Tchainid -> "chain"
-  | Tvar _ | Tpartial _ | Tcontract_view _ -> assert false
+  | Tvar _ | Tpartial _ | Tcontract_view _ | Tcontract _ -> assert false
 
 
 let vars_nums = Hashtbl.create 101

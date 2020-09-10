@@ -866,9 +866,14 @@ module LiquidDebug = struct
       Printf.bprintf b "%s(sig\n" indent;
       Printf.bprintf b "%stype storage\n" indent2;
       List.iter (fun e ->
-          Printf.bprintf b "%sentry %s: (" indent2 e.entry_name;
+          let kind = match e.return with None -> "entry" | Some _ -> "view" in
+          Printf.bprintf b "%s%s %s: (" indent2 kind e.entry_name;
           bprint_type_base expand b indent2 e.parameter;
-          Printf.bprintf b " * storage) -> (operation list * storage)\n";
+          Printf.bprintf b " * storage) -> ";
+          match e.return with
+          | None -> Printf.bprintf b "(operation list * storage)"
+          | Some r -> bprint_type_base expand b "" r;
+          Printf.bprintf b "\n";
         ) entries_sig;
       Printf.bprintf b "%send)" indent
 
@@ -1468,7 +1473,8 @@ module LiquidDebug = struct
 
   let bprint_entry bprint_code ~debug b indent storage_ty entry =
     let indent2 = indent ^ "    " in
-    Printf.bprintf b "let%%entry %s\n" entry.entry_sig.entry_name;
+    let kind = if entry.view then "view" else "entry" in
+    Printf.bprintf b "let%%%s %s\n" kind entry.entry_sig.entry_name;
     (* Printf.bprintf b "    (amount: tez)\n"; *)
     Printf.bprintf b "    (%s/2: " entry.entry_sig.parameter_name;
     bprint_type b indent2 entry.entry_sig.parameter;

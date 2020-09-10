@@ -779,10 +779,14 @@ let rec vars_to_unit ?loc ~keep_tvars ty =
   | Tkey_hash | Tsignature | Toperation | Taddress | Tfail | Tchainid -> ty
 
 and sig_vars_to_unit ?loc ~keep_tvars c =
-  { c with entries_sig =
-             List.map (fun es ->
-                 { es with parameter = vars_to_unit ?loc ~keep_tvars es.parameter }
-               ) c.entries_sig
+  { c with entries_sig = List.map (fun es ->
+        { es with
+          parameter = vars_to_unit ?loc ~keep_tvars es.parameter;
+          return = match es.return with
+            | None -> None
+            | Some r -> Some (vars_to_unit ?loc ~keep_tvars r)
+        }
+      ) c.entries_sig
   }
 
 let rec has_unresolved = function
@@ -1017,10 +1021,14 @@ and contract_tvars_to_unit ~keep_tvars (contract : typed_contract) =
                  x, loc, vars_to_unit ~loc ty) init_args;
              init_body = tvars_to_unit init_body } in
   let entries = List.map (fun { entry_sig; code; fee_code; view } ->
-      { entry_sig = { entry_sig with
-                      parameter =
-                        vars_to_unit ~loc:(code : typed_exp).loc
-                          entry_sig.parameter };
+      { entry_sig =
+          { entry_sig with
+            parameter =
+              vars_to_unit ~loc:(code : typed_exp).loc entry_sig.parameter;
+            return = match entry_sig.return with
+              | None -> None
+              | Some r -> Some (vars_to_unit ~loc:(code : typed_exp).loc r)
+          };
         code = tvars_to_unit code;
         view;
         fee_code = match fee_code with
@@ -1273,14 +1281,26 @@ and mono_contract vtys c =
       let pty = get_type env code.loc e.entry_sig.parameter in
       if has_unresolved pty then
         error e.code.loc
-          "Parameter type for entry %s can't be inferred (%s), \
+          "Parameter type for %s can't be inferred (%s), \
            add an annotation"
           e.entry_sig.entry_name
           (string_of_type pty);
+      let rty = match e.entry_sig.return with
+        | None -> None
+        | Some r ->
+          let rty = get_type env code.loc r in
+          if has_unresolved rty then
+            error e.code.loc
+              "Return type for view %s can't be inferred (%s), \
+               add an annotation"
+              e.entry_sig.entry_name
+              (string_of_type rty);
+          Some rty
+      in
       { code;
         fee_code;
         view = e.view;
-        entry_sig = { e.entry_sig with parameter = pty } }
+        entry_sig = { e.entry_sig with parameter = pty; return = rty } }
     ) c.entries in
   let c_init = match c.c_init with
     | Some init ->

@@ -261,8 +261,12 @@ and normalize_contract_sig ?from_env ~in_env ~build_sig_env c_sig =
     { sig_name = Some (qualify_name ?from_env ~at:found_env.path s);
       entries_sig =
         List.map (fun e ->
-            { e with parameter =
-                       normalize_type ?from_env ~in_env:sig_env e.parameter }
+            { e with
+              parameter = normalize_type ?from_env ~in_env:sig_env e.parameter;
+              return = match e.return with
+                | None -> None
+                | Some r -> Some (normalize_type ?from_env ~in_env:sig_env r)
+            }
           ) c_sig.entries_sig }
 
 let find_type ~loc s env subst =

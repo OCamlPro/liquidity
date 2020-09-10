@@ -269,6 +269,7 @@ let rec constrlabel_is_in_type c = function
     List.exists (fun (_, t) -> constrlabel_is_in_type c t) l
   | Tvar { contents = { contents = { tyo = Some ty }}} ->
     constrlabel_is_in_type c ty
+  | Tcontract _ -> false
   | Tvar _ | Tpartial _ -> (* assert *) false
 
 let rec constrlabel_is_in_code c code =
