@@ -398,7 +398,7 @@ The ``Current`` module
 
 * ``Current.balance: unit -> dun``: returns the balance of the current
   contract. The balance contains the amount of dun that was sent by
-  the current operation. It is translated to ``BALANCE`` in Michelson.
+  the current operation.
 
   .. tryliquidity:: ../../../../tests/doc/doc1.liq
   .. literalinclude:: ../../../../tests/doc/doc1.liq
@@ -406,15 +406,14 @@ The ``Current`` module
 * ``Current.time: unit -> timestamp``: returns the timestamp of the
   block in which the transaction is included. This value is chosen by
   the baker that is including the transaction, so it should not be
-  used as a reliable source of alea.  It is translated to ``NOW`` in
-  Michelson.
+  used as a reliable source of alea.
 
   .. tryliquidity:: ../../../../tests/doc/doc2.liq
   .. literalinclude:: ../../../../tests/doc/doc2.liq
 
 * ``Current.amount: unit -> dun``: returns the amount of dun
   transferred by the current operation (standard or internal
-  transaction). It is translated to ``AMOUNT`` in Michelson.
+  transaction).
 
   .. tryliquidity:: ../../../../tests/doc/doc3.liq
   .. literalinclude:: ../../../../tests/doc/doc3.liq
@@ -424,7 +423,7 @@ The ``Current`` module
   the same one for all the transactions resulting from the top-level
   transaction, standard and internal. It is the address that paid the
   fees and storage cost, and signed the operation on the
-  blockchain. It is translated to ``SOURCE`` in Michelson.
+  blockchain.
 
   .. tryliquidity:: ../../../../tests/doc/doc5.liq
   .. literalinclude:: ../../../../tests/doc/doc5.liq
@@ -432,7 +431,7 @@ The ``Current`` module
 * ``Current.sender: unit -> address``: returns the address that
   initiated the current transaction. It is the same as the source for
   the top-level transaction, but it is the originating contract for
-  internal operations. It is translated to ``SENDER`` in Michelson.
+  internal operations.
 
   .. tryliquidity:: ../../../../tests/doc/doc6.liq
   .. literalinclude:: ../../../../tests/doc/doc6.liq
@@ -489,7 +488,7 @@ Operations on numeric values
   * ``timestamp -> int -> timestamp``
   * ``int -> timestamp -> timestamp``
     
-    It is translated to ``ADD`` in Michelson.
+
     
 * ``-``: Substraction. With the following types:
   
@@ -499,8 +498,7 @@ Operations on numeric values
   * ``timestamp -> timestamp -> int``
   * ``int|nat -> int`` (unary negation)
   
-    It is translated to ``SUB`` (or ``NEG`` for unary negation) in
-    Michelson.
+
 
 * ``*``: Multiplication. With the following types:
 
@@ -509,7 +507,7 @@ Operations on numeric values
   * ``nat -> nat -> nat``
   * ``nat|int -> nat|int -> int``
 
-    It is translated to ``MUL`` in Michelson.
+
 
     .. tryliquidity:: ../../../../tests/doc/doc10.liq
     .. literalinclude:: ../../../../tests/doc/doc10.liq
@@ -522,49 +520,48 @@ Operations on numeric values
   * ``dun -> nat -> ( dun * dun ) option``
   * ``dun -> dun -> ( nat * dun ) option``
   
-    It is translated to ``EDIV`` in Michelson.
+
 
     .. tryliquidity:: ../../../../tests/doc/doc11.liq
     .. literalinclude:: ../../../../tests/doc/doc11.liq
 
 * ``~-``: Negation. Type: ``int|nat -> int``
   
-    It is translated to ``NEG`` in Michelson.
+
   
 * ``lor``, ``or`` and ``||``: logical OR with the following types:
 
   * ``bool -> bool -> bool``
   * ``nat -> nat -> nat``
   
-    It is translated to ``OR`` in Michelson.
+
     
 * ``&``, ``land`` and ``&&``: logical AND with the following types:
 
   * ``bool -> bool -> bool``
   * ``nat|int -> nat -> nat``
   
-    It is translated to ``AND`` in Michelson.
+
 
 * ``lxor``, ``xor``: logical exclusive OR with the following types:
 
   * ``bool -> bool -> bool``
   * ``nat -> nat -> nat``
   
-    It is translated to ``XOR`` in Michelson.
+
     
 * ``not``: logical NOT
 
   * ``bool -> bool``
   * ``nat|int -> int`` (two-complement with sign negation)
 
-    It is translated to ``NOT`` in Michelson.
+
 
 * ``abs``: Absolute value. Type ``int -> int``
 
-    It is translated to ``ABS; INT`` in Michelson.
 
-* ``is_nat``: Maybe positive. Type ``int -> nat option``. It is
-  translated to ``IS_NAT`` in Michelson.
+
+* ``is_nat``: Maybe positive. Type ``int -> nat option``.
 
     Instead of using ``is_nat``, it is recommended to use a specific form
     of pattern matching:
@@ -574,15 +571,15 @@ Operations on numeric values
 
 * ``int``: To integer. Type ``nat -> int``
 
-    It is translated to ``INT`` in Michelson.
+
 
 * ``>>`` and ``lsr`` : Logical shift right. Type ``nat -> nat -> nat``
 
-    It is translated to ``LSR`` in Michelson.
+
 
 * ``<<`` and ``lsl`` : Logical shift left. Type ``nat -> nat -> nat``
 
-    It is translated to ``LSL`` in Michelson.
+
 
 
 Operations on contracts
@@ -590,7 +587,7 @@ Operations on contracts
 
 * ``Contract.call: dest:(address | [%handle 'a] | 'S.instance) -> amount:dun ->
   ?entry:<entry_name> -> parameter:'a -> operation``. Forge an internal
-  contract call. It is translated to ``TRANSFER_TOKENS`` in Michelson.
+  contract call.
   Arguments can be labeled, in which case they can be given
   in any order. The entry point name is optional (``default`` by
   default). The destination is either a contract handle to an entry
@@ -601,8 +598,7 @@ Operations on contracts
   .. literalinclude:: ../../../../tests/doc/doc13.liq
 
 * ``<c.entry>: 'parameter -> amount:dun -> operation``. Forge an
-  internal contract call. It is translated to ``TRANSFER_TOKENS`` in
-  Michelson.  The amount argument can be labeled, in which case it can
+  internal contract call.   The amount argument can be labeled, in which case it can
   appear before the parameter. ``c`` is either a contract handle (of
   type ``[%handle 'parameter]``) or an address.
 
@@ -635,7 +631,7 @@ Operations on contracts
 * ``Account.default: key_hash -> [%handle unit]``. Returns a contract
   handle to the ``default`` entry point of the implicit account
   associated to the given ``key_hash``. Transfers to it cannot
-  fail. It is translated to ``IMPLICIT_ACCOUNT`` in Michelson.
+  fail.
 
   .. tryliquidity:: ../../../../tests/doc/doc17.liq
   .. literalinclude:: ../../../../tests/doc/doc17.liq
@@ -645,7 +641,7 @@ Operations on contracts
   means that the contract should have no delegate (it falls back to
   its manager). The delegation operation will only be executed in an
   internal operation if it is returned at the end of the entry point
-  definition. It is translated to ``SET_DELEGATE`` in Michelson.
+  definition.
 
   .. tryliquidity:: ../../../../tests/doc/doc18.liq
   .. literalinclude:: ../../../../tests/doc/doc18.liq
@@ -680,8 +676,7 @@ Operations on contracts
   ``<entry_name>`` if the contract at the specified address has an
   entry point named ``<entry_name>`` of parameter type ``'a``. If no
   such entry point exists or the parameter type is different then this
-  function returns ``None``. It is translated to ``CONTRACT`` in
-  Michelson. For any contract or contract type ``C``, you can also use
+  function returns ``None``.  For any contract or contract type ``C``, you can also use
   the syntactic sugar ``[%handle C.<entry_name>]`` instead.
 
   .. tryliquidity:: ../../../../tests/doc/doc20.liq
@@ -720,7 +715,7 @@ Operations on contracts
 
 * ``[%handle Self.<entry>] -> [%handle 'a]``. Returns a handle
   to the entry point ``<entry>`` of the currently executing
-  contract. It is translated to ``SELF`` in Michelson. You can use the
+  contract.  You can use the
   syntactic sugar ``Contract.self ()`` for ``[%handle Self.default]``.
 
   .. tryliquidity:: ../../../../tests/doc/doc21.liq
@@ -731,8 +726,7 @@ Operations on contracts
   to originate a contract with code. The contract is only created when
   the operation is executed, so it must be returned by the
   transaction. Note that the code must be specified as a contract
-  structure (inlined or not). It is translated to ``CREATE_CONTRACT``
-  in Michelson.  ``Contract.create delegate_opt initial_amount
+  structure (inlined or not).   ``Contract.create delegate_opt initial_amount
   initial_storage (contract C)`` forges an
   an origination operation for contract ``C`` with
   optional delegate ``delegate``, initial
@@ -754,35 +748,32 @@ Cryptographic operations
 ~~~~~~~~~~~~~~~~~~~~~~~~
               
 * ``Crypto.blake2b: bytes -> bytes``. Computes the cryptographic hash of
-  a bytes with the cryptographic Blake2b function. It is translated to
-  ``BLAKE2B`` in Michelson.
+  a bytes with the cryptographic Blake2b function.
 
   .. tryliquidity:: ../../../../tests/doc/doc24.liq
   .. literalinclude:: ../../../../tests/doc/doc24.liq
 
 * ``Crypto.sha256: bytes -> bytes``. Computes the cryptographic hash
-  of a bytes with the cryptographic Sha256 function. It is translated
-  to ``SHA256`` in Michelson.
+  of a bytes with the cryptographic Sha256 function.
 
   .. tryliquidity:: ../../../../tests/doc/doc25.liq
   .. literalinclude:: ../../../../tests/doc/doc25.liq
 
 * ``Crypto.sha512: bytes -> bytes``. Computes the cryptographic hash of
-  a bytes with the cryptographic Sha512 function. It is translated to ``SHA512`` in Michelson.
+  a bytes with the cryptographic Sha512 function.
 
   .. tryliquidity:: ../../../../tests/doc/doc26.liq
   .. literalinclude:: ../../../../tests/doc/doc26.liq
   
 * ``Crypto.hash_key: key -> key_hash``. Hash a public key and encode
-  the hash in B58check. It is translated to ``HASH_KEY`` in Michelson.
+  the hash in B58check.
 
   .. tryliquidity:: ../../../../tests/doc/doc27.liq
   .. literalinclude:: ../../../../tests/doc/doc27.liq
 
 * ``Crypto.check: key -> signature -> bytes -> bool``. Check that the
   signature corresponds to signing the (Blake2b hash of the) sequence
-  of bytes with the public key. It is translated to
-  ``CHECK_SIGNATURE`` in Michelson. Signatures generated by
+  of bytes with the public key.  Signatures generated by
   ``dune-client sign bytes ...`` can be checked this way.
 
   .. tryliquidity:: ../../../../tests/doc/doc28.liq
@@ -792,29 +783,26 @@ Operations on bytes
 ~~~~~~~~~~~~~~~~~~~
               
 * ``Bytes.pack: 'a -> bytes``. Serialize any data to a binary
-  representation in a sequence of bytes. It is translated to ``PACK``
-  in Michelson.
+  representation in a sequence of bytes.
 
   .. tryliquidity:: ../../../../tests/doc/doc29.liq
   .. literalinclude:: ../../../../tests/doc/doc29.liq
 
 * ``Bytes.unpack: bytes -> 'a option``. Deserialize a sequence of
   bytes to a value from which it was serialized. The expression must
-  be annotated with the (option) type that it should return. It is
-  translated to ``UNPACK`` in Michelson.
+  be annotated with the (option) type that it should return.
 
   .. tryliquidity:: ../../../../tests/doc/doc30.liq
   .. literalinclude:: ../../../../tests/doc/doc30.liq
 
 * ``Bytes.length`` or ``Bytes.size: bytes -> nat``. Return the size of
-  the sequence of bytes. It is translated to ``SIZE`` in Michelson.
+  the sequence of bytes.
 
   .. tryliquidity:: ../../../../tests/doc/doc31.liq
   .. literalinclude:: ../../../../tests/doc/doc31.liq
 
 * ``Bytes.concat: bytes list -> bytes``. Append all the sequences of
-  bytes of a list into a single sequence of bytes. It is translated to
-  ``CONCAT`` in Michelson.
+  bytes of a list into a single sequence of bytes.
 
   .. tryliquidity:: ../../../../tests/doc/doc32.liq
   .. literalinclude:: ../../../../tests/doc/doc32.liq
@@ -823,8 +811,7 @@ Operations on bytes
   bytes option``. Extract a sequence of bytes within another sequence
   of bytes. ``Bytes.slice start len b`` extracts the bytes subsequence
   of ``b`` starting at index ``start`` and of length ``len``. A return
-  value ``None`` means that the position or length was invalid. It
-  is translated to ``SLICE`` in Michelson.
+  value ``None`` means that the position or length was invalid.
 
   .. tryliquidity:: ../../../../tests/doc/doc33.liq
   .. literalinclude:: ../../../../tests/doc/doc33.liq
@@ -845,8 +832,7 @@ printable subset of 7-bit ASCII, plus some escaped characters (``\n``,
 
 
 * ``String.length`` or ``String.size`` of type ``string ->
-  nat``. Return the size of the string in characters. It is translated
-  to ``SIZE`` in Michelson.
+  nat``. Return the size of the string in characters.
 
   .. tryliquidity:: ../../../../tests/doc/doc35.liq
   .. literalinclude:: ../../../../tests/doc/doc35.liq
@@ -854,15 +840,13 @@ printable subset of 7-bit ASCII, plus some escaped characters (``\n``,
 * ``String.slice`` or ``String.sub`` with type ``nat -> nat -> string
   -> string option``. ``String.sub start len s`` returns a substring
   of a string ``s`` at the given starting at position ``len`` with the
-  specified length ``len``, or ``None`` if invalid. It is
-  translated to ``SLICE`` in Michelson.
+  specified length ``len``, or ``None`` if invalid.
 
   .. tryliquidity:: ../../../../tests/doc/doc36.liq
   .. literalinclude:: ../../../../tests/doc/doc36.liq
 
 * ``String.concat: string list -> string``. Append all strings of a
-  list into a single string. It is translated to ``CONCAT`` in
-  Michelson.
+  list into a single string.
 
   .. tryliquidity:: ../../../../tests/doc/doc37.liq
   .. literalinclude:: ../../../../tests/doc/doc37.liq
@@ -896,8 +880,7 @@ immutable, all **modification** primitives return a new list, and the
 list given in argument is unmodified.
 
 * ``( :: ) : 'a -> 'a list -> 'a list`` Add a new element at the head
-  of the list. The previous list becomes the tail of the new list.  It
-  is translated to ``CONS`` in Michelson.
+  of the list. The previous list becomes the tail of the new list.
 
   .. tryliquidity:: ../../../../tests/doc/doc40.liq
   .. literalinclude:: ../../../../tests/doc/doc40.liq
@@ -908,37 +891,35 @@ list given in argument is unmodified.
   .. literalinclude:: ../../../../tests/doc/doc41.liq
 
 * ``List.length`` or ``List.size: 'a list -> nat``. Return the length
-  of the list. It is translated to ``SIZE`` in Michelson.
+  of the list.
 
   .. tryliquidity:: ../../../../tests/doc/doc42.liq
   .. literalinclude:: ../../../../tests/doc/doc42.liq
 
 * ``List.iter: ('a -> unit) -> 'a list -> unit``. Iter the function on
   all the elements of a list. Since no value can be returned, it can
-  only be used for side effects, i.e. to fail the transaction.  It is
-  translated to ``ITER`` in Michelson.
+  only be used for side effects, i.e. to fail the transaction.
 
   .. tryliquidity:: ../../../../tests/doc/doc43.liq
   .. literalinclude:: ../../../../tests/doc/doc43.liq
 
 * ``List.fold: ('elt * 'acc -> 'acc) -> 'elt list -> 'acc ->
   'acc``. Iter on all elements of a list, while modifying an
-  accumulator. It is translated to ``ITER`` in Michelson.
+  accumulator.
 
   .. tryliquidity:: ../../../../tests/doc/doc44.liq
   .. literalinclude:: ../../../../tests/doc/doc44.liq
 
 * ``List.map: ('a -> 'b) -> 'a list -> 'b list``. Return a
   list with the result of applying the function on each element of the
-  list. It is translated to ``MAP`` in Michelson.
+  list.
 
   .. tryliquidity:: ../../../../tests/doc/doc45.liq
   .. literalinclude:: ../../../../tests/doc/doc45.liq
 
 * ``List.map_fold: ('a * 'acc -> 'b * 'acc) -> 'a list -> 'acc
   -> 'b list * 'acc``.  Return a list with the result of applying the
-  function on each element of the list, plus an accumulator. It is
-  translated to ``MAP`` in Michelson.
+  function on each element of the list, plus an accumulator.
 
   .. tryliquidity:: ../../../../tests/doc/doc46.liq
   .. literalinclude:: ../../../../tests/doc/doc46.liq
@@ -953,8 +934,7 @@ unmodified.
 
 * ``Set.update: 'a -> bool -> 'a set -> 'a set``. Update a set for a
   particular element. If the boolean is ``true``, the element is
-  added. If the boolean is ``false``, the element is removed. It is
-  translated to ``UPDATE`` in Michelson.
+  added. If the boolean is ``false``, the element is removed.
 
   .. tryliquidity:: ../../../../tests/doc/doc47.liq
   .. literalinclude:: ../../../../tests/doc/doc47.liq
@@ -974,23 +954,20 @@ unmodified.
   .. literalinclude:: ../../../../tests/doc/doc49.liq
 
 * ``Set.mem: 'a -> 'a set -> bool``. Return ``true`` if the element is
-  in the set, ``false`` otherwise. It is translated to ``MEM`` in
-  Michelson.
+  in the set, ``false`` otherwise.
 
   .. tryliquidity:: ../../../../tests/doc/doc50.liq
   .. literalinclude:: ../../../../tests/doc/doc50.liq
 
 * ``Set.cardinal`` or ``Set.size`` with type ``'a set -> nat``. Return
-  the number of elements in the set. It is translated to ``SIZE`` in
-  Michelson.
+  the number of elements in the set.
 
   .. tryliquidity:: ../../../../tests/doc/doc51.liq
   .. literalinclude:: ../../../../tests/doc/doc51.liq
 
 * ``Set.iter: ('ele -> unit) -> 'ele set -> unit``. Apply a function
   on all elements of the set. Since no value can be returned, it can
-  only be used for side effects, i.e. to fail the transaction.  It is
-  translated to ``ITER`` in Michelson.
+  only be used for side effects, i.e. to fail the transaction.
   
   .. tryliquidity:: ../../../../tests/doc/doc52.liq
   .. literalinclude:: ../../../../tests/doc/doc52.liq
@@ -1006,22 +983,19 @@ and the map given in argument is unmodified.
 * ``Map.add: 'key -> 'val -> ('key, 'val) map -> ('key, 'val)
   map``. Return a map with a new association between a key and a
   value. If an association previously existed for the same key, it is
-  not present in the new map. It is translated with ``UPDATE`` in
-  Michelson.
+  not present in the new map.
 
   .. tryliquidity:: ../../../../tests/doc/doc56.liq
   .. literalinclude:: ../../../../tests/doc/doc56.liq
 
 * ``Map.remove: 'key -> ('key,'val) map -> ('key,'val) map``. Return a
-  map where any associated with the key has been removed. It is
-  translated with ``UPDATE`` in Michelson.
+  map where any associated with the key has been removed.
 
   .. tryliquidity:: ../../../../tests/doc/doc57.liq
   .. literalinclude:: ../../../../tests/doc/doc57.liq
 
 * ``Map.find: 'key -> ('key,'val) map -> 'val option``. Return the
-  value associated with a key in the map. It is translated to ``GET``
-  in Michelson.
+  value associated with a key in the map.
 
   .. tryliquidity:: ../../../../tests/doc/doc58.liq
   .. literalinclude:: ../../../../tests/doc/doc58.liq
@@ -1029,21 +1003,20 @@ and the map given in argument is unmodified.
 * ``Map.update: 'key -> 'val option -> ('key,'val) map -> ('key,'val)
   map``. Return a new map where the association between the key and
   the value has been removed (case ``None``) or added/updated (case
-  ``Some v``). It is translated to ``UPDATE`` in Michelson.
+  ``Some v``).
 
   .. tryliquidity:: ../../../../tests/doc/doc59.liq
   .. literalinclude:: ../../../../tests/doc/doc59.liq
 
 * ``Map.mem: 'key -> ('key, 'val) map -> bool``. Return ``true`` if an
-  association exists in the map for the key, ``false`` otherwise. It
-  is translated to ``MEM`` in Michelson.
+  association exists in the map for the key, ``false`` otherwise.
 
   .. tryliquidity:: ../../../../tests/doc/doc60.liq
   .. literalinclude:: ../../../../tests/doc/doc60.liq
 
 * ``Map.cardinal`` or ``Map.size`` with type ``('key,'val) map ->
   nat``. Return the number of associations (i.e. uniq keys) in the
-  map. It is translated to ``SIZE`` in Michelson.
+  map.
 
   .. tryliquidity:: ../../../../tests/doc/doc61.liq
   .. literalinclude:: ../../../../tests/doc/doc61.liq
@@ -1051,15 +1024,14 @@ and the map given in argument is unmodified.
 * ``Map.iter: ('key * 'val -> unit) -> ('key,'val) map ->
   unit``. Apply a function on all associations in the map. Since no
   value can be returned, it can only be used for side effects, *i.e.* to
-  fail the transaction. It is translated to ``ITER`` in Michelson.
+  fail the transaction.
 
   .. tryliquidity:: ../../../../tests/doc/doc62.liq
   .. literalinclude:: ../../../../tests/doc/doc62.liq
 
 * ``Map.fold: (('key * 'val) * 'acc -> 'acc) -> ('key,'val) map ->
   'acc -> 'acc``. Apply a function on all associations of the map,
-  updating and returning an accumulator. It is translated to ``ITER``
-  in Michelson.
+  updating and returning an accumulator.
 
   .. tryliquidity:: ../../../../tests/doc/doc63.liq
   .. literalinclude:: ../../../../tests/doc/doc63.liq
@@ -1067,7 +1039,7 @@ and the map given in argument is unmodified.
 * ``Map.map: ('key * 'src -> 'dst) -> ('key,'src) map -> ('key,'dst)
   map``. Apply a function on all associations of a map, and return a
   new map where keys are now associated with the return values of the
-  function. It is translated to ``MAP`` in Michelson.
+  function.
 
   .. tryliquidity:: ../../../../tests/doc/doc64.liq
   .. literalinclude:: ../../../../tests/doc/doc64.liq
@@ -1075,7 +1047,7 @@ and the map given in argument is unmodified.
 * ``Map.map_fold: (('key * 'src) * 'acc -> 'dst * 'acc) -> ('key,'src)
   map -> 'acc -> ('key,'dst) map * 'acc``.  Apply a function on all
   associations of a map, returning both a new map and an updated
-  accumulator. It is translated to ``MAP`` in Michelson.
+  accumulator.
 
   .. tryliquidity:: ../../../../tests/doc/doc65.liq
   .. literalinclude:: ../../../../tests/doc/doc65.liq
@@ -1091,15 +1063,13 @@ deserialization cost. Big maps cannot be iterated and cannot have big
 maps as their keys or as their elements.
 
 * ``Map.find: 'key -> ('key,'val) big_map -> 'val option``. Return the
-  value associated with a key in the map. It is translated to ``GET``
-  in Michelson.
+  value associated with a key in the map.
 
   .. tryliquidity:: ../../../../tests/doc/doc66.liq
   .. literalinclude:: ../../../../tests/doc/doc66.liq
 
 * ``Map.mem: 'key -> ('key, 'val) big_map -> bool``. Return ``true`` if an
-  association exists in the map for the key, ``false`` otherwise. It
-  is translated to ``MEM`` in Michelson.
+  association exists in the map for the key, ``false`` otherwise.
 
   .. tryliquidity:: ../../../../tests/doc/doc67.liq
   .. literalinclude:: ../../../../tests/doc/doc67.liq
@@ -1107,7 +1077,7 @@ maps as their keys or as their elements.
 * ``Map.update: 'key -> 'val option -> ('key,'val) big_map -> ('key,'val)
   big_map``. Return a new map where the association between the key and
   the value has been removed (case ``None``) or added/updated (case
-  ``Some v``). It is translated to ``UPDATE`` in Michelson.
+  ``Some v``).
 
 * ``Map.add: 'key -> 'val -> ('key, 'val) big_map -> ('key, 'val)
   big_map``. Syntactic sugar for ``Map.update (Some ...)``.
