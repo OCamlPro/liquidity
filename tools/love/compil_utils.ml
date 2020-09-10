@@ -333,7 +333,7 @@ let search_aliases
         )
     in
     match td1, td2 with
-      Alias {aparams = p1; atype = t1}, Alias {aparams = p2; atype = t2} ->
+    | Alias {aparams = p1; atype = t1}, Alias {aparams = p2; atype = t2} ->
       let orig, fake = map_params p1 p2 in
       let acc = search fake t1 t2 in
       replace_map orig acc

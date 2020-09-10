@@ -33,7 +33,7 @@ module TypeVarMap = struct
   include TYPE.TypeVarMap
   let find k m =
     match TYPE.TypeVarMap.find_opt k m with
-      Some t -> t
+    | Some t -> t
     | None -> assert false
 end
 
@@ -378,7 +378,7 @@ and liqcontract_sig_to_lovetype
               (* entry.parameter has not been defined yet. *)
               let tdef = liqtype_to_lovetypedef env name t in
               match tdef with
-                TYPE.RecordType {rparams; _} ->
+              | TYPE.RecordType {rparams; _} ->
                 TUser (string_to_ident name,
                        List.map (fun v -> TVar v) rparams),
                 [name, tdef]
@@ -440,7 +440,7 @@ and liqtype_to_lovetype ?loc ?(aliases=StringMap.empty) (env : env) tv =
     in res t
   in
   match tv with
-    Tunit -> debug "[liqtype_to_lovetype] Unit@."; unit ()
+  | Tunit -> debug "[liqtype_to_lovetype] Unit@."; unit ()
   | Tbool -> debug "[liqtype_to_lovetype] Bool@."; bool ()
   | Tint  -> debug "[liqtype_to_lovetype] Int@."; int ()
   | Tnat  -> debug "[liqtype_to_lovetype] Nat@."; nat ()
@@ -524,7 +524,7 @@ and liqtype_to_lovetype ?loc ?(aliases=StringMap.empty) (env : env) tv =
       let t1 = ltl t1 and t2 = ltl t2 in
       let sumtyp = variant (t1,t2) in
       match t1, t2 with
-        TVar v1, TVar v2 ->
+      | TVar v1, TVar v2 ->
         TForall (v1, TForall (v2, sumtyp))
       | TVar v, _
       | _, TVar v -> TForall (v, sumtyp)
@@ -566,7 +566,7 @@ and liqtype_to_lovetype ?loc ?(aliases=StringMap.empty) (env : env) tv =
             fun param ->
               ltl @@
               match TypeVarMap.find_opt param params with
-                Some t -> t
+              | Some t -> t
               | None -> assert false) rparams
         in
         let t = TUser (id_name, rparams_replaced)
@@ -620,7 +620,7 @@ and liqtype_to_lovetype ?loc ?(aliases=StringMap.empty) (env : env) tv =
                   List.fold_left2
                     (fun acc polyt t ->
                        match polyt with
-                         TVar tv ->
+                       | TVar tv ->
                          TypeVarMap.add tv t acc
                        | _ -> acc
                     )
@@ -665,7 +665,7 @@ and liqtype_to_lovetype ?loc ?(aliases=StringMap.empty) (env : env) tv =
         let rec create_tuple_content acc cpt l =
         debug "[liqtype_to_lovetype] Tuple index %i@." cpt;
           match l with
-            (index, typ) :: tl ->
+          | (index, typ) :: tl ->
             if cpt = index
             then (
               debug "[liqtype_to_lovetype] Defined type@.";
@@ -706,14 +706,14 @@ and liqtype_to_lovetype ?loc ?(aliases=StringMap.empty) (env : env) tv =
 
 let rec remove_forall t =
   match t with
-    TForall (_, t) -> remove_forall t
+  | TForall (_, t) -> remove_forall t
   | _ -> t
 
 
 (*
 let mk_prim name args spec_args =
   match Love_primitive.from_string name with
-    None -> failwith ("Primitive " ^ name ^ " not found")
+  | None -> failwith ("Primitive " ^ name ^ " not found")
   | Some prim ->
     let ty = Love_primitive.type_of (prim,spec_args) in
     let exp =
@@ -783,7 +783,7 @@ let liqprim_to_loveprim ?loc env (p : primitive) (args : TYPE.t list) =
       )
     | [arg] -> (
         match to_poly_variant arg with
-          `TDun -> "+$", args
+        | `TDun -> "+$", args
         | `TTimestamp -> "+$!", args
         | _ ->
           error ?loc "I cannot guess the return type of adding an element of \
@@ -814,7 +814,7 @@ let liqprim_to_loveprim ?loc env (p : primitive) (args : TYPE.t list) =
       )
     | [arg] -> (
         match to_poly_variant arg with
-          `TDun -> "-$", args
+        | `TDun -> "-$", args
         | _ ->
           error ?loc "I cannot guess the return type of substracting an \
                       element of type %a with something unknown."
@@ -828,7 +828,7 @@ let liqprim_to_loveprim ?loc env (p : primitive) (args : TYPE.t list) =
       match args with
         [t1; t2] -> (
           match to_poly_variant t1, to_poly_variant t2 with
-            `TInt, `TInt ->  "*", args
+          | `TInt, `TInt ->  "*", args
           | `TNat, `TNat -> "*+", args
           | `TNat, `TInt -> "*+!", args
           | `TInt, `TNat -> "*!+", args
@@ -852,7 +852,7 @@ let liqprim_to_loveprim ?loc env (p : primitive) (args : TYPE.t list) =
       match args with
         [t1; t2] -> (
         match to_poly_variant t1, to_poly_variant t2 with
-          `TInt, `TInt -> "/", args
+        | `TInt, `TInt -> "/", args
         | `TDun, `TInt -> "/$!", args
         | `TDun, `TDun -> "/$", args
         | `TInt, `TNat -> "/!+", args
@@ -873,7 +873,7 @@ let liqprim_to_loveprim ?loc env (p : primitive) (args : TYPE.t list) =
   | Prim_map_find -> (
       debug "[liqprim_to_loveprim] Map.find@.";
       match List.map to_poly_variant args with
-        [_;`TMap _] -> "Map.find", args
+      | [_;`TMap _] -> "Map.find", args
       | [_;`TBigMap _ ] -> "BigMap.find", args
       | [_;_] ->
         error ?loc "Bad argument type %a for Map.find" Love_type.pretty (List.nth args 1)
@@ -882,28 +882,28 @@ let liqprim_to_loveprim ?loc env (p : primitive) (args : TYPE.t list) =
   | Prim_map_add  -> (
       debug "[liqprim_to_loveprim] Map.add@.";
       match List.map to_poly_variant args with
-        [_;_;`TMap _] -> "Map.add", args
+      | [_;_;`TMap _] -> "Map.add", args
       | [_;_;`TBigMap _ ] -> "BigMap.add", args
       | _ -> bad_number_of_args "Map.add" (List.length args) 3
     )
   | Prim_map_remove -> (
       debug "[liqprim_to_loveprim] Map.remove@.";
       match List.map to_poly_variant args with
-        [_;`TMap _] -> "Map.remove", args
+      | [_;`TMap _] -> "Map.remove", args
       | [_;`TBigMap _ ] -> "BigMap.remove", args
       | _ -> bad_number_of_args "Map.remove" (List.length args) 2
     )
   | Prim_map_mem -> (
       debug "[liqprim_to_loveprim] Map.mem@.";
       match List.map to_poly_variant args with
-        [_;`TMap _] -> "Map.mem", args
+      | [_;`TMap _] -> "Map.mem", args
       | [_;`TBigMap _] -> "BigMap.mem", args
       | _ -> bad_number_of_args "Map.mem" (List.length args) 2
     )
   | Prim_map_size -> (
       debug "[liqprim_to_loveprim] Map.size@.";
       match List.map to_poly_variant args with
-        [`TMap _] -> "Map.cardinal", args
+      | [`TMap _] -> "Map.cardinal", args
       | [`TBigMap _ ] -> error ?loc "Cannot calculate bigmap size in Love"
       | _ -> bad_number_of_args "Map.size" (List.length args) 1
     )
@@ -997,7 +997,7 @@ let liqprim_to_loveprim ?loc env (p : primitive) (args : TYPE.t list) =
         )
       | [t] -> (
           match to_poly_variant t with
-            `TBool -> "|&", args
+          | `TBool -> "|&", args
           | `TInt  -> "lxor", args
           | `TNat  -> "nlxor", args
           | _ ->
@@ -1012,7 +1012,7 @@ let liqprim_to_loveprim ?loc env (p : primitive) (args : TYPE.t list) =
   | Prim_not -> (
     debug "[liqprim_to_loveprim] Not@.";
     match List.map to_poly_variant args with
-      [`TBool] -> "not", args
+    | [`TBool] -> "not", args
     | [`TInt]  -> "lnot", args
     (* | [`TNat]  -> "nlnot", args  Does not exist in Love ? *)
     | [_]->
@@ -1025,7 +1025,7 @@ let liqprim_to_loveprim ?loc env (p : primitive) (args : TYPE.t list) =
   | Prim_neg -> "~-", args
   | Prim_lsr -> (
       match List.map to_poly_variant args with
-        `TInt :: _ -> "lsr", args
+      | `TInt :: _ -> "lsr", args
       | `TNat :: _ -> "nlsr", args
       | _ :: _ ->
         error ?loc "Cannot apply lsr on %a"
@@ -1038,7 +1038,7 @@ let liqprim_to_loveprim ?loc env (p : primitive) (args : TYPE.t list) =
 
   | Prim_lsl -> (
       match List.map to_poly_variant args with
-        `TInt :: _ -> "lsl", args
+      | `TInt :: _ -> "lsl", args
       | `TNat :: _ -> "nlsl", args
       | _ :: _ ->
         error ?loc "Cannot apply lsr on %a"
@@ -1053,7 +1053,7 @@ let liqprim_to_loveprim ?loc env (p : primitive) (args : TYPE.t list) =
   | Prim_slice -> (
     debug "[liqprim_to_loveprim] Slice@.";
     match args with
-      [] -> bad_number_of_args "slice" 0 1
+    | [] -> bad_number_of_args "slice" 0 1
     | _ -> let last = List.last_exn args in
       match to_poly_variant last with
       | `TString -> "String.slice", args
@@ -1154,7 +1154,7 @@ let rec liqexp_to_loveexp (env : env) (e : typed_exp) : AST.exp * TYPE.t =
     | Apply {prim = Prim_exec _; args} -> (
         debug "[liqexp_to_loveexp] Creating a lambda application@.";
         match args with
-          [] | _ :: [] -> assert false
+        | [] | _ :: [] -> assert false
         | fct :: args -> (
             let fct', ftyp = ltl fct in
             debug "[apply_types] Function %a : %a"
@@ -1183,7 +1183,7 @@ let rec liqexp_to_loveexp (env : env) (e : typed_exp) : AST.exp * TYPE.t =
       let first,tf = ltl e1 in
       let first =
         match tf with
-          TForall (_,_) -> mk_tapply first (unit ())
+        | TForall (_,_) -> mk_tapply first (unit ())
         | _ -> first in
       let last, t = ltl e2 in
       mk_seq ?loc:lloc [first; last], t
@@ -1506,7 +1506,7 @@ let rec liqexp_to_loveexp (env : env) (e : typed_exp) : AST.exp * TYPE.t =
         let arg, targ = ltl arg in
         let tor_typs t =
           match t with
-            Tor (t1, t2) -> t1, t2
+          | Tor (t1, t2) -> t1, t2
           | t ->
             error ~loc
               "Liquidity expression %s has type %s, while it is expected to have \
@@ -1515,7 +1515,7 @@ let rec liqexp_to_loveexp (env : env) (e : typed_exp) : AST.exp * TYPE.t =
               (LiquidPrinter.Liquid.string_of_type t)
         in
         match constr with
-          Left _ ->
+        | Left _ ->
           debug "[liqexp_to_loveexp] Left constructor";
           let t2 = liqtype_to_lovetype env @@ snd @@ tor_typs e.ty in
           mk_constr ?loc:lloc (string_to_ident "Left")  [targ; t2] [arg],
@@ -1536,7 +1536,7 @@ let rec liqexp_to_loveexp (env : env) (e : typed_exp) : AST.exp * TYPE.t =
           (fun (acc_p, acc_t) (pat, exp) ->
              let pat, env =
                match pat with
-                 LiquidTypes.PConstr (name, []) ->
+               | LiquidTypes.PConstr (name, []) ->
                  debug "[liqexp_to_loveexp] Empty constructor %s.@." name;
                  mk_pconstr
                    name
@@ -1546,20 +1546,20 @@ let rec liqexp_to_loveexp (env : env) (e : typed_exp) : AST.exp * TYPE.t =
                  let type_of_carg =
                    let typeargs =
                      match targ with
-                       TUser (_, l) -> l
+                     | TUser (_, l) -> l
                      | t ->
                        bad_pat_type ~loc pat targ "defined by the user"
                    in
                    let poly_typ_constr =
                      match find_constr name env with
-                       None -> error ~loc "Unknown constructor %s" name
+                     | None -> error ~loc "Unknown constructor %s" name
                      | Some (t, _) -> t
                    in
                    let typ_constr =
                      Love_tenv.constr_with_targs poly_typ_constr.result typeargs env
                    in
                    match typ_constr.Love_tenv.cargs with
-                     [t] -> t
+                   | [t] -> t
                    | l ->
                      bad_number_of_args ~loc
                        ("pattern constructor " ^ name)
@@ -1574,7 +1574,7 @@ let rec liqexp_to_loveexp (env : env) (e : typed_exp) : AST.exp * TYPE.t =
                  let types_of_cargs =
                    let typeargs =
                      match targ with
-                       TUser (_, l) -> l
+                     | TUser (_, l) -> l
                      | t -> bad_pat_type ~loc pat targ "defined by the user"
                    in
                    let poly_typ_constr =
@@ -1600,7 +1600,7 @@ let rec liqexp_to_loveexp (env : env) (e : typed_exp) : AST.exp * TYPE.t =
              debug "[liqexp_to_loveexp] Building the expression case@.";
              let exp, t = liqexp_to_loveexp env exp in
              match acc_t, t with
-               TVar _, _
+             | TVar _, _
              | TForall _, TForall _ -> (pat, exp) :: acc_p, t
              | TForall _, _ ->
                let new_acc_p =
@@ -1745,13 +1745,13 @@ let rec liqexp_to_loveexp (env : env) (e : typed_exp) : AST.exp * TYPE.t =
     Love_printer.Ast.print_exp exp Love_type.pretty t;
   let expected_typ =
     match e.ty, e.desc with
-      Tfail,_ -> debug "[liqexp_to_loveexp] Failure type, treated differently@."; t
+    | Tfail,_ -> debug "[liqexp_to_loveexp] Failure type, treated differently@."; t
     | Tpartial _,_ -> debug "[liqexp_to_loveexp] Partial type, not treated@."; t
     | _,Loop _ -> begin
         (* Liquidity says the type of a loop expression is bool * arg_type, while it
            should be arg_type only. *)
         match e.ty with
-          Ttuple [Tbool; t] -> liqtype_to_lovetype env t
+        | Ttuple [Tbool; t] -> liqtype_to_lovetype env t
         | _ ->
           error ~loc
             "Liquidity return type of loop body must be (bool * 'a), \
@@ -1783,8 +1783,7 @@ let rec liqexp_to_loveexp (env : env) (e : typed_exp) : AST.exp * TYPE.t =
   let e, t =
     try
       apply_types ~loc env exp t expected_typ
-    with
-      _ -> (
+    with _ -> (
         error ~loc
           "Error trying to merge types. \
            Types %a and %a are incompatible in expression @[%a@] "
@@ -1839,7 +1838,7 @@ and liqprimfold_to_loveexp
       debug "[liqprimfold_to_loveexp] Set.iter@.";
       let t =
         match to_poly_variant arg_typ with
-          `TSet t -> t
+        | `TSet t -> t
         | _ -> cannot_apply ~loc "Set.iter" arg arg_typ
       in
       let env = add_var arg_name.nname t env in
@@ -1854,7 +1853,7 @@ and liqprimfold_to_loveexp
       debug "[liqprimfold_to_loveexp] List.iter@.";
       let t =
         match to_poly_variant arg_typ with
-          `TList t -> t
+        | `TList t -> t
         | _ -> cannot_apply ~loc "List.iter" arg arg_typ
       in
       let env = add_var arg_name.nname t env in
@@ -1901,7 +1900,7 @@ and liqprimfold_to_loveexp
       debug "[liqprimfold_to_loveexp] Set.fold@.";
       let t =
         match to_poly_variant arg_typ with
-          `TSet t -> t
+        | `TSet t -> t
         | _ -> cannot_apply ~loc "Set.fold" arg arg_typ
       in
       let vars = ["__key", t; "__acc", acc_typ] in
@@ -1924,7 +1923,7 @@ and liqprimfold_to_loveexp
       debug "[liqprimfold_to_loveexp] List.fold@.";
       let t =
         match to_poly_variant arg_typ with
-          `TList t -> t
+        | `TList t -> t
         | _ -> cannot_apply ~loc "List.fold" arg arg_typ
       in
       let vars = ["__key", t; "__acc", acc_typ] in
@@ -1989,7 +1988,7 @@ and liqprimmap_to_loveexp
   | Prim_list_map ->
       let t =
         match to_poly_variant arg_typ with
-          `TList t -> t
+        | `TList t -> t
         | _ -> cannot_apply ~loc "List.map" arg arg_typ
       in
       let env = add_var arg_name.nname t env in
@@ -2031,7 +2030,7 @@ and liqprimmapfold_to_loveexp
     let bdy, typ = liqexp_to_loveexp env body in
     let typ_newbnd, typ_acc =
       match typ with
-        TTuple [t1; t2] -> t1, t2
+      | TTuple [t1; t2] -> t1, t2
       | t ->
         error ~loc
           "The return type of %a should be a tuple, not of type %a."
@@ -2056,7 +2055,7 @@ and liqprimmapfold_to_loveexp
   | Prim_list_map_fold ->
       let t =
         match to_poly_variant arg_typ with
-          `TList t -> t
+        | `TList t -> t
         | _ -> cannot_apply ~loc "List.map_fold" arg arg_typ
       in
       let vars = ["__elt", t; "__acc", acc_typ] in
@@ -2064,7 +2063,7 @@ and liqprimmapfold_to_loveexp
       let bdy, typ = liqexp_to_loveexp env body in
       let typ_newbnd, typ_acc =
         match typ with
-          TTuple [t1; t2] -> t1, t2
+        | TTuple [t1; t2] -> t1, t2
         | t ->
           error ~loc
             "The return type of %a should be a tuple, not of type %a."
@@ -2097,7 +2096,7 @@ and liqconst_to_loveexp
   : AST.exp * TYPE.t =
   let ltl ?typ = liqconst_to_loveexp ?loc ?typ env in
   let () = match typ with
-      None ->
+    | None ->
       debug "[liqconst_to_loveexp] Warning : calling const to exp with no type.@."
     | Some t ->
       debug "[liqconst_to_loveexp] Calling const to exp with type %a.@." Love_type.pretty t in
@@ -2108,7 +2107,7 @@ and liqconst_to_loveexp
     mk_const ?loc @@ f ?loc c in
   let res =
     match c with
-      CUnit   -> mk_const mk_cunit (), unit ()
+    | CUnit   -> mk_const mk_cunit (), unit ()
     | CBool b -> mk_const mk_cbool b, bool ()
     | CInt i  -> mk_const mk_cint i.integer, int ()
     | CNat n  -> mk_const mk_cnat n.integer, nat ()
@@ -2119,7 +2118,7 @@ and liqconst_to_loveexp
     | CTimestamp s -> (
         debug "[liqconst_to_loveexp] CTimestamp : %s@." s;
         match Script_timestamp_repr.of_string s with
-          None -> error ?loc "Timestamp %s has no integer representation" s
+        | None -> error ?loc "Timestamp %s has no integer representation" s
         | Some ts -> mk_const mk_ctimestamp ts
       ), timestamp ()
     | CString s -> mk_const mk_cstring s, string ()
@@ -2127,12 +2126,12 @@ and liqconst_to_loveexp
       mk_const mk_cbytes (MBytes.of_string b), bytes ()
     | CKey k -> (
       match Signature.Public_key.of_b58check_opt k with
-          None -> error ?loc "Key %s is invalid" k
+        | None -> error ?loc "Key %s is invalid" k
         | Some k -> mk_const mk_ckey k, key ()
     )
     | CSignature s -> (
       match Signature.of_b58check_opt s with
-          None -> error ?loc "Signature %s is invalid" s
+        | None -> error ?loc "Signature %s is invalid" s
         | Some s -> mk_const mk_csig s, signature ()
     )
     | CTuple ([] | [_] as l) ->
@@ -2142,7 +2141,7 @@ and liqconst_to_loveexp
         (List.length l)
     | CTuple l -> (
         match typ with
-          None ->
+        | None ->
           let cl, tl = List.split @@ List.map ltl l
           in
           mk_tuple cl, TTuple tl (* Set as a tuple expression because it may contain
@@ -2167,18 +2166,18 @@ and liqconst_to_loveexp
 
     | CNone -> (
         match typ with
-          None ->
+        | None ->
           error ?loc "None constructor expects a type, but it is not provided."
         | Some t -> (
             match is_option t with
-              Some opt -> mk_none opt, t
+            | Some opt -> mk_none opt, t
             | None ->
               bad_const_type ?loc c t "option"
           )
       )
     | CSome c -> (
         match typ with
-          None -> error ?loc "Error : CSome must be typed"
+        | None -> error ?loc "Error : CSome must be typed"
         | Some t ->
           let typ =
             match is_option t with
@@ -2192,7 +2191,7 @@ and liqconst_to_loveexp
     | CMap l ->  (
         let empty, typ, tkey, telt =
           match Option.map ~f:to_poly_variant typ, l with
-            None,[] ->
+          | None,[] ->
             mk_emptymap (),
             Love_type.type_empty_map,
             TVar Love_type.tvmkey,
@@ -2228,7 +2227,7 @@ and liqconst_to_loveexp
     | CBigMap (BMList l) -> begin
         let empty, typ, tkey, telt =
           match Option.map ~f:to_poly_variant typ, l with
-            None, [] ->
+          | None, [] ->
             error
               "Constant %s is a typeless bigmap: bigmaps types must be known in Love"
               (LiquidPrinter.Liquid.string_of_const c)
@@ -2259,7 +2258,7 @@ and liqconst_to_loveexp
     | CList [] -> (
         debug "[liqconst_to_loveexp] Empty CList";
         match Option.map ~f:to_poly_variant typ with
-          None ->
+        | None ->
           debug "[liqconst_to_loveexp] Empty CList without type";
           mk_enil (), Love_type.type_empty_list
         | Some (`TList t) -> mk_enil ~typ:t (), list t
@@ -2271,7 +2270,7 @@ and liqconst_to_loveexp
         List.fold_left
           (fun (acc_l, acc_t) elt ->
              match acc_t with
-               TVar _ -> let e, t = ltl elt in e :: acc_l, t
+             | TVar _ -> let e, t = ltl elt in e :: acc_l, t
              | _ ->
                let e, t = ltl ~typ:acc_t elt in
                match acc_t, t with
@@ -2289,7 +2288,7 @@ and liqconst_to_loveexp
     | CSet l -> (
         let empty, typ, telt =
           match Option.map ~f:to_poly_variant typ, l with
-            None,[] -> mk_emptyset (), Love_type.type_empty_set, TVar Love_type.tvset
+          | None,[] -> mk_emptyset (), Love_type.type_empty_set, TVar Love_type.tvset
           | None, hd :: _ ->
             let _, thd = liqconst_to_loveexp env hd in (* todo : done twice on list head *)
             mk_emptyset ~typ:thd (), set thd, thd
@@ -2312,7 +2311,7 @@ and liqconst_to_loveexp
     | CLeft c ->
       let (c, t1),t2 =
         match Option.map to_poly_variant typ with
-          None ->
+        | None ->
           error ?loc
             "Constant %s must be typed: no type has been provided"
             (LiquidPrinter.Liquid.string_of_const c)
@@ -2330,7 +2329,7 @@ and liqconst_to_loveexp
     | CRight c ->
       let (c, t2),t1 =
         match typ with
-          None ->
+        | None ->
           error ?loc
             "Constant %s must be typed: no type has been provided"
             (LiquidPrinter.Liquid.string_of_const c)
@@ -2447,14 +2446,14 @@ and liqapply_to_loveexp ?loc env typ prim args : AST.exp * TYPE.t =
     debug "[liqapply_to_loveexp] Creating tuple projection@.";
     let index = 
       match index with
-        {desc = Const {const = CInt i; _}; _}
+      | {desc = Const {const = CInt i; _}; _}
       | {desc = Const {const = CNat i; _}; _} -> i.integer
       | sthg -> (
           debug
             "[liqapply_to_loveexp] Index is not a liquidity constant,\
              checking love representation@.";
           match (fst @@ ltl sthg) with
-            AST.{ content = Const { content = (CInt i); _ } } -> i
+          | AST.{ content = Const { content = (CInt i); _ } } -> i
           | cst ->
             error ?loc "Tuple %s is projected on %a: invalid projection@."
               (LiquidPrinter.Liquid.string_of_code tuple)
@@ -2484,14 +2483,14 @@ and liqapply_to_loveexp ?loc env typ prim args : AST.exp * TYPE.t =
     debug "[liqapply_to_loveexp] Creating tuple update@.";
     let index =
       match index with
-        {desc = Const {const = CInt i; _}; _} -> i.integer
+      | {desc = Const {const = CInt i; _}; _} -> i.integer
       | {desc = Const {const = CNat i; _}; _} -> i.integer
       | sthg -> (
           debug
             "[liqapply_to_loveexp] Index is not a liquidity constant,\
              checking love representation@.";
           match fst @@ ltl sthg with
-            {content = Const {content = CInt i; _}; _} -> i
+          | {content = Const {content = CInt i; _}; _} -> i
           | cst ->
             error ?loc "Tuple %s is updated on invalid component %a@."
               (LiquidPrinter.Liquid.string_of_code tuple)
@@ -2504,7 +2503,7 @@ and liqapply_to_loveexp ?loc env typ prim args : AST.exp * TYPE.t =
     let typ = normalize_type typ env in
     let content, _ = ltl content in
     match typ with
-      TTuple _ -> mk_update ?loc:lloc tup [iindex, content], typ
+    | TTuple _ -> mk_update ?loc:lloc tup [iindex, content], typ
     | t -> bad_exp_type ?loc tup t "tuple"
   end
   | Prim_tuple_set, l ->
@@ -2529,7 +2528,7 @@ and liqapply_to_loveexp ?loc env typ prim args : AST.exp * TYPE.t =
     let ty = liqtype_to_lovetype ?loc env typ in
     let prim =
       match to_poly_variant ty with
-        `TString -> "String.concat"
+      | `TString -> "String.concat"
       | `TBytes -> "Bytes.concat"
       | _ ->
         error ?loc "Error while applying concat on %s of type %a: \
@@ -2557,7 +2556,7 @@ and liqapply_to_loveexp ?loc env typ prim args : AST.exp * TYPE.t =
       debug "[liqapply_to_loveexp] Creating a cast@.";
       let c, ty = liqexp_to_loveexp env cst in
       match to_poly_variant ty with
-        `TInt -> c, ty
+      | `TInt -> c, ty
       | `TNat -> mk_apply ?loc:lloc (mk_primitive_lambda ?loc env "Int.of_nat") [c], int ()
       | _ ->
         error ?loc
@@ -2587,12 +2586,12 @@ and liqapply_to_loveexp ?loc env typ prim args : AST.exp * TYPE.t =
     let valopt, tvalopt = ltl valopt in
     let tval =
       match is_option tvalopt with
-        Some t -> t
+      | Some t -> t
       | None -> bad_exp_type ?loc valopt tvalopt "option" in
     let emap, t = ltl emap in
     let prim_add, prim_rem, map =
       match to_poly_variant t with
-        `TMap _ -> "Map.add", "Map.remove", map
+      | `TMap _ -> "Map.add", "Map.remove", map
       | `TBigMap _ -> "BigMap.add", "BigMap.remove", bigmap
       | _ ->
         debug "[liqapply_to_loveexp] Incorrect type %a for map" Love_type.pretty t;
@@ -2618,7 +2617,7 @@ and liqapply_to_loveexp ?loc env typ prim args : AST.exp * TYPE.t =
     let a, t = ltl arg in
     let t2 =
       match typ with
-        Tor (_, t2) -> liqtype_to_lovetype ?loc env t2
+      | Tor (_, t2) -> liqtype_to_lovetype ?loc env t2
       | t ->
         error ?loc
           "Applying Prim_left is expected to return a variant type, but it returns %s"
@@ -2631,7 +2630,7 @@ and liqapply_to_loveexp ?loc env typ prim args : AST.exp * TYPE.t =
     let a, t = ltl arg in
     let t1 =
       match typ with
-        Tor (t1, _) -> liqtype_to_lovetype ?loc env t1
+      | Tor (t1, _) -> liqtype_to_lovetype ?loc env t1
       | t ->
         error ?loc
           "Applying Prim_right is expected to return a variant type, but it returns %s"
@@ -2703,7 +2702,7 @@ and liqapply_to_loveexp ?loc env typ prim args : AST.exp * TYPE.t =
     let prim_name, lovetlist = liqprim_to_loveprim ?loc env prim first_version_of_typs in
     let prim =
       match Love_primitive.from_string prim_name with
-        None -> error ?loc "Primitive %s does not exist in Love" prim_name
+      | None -> error ?loc "Primitive %s does not exist in Love" prim_name
       | Some p -> p in
     let prim_typ = Love_primitive.type_of (prim, ANone) in
     debug
@@ -2911,7 +2910,7 @@ and liqcontract_to_lovecontract
       (LiquidNamespace.qual_contract_name c);
   let env : env =
     match env with
-      None -> empty_env (if is_module then Module else Contract []) ()
+    | None -> empty_env (if is_module then Module else Contract []) ()
     | Some e -> e in
 
   debug "[liqcontract_to_lovecontract] %i subcontracts/modules to handle@." (List.length c.subs);
@@ -2960,7 +2959,7 @@ and liqcontract_to_lovecontract
       debug "[liqcontract_to_lovecontract] Registering type %s@." str;
       let typedef_registered acc_env n =
         match find_type n acc_env with
-          None -> false
+        | None -> false
         | Some _ -> true in
       let res =
         if
@@ -2977,7 +2976,7 @@ and liqcontract_to_lovecontract
             add_typedef_to_contract ~loc:(LiquidLoc.loc_in_file c.ty_env.filename)
               str tdef acc_env, ((str, AST.DefType (TPublic, tdef)) :: acc_tdef)
           with
-            UnknownType (s,_, _, _) ->
+          | UnknownType (s,_, _, _) ->
             debug "[liqcontract_to_lovecontract] %s is not in the environment, needed by %s@."
               s str;
             debug "environment =\n%a@."
@@ -3130,7 +3129,7 @@ let rec liqconst_to_lovevalue
   let ltl = liqconst_to_lovevalue env in
   let res : Love_value.Value.t =
     match c with
-      CUnit   -> VUnit
+    | CUnit   -> VUnit
     | CBool b -> VBool b
     | CInt i  -> VInt i.integer
     | CNat n  -> VNat n.integer
@@ -3143,7 +3142,7 @@ let rec liqconst_to_lovevalue
     | CTimestamp s -> begin
         debug "[liqconst_to_lovevalue] CTimestamp : %s@." s;
         match Script_timestamp_repr.of_string s with
-          None -> error "Timestamp %s has no integer representation" s
+        | None -> error "Timestamp %s has no integer representation" s
         | Some ts ->
           VTimestamp ts
       end
@@ -3151,12 +3150,12 @@ let rec liqconst_to_lovevalue
     | CBytes b -> VBytes (MBytes.of_string b)
     | CKey k -> (
       match Signature.Public_key.of_b58check_opt k with
-          None -> error "Key %s is invalid" k
+        | None -> error "Key %s is invalid" k
         | Some k -> VKey k
     )
     | CSignature s -> (
       match Signature.of_b58check_opt s with
-          None -> error "Signature %s is invalid" s
+        | None -> error "Signature %s is invalid" s
         | Some s -> VSignature s
     )
     | CTuple ([] | [_] as l) ->
