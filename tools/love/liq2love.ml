@@ -2678,8 +2678,10 @@ and liqapply_to_loveexp ?loc env typ prim args : AST.exp * TYPE.t =
       mk_match ?loc:lloc
         res_opt
         [mk_pnone (),
-         mk_raise (Fail (string ()))
-           ([mk_const (mk_cstring "subtraction_underflow")]);
+         mk_tapply
+           (mk_raise (Fail (string ()))
+              ([mk_const (mk_cstring "subtraction_underflow")]))
+           (dun ());
          mk_psome (mk_pvar "__v"),
          mk_var (string_to_ident "__v")
         ] in
