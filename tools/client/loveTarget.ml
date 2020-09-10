@@ -109,7 +109,7 @@ module Compiler = struct
         ~warnings:true ~decompiling:false ~monomorphise:true ~keep_tvars:true syntax_ast in
     Liquidity.global_ty_env := typed_ast.ty_env;
     let typed_ast_no_tfail = Preprocess.contract_ttfail_to_tvar typed_ast in
-    let love_ast, _ = Liq2love.liqcontract_to_lovecontract typed_ast_no_tfail in
+    let love_ast = Liq2love.liqcontract_to_lovecontract typed_ast_no_tfail in
     let init = match typed_ast.c_init with
       | None ->
         Liquidity.Init_components ["storage", Liquidity.storage typed_ast]

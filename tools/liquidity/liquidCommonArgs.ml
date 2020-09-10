@@ -115,6 +115,10 @@ let common =
     ["no-uncurry"],
     Arg.Set LiquidOptions.no_uncurrying,
     Ezcmd.info ~docs "Don't uncurry non partially applied lambdas";
+
+    ["no-love-typecheck"],
+    Arg.Set LiquidOptions.no_love_typecheck,
+    Ezcmd.info ~docs "Don't typecheck resulting Love output";
   ]
 
 

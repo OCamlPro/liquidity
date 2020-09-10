@@ -86,6 +86,8 @@ let ocaml_syntax = ref true
 
 let writeinfo = ref true
 
+let no_love_typecheck = ref false
+
 type network =
   | Dune_network
   | Tezos_network

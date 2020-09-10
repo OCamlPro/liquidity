@@ -201,7 +201,7 @@ let compile_liquid_files_to_love files =
   let typed_ast, outprefix =
     typecheck_liquid_files ~monomorphise:true ~keep_tvars:true files in
   let typed_ast_no_tfail = Preprocess.contract_ttfail_to_tvar typed_ast in
-  let love_ast, _ = Liq2love.liqcontract_to_lovecontract typed_ast_no_tfail in
+  let love_ast = Liq2love.liqcontract_to_lovecontract typed_ast_no_tfail in
   if !LiquidOptions.verbosity>0 then
     FileString.write_file (outprefix ^ ".love_ast")
       (Format.asprintf "%a" Love_printer.Ast.print_structure love_ast);

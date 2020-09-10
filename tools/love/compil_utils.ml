@@ -30,7 +30,7 @@ let liq_loc loc_file = function
   | None -> { LiquidTypes.loc_file; loc_pos = None }
   | Some AST.{ pos_lnum = l1; pos_cnum = c1; pos_bol } ->
      let l2 = pos_bol lsr shift in
-     let c2 = pos_bol - l2 in
+     let c2 = pos_bol - l2 lsl shift in
      { LiquidTypes.loc_file;
        loc_pos = Some ((l1, c1), (l2, c2)) }
 

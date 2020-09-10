@@ -3058,7 +3058,7 @@ and liqcontract_to_lovecontract
   let entries = List.rev entries in
   let init =
     match c.c_init with
-      None when not is_module ->
+    | None when not is_module ->
       debug
         "[liqcontract_to_lovecontract] Contract %s has no initializer : adding one@."
         ctr_name;
@@ -3087,11 +3087,47 @@ and liqcontract_to_lovecontract
   in
   str, env
 
-let liqcontract_to_lovecontract (c : typed_contract) : AST.structure * env =
+let typecheck_lovecontract ~filename ast =
+  let default_loc = LiquidLoc.loc_in_file filename in
+  let error ?(loc=default_loc) msg =
+    LiquidLoc.raise_error ~loc ("Love typechecker error:  " ^^ msg ^^ "%!")
+  in
+  try
+    Love_typechecker.typecheck_struct
+      None
+      (empty_env (Contract []) ())
+      ast
+    |> fst
+  with
+  | Love_typechecker.TypingError (msg, str_loc, _env) ->
+    let love_loc =
+      try Scanf.sscanf str_loc "location line %d : %d to %d"
+            (fun pos_lnum pos_bol pos_cnum ->
+               Some AST.{pos_lnum; pos_cnum; pos_bol })
+      with _ -> None in
+    let loc = liq_loc filename love_loc in
+    let msg = match love_loc with
+      | None -> String.concat ": " [str_loc; msg]
+      | Some _ -> msg in
+    error ~loc "%s" msg
+  | Love_typechecker.UnknownType typ ->
+    error "Unknown type %a" Ident.print_strident typ
+  | Love_typechecker.UnknownConstr cstr ->
+    error "Unknown constructor %a" Ident.print_strident cstr
+  | Love_typechecker.UnknownField f ->
+    error "Unknown field %s" f
+
+let liqcontract_to_lovecontract (c : typed_contract) : AST.structure =
   debug "[liqcontract_to_lovecontract] Registering contract %s@." c.contract_name;
   let initial_env = empty_env (Contract []) () in
   try
-    liqcontract_to_lovecontract ~ctr_name:c.contract_name ~env:initial_env false c
+    let ast, _ =
+      liqcontract_to_lovecontract
+        ~ctr_name:c.contract_name ~env:initial_env false c in
+    (* Typecheck resulting Love contract *)
+    if !LiquidOptions.no_love_typecheck then ast
+    else
+      typecheck_lovecontract ~filename:c.ty_env.filename ast
   with
     UnknownType (s, _, e, loc) ->
     debug "Failing with typing environment =\n%a@."
