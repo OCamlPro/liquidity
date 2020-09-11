@@ -298,7 +298,10 @@ and convert_contract_sig ~abbrev csig =
     ) predefined_contract_types None in
   match typ with
   | Some typ -> typ
-  | None -> add_abbrev name (Tcontract csig) (ContractType signature)
+  | None when abbrev ->
+    add_abbrev name (Tcontract csig) (ContractType signature)
+  | None ->
+    typ_constr (name ^ ".instance") []
 
 let convert_primitive prim args =
   match prim, args with

@@ -31,19 +31,20 @@ type 'a namespace_res =
   | Contract_namespace of 'a contract * string list
 
 (* Recursively look for value in (projection of) upper level contracts *)
-let rec rec_find s env proj =
+let rec rec_find ?(quiet=false) s env proj =
   try StringMap.find s (proj env), env
   with Not_found ->
   match env.top_env with
   | None -> raise Not_found
   | Some top_env ->
     if not env.is_module && !LiquidOptions.target_lang = Love_lang then begin
-      Format.eprintf "Contracts must be self contained in Love. \
-                      %S was not found in contract %s.@." s env.contractname;
+      if not quiet then
+        Format.eprintf "Contracts must be self contained in Love. \
+                        %S was not found in contract %s.@." s env.contractname;
       raise Not_found
     end
     else
-      rec_find s top_env proj
+      rec_find ~quiet s top_env proj
 
 let unqualify s =
   match List.rev (String.split_on_char '.' s) with
@@ -126,11 +127,11 @@ let unalias path env =
     else Some e.path
   with Unknown_namespace _ -> None
 
-let rec find ~loc s env proj =
+let rec find ?quiet ~loc s env proj =
   let path, s = unqualify s in
   let env = find_env ~loc path env in
   if path = [] then
-    rec_find s env proj
+    rec_find ?quiet s env proj
   else
     StringMap.find s (proj env), env
 
@@ -303,15 +304,17 @@ let find_constr ~loc s env =
     | _ -> assert false in
   ty, (constr_name, constr_ty, i)
 
-let find_extprim ~loc s env =
-  let e, found_env = find ~loc s env (fun env -> env.ext_prims) in
+let find_extprim ?quiet ~loc s env =
+  let e, found_env = find ?quiet ~loc s env (fun env -> env.ext_prims) in
   { e with
     atys = List.map (normalize_type ~from_env:env ~in_env:found_env) e.atys;
     rty = normalize_type ~from_env:env ~in_env:found_env e.rty }
 
 let is_extprim s env =
-  try find_extprim ~loc:noloc s env |> ignore; true
+  try find_extprim ~quiet:true ~loc:noloc s env |> ignore; true
   with Not_found | Unknown_namespace _ -> false
+
+let find_extprim ~loc s env = find_extprim ~loc s env
 
 (* ------------------------- *)
 
