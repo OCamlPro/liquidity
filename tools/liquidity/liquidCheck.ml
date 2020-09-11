@@ -2014,7 +2014,7 @@ and typecheck_prim2t env prim loc args =
   | Prim_check, _ ->
     error_prim loc Prim_check args [Tkey; Tsignature; Tbytes]
 
-  | (Prim_address | Prim_address_untype), [ Tcontract_handle _ ] ->
+  | (Prim_address | Prim_address_untype), [ Tcontract_handle _ | Tcontract _ ] ->
     Taddress
 
   | Prim_default_account, [ Tkey_hash ] -> unit_contract_ty
