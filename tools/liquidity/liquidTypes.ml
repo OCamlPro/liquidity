@@ -350,6 +350,7 @@ and eq_signature { entries_sig = s1 } { entries_sig = s2 } =
           eq_types e1.parameter e2.parameter &&
           match e1.return, e2.return with
           | Some r1, Some r2 -> eq_types r1 r2
+          | None, None -> true
           | _, _ -> false
         ) s2
     ) s1
@@ -405,8 +406,6 @@ let free_tvars ty =
     | Tclosure ((ty1, ty2), ty3, _) -> aux (aux (aux fv ty1) ty2) ty3
     | Trecord (_, fl) | Tsum (_, fl) ->
       List.fold_left (fun fv (_, ty) -> aux fv ty) fv fl
-    | Tcontract c ->
-      List.fold_left (fun fv { parameter = ty } -> aux fv ty) fv c.entries_sig
     | Tvar tvr -> begin match (Ref.get tvr).tyo with
         | None -> StringSet.add (Ref.get tvr).id fv
         | Some ty -> aux fv ty
