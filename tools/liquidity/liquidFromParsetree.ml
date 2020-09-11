@@ -2051,7 +2051,8 @@ and translate_signature contract_type_name env acc ast =
       | Ptype_abstract -> ()
       | Ptype_open -> error_loc ptype_loc "bad type definition"
       | Ptype_variant constrs ->
-        if List.length constrs < 2 then begin
+        if !LiquidOptions.target_lang = Michelson_lang &&
+           List.length constrs < 2 then begin
           error_loc ptype_loc "variant type must have at least two constructors"
         end;
         translate_variant ~loc:ptype_loc ty_name params constrs env;
@@ -2356,7 +2357,8 @@ and translate_structure env acc ast : syntax_exp parsed_struct =
       | Ptype_abstract
       | Ptype_open -> error_loc ptype_loc "bad type definition"
       | Ptype_variant constrs ->
-        if List.length constrs < 2 then begin
+        if !LiquidOptions.target_lang = Michelson_lang &&
+           List.length constrs < 2 then begin
           error_loc ptype_loc "variant type must have at least two constructors"
         end;
         translate_variant ~loc:ptype_loc ty_name params constrs env;
