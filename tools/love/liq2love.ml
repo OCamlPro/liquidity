@@ -3052,7 +3052,7 @@ and liqcontract_to_lovecontract
   in
   let str =
     let kind = if is_module then TYPE.Module else TYPE.Contract [] in
-    { AST.structure_content = (subc @ types @ signatures @ values @ init @ entries);
+    { AST.structure_content = (subc @ signatures @ types @ values @ init @ entries);
       kind }
   in
   str, env
