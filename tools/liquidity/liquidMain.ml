@@ -108,12 +108,27 @@ let output_final ~to_json ~to_readable ~outprefix ~ext c =
         (String.lowercase_ascii (LiquidOptions.network_name ()))
         output
 
+let print_signature fmt contract =
+  Format.fprintf fmt "Signature of %s:" contract.contract_name;
+  List.iter (fun e ->
+      Format.fprintf fmt "\n  val%%%s %s : %s%s"
+        (if e.view then "view" else "entry")
+        e.entry_sig.entry_name
+        (LiquidPrinter.Liquid.string_of_type e.entry_sig.parameter)
+        (match e.entry_sig.return with
+         | None -> ""
+         | Some r -> " -> " ^ LiquidPrinter.Liquid.string_of_type r)
+    ) contract.entries;
+  Format.pp_print_newline fmt ()
+
 let compile_liquid_files_to_michelson files =
   let typed_ast, outprefix = typecheck_liquid_files files in
-  if !LiquidOptions.verbosity>0 then
+  if !LiquidOptions.verbosity>0 then begin
+    print_signature Format.err_formatter typed_ast;
     FileString.write_file (outprefix ^ ".typed")
       (DebugPrint.string_of_contract_types
-         typed_ast);
+         typed_ast)
+  end;
   let encoded_ast, to_inline =
     LiquidEncode.encode_contract ~annot:true typed_ast in
   if !LiquidOptions.verbosity>0 then
@@ -200,6 +215,8 @@ let compile_liquid_files_to_love files =
   Liq2love.init ();
   let typed_ast, outprefix =
     typecheck_liquid_files ~monomorphise:true ~keep_tvars:true files in
+  if !LiquidOptions.verbosity>0 then
+    print_signature Format.err_formatter typed_ast;
   let typed_ast_no_tfail = Preprocess.contract_ttfail_to_tvar typed_ast in
   let love_ast = Liq2love.liqcontract_to_lovecontract typed_ast_no_tfail in
   if !LiquidOptions.verbosity>0 then
