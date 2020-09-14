@@ -1174,8 +1174,11 @@ let liqprim_to_loveprim ?loc env (p : primitive) (args : TYPE.t list) =
       (LiquidTypes.string_of_primitive p)
 
   (* extended primitives *)
-  | Prim_extension (s1, _b, _l, _i1, _i2, _s2) ->
-    error ?loc "Primitive %s (%s) is unsupported" s1 (LiquidTypes.string_of_primitive p)
+  | Prim_extension (liq_fun, _effect, _targs, _nb_args, nb_ret, love_inst) ->
+    if nb_ret > 1 then
+      error ?loc "Extention %s (%s) must return one value" liq_fun love_inst;
+    love_inst, args
+
   (* generated in LiquidCheck *)
   | Prim_unused _
   | Prim_collect_call

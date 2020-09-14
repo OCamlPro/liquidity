@@ -394,6 +394,32 @@ let translate_ext_type env typ =
   in
   aux false [] [] typ
 
+let translate_ext_type_love env typ =
+  let rec aux tvs atys typ = match typ with
+    (* Type argument *)
+    | { ptyp_desc =
+          Ptyp_arrow (_, { ptyp_desc =
+                             Ptyp_extension ( { txt = "type" },
+                                              PTyp { ptyp_desc = Ptyp_var tv })
+                         }, return_type); ptyp_loc } ->
+      if atys <> [] then
+        error_loc ptyp_loc "Type arguments must come first";
+      if List.mem tv tvs then
+        error_loc ptyp_loc "Type variable '%s already used in this primitive" tv;
+      aux (tv :: tvs) atys return_type
+
+    (* Argument *)
+    | { ptyp_desc = Ptyp_arrow (_, parameter_type, return_type); ptyp_loc } ->
+      let ty = translate_type env parameter_type in
+      aux tvs (ty :: atys) return_type
+
+    (* Result : any other type *)
+    | _  ->
+      let ty = translate_type env typ in
+      List.rev tvs, List.rev atys, [ty]
+  in
+  aux [] [] typ
+
 (* Prevent uncurring of lambda's in a type *)
 let rec set_curry_flag ty = match ty with
   | Tunit | Tbool | Tint | Tnat | Ttez | Tstring | Tbytes | Ttimestamp | Tkey
@@ -2167,15 +2193,21 @@ and translate_structure env acc ast : syntax_exp parsed_struct =
         | _ -> false) acc
     then
       error_loc prim_loc "Top-level identifier %S already defined" prim_name;
-    let tvs, atys, rtys = translate_ext_type env prim_type in
+    let tvs, atys, rtys = match !LiquidOptions.target_lang with
+      | Michelson_lang -> translate_ext_type env prim_type
+      | Love_lang -> translate_ext_type_love env prim_type in
     let valid_in_external = function
       | Trecord _ | Tsum _ | Tclosure _ | Tfail | Ttuple (_ :: _ :: _ :: _) ->
         error_loc prim_loc
           "Primitive %S can only use standard Michelson types" prim_name
       | _ -> ()
     in
-    List.iter valid_in_external atys;
-    List.iter valid_in_external rtys;
+    (match !LiquidOptions.target_lang with
+     | Michelson_lang ->
+       List.iter valid_in_external atys;
+       List.iter valid_in_external rtys;
+     | Love_lang ->  ()
+    );
     let effect =  List.exists (fun (a, _) -> a.txt = "effect") prim_attr in
     let nb_arg = List.length atys in
     let nb_ret = List.length rtys in
