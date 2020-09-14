@@ -2782,6 +2782,7 @@ and liqapply_to_loveexp ?loc env typ prim args : AST.exp * TYPE.t =
     in
     let first_version_of_typs = snd (List.split love_args_typ) in
     let prim_name, lovetlist = liqprim_to_loveprim ?loc env prim first_version_of_typs in
+    let liq_prim = prim in
     let prim =
       match Love_primitive.from_string prim_name with
       | None -> error ?loc "Primitive %s does not exist in Love" prim_name
@@ -2845,10 +2846,18 @@ and liqapply_to_loveexp ?loc env typ prim args : AST.exp * TYPE.t =
         (mk_primitive_lambda ?loc env "Int.of_nat")
         [exp], int ()
     | _ ->
-      mk_apply ?loc:lloc (
+      let prim_lam =
         mk_primitive_lambda ?loc env prim_name
-          ~expected_typ:(arrow_from_tlist lovetlist))
-        loveargs, t
+          ~expected_typ:(arrow_from_tlist lovetlist) in
+      let prim_lam = match liq_prim with
+        | Prim_extension (_, _, (_:: _ as targs), _, _, _) ->
+          (* Type arguments of extensions which have a type parameter must be
+             applied *)
+          List.fold_right (fun ty prim_lam ->
+              mk_tapply prim_lam (liqtype_to_lovetype env ty)
+            ) targs prim_lam
+        | _ -> prim_lam in
+      mk_apply ?loc:lloc prim_lam loveargs, t
 
 and liqvalue_to_lovecontent env {val_name; inline; val_private; val_exp} :
   (string * AST.content) * env =
