@@ -246,11 +246,6 @@ let merge_args_with_funtyp args arrowtyp =
   in
   List.map (fun (_, e) -> e) args
 
-let add_var ?kind s t env =
-  match s with
-    "_" -> env
-  | _ -> Love_tenv.add_var ?kind s t env
-
 
 (** Returning the corresponding types in t2 that are polymorphic in t1.
     The argument aliases corresponds to the type aliases (such as type t = int). *)
@@ -559,18 +554,6 @@ let mk_primitive_lambda ?loc expected_typ spec_args prim_name =
     )
     | _ -> exp
   in add_not_binded_tvars tprim poly_prim
-
-let mk_primitive_lambda ?loc env ?expected_typ ?(spec_args=ANone) prim_name =
-  Log.debug "[mk_primitive_lambda] Primitive %s%a@."
-    prim_name
-    (fun fmt -> function
-      | None -> ()
-      | Some t -> Format.fprintf fmt " with expected type %a" Love_type.pretty t
-    ) expected_typ ;
-  let expexted_typ = match expected_typ with
-    | None -> None
-    | Some t -> Some (Love_tenv.normalize_type ~relative:true t env) in
-  mk_primitive_lambda ?loc expexted_typ spec_args prim_name
 
 let reserved_types =
   Collections.StringSet.of_list

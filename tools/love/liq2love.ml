@@ -14,7 +14,12 @@ open Love_pervasives
 module SMap = Collections.StringMap
 module SIMap = Collections.StringIdentMap
 
-type env = Love_tenv.t
+type env = {
+  tenv : Love_tenv.t; (* Love typechecking environment *)
+  mutable subcs : bool ref StringMap.t; (* Used sub-contracts *)
+  mutable ctypes : bool ref StringMap.t; (* Used contract types *)
+}
+
 
 exception UnknownType of (string * (TYPE.t -> TYPE.t) * env * location option)
 
@@ -38,7 +43,7 @@ module TypeVarMap = struct
 end
 
 let add_typedef_to_contract ?(ignore_errs=false) ?loc name tdef env =
-  try Love_tenv.add_typedef name TPublic tdef env
+  try { env with tenv = Love_tenv.add_typedef name TPublic tdef env.tenv }
   with Love_tenv.EnvironmentError msg when ignore_errs ->
     (* TODO: Only catch redefinition of same aliased types *)
     let loc = match loc with
@@ -50,41 +55,82 @@ let add_typedef_to_contract ?(ignore_errs=false) ?loc name tdef env =
       name msg;
     env
 
+let add_var ?kind s t env =
+  match s with
+    "_" -> env
+  | _ -> { env with tenv = Love_tenv.add_var ?kind s t env.tenv }
+
+let add_subcontract ctrname cssig_env env =
+  { env with
+    tenv = Love_tenv.add_subcontract_env ctrname cssig_env env.tenv;
+    subcs =
+      if StringMap.mem ctrname env.subcs then env.subcs
+      else StringMap.add ctrname (ref false) env.subcs;
+  }
+
+let add_signature name s_env env =
+  { env with
+    tenv = Love_tenv.add_signature name s_env env.tenv;
+    ctypes =
+      if StringMap.mem name env.ctypes then env.ctypes
+      else StringMap.add name (ref false) env.ctypes;
+  }
+
+let register_used_subcontract ctrname env =
+  match StringMap.find_opt ctrname env.subcs with
+  | Some u -> u := true
+  | None -> env.subcs <- StringMap.add ctrname (ref true) env.subcs
+
+let register_used_signature name env =
+  match StringMap.find_opt name env.ctypes with
+  | Some u -> u := true
+  | None -> env.ctypes <- StringMap.add name (ref true) env.ctypes
+
+let register_used_path env path =
+  let rec register_used_path env = function
+    | [] -> ()
+    | Path.Prev :: path -> register_used_path env path
+    | Path.Next c :: path ->
+      register_used_subcontract c env;
+      (* register_used_path env path *)
+  in
+  register_used_path env (Path.simplify_path path)
+
 let string_to_ident ?(scoped=false) s =
   if scoped then string_to_ident s
   else Ident.create_id s
 
-let find_type (tname : string) (env: env) =
+let find_type (tname : string) env =
   let t_unscoped = string_to_ident ~scoped:false tname in
   let t_scoped = string_to_ident ~scoped:true tname in
   match Love_tenv.find_tdef t_unscoped env with
-  | Some {result; _} -> Some (result, t_unscoped)
+  | Some {result; path; _} -> Some ((result, t_unscoped), path)
   | None ->
     match Love_tenv.find_tdef t_scoped env with
-    | Some {result; _} -> Some (result, t_scoped)
+    | Some {result; path; _} -> Some ((result, t_scoped), path)
     | None -> None
 
-let find_var (v : string) (env: env) =
+let find_var (v : string) env =
   let v_unscoped = string_to_ident ~scoped:false v in
   let v_scoped = string_to_ident ~scoped:true v in
   match Love_tenv.find_var v_unscoped env with
-  | Some {result = k, t; _} -> Some (v_unscoped, k, t)
+  | Some {result = k, t; path; _} -> Some ((v_unscoped, k, t), path)
   | None ->
     match Love_tenv.find_var v_scoped env with
-    | Some {result = k, t; _} -> Some (v_scoped, k, t)
+    | Some {result = k, t; path; _} -> Some ((v_scoped, k, t), path)
     | None -> None
 
-let find_constr c (env : env) =
+let find_constr c env =
   let c_unscoped = string_to_ident ~scoped:false c in
   let c_scoped = string_to_ident ~scoped:true c in
   match Love_tenv.find_constr c_unscoped env with
-  | Some t -> Some (t, c_unscoped)
+  | Some t -> Some ((t, c_unscoped), t.path)
   | None ->
     match Love_tenv.find_constr c_scoped env with
-    | Some t -> Some (t, c_scoped)
+    | Some t -> Some ((t, c_scoped), t.path)
     | None -> None
 
-let find_field f (env : env) =
+let find_field f env =
   let find_field ~scoped name env =
     let field_path = string_to_ident ~scoped name in
     let path, field_name = ident_split_end field_path in
@@ -93,15 +139,15 @@ let find_field f (env : env) =
     | Some path -> Love_tenv.find_field_in path field_name env, Some path
   in
   match find_field ~scoped:true f env with
-  | Some r, path -> Some (r, path)
+  | Some r, path -> Some ((r, path), r.path)
   | None, _ ->
     match find_field ~scoped:false f env with
-    | Some r, path -> Some (r, path)
+    | Some r, path -> Some ((r, path), r.path)
     | None, _ -> None
 
-let find_env path (env : env) =
+let find_env path env =
   match Love_tenv.find_env path env (fun _ e -> Some (e, -1)) with
-  | Some {result; _} -> Some result
+  | Some {result; path; _} -> Some (result, path)
   | None -> None
 
 let find_constructor name cons =
@@ -122,24 +168,24 @@ let find_constructor name cons =
            (Ident.get_final (string_to_ident ~scoped:true name)))
       cons
 
-let find_contract (name : string) (env: env) =
+let find_contract (name : string) env =
   let c_unscoped = string_to_ident ~scoped:false name in
   let c_scoped = string_to_ident ~scoped:true name in
   match Love_tenv.find_contract c_unscoped env with
-  | Some {result; _} -> Some (result, c_unscoped)
+  | Some {result; path; _} -> Some ((result, c_unscoped), path)
   | None ->
     match Love_tenv.find_contract c_scoped env with
-    | Some {result; _} -> Some (result, c_scoped)
+    | Some {result; path; _} -> Some ((result, c_scoped), path)
     | None -> None
 
-let find_signature (name : string) (env: env) =
+let find_signature (name : string) env =
   let c_unscoped = string_to_ident ~scoped:false name in
   let c_scoped = string_to_ident ~scoped:true name in
   match Love_tenv.find_signature c_unscoped env with
-  | Some {result; _} -> Some (result, c_unscoped)
+  | Some {result; path; _} -> Some ((result, c_unscoped), path)
   | None ->
     match Love_tenv.find_signature c_scoped env with
-    | Some {result; _} -> Some (result, c_scoped)
+    | Some {result; path; _} -> Some ((result, c_scoped), path)
     | None -> None
 
 let find_signature name env =
@@ -147,22 +193,22 @@ let find_signature name env =
   | Some res -> Some res
   | None -> find_signature (name ^ "__sig__") env
 
-let get_entrypoint_or_view_ty name ctr_name env =
-  match find_contract ctr_name env with
+let find_and_register find name env =
+  match find name env.tenv with
   | None -> None
-  | Some (contract_env, _) ->
-    match find_var name contract_env with
-    | Some (_, Entry, TUser (LName "entrypoint", [t]))
-    | Some (_, View _, TUser (LName "view", [t])) ->
-      Some (Love_tenv.normalize_type ~relative:false t contract_env)
-    | _ -> None
+  | Some (r, path) ->
+    register_used_path env path;
+    Some r
+
+let find_signature = find_and_register find_signature
+let find_contract = find_and_register find_contract
 
 let get_entrypoint_ty name ctr_name env =
   match find_contract ctr_name env with
   | None -> None
   | Some (contract_env, _) ->
     match find_var name contract_env with
-    | Some (_, Entry, TUser (LName "entrypoint", [t])) ->
+    | Some ((_, Entry, TUser (LName "entrypoint", [t])), _) ->
       Some (Love_tenv.normalize_type ~relative:false t contract_env)
     | _ -> None
 
@@ -171,21 +217,48 @@ let get_view_ty name ctr_name env =
   | None -> None
   | Some (contract_env, _) ->
     match find_var name contract_env with
-    | Some (_, View _, TUser (LName "view", [t])) ->
+    | Some ((_, View _, TUser (LName "view", [t])), _) ->
       Some (Love_tenv.normalize_type ~relative:false t contract_env)
     | _ -> None
 
+let find_type = find_and_register find_type
+let find_var = find_and_register find_var
+let find_constr = find_and_register find_constr
+let find_field = find_and_register find_field
+let find_env = find_and_register find_env
+
 let normalize_type t env =
-  try Love_tenv.normalize_type ~relative:true t env
+  try Love_tenv.normalize_type ~relative:true t env.tenv
   with _ ->
-  try Love_tenv.normalize_type ~relative:false t env
+  try Love_tenv.normalize_type ~relative:false t env.tenv
   with e ->
-    debug "normalize type environment =\n%a@." Love_tenv.pp_env env;
+    debug "normalize type environment =\n%a@." Love_tenv.pp_env env.tenv;
     raise e
 
-let env_of_subcontract name skind env = Love_tenv.new_subcontract_env name skind env
+let mk_primitive_lambda ?loc env ?expected_typ ?(spec_args=ANone) prim_name =
+  Log.debug "[mk_primitive_lambda] Primitive %s%a@."
+    prim_name
+    (fun fmt -> function
+      | None -> ()
+      | Some t -> Format.fprintf fmt " with expected type %a" Love_type.pretty t
+    ) expected_typ ;
+  let expexted_typ = match expected_typ with
+    | None -> None
+    | Some t -> Some (Love_tenv.normalize_type ~relative:true t env.tenv) in
+  mk_primitive_lambda ?loc expexted_typ spec_args prim_name
 
-let empty_env skind () = Love_tenv.empty skind ()
+let env_of_subcontract name skind env =
+  { tenv = Love_tenv.new_subcontract_env name skind env.tenv;
+    subcs = StringMap.empty;
+    ctypes = StringMap.empty }
+
+let empty_tenv skind = Love_tenv.empty skind ()
+
+let empty_env skind =  {
+  tenv = empty_tenv skind;
+  subcs = StringMap.empty;
+  ctypes = StringMap.empty;
+}
 
 let get_opt o = match o with None -> assert false | Some o -> o
 
@@ -328,7 +401,7 @@ and liqcontract_sig_to_lovetype
     ?loc
     (env : env)
     (mod_name : string option)
-    {sig_name; entries_sig} : structure_type * env =
+    {sig_name; entries_sig} : structure_type * Love_tenv.t =
   debug "[liqcontract_sig_to_lovetype] Creating type from Liquidity Contract@.";
   match mod_name with
   | Some name -> (
@@ -336,6 +409,7 @@ and liqcontract_sig_to_lovetype
       match find_signature name env with
       | Some (c_env, c) -> (* The signature has already been registered *)
         debug "[liqcontract_sig_to_lovetype] Already registered@.";
+        register_used_signature (Format.asprintf "%a" Ident.print_strident c) env;
         Named c, c_env
       | None ->
         debug "[liqcontract_sig_to_lovetype] Not registered, treating as anonymous@.";
@@ -414,14 +488,14 @@ and liqcontract_sig_to_lovetype
            let item = name, if is_view then SView t1 else SEntry t1 in
            item :: content, env
         )
-        ([], empty_env (Contract []) ())
+        ([], empty_env (Contract []))
         entries_sig
     in
     let c_sig = {
       sig_kind = Contract [];
       sig_content = List.rev sig_content
     } in
-    let c_sig_env = Love_tenv.contract_sig_to_env sig_name c_sig env in
+    let c_sig_env = Love_tenv.contract_sig_to_env sig_name c_sig env.tenv in
     Anonymous c_sig, c_sig_env
 
 
@@ -1121,7 +1195,7 @@ let rec liqexp_to_loveexp (env : env) (e : typed_exp) : AST.exp * TYPE.t =
       let bnd_val,btyp = ltl bnd_val in
       debug "[liqexp_to_loveexp] let %s = %a in...@." nname Love_printer.Ast.print_exp bnd_val;
       let body, body_typ =
-        liqexp_to_loveexp (Compil_utils.add_var nname btyp env) body in
+        liqexp_to_loveexp (add_var nname btyp env) body in
       debug "[liqexp_to_loveexp] let %s = %a in %a@." nname Love_printer.Ast.print_exp bnd_val Love_printer.Ast.print_exp body;
       mk_let
         (Love_ast_utils.mk_pvar nname)
@@ -1131,7 +1205,7 @@ let rec liqexp_to_loveexp (env : env) (e : typed_exp) : AST.exp * TYPE.t =
         debug "[liqexp_to_loveexp] Creating Var (%s)@." v;
         match find_var v env with
         | None ->
-          debug "environment =\n%a@." Love_tenv.pp_env env;
+          debug "environment =\n%a@." Love_tenv.pp_env env.tenv;
           error ~loc "Unknown variable %s" v
         | Some (vi, _, t) -> mk_var vi, t
       )
@@ -1234,7 +1308,7 @@ let rec liqexp_to_loveexp (env : env) (e : typed_exp) : AST.exp * TYPE.t =
             | None -> tmp_ctrname in
           let cssig, cssig_env =
             liqcontract_sig_to_lovetype ~loc env c_sig.sig_name c_sig in
-          let env = Love_tenv.add_subcontract_env tmp_ctrname cssig_env env in
+          let env = add_subcontract tmp_ctrname cssig_env env in
           let ltl = liqexp_to_loveexp env in
           let arg, _arg_typ = ltl arg in
           tmp_ctrname, ctrct_or_addr, cssig, arg, env
@@ -1242,7 +1316,7 @@ let rec liqexp_to_loveexp (env : env) (e : typed_exp) : AST.exp * TYPE.t =
           let c_sig = handle_sig ~entry_name:name ty in
           let cssig, cssig_env =
             liqcontract_sig_to_lovetype ~loc env c_sig.sig_name c_sig in
-          let env = Love_tenv.add_subcontract_env tmp_ctrname cssig_env env in
+          let env = add_subcontract tmp_ctrname cssig_env env in
           let ltl = liqexp_to_loveexp env in
           tmp_ctrname, ctrct_or_addr, cssig, fst @@ ltl arg, env
         | Tcontract_view (cname, arg_ty, ret_ty) ->
@@ -1250,7 +1324,7 @@ let rec liqexp_to_loveexp (env : env) (e : typed_exp) : AST.exp * TYPE.t =
           let c_sig = handle_sig ~entry_name:cname arg_ty ~return:ret_ty in
           let cssig, cssig_env =
             liqcontract_sig_to_lovetype ~loc env c_sig.sig_name c_sig in
-          let env = Love_tenv.add_subcontract_env tmp_ctrname cssig_env env in
+          let env = add_subcontract tmp_ctrname cssig_env env in
           let ltl = liqexp_to_loveexp env in
           tmp_ctrname, ctrct_or_addr, cssig, fst @@ ltl arg, env
         | Taddress ->
@@ -1261,7 +1335,7 @@ let rec liqexp_to_loveexp (env : env) (e : typed_exp) : AST.exp * TYPE.t =
             else handle_sig ~entry_name:name arg.ty in
           let cssig, cssig_env =
             liqcontract_sig_to_lovetype ~loc env c_sig.sig_name c_sig in
-          let env = Love_tenv.add_subcontract_env tmp_ctrname cssig_env env in
+          let env = add_subcontract tmp_ctrname cssig_env env in
           let ltl = liqexp_to_loveexp env in
           let arg, _typ_arg = ltl arg in
           let ctrct =
@@ -1375,7 +1449,7 @@ let rec liqexp_to_loveexp (env : env) (e : typed_exp) : AST.exp * TYPE.t =
       ;
       debug "[liqexp_to_loveexp] The whole expression has type %s@."
         (LiquidPrinter.Liquid.string_of_type e.ty);
-      let env = Compil_utils.add_var l.arg_name.nname arg_type env in
+      let env = add_var l.arg_name.nname arg_type env in
       let body =
         mk_lambda
           (mk_pvar ?loc:(love_loc l.arg_name.nloc) l.arg_name.nname)
@@ -1416,7 +1490,7 @@ let rec liqexp_to_loveexp (env : env) (e : typed_exp) : AST.exp * TYPE.t =
         debug "[liqexp_to_loveexp] fun (%s : %a) -> ...@."
           arg_name.nname Love_type.pretty arg_ty;
         let new_fvars = Love_type.fvars arg_ty in
-        let quant = Love_tenv.get_free env in
+        let quant = Love_tenv.get_free env.tenv in
         if TypeVarSet.subset new_fvars quant
         then (
           debug "[liqexp_to_loveexp] Introducing no new free var@.";
@@ -1429,13 +1503,15 @@ let rec liqexp_to_loveexp (env : env) (e : typed_exp) : AST.exp * TYPE.t =
         else (
           debug "[liqexp_to_loveexp] Introducing new free vars@.";
           let new_body, t =
-            liqexp_to_loveexp (
-              TypeVarSet.fold
-                (fun tv acc -> Love_tenv.add_forall tv acc)
-                (* Type is not really TUnit, it is just to keep track that tv
-                   is polymorphic as it belongs to the forall map of the environment. *)
-                new_fvars
-                env) body
+            liqexp_to_loveexp
+              { env with
+                tenv = TypeVarSet.fold
+                    (fun tv acc -> Love_tenv.add_forall tv acc)
+                    (* Type is not really TUnit, it is just to keep track that tv
+                       is polymorphic as it belongs to the forall map of the environment. *)
+                    new_fvars
+                    env.tenv
+              } body
           in
           TypeVarSet.fold
             (fun tv (tlam, ty) ->
@@ -1556,8 +1632,8 @@ let rec liqexp_to_loveexp (env : env) (e : typed_exp) : AST.exp * TYPE.t =
                      | Some (t, _) -> t
                    in
                    let typ_constr =
-                     Love_tenv.constr_with_targs poly_typ_constr.result typeargs env
-                   in
+                     Love_tenv.constr_with_targs
+                       poly_typ_constr.result typeargs env.tenv in
                    match typ_constr.Love_tenv.cargs with
                    | [t] -> t
                    | l ->
@@ -1583,8 +1659,8 @@ let rec liqexp_to_loveexp (env : env) (e : typed_exp) : AST.exp * TYPE.t =
                      | Some (t, _) -> t
                    in
                    let typ_constr =
-                     Love_tenv.constr_with_targs poly_typ_constr.result typeargs env
-                   in
+                     Love_tenv.constr_with_targs
+                       poly_typ_constr.result typeargs env.tenv in
                    typ_constr.Love_tenv.cargs in
                  debug "[liqexp_to_loveexp] Constructor %s with %i arguments.@." name
                    (List.length args);
@@ -1667,6 +1743,7 @@ let rec liqexp_to_loveexp (env : env) (e : typed_exp) : AST.exp * TYPE.t =
             | _ -> assert false in
           mk_packstruct first_class_ctr
         | Some (_, name_id) ->
+          register_used_subcontract contract.contract_name env;
           mk_packstruct (Named name_id)
       in
       let args, storage =
@@ -1782,7 +1859,7 @@ let rec liqexp_to_loveexp (env : env) (e : typed_exp) : AST.exp * TYPE.t =
       fvars (exp, t) in
   let e, t =
     try
-      apply_types ~loc env exp t expected_typ
+      apply_types ~loc env.tenv exp t expected_typ
     with _ -> (
         error ~loc
           "Error trying to merge types. \
@@ -2787,7 +2864,7 @@ and liqentry_to_lovecontent env { entry_sig; code; view } =
   assert (not view);
   let param_type = liqtype_to_lovetype env entry_sig.parameter in
   let stor_typ =
-    stor_typ_from_opt_typ @@ Love_tenv.get_storage_type env in
+    stor_typ_from_opt_typ @@ Love_tenv.get_storage_type env.tenv in
   let env = add_var entry_sig.parameter_name param_type env in
   let env = add_var entry_sig.storage_name stor_typ env in
   let full_love_code = fst @@ liqexp_to_loveexp env code in
@@ -2809,17 +2886,13 @@ and liqentry_to_lovecontent env { entry_sig; code; view } =
     full_love_code in
   let name = entry_sig.entry_name in
   (name, mk_entry code None param_type),
-  Compil_utils.add_var
-    ~kind:Entry
-    name
-    (entrypoint (param_type))
-    env
+  add_var ~kind:Entry name (entrypoint (param_type)) env
 
 and liqview_to_lovecontent env { entry_sig; code; view } =
   assert view;
   let param_type = liqtype_to_lovetype env entry_sig.parameter in
   let stor_typ =
-    stor_typ_from_opt_typ @@ Love_tenv.get_storage_type env in
+    stor_typ_from_opt_typ @@ Love_tenv.get_storage_type env.tenv in
   let env = add_var entry_sig.parameter_name param_type env in
   let env = add_var entry_sig.storage_name stor_typ env in
   let full_love_code = fst @@ liqexp_to_loveexp env code in
@@ -2842,11 +2915,7 @@ and liqview_to_lovecontent env { entry_sig; code; view } =
     | Some t -> liqtype_to_lovetype env t in
   let view_typ = TArrow (param_type, return_typ) in
   (name, mk_view code view_typ NonRec),
-  Compil_utils.add_var
-    ~kind:(View Local)
-    name
-    (tview view_typ)
-    env
+  add_var ~kind:(View Local) name (tview view_typ) env
 
 and liqinit_to_loveinit env init_args init_body =
   let init_code, init_typ = match init_args with
@@ -2856,7 +2925,7 @@ and liqinit_to_loveinit env init_args init_body =
       mk_lambda (mk_pany ()) body ty, ty
     | [x, _, ty] ->
       let ty = liqtype_to_lovetype env ty in
-      let env = Love_tenv.add_var x ty env in
+      let env = add_var x ty env in
       let arg = mk_pvar x in
       let body, _t = liqexp_to_loveexp env init_body in
       mk_lambda arg body ty, ty
@@ -2866,7 +2935,7 @@ and liqinit_to_loveinit env init_args init_body =
             debug "[liqcontract_to_lovecontract] Preprocessing arg %s : %s@."
               x (LiquidPrinter.Liquid.string_of_type ty);
             let ty = (liqtype_to_lovetype env ty) in
-            ty :: tlist, Love_tenv.add_var x ty env
+            ty :: tlist, add_var x ty env
           ) ([], env) init_args
       in
       let arg = mk_ptuple (List.map (fun (x,_,_) -> mk_pvar x) init_args) in
@@ -2892,27 +2961,26 @@ and liqcontract_to_lovecontent
     liqcontract_to_lovecontract
       ~ctr_name:c.contract_name
       ~env:(env_of_subcontract c.contract_name ckind env)
-      is_module
+      ~is_module
+      ~is_toplevel:false
       c in
   debug "[liqcontract_to_lovecontent] Signature of sub structure : %a@."
-    Love_tenv.pp_env subenv;
-  let new_env =
-    Love_tenv.add_subcontract_env
-      c.contract_name
-      subenv
-      env in
+    Love_tenv.pp_env subenv.tenv;
+  let new_env = add_subcontract c.contract_name subenv.tenv env in
   debug "[liqcontract_to_lovecontent] New environment: %a@."
-    Love_tenv.pp_env new_env;
+    Love_tenv.pp_env new_env.tenv;
   c.contract_name, mk_structure ctr, new_env
 
 and liqcontract_to_lovecontract
-    ?env ?(ctr_name="") (is_module : bool) (c : typed_contract) : AST.structure * env =
+    ?env ?(ctr_name="")
+    ~is_module ~is_toplevel
+    (c : typed_contract) : AST.structure * env =
   if !LiquidOptions.verbosity > 0 then
     Format.eprintf "Transpile contract %s to Love@."
       (LiquidNamespace.qual_contract_name c);
   let env : env =
     match env with
-    | None -> empty_env (if is_module then Module else Contract []) ()
+    | None -> empty_env (if is_module then Module else Contract [])
     | Some e -> e in
 
   debug "[liqcontract_to_lovecontract] %i subcontracts/modules to handle@." (List.length c.subs);
@@ -2946,7 +3014,7 @@ and liqcontract_to_lovecontract
            | Anonymous s, s_env ->
              debug "[liqcontract_to_lovecontract] Signature %s = %a@."
                name (Love_type.pp_contract_sig ) s;
-             Love_tenv.add_signature name s_env env,
+             add_signature name s_env env,
              (name, AST.Signature s) :: sigs
            | Named _, _s_env ->
              debug "Named %s@." name;
@@ -2982,7 +3050,7 @@ and liqcontract_to_lovecontract
             debug "[liqcontract_to_lovecontract] %s is not in the environment, needed by %s@."
               s str;
             debug "environment =\n%a@."
-              Love_tenv.pp_env acc_env;
+              Love_tenv.pp_env acc_env.tenv;
             try
               let s_ty =
                 LiquidNamespace.find_type
@@ -3050,6 +3118,23 @@ and liqcontract_to_lovecontract
         liqinit_to_loveinit env init_args init_body
       ]
   in
+  (* Ignore unused subcontracts, only in toplevel contract
+     (other contracts can have non local use). *)
+  let subc =
+    if not is_toplevel then subc
+    else List.filter (fun (c, _) ->
+        match StringMap.find_opt c env.subcs with
+        | Some used -> !used
+        | None -> false
+      ) subc in
+  (* Keep only used signatures *)
+  let signatures =
+    if not is_toplevel then signatures
+    else List.filter (fun (s, _) ->
+        match StringMap.find_opt s env.ctypes with
+        | Some used -> !used
+        | None -> false
+      ) signatures in
   let str =
     let kind = if is_module then TYPE.Module else TYPE.Contract [] in
     { AST.structure_content = (subc @ signatures @ types @ values @ init @ entries);
@@ -3065,7 +3150,7 @@ let typecheck_lovecontract ~filename ast =
   try
     Love_typechecker.typecheck_struct
       None
-      (empty_env (Contract []) ())
+      (empty_tenv (Contract []))
       ast
     |> fst
   with
@@ -3089,11 +3174,12 @@ let typecheck_lovecontract ~filename ast =
 
 let liqcontract_to_lovecontract (c : typed_contract) : AST.structure =
   debug "[liqcontract_to_lovecontract] Registering contract %s@." c.contract_name;
-  let initial_env = empty_env (Contract []) () in
+  let initial_env = empty_env (Contract []) in
   try
     let ast, _ =
       liqcontract_to_lovecontract
-        ~ctr_name:c.contract_name ~env:initial_env false c in
+        ~ctr_name:c.contract_name ~env:initial_env
+        ~is_module:false ~is_toplevel:true c in
     (* Typecheck resulting Love contract *)
     if !LiquidOptions.no_love_typecheck then ast
     else
@@ -3101,7 +3187,7 @@ let liqcontract_to_lovecontract (c : typed_contract) : AST.structure =
   with
     UnknownType (s, _, e, loc) ->
     debug "Failing with typing environment =\n%a@."
-      Love_tenv.pp_env e;
+      Love_tenv.pp_env e.tenv;
     error ?loc "Unknown type %s" s
 
 
@@ -3366,7 +3452,7 @@ let rec lovevalue_to_liqconst ?ty (c : Love_value.Value.t) =
 
 
 let liqconst_to_lovevalue ?ty const =
-  let initial_env = empty_env (Contract []) () in
+  let initial_env = empty_env (Contract []) in
   liqconst_to_lovevalue initial_env ?ty const
 
 let const_encoding : Love_value.Value.t Json_encoding.encoding =

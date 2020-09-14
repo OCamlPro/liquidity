@@ -132,7 +132,7 @@ module Compiler = struct
     Liq2love.lovevalue_to_liqconst ?ty c
 
   let compile_datatype ty =
-    Liq2love.liqtype_to_lovetype (Love_tenv.empty (Contract []) ()) ty
+    Liq2love.liqtype_to_lovetype (Liq2love.empty_env (Contract [])) ty
 end
 
 include Compiler
