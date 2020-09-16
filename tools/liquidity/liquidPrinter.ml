@@ -1255,7 +1255,9 @@ module LiquidDebug = struct
       bprint_code_rec ~debug b indent2 arg;
       Printf.bprintf b ")"
 
-    | Self { entry } ->
+    | Self { entry = None } ->
+      Printf.bprintf b "\n%s(Contrac.self ())" indent;
+    | Self { entry = Some entry } ->
       Printf.bprintf b "\n%s[%%handle Self.%s]" indent entry;
     | SelfCall { amount; entry; arg } ->
       Printf.bprintf b "\n%s(Self.%s" indent entry;

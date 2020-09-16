@@ -266,7 +266,7 @@ let rec compile_desc depth env ~loc desc =
       LiquidLoc.raise_error ~loc
         "Typing error: \
          Self handle is not allowed inside non-inlined functions\n%!";
-    let entry = match entry with "default" -> None | _ -> Some entry in
+    let entry = match entry with Some "default" -> None | _ -> entry in
     [ ii ~loc (SELF entry) ]
 
   | SelfCall { amount; entry; arg } ->

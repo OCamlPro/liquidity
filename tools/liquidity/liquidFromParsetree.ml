@@ -1104,7 +1104,10 @@ and translate_code contracts env exp =
         pexp_loc } ->
       begin match args with
         | [_, { pexp_desc = Pexp_construct ( { txt = Lident "()" }, None ) }] ->
-          Self { entry = "default" }
+          let entry = match !LiquidOptions.target_lang with
+            | Michelson_lang -> Some "default"
+            | _ -> None in
+          Self { entry }
         | _ -> error_loc pexp_loc "Argument to Contract.self must be ()"
       end
 
@@ -1116,7 +1119,7 @@ and translate_code contracts env exp =
                     loc = c_loc } },
             [])}]
       )} ->
-      Self { entry = entry_point }
+      Self { entry = Some entry_point }
 
     | { pexp_desc =
           Pexp_apply (
@@ -1551,9 +1554,10 @@ and translate_code contracts env exp =
         ( [Nolabel, param; Labelled "amount", amount]
         | [Labelled "amount", amount; Nolabel, param] )
       ) } ->
-      SelfCall { amount = translate_code contracts env amount;
-                 entry;
-                 arg = translate_code contracts env param }
+      Call { contract = DSelf;
+             amount = Some (translate_code contracts env amount);
+             entry = Entry entry;
+             arg = translate_code contracts env param }
 
     (* special case for contract call with contract.entry param ~amount *)
     | { pexp_desc = Pexp_apply (

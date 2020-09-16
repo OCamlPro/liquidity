@@ -630,7 +630,12 @@ and typecheck env ( exp : syntax_exp ) : typed_exp =
     let desc = If { cond; ifthen; ifelse } in
     mk ?name:exp.name ~loc desc ty
 
-  | Self { entry } ->
+  | Self { entry = None } ->
+    let ty = Tcontract (sig_of_full_sig env.t_contract_sig) in
+    let desc = Self { entry = None } in
+    mk ?name:exp.name ~loc desc ty
+
+  | Self { entry = Some entry } ->
     let self_entries = env.t_contract_sig.f_entries_sig in
     let parameter  =
       match List.find_opt (fun e -> e.entry_name = entry) self_entries with
@@ -645,7 +650,7 @@ and typecheck env ( exp : syntax_exp ) : typed_exp =
           self_entries;
     in
     let ty = Tcontract_handle (Some entry, parameter) in
-    let desc = Self { entry } in
+    let desc = Self { entry = Some entry } in
     mk ?name:exp.name ~loc desc ty
 
   | Transfer { dest; amount } ->

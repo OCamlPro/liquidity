@@ -614,7 +614,12 @@ and convert_code ~abbrev (expr : (datatype, 'a) exp) =
   | Call { amount = None; entry = (Entry _ | NoEntry) } ->
     assert false
 
-  | Self { entry } ->
+  | Self { entry = None } ->
+    Exp.apply ~loc
+      (Exp.ident (lid "Contract.self"))
+      [ Nolabel, Exp.construct (lid "()") None ]
+
+  | Self { entry = Some entry } ->
     Exp.extension (
       id ~loc "handle",
       PStr [

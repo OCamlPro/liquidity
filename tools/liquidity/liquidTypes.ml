@@ -969,7 +969,7 @@ and ('ty, 'a) exp_desc =
   (** Transfers:
       - {[ Account.transfer ~dest ~amount ]} *)
 
-  | Self of { entry: string }
+  | Self of { entry: string option }
 
   | SelfCall of { amount: ('ty, 'a) exp;
                   entry: string;

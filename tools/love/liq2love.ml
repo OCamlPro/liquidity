@@ -16,6 +16,7 @@ module SIMap = Collections.StringIdentMap
 
 type env = {
   tenv : Love_tenv.t; (* Love typechecking environment *)
+  liq_contract : typed_contract option;
   mutable subcs : bool ref StringMap.t; (* Used sub-contracts *)
   mutable ctypes : bool ref StringMap.t; (* Used contract types *)
 }
@@ -247,15 +248,17 @@ let mk_primitive_lambda ?loc env ?expected_typ ?(spec_args=ANone) prim_name =
     | Some t -> Some (Love_tenv.normalize_type ~relative:true t env.tenv) in
   mk_primitive_lambda ?loc expexted_typ spec_args prim_name
 
-let env_of_subcontract name skind env =
+let env_of_subcontract ~liq_subcontract name skind env =
   { tenv = Love_tenv.new_subcontract_env name skind env.tenv;
+    liq_contract = Some liq_subcontract;
     subcs = StringMap.empty;
     ctypes = StringMap.empty }
 
 let empty_tenv skind = Love_tenv.empty skind ()
 
-let empty_env skind =  {
+let empty_env ?liq_contract skind =  {
   tenv = empty_tenv skind;
+  liq_contract = liq_contract;
   subcs = StringMap.empty;
   ctypes = StringMap.empty;
 }
@@ -996,7 +999,8 @@ let liqprim_to_loveprim ?loc env (p : primitive) (args : TYPE.t list) =
   | Prim_check -> debug "[liqprim_to_loveprim] PCCheck@."; "Crypto.check", args
   | Prim_default_account -> debug "[liqprim_to_loveprim] Default@."; "Account.default", args
   | Prim_set_delegate -> debug "[liqprim_to_loveprim] SetDelegate@."; "Contract.set_delegate", args
-  | Prim_address -> debug "[liqprim_to_loveprim] Address@."; "Contract.address", args
+  | Prim_address | Prim_address_untype ->
+    debug "[liqprim_to_loveprim] Address@."; "Contract.address", args
   | Prim_pack -> debug "[liqprim_to_loveprim] Pack@."; "Bytes.pack", args
   | Prim_Cons -> debug "[liqprim_to_loveprim] (::)@."; "List.cons", args
   | Prim_or -> (
@@ -1183,7 +1187,6 @@ let liqprim_to_loveprim ?loc env (p : primitive) (args : TYPE.t list) =
   | Prim_unused _
   | Prim_collect_call
   | Prim_big_map_create
-  | Prim_address_untype
   | Prim_chain_id ->
     error ?loc "Primitive %s is unsupported" (LiquidTypes.string_of_primitive p)
 
@@ -1288,8 +1291,13 @@ let rec liqexp_to_loveexp (env : env) (e : typed_exp) : AST.exp * TYPE.t =
     | Call {amount = None ; entry = (NoEntry | Entry _) }
     | Call {amount = Some _ ; entry = View _ } -> assert false
 
-    | Call { contract = DSelf } ->
-      error ~loc "Self not implemented yet"
+    | Call { contract = DSelf; amount; entry; arg } ->
+      let ty = match env.liq_contract with
+        | None -> assert false
+        | Some c -> Tcontract (sig_of_contract c) in
+      let self = LiquidTypes.mk ~loc (Self { entry = None }) ty in
+      ltl { e with desc = Call { contract = DContract self;
+                                 amount; entry; arg }}
 
     | Call {contract = DContract contract; amount; entry; arg} ->
       let name =
@@ -1813,8 +1821,38 @@ let rec liqexp_to_loveexp (env : env) (e : typed_exp) : AST.exp * TYPE.t =
       debug "[liqexp_to_loveexp] Creating a type annoted expression (discarding type)@.";
       ltl e
 
-    | Self _
-    | SelfCall _ -> error ~loc "Self not implemented yet"
+    | Self { entry } ->
+      let c_sig = match env.liq_contract with
+        | None -> assert false
+        | Some c -> sig_of_contract c in
+      let c_sig = match entry with
+        | None -> c_sig
+        | Some entry -> (* restrict signature to single entry point *)
+          { c_sig with
+            entries_sig =
+              List.filter (fun e -> e.entry_name = entry) c_sig.entries_sig }
+      in
+      let tmp_ctrname = match c_sig.sig_name with
+        | Some c -> c
+        | None -> "__Self__" in
+      let cssig, cssig_env =
+        liqcontract_sig_to_lovetype ~loc env c_sig.sig_name c_sig in
+      let env = add_subcontract tmp_ctrname cssig_env env in
+      mk_match
+        (mk_apply ?loc:lloc
+           (mk_primitive_lambda ~loc env "Contract.self"
+              ~expected_typ:((unit ()) @=> option (TContractInstance cssig))
+              ~spec_args:(AContractType cssig)
+           )
+           [mk_const (mk_cunit ())]
+        )
+        [
+          (* Some ctr -> ctr *)
+          mk_pconstr "Some" [mk_pvar "self"], mk_var (Ident.create_id "self")
+        ],
+      TContractInstance cssig
+
+    | SelfCall _ -> error ~loc "SelfCall not implemented yet"
 
     | Type t ->
       error ~loc
@@ -2431,12 +2469,13 @@ and liqconst_to_loveexp
           | None -> error ?loc "Keyhash %s is invalid" kh
           | Some k -> mk_const mk_ckeyhash k, keyhash ()
       )
-    | CContract (addr, None) -> contract_to_loveexp ?loc ~typ addr
-    | CContract (c, _) ->
-      error ?loc "Constant contracts (here %s) has no Love representation." c
+
+    | CContract (addr, _) -> contract_to_loveexp ?loc ~typ addr
+
     | CRecord [] ->
       error ?loc "Empty records are forbidden in Love"
-    | CRecord (((name, _) :: _) as l) -> (* May be source of errors on polymorphic records *)
+    | CRecord (((name, _) :: _) as l) ->
+      (* May be source of errors on polymorphic records *)
       debug "[liqconst_to_loveexp] Constant record";
       let parent_typ, path =
         match find_field name env with
@@ -2972,7 +3011,7 @@ and liqcontract_to_lovecontent
   let ctr, subenv =
     liqcontract_to_lovecontract
       ~ctr_name:c.contract_name
-      ~env:(env_of_subcontract c.contract_name ckind env)
+      ~env:(env_of_subcontract c.contract_name ckind env ~liq_subcontract:c)
       ~is_module
       ~is_toplevel:false
       c in
@@ -2992,7 +3031,7 @@ and liqcontract_to_lovecontract
       (LiquidNamespace.qual_contract_name c);
   let env : env =
     match env with
-    | None -> empty_env (if is_module then Module else Contract [])
+    | None -> empty_env ~liq_contract:c (if is_module then Module else Contract [])
     | Some e -> e in
 
   debug "[liqcontract_to_lovecontract] %i subcontracts/modules to handle@." (List.length c.subs);
@@ -3186,7 +3225,7 @@ let typecheck_lovecontract ~filename ast =
 
 let liqcontract_to_lovecontract (c : typed_contract) : AST.structure =
   debug "[liqcontract_to_lovecontract] Registering contract %s@." c.contract_name;
-  let initial_env = empty_env (Contract []) in
+  let initial_env = empty_env (Contract []) ~liq_contract:c in
   try
     let ast, _ =
       liqcontract_to_lovecontract

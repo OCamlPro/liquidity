@@ -629,7 +629,7 @@ let rec decompile_next (env : env) node =
     | N_LAMBDA_END _, [arg] -> arg_of arg
 
     | N_SELF entry, [] ->
-      let entry = match entry with None -> "default" | Some e -> e in
+      let entry = match entry with None -> Some "default" | Some _ -> entry in
       mklet env node (Self { entry })
 
     | N_TRANSFER, [dest; amount] ->
