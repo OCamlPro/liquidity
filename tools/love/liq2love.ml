@@ -2660,16 +2660,17 @@ and liqapply_to_loveexp ?loc env typ prim args : AST.exp * TYPE.t =
       [mk_list ~typ:ty @@ List.map (fun e -> fst @@ ltl e) l], ty
 
   | Prim_is_nat, [e] -> (
-    (* if e >= 0 then Some (abs e) else None *)
+    (* if e < 0 then None else Some (abs e) *)
       let lovee, te = ltl e in
       let abs_e = mk_apply ?loc:lloc (mk_primitive_lambda ?loc env "abs") [lovee] in
       mk_if ?loc:lloc
         (mk_apply
-           (mk_primitive_lambda ?loc env "<="
+           (mk_primitive_lambda ?loc env "<"
               ~expected_typ:(te @=> te @=> bool ()))
            [lovee; mk_const @@ mk_cint Z.zero])
-        (mk_some (nat ()) abs_e)
-        (mk_none (nat ())), option (nat ())
+        (mk_none (nat ()))
+        (mk_some (nat ()) abs_e),
+      option (nat ())
     )
   | Prim_int, [cst] -> (
       debug "[liqapply_to_loveexp] Creating a cast@.";
