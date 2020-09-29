@@ -1,7 +1,7 @@
 [submodule "dune-network"]
 	path = dune-network
 	url = https://gitlab.com/dune-network/dune-network.git
-	branch = mainnet
+	branch = next
 
 [submodule "libs/ezcmd"]
 	path = libs/ezcmd
