@@ -269,6 +269,7 @@ OCaml.library("dune-network-lib-config",
           from_dune_network("lib_config/set_config_testnet.ml");
           from_dune_network("lib_config/set_config_private.ml");
           from_dune_network("lib_config/set_config_sandbox.ml");
+          from_dune_network("lib_config/set_config_devnet.ml");
           from_dune_network("lib_config/set_config.ml");
        ]);
      requires = [
@@ -441,7 +442,10 @@ OCaml.library("dune-network-lib-protocol",
         from_dune_proto("love_binary_processor.ml");
         from_dune_proto("love_binary_encoding.ml");
         from_dune_proto("love_encoding.ml");
-
+        from_dune_proto("raw_level_repr.ml");
+        from_dune_proto("cycle_repr.ml");
+        from_dune_proto("voting_period_repr.ml");
+	
         "alpha_context.ml";
         from_dune_proto("love_size.ml");
         from_dune_proto("love_gas.ml");

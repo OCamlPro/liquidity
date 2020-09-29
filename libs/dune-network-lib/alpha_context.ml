@@ -135,7 +135,18 @@ module Cycle = struct
   let to_int32 _ = assert false
 end
 type dummy_level = { cycle : int; level : int }
+module Voting_period = struct
+  include Voting_period_repr
+end
 module Level = struct
+  type t = {
+    level: Raw_level_repr.t ;
+    level_position: int32 ;
+    cycle: Cycle_repr.t ;
+    cycle_position: int32 ;
+    voting_period: Voting_period_repr.t ;
+    voting_period_position: int32 ;
+    expected_commitment: bool  }
   let current _ = assert false
 end
 module Raw_level = struct
@@ -166,6 +177,12 @@ module Roll = struct
   module Delegate = struct
     let get_maxrolls _ _ = assert false
   end
+end
+
+module Vote = struct
+  let listing_get _ _ = assert false
+  let in_listings _ _ = assert false
+  let listing_size _ = assert false    
 end
 
 let fresh_internal_nonce _ = ok ((), 0)
