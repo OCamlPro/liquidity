@@ -28,7 +28,7 @@ depends: [
      "lwt_log"
      "menhir"
      "ocamlfind"
-     "ocaml-migrate-parsetree"
+     "ocaml-migrate-parsetree" { < "2.0.0" }
      "ocp-build"
      "ocplib-endian"
      "ocurl"
