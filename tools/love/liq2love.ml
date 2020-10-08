@@ -1196,6 +1196,18 @@ let rec liqexp_to_loveexp (env : env) (e : typed_exp) : AST.exp * TYPE.t =
   let exp, t =
     let ltl = liqexp_to_loveexp env in
     match e.desc with
+    | Let { bnd_var = {nname; _}; inline;
+            bnd_val = ({ desc = Lambda { recursive = Some f;
+                                         arg_ty; ret_ty }} as bnd_val);
+            body } ->
+      let bnd_val, btyp = ltl bnd_val in
+      let body, body_typ =
+        liqexp_to_loveexp (add_var nname btyp env) body in
+      mk_let_rec
+        nname
+        bnd_val
+        body
+        btyp, body_typ
     | Let { bnd_var = {nname; _}; inline; bnd_val; body} ->
       debug "[liqexp_to_loveexp] let %s = ...@." nname;
       let bnd_val,btyp = ltl bnd_val in
@@ -1491,10 +1503,13 @@ let rec liqexp_to_loveexp (env : env) (e : typed_exp) : AST.exp * TYPE.t =
       liqprimmapfold_to_loveexp loc env prim arg_name
         arg acc body
 
-    | Lambda {recursive = Some f; _} ->
-      error ~loc "Recursive lambda %s not supported." f
-
-    | Lambda {arg_name; arg_ty; body; recursive = None; _} -> (
+    | Lambda {arg_name; arg_ty; body; recursive; ret_ty } -> (
+        let env = match recursive with
+          | None -> env
+          | Some f ->
+            let ftyp = TArrow (liqtype_to_lovetype env arg_ty,
+                               liqtype_to_lovetype env ret_ty) in
+            add_var f ftyp env in
         debug "[liqexp_to_loveexp] Creating a non recursive lambda@.";
         let arg_ty = liqtype_to_lovetype env arg_ty in
         let env = add_var arg_name.nname arg_ty env in

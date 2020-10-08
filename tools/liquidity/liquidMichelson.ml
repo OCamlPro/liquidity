@@ -216,7 +216,8 @@ let rec compile_desc depth env ~loc desc =
   | Call { entry = View _ } | Call { amount = None } ->
     LiquidLoc.raise_error ~loc "Cannot compile views to Michelson"
 
-  | Call { contract = DContract ({ ty = Tcontract_handle _ } as contract);
+  | Call { contract = DContract
+               ({ ty = Tcontract_handle _ | Tcontract _ } as contract);
            amount = Some amount; entry; arg } ->
     (* Contract.call compiled to TRANSFER_TOKENS *)
     let contract = compile depth env contract in
