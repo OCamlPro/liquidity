@@ -15,16 +15,18 @@ open Log
 let shift = 15
 
 let love_loc loc =
-  match loc.LiquidTypes.loc_pos with
-  | None -> None
-  | Some ((l1, c1), (l2, c2)) ->
-     (* Nothing for end position *)
-     (* use bol to encode *)
-     Some (AST.{
-           pos_lnum = l1;
-           pos_cnum = c1;
-           pos_bol = l2 lsl shift + c2;
-       })
+  if !LiquidOptions.no_annot then None
+  else
+    match loc.LiquidTypes.loc_pos with
+    | None -> None
+    | Some ((l1, c1), (l2, c2)) ->
+       (* Nothing for end position *)
+       (* use bol to encode *)
+       Some (AST.{
+             pos_lnum = l1;
+             pos_cnum = c1;
+             pos_bol = l2 lsl shift + c2;
+         })
 
 let liq_loc loc_file = function
   | None -> { LiquidTypes.loc_file; loc_pos = None }
