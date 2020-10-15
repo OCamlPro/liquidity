@@ -2256,14 +2256,20 @@ and liqconst_to_loveexp
       ), timestamp ()
     | CString s -> mk_const mk_cstring s, string ()
     | CBytes b ->
-      mk_const mk_cbytes (MBytes.of_string b), bytes ()
+      mk_const mk_cbytes (bytes_of_0x b), bytes ()
     | CKey k -> (
-      match Signature.Public_key.of_b58check_opt k with
+        match
+          if k.[0] = '0' then Signature.Public_key.of_hex_opt (hex_of_0x k)
+          else Signature.Public_key.of_b58check_opt k
+        with
         | None -> error ?loc "Key %s is invalid" k
         | Some k -> mk_const mk_ckey k, key ()
     )
     | CSignature s -> (
-      match Signature.of_b58check_opt s with
+        match
+          if s.[0] = '0' then Signature.of_hex_opt (hex_of_0x s)
+          else Signature.of_b58check_opt s
+        with
         | None -> error ?loc "Signature %s is invalid" s
         | Some s -> mk_const mk_csig s, signature ()
     )
@@ -2480,7 +2486,11 @@ and liqconst_to_loveexp
         | Some (`TAddress | `Type (TContractInstance _)) ->
           contract_to_loveexp ?loc ~typ kh
         | _ ->
-          match Signature.Public_key_hash.of_b58check_opt kh with
+          let opt_kh =
+            if kh.[0] = '0' then
+              Signature.Public_key_hash.of_hex_opt (hex_of_0x kh)
+            else Signature.Public_key_hash.of_b58check_opt kh in
+          match opt_kh with
           | None -> error ?loc "Keyhash %s is invalid" kh
           | Some k -> mk_const mk_ckeyhash k, keyhash ()
       )
@@ -3302,14 +3312,20 @@ let rec liqconst_to_lovevalue
           VTimestamp ts
       end
     | CString s -> VString s
-    | CBytes b -> VBytes (MBytes.of_string b)
+    | CBytes b -> VBytes (bytes_of_0x b)
     | CKey k -> (
-      match Signature.Public_key.of_b58check_opt k with
+        match
+          if k.[0] = '0' then Signature.Public_key.of_hex_opt (hex_of_0x k)
+          else Signature.Public_key.of_b58check_opt k
+        with
         | None -> error "Key %s is invalid" k
         | Some k -> VKey k
     )
     | CSignature s -> (
-      match Signature.of_b58check_opt s with
+        match
+          if s.[0] = '0' then Signature.of_hex_opt (hex_of_0x s)
+          else Signature.of_b58check_opt s
+        with
         | None -> error "Signature %s is invalid" s
         | Some s -> VSignature s
     )
@@ -3380,7 +3396,11 @@ let rec liqconst_to_lovevalue
         | Some (Taddress | Tcontract_handle _ ) ->
           contract_to_lovevalue env ~ty kh
         | _ ->
-          match Signature.Public_key_hash.of_b58check_opt kh with
+          let opt_kh =
+            if kh.[0] = '0' then
+              Signature.Public_key_hash.of_hex_opt (hex_of_0x kh)
+            else Signature.Public_key_hash.of_b58check_opt kh in
+          match opt_kh with
           | None -> error "Keyhash %s is invalid" kh
           | Some k -> VKeyHash k
       )
@@ -3428,7 +3448,7 @@ let rec lovevalue_to_liqconst ?ty (c : Love_value.Value.t) =
       |> fun c -> CTez c
     | VTimestamp s -> CTimestamp (Script_timestamp_repr.to_string s)
     | VString s -> CString s
-    | VBytes b -> CBytes (MBytes.to_string b)
+    | VBytes b -> CBytes (bytes_to_0x b)
     | VKey k -> CKey (Signature.Public_key.to_b58check k)
     | VSignature s -> CSignature (Signature.to_b58check s)
     | VKeyHash k -> CKey_hash (Signature.Public_key_hash.to_b58check k)

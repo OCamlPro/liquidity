@@ -693,3 +693,14 @@ let rec has_lambda ty =
   | Trecord (_, l) | Tsum (_, l) ->
      List.exists (fun (_, t) -> has_lambda t) l
   | Tvar _ | Tpartial _ -> false
+
+let hex_of_0x s =
+  `Hex (String.sub s 2 (String.length s - 2))
+
+(* convert 0x... to MBytes *)
+let bytes_of_0x s =
+  hex_of_0x s
+  |> Environment.MBytes.of_hex
+
+let bytes_to_0x s =
+  "0x" ^ Hex.show (Environment.MBytes.to_hex s)
