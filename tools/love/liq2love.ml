@@ -2929,11 +2929,14 @@ and liqvalue_to_lovecontent env {val_name; inline; val_private; val_exp} :
   debug "[liqvalue_to_lovecontent] Creating value %s@." val_name;
   let code, typ = liqexp_to_loveexp env val_exp in
   let visibility = (if val_private then AST.Private else AST.Public) in
+  let recursive = match val_exp with
+    | { desc = Lambda { recursive = Some _; _}; _ } -> Rec
+    | _ -> NonRec in
   debug "[liqvalue_to_lovecontent] Value %s = %a:%a@."
     val_name
     Love_printer.Ast.print_exp code
     Love_type.pretty typ;
-  (val_name, mk_value code typ visibility Rec),
+  (val_name, mk_value code typ visibility recursive),
   add_var ~kind:(Value visibility) val_name typ env
 
 
