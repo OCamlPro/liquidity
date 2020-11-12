@@ -392,6 +392,7 @@ OCaml.library("dune-network-lib-protocol",
         from_dune_proto("qty_repr.ml");
         from_dune_proto("tez_repr.ml");
         from_dune_proto("script_int_repr.ml");
+        from_dune_proto("ztez_repr.ml");
         from_dune_proto("period_repr.ml");
         from_dune_proto("time_repr.ml");
         from_dune_proto("script_timestamp_repr.ml");

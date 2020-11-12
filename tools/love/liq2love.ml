@@ -2246,8 +2246,7 @@ and liqconst_to_loveexp
     | CNat n  -> mk_const mk_cnat n.integer, nat ()
     | CTez tez ->
       let mudun = LiquidNumber.mic_mutez_of_tez tez in
-      let d = Z.to_int64 mudun in
-      mk_const mk_cdun d, dun ()
+      mk_const mk_cdun mudun, dun ()
     | CTimestamp s -> (
         debug "[liqconst_to_loveexp] CTimestamp : %s@." s;
         match Script_timestamp_repr.of_string s with
@@ -3303,7 +3302,7 @@ let rec liqconst_to_lovevalue
     | CNat n  -> VNat n.integer
     | CTez tez ->
       let mudun = LiquidNumber.mic_mutez_of_tez tez in
-      let d = match Tez_repr.of_mutez (Z.to_int64 mudun) with
+      let d = match Ztez_repr.of_mutez mudun with
         | None -> assert false
         | Some d -> d in
       VDun d
@@ -3445,8 +3444,7 @@ let rec lovevalue_to_liqconst ?ty (c : Love_value.Value.t) =
     | VInt integer  -> CInt { LiquidNumber.integer }
     | VNat integer  -> CNat { LiquidNumber.integer }
     | VDun d ->
-      Tez_repr.to_mutez d
-      |> Z.of_int64
+      Ztez_repr.to_mutez d
       |> LiquidNumber.tez_of_mic_mutez
       |> fun c -> CTez c
     | VTimestamp s -> CTimestamp (Script_timestamp_repr.to_string s)
@@ -3534,8 +3532,8 @@ let rec lovevalue_to_liqconst ?ty (c : Love_value.Value.t) =
     | VEntryPoint _ -> error "decompilation VEntryPoint"
     | VView _ -> error "decompilation VView"
     | VPrimitive _ -> error "decompilation VPrimitive"
-
     | VClosure _ -> error "Todo: VClosure -> CLambda"
+    | VExpression _ -> error "Todo: VExpression -> ?"
   in
   debug " %s" (LiquidPrinter.LiquidDebug.string_of_const res);
   res

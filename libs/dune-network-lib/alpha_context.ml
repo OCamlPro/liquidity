@@ -33,6 +33,7 @@ module type BASIC_DATA = sig
 end
 
 module Tez = Tez_repr
+module ZTez = Ztez_repr
 module Period = Period_repr
 
 module Timestamp = struct
@@ -135,6 +136,42 @@ module Cycle = struct
   let to_int32 _ = assert false
 end
 type dummy_level = { cycle : int; level : int }
+
+module Constants = struct
+  type parametric = {
+    (* preserved_cycles: int ; *)
+    blocks_per_cycle: int32 ;
+    (* blocks_per_commitment: int32 ; *)
+    (* blocks_per_roll_snapshot: int32 ; *)
+    blocks_per_voting_period: int32 ;
+    (* time_between_blocks: Period.t list ;
+     * endorsers_per_block: int ;
+     * hard_gas_limit_per_operation: Z.t ;
+     * hard_gas_limit_per_block: Z.t ;
+     * proof_of_work_threshold: int64 ;
+     * tokens_per_roll: Tez.t ;
+     * michelson_maximum_type_size: int;
+     * seed_nonce_revelation_tip: Tez.t ;
+     * origination_size: int ;
+     * block_security_deposit: Tez.t ;
+     * endorsement_security_deposit: Tez.t ;
+     * block_reward: Tez.t ;
+     * endorsement_reward: Tez.t ;
+     * cost_per_byte: Tez.t ;
+     * hard_storage_limit_per_operation: Z.t ;
+     * test_chain_duration: int64;
+     * hard_gas_limit_to_pay_fees: Z.t ;
+     * max_operation_ttl : int ;
+     * allow_collect_call : bool ;
+     * quorum_min: int32 ;
+     * quorum_max: int32 ;
+     * min_proposal_quorum : int32 ;
+     * initial_endorsers: int ;
+     * delay_per_missing_endorsement : Period.t ; *)
+  }
+  let parametric _ : parametric = assert false
+end
+
 module Voting_period = struct
   include Voting_period_repr
 end
@@ -163,6 +200,7 @@ module Contract = struct
     let get_delegation _ _= assert false
     let get_admin _ _= assert false
     let get_whitelist _ _= assert false
+    let is_manager_key_revealed _ _ = assert false
   end
 module Big_map = struct
   type id = Z.t
@@ -180,7 +218,7 @@ module Roll = struct
 end
 
 module Vote = struct
-  let listing_get _ _ = assert false
+  let listing_get _ _ : int32 tzresult Lwt.t = assert false
   let in_listings _ _ = assert false
   let listing_size _ = assert false    
 end
