@@ -534,7 +534,8 @@ and typecheck_lambda ~loc env
   let ty =
     (* Pre-compute env type if will be tranformed to closure *)
     let bvs = LiquidBoundVariables.bv (mk ~loc (Lambda origlam) ()) in
-    if StringSet.is_empty bvs then
+    if StringSet.is_empty bvs
+    || !LiquidOptions.target_lang = Love_lang then
       Tlambda (arg_ty, ret_ty, default_uncurry ())
     else
       let call_env_args = List.map (fun v ->

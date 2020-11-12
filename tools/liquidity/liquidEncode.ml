@@ -1019,7 +1019,8 @@ and encode env ( exp : typed_exp ) : encoded_exp =
     let lambda_arg_name = arg_name in
     let lambda_body = body in
     let bvs = LiquidBoundVariables.bv exp in
-    if StringSet.is_empty bvs then
+    if StringSet.is_empty bvs
+    || !LiquidOptions.target_lang = Love_lang then
       (* not a closure, create a real lambda *)
       let env = { env_at_lambda with
                   vars = StringSet.fold (fun bv ->
