@@ -694,6 +694,24 @@ let rec has_lambda ty =
      List.exists (fun (_, t) -> has_lambda t) l
   | Tvar _ | Tpartial _ -> false
 
+let rec ty_has_nat ty =
+  let open LiquidTypes in
+  match expand ty with
+  | Tnat -> true
+  | Toperation | Tunit | Tbool | Tint | Ttez | Tstring | Tbytes
+  | Ttimestamp | Tkey | Tkey_hash | Tsignature | Taddress | Tfail | Tchainid ->
+    false
+  | Tlambda _ | Tclosure _ -> false
+  | Tcontract _ | Tcontract_view _ | Tcontract_handle _ -> false
+  | Ttuple l -> List.exists ty_has_nat l
+  | Toption ty | Tlist ty | Tset ty ->
+    ty_has_nat ty
+  | Tmap (t1, t2) | Tbigmap (t1, t2) | Tor (t1, t2) ->
+    ty_has_nat t1 || ty_has_nat t2
+  | Trecord (_, l) | Tsum (_, l) ->
+    List.exists (fun (_, t) -> ty_has_nat t) l
+  | Tvar _ | Tpartial _ -> false
+
 let hex_of_0x s =
   `Hex (String.sub s 2 (String.length s - 2))
 

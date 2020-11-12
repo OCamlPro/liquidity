@@ -14,6 +14,115 @@ let check_lambda_params c =
           entry_sig.entry_name;
     ) c.entries
 
+let mk_nat ~loc i =
+  mk ~loc
+    (Const { ty = Tnat; const = CNat (LiquidNumber.integer_of_int i) })
+    Tnat
+
+let const_unit ~loc = mk ~loc (Const { ty = Tunit; const = CUnit }) Tunit
+
+let runtime_nat_check ~loc v =
+  (* if v < 0p then failwith () *)
+  let cond = mk ~loc (Apply { prim = Prim_lt; args = [v; mk_nat ~loc 0] }) Tbool in
+  let ifthen = mk  ~loc (Failwith (const_unit ~loc)) Tunit in
+  mk ~loc (If { cond; ifthen; ifelse = const_unit ~loc }) Tunit
+
+let rec runtime_nat_checks ~loc v_desc v_ty acc =
+  if not @@ ty_has_nat v_ty then acc
+  else
+    let u = const_unit ~loc in
+    let n i = mk_nat ~loc i in
+    let ln nname = { nname; nloc = loc } in
+    let (///) e1 e2 = mk ~loc (Seq (e1, e2)) e2.ty in
+    (* let var v ty = mk ~loc (Var v) ty in *)
+    let mku desc = mk ~loc desc Tunit in
+    (* let lambda_nat_check ty =
+     *   mk ~loc (Lambda {
+     *       arg_name = ln "x";
+     *       arg_ty = ty;
+     *       body = runtime_nat_checks ~loc (Var "x") ty u;
+     *       ret_ty = Tunit;
+     *       recursive = None
+     *     })
+     *     (Tlambda (ty, Tunit, ref (ref None))) in *)
+    let v = mk ~loc v_desc v_ty in
+    match v_ty with
+    | Tnat -> acc /// runtime_nat_check ~loc v
+    | Toperation | Tunit | Tbool | Tint | Ttez | Tstring | Tbytes
+    | Ttimestamp | Tkey | Tkey_hash | Tsignature | Taddress | Tfail | Tchainid
+    | Tlambda _ | Tclosure _
+    | Tcontract _ | Tcontract_view _ | Tcontract_handle _
+    | Tbigmap _
+    | Tvar _ | Tpartial _
+      -> acc
+    | Ttuple l ->
+      List.fold_left (fun (acc, i) ty ->
+          runtime_nat_checks ~loc
+            (Apply {prim = Prim_tuple_get; args = [v; n i]})
+            ty acc,
+          i + 1
+        ) (acc, 0) l
+      |> fst
+    | Toption ty ->
+      mku @@ MatchOption {
+        arg = v; ifnone = u;
+        some_name = ln "o";
+        ifsome = runtime_nat_checks ~loc (Var "o") ty u;
+      }
+    | Tlist ty ->
+      mku @@ Fold {
+        prim = Prim_list_iter;
+        arg_name = ln "o";
+        body = runtime_nat_checks ~loc (Var "o") ty u;
+        arg = v;
+        acc = u;
+      }
+    | Tset ty ->
+      mku @@ Fold {
+        prim = Prim_set_iter;
+        arg_name = ln "o";
+        body = runtime_nat_checks ~loc (Var "o") ty u;
+        arg = v;
+        acc = u;
+      }
+    | Tmap (ty1, ty2) ->
+      mku @@ Fold {
+        prim = Prim_map_iter;
+        arg_name = ln "o";
+        body = runtime_nat_checks ~loc (Var "o") (Ttuple [ty1; ty2]) u;
+        arg = v;
+        acc = u;
+      }
+    | Tor (ty1, ty2) ->
+      mku @@ MatchVariant {
+        arg = v;
+        cases = [
+          PConstr ("Left", ["o"]),
+          runtime_nat_checks ~loc (Var "o") ty1 u;
+          PConstr ("Right", ["o"]),
+          runtime_nat_checks ~loc (Var "o") ty2 u;
+        ]
+      }
+    | Tsum (_, l) ->
+      mku @@ MatchVariant {
+        arg = v;
+        cases = List.map (fun (c, ty) ->
+            PConstr (c, ["o"]),
+            runtime_nat_checks ~loc (Var "o") ty u
+          ) l
+      }
+    | Trecord (_, l) ->
+      List.fold_left (fun acc (field, ty) ->
+          runtime_nat_checks ~loc (Project { field; record = v }) ty acc
+        ) acc l
+
+let add_runtime_nat_checks ~loc var v_ty body =
+  if not @@ ty_has_nat v_ty then body
+  else
+    let (///) e1 e2 = mk ~loc (Seq (e1, e2)) e2.ty in
+    let u = const_unit ~loc in
+    runtime_nat_checks ~loc (Var var) v_ty u /// body
+
 let rec tfail_to_tvar ?loc ty = match ty with
   | Ttuple tyl -> Ttuple (List.map (tfail_to_tvar ?loc) tyl)
   | Toption ty -> Toption (tfail_to_tvar ?loc ty)
@@ -339,6 +448,10 @@ and entry_ttfail_to_tvar storage { entry_sig; code; view; _ } =
       let r = tfail_to_tvar ~loc r in
       Some r, r in
   let code = ttfail_to_tvar code in
+  let code =
+    add_runtime_nat_checks ~loc
+      entry_sig.parameter_name entry_sig.parameter code
+  in
   LiquidInfer.unify loc code.ty code_ty;
   { entry_sig = { entry_sig with parameter; return };
     code = code;
@@ -358,15 +471,17 @@ and contract_ttfail_to_tvar (contract : typed_contract) =
     | None -> None
     | Some { init_name; init_args; init_body } ->
       debug "[Preprocess.contract_ttfail_to_tvar] Preprocessing init %s@." init_name;
-      Some { init_name;
-             init_args = List.map (fun (x, loc, ty) ->
-                 debug "[Preprocess.contract_ttfail_to_tvar] Preprocessing arg %s : %s@."
-                   x (LiquidPrinter.Liquid.string_of_type ty);
-                 x, loc, tfail_to_tvar ~loc ty) init_args;
-             init_body = (
-               debug "[Preprocess.contract_ttfail_to_tvar] Preprocessing body of %s@." init_name;
-               ttfail_to_tvar init_body
-             )} in
+      let init_args = List.map (fun (x, loc, ty) ->
+          debug "[Preprocess.contract_ttfail_to_tvar] Preprocessing arg %s : %s@."
+            x (LiquidPrinter.Liquid.string_of_type ty);
+          x, loc, tfail_to_tvar ~loc ty) init_args in
+      let init_body =
+        debug "[Preprocess.contract_ttfail_to_tvar] Preprocessing body of %s@." init_name;
+        ttfail_to_tvar init_body in
+      let init_body = List.fold_left (fun acc (x, loc, ty) ->
+          add_runtime_nat_checks ~loc x ty acc
+        ) init_body init_args in
+      Some { init_name; init_args; init_body } in
   let entries =
     List.map (entry_ttfail_to_tvar contract.storage) contract.entries in
   let rec env_ttfail_to_tvar ty_env = {
