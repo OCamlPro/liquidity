@@ -4,16 +4,6 @@ open Love_pervasives
 open Log
 open Compil_utils
 
-let check_lambda_params c =
-  let loc = LiquidLoc.loc_in_file c.ty_env.filename in
-  List.iter (fun { entry_sig; view } ->
-      if has_lambda entry_sig.parameter then
-        error ~loc
-          "Parameter of %s %s cannot contain lambda type in Love"
-          (if view then "view" else "entry point")
-          entry_sig.entry_name;
-    ) c.entries
-
 let mk_nat ~loc i =
   mk ~loc
     (Const { ty = Tnat; const = CNat (LiquidNumber.integer_of_int i) })
@@ -276,15 +266,9 @@ let rec ttfail_to_tvar ({ desc; ty; loc } as e) =
                 body = ttfail_to_tvar body;
                 arg = ttfail_to_tvar arg;
                 acc = ttfail_to_tvar acc }, ty (* should not have fails *)
-    | Lambda { arg_name; recursive; arg_ty; body; ret_ty } ->
-      let u = match body.ty with Tlambda (_,_,u) -> u | _ -> ref @@ ref None in
-      let body = ttfail_to_tvar body in
-      let arg_ty = tfail_to_tvar ~loc:arg_name.nloc arg_ty in
-      let body_ty = tfail_to_tvar ~loc:arg_name.nloc body.ty in
-      Lambda { arg_name; recursive;
-               arg_ty;
-               body;
-               ret_ty = body_ty }, Tlambda (arg_ty, body_ty,u)
+    | Lambda lambda ->
+      let lambda, ty = lambda_ttfail_to_tvar lambda in
+      Lambda lambda, ty
     | Closure { arg_name; arg_ty; call_env; body; ret_ty } ->
       Closure { arg_name;
                 arg_ty = tfail_to_tvar ~loc:arg_name.nloc arg_ty;
@@ -349,6 +333,16 @@ let rec ttfail_to_tvar ({ desc; ty; loc } as e) =
     | Type _ -> assert false (* Removed during typechecking*)
   in
   { e with desc; ty}
+
+and lambda_ttfail_to_tvar { arg_name; recursive; arg_ty; body; ret_ty } =
+  let u = match body.ty with Tlambda (_,_,u) -> u | _ -> ref @@ ref None in
+  let body = ttfail_to_tvar body in
+  let arg_ty = tfail_to_tvar ~loc:arg_name.nloc arg_ty in
+  let body_ty = tfail_to_tvar ~loc:arg_name.nloc body.ty in
+  { arg_name; recursive;
+    arg_ty;
+    body;
+    ret_ty = body_ty }, Tlambda (arg_ty, body_ty,u)
 
 and const_ttfail_to_tvar loc (typ : datatype) c : 'a * datatype =
   debug "[Preprocess.contract_ttfail_to_tvar] Preprocessing constant %s : %s@."
@@ -460,7 +454,6 @@ and entry_ttfail_to_tvar storage { entry_sig; code; view; _ } =
   }
 
 and contract_ttfail_to_tvar (contract : typed_contract) =
-  check_lambda_params contract;
   debug "[Preprocess.contract_ttfail_to_tvar] Preprocessing contract %s@." contract.contract_name;
   let subs = List.map contract_ttfail_to_tvar contract.subs in
   let values = List.map (fun v ->

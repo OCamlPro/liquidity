@@ -1503,57 +1503,9 @@ let rec liqexp_to_loveexp (env : env) (e : typed_exp) : AST.exp * TYPE.t =
       liqprimmapfold_to_loveexp loc env prim arg_name
         arg acc body
 
-    | Lambda {arg_name; arg_ty; body; recursive; ret_ty } -> (
-        let env = match recursive with
-          | None -> env
-          | Some f ->
-            let ftyp = TArrow (liqtype_to_lovetype env arg_ty,
-                               liqtype_to_lovetype env ret_ty) in
-            add_var f ftyp env in
-        debug "[liqexp_to_loveexp] Creating a non recursive lambda@.";
-        let arg_ty = liqtype_to_lovetype env arg_ty in
-        let env = add_var arg_name.nname arg_ty env in
-        debug "[liqexp_to_loveexp] fun (%s : %a) -> ...@."
-          arg_name.nname Love_type.pretty arg_ty;
-        let new_fvars = Love_type.fvars arg_ty in
-        let quant = Love_tenv.get_free env.tenv in
-        if TypeVarSet.subset new_fvars quant
-        then (
-          debug "[liqexp_to_loveexp] Introducing no new free var@.";
-          let body, t = liqexp_to_loveexp env body in
-          mk_lambda ?loc:lloc
-            (mk_pvar ?loc:(love_loc arg_name.nloc) arg_name.nname)
-            body
-            arg_ty, arg_ty @=> t
-        )
-        else (
-          debug "[liqexp_to_loveexp] Introducing new free vars@.";
-          let new_body, t =
-            liqexp_to_loveexp
-              { env with
-                tenv = TypeVarSet.fold
-                    (fun tv acc -> Love_tenv.add_forall tv acc)
-                    (* Type is not really TUnit, it is just to keep track that tv
-                       is polymorphic as it belongs to the forall map of the environment. *)
-                    new_fvars
-                    env.tenv
-              } body
-          in
-          TypeVarSet.fold
-            (fun tv (tlam, ty) ->
-               if TypeVarSet.mem tv quant
-               then tlam, ty
-               else (
-                 debug "[liqexp_to_loveexp] Adding parameter %a@." Love_type.pp_typvar tv;
-                 mk_tlambda tv tlam, TForall (tv, ty)
-               )
-            )
-            new_fvars
-            ((mk_lambda ?loc:lloc
-                (mk_pvar ?loc:(love_loc arg_name.nloc) arg_name.nname)
-                new_body arg_ty), arg_ty @=> t)
-        )
-      )
+    | Lambda lambda ->
+      liqlambda_to_loveexp env ~loc lambda
+
     | Closure _ ->
       error ~loc "Closures are forbidden in Love"
 
@@ -1928,6 +1880,65 @@ let rec liqexp_to_loveexp (env : env) (e : typed_exp) : AST.exp * TYPE.t =
   debug "[liqexp_to_loveexp] New expression %a : %a@."
     Love_printer.Ast.print_exp e Love_type.pretty t;
   e, t
+
+
+and liqlambda_to_loveexp
+    (env : env)
+    ?loc
+    {arg_name; arg_ty; body; recursive; ret_ty }  : AST.exp * TYPE.t =
+  let lloc = match loc with
+    | None -> None
+    | Some loc -> love_loc loc in
+  let env = match recursive with
+    | None -> env
+    | Some f ->
+      let ftyp = TArrow (liqtype_to_lovetype env arg_ty,
+                         liqtype_to_lovetype env ret_ty) in
+      add_var f ftyp env in
+  debug "[liqlambda_to_loveexp] Creating a non recursive lambda@.";
+  let arg_ty = liqtype_to_lovetype env arg_ty in
+  let env = add_var arg_name.nname arg_ty env in
+  debug "[liqlambda_to_loveexp] fun (%s : %a) -> ...@."
+    arg_name.nname Love_type.pretty arg_ty;
+  let new_fvars = Love_type.fvars arg_ty in
+  let quant = Love_tenv.get_free env.tenv in
+  if TypeVarSet.subset new_fvars quant
+  then (
+    debug "[liqlambda_to_loveexp] Introducing no new free var@.";
+    let body, t = liqexp_to_loveexp env body in
+    mk_lambda ?loc:lloc
+      (mk_pvar ?loc:(love_loc arg_name.nloc) arg_name.nname)
+      body
+      arg_ty, arg_ty @=> t
+  )
+  else (
+    debug "[liqlambda_to_loveexp] Introducing new free vars@.";
+    let new_body, t =
+      liqexp_to_loveexp
+        { env with
+          tenv = TypeVarSet.fold
+              (fun tv acc -> Love_tenv.add_forall tv acc)
+              (* Type is not really TUnit, it is just to keep track that tv
+                 is polymorphic as it belongs to the forall map of the environment. *)
+              new_fvars
+              env.tenv
+        } body
+    in
+    TypeVarSet.fold
+      (fun tv (tlam, ty) ->
+         if TypeVarSet.mem tv quant
+         then tlam, ty
+         else (
+           debug "[liqlambda_to_loveexp] Adding parameter %a@." Love_type.pp_typvar tv;
+           mk_tlambda tv tlam, TForall (tv, ty)
+         )
+      )
+      new_fvars
+      ((mk_lambda ?loc:lloc
+          (mk_pvar ?loc:(love_loc arg_name.nloc) arg_name.nname)
+          new_body arg_ty), arg_ty @=> t)
+  )
+
 
 and liqprimfold_to_loveexp
     loc
@@ -2549,8 +2560,9 @@ and liqconst_to_loveexp
       let arg, _ = ltl ~typ:ty_arg arg in
       mk_constr id_name typ_args [arg], t
 
-    | CLambda {arg_name; arg_ty; body; ret_ty; recursive} ->
-      error ?loc "Constant lambdas are forbidden in Love"
+    | CLambda lambda ->
+      let lambda, _ty = Preprocess.lambda_ttfail_to_tvar lambda in
+      liqlambda_to_loveexp env ?loc lambda
   in
   let () = match typ with
     | None ->
@@ -3425,8 +3437,10 @@ let rec liqconst_to_lovevalue
         | _ -> None in
       VConstr (name, [ltl ?ty args])
 
-    | CLambda {arg_name; arg_ty; body; ret_ty; recursive} ->
-      error "Todo: CLambda -> VClosure"
+    | CLambda lambda ->
+      let lambda, _ty = Preprocess.lambda_ttfail_to_tvar lambda in
+      let e, _ty = liqlambda_to_loveexp env lambda in
+      VExpression e
   in
   let () =
     debug
